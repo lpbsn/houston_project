@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Houston API
   version: 0.1.0
-  description: Phase 0.1 foundations schema
+  description: Phase 0 foundation and access schema
 paths:
   /api/schema/:
     get:

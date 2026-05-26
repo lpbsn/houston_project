@@ -1,6 +1,17 @@
 # Houston
 
-Houston is currently in Phase 0.4 identity and access foundation for the modular monolith backend.
+Houston is in Phase 0.7, the Phase 0 closure gate for the modular monolith backend.
+
+Phase 0.1 through Phase 0.6 are implemented:
+
+- Phase 0.1: Django project foundation under `apps/api`
+- Phase 0.2: environment and Docker workflow hardening
+- Phase 0.3: core technical primitives
+- Phase 0.4: identity and access models
+- Phase 0.5: web session authentication and current establishment context
+- Phase 0.6: minimal RBAC permission service
+
+Phase 0.7 is a closure, audit, and documentation phase only. It does not start Phase 1.
 
 ## Current Stack Decisions
 
@@ -26,6 +37,24 @@ Houston is currently in Phase 0.4 identity and access foundation for the modular
 - `infra/docker/api`: API container build files
 - `docs/codex`: scoped implementation briefs
 
+## Current Capabilities
+
+The current Phase 0 foundation includes:
+
+- Django project under `apps/api`
+- Docker Compose workflow
+- PostgreSQL / Redis wiring
+- pytest / Ruff / OpenAPI
+- core primitives
+- custom `User`
+- `Organization`
+- `Establishment`
+- `EstablishmentMembership`
+- web session login/logout
+- protected `/app/`
+- current establishment context
+- minimal RBAC permission service
+
 ## Local Setup
 
 1. Copy `.env.example` to `.env`.
@@ -46,6 +75,20 @@ docker compose exec api python manage.py spectacular --file schema.yml
 curl http://localhost:8000/api/v1/health/
 curl http://localhost:8000/
 ```
+
+## Validation Commands
+
+Run from the repository root:
+
+```bash
+make check
+make test
+make lint
+make schema
+cd apps/api && uv run python manage.py makemigrations --check --dry-run
+```
+
+`make check`, `make test`, `make lint`, and `make schema` assume the Docker Compose stack is already running.
 
 ## Make Commands
 
@@ -71,16 +114,35 @@ make migrate
 - `/api/v1/health/`: health endpoint
 - `/api/schema/`: OpenAPI schema
 - `/api/docs/`: Swagger UI
+- `/login/`: session login page
+- `/logout/`: session logout endpoint
+- `/app/`: protected application shell
 
-## Phase 0.4 Boundaries
+## Not Implemented Yet
 
-- Minimal identity and access foundation only
-- Custom global `User`
-- `Organization`, `Establishment`, and `EstablishmentMembership`
-- No login, logout, JWT, refresh tokens, password reset, or invitation flow
-- No permissions matrix or product workflow endpoints
-- No `apps/web`
-- No React
-- No frontend build tooling
-- No observation, signal, action, AI, uploads, notifications, or realtime implementation
-- All other domain apps remain scaffolds only
+- Phase 1 onboarding
+- runtime configuration
+- invitations
+- signup
+- password reset
+- JWT
+- refresh tokens
+- DRF login endpoint
+- Observation
+- Signal
+- Action
+- Checklist
+- Comments
+- Notifications
+- Realtime business flows
+- AI pipeline
+- Upload logic
+- React
+- TypeScript
+- `apps/web`
+
+Scaffold-only Django apps for future domains may exist, but their business logic is intentionally not implemented in Phase 0.
+
+## Next Phase
+
+Phase 1 — Runtime Config + Minimal Onboarding

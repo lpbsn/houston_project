@@ -115,6 +115,6 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Houston API",
-    "DESCRIPTION": "Phase 0.1 foundations schema",
+    "DESCRIPTION": "Phase 0 foundation and access schema",
     "VERSION": "0.1.0",
 }
