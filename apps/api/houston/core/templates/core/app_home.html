@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Houston App</title>
+  </head>
+  <body>
+    <main>
+      <h1>Houston App</h1>
+
+      {% if access_context.state == "ready" %}
+        <p>User: {{ access_context.user.username }}</p>
+        <p>Current establishment: {{ access_context.selected_establishment.name }}</p>
+        <p>Access context resolved successfully.</p>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit">Log out</button>
+        </form>
+      {% elif access_context.state == "selection_required" %}
+        <p>Multiple active establishments are available. Selection is required before continuing.</p>
+        <ul>
+          {% for membership in access_context.active_memberships %}
+            <li>{{ membership.establishment.name }}</li>
+          {% endfor %}
+        </ul>
+      {% elif access_context.state == "no_memberships" %}
+        <p>No active establishment access is available for this account.</p>
+      {% elif access_context.state == "inactive_user" %}
+        <p>This account is not active in Houston.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>
