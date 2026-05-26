@@ -1,6 +1,6 @@
 # Houston
 
-Houston is in Phase 0.7, the Phase 0 closure gate for the modular monolith backend.
+Houston is in Phase 0.8, the operational domain normalization slice for the modular monolith backend.
 
 Phase 0.1 through Phase 0.6 are implemented:
 
@@ -11,7 +11,7 @@ Phase 0.1 through Phase 0.6 are implemented:
 - Phase 0.5: web session authentication and current establishment context
 - Phase 0.6: minimal RBAC permission service
 
-Phase 0.7 is a closure, audit, and documentation phase only. It does not start Phase 1.
+Phase 0.8 replaces membership domain JSON storage with relational operational domain tables scoped to establishments. It does not start Phase 1.
 
 ## Current Stack Decisions
 
@@ -50,10 +50,13 @@ The current Phase 0 foundation includes:
 - `Organization`
 - `Establishment`
 - `EstablishmentMembership`
+- `OperationalDomain`
+- `MembershipDomain`
 - web session login/logout
 - protected `/app/`
 - current establishment context
 - minimal RBAC permission service
+- capability-level permissions plus domain membership checks
 
 ## Local Setup
 
@@ -144,6 +147,12 @@ make shell
 - `apps/web`
 
 Scaffold-only Django apps for future domains may exist, but their business logic is intentionally not implemented in Phase 0.
+
+## Domain Access Note
+
+Phase 0.8 replaces `EstablishmentMembership.operational_domains` JSON storage with relational `OperationalDomain` and `MembershipDomain` models.
+
+Current permissions remain limited to capability-level checks plus establishment-scoped domain membership. Object-level Signal, Action, and checklist authorization is not implemented yet.
 
 ## Next Phase
 

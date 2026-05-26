@@ -3,7 +3,12 @@ import uuid
 import pytest
 
 from houston.accounts.models import User
-from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.establishments.models import (
+    Establishment,
+    EstablishmentMembership,
+    MembershipDomain,
+    OperationalDomain,
+)
 from houston.establishments.permissions import (
     can_access_app,
     can_access_domain,
@@ -27,7 +32,6 @@ def build_membership(
     user_status=User.Status.ACTIVE,
     organization_status=Organization.Status.ACTIVE,
     establishment_status=Establishment.Status.ACTIVE,
-    operational_domains=None,
 ):
     organization = Organization.objects.create(
         name=f"Org {uuid.uuid4().hex[:8]}",
@@ -48,9 +52,32 @@ def build_membership(
         establishment=establishment,
         role=role,
         status=membership_status,
-        operational_domains=[] if operational_domains is None else operational_domains,
     )
     return membership
+
+
+def create_domain(
+    establishment,
+    *,
+    key,
+    label,
+    active=True,
+    source=OperationalDomain.Source.MANUAL,
+):
+    return OperationalDomain.objects.create(
+        establishment=establishment,
+        key=key,
+        label=label,
+        active=active,
+        source=source,
+    )
+
+
+def link_membership_to_domain(membership, operational_domain):
+    return MembershipDomain.objects.create(
+        membership=membership,
+        operational_domain=operational_domain,
+    )
 
 
 def assert_all_permissions_denied(membership):
@@ -153,6 +180,7 @@ def test_non_active_establishment_denies_all_permissions(establishment_status):
 
     assert_all_permissions_denied(membership)
 
+
 @pytest.mark.parametrize(
     "organization_status",
     [
@@ -164,6 +192,7 @@ def test_non_active_organization_denies_all_permissions(organization_status):
     membership = build_membership(organization_status=organization_status)
 
     assert_all_permissions_denied(membership)
+
 
 def test_unknown_role_fails_closed():
     membership = build_membership()
@@ -193,6 +222,16 @@ def test_unknown_status_fails_closed(attribute_name, attribute_value):
 def test_owner_and_director_can_access_any_nonblank_domain():
     owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
     director_membership = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
+    create_domain(
+        owner_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    create_domain(
+        director_membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
 
     assert can_access_domain(owner_membership, " housekeeping ") is True
     assert can_access_domain(director_membership, "maintenance") is True
@@ -202,32 +241,31 @@ def test_owner_and_director_can_access_any_nonblank_domain():
     "role",
     [EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF],
 )
-def test_manager_and_staff_can_access_matching_domain(role):
-    membership = build_membership(role=role, operational_domains=[" housekeeping ", "security"])
-    original_domains = list(membership.operational_domains)
+def test_manager_and_staff_can_access_matching_linked_domain(role):
+    membership = build_membership(role=role)
+    domain = create_domain(
+        membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    link_membership_to_domain(membership, domain)
 
     assert can_access_domain(membership, "housekeeping") is True
-    assert membership.operational_domains == original_domains
 
 
 @pytest.mark.parametrize(
     "role",
     [EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF],
 )
-def test_manager_and_staff_cannot_access_non_matching_domain(role):
-    membership = build_membership(role=role, operational_domains=["housekeeping"])
+def test_manager_and_staff_cannot_access_without_linked_domain(role):
+    membership = build_membership(role=role)
+    create_domain(
+        membership.establishment,
+        key="security",
+        label="Security",
+    )
 
     assert can_access_domain(membership, "security") is False
-
-
-@pytest.mark.parametrize(
-    "role",
-    [EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF],
-)
-def test_manager_and_staff_empty_operational_domains_deny_domain_access(role):
-    membership = build_membership(role=role, operational_domains=[])
-
-    assert can_access_domain(membership, "housekeeping") is False
 
 
 @pytest.mark.parametrize(
@@ -240,17 +278,80 @@ def test_manager_and_staff_empty_operational_domains_deny_domain_access(role):
     ],
 )
 def test_blank_domain_is_denied_for_every_role(role):
-    membership = build_membership(role=role, operational_domains=["housekeeping"])
+    membership = build_membership(role=role)
+    domain = create_domain(
+        membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    if role in {EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF}:
+        link_membership_to_domain(membership, domain)
 
     assert can_access_domain(membership, "   ") is False
+    assert can_access_domain(membership, None) is False
 
 
 @pytest.mark.parametrize(
     "role",
-    [EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF],
+    [
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    ],
 )
-def test_malformed_operational_domains_deny_domain_access(role):
-    membership = build_membership(role=role, operational_domains=["housekeeping"])
-    membership.operational_domains = {"domain": "housekeeping"}
+def test_unknown_domain_key_is_denied_for_every_role(role):
+    membership = build_membership(role=role)
+    domain = create_domain(
+        membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    if role in {EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF}:
+        link_membership_to_domain(membership, domain)
+
+    assert can_access_domain(membership, "unknown") is False
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    ],
+)
+def test_inactive_domain_is_denied_for_every_role(role):
+    membership = build_membership(role=role)
+    inactive_domain = create_domain(
+        membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+        active=False,
+    )
+    if role in {EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF}:
+        link_membership_to_domain(membership, inactive_domain)
 
     assert can_access_domain(membership, "housekeeping") is False
+
+
+def test_domain_from_another_establishment_is_denied():
+    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    other_membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    foreign_domain = create_domain(
+        other_membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    link_membership_to_domain(membership, foreign_domain)
+
+    assert can_access_domain(membership, "maintenance") is False
+
+
+def test_owner_and_director_domain_access_requires_existing_active_domain():
+    owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    director_membership = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
+
+    assert can_access_domain(owner_membership, "housekeeping") is False
+    assert can_access_domain(director_membership, "maintenance") is False

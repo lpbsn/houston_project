@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from houston.accounts.models import User
-from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.establishments.models import (
+    Establishment,
+    EstablishmentMembership,
+    MembershipDomain,
+    OperationalDomain,
+)
 from houston.organizations.models import Organization
 
 _ADMIN_ROLES = frozenset(
@@ -63,14 +68,21 @@ def can_access_domain(
     if normalized_domain_key is None:
         return False
 
+    domain = OperationalDomain.objects.filter(
+        establishment=membership.establishment,
+        key=normalized_domain_key,
+        active=True,
+    ).only("id").first()
+    if domain is None:
+        return False
+
     if membership.role in _ADMIN_ROLES:
         return True
 
-    normalized_domains = _normalized_operational_domains(membership.operational_domains)
-    if normalized_domains is None:
-        return False
-
-    return normalized_domain_key in normalized_domains
+    return MembershipDomain.objects.filter(
+        membership=membership,
+        operational_domain=domain,
+    ).exists()
 
 
 def _has_role(
@@ -104,7 +116,8 @@ def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
 
     return True
 
-def _normalize_domain_key(domain_key: str) -> str | None:
+
+def _normalize_domain_key(domain_key: str | None) -> str | None:
     if not isinstance(domain_key, str):
         return None
 
@@ -113,17 +126,3 @@ def _normalize_domain_key(domain_key: str) -> str | None:
         return None
 
     return normalized_domain_key
-
-
-def _normalized_operational_domains(value: object) -> set[str] | None:
-    if not isinstance(value, list):
-        return None
-
-    normalized_domains: set[str] = set()
-    for item in value:
-        normalized_domain_key = _normalize_domain_key(item)
-        if normalized_domain_key is None:
-            return None
-        normalized_domains.add(normalized_domain_key)
-
-    return normalized_domains
