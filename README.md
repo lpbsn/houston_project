@@ -58,52 +58,54 @@ The current Phase 0 foundation includes:
 ## Local Setup
 
 1. Copy `.env.example` to `.env`.
+
 2. Start the stack:
-
-```bash
 docker compose up --build
-```
 
-3. Run the acceptance checks from another terminal:
+3. Apply database migrations from another terminal
+make migrate
 
-```bash
+4. Run the acceptance checks
 docker compose exec api python --version
-docker compose exec api python manage.py check
-docker compose exec api pytest
-docker compose exec api ruff check .
-docker compose exec api python manage.py spectacular --file schema.yml
-curl http://localhost:8000/api/v1/health/
-curl http://localhost:8000/
-```
-
-## Validation Commands
-
-Run from the repository root:
-
-```bash
 make check
 make test
 make lint
 make schema
-cd apps/api && uv run python manage.py makemigrations --check --dry-run
-```
+make migrations-check
+curl http://localhost:8000/api/v1/health/
+curl http://localhost:8000/
 
-`make check`, `make test`, `make lint`, and `make schema` assume the Docker Compose stack is already running.
+make migrate, make check, make test, make lint, make schema, and make migrations-check assume the Docker Compose stack is already running.
+
+## Validation Commands
+
+
+Run from the repository root after the Docker Compose stack is running:
+```bash
+make migrate
+make check
+make test
+make lint
+make schema
+make migrations-check
 
 ## Make Commands
 
 These commands are thin wrappers around `docker compose`:
 
-```bash
+make migation check :
+
+```md
 make build
 make up
 make down
+make migrate
 make check
 make test
 make lint
 make schema
+make migrations-check
 make shell
-make migrate
 ```
 
 `make check`, `make test`, `make lint`, `make schema`, `make shell`, and `make migrate` assume the stack is already running.

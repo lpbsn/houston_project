@@ -89,25 +89,6 @@ apps/api/
 - No raw Observation text in realtime payloads, notifications, logs, or unauthorized APIs.
 - Tests are required for domain services, permissions, API workflows, feed queries, and AI contracts.
 
-## Current build phase
-
-Only implement Phase 0.1 Foundations unless explicitly asked otherwise.
-
-Phase 0.1 scope:
-- repo structure
-- Docker Compose
-- Django project
-- PostgreSQL
-- Redis
-- pytest
-- Ruff
-- OpenAPI setup
-- minimal health endpoint
-- minimal template rendering proof
-- CI-ready commands
-
-Do not implement Observation, Signal, Action, AI pipeline, uploads, notifications, or realtime yet.
-
 ## Definition of done
 
 A task is done only when:

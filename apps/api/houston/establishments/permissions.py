@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from houston.accounts.models import User
 from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.organizations.models import Organization
 
 _ADMIN_ROLES = frozenset(
     {
@@ -97,8 +98,11 @@ def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
     if establishment is None or establishment.status != Establishment.Status.ACTIVE:
         return False
 
-    return True
+    organization = getattr(establishment, "organization", None)
+    if organization is None or organization.status != Organization.Status.ACTIVE:
+        return False
 
+    return True
 
 def _normalize_domain_key(domain_key: str) -> str | None:
     if not isinstance(domain_key, str):

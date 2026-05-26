@@ -25,10 +25,14 @@ def build_membership(
     role=EstablishmentMembership.Role.STAFF,
     membership_status=EstablishmentMembership.Status.ACTIVE,
     user_status=User.Status.ACTIVE,
+    organization_status=Organization.Status.ACTIVE,
     establishment_status=Establishment.Status.ACTIVE,
     operational_domains=None,
 ):
-    organization = Organization.objects.create(name=f"Org {uuid.uuid4().hex[:8]}")
+    organization = Organization.objects.create(
+        name=f"Org {uuid.uuid4().hex[:8]}",
+        status=organization_status,
+    )
     user = User.objects.create_user(
         username=f"user_{uuid.uuid4().hex[:8]}",
         password="secret",
@@ -149,6 +153,17 @@ def test_non_active_establishment_denies_all_permissions(establishment_status):
 
     assert_all_permissions_denied(membership)
 
+@pytest.mark.parametrize(
+    "organization_status",
+    [
+        Organization.Status.SUSPENDED,
+        Organization.Status.ARCHIVED,
+    ],
+)
+def test_non_active_organization_denies_all_permissions(organization_status):
+    membership = build_membership(organization_status=organization_status)
+
+    assert_all_permissions_denied(membership)
 
 def test_unknown_role_fails_closed():
     membership = build_membership()

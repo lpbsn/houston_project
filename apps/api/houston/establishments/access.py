@@ -5,6 +5,7 @@ from typing import Any
 
 from houston.accounts.models import User
 from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.organizations.models import Organization
 
 CURRENT_ESTABLISHMENT_SESSION_KEY = "current_establishment_id"
 
@@ -57,6 +58,7 @@ def resolve_current_access_context(request: Any) -> CurrentAccessContext:
             user=user,
             status=EstablishmentMembership.Status.ACTIVE,
             establishment__status=Establishment.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
         )
         .select_related("establishment", "establishment__organization")
         .order_by("establishment__name", "establishment_id")

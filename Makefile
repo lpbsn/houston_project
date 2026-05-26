@@ -1,4 +1,4 @@
-.PHONY: build up down check test lint schema shell migrate
+.PHONY: build up down check test lint schema shell migrate migrations-check
 
 build:
 	docker compose build
@@ -26,3 +26,6 @@ shell:
 
 migrate:
 	docker compose exec api python manage.py migrate
+
+migrations-check:
+	docker compose exec api python manage.py makemigrations --check --dry-run
