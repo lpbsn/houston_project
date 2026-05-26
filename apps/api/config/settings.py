@@ -4,16 +4,20 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def env_str(name: str, default: str) -> str:
+    return os.getenv(name, default)
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(int(default))).lower() in {"1", "true", "yes", "on"}
 
 
 def env_list(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
+    value = env_str(name, default)
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-secret-key")
+SECRET_KEY = env_str("DJANGO_SECRET_KEY", "replace-me-for-local-dev")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
@@ -75,11 +79,11 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "houston"),
-        "USER": os.getenv("POSTGRES_USER", "houston"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "houston"),
-        "HOST": os.getenv("POSTGRES_HOST", "postgres"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "NAME": env_str("POSTGRES_DB", "houston"),
+        "USER": env_str("POSTGRES_USER", "houston"),
+        "PASSWORD": env_str("POSTGRES_PASSWORD", "houston"),
+        "HOST": env_str("POSTGRES_HOST", "postgres"),
+        "PORT": env_str("POSTGRES_PORT", "5432"),
     }
 }
 
@@ -91,9 +95,9 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/1")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/2")
+REDIS_URL = env_str("REDIS_URL", "redis://redis:6379/0")
+CELERY_BROKER_URL = env_str("CELERY_BROKER_URL", "redis://redis:6379/1")
+CELERY_RESULT_BACKEND = env_str("CELERY_RESULT_BACKEND", "redis://redis:6379/2")
 
 CHANNEL_LAYERS = {
     "default": {
