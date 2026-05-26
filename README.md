@@ -37,6 +37,37 @@ Phase 0.8 replaces membership domain JSON storage with relational operational do
 - `infra/docker/api`: API container build files
 - `docs/codex`: scoped implementation briefs
 
+## `houston.core` Guardrail
+
+`apps/api/houston/core` is reserved for shared technical primitives only. It must stay small, stable, and infrastructure-level.
+
+Allowed in `houston.core`:
+
+- abstract base models
+- cross-cutting technical primitives
+- generic result objects
+- generic exceptions
+- generic event envelope structures
+- temporary health, root, and app shell views
+- helpers that are truly shared and non-business
+
+Forbidden in `houston.core`:
+
+- Observation, Signal, Action, Checklist, Notification, Upload, or AI business logic
+- establishment-specific RBAC rules
+- domain services
+- business selectors
+- object-level business policies
+- code placed there only because it is shared by two modules
+
+Decision rule:
+
+- If code depends on a domain concept, it belongs in that domain app.
+- If code is shared across domains but still expresses business rules, put it in the owning domain or a dedicated app, not in `core`.
+- If there is doubt, do not put it in `houston.core`.
+
+Any future PR adding code to `houston.core` must explain why that code is framework-level or infrastructure-level rather than domain-level.
+
 ## Current Capabilities
 
 The current Phase 0 foundation includes:

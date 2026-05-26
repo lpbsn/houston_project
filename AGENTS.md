@@ -89,6 +89,42 @@ apps/api/
 - No raw Observation text in realtime payloads, notifications, logs, or unauthorized APIs.
 - Tests are required for domain services, permissions, API workflows, feed queries, and AI contracts.
 
+## `houston.core` Boundary
+
+`houston.core` exists only for small, stable, infrastructure-level building blocks shared across the modular monolith.
+
+`houston.core` may contain only:
+- generic abstract base models
+- cross-cutting technical primitives
+- generic result objects
+- generic exceptions
+- generic event envelope structures
+- temporary health/root/app shell views
+- helpers that are genuinely shared and not domain-specific
+
+`houston.core` must never contain:
+- Observation business logic
+- Signal business logic
+- Action business logic
+- Checklist business logic
+- Notification business logic
+- Upload business logic
+- AI business logic
+- establishment-specific RBAC rules
+- domain services
+- business selectors
+- object-level business policies
+- code added there only because it is reused by two files
+
+Decision rule:
+- if code depends on a business concept, it belongs in the owning domain app
+- if code is used by several domains but still carries business rules, create it in the owning domain or in a dedicated app, not in `core`
+- when in doubt, do not put it in `houston.core`
+
+Pull request rule:
+- any future PR that adds code to `houston.core` must justify why the addition is framework-level or infrastructure-level rather than domain-level
+- `houston.core` must stay small, stable, and non-business
+
 ## Definition of done
 
 A task is done only when:

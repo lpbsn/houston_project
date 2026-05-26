@@ -117,6 +117,46 @@ It may only modify documentation or small project metadata if stale.
 
 It must not add business-domain code.
 
+## `houston.core` Closure Gate
+
+Phase 0 closure must preserve `houston.core` as a narrow technical layer, not a generic dumping ground.
+
+Allowed in `houston.core` only:
+
+- generic abstract base models
+- cross-cutting technical primitives
+- generic result objects
+- generic exceptions
+- generic event envelope structures
+- temporary health, root, and app shell views
+- helpers that are genuinely shared and non-business
+
+Forbidden in `houston.core`:
+
+- Observation business logic
+- Signal business logic
+- Action business logic
+- Checklist business logic
+- Notification business logic
+- Upload business logic
+- AI business logic
+- establishment-specific RBAC rules
+- domain services
+- business selectors
+- object-level business policies
+- code added there only because it is reused by two files
+
+Decision rule:
+
+- if code depends on a business concept, it must live in the owning domain app
+- if code is shared across domains but still carries business rules, it must live in the owning domain or a dedicated app, never in `core`
+- if there is doubt, do not place the code in `houston.core`
+
+PR review rule:
+
+- any PR that adds code to `houston.core` must explicitly justify why the addition is framework-level or infrastructure-level rather than domain-level
+- reviewers should reject convenience-driven additions that weaken domain boundaries
+
 ## In Scope
 
 ### Phase 0 audit
@@ -156,6 +196,7 @@ Allowed documentation updates:
 
 - `README.md`
 - `docs/codex/phase_0_7_phase_0_closure_gate.md` if implementation notes are needed
+- architecture guardrails documenting what may and may not live in `houston.core`
 
 Recommended README updates:
 
@@ -204,6 +245,7 @@ JWT
 refresh tokens
 React
 apps/web
+Codex must also verify that `houston.core` has not become a host for domain services, business selectors, business policies, or establishment-specific RBAC logic.
 Existing empty Django app folders from Phase 0.1 are acceptable if they were already part of the foundation.
 Out of Scope
 Do not implement:
