@@ -1,6 +1,6 @@
 # Houston
 
-Houston is currently in Phase 0.2 foundation hardening for the modular monolith backend.
+Houston is currently in Phase 0.4 identity and access foundation for the modular monolith backend.
 
 ## Current Stack Decisions
 
@@ -72,12 +72,15 @@ make migrate
 - `/api/schema/`: OpenAPI schema
 - `/api/docs/`: Swagger UI
 
-## Phase 0.2 Boundaries
+## Phase 0.4 Boundaries
 
-- No business models
-- No auth, users, memberships, roles, or permissions
+- Minimal identity and access foundation only
+- Custom global `User`
+- `Organization`, `Establishment`, and `EstablishmentMembership`
+- No login, logout, JWT, refresh tokens, password reset, or invitation flow
+- No permissions matrix or product workflow endpoints
 - No `apps/web`
 - No React
 - No frontend build tooling
 - No observation, signal, action, AI, uploads, notifications, or realtime implementation
-- Domain apps remain scaffolds only
+- All other domain apps remain scaffolds only
