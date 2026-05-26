@@ -4,6 +4,7 @@ from django.test import RequestFactory
 
 from houston.accounts.models import User
 from houston.establishments.access import (
+    ACCESS_STATE_INACTIVE_USER,
     ACCESS_STATE_READY,
     ACCESS_STATE_SELECTION_REQUIRED,
     CURRENT_ESTABLISHMENT_SESSION_KEY,
@@ -162,3 +163,18 @@ def test_active_membership_resolution_ignores_deactivated_memberships_and_non_ac
     assert context.active_memberships == (valid_membership,)
     assert context.selected_establishment == valid_establishment
     assert request.session[CURRENT_ESTABLISHMENT_SESSION_KEY] == str(valid_establishment.id)
+
+
+def test_anonymized_user_is_denied_access_and_stale_selection_is_cleared(request_factory):
+    user = User.objects.create_user(
+        username="anonymized_01",
+        password="secret",
+        status=User.Status.ANONYMIZED,
+    )
+    request = build_request(request_factory, user, session_value="stale-id")
+
+    context = resolve_current_access_context(request)
+
+    assert context.state == ACCESS_STATE_INACTIVE_USER
+    assert context.has_app_access is False
+    assert CURRENT_ESTABLISHMENT_SESSION_KEY not in request.session
