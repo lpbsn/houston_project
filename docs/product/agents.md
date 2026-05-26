@@ -1,0 +1,29 @@
+# Houston Architecture Rules
+
+- Houston is a Django modular monolith.
+- The MVP is not a React SPA.
+- Use Django Templates for product screens.
+- Use HTMX for partial updates and workflow interactions.
+- Use TypeScript only for targeted frontend modules.
+- Use Vite only for bundling TypeScript/CSS if needed.
+- Django REST Framework is used for JSON APIs where needed, not for every screen.
+- Business logic must not live in views.
+- Views call application services only.
+- Models contain fields, relationships, constraints, and small invariants only.
+- Use selectors/query modules for read-side/feed logic.
+- All important business mutations emit an ApplicationEvent.
+- Events are persisted in the same DB transaction as the business mutation.
+- Celery handles async side effects.
+- AI workers never write directly to core business tables.
+- Backend validates all AI outputs before persistence.
+- Visibility is always backend-resolved.
+- WebSocket subscriptions must be authorized server-side.
+- Realtime payloads are minimal and trigger partial refetch.
+- UUID is used for all primary keys.
+- Uploads are backend-mediated in the MVP.
+- Direct-to-storage signed uploads are post-MVP.
+- Services return explicit success/error results or raise documented domain exceptions.
+- No microservices before MVP validation.
+- No Kafka before MVP validation.
+- No frontend-side RBAC authority.
+- No raw Observation text in product API, realtime payloads, or notifications.
