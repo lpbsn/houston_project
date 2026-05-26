@@ -77,7 +77,7 @@ Les domaines sont séparés par apps Django et modules internes, mais ne devienn
 ## 3.1 Backend
 
 ```txt
-Python 3.13
+Python 3.14.2
 Django
 Django REST Framework
 PostgreSQL
