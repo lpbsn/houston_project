@@ -24,7 +24,7 @@ FloorPower n’est pas une app CRUD classique : ton product overview décrit un 
 ## Stack backend
 
 ```txt
-Python 3.13
+Python 3.14.2
 Django 5.2 LTS
 Django REST Framework
 PostgreSQL
@@ -818,7 +818,7 @@ No full offline-first MVP.
 
 ```txt
 BACKEND
-Python 3.12/3.13
+Python 3.14.2
 Django
 Django REST Framework
 PostgreSQL

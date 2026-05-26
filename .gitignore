@@ -17,9 +17,6 @@ db.sqlite3
 media/
 staticfiles/
 
-# uv
-uv.lock
-
 # Node / frontend tooling
 node_modules/
 dist/
