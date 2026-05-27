@@ -7,7 +7,7 @@
     "dev": "vite",
     "typecheck": "tsc -b",
     "build": "tsc -b && vite build",
-    "api:generate": "openapi-typescript ../api/schema.yml -o src/api/types.ts",
+    "api:generate": "openapi-typescript ../api/schema.yml -o src/api/generated/types.ts",
     "lint": "eslint .",
     "preview": "vite preview"
   },

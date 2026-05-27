@@ -1,4 +1,4 @@
-import type { components } from '@/api/types'
+import type { components } from '@/api/generated/types'
 
 export type AuthResponse = components['schemas']['AuthResponse']
 export type BootstrapResponse = components['schemas']['BootstrapResponse']
