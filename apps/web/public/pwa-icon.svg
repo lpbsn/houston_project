@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title>Houston</title>
+  <rect width="256" height="256" rx="64" fill="#0f3b48"/>
+  <path d="M70 68h36v50h44V68h36v120h-36v-40h-44v40H70Z" fill="#f5f0e8"/>
+</svg>

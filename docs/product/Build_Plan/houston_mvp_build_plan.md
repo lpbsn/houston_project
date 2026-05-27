@@ -1,117 +1,130 @@
-# Houston — MVP Build Plan
+# Houston — MVP Build Plan v0.2
 
-**Version:** v0.1  
-**Date:** 2026-05-26  
-**Statut:** Décisions MVP validées  
-**Périmètre:** Houston MVP — ordre de construction, phases, jalons, tickets, dépendances, critères d’acceptation, risques, pilote Mama Shelter Nice
-
-**Documents liés :**
-
-- `houston_technical_architecture_erd_final.md`
-- `houston_api_contract_mvp.md`
-- `houston_feed_query_sorting_contract.md`
-- `houston_realtime_architecture.md`
-- `houston_authentication_identity_domain.md`
-- `houston_rbac_permissions_domain.md`
-- `houston_onboarding_domain.md`
-- `houston_observation_domain.md`
-- `houston_signal_domain.md`
-- `houston_action_domain.md`
-- `houston_checklist_domain.md`
-- `houston_ai_overview.md`
-- `houston_event_catalog.md`
-- `houston_notification_matrix.md`
-- `houston_upload_media_lifecycle.md`
-- `houston_security_rgpd_baseline.md`
+**Version:** v0.2
+**Statut:** Plan de build MVP
+**Périmètre:** Houston MVP complet — P0 pilote Mama Shelter Nice
+**Objectif:** construire le P0 complet, dans un ordre strict, sans déplacer les règles métier côté frontend ni créer de dette structurelle.
 
 ---
 
-# 1. Objectif du document
+# 1. Purpose
 
-Ce document transforme le cadrage produit/tech Houston en plan de build MVP.
+Ce document définit :
 
-Il définit :
-- l’objectif MVP ;
-- le périmètre pilote ;
-- les phases de construction ;
-- les jalons ;
-- les vertical slices ;
-- les dépendances ;
-- les tickets types ;
-- les critères d’acceptation ;
-- les risques ;
-- les exclusions MVP ;
-- le protocole pilote Mama Shelter Nice.
-
----
-
-# 2. Principe central
-
-```txt
-Build the smallest complete operational loop.
-Harden it for pilot.
-Then expand.
-```
-
-En français :
-
-```txt
-Construire la plus petite boucle opérationnelle complète.
-La durcir pour le pilote.
-Étendre ensuite.
-```
-
----
-
-# 3. Rôle du MVP Build Plan
-
-```txt
-MVP Build Plan = ordre de construction + jalons + tickets + critères d’acceptation + risques.
-```
+* l’objectif MVP ;
+* le périmètre P0 complet ;
+* l’ordre de construction ;
+* les responsabilités backend/frontend ;
+* les phases de build ;
+* les gates de validation ;
+* les critères d’acceptation ;
+* la structure des tickets ;
+* les règles de Definition of Done ;
+* les risques ;
+* le protocole pilote Mama Shelter Nice.
 
 Ce document n’est pas :
-- un planning commercial ;
-- un chiffrage définitif ;
-- une roadmap long terme ;
-- un backlog exhaustif de tous les tickets techniques.
 
-Il sert à :
-- éviter le scope creep ;
-- guider Cursor/Codex/Claude Code ;
-- sécuriser l’ordre de développement ;
-- valider chaque phase par preuve fonctionnelle ;
-- préparer le pilote terrain.
+* une roadmap long terme ;
+* un planning commercial ;
+* un chiffrage ;
+* un backlog exhaustif.
 
 ---
 
-# 4. Objectif MVP
+# 2. MVP objective
 
 ```txt
-MVP objective = permettre à une équipe terrain de signaler, structurer, assigner, exécuter, valider et suivre des situations opérationnelles en conditions réelles.
+MVP objective =
+permettre à une équipe terrain de signaler, structurer, assigner, exécuter, valider et suivre des situations opérationnelles en conditions réelles.
 ```
 
-## 4.1 P0 absolu
+Le cœur du MVP reste :
 
 ```txt
-P0 = complete operational loop:
-Observation → Signal → Action → Execution → Validation → Feed update.
+Observation → Signal → Action → Execution → Validation → Feed update
 ```
 
-## 4.2 Critère d’acceptation principal
+Critère principal :
 
 ```txt
-Acceptance #1:
-A user can submit an Observation.
-System creates/aggregates Signal.
-Manager creates Action.
-Staff executes Action.
-Manager validates.
-Feeds update.
+A user submits an Observation.
+System creates or aggregates a Signal.
+Manager creates an Action.
+Staff executes the Action.
+Manager validates the Action.
+Feeds update correctly.
 ```
 
 ---
 
-# 5. Périmètre pilote
+# 3. P0 complete scope
+
+Le P0 est complet pour le pilote.
+
+Le P0 inclut :
+
+```txt
+- Auth / sessions / memberships / RBAC
+- Runtime config / onboarding minimal
+- Observation text
+- Optional photos
+- Audio transcription with text fallback
+- Temporary upload lifecycle
+- AI pipeline fake + real provider adapter
+- Signal creation
+- Signal aggregation
+- no_signal_created
+- Signal Feed
+- Signal detail
+- Action lifecycle
+- Execution Feed
+- In-app notifications
+- Notification Center
+- Minimal realtime invalidation/refetch
+- Shared Checklists
+- Personal Checklists
+- Task → Observation
+- Security baseline
+- Cleanup jobs
+- Mobile QA
+- Mama Shelter Nice pilot readiness
+```
+
+---
+
+# 4. P0 sequencing principle
+
+```txt
+P0 complet ne signifie pas développement simultané.
+```
+
+Règle :
+
+```txt
+Tout reste P0.
+Tout n’est pas construit au même moment.
+La boucle opérationnelle pilote l’ordre.
+Les modules terrain viennent se brancher progressivement sur cette boucle.
+```
+
+Donc :
+
+```txt
+1. Construire l’autorité backend et les permissions.
+2. Construire le socle frontend API-driven.
+3. Construire Observation + media/audio.
+4. Construire Observation → Signal.
+5. Construire Signal → Action → Validation.
+6. Ajouter notifications.
+7. Ajouter realtime.
+8. Ajouter checklists.
+9. Durcir pour pilote.
+```
+
+---
+
+# 5. Pilot scope
 
 ## 5.1 Pilote initial
 
@@ -119,865 +132,1843 @@ Feeds update.
 Pilot MVP = Mama Shelter Nice.
 ```
 
-## 5.2 Nancy
+## 5.2 Exclusion
 
 ```txt
 Nancy pilot = post-Mama Shelter stabilization.
 Not part of initial MVP build acceptance.
 ```
 
-## 5.3 Implication
+## 5.3 Implication produit
 
-Le build MVP doit optimiser pour :
-- un établissement hôtel/restauration réel ;
-- des utilisateurs terrain ;
-- des managers opérationnels ;
-- des flux mobile-first ;
-- une validation rapide en conditions réelles.
+Le build doit optimiser pour :
 
----
-
-# 6. Stratégie de construction
-
-## 6.1 Vertical slices
-
-```txt
-Build by vertical slices.
-Chaque slice doit produire un flux utilisable de bout en bout.
-```
-
-## 6.2 Pourquoi
-
-Construire par vertical slices évite :
-- backend complet inutilisable ;
-- frontend déconnecté de l’API ;
-- modèle DB surdimensionné ;
-- feedback terrain trop tardif.
-
-Chaque phase doit produire une preuve fonctionnelle.
+* usage mobile terrain ;
+* hôtel / restauration ;
+* managers opérationnels ;
+* staff non technique ;
+* rapidité de saisie ;
+* clarté des feeds ;
+* sécurité des données opérationnelles.
 
 ---
 
-# 7. UI Kit MVP
+# 6. Stack ownership matrix
 
-## 7.1 Décision
+## 6.1 Backend ownership
 
 ```txt
-Build minimal mobile-first UI kit:
-buttons, forms, cards, badges, feed items, modals, toasts.
+Django = business authority.
+PostgreSQL = persisted source of truth.
+Redis = temporary technical state only.
+Celery = async execution only.
+Channels = realtime invalidation only.
+Pydantic = structured AI/technical payload validation.
+OpenAPI = API contract.
 ```
 
-## 7.2 Objectif
+Conséquences :
 
-Avoir un socle UI suffisant pour :
-- formulaires auth/onboarding ;
-- cartes feed ;
-- badges domains/status/urgency ;
-- actions principales ;
-- états loading/error/empty ;
-- UX mobile terrain.
-
-## 7.3 Hors MVP
-
-Pas de design system complet.
+* les workflows métier vont dans `services.py` ;
+* les lectures complexes vont dans `selectors.py` ;
+* les règles d’autorisation vont dans `permissions.py` ;
+* les views DRF restent fines ;
+* les serializers ne pilotent pas les workflows ;
+* les modèles ne pilotent pas les transitions métier ;
+* aucun workflow métier ne va dans `core/`.
 
 ---
 
-# 8. Stratégie IA
-
-## 8.1 Fake provider d’abord
+## 6.2 Frontend ownership
 
 ```txt
-Start with fake/deterministic AI provider.
-Then plug real provider behind same interface.
+React = UI layer.
+TanStack Query = server state.
+Zustand = UI/client state only.
+OpenAPI generated client = API access.
+Realtime messages = invalidation triggers only.
+Framer Motion = functional UX transitions and feedback only.
 ```
 
-## 8.2 Pourquoi
+Conséquences :
 
-Réduit :
-- instabilité IA ;
-- coûts ;
-- lenteur tests ;
-- dépendance provider ;
-- bugs non déterministes.
-
-## 8.3 Acceptation IA
-
-```txt
-AI acceptance:
-- valid JSON schema
-- backend validates domains
-- max 5 candidates
-- create/aggregate/no_signal_created outcomes work
-```
+* pas de business workflow dans React ;
+* pas de calcul réel de permissions dans React ;
+* pas de données serveur stockées dans Zustand ;
+* pas de `fetch` direct dans les composants ;
+* pas d’usage d’endpoint non documenté par OpenAPI ;
+* les composants affichent, composent et déclenchent des hooks ;
+* TanStack Query gère reads, mutations, cache, loading/error/success, invalidation.
 
 ---
 
-# 9. OpenAPI / frontend contract
-
-## 9.1 OpenAPI dès le début
+## 6.3 API/OpenAPI ownership
 
 ```txt
-OpenAPI generated from day 1.
-OpenAPI documents JSON APIs and future mobile/API consumers.
-HTMX product screens use server-rendered templates and partials.
-Generated TypeScript client is optional for targeted JSON API consumers.
+OpenAPI owns the API contract.
 ```
 
-## 9.2 Frontend start
+Règles :
+
+* toute API produit doit être documentée ;
+* les types frontend viennent du client généré ;
+* si les types générés sont faux, corriger le backend/schema puis régénérer ;
+* ne pas modifier manuellement les fichiers générés ;
+* ne pas inventer de commande de génération.
+
+Si aucune commande OpenAPI n’existe :
 
 ```txt
-Frontend starts with Django Templates from Phase 0/1.
-HTMX partials start once authenticated workflows exist.
-OpenAPI remains generated continuously for JSON endpoints.
-Generated TypeScript client is only used where a TypeScript module consumes JSON APIs.
+OpenAPI generation command is not defined yet.
 ```
 
-## 9.3 Mocks
-
-```txt
-Frontend mocks should be avoided for server-rendered flows.
-If JSON API mocking is needed, mocks must follow OpenAPI schemas.
-```
-
-## 9.4 Acceptance
-
-```txt
-OpenAPI acceptance:
-- JSON product APIs are documented.
-- schema generation passes in CI.
-- TypeScript client can be generated when needed.
-- HTMX product screens do not depend on a generated client.
-```
+Créer alors un ticket dédié de setup OpenAPI.
 
 ---
 
-# 10. Tests
-
-## 10.1 Test priority
+## 6.4 Async ownership
 
 ```txt
-Test priority:
-1. domain services
-2. permissions
-3. API integration
-4. feed queries
-5. AI contracts
-6. realtime authorization
+Celery tasks are execution wrappers, not business services.
 ```
 
-## 10.2 Pourquoi
+Règles :
 
-Les plus gros risques sont :
-- règles métier ;
-- droits d’accès ;
-- feeds ;
-- IA ;
-- realtime.
-
-Les tests UI complets ne doivent pas masquer des bugs backend.
+* les tâches Celery reçoivent des IDs ;
+* elles rechargent les records côté serveur ;
+* elles appellent des services ;
+* elles ne reçoivent pas de texte Observation brut ;
+* elles ne contiennent pas de workflow métier directement ;
+* elles ne deviennent pas source de vérité métier.
 
 ---
 
-# 11. Definition of Done
-
-## 11.1 Ticket done
+## 6.5 Realtime ownership
 
 ```txt
-Ticket done =
-- code implemented
-- tests pass
-- API documented if endpoint
-- permissions checked
-- no raw sensitive data leaked
-- basic error handling
+Channels = invalidation/refetch only.
 ```
 
-## 11.2 Taille ticket
+Règles :
+
+* websocket payload léger ;
+* pas de payload métier complet ;
+* pas de mutation métier depuis Channels ;
+* authentification + vérification membership ;
+* vérification du droit de souscription ;
+* frontend invalide les queries TanStack Query ;
+* frontend refetch via REST API.
+
+---
+
+# 7. Backend structure standard
+
+Chaque app domaine suit cette structure quand pertinent :
 
 ```txt
-Ticket size target:
-small enough to review diff safely.
+models.py
+services.py
+selectors.py
+permissions.py
+api/
+  serializers.py
+  views.py
+  urls.py
+tests/
 ```
 
-## 11.3 Format backlog
+`core/` est autorisé uniquement pour les primitives techniques partagées.
+
+Interdit dans `core/` :
 
 ```txt
-Backlog format:
-Epic
-→ Slice
-→ Ticket
-→ Acceptance criteria
-→ Dependencies
-→ Tests
+- business workflows
+- domain-specific services
+- catch-all utilities
+- cross-domain shortcuts
 ```
 
 ---
 
-# 12. Phases MVP
+# 8. Frontend structure standard
 
-## 12.1 Vue globale
+Structure attendue :
 
 ```txt
-MVP Build Plan phases:
-0. Foundations
-1. Runtime config + onboarding minimal
-2. Observation + upload + transcription
-3. AI pipeline + Signal Feed
-4. Actions + Execution Feed
-5. Checklists + Notifications + Realtime
-6. Hardening + pilot readiness
+src/
+  api/
+    generated/
+  app/
+  components/
+    ui/
+    domain/
+    layout/
+  features/
+  stores/
+  lib/
 ```
 
-## 12.2 Ordre
+Usage :
 
 ```txt
-Strict phase order.
-Flexible ticket order inside phase if dependencies met.
+src/api/generated/ = generated OpenAPI client
+src/app/ = bootstrap, providers, routing, layout shell
+src/components/ui/ = primitives shadcn/ui
+src/components/domain/ = composants Houston réutilisables
+src/components/layout/ = layout primitives
+src/features/ = screens et flows métier
+src/stores/ = Zustand UI/client state only
+src/lib/ = petites utilities frontend
 ```
 
-## 12.3 Migrations
+Interdit :
 
 ```txt
-Migrations generated per domain slice.
-Review schema after each phase.
+- nouveau top-level folder sans justification
+- server state dans Zustand
+- business workflow dans React
+- permissions réelles calculées côté frontend
+- direct fetch dans les composants feature
 ```
 
 ---
 
-# 13. Phase 0 — Foundations
+# 9. Build strategy
 
-## 13.1 Objectif
-
-Construire le socle technique et les fondations métier nécessaires à tout le reste.
-
-## 13.2 Scope
+## 9.1 Principe
 
 ```txt
-Phase 0:
-- project setup
-- auth
-- user identities email/username
-- organizations/establishments
-- memberships
-- operational domains
-- permission services
-- OpenAPI base
+Build by domain-sequenced full-stack slices.
 ```
 
-## 13.3 Milestone 0.1
+Chaque phase doit produire une preuve vérifiable :
+
+* backend ;
+* API ;
+* OpenAPI ;
+* frontend si concerné ;
+* tests ;
+* permissions ;
+* commandes de validation.
+
+## 9.2 Feed update levels
 
 ```txt
-Milestone 0.1:
-- repo structure
-- Docker Compose
-- Django project
-- PostgreSQL
-- Redis
+Feed update Level 1 = API/refetch correctness.
+Feed update Level 2 = realtime invalidation/refetch.
+```
+
+Level 1 est requis avant validation de la boucle opérationnelle.
+
+Level 2 est requis avant pilote.
+
+## 9.3 UI principle
+
+```txt
+Mobile-first.
+Operational clarity first.
+No dense desktop-first UX.
+No hidden critical actions.
+```
+
+---
+
+# 10. Phase overview
+
+```txt
+0. Full-stack foundation
+1. Identity / Memberships / RBAC
+2. Runtime config / Onboarding minimal
+3. Observation / Media / Transcription
+   3A. Observation text
+   3B. Temporary uploads + photos
+   3C. Audio transcription + editable text
+   3D. Cleanup jobs + signed media access
+4. AI Pipeline / Signal Feed
+5. Actions / Execution Feed
+6. Notifications
+7. Checklists
+8. Realtime invalidation
+9. Hardening
+10. Pilot readiness
+```
+
+---
+
+# 11. Phase 0 — Full-stack foundation
+
+## Objective
+
+Créer le socle technique backend/frontend sans encore construire les workflows métier avancés.
+
+## Backend scope
+
+```txt
+- Django project baseline
+- DRF baseline
+- PostgreSQL connection
+- Redis connection
+- Celery setup
+- Channels baseline configuration only if required by project boot
+- no realtime business flow before Phase 7
 - pytest
 - Ruff
-- OpenAPI setup
+- project settings
+- base model if needed
+- OpenAPI generation command setup
 ```
 
-## 13.4 CI MVP
+## Frontend scope
 
 ```txt
-CI MVP:
+Frontend scope:
+- React + Vite + TypeScript app
+- Tailwind CSS
+- shadcn/ui base
+- TanStack Query provider
+- minimal Zustand setup
+- Framer Motion setup
+- src/api/generated/ folder
+- app shell mobile-first
+- routing baseline
+```
+
+Motion / Animation policy:
+
+Framer Motion is part of the MVP frontend stack.
+
+Purpose:
+- improve mobile usability
+- improve perceived responsiveness
+- make screen transitions clearer
+- provide feedback after important user actions
+- make drawers, modals, sheets, and feed updates feel natural
+
+Allowed:
+- page/screen transitions
+- mobile sheet/drawer transitions
+- modal transitions
+- toast entrance/exit
+- feed item insertion animation
+- button/action feedback
+- loading-to-success transitions
+- small status change feedback
+- audio recording visual feedback
+- upload/transcription progress feedback
+
+Forbidden:
+- decorative animations with no UX value
+- heavy animation sequences
+- complex animation state machines
+- animations that slow down operational actions
+- animations that hide loading/error states
+- animations that hide business status changes
+- animations used instead of clear text feedback
+
+Principle:
+Motion supports operational clarity.
+Motion never replaces clear state, copy, or backend truth.
+
+## CI scope
+
+```txt
+Backend:
 - lint
+- format check
 - tests
-- migrations check
-- OpenAPI schema generation check
+- migration check
+- OpenAPI generation if command exists
+
+Frontend:
+- typecheck
+- lint
+- build
 ```
 
-## 13.5 Critical dependency
+## Acceptance
 
 ```txt
-Critical dependency #1 = Auth + EstablishmentMembership + permissions.
+- Backend starts locally.
+- Frontend starts locally.
+- PostgreSQL works.
+- Redis works.
+- Celery worker can boot.
+- Channels baseline can boot.
+- OpenAPI generation command exists or dedicated setup ticket is created.
+- Frontend has React/Vite/TypeScript shell.
+- TanStack Query provider installed.
+- Zustand reserved for UI/client state only.
+- CI commands documented.
 ```
 
-## 13.6 Acceptance Phase 0
+## Gate Phase 0
 
-- API project démarre localement via Docker Compose.
-- Tests s’exécutent.
-- OpenAPI schema générable.
-- User email identity et username identity possibles.
-- Organization + Establishment créables.
-- Membership active/deactivated fonctionne.
-- Permission service minimal testé.
-- No secrets in repo.
+Can move to Phase 1 only if:
+
+```txt
+- backend foundation works
+- frontend foundation works
+- OpenAPI strategy is explicit
+- CI baseline passes or missing commands are tracked
+- no secrets in repo
+```
 
 ---
 
-# 14. Phase 1 — Runtime config + onboarding minimal
+# 12. Phase 1 — Identity / Memberships / RBAC
 
-## 14.1 Scope
+## Objective
+
+Sécuriser l’accès avant les domaines métier.
+
+## Backend scope
 
 ```txt
-Phase 1:
-- create organization/establishment
+- User model
+- email identity
+- username identity for Staff
+- Organization
+- Establishment
+- EstablishmentMembership
+- membership statuses
+- auth endpoints
+- token/session lifecycle
+- refresh token rotation
+- permission services
+- establishment access helpers
+```
+
+## Frontend scope
+
+```txt
+- login screen
+- session handling
+- protected route shell
+- establishment selection if multiple memberships
+- expired session handling
+- permission-denied UI state
+```
+
+## Ownership rules
+
+```txt
+- Backend owns permissions.
+- Frontend may display backend-provided permission flags.
+- Frontend must not compute real permissions from role/domain data.
+```
+
+## Contract order
+
+```txt
+1. backend endpoint/service/selector
+2. OpenAPI schema generated
+3. TypeScript client generated
+4. frontend hook
+5. frontend screen
+```
+
+## Acceptance
+
+```txt
+- User can authenticate.
+- User can belong to one or more establishments.
+- Active membership gives access.
+- Deactivated membership removes access.
+- Backend permission functions are tested.
+- Frontend protected routes work.
+- Frontend handles forbidden response gracefully.
+- No frontend-side RBAC authority.
+```
+
+## Gate Phase 1
+
+Can move to Phase 2 only if:
+
+```txt
+- auth works
+- memberships work
+- permissions tested
+- protected frontend shell works
+- establishment scoping is enforced
+```
+
+---
+
+# 13. Phase 2 — Runtime config / Onboarding minimal
+
+## Objective
+
+Initialiser un établissement réel et ses domaines opérationnels.
+
+## Backend scope
+
+```txt
+- create organization
+- create establishment
 - submit establishment description
-- validate modules/domains/units
-- invite initial users
-- activate establishment
+- operational modules
+- operational domains
+- operational units
+- runtime vocabulary if MVP
+- onboarding validation service
+- establishment activation
+- Mama Shelter Nice seed dataset
 ```
 
-## 14.2 Mama Shelter seed
+## Frontend scope
 
 ```txt
-Create Mama Shelter Nice seed dataset after Phase 1.
+- onboarding flow
+- establishment setup screens
+- modules/domains/units validation UI
+- activation state
+- simple user invitation UI if in scope
 ```
 
-## 14.3 Acceptance Phase 1
+## Contract order
 
-- Un établissement peut être initialisé.
-- Modules/domains/units validés.
-- Owner/Director/Manager/Staff peuvent être invités.
-- Staff sans email peut être créé via username identity.
-- Establishment peut passer `active`.
-- Mama Shelter Nice seed disponible.
+```txt
+1. backend endpoint/service/selector
+2. OpenAPI schema generated
+3. TypeScript client generated
+4. frontend hook
+5. frontend screen
+```
+
+## Acceptance
+
+```txt
+- Organization can be created.
+- Establishment can be created.
+- Establishment description can be submitted.
+- Modules/domains/units can be validated.
+- Establishment can become active.
+- Mama Shelter Nice seed exists.
+- Frontend can display and validate runtime config.
+```
+
+## Gate Phase 2
+
+Can move to Phase 3 only if:
+
+```txt
+- Mama Shelter runtime seed exists
+- operational domains assigned
+- establishment active
+- frontend onboarding flow works for MVP needs
+```
 
 ---
 
-# 15. Phase 2 — Observation + upload + transcription
+# 14. Phase 3 — Observation / Media / Transcription
 
-## 15.1 Scope
+## Objectif
 
-```txt
-Phase 2:
-- submit text Observation
-- temporary uploads
-- optional photos
-- transcription audio
-- ObservationProcessing queued
+Permettre à un utilisateur terrain de créer une Observation exploitable avec texte, photos optionnelles et transcription audio, sans exposer de contenu sensible ni bloquer la suite du pipeline.
+
+```
+Phase 3 is split into:
+3A. Observation text
+3B. Temporary uploads + photos
+3C. Audio transcription + editable text
+3D. Cleanup jobs + signed media access
 ```
 
-## 15.2 Photos
+------
 
-```txt
-Photos = P0 optional.
-Photo-only Observation forbidden.
+# Phase 3A — Observation text
+
+## Objective
+
+Construire le flux minimal de création d’Observation texte.
+
+## Backend scope
+
+```
+- Observation model
+- ObservationProcessing model/status
+- submit Observation service
+- ObservationCreated event if event system already exists
+- ObservationProcessing queued state
+- text validation
+- establishment scoping
+- author scoping
+- source = direct/checklist-ready if checklist context is already modeled
+- no raw Observation exposure in product API
 ```
 
-## 15.3 Audio
+## Frontend scope
 
-```txt
-Audio transcription = P0, but never blocks text submit.
+```
+- +Signaler text screen
+- textarea input
+- submit button
+- basic frontend validation for visible required text
+- backend validation error display
+- loading state
+- success state
+- error state
+- local non-durable draft if already planned
 ```
 
-## 15.4 Offline
+## Rules
 
-```txt
-Offline MVP:
-local Observation draft only.
-Submit requires online.
+```
+- Text is required.
+- Photo-only Observation is impossible at this stage.
+- Frontend validation improves UX only.
+- Backend remains source of validation truth.
+- Observation submit must go through backend service.
+- DRF view must stay thin.
+- Raw Observation text must not be returned in product APIs outside the authorized submit/result flow.
 ```
 
-## 15.5 Media acceptance
+## Acceptance
 
-```txt
-Media acceptance:
-- max 3 photos
-- no photo-only Observation
-- audio deleted after transcription
-- signed URLs authorized
-- cleanup jobs work
+```
+- User can submit a valid text Observation.
+- Empty text is rejected.
+- Too-short/invalid text is rejected according to domain rules.
+- ObservationProcessing is created in queued status.
+- Observation is scoped to establishment.
+- Unauthorized user cannot submit for another establishment.
+- API response does not expose unnecessary raw Observation content.
+- Frontend handles loading/error/success states.
 ```
 
-## 15.6 Acceptance Phase 2
+## Tests
 
-- Un user peut soumettre une Observation texte.
-- Une Observation sans texte valide est refusée.
-- Photos optionnelles uploadées temporairement puis liées.
-- Photo-only refusé.
-- Audio transcrit en texte éditable.
-- Audio supprimé après transcription ou échec final.
-- ObservationProcessing créé en `queued`.
-- Aucun raw Observation exposé hors flux autorisé.
+```
+Backend:
+- service success test
+- service invalid text test
+- API success test
+- API validation error test
+- permission/establishment scoping test
+- no raw Observation leak test
 
----
+Frontend:
+- submit valid text
+- display validation error
+- display loading state
+- display success feedback
+```
 
-# 16. Phase 3 — AI pipeline + Signal Feed
+## Gate 3A
 
-## 16.1 Scope
+Can move to 3B only if:
+
+```
+- text Observation submit works end-to-end
+- ObservationProcessing queued works
+- establishment scoping is tested
+- raw Observation exposure rules are tested
+```
+
+------
+
+# Phase 3B — Temporary uploads + photos
+
+## Objective
+
+Ajouter les photos optionnelles sans permettre d’Observation photo-only.
+
+## Backend scope
+
+```
+- temporary upload model or technical upload record
+- upload initialization endpoint
+- upload attach/link service
+- photo validation
+- max 3 photos per Observation
+- allowed MIME types
+- max file size validation
+- temporary upload ownership
+- temporary upload establishment scope
+- media linked to Observation on submit
+- orphan upload status or expiry metadata
+```
+
+## Frontend scope
+
+```
+- photo picker
+- photo preview
+- remove photo
+- upload progress
+- upload retry
+- upload error state
+- max 3 photos UI constraint
+- submit Observation with linked temporary upload IDs
+```
+
+## Rules
+
+```
+- Photos are optional.
+- Photo-only Observation is forbidden.
+- Temporary upload is not business truth.
+- Media is linked to Observation only on submit.
+- Frontend must not bypass backend media limits.
+- Backend must revalidate upload ownership and establishment scope.
+```
+
+## Acceptance
+
+```
+- User can attach up to 3 photos.
+- User can remove a selected photo before submit.
+- Upload error is displayed clearly.
+- Observation with text + photos is accepted.
+- Observation with photos but no valid text is rejected.
+- More than 3 photos is rejected.
+- Upload belonging to another user/establishment cannot be attached.
+- Linked media count appears where needed without exposing raw Observation.
+```
+
+## Tests
+
+```
+Backend:
+- upload init success
+- invalid MIME rejected
+- max size rejected
+- max 3 photos enforced
+- attach valid upload to Observation
+- reject upload owned by another user
+- reject upload from another establishment
+- photo-only Observation rejected
+
+Frontend:
+- add photo
+- remove photo
+- max 3 photos UI behavior
+- upload failure state
+- submit with text + photo IDs
+```
+
+## Gate 3B
+
+Can move to 3C only if:
+
+```
+- temporary uploads work
+- photo validation works
+- photo-only Observation is rejected
+- media ownership and establishment scope are tested
+```
+
+------
+
+# Phase 3C — Audio transcription + editable text
+
+## Objective
+
+Permettre à l’utilisateur de dicter une Observation, transformer l’audio en texte éditable, puis soumettre uniquement du texte validé.
+
+## Backend scope
+
+```
+- temporary audio upload endpoint
+- audio validation
+- supported audio formats
+- max duration validation if available
+- max audio size validation
+- transcription service abstraction
+- transcription Celery task or sync service depending architecture
+- transcription status/result endpoint if async
+- audio deletion after success
+- audio deletion after final failure
+- AIUsageLog metadata for transcription if in scope
+- no transcribed text stored before Observation submit except short-lived technical response if needed
+```
+
+## Frontend scope
+
+```
+- record audio UI
+- recording state
+- cancel recording
+- upload audio state
+- transcribing state
+- transcription success state
+- transcription failure state
+- editable transcribed text
+- retry once if allowed
+- fallback to manual text input
+```
+
+## Rules
+
+```
+- Audio is temporary.
+- Audio never creates Observation by itself.
+- Audio only produces editable text.
+- User submits validated text.
+- The Observation pipeline receives text only.
+- Audio content is deleted after transcription success or final failure.
+- Celery payloads pass IDs only.
+- Standard logs must not contain audio content, full transcription, or raw prompt/content.
+```
+
+## Acceptance
+
+```
+- User can record or upload audio.
+- Audio is transcribed into editable text.
+- User can edit transcription before submit.
+- User can submit edited transcription as Observation text.
+- Failed transcription does not block manual text submit.
+- Audio is deleted after success/final failure.
+- Unsupported audio is rejected.
+- Too-large audio is rejected.
+- Frontend displays recording/uploading/transcribing/failed states.
+```
+
+## Tests
+
+```
+Backend:
+- valid audio accepted
+- unsupported format rejected
+- too-large audio rejected
+- transcription success path
+- transcription failure path
+- audio deletion after success
+- audio deletion after final failure
+- Celery task receives IDs only
+- logs do not contain raw audio/transcription content
+
+Frontend:
+- recording state
+- transcription loading state
+- transcription success into editable text
+- transcription failure fallback
+- submit edited transcription
+```
+
+## Gate 3C
+
+Can move to 3D only if:
+
+```
+- audio transcription works
+- text fallback works
+- audio deletion is tested
+- frontend transcription states work
+- Observation submit still uses text only
+```
+
+------
+
+# Phase 3D — Cleanup jobs + signed media access
+
+## Objective
+
+Sécuriser le cycle de vie des fichiers temporaires et l’accès aux médias liés.
+
+## Backend scope
+
+```
+- cleanup job for orphan temporary uploads
+- cleanup job for expired temporary audio
+- media access permission service
+- signed media URL generation if used
+- media metadata endpoint if needed
+- retention metadata
+- cleanup event/log metadata without sensitive content
+```
+
+## Frontend scope
+
+```
+- display linked photo thumbnails where product UI allows it
+- handle expired media URL
+- retry media URL fetch if needed
+- display media loading/error state
+```
+
+## Rules
+
+```
+- Redis must not store durable media truth.
+- PostgreSQL stores persisted media metadata.
+- Object storage stores file content.
+- Signed URLs must be authorized.
+- Expired temporary uploads must not remain usable.
+- Cleanup jobs must not delete linked valid media.
+```
+
+## Acceptance
+
+```
+- Orphan temporary uploads expire.
+- Expired temporary audio is deleted.
+- Linked Observation media remains accessible to authorized users.
+- Unauthorized user cannot access media.
+- Signed URL generation enforces establishment and visibility scope.
+- Expired media URL is handled gracefully by frontend.
+- Cleanup jobs are idempotent.
+```
+
+## Tests
+
+```
+Backend:
+- orphan upload cleanup
+- expired audio cleanup
+- linked media not deleted
+- authorized media access
+- unauthorized media access denied
+- signed URL generated only for authorized user
+- cleanup job idempotency
+
+Frontend:
+- media loading state
+- media error state
+- expired URL recovery if implemented
+```
+
+## Gate Phase 3
+
+Can move to Phase 4 only if all Phase 3 gates pass:
+
+```
+- 3A Observation text works
+- 3B temporary uploads/photos work
+- 3C audio transcription works
+- 3D cleanup/media access works
+- no raw Observation leaks are tested
+- ObservationProcessing queued works
+```
+
+# 15. Phase 4 — AI Pipeline / Signal Feed
+
+## Objective
+
+Transformer les Observations validées en Signals visibles et actionnables.
+
+## Backend scope
 
 ```txt
-Phase 3:
-- AI pipeline contract
-- fake provider
-- Signal creation
-- Signal aggregation
+- Pydantic AI schemas
+- fake deterministic AI provider
+- real provider adapter behind same interface
+- AI usage logging metadata
+- pipeline Celery task
+- candidate validation
+- Signal create service
+- Signal aggregate service
+- no_signal_created outcome
+- detected_domains validation
+- Signal Feed selector
+- Signal detail selector
+- last_activity_at management
+- RBAC-scoped feed queries
+```
+
+## Frontend scope
+
+```txt
 - Signal Feed
 - Signal detail
+- processing state
+- no_signal_created state if exposed
+- Signal status badges
+- domain badges
+- urgency badge
+- pinned display if in scope
+- feed filters/view modes if in scope
 ```
 
-## 16.2 Feed dependency
+## Rules
 
 ```txt
-Feeds require:
-- operational domains
-- membership domains
-- signal detected domains
-- last_activity_at
+- AI does not mutate the database directly.
+- Django validates business rules.
+- AI does not decide permissions.
+- AI does not decide urgency in MVP.
+- Images are not sent to AI.
+- Prompt/content logs are forbidden in standard logs.
+- Signal visibility is backend-owned.
+- Feed sorting is backend-owned.
+
+Real AI provider integration starts only after fake provider passes:
+- candidate schema validation
+- Signal creation
+- Signal aggregation
+- no_signal_created
+- RBAC-safe Signal Feed
 ```
 
-## 16.3 Acceptance Phase 3
+## Contract order
 
-- Fake AI provider retourne candidates déterministes.
-- Backend valide domains.
-- Max 5 candidates par Observation.
-- Signal créé si candidate distincte.
-- Signal agrégé si candidate similaire.
-- no_signal_created fonctionne.
-- Signal Feed personnel/général fonctionne.
-- Signal detail sans Observation brute.
-- Signal.last_activity_at mis à jour.
-- Signal Feed respecte RBAC.
+```txt
+1. backend endpoint/service/selector
+2. OpenAPI schema generated
+3. TypeScript client generated
+4. frontend hook
+5. frontend screen
+```
+
+## Acceptance
+
+```txt
+- Fake provider returns deterministic candidates.
+- Real provider can be plugged behind same interface.
+- AI JSON validates through Pydantic.
+- Backend validates domains.
+- Max 5 candidates per Observation.
+- Signal is created if candidate is distinct.
+- Signal is aggregated if candidate matches active similar Signal.
+- no_signal_created works.
+- Signal Feed works.
+- Signal detail works without raw Observation.
+- Signal.last_activity_at updates.
+- Signal Feed respects RBAC and establishment scope.
+- Frontend uses generated API types.
+```
+
+## Gate Phase 4
+
+Can move to Phase 5 only if:
+
+```txt
+- fake AI pipeline creates/aggregates Signals
+- no_signal_created works
+- Signal Feed works
+- Signal detail works
+- RBAC feed tests pass
+- frontend Signal Feed consumes OpenAPI client
+```
 
 ---
 
-# 17. Phase 4 — Actions + Execution Feed
+# 16. Phase 5 — Actions / Execution Feed
 
-## 17.1 Scope
+## Objective
+
+Fermer la boucle opérationnelle principale.
+
+## Backend scope
 
 ```txt
-Phase 4:
 - create Action from Signal
-- assign
-- accept
+- assign Action
+- accept Action
+- mark Action done
+- validate Action
+- reopen Action
+- cancel Action
+- reassign Action if MVP
+- Signal status transitions from Action lifecycle
+- Execution Feed selector
+- Action detail selector
+- domain events
+- notification triggers prepared if needed
+```
+
+## Frontend scope
+
+```txt
+- create Action from Signal
+- Action assignment UI
+- Execution Feed
+- Action detail
+- accept action
 - mark done
 - validate
 - reopen
 - cancel
-- Execution Feed Actions
+- conflict/error states
 ```
 
-## 17.2 Dependencies
+## Rules
 
 ```txt
-Actions depend on:
-Signal Domain
-Accounts/Memberships
-RBAC
+- No generic PATCH status endpoint.
+- All business transitions use explicit service methods.
+- All transitions check backend permission.
+- All transitions validate current state.
+- Multiple-write transitions use transaction.atomic.
+- React never encodes transition authority.
 ```
 
-## 17.3 Acceptance Phase 4
+## Contract order
 
-- Manager crée une Action depuis un Signal autorisé.
-- Action assignée à un user actif.
-- Assignee accepte Action.
-- Assignee marque done/pending validation.
-- Manager/Director/Owner valide selon permissions.
-- Reopen fonctionne.
-- Cancel fonctionne.
-- Signal passe in_progress/resolved selon règles.
-- Execution Feed affiche Actions pertinentes.
-- Permissions Action testées.
+```txt
+1. backend endpoint/service/selector
+2. OpenAPI schema generated
+3. TypeScript client generated
+4. frontend hook
+5. frontend screen
+```
+
+## Acceptance
+
+```txt
+- Manager can create Action from authorized Signal.
+- Action can be assigned to active user.
+- Assignee can accept Action.
+- Assignee can mark Action done.
+- Manager/Director/Owner can validate according to permissions.
+- Reopen works.
+- Cancel works.
+- Signal moves in_progress/resolved according to rules.
+- Execution Feed shows relevant Actions.
+- Unauthorized users cannot view or mutate forbidden Actions.
+- Frontend handles forbidden/conflict responses.
+```
+
+## Gate Phase 5
+
+Can move to Phase 6 only if:
+
+```txt
+- Action lifecycle complete
+- Execution Feed works
+- Signal status transitions work
+- validation/reopen/cancel tested
+- frontend Action flow works
+- operational loop works with API/refetch feed update
+```
 
 ---
 
-# 18. Phase 5 — Checklists + Notifications + Realtime
+# 17. Phase 6 — Notifications
 
-## 18.1 Scope
+## Objective
+
+Créer les notifications in-app nécessaires au pilote.
+
+## Backend scope
 
 ```txt
-Phase 5:
-- Shared Checklists
-- Personal Checklists
+- Notification model
+- Notification service
 - Notification Matrix MVP
-- Realtime invalidation
+- Notification Center selector
+- ActionAssigned notification
+- pending validation notification
+- mention notification
+- important Signal event notification
+- read/unread if MVP
 ```
 
-## 18.2 Checklists
+## Frontend scope
 
 ```txt
-Checklists = P0 MVP, build after Action lifecycle.
+- Notification Center
+- unread badge
+- notification list
+- notification detail or navigation target
+- empty state
+- loading state
+- error state
 ```
 
-## 18.3 Checklist dependencies
+## Rules
 
 ```txt
-Checklists depend on:
-Users
-Operational domains
-Execution Feed
-Observation submit for task-generated Observations
+- No raw Observation in notifications.
+- Notification payloads stay minimal.
+- Notification recipients are backend-owned.
+- Frontend only displays what backend returns.
+- Each notification must be traceable to a source event.
+- Notification service consumes domain/application events.
+- No notification should be created directly from React or DRF views.
 ```
 
-## 18.4 Notifications
+## Contract order
 
 ```txt
-P0 = in-app notifications.
-Push = optional P0.5 / P1 depending pilot need.
+1. backend endpoint/service/selector
+2. OpenAPI schema generated
+3. TypeScript client generated
+4. frontend hook
+5. frontend screen
 ```
 
-## 18.5 Notifications dependencies
+## Acceptance
 
 ```txt
-Notifications depend on:
-ApplicationEvents
-Notification Matrix
-Recipients/users
+- In-app notification created for ActionAssigned.
+- In-app notification created for pending validation.
+- Mention notification works if mentions are MVP.
+- Important Signal event notification works.
+- Notification Center displays user-scoped notifications.
+- No unauthorized notification is visible.
+- No raw Observation leaks into notification payload.
 ```
 
-## 18.6 Realtime
+## Gate Phase 6
+
+Can move to Phase 7 only if:
 
 ```txt
-Realtime = P0 minimal invalidation/refetch.
-Presence/typing/read receipts = NO.
+- Notification Center works
+- P0 notification triggers work
+- notification RBAC/scoping tested
+- no raw Observation leak tested
 ```
-
-## 18.7 Notification acceptance
-
-```txt
-Notification acceptance:
-P0 in-app notifications appear for ActionAssigned, pending validation, mentions, important Signal events.
-```
-
-## 18.8 Realtime acceptance
-
-```txt
-Realtime acceptance:
-visible feed/detail updates after relevant event without manual refresh.
-```
-
-## 18.9 Acceptance Phase 5
-
-- Shared ChecklistTemplate créé/activé.
-- Shared ChecklistExecution assignée.
-- Personal Checklist créée et exécutée par son créateur.
-- Checklist task peut créer une Observation contextualisée.
-- Notification in-app créée pour triggers P0.
-- Notification Center fonctionne.
-- Realtime invalide/refetch Signal Feed, Execution Feed, Notification Center, details.
-- Unauthorized websocket user ne reçoit pas d’event non autorisé.
 
 ---
 
-# 19. Phase 6 — Hardening + pilot readiness
+# 18. Phase 7 — Checklists
 
-## 19.1 Scope
+## Objective
+
+Brancher les routines terrain sur le moteur Observation → Signal.
+
+## Backend scope
 
 ```txt
-Phase 6:
-- security baseline checks
-- cleanup jobs
+- Shared ChecklistTemplate
+- ChecklistTaskTemplate
+- ChecklistExecution
+- ChecklistTaskExecution
+- Personal ChecklistTemplate
+- Personal ChecklistExecution
+- assign checklist execution
+- start checklist execution
+- complete task
+- skip task
+- task → contextual Observation
+- checklist execution completion
+- checklist cancellation
+```
+
+## Frontend scope
+
+```txt
+- Shared Checklist execution UI
+- Personal Checklist UI
+- checklist task list
+- task status controls
+- task → +Signaler contextual flow
+- Execution Feed integration
+- checklist empty/error/loading/success states
+```
+
+## Rules
+
+```txt
+- Checklist is not an Action.
+- ChecklistExecution appears in Execution Feed.
+- Personal Checklists are private to creator.
+- Task → Observation goes through Observation submit service.
+- Signal creation still goes through AI pipeline/backend processing.
+- Action and Signal detail responses may expose backend-computed available_actions / available_transitions.
+- Frontend may use these flags to display or hide action buttons.
+- Frontend must not recompute transition authority from role/domain/status.
+```
+
+## Contract order
+
+```txt
+1. backend endpoint/service/selector
+2. OpenAPI schema generated
+3. TypeScript client generated
+4. frontend hook
+5. frontend screen
+```
+
+## Acceptance
+
+```txt
+- Shared ChecklistTemplate can be created/activated.
+- Shared ChecklistExecution can be assigned.
+- Assignee can execute checklist.
+- Personal Checklist can be created and executed by creator.
+- Checklist task can create contextual Observation.
+- ChecklistExecution appears in Execution Feed.
+- Personal Checklist visibility is private.
+- Permissions are tested.
+```
+
+## Gate Phase 8
+
+Can move to Phase 9 only if:
+
+```txt
+- Shared Checklist flow works
+- Personal Checklist flow works
+- task → Observation works
+- Execution Feed integration works
+- checklist permissions tested
+```
+
+---
+
+# 19. Phase 8 — Realtime invalidation
+
+## Objective
+
+Rendre les feeds et détails vivants sans transformer websocket en source métier.
+
+## Backend scope
+
+```txt
+- Channels authentication
+- subscription permission checks
+- channel/group naming rules
+- lightweight event broadcast
+- Signal Feed invalidation event
+- Execution Feed invalidation event
+- Notification Center invalidation event
+- detail invalidation event
+- unauthorized websocket tests
+```
+
+## Frontend scope
+
+```txt
+- websocket connection lifecycle
+- reconnect behavior if MVP
+- event type routing
+- TanStack Query invalidation
+- refetch through REST API
+- expired session handling
+- unauthorized event handling
+```
+
+## Rules
+
+```txt
+- Realtime messages are invalidation/refetch triggers only.
+- Do not use websocket payloads as business truth.
+- Do not store full websocket payloads as domain state.
+- Do not bypass REST API after realtime events.
+- Channels consumers must not perform business workflows.
+- Each realtime event type must map to explicit TanStack Query keys to invalidate.
+```
+
+## Acceptance
+
+```txt
+- Signal Feed invalidates/refetches after relevant event.
+- Execution Feed invalidates/refetches after relevant event.
+- Notification Center invalidates/refetches after relevant event.
+- Signal/Action detail invalidates/refetches after relevant event.
+- Unauthorized websocket user receives no forbidden event.
+- Frontend does not store domain state from websocket payload.
+```
+
+## Gate Phase 7
+
+Can move to Phase 8 only if:
+
+```txt
+- realtime invalidation works
+- REST refetch remains source of truth
+- unauthorized realtime tests pass
+- frontend query invalidation works
+```
+
+---
+
+# 20. Phase 9 — Hardening
+
+## Objective
+
+Durcir le produit techniquement avant le pilote, sans ajouter de nouvelles fonctionnalités métier.
+
+## Scope
+
+```
+Phase 9 is technical hardening only.
+It must not introduce new product scope.
+It validates reliability, security, data lifecycle, logs, performance, and operational readiness.
+```
+
+## Backend scope
+
+```
+- RBAC API test review
+- RBAC realtime test review
+- tenant/establishment scoping audit
+- no raw Observation exposure audit
+- no raw Observation in realtime audit
+- no raw Observation in notifications audit
+- no sensitive content in logs audit
+- token/session behavior verification
+- cleanup jobs verification
+- temporary uploads expiration verification
+- audio deletion verification
+- AI structured outputs retention verification
+- Celery retry behavior verification
+- failed task visibility/logging
 - backup/restore smoke test
-- pilot dataset
-- mobile QA
-- performance smoke tests
+- performance smoke tests on key feeds
 ```
 
-## 19.2 Security acceptance
+## Frontend scope
+
+```
+- critical flow QA
+- mobile viewport QA
+- touch-friendly interaction check
+- loading/error/empty/success state review
+- expired session UX
+- permission denied UX
+- network error UX
+- critical action feedback
+- Framer Motion usage review
+- animation does not hide loading/errors/business statuses
+- PWA-ready checks
+```
+
+## API/OpenAPI scope
+
+```
+- OpenAPI schema generation works
+- generated TypeScript client is up to date
+- no undocumented product endpoint is used by frontend
+- API response shapes match frontend expectations
+```
+
+## Realtime scope
+
+```
+- websocket authentication verified
+- subscription permission checks verified
+- unauthorized event delivery test
+- realtime payloads remain lightweight
+- frontend invalidates TanStack Query keys
+- frontend refetches REST API after realtime events
+```
+
+## Security acceptance
+
+```
+- RBAC API tests pass.
+- RBAC realtime tests pass.
+- No raw Observation is exposed in product API.
+- No raw Observation is exposed in realtime.
+- No raw Observation is exposed in notifications.
+- Logs contain no raw Observation, full comments, audio content, photo content, secrets, tokens, full AI prompts, or full AI outputs with business content.
+- No frontend-side RBAC authority exists.
+- No server state is stored in Zustand.
+```
+
+## Ops acceptance
+
+```
+- Cleanup jobs pass.
+- Temporary uploads expire correctly.
+- Audio deletion works after success/final failure.
+- AI structured outputs retention is verified.
+- Backup/restore smoke test is documented.
+- Feed performance is acceptable for pilot volume.
+- Celery retry/failure behavior is verified.
+```
+
+## Frontend acceptance
+
+```
+- Main flows work on smartphone viewport.
+- Critical actions have clear feedback.
+- Loading/error/empty/success states are present where needed.
+- Expired session is handled clearly.
+- Forbidden responses are handled clearly.
+- Framer Motion is used only for functional transitions/feedback.
+- Animations do not hide business state, loading, or errors.
+```
+
+## Gate Phase 9
+
+Can move to Phase 10 only if:
+
+```
+- security acceptance passes
+- ops acceptance passes
+- frontend acceptance passes
+- OpenAPI/client generation is clean
+- known risks/debts are documented
+- no new product scope was added during hardening
+```
+
+------
+
+# 21. Phase 10 — Pilot readiness
+
+## Objective
+
+Préparer l’exécution terrain du pilote Mama Shelter Nice.
+
+Cette phase n’est pas une phase de construction produit.
+Elle valide que le P0 complet peut être testé en conditions réelles.
+
+## Scope
+
+```
+Phase 10 is product/field readiness.
+It prepares the pilot environment, pilot users, scenarios, success metrics, feedback loop, and support path.
+```
+
+## Pilot environment scope
+
+```
+- Mama Shelter Nice organization ready
+- Mama Shelter Nice establishment ready
+- operational modules configured
+- operational domains configured
+- operational units configured if used
+- test users created
+- roles assigned
+- memberships active
+- sample Signals/Actions/Checklists seeded only if useful for demo/training
+- clean pilot dataset available before real usage
+```
+
+## Pilot users scope
+
+```
+- Owner/Director pilot user identified
+- Manager pilot users identified
+- Staff pilot users identified
+- username identity users prepared if needed
+- login/activation instructions prepared
+- establishment selection tested if user has multiple memberships
+```
+
+## Pilot scenarios
+
+```
+- room issue
+- maintenance issue
+- restaurant rush issue
+- lost/found or guest issue
+- checklist round
+- audio Observation scenario
+- photo Observation scenario
+- Signal aggregation scenario
+- Action validation scenario
+- notification scenario
+- realtime feed update scenario
+```
+
+## Pilot success metrics
+
+```
+Usage:
+- Observations submitted/day
+- active users by role
+- checklist completion rate
+
+Workflow:
+- Signals created vs aggregated
+- no_signal_created rate
+- Actions created
+- Actions completed
+- Actions validated
+- time from Observation to Action
+- time from Action assignment to completion
+
+Quality:
+- manager corrections of domains
+- invalid/noisy Signals
+- failed transcriptions
+- failed uploads
+- notification usefulness
+- realtime update reliability
+
+Safety:
+- permission issue count
+- data leak issue count
+- blocked user flow count
+```
+
+## Feedback protocol
+
+```
+- feedback questions prepared
+- feedback collection owner assigned
+- daily or end-of-shift feedback rhythm defined
+- issue severity levels defined
+- support contact/path defined
+- bug triage process defined
+- rollback or pause procedure defined
+```
+
+## Pilot acceptance
+
+```
+- Pilot users can log in.
+- Pilot users have correct roles and memberships.
+- Mama Shelter runtime config is ready.
+- Pilot scenarios are documented.
+- Success metrics are defined.
+- Feedback questions are ready.
+- Incident support path is ready.
+- Mobile QA has passed on target devices/browsers.
+- P0 Master Gate has passed.
+```
+
+## Gate Phase 10
+
+Pilot can start only if:
+
+```
+- Phase 9 hardening gate passed
+- P0 Master Gate passed
+- Mama Shelter pilot environment is ready
+- pilot users are ready
+- pilot scenarios are ready
+- success metrics are ready
+- support/incident process is ready
+```
+
+# 23. P0 Master Gate
+
+Le pilote Mama Shelter Nice peut démarrer uniquement si :
+
+## Operational loop
 
 ```txt
-Security acceptance:
-- no secrets in repo
-- token auth works
-- RBAC tested
-- no raw Observation in product API/realtime/notifications
+- Observation → Signal → Action → Execution → Validation works end-to-end.
+- Signal Feed is correct.
+- Execution Feed is correct.
+- Signal statuses update from Action lifecycle.
 ```
 
-## 19.3 Mobile acceptance
+## Field input
 
 ```txt
-Mobile acceptance:
-Core flows usable on smartphone viewport.
+- Text Observation works.
+- Optional photos work.
+- Audio transcription works.
+- Text fallback works.
+- Photo-only Observation is forbidden.
+- Cleanup jobs work.
 ```
 
-## 19.4 Acceptance Phase 6
+## AI
 
-- Cleanup jobs testés.
-- Temporary uploads expirent correctement.
-- AI structured outputs retention 14 jours.
-- Logs ne contiennent pas de raw Observation/comment/audio/photo.
-- Backup/restore smoke test documenté.
-- Dataset Mama Shelter prêt.
-- Scénarios pilote scriptés.
-- Performance feed acceptable pour volume pilote.
-- Déploiement pilote prêt.
+```txt
+- Fake provider works.
+- Real provider works behind same interface.
+- Pydantic JSON validation works.
+- Backend domain validation works.
+- Signal creation works.
+- Signal aggregation works.
+- no_signal_created works.
+```
+
+## Notifications
+
+```txt
+- P0 in-app notifications work.
+- Notification Center works.
+- No raw Observation leaks.
+```
+
+## Realtime
+
+```txt
+- Signal Feed invalidation works.
+- Execution Feed invalidation works.
+- Notification Center invalidation works.
+- Detail invalidation works.
+- Unauthorized websocket tests pass.
+```
+
+## Checklists
+
+```txt
+- Shared Checklist execution works.
+- Personal Checklist works.
+- Checklist task can create contextual Observation.
+```
+
+## Security
+
+```txt
+- RBAC API tests pass.
+- RBAC realtime tests pass.
+- No frontend-side RBAC authority.
+- No secrets in repo.
+- Logs contain no raw sensitive operational content.
+```
+
+## Pilot
+
+```txt
+- Mama Shelter seed ready.
+- Pilot scenarios ready.
+- Mobile QA passed.
+- Backup/restore smoke test done.
+```
 
 ---
 
-# 20. P0 / P1
+# 24. Backend Definition of Done
 
-## 20.1 P0
+Backend work is done only when:
 
 ```txt
-P0 = complete operational loop:
-Observation → Signal → Action → Execution → Validation → Feed update.
+- service/selector/permission ownership is respected
+- views remain thin
+- serializers do not orchestrate workflows
+- status transitions are explicit
+- no generic PATCH status endpoint is introduced
+- transaction boundaries are correct
+- tenant/establishment scoping is enforced
+- sensitive payload rules are respected
+- Celery payloads pass IDs only when sensitive content is involved
+- Channels payloads are lightweight invalidation events only
+- migrations exist for model changes
+- OpenAPI is updated when API shape changes
+- tests cover changed behavior
+- relevant backend commands were run or a reason is given
+- risks/debt are stated
 ```
 
-P0 includes:
-- Auth/memberships/RBAC.
-- Runtime config minimal.
-- Observation text.
-- Optional photos.
-- Audio transcription.
-- AI pipeline fake then real.
-- Signal Feed.
-- Action lifecycle.
-- Execution Feed.
-- Shared Checklists.
-- Personal Checklists.
-- In-app notifications.
-- Minimal realtime.
-- Security baseline.
+Backend commands:
 
-## 20.2 P1
-
-```txt
-P1:
-- analytics dashboard
-- recommended assignees
-- AI quality review UI
-- billing
-- mobile native
+```bash
+cd apps/api && uv sync
+cd apps/api && uv run ruff check .
+cd apps/api && uv run ruff format --check .
+cd apps/api && uv run pytest
+cd apps/api && uv run python manage.py makemigrations --check --dry-run
 ```
 
-## 20.3 Out of MVP
+OpenAPI:
 
 ```txt
-Out of MVP:
-- billing
-- SSO
-- MFA
-- native mobile
-- analytics dashboard avancé
-- advanced AI review UI
-- recommended assignees
-- presence/typing/read receipts
-- full admin product console
-- direct-to-S3 upload
-```
-
-## 20.4 Billing
-
-```txt
-Billing excluded MVP.
-Keep architecture compatible with establishment-level billing later.
+Use the project-defined OpenAPI command if it exists.
+If missing, do not invent it.
+Create a setup ticket instead.
 ```
 
 ---
 
-# 21. Acceptance criteria globaux
+# 25. Frontend Definition of Done
 
-## 21.1 Operational loop
+Frontend work is done only when:
+- generated API types are used when applicable
+- no direct fetch is added inside feature components
+- TanStack Query handles server state
+- Zustand is limited to UI/client state
+- React does not contain business workflows
+- React does not compute real permissions
+- loading/error/empty/success states are handled when relevant
+- mobile-first behavior is preserved
+- permissions are backend-driven
+- realtime events invalidate/refetch instead of carrying business truth
+- Framer Motion is used only for functional transitions/feedback
+- animations do not hide loading, errors, or business state changes
+- relevant frontend commands were run or a reason is given
+- tests are added/updated when behavior changes
+- risks/debt are stated
 
-```txt
-A user can submit an Observation.
-System creates/aggregates Signal.
-Manager creates Action.
-Staff executes Action.
-Manager validates.
-Feeds update.
+Frontend commands:
+
+```bash
+cd apps/web && npm install
+cd apps/web && npm run typecheck
+cd apps/web && npm run lint
+cd apps/web && npm run build
 ```
 
-## 21.2 AI
+API client generation:
 
 ```txt
-AI acceptance:
-- valid JSON schema
-- backend validates domains
-- max 5 candidates
-- create/aggregate/no_signal_created outcomes work
-```
-
-## 21.3 RBAC
-
-```txt
-RBAC acceptance:
-API and realtime never expose data outside authorized scope.
-```
-
-## 21.4 Mobile
-
-```txt
-Mobile acceptance:
-Core flows usable on smartphone viewport.
-```
-
-## 21.5 Offline
-
-```txt
-Offline MVP:
-local Observation draft only.
-Submit requires online.
-```
-
-## 21.6 Realtime
-
-```txt
-Realtime acceptance:
-visible feed/detail updates after relevant event without manual refresh.
-```
-
-## 21.7 Notifications
-
-```txt
-Notification acceptance:
-P0 in-app notifications appear for ActionAssigned, pending validation, mentions, important Signal events.
-```
-
-## 21.8 Media
-
-```txt
-Media acceptance:
-- max 3 photos
-- no photo-only Observation
-- audio deleted after transcription
-- signed URLs authorized
-- cleanup jobs work
-```
-
-## 21.9 Security
-
-```txt
-Security acceptance:
-- no secrets in repo
-- token auth works
-- RBAC tested
-- no raw Observation in product API/realtime/notifications
-```
-
-## 21.10 OpenAPI
-
-```txt
-OpenAPI acceptance:
-JSON APIs are OpenAPI-documented; generated TypeScript client is optional for targeted consumers.
+Use the project-defined API client generation command if it exists.
+If missing, do not invent it.
+Create a setup ticket instead.
 ```
 
 ---
 
-# 22. Backlog structure
-
-## 22.1 Format
-
-```txt
-Epic
-→ Slice
-→ Ticket
-→ Acceptance criteria
-→ Dependencies
-→ Tests
-```
-
-## 22.2 Ticket size
-
-```txt
-Ticket size target:
-small enough to review diff safely.
-```
-
-## 22.3 Ticket template
+# 26. Ticket template
 
 ```txt
 Ticket title:
+
+Phase:
+Domain:
+Backend / Frontend / Full-stack:
+
 Context:
+Why this ticket exists.
+
 Scope:
+What must be implemented.
+
 Out of scope:
+What must not be changed.
+
 Dependencies:
-Implementation notes:
+Previous tickets/domains required.
+
+Backend ownership:
+- services.py impact:
+- selectors.py impact:
+- permissions.py impact:
+- models/migrations impact:
+- api serializers/views/urls impact:
+
+Frontend ownership:
+- generated API client impact:
+- TanStack Query hooks impact:
+- Zustand UI state impact:
+- components/pages/forms impact:
+- loading/error/empty/success states:
+
+API/OpenAPI impact:
+- endpoint added/changed:
+- schema changed:
+- generated TS types updated:
+
+Async/realtime impact:
+- Celery tasks:
+- Redis usage:
+- Channels events:
+- Query invalidation keys:
+
+Security/RBAC:
+- who can do what:
+- who can view what:
+- forbidden cases:
+
+Business rules:
+- status transitions:
+- validations:
+- idempotency/retry behavior:
+
+Events:
+- emitted domain/application events:
+
 Acceptance criteria:
+Concrete behavior to validate.
+
 Tests:
-Security/RBAC checks:
-OpenAPI impact:
+- service tests:
+- selector tests:
+- permission tests:
+- API tests:
+- frontend hook/component tests:
+- realtime tests if applicable:
+
+Commands:
+- backend commands run:
+- frontend commands run:
+- OpenAPI/client generation command run:
+
+Risks/debt:
+Known limitation or follow-up.
 ```
 
 ---
 
-# 23. Suggested epics and slices
-
-## Epic 0 — Foundations
-
-Slices:
-- Project bootstrap.
-- Base models and settings.
-- Auth identities.
-- Organizations/Establishments.
-- Memberships/RBAC.
-- OpenAPI base.
-
-## Epic 1 — Runtime config / Onboarding
-
-Slices:
-- Organization/Establishment creation.
-- Runtime modules/domains/units.
-- Knowledge items.
-- Onboarding session.
-- Initial user invitation.
-- Establishment activation.
-
-## Epic 2 — Observation / Upload / Transcription
-
-Slices:
-- Observation submit text.
-- Temporary uploads.
-- Photo lifecycle.
-- Audio transcription.
-- ObservationProcessing queue.
-- Cleanup jobs.
-
-## Epic 3 — AI Pipeline / Signals
-
-Slices:
-- AI schemas.
-- Fake provider.
-- Pipeline task.
-- Signal create.
-- Signal aggregate.
-- Signal Feed.
-- Signal detail.
-
-## Epic 4 — Actions / Execution Feed
-
-Slices:
-- Action create from Signal.
-- Assignment.
-- Accept / mark done.
-- Validation / reopen.
-- Cancel.
-- Execution Feed Actions.
-
-## Epic 5 — Checklists
-
-Slices:
-- Shared Checklist templates.
-- Shared Checklist executions.
-- Personal Checklists.
-- Task execution.
-- Task → Observation.
-
-## Epic 6 — Notifications / Realtime
-
-Slices:
-- ApplicationEvents consumers.
-- Notification Matrix MVP.
-- Notification Center.
-- Django Channels setup.
-- Feed invalidation.
-- Detail invalidation.
-
-## Epic 7 — Hardening / Pilot
-
-Slices:
-- Security baseline.
-- Retention/cleanup.
-- Logs/monitoring.
-- Mobile QA.
-- Pilot seed.
-- Pilot protocol.
-
----
-
-# 24. Critical dependencies
-
-## 24.1 Dependency #1
+# 27. Critical dependencies
 
 ```txt
-Critical dependency #1 = Auth + EstablishmentMembership + permissions.
+Critical dependency #1:
+Auth + EstablishmentMembership + permissions.
 ```
-
-## 24.2 Feeds
 
 ```txt
 Feeds require:
@@ -985,76 +1976,139 @@ Feeds require:
 - membership domains
 - signal detected domains
 - last_activity_at
+- backend-owned sorting
+- backend-owned visibility
 ```
 
-## 24.3 Actions
-
 ```txt
-Actions depend on:
-Signal Domain
-Accounts/Memberships
-RBAC
+Actions require:
+- Signal Domain
+- Accounts/Memberships
+- RBAC
+- explicit transition services
 ```
 
-## 24.4 Checklists
-
 ```txt
-Checklists depend on:
-Users
-Operational domains
-Execution Feed
-Observation submit for task-generated Observations
+Notifications require:
+- domain/application events
+- Notification Matrix
+- recipient resolution
+- user/membership scope
 ```
 
-## 24.5 Notifications
-
 ```txt
-Notifications depend on:
-ApplicationEvents
-Notification Matrix
-Recipients/users
+Realtime requires:
+- authenticated Channels connection
+- subscription permission checks
+- lightweight event payloads
+- TanStack Query invalidation frontend side
 ```
 
----
-
-# 25. Risk register
-
-## 25.1 Risk — MVP too wide
-
 ```txt
-Main risk = MVP too wide.
-Mitigation = strict P0 loop and phase gates.
-```
-
-## 25.2 Risk — data visibility bugs
-
-```txt
-Risk = data visibility bugs.
-Mitigation = permission tests + feed tests + realtime authorization tests.
-```
-
-## 25.3 Risk — AI instability
-
-```txt
-Risk = AI output instability.
-Mitigation = strict Pydantic schemas + fake provider + backend validation.
-```
-
-## 25.4 Risk — field UX friction
-
-```txt
-Risk = field UX friction.
-Mitigation = mobile-first flows + reduce clicks + pilot scripts.
+Checklists require:
+- Users
+- operational domains
+- Execution Feed
+- Observation submit flow
 ```
 
 ---
 
-# 26. Pilot validation — Mama Shelter Nice
+# 28. Risk register
 
-## 26.1 Scripted scenarios
+## Risk 1 — P0 too wide
 
 ```txt
-Pilot validation uses scripted scenarios:
+Risk:
+P0 contains many modules and can become difficult to sequence.
+
+Mitigation:
+P0 stays complete, but phases are strictly ordered.
+Each phase has a gate.
+P0 Master Gate decides pilot readiness.
+```
+
+## Risk 2 — business logic leaks into frontend
+
+```txt
+Risk:
+React starts encoding permissions, statuses, or workflow rules.
+
+Mitigation:
+Backend owns business rules.
+Frontend consumes backend-provided permissions and transition availability.
+```
+
+## Risk 3 — backend ownership becomes blurred
+
+```txt
+Risk:
+Workflows leak into serializers, views, models, signals, or core utilities.
+
+Mitigation:
+Writes go to services.py.
+Reads go to selectors.py.
+Authorization goes to permissions.py.
+DRF views stay thin.
+```
+
+## Risk 4 — realtime becomes source of truth
+
+```txt
+Risk:
+Websocket payloads start carrying business state.
+
+Mitigation:
+Channels only sends invalidation events.
+Frontend refetches REST APIs through TanStack Query.
+```
+
+## Risk 5 — AI instability
+
+```txt
+Risk:
+AI output breaks workflow predictability.
+
+Mitigation:
+Fake deterministic provider first.
+Pydantic validates JSON.
+Django validates business rules.
+AI never mutates DB directly.
+```
+
+## Risk 6 — sensitive data leak
+
+```txt
+Risk:
+Raw Observation, comments, audio/photo content, prompts, or tokens leak into API/logs/realtime/notifications.
+
+Mitigation:
+No raw Observation in product API/realtime/notifications.
+Logs contain technical metadata only.
+Celery payloads pass IDs only.
+```
+
+## Risk 7 — field UX friction
+
+```txt
+Risk:
+Terrain users find the app too slow or complex.
+
+Mitigation:
+Mobile-first UI.
+Touch-friendly interactions.
+Fast flows.
+Clear feedback.
+No hidden critical actions.
+```
+
+---
+
+# 29. Pilot validation protocol
+
+## Scripted scenarios
+
+```txt
 - room issue
 - maintenance issue
 - restaurant rush issue
@@ -1062,10 +2116,9 @@ Pilot validation uses scripted scenarios:
 - checklist round
 ```
 
-## 26.2 Pilot metrics
+## Pilot metrics
 
 ```txt
-Pilot metrics:
 - Observations submitted/day
 - Signals created vs aggregated
 - no_signal_created rate
@@ -1075,86 +2128,26 @@ Pilot metrics:
 - checklist completion rate
 - user adoption by role
 - manager corrections of domains
+- notification usefulness
+- realtime update reliability
 ```
 
-## 26.3 Pilot protocol
+## Pilot protocol must define
 
 ```txt
-Create pilot protocol:
 - users involved
+- roles involved
 - scenarios
 - duration
 - success metrics
 - feedback questions
 - incident support path
+- rollback/support plan
 ```
 
 ---
 
-# 27. Phase gates
-
-## 27.1 Gate Phase 0
-
-Can move to Phase 1 only if:
-- auth works ;
-- memberships work ;
-- permissions tested ;
-- OpenAPI base generated ;
-- CI passes.
-
-## 27.2 Gate Phase 1
-
-Can move to Phase 2 only if:
-- Mama Shelter runtime seed exists ;
-- operational domains assigned ;
-- initial users invited/activated ;
-- establishment active.
-
-## 27.3 Gate Phase 2
-
-Can move to Phase 3 only if:
-- Observation submit works ;
-- upload lifecycle works ;
-- transcription works/fallback text works ;
-- no raw Observation leaked ;
-- ObservationProcessing queued.
-
-## 27.4 Gate Phase 3
-
-Can move to Phase 4 only if:
-- fake AI pipeline creates/aggregates Signals ;
-- Signal Feed works ;
-- Signal detail works ;
-- RBAC feed tests pass.
-
-## 27.5 Gate Phase 4
-
-Can move to Phase 5 only if:
-- Action lifecycle complete ;
-- Execution Feed Actions works ;
-- validations/reopen/cancel tested ;
-- Signal status transitions work.
-
-## 27.6 Gate Phase 5
-
-Can move to Phase 6 only if:
-- Shared and Personal Checklists work ;
-- Notification Center works ;
-- realtime invalidation works ;
-- unauthorized realtime tests pass.
-
-## 27.7 Gate Phase 6
-
-Pilot-ready only if:
-- mobile QA passes ;
-- cleanup jobs pass ;
-- backup/restore smoke test complete ;
-- logs/security checks pass ;
-- pilot protocol ready.
-
----
-
-# 28. Non-negotiables
+# 30. Non-negotiables
 
 ```txt
 No raw Observation in product API.
@@ -1167,115 +2160,79 @@ No shared user accounts.
 No photo-only Observation.
 No long-lived unrotated refresh token.
 No direct provider AI call from frontend.
+No business workflow in React.
+No business workflow in Celery task body.
+No business workflow in Channels consumer.
+No server state in Zustand.
+No websocket payload as business truth.
+No generic PATCH status endpoint for business transitions.
+No OpenAPI/client generation command invented by the AI.
 ```
 
 ---
 
-# 29. Decisions index
+# 32. Out of MVP
 
-| Décision | Statut |
-|---|---:|
-| Build Plan defines order/milestones/tickets/acceptance/risks | Validé |
-| MVP objective complete field workflow | Validé |
-| Pilot MVP Mama Shelter Nice | Validé |
-| Build by vertical slices | Validé |
-| Slice 0 Foundations | Validé |
-| Minimal mobile-first UI kit | Validé |
-| Fake deterministic AI provider first | Validé |
-| Real provider behind same interface | Validé |
-| OpenAPI from day 1 | Validé |
-| Frontend uses Django Templates + HTMX for MVP | Validé |
-| Test priority services/permissions/API/feeds/AI/realtime | Validé |
-| Ticket done definition | Validé |
-| 7 phases 0–6 | Validé |
-| Phase 0 Foundations | Validé |
-| Phase 1 Runtime config/onboarding | Validé |
-| Phase 2 Observation/upload/transcription | Validé |
-| Phase 3 AI pipeline/Signal Feed | Validé |
-| Phase 4 Actions/Execution Feed | Validé |
-| Phase 5 Checklists/Notifications/Realtime | Validé |
-| Phase 6 Hardening/pilot readiness | Validé |
-| P0 operational loop | Validé |
-| P1 list | Validé |
-| Checklists P0 after Actions | Validé |
-| Photos P0 optional | Validé |
-| Photo-only forbidden | Validé |
-| Audio transcription P0, fallback text | Validé |
-| Realtime P0 minimal invalidation/refetch | Validé |
-| Presence/typing/read receipts excluded | Validé |
-| In-app notifications P0 | Validé |
-| Push optional P0.5/P1 | Validé |
-| Milestone 0.1 | Validé |
-| CI MVP | Validé |
-| Mama Shelter seed after Phase 1 | Validé |
-| TypeScript used only for targeted frontend modules | Validé |
-| OpenAPI generated from day 1 for JSON APIs | Validé |
-| Generated TypeScript client optional for targeted consumers | Validé |
-| Frontend starts with server-rendered screens from Phase 0/1 | Validé |
-| JSON API mocks only from OpenAPI schemas if needed | Validé |
-| Critical dependency Auth + Membership + permissions | Validé |
-| Feed dependencies validées | Validé |
-| Action dependencies validées | Validé |
-| Checklist dependencies validées | Validé |
-| Notification dependencies validées | Validé |
-| Out of MVP list validée | Validé |
-| Nancy post-stabilization | Validé |
-| Billing excluded MVP | Validé |
-| Acceptance #1 operational loop | Validé |
-| AI acceptance criteria | Validé |
-| RBAC acceptance criteria | Validé |
-| Mobile acceptance criteria | Validé |
-| Offline local draft only | Validé |
-| Realtime acceptance criteria | Validé |
-| Notification acceptance criteria | Validé |
-| Media acceptance criteria | Validé |
-| Security acceptance criteria | Validé |
-| OpenAPI acceptance criteria | Validé |
-| Backlog format | Validé |
-| Ticket size reviewable | Validé |
-| Strict phase order, flexible inside phase | Validé |
-| Migrations per domain slice | Validé |
-| Main risks and mitigations | Validé |
-| Pilot scenarios | Validé |
-| Pilot metrics | Validé |
-| Pilot protocol | Validé |
-| Final principle | Validé |
+```txt
+- billing
+- SSO
+- MFA
+- native mobile
+- advanced analytics dashboard
+- advanced AI review UI
+- recommended assignees
+- presence / typing / read receipts
+- full admin product console
+- direct-to-S3 upload
+- offline mutation queue
+- durable offline storage of sensitive business data
+```
 
 ---
 
-# 30. Recommandation finale
+## 30. Risk — AI-generated overengineering
 
-Le MVP Build Plan est validé pour démarrer le build.
+```
+Risk:
+The AI creates generic abstractions, premature utilities, unnecessary layers, or broad refactors.
 
-Décision centrale :
+Mitigation:
+Tickets must be small.
+Out of scope must be explicit.
+No new top-level folder without justification.
+No generic core utility without demonstrated repeated need.
+Prefer local explicit code over abstraction.
 
-```txt
-Build the smallest complete operational loop.
-Harden it for pilot.
-Then expand.
+No premature abstraction.
+Prefer explicit domain services, selectors, hooks, and components until duplication is proven.
 ```
 
-Ordre à respecter :
+# 32. Final recommendation
+
+Le Build Plan v0.2 est prêt à remplacer le v0.1.
+
+La décision structurante :
 
 ```txt
-0. Foundations
-1. Runtime config + onboarding minimal
-2. Observation + upload + transcription
-3. AI pipeline + Signal Feed
-4. Actions + Execution Feed
-5. Checklists + Notifications + Realtime
-6. Hardening + pilot readiness
+Le backend possède les règles métier.
+Le frontend possède l’expérience utilisateur.
+OpenAPI relie les deux.
+Celery exécute l’async.
+Channels invalide/refetch seulement.
+Redis ne stocke aucune vérité métier.
 ```
 
-Le premier objectif opérationnel n’est pas de tout construire.
-
-Le premier objectif est :
+L’ordre final à respecter :
 
 ```txt
-A user submits an Observation.
-A Signal appears.
-A Manager creates an Action.
-A Staff member executes it.
-A Manager validates it.
-Feeds update correctly.
+0. Full-stack foundation
+1. Identity / Memberships / RBAC
+2. Runtime config / Onboarding minimal
+3. Observation / Media / Transcription
+4. AI Pipeline / Signal Feed
+5. Actions / Execution Feed
+6. Notifications
+7. Realtime invalidation
+8. Checklists
+9. Hardening / Pilot readiness
 ```

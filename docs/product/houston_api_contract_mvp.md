@@ -69,13 +69,13 @@ OpenAPI documente le contrat.
 
 ## 2.1 Web app rendering strategy
 
-The MVP web app is server-rendered.
+The MVP web app uses a thin React frontend backed by backend-owned APIs.
 
 ```txt
-Django Templates render product screens.
-HTMX handles partial updates.
-DRF exposes JSON APIs where needed.
-OpenAPI documents JSON APIs, not every rendered HTML screen.
+React renders product screens.
+TanStack Query consumes backend APIs.
+DRF exposes JSON APIs.
+OpenAPI documents the frontend/backend contract.
 ```
 
 ---

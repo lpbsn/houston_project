@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Houston API
   version: 0.1.0
-  description: Phase 0 foundation and access schema
+  description: Houston backend API contract
 paths:
   /api/schema/:
     get:
@@ -127,8 +127,7 @@ paths:
       tags:
       - schema
       security:
-      - cookieAuth: []
-      - basicAuth: []
+      - BearerAccessToken: []
       - {}
       responses:
         '200':
@@ -150,6 +149,125 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/auth/bootstrap/:
+    get:
+      operationId: v1_auth_bootstrap_retrieve
+      description: Returns the authenticated bootstrap payload for the current bearer
+        token.
+      tags:
+      - auth
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/csrf/:
+    get:
+      operationId: v1_auth_csrf_retrieve
+      description: Ensures the Django CSRF cookie exists for subsequent auth mutations.
+      tags:
+      - auth
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfResponse'
+          description: ''
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: Logs in with an email or username identifier. Requires a valid
+        Django CSRF cookie and X-CSRFToken header.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: Revokes the current session, preferring the bearer access token
+        when available and otherwise falling back to the refresh token cookie. Requires
+        CSRF and clears the houston_refresh_token HttpOnly cookie.
+      tags:
+      - auth
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Session revoked and refresh cookie cleared.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/refresh/:
+    post:
+      operationId: v1_auth_refresh_create
+      description: Rotates the HttpOnly refresh token cookie and issues a new opaque
+        access token. Requires a valid CSRF cookie and X-CSRFToken header. The refresh
+        token is read from the houston_refresh_token HttpOnly cookie.
+      tags:
+      - auth
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -164,6 +282,67 @@ paths:
           description: ''
 components:
   schemas:
+    AuthResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserPublic'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        active_membership:
+          allOf:
+          - $ref: '#/components/schemas/Membership'
+          nullable: true
+        access_token:
+          type: string
+        access_token_expires_at:
+          type: string
+          format: date-time
+      required:
+      - access_token
+      - access_token_expires_at
+      - active_membership
+      - authenticated
+      - memberships
+      - user
+    BootstrapResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserPublic'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        active_membership:
+          allOf:
+          - $ref: '#/components/schemas/Membership'
+          nullable: true
+      required:
+      - active_membership
+      - authenticated
+      - memberships
+      - user
+    CsrfResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    DetailResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     HealthResponse:
       type: object
       properties:
@@ -171,11 +350,70 @@ components:
           type: string
       required:
       - status
+    LoginRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+        password:
+          type: string
+      required:
+      - identifier
+      - password
+    Membership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        operational_domains:
+          type: array
+          items:
+            type: string
+      required:
+      - establishment_id
+      - establishment_name
+      - id
+      - operational_domains
+      - organization_id
+      - organization_name
+      - role
+      - status
+    UserPublic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        identity_type:
+          type: string
+      required:
+      - email
+      - id
+      - identity_type
+      - username
   securitySchemes:
-    basicAuth:
+    BearerAccessToken:
       type: http
-      scheme: basic
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: sessionid
+      scheme: bearer
+      bearerFormat: opaque

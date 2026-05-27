@@ -1,0 +1,247 @@
+Charte minimale recommandée
+# Houston Authentication Charter
+
+## 1. Purpose
+
+This document defines the mandatory authentication and session rules for Houston.
+
+Authentication is security-critical. Any change touching login, logout, tokens, sessions, bootstrap, permissions, memberships, or frontend auth state must follow this charter.
+
+## 2. Architecture decision
+
+Houston uses API-first token-based authentication.
+
+The current MVP auth model is:
+
+- short-lived opaque bearer access token
+- access token stored only in frontend memory
+- rotating opaque refresh token
+- refresh token stored in an HttpOnly cookie for web clients
+- refresh token stored as a digest in the database
+- backend `UserSession` as the source of truth
+- backend-owned permissions and visibility
+
+Houston does not use Django template-based login pages for product UI.
+
+## 3. Forbidden
+
+Never:
+
+- store access tokens in localStorage
+- store refresh tokens in localStorage
+- store tokens in sessionStorage
+- store raw access or refresh tokens in the database
+- use JWT for MVP auth
+- put permissions or memberships as frontend authority
+- use Zustand for auth or server state
+- expose whether an email or username exists during login failure
+- compare passwords manually
+- bypass Django password hashing
+- implement product UI login with Django templates
+- expose password hashes, token digests, session internals, or internal security metadata in API responses
+
+## 4. Token rules
+
+Access token:
+
+- opaque random token
+- short-lived
+- TTL: 15 minutes
+- returned in login and refresh JSON responses
+- sent as `Authorization: Bearer <access_token>`
+- stored only in React memory
+- persisted only as `AccessToken.token_digest`
+
+Refresh token:
+
+- opaque high-entropy random token
+- stored raw only in the browser HttpOnly cookie
+- stored as `SessionRefreshToken.token_digest` in the database
+- rotated on every refresh
+- previous refresh token invalidated immediately
+- reuse of an old refresh token revokes the token family and session
+
+Refresh token cookie:
+
+- name: `houston_refresh_token`
+- HttpOnly: true
+- Secure: true in production
+- SameSite: `Lax`
+- Path: `/api/v1/auth/`
+- never readable by JavaScript
+
+## 5. Backend persistence model
+
+The backend must track auth state with:
+
+- `UserSession`
+- `AccessToken`
+- `SessionRefreshToken`
+
+Required concepts:
+
+- user
+- refresh token family id
+- token digests only
+- explicit status and revoked timestamps
+- last used timestamp
+- access expiry
+- refresh expiry
+- absolute session expiry
+- light user-agent metadata
+- minimal optional IP metadata
+
+Expiration is timestamp-first:
+
+- access token validity comes from `AccessToken.expires_at`
+- refresh token validity comes from `SessionRefreshToken.expires_at`
+- session validity comes from `UserSession.refresh_expires_at` and `UserSession.absolute_expires_at`
+- status may be updated opportunistically, but runtime auth checks must not rely only on status
+
+## 6. Required endpoints
+
+Required MVP endpoints:
+
+- `GET /api/v1/auth/csrf/`
+- `POST /api/v1/auth/login/`
+- `POST /api/v1/auth/refresh/`
+- `POST /api/v1/auth/logout/`
+- `GET /api/v1/auth/bootstrap/`
+
+Login must:
+
+- require CSRF
+- accept email or username identifier
+- return access token
+- return access token expiry
+- return bootstrap payload
+
+Refresh must:
+
+- require CSRF
+- read refresh cookie
+- validate refresh token digest and timestamps
+- rotate refresh token
+- return new access token
+- revoke token family on reuse
+
+Logout must:
+
+- require CSRF
+- revoke current session if resolvable
+- clear refresh cookie
+- remain safe and idempotent
+
+Bootstrap must return:
+
+- authenticated boolean
+- public user fields
+- `memberships`
+- `active_membership` only when exactly one active membership exists
+
+## 7. CSRF rules
+
+Cookie-backed auth mutation endpoints must enforce CSRF:
+
+- `POST /api/v1/auth/login/`
+- `POST /api/v1/auth/refresh/`
+- `POST /api/v1/auth/logout/`
+
+`SameSite=Lax` is defense in depth, not the primary CSRF control.
+
+The frontend must:
+
+- call `GET /api/v1/auth/csrf/` before login when needed
+- send `X-CSRFToken` on login, refresh, and logout
+- keep the refresh token in the HttpOnly cookie only
+
+## 8. Frontend rules
+
+React is a thin client.
+
+Allowed:
+
+- keep access token in memory
+- use TanStack Query for bootstrap and auth-related server state
+- retry once after 401 by calling refresh
+- redirect unauthenticated users to `/login`
+- display user and membership data from bootstrap
+
+Forbidden:
+
+- storing auth tokens in localStorage or sessionStorage
+- storing auth authority in Zustand
+- trusting frontend permissions for backend access
+- decoding tokens for permissions
+- hardcoding role or domain access rules as security logic
+
+## 9. Authorization boundary
+
+Frontend visibility is UX only.
+
+Backend must enforce:
+
+- identity
+- active user status
+- active session
+- active membership
+- role permissions
+- operational domain visibility
+- establishment scoping
+
+Tokens never grant business permissions by themselves.
+
+## 10. Error handling
+
+Login failure must return the generic error:
+
+```json
+{
+  "detail": "Invalid credentials."
+}
+```
+
+Do not reveal:
+
+- whether identifier exists
+- whether password was wrong
+- whether account is inactive
+- whether membership is missing
+
+Detailed reasons may be logged internally with safe metadata only.
+
+## 11. Tests required
+
+Any auth change must include tests for:
+
+- valid login
+- invalid login generic error
+- access token authentication
+- CSRF enforcement on login, refresh, and logout
+- refresh token rotation
+- old refresh token reuse detection
+- logout revocation
+- bootstrap unauthenticated
+- bootstrap authenticated
+- inactive or suspended user rejection
+- inactive memberships excluded
+- no sensitive fields leaked
+
+## 12. OpenAPI
+
+All auth endpoints must be documented through DRF and drf-spectacular.
+
+After auth API changes, run:
+
+- `make schema`
+- `cd apps/web && npm run api:generate`
+
+Generated frontend OpenAPI types must not be edited manually.
+
+## 13. Security TODOs
+
+Before production:
+
+- add login rate limiting
+- add refresh rate limiting
+- add suspicious token reuse monitoring and alerting

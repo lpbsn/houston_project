@@ -45,10 +45,10 @@ Allowed changes:
    - Document Docker commands.
    - Document validation commands.
    - Document the current stack decision:
-     - Python 3.14.2
+     - Python 3.13.13
      - Django 5.2 LTS
-     - Django Templates + HTMX
-     - no React SPA
+     - React + TypeScript + Vite frontend
+     - OpenAPI-first backend/frontend contract
 
 5. Tests
    - Keep existing tests green.

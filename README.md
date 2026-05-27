@@ -1,120 +1,137 @@
 # Houston
 
-Houston is in Phase 0.8, the operational domain normalization slice for the modular monolith backend.
+Houston is an early-stage backend-centric B2B operational workflow app.
 
-Phase 0.1 through Phase 0.6 are implemented:
+The project currently uses a Django modular monolith as the business authority and a thin React frontend as the UI shell. PostgreSQL is the canonical state store. OpenAPI is the backend/frontend contract.
 
-- Phase 0.1: Django project foundation under `apps/api`
-- Phase 0.2: environment and Docker workflow hardening
-- Phase 0.3: core technical primitives
-- Phase 0.4: identity and access models
-- Phase 0.5: web session authentication and current establishment context
-- Phase 0.6: minimal RBAC permission service
+## Current Stack
 
-Phase 0.8 replaces membership domain JSON storage with relational operational domain tables scoped to establishments. It does not start Phase 1.
+### Backend
 
-## Current Stack Decisions
-
-- Python 3.14.2
+- Python 3.13.13 for local tooling
 - Django 5.2 LTS
-- Django Templates + HTMX for the MVP UI
-- Django REST Framework for workflow-oriented JSON APIs where needed
+- Django REST Framework
+- drf-spectacular for OpenAPI
 - PostgreSQL
-- Redis
 - Celery
+- Redis
 - Django Channels
-- drf-spectacular
+- Pydantic
 - pytest
 - Ruff
 - uv
-- No React SPA
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- TanStack Query
+- Zustand for minimal UI state only
+- Framer Motion
+- PWA foundation via `vite-plugin-pwa`
+
+## Architecture Rules
+
+- Django owns business workflows, permissions, tenant scoping, visibility, and API contracts.
+- React owns rendering, interaction, local UI state, and API consumption.
+- TanStack Query is the only place for server state in the frontend.
+- Zustand is limited to harmless UI state such as panel visibility.
+- REST remains the source of truth. Realtime is for invalidation/refetch signals only.
+- OpenAPI-first changes must flow from backend schema to generated frontend types.
+- `houston.core` remains for technical primitives, not business workflows.
 
 ## Project Layout
 
-- `apps/api`: Django project root
-- `apps/api/config`: Django configuration package
-- `apps/api/houston`: domain app package
-- `infra/docker/api`: API container build files
-- `docs/codex`: scoped implementation briefs
+- `apps/api` Django project root
+- `apps/api/config` Django settings, ASGI, Celery, and URLs
+- `apps/api/houston` domain apps
+- `apps/web` React/Vite frontend
+- `infra/docker/api` API container files
+- `infra/docker/web` web container files
+- `docs` product, architecture, and implementation notes
 
-## `houston.core` Guardrail
+## What Is Implemented
 
-`apps/api/houston/core` is reserved for shared technical primitives only. It must stay small, stable, and infrastructure-level.
+- Django project foundation under `apps/api`
+- PostgreSQL, Redis, Celery, and Channels wiring
+- OpenAPI schema generation at `/api/schema/`
+- Swagger UI at `/api/docs/`
+- Health endpoint at `/api/v1/health/`
+- Backend auth foundation at `/api/v1/auth/` with CSRF bootstrap, opaque access tokens, rotating refresh tokens, and bootstrap payloads
+- Phase 0 identity, organization, establishment, and minimal access foundations
+- React/Vite frontend foundation under `apps/web`
+- Generated OpenAPI TypeScript client workflow
+- TanStack Query, minimal Zustand, and conservative PWA setup
 
-Allowed in `houston.core`:
+## What Is Not Implemented Yet
 
-- abstract base models
-- cross-cutting technical primitives
-- generic result objects
-- generic exceptions
-- generic event envelope structures
-- temporary health, root, and app shell views
-- helpers that are truly shared and non-business
+- Phase 1 onboarding
+- Observations
+- Signals
+- Actions
+- Checklists
+- Uploads
+- AI pipeline
+- Notifications
+- Realtime business workflows
+- Full React auth shell
+- Production-grade frontend feature surface
 
-Forbidden in `houston.core`:
+## Auth Notes
 
-- Observation, Signal, Action, Checklist, Notification, Upload, or AI business logic
-- establishment-specific RBAC rules
-- domain services
-- business selectors
-- object-level business policies
-- code placed there only because it is shared by two modules
+- The backend auth contract now lives under `/api/v1/auth/`.
+- Login, refresh, and logout are CSRF-protected mutation endpoints.
+- Access tokens are opaque bearer tokens and must remain memory-only on the frontend.
+- Refresh tokens rotate and remain readable only by the browser as an HttpOnly cookie.
+- `UserSession`, `AccessToken`, and `SessionRefreshToken` are the backend auth source of truth.
+- `memberships` in bootstrap responses are already filtered to active backend truth.
 
-Decision rule:
-
-- If code depends on a domain concept, it belongs in that domain app.
-- If code is shared across domains but still expresses business rules, put it in the owning domain or a dedicated app, not in `core`.
-- If there is doubt, do not put it in `houston.core`.
-
-Any future PR adding code to `houston.core` must explain why that code is framework-level or infrastructure-level rather than domain-level.
-
-## Current Capabilities
-
-The current Phase 0 foundation includes:
-
-- Django project under `apps/api`
-- Docker Compose workflow
-- PostgreSQL / Redis wiring
-- pytest / Ruff / OpenAPI
-- core primitives
-- custom `User`
-- `Organization`
-- `Establishment`
-- `EstablishmentMembership`
-- `OperationalDomain`
-- `MembershipDomain`
-- web session login/logout
-- protected `/app/`
-- current establishment context
-- minimal RBAC permission service
-- capability-level permissions plus domain membership checks
+The backend still exposes `/login/`, `/logout/`, and `/app/` as temporary legacy scaffolding while the React auth shell is completed. They must not be expanded into product UI.
 
 ## Local Setup
 
 1. Copy `.env.example` to `.env`.
-
 2. Start the stack:
+
+```bash
 docker compose up --build
+```
 
-3. Apply database migrations from another terminal
+3. Apply database migrations:
+
+```bash
 make migrate
+```
 
-4. Run the acceptance checks
-docker compose exec api python --version
-make check
-make test
-make lint
+4. Generate the backend schema and frontend API types when needed:
+
+```bash
 make schema
-make migrations-check
-curl http://localhost:8000/api/v1/health/
-curl http://localhost:8000/
+make web-api-generate
+```
 
-make migrate, make check, make test, make lint, make schema, and make migrations-check assume the Docker Compose stack is already running.
+## Docker Compose Usage
 
-## Validation Commands
+- API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/api/docs/`
+- Frontend: `http://localhost:5173`
 
+Core commands:
 
-Run from the repository root after the Docker Compose stack is running:
+```bash
+make build
+make up
+make down
+make shell
+```
+
+## Backend Commands
+
+Run from the repository root while Docker Compose is available:
+
 ```bash
 make migrate
 make check
@@ -122,69 +139,57 @@ make test
 make lint
 make schema
 make migrations-check
+```
 
-## Make Commands
+## Frontend Commands
 
-These commands are thin wrappers around `docker compose`:
+Run from the repository root:
 
-make migation check :
+```bash
+make web-install
+make web-dev
+make web-typecheck
+make web-build
+make web-api-generate
+```
 
-```md
+## OpenAPI Workflow
+
+When backend API contracts change:
+
+1. Update the backend serializer, schema, or input type.
+2. Update the view/service/selector.
+3. Regenerate the backend OpenAPI schema:
+
+```bash
+make schema
+```
+
+4. Regenerate frontend API types:
+
+```bash
+make web-api-generate
+```
+
+5. Update the TanStack Query hook or React component that consumes the API.
+6. Update tests for the changed behavior.
+
+Do not manually edit generated API types.
+
+## Verification
+
+The intended local verification flow is:
+
+```bash
 make build
 make up
-make down
 make migrate
 make check
 make test
 make lint
 make schema
 make migrations-check
-make shell
+make web-typecheck
+make web-build
+make verify
 ```
-
-`make check`, `make test`, `make lint`, `make schema`, `make shell`, and `make migrate` assume the stack is already running.
-
-## Available Endpoints
-
-- `/`: Django template rendering proof
-- `/api/v1/health/`: health endpoint
-- `/api/schema/`: OpenAPI schema
-- `/api/docs/`: Swagger UI
-- `/login/`: session login page
-- `/logout/`: session logout endpoint
-- `/app/`: protected application shell
-
-## Not Implemented Yet
-
-- Phase 1 onboarding
-- runtime configuration
-- invitations
-- signup
-- password reset
-- JWT
-- refresh tokens
-- DRF login endpoint
-- Observation
-- Signal
-- Action
-- Checklist
-- Comments
-- Notifications
-- Realtime business flows
-- AI pipeline
-- Upload logic
-- React
-- TypeScript
-- `apps/web`
-
-Scaffold-only Django apps for future domains may exist, but their business logic is intentionally not implemented in Phase 0.
-
-## Domain Access Note
-
-Phase 0.8 replaces `EstablishmentMembership.operational_domains` JSON storage with relational `OperationalDomain` and `MembershipDomain` models.
-
-Current permissions remain limited to capability-level checks plus establishment-scoped domain membership. Object-level Signal, Action, and checklist authorization is not implemented yet.
-
-## Next Phase
-
-Phase 1 — Runtime Config + Minimal Onboarding

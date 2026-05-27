@@ -1,0 +1,530 @@
+Backend stack:
+
+- Python 3.13.13
+- Django 5.2 LTS
+- Django REST Framework
+- PostgreSQL
+- Celery
+- Redis
+- Django Channels
+- Pydantic
+- OpenAPI
+
+Do not upgrade backend framework versions unless explicitly requested.
+
+------
+
+## Backend principles
+
+Django is the business authority.
+
+PostgreSQL is the persisted source of truth.
+
+Redis is temporary technical state only.
+
+Celery owns async execution only.
+
+Channels owns realtime invalidation only.
+
+Pydantic validates structured AI/technical payloads.
+
+OpenAPI owns the API contract.
+
+Prefer explicit service methods over generic abstractions.
+
+Avoid placing business logic in framework hooks.
+
+------
+
+## Expected Django app structure
+
+Each domain app should follow this structure when relevant:
+
+```
+models.py
+services.py
+selectors.py
+permissions.py
+api/
+  serializers.py
+  views.py
+  urls.py
+tests/
+```
+
+Allowed shared technical primitives may live in `core/`.
+
+Forbidden:
+
+- business workflows in `core/`
+- domain-specific services in `core/`
+- catch-all utilities that hide ownership
+- cross-domain shortcuts that bypass service boundaries
+
+------
+
+## Backend ownership rules
+
+Business writes and workflows go in `services.py`.
+
+Examples:
+
+- submit Observation
+- create Signal
+- aggregate Signal
+- create Action
+- accept Action
+- mark Action done
+- validate Action
+- reopen Action
+- cancel Action
+- create Checklist execution
+- create notification
+- create domain event
+
+Complex reads go in `selectors.py`.
+
+Examples:
+
+- Signal feed
+- Execution feed
+- filtered domain views
+- permission-scoped lists
+- detail projections
+- dashboard-style query composition
+
+Authorization rules go in `permissions.py`.
+
+Examples:
+
+- can view Signal
+- can create Action
+- can validate Action
+- can cancel Signal
+- can access establishment resource
+- can access media
+- can subscribe to realtime channel
+
+DRF views must stay thin:
+
+1. validate request shape
+2. check permission
+3. call service or selector
+4. return response
+
+Serializers are for API validation and representation only.
+Serializers must not orchestrate Houston business workflows.
+
+Models may contain:
+
+- fields
+- constraints
+- indexes
+- simple local invariants
+- simple computed properties
+
+Models must not orchestrate workflows.
+
+------
+
+## Status transition rules
+
+All business state transitions must be explicit service methods.
+
+Forbidden:
+
+- generic PATCH status endpoints for business transitions
+- status changes from serializers
+- status changes from DRF views
+- status changes from React
+- status changes from Django signals
+- hidden transition side effects
+
+Allowed transition endpoints include:
+
+```
+POST /actions/:id/accept
+POST /actions/:id/mark_done
+POST /actions/:id/validate
+POST /actions/:id/reopen
+POST /actions/:id/cancel
+
+POST /signals/:id/resolve
+POST /signals/:id/cancel
+POST /signals/:id/pin
+POST /signals/:id/unpin
+POST /signals/:id/set_urgency
+POST /signals/:id/add_domain
+POST /signals/:id/remove_domain
+```
+
+Each transition must:
+
+- check backend permission
+- validate current state
+- validate establishment scope
+- run inside `transaction.atomic` when multiple writes are involved
+- emit the expected domain event when applicable
+- return the updated resource summary
+
+------
+
+## Transaction rules
+
+Use `transaction.atomic` for critical write workflows.
+
+Use transactions when a service:
+
+- changes status
+- creates multiple related records
+- writes domain events
+- updates feed timestamps
+- creates notifications
+- creates or updates permissions-relevant data
+- performs aggregation
+- creates an Action from a Signal
+
+Do not wrap simple read selectors in transactions.
+
+------
+
+## Domain guardrails
+
+### Observation
+
+Rules:
+
+- text input is required
+- audio is temporary and only produces editable text
+- photos are optional
+- photo-only Observation is forbidden
+- pipeline receives validated text only
+- raw Observation text is never exposed in product APIs
+
+Celery payloads must pass IDs only.
+Workers must reload sensitive content server-side.
+
+### Signal
+
+Rules:
+
+- created only by backend service
+- aggregated only by backend service
+- `detected_domains` drives visibility and actionability
+- feed visibility is backend-owned
+- feed sorting is backend-owned
+- `last_activity_at` is maintained by backend
+
+### Action
+
+Allowed transitions:
+
+- create
+- accept
+- mark_done
+- validate
+- reopen
+- cancel
+- reassign
+
+Each transition must check backend permission.
+
+Generic status mutation endpoints are forbidden.
+
+### Feeds
+
+Backend applies:
+
+- RBAC
+- establishment scope
+- view mode
+- filters
+- sorting
+- pagination
+
+Never return unauthorized data and rely on frontend hiding.
+
+### AI pipeline
+
+Rules:
+
+- Pydantic validates AI JSON shape
+- Django validates business rules
+- AI does not mutate the database directly
+- AI does not decide permissions
+- AI does not decide urgency in MVP
+- store only technical AI metadata
+- no prompt/content logs in standard logs
+- images are not sent to AI in MVP
+
+------
+
+## DRF API rules
+
+Use DRF views/viewsets only as HTTP orchestration.
+
+Views may:
+
+- parse request
+- instantiate serializer
+- call permission function
+- call service or selector
+- return response
+
+Views must not:
+
+- implement workflows
+- directly mutate business objects
+- contain complex query logic
+- decide business transitions
+- bypass services
+
+Serializers may:
+
+- validate request shape
+- validate primitive field constraints
+- represent response data
+
+Serializers must not:
+
+- create complex workflows
+- perform status transitions
+- perform permission checks
+- create domain events
+- call Celery tasks directly
+- create notifications directly
+
+------
+
+## OpenAPI rules
+
+API changes require OpenAPI updates.
+
+If using drf-spectacular or another schema generator, use the project-defined command.
+
+Do not invent OpenAPI generation commands.
+
+If no command exists, report:
+
+```
+OpenAPI generation command is not defined yet.
+```
+
+and propose a dedicated setup task.
+
+Schema changes must be reflected in generated frontend types.
+
+------
+
+## Authentication foundation rules
+
+Backend auth for Houston uses:
+
+- opaque short-lived bearer access tokens
+- rotating opaque refresh tokens
+- `UserSession` as the session authority
+- `AccessToken` and `SessionRefreshToken` digests only
+
+Mutation auth endpoints that depend on cookies must enforce CSRF:
+
+- `POST /api/v1/auth/login/`
+- `POST /api/v1/auth/refresh/`
+- `POST /api/v1/auth/logout/`
+
+Never:
+
+- store raw tokens in the database
+- expose token digests in API responses
+- make frontend state the authorization authority
+- use JWT for MVP auth
+
+Before production, add explicit rate limiting for login and refresh.
+
+------
+
+## Celery rules
+
+Celery tasks are execution wrappers, not business services.
+
+Tasks may:
+
+- receive IDs
+- load database records
+- call services
+- handle retry policy
+- log technical metadata
+
+Tasks must not:
+
+- receive raw Observation text
+- receive sensitive business payloads
+- contain business workflows directly
+- bypass permissions or establishment scope
+- become the source of business truth
+
+Broker messages must stay small and non-sensitive.
+
+------
+
+## Redis rules
+
+Redis may be used for:
+
+- cache
+- rate limit counters
+- temporary locks
+- short-lived technical state
+- Channels layer
+
+Redis must not be used for:
+
+- persisted business truth
+- authorization truth
+- operational history
+- durable workflow state
+- sensitive raw content
+
+------
+
+## Channels and realtime rules
+
+Channels consumers must stay thin.
+
+Consumers may:
+
+- authenticate user
+- check membership
+- check channel subscription permission
+- send lightweight events
+- trigger frontend refetch
+
+Consumers must not:
+
+- perform business workflows
+- send full business payloads
+- expose sensitive content
+- bypass REST API
+- mutate domain state except technical connection state
+
+------
+
+## Logging rules
+
+Logs may contain:
+
+- correlation ID
+- request ID
+- user ID
+- establishment ID
+- event type
+- error code
+- latency
+- provider/model metadata
+- status
+
+Logs must not contain:
+
+- raw Observation text
+- full comments
+- audio content
+- photo content
+- secrets
+- tokens
+- full AI prompts
+- full AI outputs containing business content
+
+------
+
+## Backend commands
+
+Run from repository root unless stated otherwise.
+
+Install dependencies:
+
+```
+cd apps/api && uv sync
+```
+
+Lint:
+
+```
+cd apps/api && uv run ruff check .
+```
+
+Format check:
+
+```
+cd apps/api && uv run ruff format --check .
+```
+
+Tests:
+
+```
+cd apps/api && uv run pytest
+```
+
+Migration check:
+
+```
+cd apps/api && uv run python manage.py makemigrations --check --dry-run
+```
+
+OpenAPI generation:
+
+```
+Use the project-defined OpenAPI command if it exists.
+If missing, do not invent it.
+```
+
+------
+
+## Backend testing rules
+
+Add or update tests when changing:
+
+- services
+- selectors
+- permissions
+- APIs
+- models
+- migrations
+- status transitions
+- Celery tasks
+- Channels consumers
+- AI pipeline validation
+- uploads
+- notifications
+
+Backend tests should verify:
+
+- successful path
+- permission denial
+- invalid state transition
+- establishment scoping
+- database side effects
+- emitted domain event when applicable
+- API response shape
+- sensitive data is not exposed
+
+Prefer behavior-focused tests.
+
+Avoid tests that depend on fragile internal mocking.
+
+------
+
+## Backend Definition of Done
+
+Backend work is done only when:
+
+- service/selector/permission ownership is respected
+- views remain thin
+- serializers do not orchestrate workflows
+- status transitions are explicit
+- transaction boundaries are correct
+- tenant scoping is enforced
+- sensitive payload rules are respected
+- migrations exist for model changes
+- OpenAPI is updated when API shape changes
+- tests cover changed behavior
+- relevant backend commands were run or a reason is given
+- risks/debt are stated

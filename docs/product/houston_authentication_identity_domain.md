@@ -5,6 +5,35 @@
 **Statut:** Décisions MVP validées  
 **Périmètre:** Houston MVP — identité utilisateur, authentification, invitations, activation, sessions, tokens, password reset, révocation
 
+## Implementation status note
+
+Checkpoint 1 implementation overrides older exploratory notes in this document where they conflict.
+
+Current implemented backend contract:
+
+- access token = opaque bearer token, not JWT
+- access token persisted as `AccessToken.token_digest` only
+- refresh token = opaque rotating token persisted as `SessionRefreshToken.token_digest` only
+- `UserSession` is the session authority record
+- login, refresh, and logout are CSRF-protected
+- bootstrap returns `memberships` and `active_membership`
+- email login is case-insensitive and email values are normalized on write
+
+Current non-goals for this pass:
+
+- invitations
+- password reset
+- email verification
+- MFA
+- onboarding
+- establishment switcher UI
+
+Production TODOs still open:
+
+- login rate limiting
+- refresh rate limiting
+- suspicious token reuse monitoring
+
 **Documents liés :**
 - `Houston_rbac_permissions_domain.md`
 - `Houston_security_rgpd_baseline.md`

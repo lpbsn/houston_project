@@ -10,19 +10,13 @@ Implement Houston Phase 0.1 Foundations only.
 
 Houston is a Django modular monolith for a mobile-first B2B PWA.
 
-The MVP is not a React SPA.
-
-The frontend MVP uses:
-- Django Templates
-- HTMX
-- targeted TypeScript only where needed
-- no apps/web
+The project now uses a dedicated React frontend in `apps/web`.
 
 ## Scope
 
 Create the backend project under apps/api using:
 
-- Python 3.14.2
+- Python 3.13.13
 - Django 5.2 LTS
 - Django REST Framework
 - PostgreSQL
@@ -30,6 +24,7 @@ Create the backend project under apps/api using:
 - Celery
 - Django Channels
 - drf-spectacular
+- Pydantic
 - pytest
 - Ruff
 - uv

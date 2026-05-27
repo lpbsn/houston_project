@@ -77,27 +77,29 @@ Les domaines sont séparés par apps Django et modules internes, mais ne devienn
 ## 3.1 Backend
 
 ```txt
-Python 3.14.2
-Django
-Django REST Framework
-PostgreSQL
-Celery
-Redis
-Django Channels
-Pydantic
-drf-spectacular
+- Python 3.13.13
+- Django 5.2 LTS
+- Django REST Framework
+- PostgreSQL
+- Celery
+- Redis
+- Django Channels
+- Pydantic
+- OpenAPI
 ```
 
 ## 3.2 Frontend
 
 ```txt
-Django Templates
-HTMX
-TypeScript ciblé via Vite
-Alpine.js or Stimulus if needed
-PWA manifest
-Service worker minimal
-Optional OpenAPI TypeScript client for JSON API consumers
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- TanStack Query
+- minimal Zustand
+- Framer Motion, minimal usage only
+- PWA-ready
 ```
 
 ## 3.3 Storage / infra locale
@@ -107,24 +109,6 @@ S3-compatible storage
 MinIO local
 Docker Compose local
 ```
-
-## 3.4 Challenge stack
-
-Django + DRF + Celery + Channels est cohérent pour Houston parce que :
-- le produit est transactionnel ;
-- les règles métier sont importantes ;
-- PostgreSQL est central ;
-- les feeds sont backend-authorized ;
-- les jobs async sont nécessaires pour IA/events/uploads ;
-- Django Admin donne un support technique rapide ;
-- OpenAPI documente les endpoints JSON et prépare les futurs consommateurs API, notamment mobile ou modules TypeScript ciblés.
-
-Point à surveiller :
-- Django Channels + Celery + Redis ajoute de la complexité runtime.
-- Il faudra garder le realtime minimal : invalidation/refetch, pas transport complet de données.
-- Le monolithe doit rester modulaire, pas devenir un `core` fourre-tout.
-
----
 
 # 4. Structure projet cible
 
@@ -149,14 +133,6 @@ apps/api/
     ├── events/
     └── uploads/
 ```
-
-## 4.2 Renommages validés
-
-```txt
-ai_pipeline → ai
-domain_events → events
-```
-
 ## 4.3 Nommage
 
 ```txt
@@ -1078,7 +1054,7 @@ Use DRF serializers for API request/response.
 ```txt
 Use drf-spectacular for OpenAPI.
 Generate optional TypeScript client for JSON API consumers.
-Do not require generated TypeScript client for HTMX-rendered screens.
+Require generated TypeScript types for frontend API consumption.
 ```
 
 ## 21.4 API style

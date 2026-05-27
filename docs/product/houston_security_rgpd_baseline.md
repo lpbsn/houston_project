@@ -981,3 +981,18 @@ Le build doit maintenant s’appuyer sur :
 - incident process minimal ;
 - subprocessors list ;
 - monitoring sécurité MVP.
+# Checkpoint 1 auth security note
+
+Current backend auth security baseline:
+
+- access token = opaque bearer token, memory-only on the frontend
+- refresh token = rotating opaque token in an HttpOnly cookie
+- login, refresh, and logout are CSRF-protected mutation endpoints
+- `SameSite=Lax` is defense in depth and does not replace CSRF validation
+- raw tokens must not be stored or logged
+
+Before production:
+
+- add login rate limiting
+- add refresh rate limiting
+- add monitoring and alerting for suspicious refresh-token reuse

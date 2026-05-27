@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -111,10 +112,44 @@ CHANNEL_LAYERS = {
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "houston.accounts.authentication.BearerAccessTokenAuthentication",
+    ],
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Houston API",
-    "DESCRIPTION": "Phase 0 foundation and access schema",
+    "DESCRIPTION": "Houston backend API contract",
     "VERSION": "0.1.0",
 }
+
+AUTHENTICATION_BACKENDS = [
+    "houston.accounts.backends.IdentifierBackend",
+]
+
+HOUSTON_AUTH_ACCESS_TOKEN_TTL = timedelta(minutes=15)
+HOUSTON_AUTH_REFRESH_TOKEN_TTL = timedelta(days=30)
+HOUSTON_AUTH_ABSOLUTE_SESSION_TTL = timedelta(days=90)
+HOUSTON_AUTH_TOKEN_SALT = env_str("HOUSTON_AUTH_TOKEN_SALT", "houston.auth.token")
+HOUSTON_AUTH_TOKEN_PEPPER = env_str("HOUSTON_AUTH_TOKEN_PEPPER", SECRET_KEY)
+HOUSTON_AUTH_TOKEN_BYTES = int(env_str("HOUSTON_AUTH_TOKEN_BYTES", "48"))
+HOUSTON_AUTH_TOKEN_GENERATION_MAX_ATTEMPTS = int(
+    env_str("HOUSTON_AUTH_TOKEN_GENERATION_MAX_ATTEMPTS", "5")
+)
+HOUSTON_AUTH_REFRESH_COOKIE_NAME = env_str(
+    "HOUSTON_AUTH_REFRESH_COOKIE_NAME",
+    "houston_refresh_token",
+)
+HOUSTON_AUTH_REFRESH_COOKIE_HTTPONLY = True
+HOUSTON_AUTH_REFRESH_COOKIE_SAMESITE = env_str(
+    "HOUSTON_AUTH_REFRESH_COOKIE_SAMESITE",
+    "Lax",
+)
+HOUSTON_AUTH_REFRESH_COOKIE_PATH = env_str(
+    "HOUSTON_AUTH_REFRESH_COOKIE_PATH",
+    "/api/v1/auth/",
+)
+HOUSTON_AUTH_REFRESH_COOKIE_SECURE = env_bool(
+    "HOUSTON_AUTH_REFRESH_COOKIE_SECURE",
+    default=not DEBUG,
+)
