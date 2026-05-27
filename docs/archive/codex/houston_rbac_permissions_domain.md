@@ -851,21 +851,18 @@ La matrice de notifications reste à cadrer dans un document dédié.
 
 ## 19.1 Service de permission
 
-Créer un service backend explicite :
+Créer un service backend explicite.
 
-```rb
-Permissions::Can
-```
+Exemples conceptuels :
 
-ou :
-
-```rb
-Authorization::Policy
+```txt
+PermissionService
+AuthorizationPolicy
 ```
 
 ## 19.2 Exemples de méthodes
 
-```rb
+```txt
 can_view_signal?(user:, signal:, establishment:)
 can_create_action?(user:, signal:)
 can_assign_action?(user:, action:)
@@ -876,39 +873,34 @@ can_create_shared_checklist_template?(user:, establishment:)
 can_execute_checklist?(user:, checklist_execution:)
 ```
 
-## 19.3 Recommandation Rails
+## 19.3 Recommandation backend
 
 Utiliser des policies explicites.
 
 Exemple conceptuel :
 
-```rb
-class SignalPolicy
-  def show?
-    same_establishment? && member_active?
-  end
+```txt
+SignalPolicy.show?
+  same_establishment? && member_active?
 
-  def create_action?
-    owner_or_director? || manager_with_matching_domain?
-  end
+SignalPolicy.create_action?
+  owner_or_director? || manager_with_matching_domain?
 
-  def resolve?
-    owner_or_director? || manager_with_matching_domain?
-  end
-end
+SignalPolicy.resolve?
+  owner_or_director? || manager_with_matching_domain?
 ```
 
 ## 19.4 Règle critique
 
 Toutes les queries doivent être establishment-scoped.
 
-```rb
+```txt
 Signal.where(establishment_id: current_establishment.id)
 ```
 
 Jamais :
 
-```rb
+```txt
 Signal.all
 ```
 
@@ -1148,7 +1140,7 @@ Mais le backend doit quand même refuser toute action interdite.
 Le domaine RBAC / Permissions est suffisamment cadré pour le MVP.
 
 Il peut servir de base à :
-- modèles Rails ;
+- modèles backend ;
 - policies backend ;
 - écrans frontend ;
 - tests fonctionnels ;
