@@ -70,7 +70,6 @@ def _serialize_membership(membership: EstablishmentMembership) -> dict:
         "role": membership.role,
         "status": membership.status,
         "operational_domains": [
-            link.operational_domain.key
-            for link in membership.domain_links.all()
+            link.operational_domain.key for link in membership.domain_links.all()
         ],
     }

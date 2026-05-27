@@ -7,44 +7,120 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('organizations', '0001_initial'),
+        ("organizations", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Establishment',
+            name="Establishment",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=255)),
-                ('status', models.CharField(choices=[('draft', 'Draft'), ('active', 'Active'), ('deactivated', 'Deactivated')], default='draft', max_length=20)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='establishments', to='organizations.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=255)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("draft", "Draft"),
+                            ("active", "Active"),
+                            ("deactivated", "Deactivated"),
+                        ],
+                        default="draft",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="establishments",
+                        to="organizations.organization",
+                    ),
+                ),
             ],
             options={
-                'abstract': False,
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='EstablishmentMembership',
+            name="EstablishmentMembership",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('role', models.CharField(choices=[('owner', 'Owner'), ('director', 'Director'), ('manager', 'Manager'), ('staff', 'Staff')], default='staff', max_length=20)),
-                ('status', models.CharField(choices=[('invited', 'Invited'), ('active', 'Active'), ('deactivated', 'Deactivated')], default='invited', max_length=20)),
-                ('operational_domains', models.JSONField(blank=True, default=list)),
-                ('establishment', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='establishments.establishment')),
-                ('user', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='establishment_memberships', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[
+                            ("owner", "Owner"),
+                            ("director", "Director"),
+                            ("manager", "Manager"),
+                            ("staff", "Staff"),
+                        ],
+                        default="staff",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("invited", "Invited"),
+                            ("active", "Active"),
+                            ("deactivated", "Deactivated"),
+                        ],
+                        default="invited",
+                        max_length=20,
+                    ),
+                ),
+                ("operational_domains", models.JSONField(blank=True, default=list)),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="memberships",
+                        to="establishments.establishment",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="establishment_memberships",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['establishment'], name='membership_est_idx'), models.Index(fields=['user'], name='membership_user_idx'), models.Index(fields=['role'], name='membership_role_idx'), models.Index(fields=['status'], name='membership_status_idx')],
-                'constraints': [models.UniqueConstraint(fields=('user', 'establishment'), name='unique_user_establishment_membership')],
+                "indexes": [
+                    models.Index(fields=["establishment"], name="membership_est_idx"),
+                    models.Index(fields=["user"], name="membership_user_idx"),
+                    models.Index(fields=["role"], name="membership_role_idx"),
+                    models.Index(fields=["status"], name="membership_status_idx"),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("user", "establishment"),
+                        name="unique_user_establishment_membership",
+                    )
+                ],
             },
         ),
     ]

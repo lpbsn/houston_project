@@ -6,65 +6,113 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0001_initial'),
+        ("establishments", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='establishmentmembership',
-            name='operational_domains',
+            model_name="establishmentmembership",
+            name="operational_domains",
         ),
         migrations.CreateModel(
-            name='OperationalDomain',
+            name="OperationalDomain",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('key', models.CharField(max_length=100)),
-                ('label', models.CharField(max_length=255)),
-                ('source', models.CharField(choices=[('ai_proposed', 'AI Proposed'), ('manual', 'Manual'), ('template', 'Template')], default='manual', max_length=20)),
-                ('active', models.BooleanField(default=True)),
-                ('establishment', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='operational_domains', to='establishments.establishment')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("key", models.CharField(max_length=100)),
+                ("label", models.CharField(max_length=255)),
+                (
+                    "source",
+                    models.CharField(
+                        choices=[
+                            ("ai_proposed", "AI Proposed"),
+                            ("manual", "Manual"),
+                            ("template", "Template"),
+                        ],
+                        default="manual",
+                        max_length=20,
+                    ),
+                ),
+                ("active", models.BooleanField(default=True)),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="operational_domains",
+                        to="establishments.establishment",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='MembershipDomain',
+            name="MembershipDomain",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('membership', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='domain_links', to='establishments.establishmentmembership')),
-                ('operational_domain', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='membership_links', to='establishments.operationaldomain')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "membership",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="domain_links",
+                        to="establishments.establishmentmembership",
+                    ),
+                ),
+                (
+                    "operational_domain",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="membership_links",
+                        to="establishments.operationaldomain",
+                    ),
+                ),
             ],
         ),
         migrations.AddIndex(
-            model_name='operationaldomain',
-            index=models.Index(fields=['establishment'], name='domain_est_idx'),
+            model_name="operationaldomain",
+            index=models.Index(fields=["establishment"], name="domain_est_idx"),
         ),
         migrations.AddIndex(
-            model_name='operationaldomain',
-            index=models.Index(fields=['establishment', 'active'], name='domain_est_active_idx'),
+            model_name="operationaldomain",
+            index=models.Index(fields=["establishment", "active"], name="domain_est_active_idx"),
         ),
         migrations.AddIndex(
-            model_name='operationaldomain',
-            index=models.Index(fields=['key'], name='domain_key_idx'),
+            model_name="operationaldomain",
+            index=models.Index(fields=["key"], name="domain_key_idx"),
         ),
         migrations.AddConstraint(
-            model_name='operationaldomain',
-            constraint=models.UniqueConstraint(fields=('establishment', 'key'), name='op_domain_est_key_uniq'),
+            model_name="operationaldomain",
+            constraint=models.UniqueConstraint(
+                fields=("establishment", "key"), name="op_domain_est_key_uniq"
+            ),
         ),
         migrations.AddIndex(
-            model_name='membershipdomain',
-            index=models.Index(fields=['membership'], name='mship_domain_mship_idx'),
+            model_name="membershipdomain",
+            index=models.Index(fields=["membership"], name="mship_domain_mship_idx"),
         ),
         migrations.AddIndex(
-            model_name='membershipdomain',
-            index=models.Index(fields=['operational_domain'], name='mship_domain_domain_idx'),
+            model_name="membershipdomain",
+            index=models.Index(fields=["operational_domain"], name="mship_domain_domain_idx"),
         ),
         migrations.AddConstraint(
-            model_name='membershipdomain',
-            constraint=models.UniqueConstraint(fields=('membership', 'operational_domain'), name='membership_domain_uniq'),
+            model_name="membershipdomain",
+            constraint=models.UniqueConstraint(
+                fields=("membership", "operational_domain"), name="membership_domain_uniq"
+            ),
         ),
     ]

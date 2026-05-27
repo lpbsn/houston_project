@@ -180,6 +180,7 @@ def test_anonymized_user_is_denied_access_and_stale_selection_is_cleared(request
     assert context.has_app_access is False
     assert CURRENT_ESTABLISHMENT_SESSION_KEY not in request.session
 
+
 def test_active_membership_resolution_ignores_establishments_under_non_active_organization(
     request_factory,
     active_user,

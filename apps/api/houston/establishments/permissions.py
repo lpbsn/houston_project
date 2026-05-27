@@ -68,11 +68,15 @@ def can_access_domain(
     if normalized_domain_key is None:
         return False
 
-    domain = OperationalDomain.objects.filter(
-        establishment=membership.establishment,
-        key=normalized_domain_key,
-        active=True,
-    ).only("id").first()
+    domain = (
+        OperationalDomain.objects.filter(
+            establishment=membership.establishment,
+            key=normalized_domain_key,
+            active=True,
+        )
+        .only("id")
+        .first()
+    )
     if domain is None:
         return False
 
