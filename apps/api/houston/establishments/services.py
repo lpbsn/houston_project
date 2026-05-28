@@ -273,6 +273,21 @@ def create_template_onboarding_proposal(
 
 
 @transaction.atomic
+def create_ai_onboarding_proposal(
+    *,
+    session: OnboardingSession,
+    actor,
+    payload: dict,
+) -> OnboardingProposal:
+    return _create_onboarding_proposal(
+        session=session,
+        actor=actor,
+        payload=payload,
+        source=OnboardingProposal.Source.AI_PROPOSED,
+    )
+
+
+@transaction.atomic
 def validate_onboarding_proposal_section(
     *,
     proposal: OnboardingProposal,
