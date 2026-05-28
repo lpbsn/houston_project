@@ -6,7 +6,6 @@
     "module": "esnext",
     "types": ["node"],
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
