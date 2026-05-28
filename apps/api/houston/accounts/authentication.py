@@ -67,6 +67,14 @@ class BearerAccessTokenAuthentication(authentication.BaseAuthentication):
         return self.keyword
 
 
+class OptionalBearerAccessTokenAuthentication(BearerAccessTokenAuthentication):
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except exceptions.AuthenticationFailed:
+            return None
+
+
 class BearerAccessTokenAuthenticationScheme(OpenApiAuthenticationExtension):
     target_class = "houston.accounts.authentication.BearerAccessTokenAuthentication"
     name = "BearerAccessToken"

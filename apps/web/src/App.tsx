@@ -6,7 +6,7 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
-import { useUiStore } from '@/stores/use-ui-store'
+import { LandingPage } from '@/features/landing/landing-page'
 
 type AppPath = '/' | '/login' | '/app'
 
@@ -50,10 +50,6 @@ function usePathname() {
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
-  const sidebarOpen = useUiStore((state) => state.sidebarOpen)
-  const visualMode = useUiStore((state) => state.visualMode)
-  const toggleSidebar = useUiStore((state) => state.toggleSidebar)
-  const cycleVisualMode = useUiStore((state) => state.cycleVisualMode)
   const { pathname, navigate } = usePathname()
 
   const motionProps = shouldReduceMotion
@@ -69,11 +65,6 @@ function App() {
       return
     }
 
-    if (pathname === '/') {
-      navigate(auth.isAuthenticated ? '/app' : '/login', { replace: true })
-      return
-    }
-
     if (pathname === '/login' && auth.isAuthenticated) {
       navigate('/app', { replace: true })
       return
@@ -85,59 +76,52 @@ function App() {
   }, [auth.isAuthenticated, auth.isReady, navigate, pathname])
 
   const routeContent = useMemo(() => {
-    if (!auth.isReady && pathname === '/') {
-      return null
-    }
-
     if (pathname === '/app') {
       return <AppPage />
     }
 
     return <LoginPage />
-  }, [auth.isReady, pathname])
+  }, [pathname])
+
+  if (pathname === '/') {
+    return <LandingPage />
+  }
 
   const routeCopy = pathname === '/app'
     ? {
-        headingBadge: 'Houston auth shell',
-        title: 'Authenticated bootstrap, thin React shell.',
+        headingBadge: 'Workspace shell',
+        title: 'Identity, context, and membership workspaces.',
         description:
-          'React renders the approved bootstrap payload, while Django remains the authority for session validity, permissions, and memberships.',
-        heroTitle: 'Access is restored through backend-owned sessions.',
-        heroDescription:
-          'A short-lived bearer token lives only in memory. Refresh stays cookie-backed and CSRF-protected.',
-        heroFooter: 'The app shell stays small while the backend keeps the operational truth.',
+          'This mobile-first shell renders only backend-approved session, establishment, membership, and scoped search data.',
+        actions: (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+            onClick={() => {
+              void auth.logout()
+            }}
+            disabled={auth.isLoggingOut}
+          >
+            {auth.isLoggingOut ? 'Signing out...' : 'Sign out'}
+          </Button>
+        ),
       }
     : {
-        headingBadge: 'Houston access',
+        headingBadge: 'Session access',
         title: 'Sign in through the backend auth contract.',
         description:
-          'The login, refresh, and logout flows use CSRF-protected backend endpoints, while TanStack Query owns the bootstrap state.',
-        heroTitle: 'No token persistence, no client-owned authorization.',
-        heroDescription:
-          'This shell restores sessions from the backend when possible and never writes auth tokens to durable browser storage.',
-        heroFooter: 'The frontend renders state. The backend decides whether a session is valid.',
+          'Sessions stay backend-owned, refresh stays cookie-backed, and React only renders the approved bootstrap state.',
+        actions: undefined,
       }
 
   return (
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">
       <AppShell
-        sidebarOpen={sidebarOpen}
-        visualMode={visualMode}
-        onToggleSidebar={toggleSidebar}
-        onCycleVisualMode={cycleVisualMode}
         headingBadge={routeCopy.headingBadge}
         title={routeCopy.title}
         description={routeCopy.description}
-        heroTitle={routeCopy.heroTitle}
-        heroDescription={routeCopy.heroDescription}
-        heroFooter={routeCopy.heroFooter}
-        actions={
-          pathname === '/app' && auth.user ? (
-            <Button variant="secondary" disabled>
-              {auth.user.email ?? auth.user.username}
-            </Button>
-          ) : null
-        }
+        actions={routeCopy.actions}
       >
         {routeContent}
       </AppShell>

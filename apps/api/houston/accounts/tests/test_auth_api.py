@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 import pytest
@@ -88,12 +89,34 @@ def auth_headers(csrf_token: str, access_token: str | None = None) -> dict:
     return headers
 
 
-def login(api_client: APIClient, csrf_token: str, *, identifier: str, password: str):
+def login(
+    api_client: APIClient,
+    csrf_token: str,
+    *,
+    identifier: str,
+    password: str,
+    **extra_headers,
+):
     return api_client.post(
         "/api/v1/auth/login/",
         {"identifier": identifier, "password": password},
         format="json",
         **auth_headers(csrf_token),
+        **extra_headers,
+    )
+
+
+def switch_establishment(
+    api_client: APIClient,
+    *,
+    access_token: str,
+    establishment_id,
+):
+    return api_client.post(
+        "/api/v1/auth/switch_establishment/",
+        {"establishment_id": str(establishment_id)},
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
     )
 
 
@@ -118,7 +141,7 @@ def test_login_without_csrf_is_forbidden(api_client, active_user):
 
 
 def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
-    create_membership(user=active_user, domains=["housekeeping"])
+    membership = create_membership(user=active_user, domains=["housekeeping"])
     csrf_token = ensure_csrf(api_client)
 
     response = login(
@@ -138,6 +161,9 @@ def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
     assert "access_token" in body
     assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME in response.cookies
 
+    session = UserSession.objects.get(user=active_user)
+    assert session.selected_establishment_id == membership.establishment_id
+
 
 def test_login_with_csrf_succeeds_for_valid_username(api_client, active_user):
     create_membership(user=active_user)
@@ -152,6 +178,29 @@ def test_login_with_csrf_succeeds_for_valid_username(api_client, active_user):
 
     assert response.status_code == 200
     assert response.json()["user"]["username"] == active_user.username
+
+
+def test_login_with_trusted_browser_origin_succeeds_when_proxy_host_differs(
+    api_client,
+    active_user,
+    settings,
+):
+    create_membership(user=active_user)
+    csrf_token = ensure_csrf(api_client)
+    settings.ALLOWED_HOSTS = ["localhost", "127.0.0.1", "api"]
+    settings.CSRF_TRUSTED_ORIGINS = ["http://localhost:5173"]
+
+    response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+        HTTP_HOST="api:8000",
+        HTTP_ORIGIN="http://localhost:5173",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["authenticated"] is True
 
 
 def test_invalid_login_returns_generic_error(api_client, active_user):
@@ -218,6 +267,15 @@ def test_bootstrap_without_bearer_returns_unauthorized(api_client):
     assert response.status_code == 401
 
 
+def test_bootstrap_with_invalid_bearer_returns_unauthorized(api_client):
+    response = api_client.get(
+        "/api/v1/auth/bootstrap/",
+        HTTP_AUTHORIZATION="Bearer invalid-access-token",
+    )
+
+    assert response.status_code == 401
+
+
 def test_bootstrap_filters_inactive_memberships_establishments_and_organizations(
     api_client,
     active_user,
@@ -278,6 +336,127 @@ def test_active_membership_is_null_for_multiple_memberships(api_client, active_u
     assert response.status_code == 200
     assert response.json()["active_membership"] is None
 
+    session = UserSession.objects.get(user=active_user)
+    assert session.selected_establishment_id is None
+
+
+def test_switch_establishment_requires_bearer_auth(api_client, active_user):
+    create_membership(user=active_user, name="Nice")
+    create_membership(user=active_user, name="Cannes")
+
+    response = api_client.post(
+        "/api/v1/auth/switch_establishment/",
+        {"establishment_id": str(uuid.uuid4())},
+        format="json",
+    )
+
+    assert response.status_code == 401
+
+
+def test_switch_establishment_selects_active_membership_for_session(api_client, active_user):
+    first_membership = create_membership(user=active_user, name="Nice")
+    second_membership = create_membership(user=active_user, name="Cannes")
+    csrf_token = ensure_csrf(api_client)
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = switch_establishment(
+        api_client,
+        access_token=access_token,
+        establishment_id=second_membership.establishment_id,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_membership"]["establishment_name"] == second_membership.establishment.name
+    assert body["memberships"][0]["establishment_name"] == second_membership.establishment.name
+
+    session = UserSession.objects.get(user=active_user)
+    assert session.selected_establishment_id == second_membership.establishment_id
+
+    bootstrap_response = api_client.get(
+        "/api/v1/auth/bootstrap/",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+    )
+
+    assert bootstrap_response.status_code == 200
+    assert (
+        bootstrap_response.json()["active_membership"]["establishment_name"]
+        == second_membership.establishment.name
+    )
+    assert first_membership.establishment.name in {
+        membership["establishment_name"] for membership in bootstrap_response.json()["memberships"]
+    }
+
+
+def test_switch_establishment_returns_not_found_for_foreign_or_inactive_targets(
+    api_client,
+    active_user,
+):
+    create_membership(user=active_user, name="Nice")
+    foreign_user = User.objects.create_user(
+        username="other_user",
+        email="other@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    foreign_membership = create_membership(user=foreign_user, name="Foreign")
+    inactive_membership = create_membership(
+        user=active_user,
+        name="Inactive",
+        establishment_status=Establishment.Status.DEACTIVATED,
+    )
+    csrf_token = ensure_csrf(api_client)
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+    access_token = login_response.json()["access_token"]
+
+    foreign_response = switch_establishment(
+        api_client,
+        access_token=access_token,
+        establishment_id=foreign_membership.establishment_id,
+    )
+    inactive_response = switch_establishment(
+        api_client,
+        access_token=access_token,
+        establishment_id=inactive_membership.establishment_id,
+    )
+
+    assert foreign_response.status_code == 404
+    assert foreign_response.json() == {"detail": "Not found."}
+    assert inactive_response.status_code == 404
+    assert inactive_response.json() == {"detail": "Not found."}
+
+
+def test_switch_establishment_with_invalid_uuid_returns_bad_request(api_client, active_user):
+    create_membership(user=active_user, name="Nice")
+    csrf_token = ensure_csrf(api_client)
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = api_client.post(
+        "/api/v1/auth/switch_establishment/",
+        {"establishment_id": "not-a-uuid"},
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+    )
+
+    assert response.status_code == 400
+
 
 def test_refresh_without_csrf_is_forbidden(api_client, active_user):
     create_membership(user=active_user)
@@ -312,6 +491,40 @@ def test_refresh_with_csrf_succeeds_and_rotates_refresh_token(api_client, active
     body = response.json()
     assert body["access_token"] != first_access_token
     assert response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value != first_refresh_cookie
+
+
+def test_bootstrap_clears_stale_selected_establishment_from_auth_session(api_client, active_user):
+    create_membership(user=active_user, name="Nice")
+    foreign_user = User.objects.create_user(
+        username="foreign_01",
+        email="foreign@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    foreign_membership = create_membership(user=foreign_user, name="Foreign")
+    csrf_token = ensure_csrf(api_client)
+    login_response = login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+    access_token = login_response.json()["access_token"]
+
+    session = UserSession.objects.get(user=active_user)
+    session.selected_establishment = foreign_membership.establishment
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    response = api_client.get(
+        "/api/v1/auth/bootstrap/",
+        HTTP_AUTHORIZATION=f"Bearer {access_token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["active_membership"] is None
+
+    session.refresh_from_db()
+    assert session.selected_establishment_id is None
 
 
 def test_old_refresh_token_reuse_revokes_family(api_client, active_user):
@@ -400,6 +613,52 @@ def test_logout_with_csrf_revokes_session_and_clears_cookie(api_client, active_u
     response = api_client.post(
         "/api/v1/auth/logout/",
         **auth_headers(csrf_token, access_token),
+    )
+
+    assert response.status_code == 204
+    assert response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value == ""
+
+    session = UserSession.objects.get(user=active_user)
+    session.refresh_from_db()
+    assert session.status == UserSession.Status.REVOKED
+
+
+def test_logout_with_csrf_and_refresh_cookie_only_revokes_session(api_client, active_user):
+    create_membership(user=active_user)
+    csrf_token = ensure_csrf(api_client)
+    login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/logout/",
+        **auth_headers(csrf_token),
+    )
+
+    assert response.status_code == 204
+    assert response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value == ""
+
+    session = UserSession.objects.get(user=active_user)
+    session.refresh_from_db()
+    assert session.status == UserSession.Status.REVOKED
+
+
+def test_logout_with_invalid_bearer_falls_back_to_refresh_cookie(api_client, active_user):
+    create_membership(user=active_user)
+    csrf_token = ensure_csrf(api_client)
+    login(
+        api_client,
+        csrf_token,
+        identifier=active_user.email,
+        password="secret",
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/logout/",
+        **auth_headers(csrf_token, "invalid-access-token"),
     )
 
     assert response.status_code == 204

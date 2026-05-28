@@ -69,6 +69,13 @@ def test_user_session_status_choices():
     assert field.choices == UserSession.Status.choices
 
 
+def test_user_session_selected_establishment_is_nullable():
+    field = UserSession._meta.get_field("selected_establishment")
+
+    assert field.null is True
+    assert field.blank is True
+
+
 def test_access_token_digest_field_is_unique_and_indexed():
     field = AccessToken._meta.get_field("token_digest")
 

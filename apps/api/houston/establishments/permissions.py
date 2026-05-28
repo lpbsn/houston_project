@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from rest_framework.permissions import BasePermission
+
 from houston.accounts.models import User
+from houston.establishments.access import get_api_access_context
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
@@ -130,3 +133,27 @@ def _normalize_domain_key(domain_key: str | None) -> str | None:
         return None
 
     return normalized_domain_key
+
+
+class HasActiveMembership(BasePermission):
+    message = "An active establishment membership is required."
+
+    def has_permission(self, request, view) -> bool:
+        access_context = get_api_access_context(request)
+        return bool(access_context.active_memberships)
+
+
+class CanManageMemberships(BasePermission):
+    message = "You do not have permission to manage memberships."
+
+    def has_permission(self, request, view) -> bool:
+        access_context = get_api_access_context(request)
+        return can_manage_memberships(access_context.active_membership)
+
+
+class CanManageRuntimeContext(BasePermission):
+    message = "You do not have permission to manage runtime context."
+
+    def has_permission(self, request, view) -> bool:
+        access_context = get_api_access_context(request)
+        return can_manage_runtime_context(access_context.active_membership)

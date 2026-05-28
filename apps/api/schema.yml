@@ -230,8 +230,6 @@ paths:
         CSRF and clears the houston_refresh_token HttpOnly cookie.
       tags:
       - auth
-      security:
-      - BearerAccessToken: []
       responses:
         '204':
           description: Session revoked and refresh cookie cleared.
@@ -263,6 +261,307 @@ paths:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/switch_establishment/:
+    post:
+      operationId: v1_auth_switch_establishment_create
+      description: Selects the active establishment for the current auth session.
+        Requires a valid bearer access token and stores the selection on the backend
+        UserSession.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwitchEstablishmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SwitchEstablishmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SwitchEstablishmentRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '400':
+          description: Invalid request payload.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/memberships/:
+    get:
+      operationId: v1_establishments_memberships_list
+      description: Lists memberships for the current active establishment context.
+        Requires an active selected establishment and owner or director authority.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EstablishmentMembershipResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/memberships/{membership_id}/:
+    get:
+      operationId: v1_establishments_memberships_retrieve
+      description: Returns one membership inside the current active establishment
+        context. Requires owner or director authority.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentMembershipResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_memberships_partial_update
+      description: Updates the role and active operational-domain assignments for
+        one membership in the current active establishment context.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentMembershipResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/:
+    post:
+      operationId: v1_establishments_memberships_deactivate_create
+      description: Deactivates one membership in the current active establishment
+        context. The last active owner cannot be deactivated.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentMembershipResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/users/search/:
+    get:
+      operationId: v1_establishments_users_search_list
+      description: Searches active users in the current active establishment context.
+        Results are tenant-filtered before serialization and return only a minimal
+        membership-backed user summary.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Search term with a minimum length of 2 characters.
+        required: true
+      tags:
+      - memberships
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScopedUserSearchResult'
+          description: ''
+        '400':
+          description: Invalid query parameters.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -343,6 +642,43 @@ components:
           type: string
       required:
       - detail
+    EstablishmentMembershipResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        user:
+          $ref: '#/components/schemas/MembershipUserSummary'
+        role:
+          type: string
+        status:
+          type: string
+        operational_domains:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - establishment_id
+      - establishment_name
+      - id
+      - operational_domains
+      - organization_id
+      - organization_name
+      - role
+      - status
+      - user
     HealthResponse:
       type: object
       properties:
@@ -393,6 +729,82 @@ components:
       - organization_name
       - role
       - status
+    MembershipUserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          readOnly: true
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+      required:
+      - display_name
+      - email
+      - id
+      - username
+    PatchedMembershipUpdateRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        operational_domains:
+          type: array
+          items:
+            type: string
+    RoleEnum:
+      enum:
+      - owner
+      - director
+      - manager
+      - staff
+      type: string
+      description: |-
+        * `owner` - Owner
+        * `director` - Director
+        * `manager` - Manager
+        * `staff` - Staff
+    ScopedUserSearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          readOnly: true
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        role:
+          type: string
+        membership_id:
+          type: string
+          format: uuid
+      required:
+      - display_name
+      - email
+      - id
+      - membership_id
+      - role
+      - username
+    SwitchEstablishmentRequest:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+      required:
+      - establishment_id
     UserPublic:
       type: object
       properties:

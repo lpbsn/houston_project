@@ -1,8 +1,11 @@
 import uuid
 
 import pytest
+from django.test import RequestFactory
+from django.utils import timezone
 
-from houston.accounts.models import User
+from houston.accounts.authentication import AccessTokenAuthContext
+from houston.accounts.models import AccessToken, User, UserSession
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
@@ -10,6 +13,9 @@ from houston.establishments.models import (
     OperationalDomain,
 )
 from houston.establishments.permissions import (
+    CanManageMemberships,
+    CanManageRuntimeContext,
+    HasActiveMembership,
     can_access_app,
     can_access_domain,
     can_create_action,
@@ -23,6 +29,11 @@ from houston.establishments.permissions import (
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def request_factory():
+    return RequestFactory()
 
 
 def build_membership(
@@ -78,6 +89,30 @@ def link_membership_to_domain(membership, operational_domain):
         membership=membership,
         operational_domain=operational_domain,
     )
+
+
+def build_permission_request(
+    request_factory,
+    *,
+    user,
+    selected_establishment=None,
+):
+    session = UserSession.objects.create(
+        user=user,
+        selected_establishment=selected_establishment,
+        refresh_token_family_id=uuid.uuid4(),
+        refresh_expires_at=timezone.now(),
+        absolute_expires_at=timezone.now(),
+    )
+    access_token = AccessToken(
+        session=session,
+        token_digest=f"token-{uuid.uuid4().hex}",
+        expires_at=timezone.now(),
+    )
+    request = request_factory.get("/api/v1/example/")
+    request.user = user
+    request.auth = AccessTokenAuthContext(session=session, access_token=access_token)
+    return request
 
 
 def assert_all_permissions_denied(membership):
@@ -355,3 +390,95 @@ def test_owner_and_director_domain_access_requires_existing_active_domain():
 
     assert can_access_domain(owner_membership, "housekeeping") is False
     assert can_access_domain(director_membership, "maintenance") is False
+
+
+def test_has_active_membership_allows_ready_and_selection_required_contexts(request_factory):
+    owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    EstablishmentMembership.objects.create(
+        user=owner_membership.user,
+        establishment=Establishment.objects.create(
+            name="Second Site",
+            organization=owner_membership.establishment.organization,
+            status=Establishment.Status.ACTIVE,
+        ),
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    permission = HasActiveMembership()
+
+    ready_request = build_permission_request(
+        request_factory,
+        user=owner_membership.user,
+        selected_establishment=owner_membership.establishment,
+    )
+    selection_required_request = build_permission_request(
+        request_factory,
+        user=owner_membership.user,
+        selected_establishment=None,
+    )
+
+    assert permission.has_permission(ready_request, None) is True
+    assert permission.has_permission(selection_required_request, None) is True
+
+
+def test_has_active_membership_denies_when_no_active_memberships(request_factory):
+    user = User.objects.create_user(
+        username=f"user_{uuid.uuid4().hex[:8]}",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    permission = HasActiveMembership()
+    request = build_permission_request(
+        request_factory,
+        user=user,
+        selected_establishment=None,
+    )
+
+    assert permission.has_permission(request, None) is False
+
+
+@pytest.mark.parametrize(
+    ("role", "expected_allowed"),
+    [
+        (EstablishmentMembership.Role.OWNER, True),
+        (EstablishmentMembership.Role.DIRECTOR, True),
+        (EstablishmentMembership.Role.MANAGER, False),
+        (EstablishmentMembership.Role.STAFF, False),
+    ],
+)
+def test_manage_membership_permissions_follow_rbac_helpers(
+    request_factory,
+    role,
+    expected_allowed,
+):
+    membership = build_membership(role=role)
+    request = build_permission_request(
+        request_factory,
+        user=membership.user,
+        selected_establishment=membership.establishment,
+    )
+
+    assert CanManageMemberships().has_permission(request, None) is expected_allowed
+    assert CanManageRuntimeContext().has_permission(request, None) is expected_allowed
+
+
+def test_manage_permissions_fail_closed_without_selected_membership(request_factory):
+    owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
+    EstablishmentMembership.objects.create(
+        user=owner_membership.user,
+        establishment=Establishment.objects.create(
+            name="Second Site",
+            organization=owner_membership.establishment.organization,
+            status=Establishment.Status.ACTIVE,
+        ),
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    request = build_permission_request(
+        request_factory,
+        user=owner_membership.user,
+        selected_establishment=None,
+    )
+
+    assert CanManageMemberships().has_permission(request, None) is False
+    assert CanManageRuntimeContext().has_permission(request, None) is False

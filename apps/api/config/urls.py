@@ -8,6 +8,7 @@ urlpatterns = [
     path("app/", AppHomeView.as_view(), name="app-home"),
     path("api/v1/auth/", include("houston.accounts.api.urls")),
     path("api/v1/", include("houston.core.urls")),
+    path("api/v1/", include("houston.establishments.api.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
 ]

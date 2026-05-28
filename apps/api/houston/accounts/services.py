@@ -14,6 +14,8 @@ from django.utils import timezone
 from houston.accounts import tokens
 from houston.accounts.models import AccessToken, SessionRefreshToken, User, UserSession
 from houston.accounts.selectors import build_bootstrap_payload
+from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.organizations.models import Organization
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,10 @@ class InvalidRefreshTokenError(Exception):
 
 
 class RefreshTokenReuseError(Exception):
+    pass
+
+
+class InvalidSelectedEstablishmentError(Exception):
     pass
 
 
@@ -72,7 +78,7 @@ def create_login_session(*, request: HttpRequest, user: User) -> AuthSessionBund
         session=session,
         access_token=access_token,
         refresh_token=refresh_token,
-        payload=build_auth_response_payload(user=user, access_token=access_token),
+        payload=build_auth_response_payload(session=session, access_token=access_token),
     )
 
 
@@ -100,12 +106,20 @@ def refresh_session(*, raw_refresh_token: str) -> AuthSessionBundle:
             session=session,
             access_token=access_token,
             refresh_token=rotated_refresh_token,
-            payload=build_auth_response_payload(user=session.user, access_token=access_token),
+            payload=build_auth_response_payload(session=session, access_token=access_token),
         )
 
 
-def build_auth_response_payload(*, user: User, access_token: IssuedAccessToken) -> dict:
-    payload = build_bootstrap_payload(user)
+def build_auth_response_payload(
+    *,
+    session: UserSession,
+    access_token: IssuedAccessToken,
+) -> dict:
+    payload = build_bootstrap_payload(
+        session.user,
+        session=session,
+        autoselect_single_membership=True,
+    )
     payload.update(
         {
             "access_token": access_token.raw_token,
@@ -244,6 +258,32 @@ def revoke_refresh_token_family(*, session: UserSession, family_id: uuid.UUID) -
         revoked_at=timezone.now(),
         status=SessionRefreshToken.Status.REVOKED,
     )
+
+
+def switch_selected_establishment(
+    *,
+    session: UserSession,
+    establishment_id,
+) -> dict:
+    membership = (
+        EstablishmentMembership.objects.filter(
+            user=session.user,
+            status=EstablishmentMembership.Status.ACTIVE,
+            establishment_id=establishment_id,
+            establishment__status=Establishment.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
+        )
+        .select_related("establishment")
+        .first()
+    )
+
+    if membership is None:
+        raise InvalidSelectedEstablishmentError
+
+    session.selected_establishment = membership.establishment
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    return build_bootstrap_payload(session.user, session=session)
 
 
 def resolve_session_for_logout(

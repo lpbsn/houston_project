@@ -47,7 +47,9 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000',
-        changeOrigin: true,
+        // Preserve the browser host in local dev so Django sees a same-origin
+        // request instead of an internal container host such as api:8000.
+        changeOrigin: false,
       },
     },
   },

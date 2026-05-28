@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-05-27
-Implementation status: partial
+Implementation status: implemented for Phase 1
 
 ## 1. Purpose
 
@@ -22,7 +22,9 @@ This domain owns global user identity, organization and establishment membership
 - Backend-enforced establishment access based on active membership, active user, active establishment, and active organization.
 - Bootstrap-facing identity and membership context through the current auth API.
 - Mono-establishment default UX.
-- Multi-establishment selection as a product rule, with current implementation still partial.
+- Multi-establishment selection through backend-owned auth-session state.
+- Establishment-scoped membership management for the current active establishment context.
+- Establishment-scoped active-user search for the current active establishment context.
 
 ## 3. Out of Scope
 
@@ -34,7 +36,8 @@ This domain owns global user identity, organization and establishment membership
 - Fine-grained RBAC matrices.
 - Arbitrary admin browsing across tenants.
 - Cross-tenant access.
-- Invitation and password reset flows as implemented behavior.
+- Invitation flows.
+- Password reset flows.
 - Public signup.
 - Old-stack implementation assumptions or terminology.
 
@@ -85,6 +88,7 @@ Validated MVP access implications:
 
 - Active members may access establishment context only through backend validation.
 - Membership management is restricted to authorized establishment leadership roles. Current backend helpers must be checked before changing this rule.
+- Current public membership-management API is restricted to the current active establishment context selected on `UserSession`.
 - Membership role and operational domain data inform backend authorization, but detailed action matrices do not belong here.
 - Detailed RBAC rules belong to `docs/product/domains/rbac_permissions_domain.md`.
 
@@ -111,19 +115,35 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
+- `POST /api/v1/auth/switch_establishment/`
+- `GET /api/v1/establishments/{establishment_id}/memberships/`
+- `GET /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
+- `PATCH /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
+- `POST /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/`
+- `GET /api/v1/establishments/{establishment_id}/users/search/?q=`
 
 Implemented response truths:
 
 - Login and bootstrap responses include `memberships`.
-- Current bootstrap behavior: `active_membership` is populated only when exactly one active membership exists.
-- No membership-management, invitation, password-reset, `me`, `logout_all`, or switch-establishment endpoint is confirmed as implemented in `apps/api/schema.yml`.
+- Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
+- Current bootstrap behavior: `active_membership` resolves from `UserSession.selected_establishment` when valid.
+- If `selected_establishment` is stale, inactive, or outside active memberships, it is cleared safely and `active_membership` becomes `null`.
+- Membership-management endpoints are establishment-scoped and require the path `establishment_id` to match the current active auth-session context.
+- Membership-management list and detail responses are tenant-filtered before serialization.
+- Role updates and operational-domain assignment updates use `PATCH`; deactivation is a separate command endpoint.
+- The last active owner cannot be deactivated.
+- The last active owner cannot be demoted to another role.
+- The last-active-owner invariant is enforced in the service layer.
+- If another active owner exists, demotion is allowed.
+- Scoped user search is establishment-scoped and requires the path `establishment_id` to match the current active auth-session context.
+- Scoped user search returns active users with active memberships in the same active establishment only.
+- Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
+- No invitation, password-reset, `me`, or `logout_all` endpoint is confirmed as implemented in `apps/api/schema.yml`.
 
 Candidate endpoints only:
 
-- `POST /api/v1/auth/switch_establishment/`
 - Invitation endpoints
 - Password reset endpoints
-- Membership management endpoints
 - Current-user endpoints beyond the implemented bootstrap contract
 
 ## 10. Frontend Expectations
@@ -133,9 +153,9 @@ Candidate endpoints only:
 - Frontend auth and session mechanics follow `docs/architecture/authentication_charter.md`.
 - Frontend must not derive authorization from role or operational domain data.
 - Mono-establishment users should not see unnecessary establishment switch UI.
-- Multi-membership users may require simple selection UI, but current public API support for switching is not validated.
+- Multi-membership users may require simple selection UI through the validated `switch_establishment` auth endpoint.
 - Frontend must handle unauthenticated, inactive user, no active memberships, single active membership, and multiple active memberships with no selected context yet.
-- Current backend may contain non-public establishment selection helpers, but no public OpenAPI switch contract is currently validated.
+- Frontend must not persist selected establishment outside the backend auth session design.
 
 ## 11. AI Agent Notes
 
@@ -145,5 +165,6 @@ Candidate endpoints only:
 - Do not add detailed RBAC matrices here.
 - Do not place detailed authorization rules in this document; use `rbac_permissions_domain.md` for permission behavior.
 - Do not claim invitations, password reset, membership management, or switch endpoints are implemented without schema proof.
+- Do not document Django `request.session["current_establishment_id"]` as public auth-session authority.
 - Do not introduce old-stack terminology.
 - For auth and session mechanics, read `docs/architecture/authentication_charter.md`.

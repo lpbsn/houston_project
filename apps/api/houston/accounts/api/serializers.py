@@ -16,6 +16,10 @@ class LoginRequestSerializer(serializers.Serializer):
     password = serializers.CharField(trim_whitespace=False)
 
 
+class SwitchEstablishmentRequestSerializer(serializers.Serializer):
+    establishment_id = serializers.UUIDField()
+
+
 class OperationalDomainsField(serializers.ListField):
     child = serializers.CharField()
 
