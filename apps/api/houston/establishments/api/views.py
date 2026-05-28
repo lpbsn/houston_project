@@ -7,31 +7,63 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import DetailResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
-from houston.establishments.access import get_api_access_context
+from houston.establishments.access import (
+    get_api_access_context,
+    get_onboarding_access_context,
+)
 from houston.establishments.api.serializers import (
+    ActivationSummaryResponseSerializer,
+    ActivityDescriptionRequestSerializer,
+    ActivityDescriptionUpdateResponseSerializer,
     EstablishmentMembershipResponseSerializer,
+    MarkReadyResponseSerializer,
     MembershipUpdateRequestSerializer,
+    OnboardingErrorResponseSerializer,
+    OnboardingSessionCreateRequestSerializer,
+    OnboardingSessionCreateResponseSerializer,
+    OnboardingSessionResponseSerializer,
+    RuntimeConfigResponseSerializer,
     ScopedUserSearchRequestSerializer,
     ScopedUserSearchResultSerializer,
+)
+from houston.establishments.models import (
+    Establishment,
+    EstablishmentMembership,
+    OnboardingSession,
 )
 from houston.establishments.permissions import (
     CanManageMemberships,
     HasActiveMembership,
 )
 from houston.establishments.selectors import (
+    get_active_onboarding_session_for_establishment,
     get_membership_for_management,
+    get_onboarding_session_for_actor,
+    get_runtime_config_for_session,
     list_memberships_for_management,
     search_users_for_establishment,
 )
 from houston.establishments.services import (
+    ActiveOnboardingSessionExistsError,
     CannotDeactivateLastActiveOwnerError,
     CannotDemoteLastActiveOwnerError,
+    InvalidActivityDescriptionError,
     InvalidMembershipDomainAssignmentError,
+    InvalidOnboardingSessionScopeError,
     MembershipManagementNotFoundError,
     MembershipUpdateInput,
+    OnboardingAccessDeniedError,
+    OnboardingReadinessError,
+    OnboardingSessionTerminalError,
+    UnsupportedOnboardingSessionSourceModeError,
+    build_activation_summary,
     deactivate_membership_for_management,
+    mark_onboarding_ready_for_activation,
+    start_onboarding_session,
+    submit_activity_description,
     update_membership_for_management,
 )
+from houston.organizations.models import Organization
 
 
 class MembershipListView(APIView):
@@ -240,3 +272,384 @@ class ScopedUserSearchView(APIView):
 
         response_serializer = ScopedUserSearchResultSerializer(memberships, many=True)
         return Response(response_serializer.data)
+
+
+class OnboardingSessionCreateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=OnboardingSessionCreateRequestSerializer,
+        responses={
+            200: OnboardingSessionCreateResponseSerializer,
+            201: OnboardingSessionCreateResponseSerializer,
+            400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Starts or returns an existing non-terminal onboarding session for an "
+            "establishment. Supports manual and template source modes only."
+        ),
+    )
+    def post(self, request):
+        serializer = OnboardingSessionCreateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        establishment = _get_onboarding_establishment(
+            establishment_id=serializer.validated_data["establishment_id"],
+        )
+        if establishment is None:
+            return _not_found_response()
+
+        access = get_onboarding_access_context(
+            actor=request.user,
+            session=OnboardingSession(
+                organization=establishment.organization,
+                establishment=establishment,
+            ),
+        )
+        if access.membership is None:
+            return _not_found_response()
+        if not access.can_manage:
+            return _forbidden_response()
+
+        existing_session = get_active_onboarding_session_for_establishment(
+            actor=request.user,
+            establishment_id=establishment.id,
+        )
+        if existing_session is not None:
+            return _onboarding_session_start_response(
+                session=existing_session,
+                created=False,
+                response_status=status.HTTP_200_OK,
+            )
+
+        try:
+            session = start_onboarding_session(
+                organization=establishment.organization,
+                establishment=establishment,
+                started_by=request.user,
+                source_mode=serializer.validated_data["source_mode"],
+            )
+        except UnsupportedOnboardingSessionSourceModeError:
+            return Response(
+                {
+                    "code": "unsupported_source_mode",
+                    "detail": "Only manual and template onboarding sessions are supported.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidOnboardingSessionScopeError:
+            return Response(
+                {
+                    "code": "invalid_onboarding_scope",
+                    "detail": "Organization must match the establishment organization.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except ActiveOnboardingSessionExistsError:
+            existing_session = get_active_onboarding_session_for_establishment(
+                actor=request.user,
+                establishment_id=establishment.id,
+            )
+            if existing_session is None:
+                return Response(
+                    {
+                        "code": "active_onboarding_session_exists",
+                        "detail": (
+                            "A non-terminal onboarding session already exists for this "
+                            "establishment."
+                        ),
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            return _onboarding_session_start_response(
+                session=existing_session,
+                created=False,
+                response_status=status.HTTP_200_OK,
+            )
+
+        return _onboarding_session_start_response(
+            session=session,
+            created=True,
+            response_status=status.HTTP_201_CREATED,
+        )
+
+
+class OnboardingSessionDetailView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        responses={
+            200: OnboardingSessionResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns one onboarding session visible to the authenticated actor.",
+    )
+    def get(self, request, session_id):
+        session = get_onboarding_session_for_actor(actor=request.user, session_id=session_id)
+        if session is None:
+            return _not_found_response()
+
+        serializer = OnboardingSessionResponseSerializer(session)
+        return Response(serializer.data)
+
+
+class OnboardingSessionDescriptionView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=ActivityDescriptionRequestSerializer,
+        responses={
+            200: ActivityDescriptionUpdateResponseSerializer,
+            400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description="Submits the canonical establishment activity description for onboarding.",
+    )
+    def patch(self, request, session_id):
+        serializer = ActivityDescriptionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability="configure_runtime",
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            activity_description = submit_activity_description(
+                session=session_response,
+                actor=request.user,
+                description=serializer.validated_data["description"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except InvalidActivityDescriptionError as exc:
+            return Response(
+                {
+                    "code": "invalid_activity_description",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OnboardingSessionTerminalError:
+            return _terminal_session_response()
+
+        session = get_onboarding_session_for_actor(actor=request.user, session_id=session_id)
+        response_serializer = ActivityDescriptionUpdateResponseSerializer(
+            {
+                "session": session,
+                "activity_description": activity_description,
+            }
+        )
+        return Response(response_serializer.data)
+
+
+class OnboardingSessionRuntimeConfigView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        responses={
+            200: RuntimeConfigResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns active runtime configuration for an onboarding session.",
+    )
+    def get(self, request, session_id):
+        session = get_onboarding_session_for_actor(actor=request.user, session_id=session_id)
+        if session is None:
+            return _not_found_response()
+
+        serializer = RuntimeConfigResponseSerializer(
+            get_runtime_config_for_session(session=session)
+        )
+        return Response(serializer.data)
+
+
+class OnboardingSessionActivationSummaryView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        responses={
+            200: ActivationSummaryResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns backend activation readiness and blockers for onboarding.",
+    )
+    def get(self, request, session_id):
+        session = get_onboarding_session_for_actor(actor=request.user, session_id=session_id)
+        if session is None:
+            return _not_found_response()
+
+        return Response(_build_activation_summary_payload(session=session, actor=request.user))
+
+
+class OnboardingSessionMarkReadyView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=None,
+        responses={
+            200: MarkReadyResponseSerializer,
+            400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description=(
+            "Marks an onboarding session ready for activation when backend readiness "
+            "passes. This does not activate the establishment."
+        ),
+    )
+    def post(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability="activate",
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            result = mark_onboarding_ready_for_activation(
+                session=session_response,
+                actor=request.user,
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingReadinessError as exc:
+            return Response(
+                {
+                    "code": "activation_readiness_failed",
+                    "detail": "Onboarding session is not ready for activation.",
+                    "blockers": exc.readiness["blockers"],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OnboardingSessionTerminalError:
+            return _terminal_session_response()
+
+        session = result["session"]
+        response_serializer = MarkReadyResponseSerializer(
+            {
+                "session": session,
+                "activation_summary": _build_activation_summary_payload(
+                    session=session,
+                    actor=request.user,
+                ),
+            }
+        )
+        return Response(response_serializer.data)
+
+
+def _get_onboarding_establishment(*, establishment_id):
+    return (
+        Establishment.objects.select_related("organization")
+        .filter(
+            id=establishment_id,
+            status__in={
+                Establishment.Status.DRAFT,
+                Establishment.Status.ACTIVE,
+            },
+            organization__status=Organization.Status.ACTIVE,
+        )
+        .first()
+    )
+
+
+def _get_onboarding_command_session(*, actor, session_id, capability: str):
+    session = (
+        OnboardingSession.objects.select_related(
+            "organization",
+            "establishment",
+            "establishment__organization",
+            "started_by",
+        )
+        .filter(id=session_id)
+        .first()
+    )
+    if session is None:
+        return _not_found_response()
+
+    access = get_onboarding_access_context(actor=actor, session=session)
+    if access.membership is None:
+        return _not_found_response()
+
+    if access.membership.role not in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return _forbidden_response()
+
+    if capability == "configure_runtime" and not access.can_configure_runtime:
+        return _not_found_response()
+
+    if capability == "activate" and not access.can_activate:
+        return _not_found_response()
+
+    return session
+
+
+def _build_activation_summary_payload(*, session, actor):
+    summary = build_activation_summary(session=session)
+    access = get_onboarding_access_context(actor=actor, session=session)
+    summary["access"] = {"can_activate": access.can_activate}
+    summary["effective_can_activate"] = (
+        summary["readiness"]["is_ready"] and access.can_activate
+    )
+    return summary
+
+
+def _onboarding_session_start_response(*, session, created: bool, response_status: int):
+    serializer = OnboardingSessionCreateResponseSerializer(
+        {
+            "created": created,
+            "session": session,
+        }
+    )
+    return Response(serializer.data, status=response_status)
+
+
+def _not_found_response():
+    return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+def _forbidden_response():
+    return Response(
+        {"detail": "You do not have permission to manage onboarding."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _terminal_session_response():
+    return Response(
+        {
+            "code": "onboarding_session_terminal",
+            "detail": "Terminal onboarding sessions cannot be changed.",
+        },
+        status=status.HTTP_409_CONFLICT,
+    )

@@ -4,10 +4,46 @@ from houston.establishments.api.views import (
     MembershipDeactivateView,
     MembershipDetailView,
     MembershipListView,
+    OnboardingSessionActivationSummaryView,
+    OnboardingSessionCreateView,
+    OnboardingSessionDescriptionView,
+    OnboardingSessionDetailView,
+    OnboardingSessionMarkReadyView,
+    OnboardingSessionRuntimeConfigView,
     ScopedUserSearchView,
 )
 
 urlpatterns = [
+    path(
+        "onboarding-sessions/",
+        OnboardingSessionCreateView.as_view(),
+        name="onboarding-session-create",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/",
+        OnboardingSessionDetailView.as_view(),
+        name="onboarding-session-detail",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/description/",
+        OnboardingSessionDescriptionView.as_view(),
+        name="onboarding-session-description",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/runtime-config/",
+        OnboardingSessionRuntimeConfigView.as_view(),
+        name="onboarding-session-runtime-config",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/activation-summary/",
+        OnboardingSessionActivationSummaryView.as_view(),
+        name="onboarding-session-activation-summary",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/mark-ready/",
+        OnboardingSessionMarkReadyView.as_view(),
+        name="onboarding-session-mark-ready",
+    ),
     path(
         "establishments/<uuid:establishment_id>/memberships/",
         MembershipListView.as_view(),

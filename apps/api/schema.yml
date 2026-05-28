@@ -579,8 +579,425 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
           description: ''
+  /api/v1/onboarding-sessions/:
+    post:
+      operationId: v1_onboarding_sessions_create
+      description: Starts or returns an existing non-terminal onboarding session for
+        an establishment. Supports manual and template source modes only.
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingSessionCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OnboardingSessionCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OnboardingSessionCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingSessionCreateResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingSessionCreateResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/:
+    get:
+      operationId: v1_onboarding_sessions_retrieve
+      description: Returns one onboarding session visible to the authenticated actor.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingSessionResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/activation-summary/:
+    get:
+      operationId: v1_onboarding_sessions_activation_summary_retrieve
+      description: Returns backend activation readiness and blockers for onboarding.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivationSummaryResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/description/:
+    patch:
+      operationId: v1_onboarding_sessions_description_partial_update
+      description: Submits the canonical establishment activity description for onboarding.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActivityDescriptionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActivityDescriptionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActivityDescriptionRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDescriptionUpdateResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/mark-ready/:
+    post:
+      operationId: v1_onboarding_sessions_mark_ready_create
+      description: Marks an onboarding session ready for activation when backend readiness
+        passes. This does not activate the establishment.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadyResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/runtime-config/:
+    get:
+      operationId: v1_onboarding_sessions_runtime_config_retrieve
+      description: Returns active runtime configuration for an onboarding session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeConfigResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
 components:
   schemas:
+    ActivationBlocker:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+    ActivationReadinessResponse:
+      type: object
+      properties:
+        is_ready:
+          type: boolean
+        blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivationBlocker'
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        sections:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: {}
+        establishment_status:
+          type: string
+        session_status:
+          type: string
+      required:
+      - blockers
+      - counts
+      - establishment_status
+      - is_ready
+      - sections
+      - session_status
+    ActivationSummaryResponse:
+      type: object
+      properties:
+        organization:
+          $ref: '#/components/schemas/OnboardingOrganizationSummary'
+        establishment:
+          $ref: '#/components/schemas/OnboardingEstablishmentSummary'
+        activity_description:
+          allOf:
+          - $ref: '#/components/schemas/ActivityDescriptionResponse'
+          nullable: true
+        active_modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
+        active_domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
+        optional_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
+        optional_vocabulary:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeVocabularyItem'
+        optional_runtime_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeTagItem'
+        optional_routing_hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutingHintItem'
+        initial_owner_director_count:
+          type: integer
+        initial_manager_count:
+          type: integer
+        managers_with_domains_count:
+          type: integer
+        readiness:
+          $ref: '#/components/schemas/ActivationReadinessResponse'
+        blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivationBlocker'
+        access:
+          $ref: '#/components/schemas/OnboardingAccessResponse'
+        effective_can_activate:
+          type: boolean
+      required:
+      - access
+      - active_domains
+      - active_modules
+      - activity_description
+      - blockers
+      - effective_can_activate
+      - establishment
+      - initial_manager_count
+      - initial_owner_director_count
+      - managers_with_domains_count
+      - optional_routing_hints
+      - optional_runtime_tags
+      - optional_units
+      - optional_vocabulary
+      - organization
+      - readiness
+    ActivityDescriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        source:
+          type: string
+        submitted_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - description
+      - id
+      - source
+      - submitted_by_id
+      - validated_at
+    ActivityDescriptionUpdateResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/OnboardingSessionResponse'
+        activity_description:
+          $ref: '#/components/schemas/ActivityDescriptionResponse'
+      required:
+      - activity_description
+      - session
     AuthResponse:
       type: object
       properties:
@@ -686,6 +1103,26 @@ components:
           type: string
       required:
       - status
+    KeyedRuntimeItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+        source:
+          type: string
+        active:
+          type: boolean
+      required:
+      - active
+      - id
+      - key
+      - label
+      - source
     LoginRequest:
       type: object
       properties:
@@ -696,6 +1133,16 @@ components:
       required:
       - identifier
       - password
+    MarkReadyResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/OnboardingSessionResponse'
+        activation_summary:
+          $ref: '#/components/schemas/ActivationSummaryResponse'
+      required:
+      - activation_summary
+      - session
     Membership:
       type: object
       properties:
@@ -749,6 +1196,143 @@ components:
       - email
       - id
       - username
+    OnboardingAccessResponse:
+      type: object
+      properties:
+        can_activate:
+          type: boolean
+      required:
+      - can_activate
+    OnboardingErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivationBlocker'
+      required:
+      - code
+      - detail
+    OnboardingEstablishmentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - name
+      - status
+    OnboardingOrganizationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - name
+      - status
+    OnboardingSessionCreateRequest:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+        source_mode:
+          type: string
+          default: manual
+      required:
+      - establishment_id
+    OnboardingSessionCreateResponse:
+      type: object
+      properties:
+        created:
+          type: boolean
+        session:
+          $ref: '#/components/schemas/OnboardingSessionResponse'
+      required:
+      - created
+      - session
+    OnboardingSessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization:
+          $ref: '#/components/schemas/OnboardingOrganizationSummary'
+        establishment:
+          $ref: '#/components/schemas/OnboardingEstablishmentSummary'
+        started_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        source_mode:
+          type: string
+        current_step:
+          type: string
+        ai_attempts:
+          type: integer
+        last_error_code:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ready_for_activation_at:
+          type: string
+          format: date-time
+          nullable: true
+        activated_at:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - activated_at
+      - ai_attempts
+      - canceled_at
+      - created_at
+      - current_step
+      - establishment
+      - id
+      - last_error_code
+      - organization
+      - ready_for_activation_at
+      - source_mode
+      - started_at
+      - started_by_id
+      - status
+      - updated_at
+    PatchedActivityDescriptionRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 50
     PatchedMembershipUpdateRequest:
       type: object
       properties:
@@ -770,6 +1354,129 @@ components:
         * `director` - Director
         * `manager` - Manager
         * `staff` - Staff
+    RoutingHintItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        pattern:
+          type: string
+        suggested_unit_key:
+          type: string
+          nullable: true
+          readOnly: true
+        source:
+          type: string
+        active:
+          type: boolean
+        domain_keys:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - active
+      - domain_keys
+      - id
+      - pattern
+      - source
+      - suggested_unit_key
+    RuntimeConfigResponse:
+      type: object
+      properties:
+        activity_description:
+          allOf:
+          - $ref: '#/components/schemas/ActivityDescriptionResponse'
+          nullable: true
+        active_modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
+        active_domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
+        optional_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
+        optional_vocabulary:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeVocabularyItem'
+        optional_runtime_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeTagItem'
+        optional_routing_hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutingHintItem'
+      required:
+      - active_domains
+      - active_modules
+      - activity_description
+      - optional_routing_hints
+      - optional_runtime_tags
+      - optional_units
+      - optional_vocabulary
+    RuntimeTagItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+        source:
+          type: string
+        active:
+          type: boolean
+        domain_keys:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - active
+      - domain_keys
+      - id
+      - key
+      - label
+      - source
+    RuntimeVocabularyItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        meaning:
+          type: string
+        mapped_domain_key:
+          type: string
+          nullable: true
+          readOnly: true
+        mapped_unit_key:
+          type: string
+          nullable: true
+          readOnly: true
+        source:
+          type: string
+        active:
+          type: boolean
+      required:
+      - active
+      - id
+      - mapped_domain_key
+      - mapped_unit_key
+      - meaning
+      - source
+      - term
     ScopedUserSearchResult:
       type: object
       properties:
