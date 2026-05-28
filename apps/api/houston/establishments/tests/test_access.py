@@ -239,6 +239,45 @@ def test_active_membership_resolution_ignores_establishments_under_non_active_or
     assert CURRENT_ESTABLISHMENT_SESSION_KEY not in request.session
 
 
+def test_active_membership_resolution_ignores_draft_establishments(
+    request_factory,
+    organization,
+    active_user,
+):
+    active_establishment = Establishment.objects.create(
+        name="Active",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    draft_establishment = Establishment.objects.create(
+        name="Draft",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    active_membership = EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=active_establishment,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=draft_establishment,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    request = build_request(
+        request_factory,
+        active_user,
+        session_value=str(draft_establishment.id),
+    )
+
+    context = resolve_current_access_context(request)
+
+    assert context.state == ACCESS_STATE_READY
+    assert context.active_memberships == (active_membership,)
+    assert context.selected_establishment == active_establishment
+    assert request.session[CURRENT_ESTABLISHMENT_SESSION_KEY] == str(active_establishment.id)
+
+
 def test_api_access_context_uses_auth_session_selected_establishment(
     request_factory,
     organization,

@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.accounts.models import UserSession
 from houston.establishments.models import (
+    Establishment,
     EstablishmentMembership,
     MembershipDomain,
+    OnboardingSession,
     OperationalDomain,
 )
 from houston.establishments.selectors import get_membership_for_management
+from houston.organizations.models import Organization
 
 
 class MembershipManagementNotFoundError(Exception):
@@ -30,10 +33,63 @@ class CannotDemoteLastActiveOwnerError(Exception):
     pass
 
 
+class ActiveOnboardingSessionExistsError(Exception):
+    pass
+
+
+class InvalidOnboardingSessionScopeError(Exception):
+    pass
+
+
+class UnsupportedOnboardingSessionSourceModeError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class MembershipUpdateInput:
     role: str | None = None
     operational_domains: list[str] | None = None
+
+
+@transaction.atomic
+def start_onboarding_session(
+    *,
+    organization: Organization,
+    establishment: Establishment,
+    started_by=None,
+    source_mode: str = OnboardingSession.SourceMode.MANUAL,
+    current_step: str = "",
+) -> OnboardingSession:
+    if source_mode not in {
+        OnboardingSession.SourceMode.MANUAL,
+        OnboardingSession.SourceMode.TEMPLATE,
+    }:
+        raise UnsupportedOnboardingSessionSourceModeError(
+            "Only manual and template onboarding sessions are supported."
+        )
+
+    if establishment.organization_id != organization.id:
+        raise InvalidOnboardingSessionScopeError(
+            "Organization must match the establishment organization."
+        )
+
+    session = OnboardingSession(
+        organization=organization,
+        establishment=establishment,
+        started_by=started_by,
+        source_mode=source_mode,
+        current_step=current_step,
+    )
+    session.full_clean(validate_unique=False, validate_constraints=False)
+
+    try:
+        session.save()
+    except IntegrityError as exc:
+        raise ActiveOnboardingSessionExistsError(
+            "A non-terminal onboarding session already exists for this establishment."
+        ) from exc
+
+    return session
 
 
 @transaction.atomic

@@ -1,10 +1,33 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
 
 from houston.core.models import BaseModel
 from houston.organizations.models import Organization
+
+ACTIVITY_DESCRIPTION_MIN_LENGTH = 50
+ONBOARDING_TERMINAL_STATUSES = (
+    "activated",
+    "failed",
+    "canceled",
+)
+ONBOARDING_NON_TERMINAL_STATUSES = (
+    "started",
+    "description_submitted",
+    "configuring_runtime",
+    "proposal_ready",
+    "validating_sections",
+    "ready_for_activation",
+)
+
+
+def _validate_nonblank(value: str, field_name: str, errors: dict[str, str]) -> None:
+    if not isinstance(value, str) or not value.strip():
+        errors[field_name] = "This field cannot be blank."
 
 
 class Establishment(BaseModel):
@@ -27,6 +50,109 @@ class Establishment(BaseModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class OnboardingSession(BaseModel):
+    class Status(models.TextChoices):
+        STARTED = "started", "Started"
+        DESCRIPTION_SUBMITTED = "description_submitted", "Description submitted"
+        CONFIGURING_RUNTIME = "configuring_runtime", "Configuring runtime"
+        PROPOSAL_READY = "proposal_ready", "Proposal ready"
+        VALIDATING_SECTIONS = "validating_sections", "Validating sections"
+        READY_FOR_ACTIVATION = "ready_for_activation", "Ready for activation"
+        ACTIVATED = "activated", "Activated"
+        FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
+
+    class SourceMode(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI = "ai", "AI"
+
+    TERMINAL_STATUSES = ONBOARDING_TERMINAL_STATUSES
+    NON_TERMINAL_STATUSES = ONBOARDING_NON_TERMINAL_STATUSES
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="onboarding_sessions",
+        db_index=False,
+    )
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="onboarding_sessions",
+        db_index=False,
+    )
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="started_onboarding_sessions",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    status = models.CharField(
+        max_length=40,
+        choices=Status.choices,
+        default=Status.STARTED,
+    )
+    source_mode = models.CharField(
+        max_length=20,
+        choices=SourceMode.choices,
+        default=SourceMode.MANUAL,
+    )
+    current_step = models.CharField(max_length=80, blank=True, default="")
+    ai_attempts = models.PositiveSmallIntegerField(default=0)
+    last_error_code = models.CharField(max_length=80, blank=True, default="")
+    started_at = models.DateTimeField(default=timezone.now)
+    ready_for_activation_at = models.DateTimeField(null=True, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    canceled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment"],
+                condition=Q(status__in=ONBOARDING_NON_TERMINAL_STATUSES),
+                name="onboarding_session_est_nonterminal_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="onbrd_session_est_idx"),
+            models.Index(fields=["organization"], name="onbrd_session_org_idx"),
+            models.Index(fields=["started_by"], name="onbrd_session_started_idx"),
+            models.Index(fields=["status"], name="onbrd_session_status_idx"),
+            models.Index(
+                fields=["establishment", "status"],
+                name="onbrd_session_est_status_idx",
+            ),
+        ]
+
+    @classmethod
+    def is_terminal_status(cls, status: str) -> bool:
+        return status in cls.TERMINAL_STATUSES
+
+    @classmethod
+    def is_non_terminal_status(cls, status: str) -> bool:
+        return status in cls.NON_TERMINAL_STATUSES
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+
+        if (
+            self.organization_id is not None
+            and self.establishment_id is not None
+            and self.establishment.organization_id != self.organization_id
+        ):
+            errors["organization"] = "Organization must match the establishment organization."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.establishment} onboarding [{self.status}]"
 
 
 class EstablishmentMembership(BaseModel):
@@ -148,3 +274,424 @@ class MembershipDomain(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.membership} -> {self.operational_domain.key}"
+
+
+class EstablishmentActivityDescription(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+
+    establishment = models.OneToOneField(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="activity_description",
+    )
+    description = models.TextField()
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="submitted_activity_descriptions",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    validated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["submitted_by"], name="activity_desc_submitter_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if len((self.description or "").strip()) < ACTIVITY_DESCRIPTION_MIN_LENGTH:
+            raise ValidationError(
+                {
+                    "description": (
+                        "Activity description must be at least "
+                        f"{ACTIVITY_DESCRIPTION_MIN_LENGTH} characters."
+                    )
+                }
+            )
+
+    def __str__(self) -> str:
+        return f"{self.establishment} activity description"
+
+
+class OperationalModule(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI_PROPOSED = "ai_proposed", "AI Proposed"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="operational_modules",
+        db_index=False,
+    )
+    key = models.CharField(max_length=100)
+    label = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "key"],
+                name="op_module_est_key_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="module_est_idx"),
+            models.Index(fields=["establishment", "active"], name="module_est_active_idx"),
+            models.Index(fields=["key"], name="module_key_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.key, "key", errors)
+        _validate_nonblank(self.label, "label", errors)
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.establishment} :: {self.label} [{self.key}]"
+
+
+class OperationalUnit(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI_PROPOSED = "ai_proposed", "AI Proposed"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="operational_units",
+        db_index=False,
+    )
+    key = models.CharField(max_length=100)
+    label = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "key"],
+                name="op_unit_est_key_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="unit_est_idx"),
+            models.Index(fields=["establishment", "active"], name="unit_est_active_idx"),
+            models.Index(fields=["key"], name="unit_key_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.key, "key", errors)
+        _validate_nonblank(self.label, "label", errors)
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.establishment} :: {self.label} [{self.key}]"
+
+
+class RuntimeVocabulary(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI_PROPOSED = "ai_proposed", "AI Proposed"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="runtime_vocabulary",
+        db_index=False,
+    )
+    term = models.CharField(max_length=255)
+    meaning = models.TextField()
+    mapped_domain = models.ForeignKey(
+        OperationalDomain,
+        on_delete=models.SET_NULL,
+        related_name="runtime_vocabulary",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    mapped_unit = models.ForeignKey(
+        OperationalUnit,
+        on_delete=models.SET_NULL,
+        related_name="runtime_vocabulary",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "term"],
+                name="runtime_vocab_est_term_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="vocab_est_idx"),
+            models.Index(fields=["establishment", "active"], name="vocab_est_active_idx"),
+            models.Index(fields=["term"], name="vocab_term_idx"),
+            models.Index(fields=["mapped_domain"], name="vocab_mapped_domain_idx"),
+            models.Index(fields=["mapped_unit"], name="vocab_mapped_unit_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.term, "term", errors)
+        _validate_nonblank(self.meaning, "meaning", errors)
+
+        if (
+            self.establishment_id is not None
+            and self.mapped_domain_id is not None
+            and self.mapped_domain.establishment_id != self.establishment_id
+        ):
+            errors["mapped_domain"] = "Mapped domain must belong to the same establishment."
+
+        if (
+            self.establishment_id is not None
+            and self.mapped_unit_id is not None
+            and self.mapped_unit.establishment_id != self.establishment_id
+        ):
+            errors["mapped_unit"] = "Mapped unit must belong to the same establishment."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.establishment} :: {self.term}"
+
+
+class RuntimeTag(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI_PROPOSED = "ai_proposed", "AI Proposed"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="runtime_tags",
+        db_index=False,
+    )
+    key = models.CharField(max_length=100)
+    label = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "key"],
+                name="runtime_tag_est_key_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="runtime_tag_est_idx"),
+            models.Index(
+                fields=["establishment", "active"],
+                name="runtime_tag_est_active_idx",
+            ),
+            models.Index(fields=["key"], name="runtime_tag_key_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.key, "key", errors)
+        _validate_nonblank(self.label, "label", errors)
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.establishment} :: {self.label} [{self.key}]"
+
+
+class RuntimeTagDomain(BaseModel):
+    runtime_tag = models.ForeignKey(
+        RuntimeTag,
+        on_delete=models.CASCADE,
+        related_name="domain_links",
+        db_index=False,
+    )
+    operational_domain = models.ForeignKey(
+        OperationalDomain,
+        on_delete=models.CASCADE,
+        related_name="runtime_tag_links",
+        db_index=False,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["runtime_tag", "operational_domain"],
+                name="runtime_tag_domain_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["runtime_tag"], name="rt_tag_domain_tag_idx"),
+            models.Index(fields=["operational_domain"], name="rt_tag_domain_domain_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if (
+            self.runtime_tag_id is not None
+            and self.operational_domain_id is not None
+            and self.runtime_tag.establishment_id != self.operational_domain.establishment_id
+        ):
+            raise ValidationError(
+                {
+                    "operational_domain": (
+                        "Operational domain must belong to the same establishment "
+                        "as the runtime tag."
+                    )
+                }
+            )
+
+    def __str__(self) -> str:
+        return f"{self.runtime_tag} -> {self.operational_domain.key}"
+
+
+class RoutingHint(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+        AI_PROPOSED = "ai_proposed", "AI Proposed"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="routing_hints",
+        db_index=False,
+    )
+    pattern = models.CharField(max_length=255)
+    suggested_unit = models.ForeignKey(
+        OperationalUnit,
+        on_delete=models.SET_NULL,
+        related_name="routing_hints",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "pattern"],
+                name="routing_hint_est_pattern_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="routing_hint_est_idx"),
+            models.Index(
+                fields=["establishment", "active"],
+                name="routing_hint_est_active_idx",
+            ),
+            models.Index(fields=["suggested_unit"], name="routing_hint_unit_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.pattern, "pattern", errors)
+
+        if (
+            self.establishment_id is not None
+            and self.suggested_unit_id is not None
+            and self.suggested_unit.establishment_id != self.establishment_id
+        ):
+            errors["suggested_unit"] = "Suggested unit must belong to the same establishment."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.establishment} routing hint [{self.pattern}]"
+
+
+class RoutingHintDomain(BaseModel):
+    routing_hint = models.ForeignKey(
+        RoutingHint,
+        on_delete=models.CASCADE,
+        related_name="domain_links",
+        db_index=False,
+    )
+    operational_domain = models.ForeignKey(
+        OperationalDomain,
+        on_delete=models.CASCADE,
+        related_name="routing_hint_links",
+        db_index=False,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["routing_hint", "operational_domain"],
+                name="routing_hint_domain_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["routing_hint"], name="route_hint_domain_hint_idx"),
+            models.Index(fields=["operational_domain"], name="route_hint_domain_dom_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if (
+            self.routing_hint_id is not None
+            and self.operational_domain_id is not None
+            and self.routing_hint.establishment_id != self.operational_domain.establishment_id
+        ):
+            raise ValidationError(
+                {
+                    "operational_domain": (
+                        "Operational domain must belong to the same establishment "
+                        "as the routing hint."
+                    )
+                }
+            )
+
+    def __str__(self) -> str:
+        return f"{self.routing_hint} -> {self.operational_domain.key}"

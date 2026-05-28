@@ -1478,44 +1478,6 @@ And human validation is required before activation
 
 ---
 
-# 29. Points à traiter dans d'autres domaines
-
-## 29.1 Checklist Domain
-
-À cadrer :
-- checklist templates ;
-- checklist execution ;
-- shared checklist setup post-activation ;
-- first checklist creation flow ;
-- checklist assignment.
-
-## 29.2 AI Pipeline Contract
-
-À cadrer :
-- format exact des proposals onboarding ;
-- JSON schema ;
-- confidence scores ;
-- validation backend ;
-- retries ;
-- fallback templates.
-
-## 29.3 Notification Matrix
-
-À cadrer :
-- InitialUserInvited ;
-- MembershipActivated ;
-- EstablishmentActivated ;
-- post-activation notifications.
-
-## 29.4 Security / RBAC
-
-À cadrer :
-- qui peut rerun AI ;
-- qui peut edit runtime structure post-activation ;
-- audit admin/support.
-
----
-
 # 30. Recommandation finale
 
 Le domaine Onboarding est suffisamment cadré pour le MVP.
