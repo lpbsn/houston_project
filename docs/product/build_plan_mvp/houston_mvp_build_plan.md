@@ -24,7 +24,7 @@ Houston remains a backend-authoritative operational workflow app.
 ## Validated Phase Sequence
 
 1. Phase 0 — Full-stack foundation ✅ completed
-2. Phase 1 — Identity / Memberships / RBAC
+2. Phase 1 — Identity / Memberships / RBAC ✅ completed
 3. Phase 2 — Runtime config / Onboarding
 4. Phase 3 — Observation / Media / Transcription
 5. Phase 4 — AI Pipeline / Signal Feed

@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
+import { LandingPage } from '@/features/landing/landing-page'
 
 type AppPath = '/' | '/login' | '/app'
 
@@ -64,11 +65,6 @@ function App() {
       return
     }
 
-    if (pathname === '/') {
-      navigate(auth.isAuthenticated ? '/app' : '/login', { replace: true })
-      return
-    }
-
     if (pathname === '/login' && auth.isAuthenticated) {
       navigate('/app', { replace: true })
       return
@@ -80,16 +76,16 @@ function App() {
   }, [auth.isAuthenticated, auth.isReady, navigate, pathname])
 
   const routeContent = useMemo(() => {
-    if (!auth.isReady && pathname === '/') {
-      return null
-    }
-
     if (pathname === '/app') {
       return <AppPage />
     }
 
     return <LoginPage />
-  }, [auth.isReady, pathname])
+  }, [pathname])
+
+  if (pathname === '/') {
+    return <LandingPage />
+  }
 
   const routeCopy = pathname === '/app'
     ? {
