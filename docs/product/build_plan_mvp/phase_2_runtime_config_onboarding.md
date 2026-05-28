@@ -67,7 +67,8 @@ Current repository state confirms these Phase 0/1 foundations are implemented:
 - The frontend uses TanStack Query for auth/bootstrap, membership, mutation, and scoped
   search server state.
 
-Current repository state confirms these Phase 2 items are not implemented:
+Current repository state confirms these Phase 2 data-model foundation items are
+implemented:
 
 - `OnboardingSession`
 - `EstablishmentActivityDescription`
@@ -78,6 +79,9 @@ Current repository state confirms these Phase 2 items are not implemented:
 - `RuntimeTagDomain`
 - `RoutingHint`
 - `RoutingHintDomain`
+
+Current repository state confirms these Phase 2 items are not implemented:
+
 - onboarding activation service
 - onboarding session API
 - runtime config API
@@ -135,16 +139,28 @@ Phase 2 adopts from the archived AI onboarding contract:
 
 Phase 2 defers:
 
-- real AI provider integration
-- provider prompt contract implementation
-- strict provider JSON schema implementation
-- provider retry policy
-- provider timeout policy
-- AIUsageLog
 - AI events
 - post-activation AI rerun implementation
 - `/api/v1/onboarding/:id/...` session endpoints unless the Phase 2 API design
   explicitly chooses them
+
+## AI domains separation
+
+AI Onboarding and AI Observation Pipeline are separate AI domains. They may share
+infrastructure later, but they must not share prompt contracts, output schemas,
+lifecycle assumptions, or product responsibilities.
+
+Use explicit domain separation:
+
+- `ai_domain = onboarding` is for low-frequency, human-validated bootstrap proposals.
+- `ai_domain = observation_pipeline` is for future high-frequency operational
+  interpretation.
+- onboarding AI and observation pipeline AI may use different prompts, schemas,
+  providers, models, costs, latency targets, and evaluation metrics.
+- onboarding AI only proposes runtime onboarding structure.
+- observation pipeline AI may later support operational processing, but remains
+  separate and out of Phase 2.
+- the two domains must not be coupled.
 
 ## Chosen defaults
 
@@ -160,9 +176,15 @@ Phase 2 defers:
 - Add separate onboarding access for draft/active establishments later.
 - Manual onboarding first.
 - Manual runtime setup must work before AI assistance.
-- No real AI provider call in the first implementation pass.
+- Real AI Onboarding provider integration is part of full Phase 2, but only after the
+  `OnboardingProposal` foundation exists.
+- Real AI provider integration remains out of scope for Sub-phase 3 and earlier
+  sub-phases.
 - OnboardingProposal structure and manual/template proposal apply flow are part of full
-  Phase 2. Real AI provider integration remains out of scope until explicitly requested.
+  Phase 2.
+- AI Onboarding must store output as `OnboardingProposal` only.
+- AI must never mutate runtime configuration directly.
+- AI Observation Pipeline remains out of Phase 2.
 - Runtime config is establishment-scoped.
 - Runtime tags and routing hints never drive permissions.
 - Runtime tags and routing hints do not affect RBAC.
@@ -220,30 +242,54 @@ authority.
 
 Staff invitations are not required before activation.
 
-## AI-ready, but no real AI provider yet
+## AI Onboarding integration strategy
 
-Phase 2 must avoid both extremes:
+AI Onboarding can be integrated in Phase 2 because its scope is limited to onboarding
+proposals.
 
-- Do not integrate a real AI provider too early.
-- Do not ignore AI integration seams.
+AI Onboarding must use the `OnboardingProposal` boundary:
 
-The correct Phase 2 direction is:
-
-- build manual runtime configuration first
-- prepare `OnboardingSession`
-- prepare `OnboardingProposal`
-- prepare a strict proposal payload shape
-- prepare an `apply_onboarding_proposal` service or equivalent service boundary
-- allow future proposal sources such as `manual`, `template`, and `ai_proposed`
-- ensure proposals are never active runtime state until applied
-- ensure backend validates every proposed object before persistence
-- ensure human validation is required before apply
+- AI output must be stored as an `OnboardingProposal`.
+- AI output must never directly write active runtime configuration.
+- backend must validate the proposal before it can be stored or applied.
+- human validation is required before apply.
+- only backend services can apply validated proposal data into runtime configuration.
 - ensure manual/template proposals use the same apply boundary as future AI proposals
+
+AI Onboarding must:
+
+- use allowed module/domain/unit catalogs
+- enforce proposal caps
+- validate structured output before storage/application
+- produce only onboarding proposal sections:
+  - operational modules
+  - operational domains
+  - operational units
+  - runtime vocabulary
+  - runtime tags
+  - routing hints
+
+AI Onboarding must not generate:
+
+- roles
+- memberships
+- billing changes
+- checklists
+- signal examples
+- actions
+- comments
+- operational execution workflows
+
+AI Onboarding must not know or own Signal, Action, Signal lifecycle, Action lifecycle,
+feeds, or operational execution workflows.
+
+AI Observation Pipeline remains separate and out of scope for Phase 2.
 
 Strict No-AI-claims rule:
 
-Do not claim AI onboarding is implemented until a real provider, prompt contract,
-strict JSON schema, retry policy, timeout policy, AIUsageLog, and tests exist.
+Do not claim AI-assisted onboarding is implemented until a real onboarding provider,
+prompt contract, strict JSON schema or structured output contract, retry policy,
+timeout policy, AIUsageLog or equivalent usage tracking, and tests exist.
 
 ## Proposal payload shape
 
@@ -278,7 +324,8 @@ Proposal validation must enforce these caps:
 Proposals must not assign roles. Proposals must not assign memberships. Proposals must
 not change billing. Proposals must not generate checklist templates in Phase 2.
 Proposals must not generate signal examples in Phase 2. Proposals must not activate
-the establishment directly unless the activation service passes.
+the establishment directly. Activation must remain an explicit backend service path
+after human validation and proposal application.
 
 ## Final ordered sub-phases
 
@@ -334,7 +381,11 @@ Definition of Done:
 - No candidate model, endpoint, or AI behavior is described as implemented.
 - No file other than this Phase 2 build plan changed.
 
-### 2. Backend onboarding + runtime data model foundation
+### 2. Backend onboarding + runtime data model foundation — DONE
+
+Status:
+
+- DONE. Sub-phase 2 is implemented and green.
 
 Objective:
 
@@ -343,7 +394,7 @@ Objective:
 - Keep onboarding and runtime model foundations inside `houston.establishments`.
 - Keep onboarding process state separate from `Establishment` runtime state.
 
-Candidate models:
+Implemented models:
 
 - `OnboardingSession`
 - `EstablishmentActivityDescription`
@@ -392,7 +443,7 @@ Recommended `source_mode` values:
 - `ai`
 
 `ai` may exist as a future-compatible enum value, but no real AI provider is
-integrated in Phase 2 unless a later explicit task requests it.
+called in Sub-phase 2.
 
 Database rule:
 
@@ -645,130 +696,11 @@ Definition of Done:
 - Endpoint tests cover permissions, tenant isolation, response shape, description
   validation, activation summary, and activation.
 
-### 5. Frontend generated types and onboarding/runtime API hooks
+### 5. OnboardingProposal foundation / manual-template proposal apply boundary
 
 Objective:
 
-- Regenerate frontend OpenAPI types after onboarding/runtime API endpoints exist.
-- Add typed API wrappers and TanStack Query hooks for onboarding/runtime server state.
-
-Must use:
-
-- generated OpenAPI types
-- TanStack Query for server state
-- no manual generated type edits
-- no Zustand for onboarding/runtime server state
-
-Likely files touched:
-
-- `apps/web/src/api/generated/types.ts`
-- onboarding/runtime feature API and hooks under `apps/web/src/features/`
-- existing app shell integration only where needed
-
-API changes:
-
-- None. This sub-phase consumes the OpenAPI contract generated from the backend.
-
-Migration risk:
-
-- None.
-
-Tests required:
-
-- Typecheck validates generated type usage.
-- Build validates integration.
-- Hook behavior keeps server state in TanStack Query, not Zustand.
-
-Exact commands to run:
-
-```bash
-make web-api-generate
-make web-typecheck
-make web-build
-```
-
-Explicit out of scope:
-
-- Manual edits to generated frontend types.
-- Direct `fetch` calls in feature components.
-- Storing onboarding/runtime server state in Zustand.
-- Frontend-owned activation rules.
-
-Definition of Done:
-
-- Generated frontend types include onboarding/runtime endpoints.
-- Runtime API calls flow through generated client usage.
-- Onboarding/runtime server state is handled with TanStack Query.
-
-### 6. Mobile-first onboarding UI minimal
-
-Objective:
-
-- Add a minimal mobile-first UI for manual onboarding, runtime setup, section
-  validation, activation summary, and activation readiness.
-- Reflect backend state and backend validation errors without making React the authority.
-
-Must include:
-
-- description form with 50-character minimum feedback
-- manual setup path
-- template fallback path if available
-- section-by-section validation UX
-- accept-all by section
-- skippable vocabulary/tags/routing hints
-- modules/domains required
-- activation summary before activation
-- backend validation errors surfaced clearly
-- no React-owned permission or activation authority
-
-Likely files touched:
-
-- onboarding/runtime feature components under `apps/web/src/features/`
-- existing app shell or routing files only where required
-- reusable UI/domain components only if reuse is clear
-
-API changes:
-
-- None.
-
-Migration risk:
-
-- None.
-
-Tests required:
-
-- Frontend typecheck and build.
-- If frontend test tooling is added or already available at implementation time, cover
-  loading, error, empty, editing, save, section validation, activation summary, and
-  activation-blocked states.
-
-Exact commands to run:
-
-```bash
-make web-typecheck
-make web-build
-```
-
-Explicit out of scope:
-
-- React-derived real permissions.
-- Client-only activation minimum enforcement as authority.
-- AI proposal UX that implies real AI has run.
-- Desktop-only dense admin UI.
-
-Definition of Done:
-
-- Owner/Director can use a mobile-first UI to configure onboarding/runtime setup.
-- UI clearly handles loading, error, empty, and success states.
-- UI supports section validation and activation summary.
-- Backend validation errors are surfaced plainly.
-- Frontend does not claim activation until backend confirms it.
-
-### 7. Onboarding proposal foundation / AI-ready, no real provider
-
-Objective:
-
-- Prepare the future AI onboarding flow without integrating a real AI provider.
+- Prepare the AI Onboarding boundary without integrating a real AI provider yet.
 - Add an onboarding proposal foundation that supports manual/template proposals using
   the same apply path future AI proposals will use.
 - Ensure proposal apply is human-validated and backend-validated.
@@ -862,8 +794,7 @@ Tests required:
 - Proposals cannot change billing.
 - Proposals cannot generate checklist templates.
 - Proposals cannot generate signal examples.
-- Proposals cannot activate an establishment directly unless the activation service
-  passes.
+- Proposals cannot activate an establishment directly.
 - `manual` and `template` sources can be represented without a real provider.
 - `ai_proposed` can be represented as a future source without calling a real provider.
 
@@ -875,9 +806,6 @@ make schema
 make migrations-check
 make check
 make lint
-make web-api-generate
-make web-typecheck
-make web-build
 ```
 
 Explicit out of scope:
@@ -904,12 +832,306 @@ Definition of Done:
 - Full Phase 2 completion requires this proposal foundation. If this foundation is
   deferred, the milestone must be called Phase 2A complete, not full Phase 2 complete.
 
+### 6. AI Onboarding provider integration
+
+Objective:
+
+- Integrate real AI Onboarding as a backend-only provider flow that produces
+  `OnboardingProposal` records, without directly mutating runtime configuration.
+
+Likely files touched:
+
+- `apps/api/houston/establishments/services.py`
+- `apps/api/houston/establishments/selectors.py`
+- possibly `apps/api/houston/establishments/ai_onboarding.py` or equivalent module if
+  repo conventions allow
+- `apps/api/houston/establishments/tests/`
+- provider config/settings only if required by current repo conventions
+- AI usage logging module only if implemented in this sub-phase
+- no frontend unless explicitly part of a later sub-phase
+
+Required backend services to plan:
+
+- `build_ai_onboarding_input(session)`
+- `run_ai_onboarding_interpretation(session, actor)`
+- `validate_ai_onboarding_output(raw_output)`
+- `store_ai_onboarding_proposal(session, sanitized_output, actor)`
+- `fallback_to_template_proposal(session, actor)`
+
+Names may differ if repo conventions require it.
+
+Input contract:
+
+AI Onboarding input must include only:
+
+- `organization_name`
+- `establishment_name`
+- `establishment_activity_description`
+- `allowed_module_catalog`
+- `allowed_domain_catalog`
+- `allowed_unit_catalog`
+- `locale`
+- `prompt_version`
+
+AI Onboarding input must exclude:
+
+- nominative user data
+- emails
+- phone numbers
+- assignments
+- roles nominative data
+- exact address/location
+- billing
+- subscription
+- observations
+- signals
+- actions
+- comments
+
+Output contract:
+
+AI output must produce proposal payload sections:
+
+- `operational_modules`
+- `operational_domains`
+- `operational_units`
+- `runtime_vocabulary`
+- `runtime_tags`
+- `routing_hints`
+
+Required validation:
+
+- parseable JSON / structured output
+- `schema_version`
+- allowed outcome
+- section separation
+- catalog validation
+- caps validation:
+  - modules max 10
+  - domains max 15
+  - units max 15
+  - vocabulary max 30
+  - runtime_tags max 30
+  - routing_hints max 30
+- at least 3 valid domains for a generated AI proposal
+- unknown modules/domains/units rejected or safely ignored
+- no role assignment
+- no membership assignment
+- no billing changes
+- no checklist generation
+- no signal examples
+- no direct activation
+
+Provider constraints:
+
+- Use structured output / JSON schema if the chosen provider supports it.
+- Use `prompt_version`.
+- Use `schema_version`.
+- Use timeout policy.
+- Use retry policy.
+- Use safe technical errors.
+- Do not log full raw prompts.
+- Do not store unnecessary raw AI content outside the approved proposal/usage retention
+  strategy.
+- No user-facing claim that AI succeeded unless a proposal was validated and stored.
+
+`AIUsageLog`:
+
+If AI provider integration is implemented in Phase 2, `AIUsageLog` or equivalent usage
+tracking is required.
+
+It must track at minimum:
+
+- establishment
+- `ai_domain = onboarding`
+- provider
+- model
+- prompt_version
+- status
+- latency_ms
+- input_tokens
+- output_tokens
+- cost estimate if available
+- error_code
+- correlation_id
+- created_at
+
+If `AIUsageLog` is deferred, then the AI provider integration sub-phase is not complete.
+
+Tests required:
+
+- builds input without nominative user data
+- rejects too-short description before provider call
+- provider output is stored as `OnboardingProposal`, not active runtime
+- invalid JSON / invalid structured output fails safely
+- unknown catalog values rejected or ignored safely
+- caps enforced
+- fewer than 3 valid domains fails or falls back to template
+- provider failure uses retry/fallback behavior
+- no direct runtime mutation from AI output
+- no roles/memberships/billing/checklists/signal examples accepted
+- usage log created for provider calls
+- no full raw prompt logged
+
+Exact commands to run:
+
+```bash
+cd apps/api && uv run pytest houston/establishments/tests/
+make schema
+make migrations-check
+make check
+make lint
+```
+
+Explicit out of scope:
+
+- Observation Pipeline AI
+- Signal candidate generation
+- Action suggestions
+- automatic runtime activation
+- automatic user/membership assignment
+- frontend AI UX unless later sub-phase explicitly implements it
+
+Definition of Done:
+
+- AI Onboarding provider can generate a validated `OnboardingProposal`.
+- AI output never mutates runtime directly.
+- Backend validation protects catalogs, caps, and excluded sections.
+- `AIUsageLog` or equivalent exists.
+- Fallback template path exists.
+- Tests pass.
+- Observation Pipeline AI remains untouched.
+
+### 7. Frontend generated types + onboarding/runtime API hooks
+
+Objective:
+
+- Regenerate frontend OpenAPI types after onboarding/runtime and proposal API endpoints
+  exist.
+- Add typed API wrappers and TanStack Query hooks for onboarding/runtime server state.
+
+Must use:
+
+- generated OpenAPI types
+- TanStack Query for server state
+- no manual generated type edits
+- no Zustand for onboarding/runtime server state
+
+Likely files touched:
+
+- `apps/web/src/api/generated/types.ts`
+- onboarding/runtime feature API and hooks under `apps/web/src/features/`
+- existing app shell integration only where needed
+
+API changes:
+
+- None. This sub-phase consumes the OpenAPI contract generated from the backend.
+
+Migration risk:
+
+- None.
+
+Tests required:
+
+- Typecheck validates generated type usage.
+- Build validates integration.
+- Hook behavior keeps server state in TanStack Query, not Zustand.
+
+Exact commands to run:
+
+```bash
+make web-api-generate
+make web-typecheck
+make web-build
+```
+
+Explicit out of scope:
+
+- Manual edits to generated frontend types.
+- Direct `fetch` calls in feature components.
+- Storing onboarding/runtime server state in Zustand.
+- Frontend-owned activation rules.
+
+Definition of Done:
+
+- Generated frontend types include onboarding/runtime endpoints.
+- Runtime API calls flow through generated client usage.
+- Onboarding/runtime server state is handled with TanStack Query.
+
+### 8. Mobile-first onboarding UI minimal
+
+Objective:
+
+- Add a minimal mobile-first UI for manual onboarding, runtime setup, section
+  validation, activation summary, and activation readiness.
+- Reflect backend state and backend validation errors without making React the authority.
+- Do not claim AI-assisted onboarding until the backend AI Onboarding provider can
+  validate and store an `OnboardingProposal`.
+
+Must include:
+
+- description form with 50-character minimum feedback
+- manual setup path
+- template fallback path if available
+- section-by-section validation UX
+- accept-all by section
+- skippable vocabulary/tags/routing hints
+- modules/domains required
+- activation summary before activation
+- backend validation errors surfaced clearly
+- no React-owned permission or activation authority
+
+Likely files touched:
+
+- onboarding/runtime feature components under `apps/web/src/features/`
+- existing app shell or routing files only where required
+- reusable UI/domain components only if reuse is clear
+
+API changes:
+
+- None.
+
+Migration risk:
+
+- None.
+
+Tests required:
+
+- Frontend typecheck and build.
+- If frontend test tooling is added or already available at implementation time, cover
+  loading, error, empty, editing, save, section validation, activation summary, and
+  activation-blocked states.
+
+Exact commands to run:
+
+```bash
+make web-typecheck
+make web-build
+```
+
+Explicit out of scope:
+
+- React-derived real permissions.
+- Client-only activation minimum enforcement as authority.
+- AI proposal UX that implies real AI has run when no validated proposal exists.
+- Desktop-only dense admin UI.
+
+Definition of Done:
+
+- Owner/Director can use a mobile-first UI to configure onboarding/runtime setup.
+- UI clearly handles loading, error, empty, and success states.
+- UI supports section validation and activation summary.
+- Backend validation errors are surfaced plainly.
+- Frontend does not claim activation until backend confirms it.
+
 ## Assumptions and defaults
 
-- Real AI onboarding provider integration is intentionally out of scope for the first
-  implementation pass.
 - `OnboardingSession` is required for full Phase 2 completion.
 - `OnboardingProposal` is required for full Phase 2 completion.
+- Real AI Onboarding provider integration is required for full Phase 2 completion,
+  after the `OnboardingProposal` foundation exists.
+- Real AI provider integration is out of scope for Sub-phase 3 and earlier.
+- AI Observation Pipeline is out of scope for Phase 2.
 - Runtime config is establishment-scoped.
 - Runtime tags and routing hints do not affect RBAC.
 - Backend is the source of truth for activation.
@@ -923,9 +1145,6 @@ Definition of Done:
 ## Blocking questions
 
 There is no blocking question if the defaults above are accepted.
-
-Real AI onboarding provider integration is intentionally out of scope for the first
-implementation pass.
 
 If a future implementation task finds a direct contradiction between current code and
 this plan, stop and report:
@@ -948,10 +1167,13 @@ Full Phase 2 is done only when:
 - activation minimum is enforced server-side
 - activation summary exists
 - OpenAPI contains onboarding/runtime endpoints
+- AI Onboarding provider integration exists and stores validated `OnboardingProposal`
+  records
+- `AIUsageLog` or equivalent usage tracking exists for AI Onboarding calls
 - frontend generated types are updated
 - mobile-first onboarding UI exists
 - frontend uses TanStack Query for onboarding/runtime server state
-- no real AI behavior is claimed unless explicitly implemented
+- Observation Pipeline AI remains separate and untouched
 - backend and frontend checks pass
 
 If `OnboardingSession` or `OnboardingProposal` is deferred, the milestone is only

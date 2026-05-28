@@ -1,14 +1,34 @@
 from __future__ import annotations
 
+from django.db import models
 from django.db.models import Prefetch, Q
 
 from houston.accounts.models import User
 from houston.establishments.models import (
     Establishment,
+    EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipDomain,
+    OnboardingSession,
+    OperationalDomain,
+    OperationalModule,
+    OperationalUnit,
+    RoutingHint,
+    RoutingHintDomain,
+    RuntimeTag,
+    RuntimeTagDomain,
+    RuntimeVocabulary,
 )
 from houston.organizations.models import Organization
+
+_ONBOARDING_MANAGEMENT_ROLES = (
+    EstablishmentMembership.Role.OWNER,
+    EstablishmentMembership.Role.DIRECTOR,
+)
+_ONBOARDING_ESTABLISHMENT_STATUSES = (
+    Establishment.Status.DRAFT,
+    Establishment.Status.ACTIVE,
+)
 
 
 def list_memberships_for_management(
@@ -65,6 +85,151 @@ def search_users_for_establishment(
             | Q(user__username__icontains=normalized_query)
             | Q(user__email__icontains=normalized_query)
         )
+    )
+
+
+def get_onboarding_session_for_actor(
+    *,
+    actor: User,
+    session_id,
+) -> OnboardingSession | None:
+    if actor.status != User.Status.ACTIVE:
+        return None
+
+    return _onboarding_session_queryset_for_actor(actor).filter(id=session_id).first()
+
+
+def list_onboarding_sessions_for_actor(*, actor: User) -> list[OnboardingSession]:
+    if actor.status != User.Status.ACTIVE:
+        return []
+
+    return list(_onboarding_session_queryset_for_actor(actor))
+
+
+def get_active_onboarding_session_for_establishment(
+    *,
+    actor: User,
+    establishment_id,
+) -> OnboardingSession | None:
+    if actor.status != User.Status.ACTIVE:
+        return None
+
+    return (
+        _onboarding_session_queryset_for_actor(actor)
+        .filter(
+            establishment_id=establishment_id,
+            status__in=OnboardingSession.NON_TERMINAL_STATUSES,
+        )
+        .first()
+    )
+
+
+def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
+    establishment_id = session.establishment_id
+
+    return {
+        "activity_description": _get_activity_description(establishment_id),
+        "active_modules": list(
+            OperationalModule.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            ).order_by("key", "id")
+        ),
+        "active_domains": list(
+            OperationalDomain.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            ).order_by("key", "id")
+        ),
+        "optional_units": list(
+            OperationalUnit.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            ).order_by("key", "id")
+        ),
+        "optional_vocabulary": list(
+            RuntimeVocabulary.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            )
+            .select_related("mapped_domain", "mapped_unit")
+            .order_by("term", "id")
+        ),
+        "optional_runtime_tags": list(
+            RuntimeTag.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            )
+            .prefetch_related(
+                Prefetch(
+                    "domain_links",
+                    queryset=RuntimeTagDomain.objects.select_related(
+                        "operational_domain",
+                    )
+                    .filter(operational_domain__active=True)
+                    .order_by("operational_domain__key"),
+                )
+            )
+            .order_by("key", "id")
+        ),
+        "optional_routing_hints": list(
+            RoutingHint.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            )
+            .select_related("suggested_unit")
+            .prefetch_related(
+                Prefetch(
+                    "domain_links",
+                    queryset=RoutingHintDomain.objects.select_related(
+                        "operational_domain",
+                    )
+                    .filter(operational_domain__active=True)
+                    .order_by("operational_domain__key"),
+                )
+            )
+            .order_by("pattern", "id")
+        ),
+    }
+
+
+def get_activation_summary_for_session(*, session: OnboardingSession) -> dict:
+    from houston.establishments.services import build_activation_summary
+
+    return build_activation_summary(session=session)
+
+
+def _onboarding_session_queryset_for_actor(actor: User):
+    accessible_establishment_ids = EstablishmentMembership.objects.filter(
+        user=actor,
+        status=EstablishmentMembership.Status.ACTIVE,
+        role__in=_ONBOARDING_MANAGEMENT_ROLES,
+        establishment__status__in=_ONBOARDING_ESTABLISHMENT_STATUSES,
+        establishment__organization__status=Organization.Status.ACTIVE,
+    ).values("establishment_id")
+
+    return (
+        OnboardingSession.objects.filter(
+            establishment_id__in=accessible_establishment_ids,
+            organization_id=models.F("establishment__organization_id"),
+            establishment__status__in=_ONBOARDING_ESTABLISHMENT_STATUSES,
+            establishment__organization__status=Organization.Status.ACTIVE,
+        )
+        .select_related(
+            "organization",
+            "establishment",
+            "establishment__organization",
+            "started_by",
+        )
+        .order_by("-updated_at", "-created_at", "id")
+    )
+
+
+def _get_activity_description(establishment_id):
+    return (
+        EstablishmentActivityDescription.objects.filter(establishment_id=establishment_id)
+        .select_related("submitted_by")
+        .first()
     )
 
 
