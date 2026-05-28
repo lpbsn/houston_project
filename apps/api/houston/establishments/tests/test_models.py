@@ -9,6 +9,10 @@ from houston.establishments.models import (
     EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipDomain,
+    OnboardingCatalogDomain,
+    OnboardingCatalogModule,
+    OnboardingCatalogUnit,
+    OnboardingProposal,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
@@ -273,6 +277,189 @@ def test_onboarding_session_allows_historical_terminal_sessions(
     )
 
     assert first.establishment == second.establishment
+
+
+def test_onboarding_catalog_rows_are_seeded_by_migration():
+    assert set(
+        OnboardingCatalogModule.objects.filter(active=True).values_list("key", flat=True)
+    ) >= {"hotel", "restaurant", "bar", "rooftop", "seminar_rooms", "coworking"}
+    assert set(
+        OnboardingCatalogDomain.objects.filter(active=True).values_list("key", flat=True)
+    ) >= {"maintenance", "housekeeping", "security", "restaurant_room", "management"}
+    assert set(OnboardingCatalogUnit.objects.filter(active=True).values_list("key", flat=True)) >= {
+        "lobby",
+        "rooms",
+        "kitchen",
+        "technical_rooms",
+        "outdoor_areas",
+    }
+
+
+@pytest.mark.parametrize(
+    "model_class",
+    [OnboardingCatalogModule, OnboardingCatalogDomain, OnboardingCatalogUnit],
+)
+def test_onboarding_catalog_key_is_unique(model_class):
+    model_class.objects.create(key="custom_key", label="Custom")
+
+    with pytest.raises(IntegrityError):
+        model_class.objects.create(key="custom_key", label="Duplicate")
+
+
+@pytest.mark.parametrize(
+    ("model_class", "field_values", "expected_field"),
+    [
+        (OnboardingCatalogModule, {"key": " ", "label": "Hotel"}, "key"),
+        (OnboardingCatalogModule, {"key": "hotel", "label": " "}, "label"),
+        (OnboardingCatalogDomain, {"key": " ", "label": "Maintenance"}, "key"),
+        (OnboardingCatalogDomain, {"key": "maintenance", "label": " "}, "label"),
+        (OnboardingCatalogUnit, {"key": " ", "label": "Lobby"}, "key"),
+        (OnboardingCatalogUnit, {"key": "lobby", "label": " "}, "label"),
+    ],
+)
+def test_onboarding_catalog_models_validate_nonblank_fields(
+    model_class,
+    field_values,
+    expected_field,
+):
+    instance = model_class(**field_values)
+
+    with pytest.raises(ValidationError) as exc_info:
+        instance.full_clean()
+
+    assert expected_field in exc_info.value.message_dict
+
+
+def test_onboarding_catalog_defaults():
+    catalog_item = OnboardingCatalogModule.objects.create(
+        key="custom_module",
+        label="Custom module",
+    )
+
+    assert catalog_item.active is True
+    assert catalog_item.sort_order == 0
+
+
+def test_onboarding_proposal_defaults(organization, establishment, user):
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+        started_by=user,
+    )
+    proposal = OnboardingProposal.objects.create(
+        onboarding_session=session,
+        establishment=establishment,
+        created_by=user,
+    )
+
+    assert proposal.source == OnboardingProposal.Source.MANUAL
+    assert proposal.status == OnboardingProposal.Status.DRAFT
+    assert proposal.payload == {}
+    assert proposal.section_validation == {}
+    assert proposal.validation_errors == []
+
+
+def test_onboarding_proposal_choices_include_future_ai_source():
+    source_field = OnboardingProposal._meta.get_field("source")
+    status_field = OnboardingProposal._meta.get_field("status")
+
+    assert source_field.choices == OnboardingProposal.Source.choices
+    assert status_field.choices == OnboardingProposal.Status.choices
+    assert OnboardingProposal.Source.AI_PROPOSED in {
+        choice for choice, _label in OnboardingProposal.Source.choices
+    }
+
+
+def test_onboarding_proposal_validates_establishment_matches_session(
+    organization,
+    establishment,
+):
+    other_establishment = Establishment.objects.create(name="Cannes", organization=organization)
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+    )
+    proposal = OnboardingProposal(
+        onboarding_session=session,
+        establishment=other_establishment,
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        proposal.full_clean()
+
+    assert "establishment" in exc_info.value.message_dict
+
+
+def test_onboarding_proposal_unique_non_terminal_per_session(
+    organization,
+    establishment,
+):
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+    )
+    OnboardingProposal.objects.create(
+        onboarding_session=session,
+        establishment=establishment,
+        status=OnboardingProposal.Status.READY,
+    )
+
+    with pytest.raises(IntegrityError):
+        OnboardingProposal.objects.create(
+            onboarding_session=session,
+            establishment=establishment,
+            status=OnboardingProposal.Status.PARTIALLY_VALIDATED,
+        )
+
+
+def test_onboarding_proposal_terminal_allows_later_non_terminal(
+    organization,
+    establishment,
+):
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+    )
+    OnboardingProposal.objects.create(
+        onboarding_session=session,
+        establishment=establishment,
+        status=OnboardingProposal.Status.REJECTED,
+    )
+    next_proposal = OnboardingProposal.objects.create(
+        onboarding_session=session,
+        establishment=establishment,
+        status=OnboardingProposal.Status.READY,
+    )
+
+    assert next_proposal.status == OnboardingProposal.Status.READY
+
+
+def test_onboarding_proposal_json_defaults_are_independent(
+    organization,
+    establishment,
+):
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+    )
+    first = OnboardingProposal.objects.create(
+        onboarding_session=session,
+        establishment=establishment,
+        status=OnboardingProposal.Status.REJECTED,
+    )
+    second = OnboardingProposal.objects.create(
+        onboarding_session=session,
+        establishment=establishment,
+        status=OnboardingProposal.Status.FAILED,
+    )
+
+    first.payload["x"] = "y"
+    first.section_validation["operational_modules"] = "accepted"
+    first.validation_errors.append({"code": "example"})
+
+    assert second.payload == {}
+    assert second.section_validation == {}
+    assert second.validation_errors == []
 
 
 def test_onboarding_session_validates_organization_matches_establishment(establishment):

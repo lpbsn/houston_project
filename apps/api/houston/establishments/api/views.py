@@ -618,9 +618,7 @@ def _build_activation_summary_payload(*, session, actor):
     summary = build_activation_summary(session=session)
     access = get_onboarding_access_context(actor=actor, session=session)
     summary["access"] = {"can_activate": access.can_activate}
-    summary["effective_can_activate"] = (
-        summary["readiness"]["is_ready"] and access.can_activate
-    )
+    summary["effective_can_activate"] = summary["readiness"]["is_ready"] and access.can_activate
     return summary
 
 
