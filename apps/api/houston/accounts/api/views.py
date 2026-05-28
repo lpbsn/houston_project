@@ -15,14 +15,19 @@ from houston.accounts.api.serializers import (
     CsrfResponseSerializer,
     DetailResponseSerializer,
     LoginRequestSerializer,
+    SwitchEstablishmentRequestSerializer,
 )
-from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.accounts.authentication import (
+    BearerAccessTokenAuthentication,
+    OptionalBearerAccessTokenAuthentication,
+)
 from houston.accounts.selectors import build_bootstrap_payload
 from houston.accounts.services import (
     AUTHENTICATION_FAILED_DETAIL,
     INVALID_CREDENTIALS_DETAIL,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
+    InvalidSelectedEstablishmentError,
     RefreshTokenReuseError,
     authenticate_user,
     clear_refresh_cookie,
@@ -31,6 +36,7 @@ from houston.accounts.services import (
     resolve_session_for_logout,
     revoke_session,
     set_refresh_cookie,
+    switch_selected_establishment,
 )
 
 
@@ -150,11 +156,12 @@ class RefreshView(APIView):
 
 
 class LogoutView(APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
+    authentication_classes = [OptionalBearerAccessTokenAuthentication]
     permission_classes = []
 
     @extend_schema(
         tags=["auth"],
+        auth=[],
         request=None,
         responses={
             204: OpenApiResponse(description="Session revoked and refresh cookie cleared."),
@@ -200,7 +207,44 @@ class BootstrapView(APIView):
         description="Returns the authenticated bootstrap payload for the current bearer token.",
     )
     def get(self, request):
-        return Response(build_bootstrap_payload(request.user))
+        return Response(build_bootstrap_payload(request.user, session=request.auth.session))
+
+
+class SwitchEstablishmentView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=SwitchEstablishmentRequestSerializer,
+        responses={
+            200: BootstrapResponseSerializer,
+            400: OpenApiResponse(description="Invalid request payload."),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Selects the active establishment for the current auth session. Requires "
+            "a valid bearer access token and stores the selection on the backend "
+            "UserSession."
+        ),
+    )
+    def post(self, request):
+        serializer = SwitchEstablishmentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            payload = switch_selected_establishment(
+                session=request.auth.session,
+                establishment_id=serializer.validated_data["establishment_id"],
+            )
+        except InvalidSelectedEstablishmentError:
+            return Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(payload)
 
 
 def _enforce_csrf(request) -> Response | None:

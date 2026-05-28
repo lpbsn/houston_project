@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db.models import Prefetch
 
-from houston.accounts.models import User
+from houston.accounts.models import User, UserSession
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
@@ -11,21 +11,70 @@ from houston.establishments.models import (
 from houston.organizations.models import Organization
 
 
+def list_active_memberships(user: User) -> list[EstablishmentMembership]:
+    return list(_active_membership_queryset(user))
+
+
 def list_bootstrap_memberships(user: User) -> list[dict]:
-    memberships = _active_membership_queryset(user)
+    memberships = list_active_memberships(user)
     return [_serialize_membership(membership) for membership in memberships]
 
 
-def build_bootstrap_payload(user: User) -> dict:
-    memberships = list_bootstrap_memberships(user)
-    active_membership = memberships[0] if len(memberships) == 1 else None
+def build_bootstrap_payload(
+    user: User,
+    *,
+    session: UserSession,
+    autoselect_single_membership: bool = False,
+) -> dict:
+    memberships, active_membership = resolve_active_membership(
+        user=user,
+        session=session,
+        autoselect_single_membership=autoselect_single_membership,
+    )
 
     return {
         "authenticated": True,
         "user": _serialize_user(user),
-        "memberships": memberships,
-        "active_membership": active_membership,
+        "memberships": [_serialize_membership(membership) for membership in memberships],
+        "active_membership": (
+            None if active_membership is None else _serialize_membership(active_membership)
+        ),
     }
+
+
+def resolve_active_membership(
+    *,
+    user: User,
+    session: UserSession,
+    autoselect_single_membership: bool = False,
+) -> tuple[list[EstablishmentMembership], EstablishmentMembership | None]:
+    memberships = list_active_memberships(user)
+    memberships_by_establishment_id = {
+        membership.establishment_id: membership for membership in memberships
+    }
+
+    selected_membership = None
+    selected_establishment_id = session.selected_establishment_id
+
+    if selected_establishment_id is not None:
+        selected_membership = memberships_by_establishment_id.get(selected_establishment_id)
+
+        if selected_membership is None:
+            _update_selected_establishment(session=session, establishment=None)
+
+    if (
+        selected_membership is None
+        and session.selected_establishment_id is None
+        and autoselect_single_membership
+        and len(memberships) == 1
+    ):
+        selected_membership = memberships[0]
+        _update_selected_establishment(
+            session=session,
+            establishment=selected_membership.establishment,
+        )
+
+    return memberships, selected_membership
 
 
 def _active_membership_queryset(user: User):
@@ -73,3 +122,17 @@ def _serialize_membership(membership: EstablishmentMembership) -> dict:
             link.operational_domain.key for link in membership.domain_links.all()
         ],
     }
+
+
+def _update_selected_establishment(
+    *,
+    session: UserSession,
+    establishment: Establishment | None,
+) -> None:
+    next_establishment_id = None if establishment is None else establishment.id
+
+    if session.selected_establishment_id == next_establishment_id:
+        return
+
+    session.selected_establishment = establishment
+    session.save(update_fields=["selected_establishment", "updated_at"])

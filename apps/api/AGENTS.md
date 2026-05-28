@@ -1,3 +1,29 @@
+## Phase execution rule
+
+Before coding any phase:
+1. Read the relevant AGENTS.md files, docs, current code, tests, migrations, and OpenAPI schema.
+2. If requirements are clear, summarize the plan and implement.
+3. If a blocking ambiguity affects DB schema, API contract, auth, RBAC, tenant isolation, migrations, security, or frontend state ownership, stop and ask up to 5 precise questions.
+4. For each question, include the recommended default and the risk of choosing wrong.
+5. Do not ask about naming/style details already answered by project conventions.
+6. Keep scope strict. Do not implement future phases.
+7. Run required checks and report changed files + commands + results.
+
+## Clarification Gate
+
+Before implementing anything, inspect the relevant docs, current code, schema, and tests.
+
+If requirements are clear, proceed without asking questions.
+
+If ambiguity affects data model, API contract, security, RBAC, migrations, authentication, tenant isolation, or user-visible behavior, stop and ask up to 5 precise questions before coding.
+
+Do not ask questions about details already answered in docs, AGENTS.md, existing code, tests, or schema.
+
+For each question, explain:
+- why it matters
+- the recommended default
+- the risk of choosing wrong
+
 Backend stack:
 
 - Python 3.13.13

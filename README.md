@@ -62,13 +62,16 @@ The project currently uses a Django modular monolith as the business authority a
 - Health endpoint at `/api/v1/health/`
 - Backend auth foundation at `/api/v1/auth/` with CSRF bootstrap, opaque access tokens, rotating refresh tokens, and bootstrap payloads
 - Phase 0 identity, organization, establishment, and minimal access foundations
-- React/Vite frontend foundation under `apps/web`
+- React identity/workspace shell under `apps/web`
 - Generated OpenAPI TypeScript client workflow
 - TanStack Query, minimal Zustand, and conservative PWA setup
+- Authenticated-only bootstrap through `/api/v1/auth/bootstrap/`
+- Selected establishment stored on `UserSession.selected_establishment`
+- Phase 1 membership management API for owner/director users
+- Phase 1 scoped user search for the current active establishment
 
 ## What Is Not Implemented Yet
 
-- Phase 1 onboarding
 - Observations
 - Signals
 - Actions
@@ -77,19 +80,24 @@ The project currently uses a Django modular monolith as the business authority a
 - AI pipeline
 - Notifications
 - Realtime business workflows
-- Full React auth shell
 - Production-grade frontend feature surface
+- Phase 2 work
 
 ## Auth Notes
 
 - The backend auth contract now lives under `/api/v1/auth/`.
+- Browser login works through the Phase 1 auth API.
 - Login, refresh, and logout are CSRF-protected mutation endpoints.
 - Access tokens are opaque bearer tokens and must remain memory-only on the frontend.
 - Refresh tokens rotate and remain readable only by the browser as an HttpOnly cookie.
 - `UserSession`, `AccessToken`, and `SessionRefreshToken` are the backend auth source of truth.
+- `bootstrap` is authenticated-only.
+- Selected establishment is stored on `UserSession.selected_establishment`.
 - `memberships` in bootstrap responses are already filtered to active backend truth.
+- Membership management and scoped user search are implemented for the current active establishment context.
+- Phase 2 has not started.
 
-The backend still exposes `/login/`, `/logout/`, and `/app/` as temporary legacy scaffolding while the React auth shell is completed. They must not be expanded into product UI.
+Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the Phase 1 product contract. They must not be expanded into product UI.
 
 ## Local Setup
 

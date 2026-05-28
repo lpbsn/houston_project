@@ -6,6 +6,7 @@ from houston.accounts.api.views import (
     LoginView,
     LogoutView,
     RefreshView,
+    SwitchEstablishmentView,
 )
 
 urlpatterns = [
@@ -14,4 +15,9 @@ urlpatterns = [
     path("refresh/", RefreshView.as_view(), name="auth-refresh"),
     path("logout/", LogoutView.as_view(), name="auth-logout"),
     path("bootstrap/", BootstrapView.as_view(), name="auth-bootstrap"),
+    path(
+        "switch_establishment/",
+        SwitchEstablishmentView.as_view(),
+        name="auth-switch-establishment",
+    ),
 ]

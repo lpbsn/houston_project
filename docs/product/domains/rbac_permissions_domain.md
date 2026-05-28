@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-05-27
-Implementation status: partial
+Implementation status: implemented for Phase 1
 
 ## 1. Purpose
 
@@ -139,16 +139,29 @@ Implemented RBAC-relevant endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
+- `POST /api/v1/auth/switch_establishment/`
+- `GET /api/v1/establishments/{establishment_id}/memberships/`
+- `GET /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
+- `PATCH /api/v1/establishments/{establishment_id}/memberships/{membership_id}/`
+- `POST /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/`
+- `GET /api/v1/establishments/{establishment_id}/users/search/?q=`
 
 Implemented response truths:
 
 - Auth responses and bootstrap expose backend-approved `memberships`.
-- `active_membership` is present only when exactly one active membership is available.
+- `active_membership` is present when `UserSession.selected_establishment` resolves to a valid active membership.
+- Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
 - Membership payloads include `role` and `operational_domains` for UI context.
+- Membership-management endpoints reuse bearer-session access context and DRF permission classes backed by `UserSession.selected_establishment`.
+- Membership-management list endpoints are tenant-filtered at selector/queryset level before serialization.
+- Current implemented membership-management authority is `owner` and `director`; `manager` and `staff` are denied.
+- The current active establishment context must match the path `establishment_id`.
+- Scoped user search reuses bearer-session access context and requires a valid active membership in the current selected establishment.
+- Scoped user search is tenant-filtered at selector/queryset level before serialization and does not expose cross-establishment users.
+- Scoped user search response fields are intentionally minimal and do not expose broader user profile or tenant metadata.
 
 Candidate endpoints only:
 
-- Membership management endpoints.
 - Role assignment or operational-domain assignment endpoints.
 - Permission introspection endpoints.
 - Signal, action, checklist, comment, notification, chat, feed, and signed-media endpoints whose RBAC behavior is described in product docs but not present in `apps/api/schema.yml`.

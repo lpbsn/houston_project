@@ -3,9 +3,23 @@ import { queryClient } from '@/lib/query-client'
 
 import { ensureCsrfToken } from './csrf'
 import { clearAccessToken, getAccessToken, setAccessToken } from './session'
-import type { AuthResponse, BootstrapResponse, LoginRequest } from './types'
+import type {
+  AuthResponse,
+  BootstrapResponse,
+  EstablishmentMembershipResponse,
+  LoginRequest,
+  MembershipUpdateRequest,
+  ScopedUserSearchResult,
+  SwitchEstablishmentRequest,
+} from './types'
 
 export const bootstrapQueryKey = ['auth', 'bootstrap'] as const
+export const membershipListQueryKey = (establishmentId: string) =>
+  ['workspace', 'memberships', establishmentId] as const
+export const membershipDetailQueryKey = (establishmentId: string, membershipId: string) =>
+  ['workspace', 'memberships', establishmentId, membershipId] as const
+export const scopedUserSearchQueryKey = (establishmentId: string, query: string) =>
+  ['workspace', 'user-search', establishmentId, query] as const
 
 class AuthApiError extends Error {
   status: number
@@ -166,6 +180,163 @@ export async function fetchBootstrap() {
   }
 
   return result.data
+}
+
+export async function switchEstablishment(input: SwitchEstablishmentRequest) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/auth/switch_establishment/', {
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'We could not switch this establishment.')
+  }
+
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
+export async function listMemberships(establishmentId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/memberships/', {
+        params: {
+          path: { establishment_id: establishmentId },
+        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Memberships could not be loaded.')
+  }
+
+  return result.data as EstablishmentMembershipResponse[]
+}
+
+export async function getMembership(establishmentId: string, membershipId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/memberships/{membership_id}/', {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            membership_id: membershipId,
+          },
+        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Membership details are unavailable.')
+  }
+
+  return result.data as EstablishmentMembershipResponse
+}
+
+export async function updateMembership(
+  establishmentId: string,
+  membershipId: string,
+  input: MembershipUpdateRequest,
+) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/establishments/{establishment_id}/memberships/{membership_id}/', {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            membership_id: membershipId,
+          },
+        },
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Membership changes were not saved.')
+  }
+
+  await queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
+  return result.data as EstablishmentMembershipResponse
+}
+
+export async function deactivateMembership(establishmentId: string, membershipId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              membership_id: membershipId,
+            },
+          },
+          headers: accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+              }
+            : undefined,
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'This membership could not be deactivated.')
+  }
+
+  await queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
+  return result.data as EstablishmentMembershipResponse
+}
+
+export async function searchUsers(establishmentId: string, query: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/users/search/', {
+        params: {
+          path: { establishment_id: establishmentId },
+          query: { q: query },
+        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'User search is unavailable.')
+  }
+
+  return result.data as ScopedUserSearchResult[]
 }
 
 export { AuthApiError }

@@ -73,6 +73,13 @@ class UserSession(BaseModel):
         related_name="sessions",
         db_index=False,
     )
+    selected_establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.SET_NULL,
+        related_name="selected_by_sessions",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

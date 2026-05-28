@@ -88,6 +88,7 @@ Required concepts:
 - access expiry
 - refresh expiry
 - absolute session expiry
+- selected establishment for the current auth session
 - light user-agent metadata
 - minimal optional IP metadata
 
@@ -107,6 +108,7 @@ Required MVP endpoints:
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/bootstrap/`
+- `POST /api/v1/auth/switch_establishment/`
 
 Login must:
 
@@ -137,7 +139,20 @@ Bootstrap must return:
 - authenticated boolean
 - public user fields
 - `memberships`
-- `active_membership` only when exactly one active membership exists
+- `active_membership` from the current auth session selected establishment when valid
+
+Switch establishment must:
+
+- require bearer auth
+- store selected establishment on `UserSession`
+- validate active user, active membership, active establishment, and active organization
+- fail closed for invalid, foreign, or inactive establishments
+- return bootstrap payload for the updated auth session
+
+Bootstrap is authenticated-only:
+
+- unauthenticated requests return `401`
+- authenticated requests return `BootstrapResponse`
 
 ## 7. CSRF rules
 
@@ -155,6 +170,12 @@ The frontend must:
 - send `X-CSRFToken` on login, refresh, and logout
 - keep the refresh token in the HttpOnly cookie only
 
+Local Docker + Vite development:
+
+- when using the Vite `/api` proxy, preserve the browser host instead of rewriting it to the internal container hostname
+- configure `CSRF_TRUSTED_ORIGINS` explicitly for local frontend origins such as `http://localhost:5173` and `http://127.0.0.1:5173`
+- do not use wildcard CSRF trusted origins for local convenience
+
 ## 8. Frontend rules
 
 React is a thin client.
@@ -171,6 +192,7 @@ Forbidden:
 
 - storing auth tokens in localStorage or sessionStorage
 - storing auth authority in Zustand
+- storing selected establishment in localStorage, sessionStorage, or Zustand
 - trusting frontend permissions for backend access
 - decoding tokens for permissions
 - hardcoding role or domain access rules as security logic
@@ -221,8 +243,10 @@ Any auth change must include tests for:
 - refresh token rotation
 - old refresh token reuse detection
 - logout revocation
-- bootstrap unauthenticated
+- bootstrap unauthenticated returns `401`
 - bootstrap authenticated
+- switch establishment success
+- switch establishment invalid/foreign/inactive fails closed
 - inactive or suspended user rejection
 - inactive memberships excluded
 - no sensitive fields leaked
