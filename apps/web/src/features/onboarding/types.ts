@@ -2,6 +2,7 @@ import type { components } from '@/api/generated/types'
 
 export type ActivationBlocker = components['schemas']['ActivationBlocker']
 export type ActivationSummaryResponse = components['schemas']['ActivationSummaryResponse']
+export type ActivityDescriptionResponse = components['schemas']['ActivityDescriptionResponse']
 export type ActivityDescriptionUpdateResponse =
   components['schemas']['ActivityDescriptionUpdateResponse']
 export type DetailResponse = components['schemas']['DetailResponse']
