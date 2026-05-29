@@ -11,6 +11,7 @@ import {
   OnboardingLoadingState,
   OnboardingNotice,
 } from '@/features/onboarding/components/onboarding-state'
+import { ProposalCard } from '@/features/onboarding/components/proposal-card'
 import { RuntimeConfigCard } from '@/features/onboarding/components/runtime-config-card'
 import {
   useActivationSummary,
@@ -161,6 +162,8 @@ export function OnboardingPage() {
         activityDescription={activityDescription}
         sessionId={routeParams.sessionId}
       />
+
+      <ProposalCard sessionId={routeParams.sessionId} />
 
       <RuntimeConfigCard
         error={runtimeConfigQuery.error}

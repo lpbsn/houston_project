@@ -1,11 +1,11 @@
-import { CheckCircle2, LoaderCircle, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { ActivationSummaryResponse } from '@/features/onboarding/types'
-import { useMarkReady } from '@/features/onboarding/hooks'
+import { useActivateOnboardingSession, useMarkReady } from '@/features/onboarding/hooks'
 import {
   BlockerList,
   OnboardingErrorState,
@@ -32,10 +32,24 @@ export function ActivationSummaryCard({
   sessionId,
 }: ActivationSummaryCardProps) {
   const markReadyMutation = useMarkReady(sessionId)
+  const activateMutation = useActivateOnboardingSession(sessionId)
   const markReadyBlockers = getOnboardingErrorBlockers(markReadyMutation.error)
+  const activationBlockers = getOnboardingErrorBlockers(activateMutation.error)
+  const isActivated = Boolean(
+    activationSummary?.readiness.session_status === 'activated' &&
+      activationSummary.readiness.establishment_status === 'active',
+  )
 
   const canMarkReady = Boolean(
-    activationSummary?.effective_can_activate &&
+    !isActivated &&
+      activationSummary?.effective_can_activate &&
+      activationSummary.access.can_activate &&
+      activationSummary.readiness.is_ready,
+  )
+  const canActivate = Boolean(
+    !isActivated &&
+      activationSummary?.readiness.session_status === 'ready_for_activation' &&
+      activationSummary.effective_can_activate &&
       activationSummary.access.can_activate &&
       activationSummary.readiness.is_ready,
   )
@@ -57,6 +71,14 @@ export function ActivationSummaryCard({
   async function handleMarkReady() {
     try {
       await markReadyMutation.mutateAsync()
+    } catch {
+      // The mutation state renders the backend error below.
+    }
+  }
+
+  async function handleActivate() {
+    try {
+      await activateMutation.mutateAsync()
     } catch {
       // The mutation state renders the backend error below.
     }
@@ -100,7 +122,7 @@ export function ActivationSummaryCard({
                 : 'border-[#ebe2d5] bg-[#fbf7f0]'
             }
           >
-            {activationSummary.readiness.is_ready ? 'ready' : 'not ready'}
+            {isActivated ? 'activated' : activationSummary.readiness.is_ready ? 'ready' : 'not ready'}
           </Badge>
         </div>
 
@@ -127,7 +149,12 @@ export function ActivationSummaryCard({
           ))}
         </div>
 
-        {activationSummary.blockers.length > 0 ? (
+        {isActivated ? (
+          <div className="flex items-center gap-2 rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <CheckCircle2 className="size-4" />
+            Establishment activation was completed by the backend.
+          </div>
+        ) : activationSummary.blockers.length > 0 ? (
           <BlockerList blockers={activationSummary.blockers} />
         ) : (
           <div className="flex items-center gap-2 rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -152,6 +179,36 @@ export function ActivationSummaryCard({
           <div className="flex items-center gap-2 rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <CheckCircle2 className="size-4" />
             Session readiness was updated by the backend.
+          </div>
+        ) : null}
+
+        {activateMutation.error ? (
+          <div className="space-y-3 rounded-[1rem] border border-[#f4d5d5] bg-[#fff3f2] px-4 py-3 text-sm text-[#9d3b33]">
+            <div>
+              {getOnboardingErrorMessage(
+                activateMutation.error,
+                'Onboarding session could not be activated.',
+              )}
+            </div>
+            {activationBlockers.length > 0 ? <BlockerList blockers={activationBlockers} /> : null}
+          </div>
+        ) : null}
+
+        {activateMutation.isSuccess || isActivated ? (
+          <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="size-4" />
+              Activation is complete.
+            </div>
+            <Button
+              asChild
+              className="h-11 w-full rounded-[1rem] bg-emerald-700 text-white hover:bg-emerald-800 sm:w-auto"
+            >
+              <a href="/app">
+                Go to workspace
+                <ArrowRight className="size-4" />
+              </a>
+            </Button>
           </div>
         ) : null}
 
@@ -188,6 +245,37 @@ export function ActivationSummaryCard({
             endpoint when the backend response allows it.
           </p>
         </div>
+
+        {!isActivated ? (
+          <div className="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-4">
+            <div className="mb-3 flex items-start gap-2 text-sm text-amber-900">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Activation is explicit and final for this onboarding session. The backend will
+                re-check readiness before changing the establishment to active.
+              </span>
+            </div>
+
+            <Button
+              type="button"
+              className="h-11 w-full rounded-[1rem]"
+              disabled={!canActivate || activateMutation.isPending || activateMutation.isSuccess}
+              onClick={handleActivate}
+            >
+              {activateMutation.isPending ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Activating...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="size-4" />
+                  Activate establishment
+                </>
+              )}
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
