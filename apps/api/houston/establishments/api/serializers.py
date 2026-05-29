@@ -291,3 +291,114 @@ class OnboardingErrorResponseSerializer(serializers.Serializer):
     code = serializers.CharField()
     detail = serializers.CharField()
     blockers = ActivationBlockerSerializer(many=True, required=False)
+
+
+class ProposalValidationErrorItemSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    section = serializers.CharField(required=False)
+    field = serializers.CharField(required=False)
+    key = serializers.CharField(required=False)
+
+
+class ProposalCatalogItemSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    reason = serializers.CharField(allow_blank=True, required=False)
+    confidence_score = serializers.FloatField(allow_null=True, required=False)
+
+
+class ProposalDomainOrUnitItemSerializer(ProposalCatalogItemSerializer):
+    related_modules = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+    )
+
+
+class ProposalVocabularyItemSerializer(serializers.Serializer):
+    term = serializers.CharField()
+    meaning = serializers.CharField()
+    mapped_domain_key = serializers.CharField(allow_null=True, required=False)
+    mapped_unit_key = serializers.CharField(allow_null=True, required=False)
+    reason = serializers.CharField(allow_blank=True, required=False)
+
+
+class ProposalRuntimeTagItemSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    related_domain_keys = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+    )
+    reason = serializers.CharField(allow_blank=True, required=False)
+
+
+class ProposalRoutingHintItemSerializer(serializers.Serializer):
+    pattern = serializers.CharField()
+    suggested_domain_keys = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+    )
+    suggested_unit_key = serializers.CharField(allow_null=True, required=False)
+    reason = serializers.CharField(allow_blank=True, required=False)
+    confidence_score = serializers.FloatField(allow_null=True, required=False)
+
+
+class OnboardingProposalPayloadSerializer(serializers.Serializer):
+    schema_version = serializers.CharField()
+    operational_modules = ProposalCatalogItemSerializer(many=True)
+    operational_domains = ProposalDomainOrUnitItemSerializer(many=True)
+    operational_units = ProposalDomainOrUnitItemSerializer(many=True)
+    runtime_vocabulary = ProposalVocabularyItemSerializer(many=True)
+    runtime_tags = ProposalRuntimeTagItemSerializer(many=True)
+    routing_hints = ProposalRoutingHintItemSerializer(many=True)
+
+
+class OnboardingProposalResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    onboarding_session_id = serializers.UUIDField()
+    establishment_id = serializers.UUIDField()
+    source = serializers.CharField()
+    status = serializers.CharField()
+    payload = OnboardingProposalPayloadSerializer()
+    section_validation = serializers.DictField(child=serializers.CharField())
+    validation_errors = ProposalValidationErrorItemSerializer(many=True)
+    created_by_id = serializers.UUIDField(allow_null=True)
+    validated_by_id = serializers.UUIDField(allow_null=True)
+    applied_by_id = serializers.UUIDField(allow_null=True)
+    validated_at = serializers.DateTimeField(allow_null=True)
+    applied_at = serializers.DateTimeField(allow_null=True)
+    last_error_code = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
+class AIOnboardingGenerateRequestSerializer(serializers.Serializer):
+    locale = serializers.CharField(
+        required=False,
+        default="en-US",
+        trim_whitespace=True,
+        allow_blank=False,
+    )
+
+
+class ProposalSectionDecisionRequestSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(
+        choices=[
+            ("accepted", "Accepted"),
+            ("skipped", "Skipped"),
+        ],
+    )
+
+
+class ProposalCommandResponseSerializer(serializers.Serializer):
+    session = OnboardingSessionResponseSerializer()
+    proposal = OnboardingProposalResponseSerializer()
+
+
+class OnboardingProposalErrorResponseSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+    errors = ProposalValidationErrorItemSerializer(many=True, required=False)

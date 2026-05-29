@@ -11,17 +11,26 @@ from houston.establishments.access import (
     get_api_access_context,
     get_onboarding_access_context,
 )
+from houston.establishments.ai_onboarding import (
+    AIOnboardingFallbackFailedError,
+    run_ai_onboarding_interpretation,
+)
 from houston.establishments.api.serializers import (
     ActivationSummaryResponseSerializer,
     ActivityDescriptionRequestSerializer,
     ActivityDescriptionUpdateResponseSerializer,
+    AIOnboardingGenerateRequestSerializer,
     EstablishmentMembershipResponseSerializer,
     MarkReadyResponseSerializer,
     MembershipUpdateRequestSerializer,
     OnboardingErrorResponseSerializer,
+    OnboardingProposalErrorResponseSerializer,
+    OnboardingProposalResponseSerializer,
     OnboardingSessionCreateRequestSerializer,
     OnboardingSessionCreateResponseSerializer,
     OnboardingSessionResponseSerializer,
+    ProposalCommandResponseSerializer,
+    ProposalSectionDecisionRequestSerializer,
     RuntimeConfigResponseSerializer,
     ScopedUserSearchRequestSerializer,
     ScopedUserSearchResultSerializer,
@@ -29,6 +38,7 @@ from houston.establishments.api.serializers import (
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
+    OnboardingProposal,
     OnboardingSession,
 )
 from houston.establishments.permissions import (
@@ -38,12 +48,15 @@ from houston.establishments.permissions import (
 from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
     get_membership_for_management,
+    get_onboarding_proposal_for_actor,
     get_onboarding_session_for_actor,
     get_runtime_config_for_session,
     list_memberships_for_management,
+    list_onboarding_proposals_for_actor,
     search_users_for_establishment,
 )
 from houston.establishments.services import (
+    ActiveOnboardingProposalExistsError,
     ActiveOnboardingSessionExistsError,
     CannotDeactivateLastActiveOwnerError,
     CannotDemoteLastActiveOwnerError,
@@ -53,15 +66,20 @@ from houston.establishments.services import (
     MembershipManagementNotFoundError,
     MembershipUpdateInput,
     OnboardingAccessDeniedError,
+    OnboardingProposalStateError,
+    OnboardingProposalValidationError,
     OnboardingReadinessError,
     OnboardingSessionTerminalError,
     UnsupportedOnboardingSessionSourceModeError,
+    apply_onboarding_proposal,
     build_activation_summary,
     deactivate_membership_for_management,
     mark_onboarding_ready_for_activation,
+    reject_onboarding_proposal,
     start_onboarding_session,
     submit_activity_description,
     update_membership_for_management,
+    validate_onboarding_proposal_section,
 )
 from houston.organizations.models import Organization
 
@@ -566,6 +584,263 @@ class OnboardingSessionMarkReadyView(APIView):
         return Response(response_serializer.data)
 
 
+class OnboardingSessionProposalListView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        responses={
+            200: OnboardingProposalResponseSerializer(many=True),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Lists onboarding proposals for a path-scoped onboarding session.",
+    )
+    def get(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability="configure_runtime",
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        proposals = list_onboarding_proposals_for_actor(
+            actor=request.user,
+            session_id=session_response.id,
+        )
+        if proposals is None:
+            return _not_found_response()
+
+        serializer = OnboardingProposalResponseSerializer(proposals, many=True)
+        return Response(serializer.data)
+
+
+class OnboardingSessionProposalDetailView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        responses={
+            200: OnboardingProposalResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns one onboarding proposal scoped to its onboarding session.",
+    )
+    def get(self, request, session_id, proposal_id):
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability="configure_runtime",
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        serializer = OnboardingProposalResponseSerializer(proposal_response)
+        return Response(serializer.data)
+
+
+class OnboardingSessionProposalAIGenerateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=AIOnboardingGenerateRequestSerializer,
+        responses={
+            201: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            503: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description=(
+            "Runs AI onboarding interpretation for a session. The command creates an "
+            "OnboardingProposal only and never applies runtime configuration."
+        ),
+    )
+    def post(self, request, session_id):
+        serializer = AIOnboardingGenerateRequestSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability="configure_runtime",
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            proposal = run_ai_onboarding_interpretation(
+                session=session_response,
+                actor=request.user,
+                locale=serializer.validated_data["locale"],
+            )
+        except ActiveOnboardingProposalExistsError:
+            return _proposal_conflict_response(
+                code="active_onboarding_proposal_exists",
+                detail="A non-terminal onboarding proposal already exists for this session.",
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except AIOnboardingFallbackFailedError:
+            return Response(
+                {
+                    "code": "ai_onboarding_fallback_failed",
+                    "detail": "AI onboarding could not create a proposal.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return _proposal_command_response(
+            actor=request.user,
+            proposal=proposal,
+            response_status=status.HTTP_201_CREATED,
+        )
+
+
+class OnboardingSessionProposalSectionDecisionView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=ProposalSectionDecisionRequestSerializer,
+        responses={
+            200: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description="Accepts or skips one section of an onboarding proposal.",
+    )
+    def post(self, request, session_id, proposal_id, section):
+        serializer = ProposalSectionDecisionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability="configure_runtime",
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        try:
+            proposal = validate_onboarding_proposal_section(
+                proposal=proposal_response,
+                actor=request.user,
+                section=section,
+                decision=serializer.validated_data["decision"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalValidationError as exc:
+            return _proposal_validation_response(exc)
+        except OnboardingProposalStateError as exc:
+            return _proposal_state_response(str(exc))
+
+        return _proposal_command_response(actor=request.user, proposal=proposal)
+
+
+class OnboardingSessionProposalRejectView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=None,
+        responses={
+            200: ProposalCommandResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description="Rejects an onboarding proposal without applying runtime changes.",
+    )
+    def post(self, request, session_id, proposal_id):
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability="configure_runtime",
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        try:
+            proposal = reject_onboarding_proposal(
+                proposal=proposal_response,
+                actor=request.user,
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalStateError as exc:
+            return _proposal_state_response(str(exc))
+
+        return _proposal_command_response(actor=request.user, proposal=proposal)
+
+
+class OnboardingSessionProposalApplyView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=None,
+        responses={
+            200: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description=(
+            "Applies a validated onboarding proposal into runtime configuration. "
+            "This does not activate the establishment."
+        ),
+    )
+    def post(self, request, session_id, proposal_id):
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability="configure_runtime",
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        try:
+            proposal = apply_onboarding_proposal(
+                proposal=proposal_response,
+                actor=request.user,
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalValidationError as exc:
+            return _proposal_validation_response(exc)
+        except OnboardingProposalStateError as exc:
+            return _proposal_state_response(str(exc))
+        except OnboardingSessionTerminalError:
+            return _terminal_session_response()
+
+        return _proposal_command_response(actor=request.user, proposal=proposal)
+
+
 def _get_onboarding_establishment(*, establishment_id):
     return (
         Establishment.objects.select_related("organization")
@@ -614,6 +889,26 @@ def _get_onboarding_command_session(*, actor, session_id, capability: str):
     return session
 
 
+def _get_onboarding_command_proposal(*, actor, session_id, proposal_id, capability: str):
+    session_response = _get_onboarding_command_session(
+        actor=actor,
+        session_id=session_id,
+        capability=capability,
+    )
+    if isinstance(session_response, Response):
+        return session_response
+
+    proposal = get_onboarding_proposal_for_actor(
+        actor=actor,
+        session_id=session_response.id,
+        proposal_id=proposal_id,
+    )
+    if proposal is None:
+        return _not_found_response()
+
+    return proposal
+
+
 def _build_activation_summary_payload(*, session, actor):
     summary = build_activation_summary(session=session)
     access = get_onboarding_access_context(actor=actor, session=session)
@@ -630,6 +925,48 @@ def _onboarding_session_start_response(*, session, created: bool, response_statu
         }
     )
     return Response(serializer.data, status=response_status)
+
+
+def _proposal_command_response(*, actor, proposal: OnboardingProposal, response_status=200):
+    session = get_onboarding_session_for_actor(
+        actor=actor,
+        session_id=proposal.onboarding_session_id,
+    )
+    serializer = ProposalCommandResponseSerializer(
+        {
+            "session": session or proposal.onboarding_session,
+            "proposal": proposal,
+        }
+    )
+    return Response(serializer.data, status=response_status)
+
+
+def _proposal_validation_response(exc: OnboardingProposalValidationError):
+    return Response(
+        {
+            "code": "invalid_onboarding_proposal",
+            "detail": "Onboarding proposal payload is invalid.",
+            "errors": exc.errors,
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _proposal_state_response(detail: str):
+    return _proposal_conflict_response(
+        code="invalid_onboarding_proposal_state",
+        detail=detail or "Onboarding proposal state does not allow this command.",
+    )
+
+
+def _proposal_conflict_response(*, code: str, detail: str):
+    return Response(
+        {
+            "code": code,
+            "detail": detail,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def _not_found_response():

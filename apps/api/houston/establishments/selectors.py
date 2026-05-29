@@ -9,6 +9,7 @@ from houston.establishments.models import (
     EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipDomain,
+    OnboardingProposal,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
@@ -124,6 +125,31 @@ def get_active_onboarding_session_for_establishment(
     )
 
 
+def list_onboarding_proposals_for_actor(
+    *,
+    actor: User,
+    session_id,
+) -> list[OnboardingProposal] | None:
+    session = get_onboarding_session_for_actor(actor=actor, session_id=session_id)
+    if session is None:
+        return None
+
+    return list(_onboarding_proposal_queryset(session_id=session.id))
+
+
+def get_onboarding_proposal_for_actor(
+    *,
+    actor: User,
+    session_id,
+    proposal_id,
+) -> OnboardingProposal | None:
+    session = get_onboarding_session_for_actor(actor=actor, session_id=session_id)
+    if session is None:
+        return None
+
+    return _onboarding_proposal_queryset(session_id=session.id).filter(id=proposal_id).first()
+
+
 def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
     establishment_id = session.establishment_id
 
@@ -220,6 +246,22 @@ def _onboarding_session_queryset_for_actor(actor: User):
             "establishment",
             "establishment__organization",
             "started_by",
+        )
+        .order_by("-updated_at", "-created_at", "id")
+    )
+
+
+def _onboarding_proposal_queryset(*, session_id):
+    return (
+        OnboardingProposal.objects.filter(onboarding_session_id=session_id)
+        .select_related(
+            "onboarding_session",
+            "onboarding_session__organization",
+            "onboarding_session__establishment",
+            "establishment",
+            "created_by",
+            "validated_by",
+            "applied_by",
         )
         .order_by("-updated_at", "-created_at", "id")
     )

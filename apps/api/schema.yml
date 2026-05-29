@@ -821,6 +821,350 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingErrorResponse'
           description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/:
+    get:
+      operationId: v1_onboarding_sessions_proposals_list
+      description: Lists onboarding proposals for a path-scoped onboarding session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OnboardingProposalResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/:
+    get:
+      operationId: v1_onboarding_sessions_proposals_retrieve
+      description: Returns one onboarding proposal scoped to its onboarding session.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/:
+    post:
+      operationId: v1_onboarding_sessions_proposals_apply_create
+      description: Applies a validated onboarding proposal into runtime configuration.
+        This does not activate the establishment.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalCommandResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/:
+    post:
+      operationId: v1_onboarding_sessions_proposals_reject_create
+      description: Rejects an onboarding proposal without applying runtime changes.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalCommandResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/sections/{section}/decision/:
+    post:
+      operationId: v1_onboarding_sessions_proposals_sections_decision_create
+      description: Accepts or skips one section of an onboarding proposal.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: section
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalSectionDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalSectionDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalSectionDecisionRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalCommandResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/ai-generate/:
+    post:
+      operationId: v1_onboarding_sessions_proposals_ai_generate_create
+      description: Runs AI onboarding interpretation for a session. The command creates
+        an OnboardingProposal only and never applies runtime configuration.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIOnboardingGenerateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIOnboardingGenerateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIOnboardingGenerateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalCommandResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
   /api/v1/onboarding-sessions/{session_id}/runtime-config/:
     get:
       operationId: v1_onboarding_sessions_runtime_config_retrieve
@@ -857,6 +1201,12 @@ paths:
           description: ''
 components:
   schemas:
+    AIOnboardingGenerateRequest:
+      type: object
+      properties:
+        locale:
+          type: string
+          default: en-US
     ActivationBlocker:
       type: object
       properties:
@@ -1052,6 +1402,14 @@ components:
           type: string
       required:
       - detail
+    DecisionEnum:
+      enum:
+      - accepted
+      - skipped
+      type: string
+      description: |-
+        * `accepted` - Accepted
+        * `skipped` - Skipped
     DetailResponse:
       type: object
       properties:
@@ -1245,6 +1603,128 @@ components:
       - id
       - name
       - status
+    OnboardingProposalErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalValidationErrorItem'
+      required:
+      - code
+      - detail
+    OnboardingProposalPayload:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        operational_modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalCatalogItem'
+        operational_domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalDomainOrUnitItem'
+        operational_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalDomainOrUnitItem'
+        runtime_vocabulary:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalVocabularyItem'
+        runtime_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalRuntimeTagItem'
+        routing_hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalRoutingHintItem'
+      required:
+      - operational_domains
+      - operational_modules
+      - operational_units
+      - routing_hints
+      - runtime_tags
+      - runtime_vocabulary
+      - schema_version
+    OnboardingProposalResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        onboarding_session_id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        status:
+          type: string
+        payload:
+          $ref: '#/components/schemas/OnboardingProposalPayload'
+        section_validation:
+          type: object
+          additionalProperties:
+            type: string
+        validation_errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalValidationErrorItem'
+        created_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        validated_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        applied_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error_code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - applied_at
+      - applied_by_id
+      - created_at
+      - created_by_id
+      - establishment_id
+      - id
+      - last_error_code
+      - onboarding_session_id
+      - payload
+      - section_validation
+      - source
+      - status
+      - updated_at
+      - validated_at
+      - validated_by_id
+      - validation_errors
     OnboardingSessionCreateRequest:
       type: object
       properties:
@@ -1342,6 +1822,126 @@ components:
           type: array
           items:
             type: string
+    ProposalCatalogItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - key
+      - label
+    ProposalCommandResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/OnboardingSessionResponse'
+        proposal:
+          $ref: '#/components/schemas/OnboardingProposalResponse'
+      required:
+      - proposal
+      - session
+    ProposalDomainOrUnitItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+        related_modules:
+          type: array
+          items:
+            type: string
+      required:
+      - key
+      - label
+    ProposalRoutingHintItem:
+      type: object
+      properties:
+        pattern:
+          type: string
+        suggested_domain_keys:
+          type: array
+          items:
+            type: string
+        suggested_unit_key:
+          type: string
+          nullable: true
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - pattern
+    ProposalRuntimeTagItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        related_domain_keys:
+          type: array
+          items:
+            type: string
+        reason:
+          type: string
+      required:
+      - key
+      - label
+    ProposalSectionDecisionRequest:
+      type: object
+      properties:
+        decision:
+          $ref: '#/components/schemas/DecisionEnum'
+      required:
+      - decision
+    ProposalValidationErrorItem:
+      type: object
+      properties:
+        code:
+          type: string
+        section:
+          type: string
+        field:
+          type: string
+        key:
+          type: string
+      required:
+      - code
+    ProposalVocabularyItem:
+      type: object
+      properties:
+        term:
+          type: string
+        meaning:
+          type: string
+        mapped_domain_key:
+          type: string
+          nullable: true
+        mapped_unit_key:
+          type: string
+          nullable: true
+        reason:
+          type: string
+      required:
+      - meaning
+      - term
     RoleEnum:
       enum:
       - owner

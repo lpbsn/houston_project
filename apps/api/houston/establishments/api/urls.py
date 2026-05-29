@@ -9,6 +9,12 @@ from houston.establishments.api.views import (
     OnboardingSessionDescriptionView,
     OnboardingSessionDetailView,
     OnboardingSessionMarkReadyView,
+    OnboardingSessionProposalAIGenerateView,
+    OnboardingSessionProposalApplyView,
+    OnboardingSessionProposalDetailView,
+    OnboardingSessionProposalListView,
+    OnboardingSessionProposalRejectView,
+    OnboardingSessionProposalSectionDecisionView,
     OnboardingSessionRuntimeConfigView,
     ScopedUserSearchView,
 )
@@ -43,6 +49,39 @@ urlpatterns = [
         "onboarding-sessions/<uuid:session_id>/mark-ready/",
         OnboardingSessionMarkReadyView.as_view(),
         name="onboarding-session-mark-ready",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/proposals/",
+        OnboardingSessionProposalListView.as_view(),
+        name="onboarding-session-proposal-list",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/proposals/ai-generate/",
+        OnboardingSessionProposalAIGenerateView.as_view(),
+        name="onboarding-session-proposal-ai-generate",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/",
+        OnboardingSessionProposalDetailView.as_view(),
+        name="onboarding-session-proposal-detail",
+    ),
+    path(
+        (
+            "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/"
+            "sections/<str:section>/decision/"
+        ),
+        OnboardingSessionProposalSectionDecisionView.as_view(),
+        name="onboarding-session-proposal-section-decision",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/reject/",
+        OnboardingSessionProposalRejectView.as_view(),
+        name="onboarding-session-proposal-reject",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/apply/",
+        OnboardingSessionProposalApplyView.as_view(),
+        name="onboarding-session-proposal-apply",
     ),
     path(
         "establishments/<uuid:establishment_id>/memberships/",
