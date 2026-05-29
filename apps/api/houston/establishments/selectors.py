@@ -219,12 +219,6 @@ def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
     }
 
 
-def get_activation_summary_for_session(*, session: OnboardingSession) -> dict:
-    from houston.establishments.services import build_activation_summary
-
-    return build_activation_summary(session=session)
-
-
 def _onboarding_session_queryset_for_actor(actor: User):
     accessible_establishment_ids = EstablishmentMembership.objects.filter(
         user=actor,

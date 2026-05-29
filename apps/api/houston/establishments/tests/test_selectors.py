@@ -18,12 +18,12 @@ from houston.establishments.models import (
     RuntimeVocabulary,
 )
 from houston.establishments.selectors import (
-    get_activation_summary_for_session,
     get_active_onboarding_session_for_establishment,
     get_onboarding_session_for_actor,
     get_runtime_config_for_session,
     list_onboarding_sessions_for_actor,
 )
+from houston.establishments.services import build_activation_summary
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -238,7 +238,7 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
         operational_domain=domain,
     )
 
-    summary = get_activation_summary_for_session(session=session)
+    summary = build_activation_summary(session=session)
 
     assert "active_modules" in summary
     assert "active_domains" in summary

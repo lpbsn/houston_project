@@ -16,6 +16,7 @@ from houston.establishments.ai_onboarding import (
     run_ai_onboarding_interpretation,
 )
 from houston.establishments.api.serializers import (
+    ActivationResponseSerializer,
     ActivationSummaryResponseSerializer,
     ActivityDescriptionRequestSerializer,
     ActivityDescriptionUpdateResponseSerializer,
@@ -62,6 +63,7 @@ from houston.establishments.services import (
     CannotDemoteLastActiveOwnerError,
     InvalidActivityDescriptionError,
     InvalidMembershipDomainAssignmentError,
+    InvalidOnboardingActivationStateError,
     InvalidOnboardingSessionScopeError,
     MembershipManagementNotFoundError,
     MembershipUpdateInput,
@@ -71,6 +73,7 @@ from houston.establishments.services import (
     OnboardingReadinessError,
     OnboardingSessionTerminalError,
     UnsupportedOnboardingSessionSourceModeError,
+    activate_onboarding_session,
     apply_onboarding_proposal,
     build_activation_summary,
     deactivate_membership_for_management,
@@ -292,6 +295,13 @@ class ScopedUserSearchView(APIView):
         return Response(response_serializer.data)
 
 
+# Onboarding HTTP routes authorize via get_onboarding_access_context (path-scoped session,
+# draft/active establishment). They do not use CanManageRuntimeContext, which applies to
+# active-establishment workspace membership (session-selected context).
+_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME = "configure_runtime"
+_ONBOARDING_CAPABILITY_ACTIVATE = "activate"
+
+
 class OnboardingSessionCreateView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -444,7 +454,7 @@ class OnboardingSessionDescriptionView(APIView):
         session_response = _get_onboarding_command_session(
             actor=request.user,
             session_id=session_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(session_response, Response):
             return session_response
@@ -547,7 +557,7 @@ class OnboardingSessionMarkReadyView(APIView):
         session_response = _get_onboarding_command_session(
             actor=request.user,
             session_id=session_id,
-            capability="activate",
+            capability=_ONBOARDING_CAPABILITY_ACTIVATE,
         )
         if isinstance(session_response, Response):
             return session_response
@@ -584,6 +594,73 @@ class OnboardingSessionMarkReadyView(APIView):
         return Response(response_serializer.data)
 
 
+class OnboardingSessionActivateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=None,
+        responses={
+            200: ActivationResponseSerializer,
+            400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description=(
+            "Activates a marked-ready onboarding session and its draft establishment. "
+            "Activation is explicit and backend-controlled."
+        ),
+    )
+    def post(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability=_ONBOARDING_CAPABILITY_ACTIVATE,
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            result = activate_onboarding_session(
+                session=session_response,
+                actor=request.user,
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingReadinessError as exc:
+            return Response(
+                {
+                    "code": "activation_readiness_failed",
+                    "detail": "Onboarding session is not ready for activation.",
+                    "blockers": exc.readiness["blockers"],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidOnboardingActivationStateError as exc:
+            return Response(
+                {
+                    "code": "invalid_onboarding_activation_state",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        session = result["session"]
+        response_serializer = ActivationResponseSerializer(
+            {
+                "session": session,
+                "activation_summary": _build_activation_summary_payload(
+                    session=session,
+                    actor=request.user,
+                ),
+            }
+        )
+        return Response(response_serializer.data)
+
+
 class OnboardingSessionProposalListView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -602,7 +679,7 @@ class OnboardingSessionProposalListView(APIView):
         session_response = _get_onboarding_command_session(
             actor=request.user,
             session_id=session_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(session_response, Response):
             return session_response
@@ -637,7 +714,7 @@ class OnboardingSessionProposalDetailView(APIView):
             actor=request.user,
             session_id=session_id,
             proposal_id=proposal_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(proposal_response, Response):
             return proposal_response
@@ -674,7 +751,7 @@ class OnboardingSessionProposalAIGenerateView(APIView):
         session_response = _get_onboarding_command_session(
             actor=request.user,
             session_id=session_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(session_response, Response):
             return session_response
@@ -733,7 +810,7 @@ class OnboardingSessionProposalSectionDecisionView(APIView):
             actor=request.user,
             session_id=session_id,
             proposal_id=proposal_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(proposal_response, Response):
             return proposal_response
@@ -776,7 +853,7 @@ class OnboardingSessionProposalRejectView(APIView):
             actor=request.user,
             session_id=session_id,
             proposal_id=proposal_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(proposal_response, Response):
             return proposal_response
@@ -819,7 +896,7 @@ class OnboardingSessionProposalApplyView(APIView):
             actor=request.user,
             session_id=session_id,
             proposal_id=proposal_id,
-            capability="configure_runtime",
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
         )
         if isinstance(proposal_response, Response):
             return proposal_response
@@ -880,11 +957,19 @@ def _get_onboarding_command_session(*, actor, session_id, capability: str):
     }:
         return _forbidden_response()
 
-    if capability == "configure_runtime" and not access.can_configure_runtime:
+    if capability == _ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME and not access.can_configure_runtime:
         return _not_found_response()
 
-    if capability == "activate" and not access.can_activate:
-        return _not_found_response()
+    if capability == _ONBOARDING_CAPABILITY_ACTIVATE and not access.can_activate:
+        establishment = access.establishment
+        is_idempotent_activate = (
+            session.status == OnboardingSession.Status.ACTIVATED
+            and establishment is not None
+            and establishment.status == Establishment.Status.ACTIVE
+            and access.can_manage
+        )
+        if not is_idempotent_activate:
+            return _not_found_response()
 
     return session
 

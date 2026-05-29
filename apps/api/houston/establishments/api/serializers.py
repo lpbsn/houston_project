@@ -287,6 +287,11 @@ class MarkReadyResponseSerializer(serializers.Serializer):
     activation_summary = ActivationSummaryResponseSerializer()
 
 
+class ActivationResponseSerializer(serializers.Serializer):
+    session = OnboardingSessionResponseSerializer()
+    activation_summary = ActivationSummaryResponseSerializer()
+
+
 class OnboardingErrorResponseSerializer(serializers.Serializer):
     code = serializers.CharField()
     detail = serializers.CharField()

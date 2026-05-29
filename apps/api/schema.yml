@@ -671,6 +671,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/onboarding-sessions/{session_id}/activate/:
+    post:
+      operationId: v1_onboarding_sessions_activate_create
+      description: Activates a marked-ready onboarding session and its draft establishment.
+        Activation is explicit and backend-controlled.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
   /api/v1/onboarding-sessions/{session_id}/activation-summary/:
     get:
       operationId: v1_onboarding_sessions_activation_summary_retrieve
@@ -1246,6 +1299,16 @@ components:
       - is_ready
       - sections
       - session_status
+    ActivationResponse:
+      type: object
+      properties:
+        session:
+          $ref: '#/components/schemas/OnboardingSessionResponse'
+        activation_summary:
+          $ref: '#/components/schemas/ActivationSummaryResponse'
+      required:
+      - activation_summary
+      - session
     ActivationSummaryResponse:
       type: object
       properties:

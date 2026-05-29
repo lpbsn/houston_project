@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
+from houston.ai.models import AIUsageLog
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     Establishment,
@@ -596,4 +597,284 @@ def test_manager_cannot_mark_ready_even_when_readiness_passes(api_client):
     assert response.status_code == 403
     session.refresh_from_db()
     assert session.status == OnboardingSession.Status.STARTED
+    assert session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_activate_success_transitions_ready_session_and_establishment(api_client):
+    actor = create_user(username="activate_owner")
+    session = create_onboarding_session(actor=actor)
+    create_ready_runtime(session, actor)
+
+    access_token = login(api_client, user=actor)
+    mark_ready_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/mark-ready/",
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert mark_ready_response.status_code == 200
+    session.refresh_from_db()
+    ready_at = session.ready_for_activation_at
+
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session"]["status"] == OnboardingSession.Status.ACTIVATED
+    assert body["session"]["activated_at"] is not None
+    assert body["activation_summary"]["establishment"]["status"] == Establishment.Status.ACTIVE
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
+    assert session.ready_for_activation_at == ready_at
+    assert session.activated_at is not None
+    assert session.establishment.status == Establishment.Status.ACTIVE
+    assert AIUsageLog.objects.count() == 0
+
+
+def test_activate_is_idempotent_for_same_activated_session(api_client):
+    actor = create_user(username="activate_idempotent_owner")
+    session = create_onboarding_session(actor=actor)
+    create_ready_runtime(session, actor)
+
+    access_token = login(api_client, user=actor)
+    mark_ready_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/mark-ready/",
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert mark_ready_response.status_code == 200
+    first_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert first_response.status_code == 200
+    session.refresh_from_db()
+    activated_at = session.activated_at
+
+    second_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert second_response.status_code == 200
+    assert second_response.json()["session"]["status"] == OnboardingSession.Status.ACTIVATED
+    session.refresh_from_db()
+    assert session.activated_at == activated_at
+
+
+def test_activate_blocked_when_readiness_fails(api_client):
+    actor = create_user(username="activate_blocked_owner")
+    session = create_onboarding_session(actor=actor)
+    session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    session.ready_for_activation_at = timezone.now()
+    session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+
+    access_token = login(api_client, user=actor)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "activation_readiness_failed"
+    assert response.json()["blockers"]
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
+    assert session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_activate_conflicts_when_session_is_not_marked_ready(api_client):
+    actor = create_user(username="activate_not_ready_owner")
+    session = create_onboarding_session(actor=actor)
+    create_ready_runtime(session, actor)
+
+    access_token = login(api_client, user=actor)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "invalid_onboarding_activation_state"
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
+    assert session.status == OnboardingSession.Status.STARTED
+    assert session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_activate_conflicts_when_ready_timestamp_is_missing(api_client):
+    actor = create_user(username="activate_missing_ready_timestamp_owner")
+    session = create_onboarding_session(actor=actor)
+    create_ready_runtime(session, actor)
+    session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    session.ready_for_activation_at = None
+    session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+
+    access_token = login(api_client, user=actor)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "invalid_onboarding_activation_state"
+    session.refresh_from_db()
+    assert session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+
+
+def test_activate_conflicts_when_establishment_is_already_active(api_client):
+    actor = create_user(username="activate_already_active_owner")
+    session = create_onboarding_session(actor=actor)
+    create_ready_runtime(session, actor)
+    session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    session.ready_for_activation_at = timezone.now()
+    session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+    session.establishment.status = Establishment.Status.ACTIVE
+    session.establishment.save(update_fields=["status", "updated_at"])
+
+    access_token = login(api_client, user=actor)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 404
+    session.refresh_from_db()
+    assert session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert session.activated_at is None
+
+
+def test_manager_cannot_activate_even_when_readiness_passes(api_client):
+    owner = create_user(username="activate_owner_for_manager_case")
+    session = create_onboarding_session(actor=owner)
+    domains = create_ready_runtime(session, owner)
+    manager = create_user(username="activate_manager")
+    manager_membership = EstablishmentMembership.objects.create(
+        user=manager,
+        establishment=session.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    MembershipDomain.objects.create(
+        membership=manager_membership,
+        operational_domain=domains[0],
+    )
+    session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    session.ready_for_activation_at = timezone.now()
+    session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+
+    access_token = login(api_client, user=manager)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
+    assert session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_foreign_actor_cannot_activate_onboarding_session(api_client):
+    owner = create_user(username="activate_foreign_owner")
+    foreign_actor = create_user(username="activate_foreign_actor")
+    session = create_onboarding_session(actor=owner)
+    create_ready_runtime(session, owner)
+    session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    session.ready_for_activation_at = timezone.now()
+    session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+
+    access_token = login(api_client, user=foreign_actor)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 404
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
+    assert session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert session.establishment.status == Establishment.Status.DRAFT
+
+
+def _add_staff_membership(*, session: OnboardingSession) -> User:
+    staff = create_user(username=f"onboarding_staff_{uuid.uuid4().hex[:6]}")
+    EstablishmentMembership.objects.create(
+        user=staff,
+        establishment=session.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    return staff
+
+
+def test_staff_cannot_access_onboarding_session_reads(api_client):
+    owner = create_user(username="onboarding_staff_read_owner")
+    session = create_onboarding_session(actor=owner)
+    staff = _add_staff_membership(session=session)
+
+    access_token = login(api_client, user=staff)
+    for path in (
+        f"/api/v1/onboarding-sessions/{session.id}/",
+        f"/api/v1/onboarding-sessions/{session.id}/runtime-config/",
+        f"/api/v1/onboarding-sessions/{session.id}/activation-summary/",
+    ):
+        response = api_client.get(path, **auth_headers(access_token))
+        assert response.status_code == 404
+
+
+def test_staff_cannot_submit_activity_description(api_client):
+    owner = create_user(username="onboarding_staff_description_owner")
+    session = create_onboarding_session(actor=owner)
+    staff = _add_staff_membership(session=session)
+
+    access_token = login(api_client, user=staff)
+    response = api_client.patch(
+        f"/api/v1/onboarding-sessions/{session.id}/description/",
+        {"description": "A" * ACTIVITY_DESCRIPTION_MIN_LENGTH},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+
+
+def test_staff_cannot_mark_ready_or_activate(api_client):
+    owner = create_user(username="onboarding_staff_activate_owner")
+    session = create_onboarding_session(actor=owner)
+    create_ready_runtime(session, owner)
+    staff = _add_staff_membership(session=session)
+    session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    session.ready_for_activation_at = timezone.now()
+    session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+
+    access_token = login(api_client, user=staff)
+    mark_ready_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/mark-ready/",
+        format="json",
+        **auth_headers(access_token),
+    )
+    activate_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/activate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert mark_ready_response.status_code == 403
+    assert activate_response.status_code == 403
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
     assert session.establishment.status == Establishment.Status.DRAFT

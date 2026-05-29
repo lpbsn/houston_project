@@ -2,11 +2,11 @@
 
 ## Status
 
-Active Phase 2 source of truth.
+**Complete** (closure pass 2026-05-29).
 
-This document was created during a documentation-only task. The documentation task did not implement backend code, frontend code, migrations, OpenAPI changes, generated frontend types, or tests.
-
-Future Phase 2 implementation sub-phases are expected to change code according to the ordered plan below.
+This document remains the Phase 2 source of truth for requirements and sub-phase history.
+Implementation through Sub-phase 10 is done; see **Phase 2 closure** below for deferred
+items and Phase 3 entry assumptions.
 
 ## Authority order
 
@@ -80,22 +80,23 @@ implemented:
 - `RoutingHint`
 - `RoutingHintDomain`
 
-Current repository state confirms these Phase 2 items are not implemented:
+Current repository state confirms these Phase 2 items are **implemented**:
 
-- onboarding activation service
-- onboarding session API
-- runtime config API
-- runtime config frontend UI
-- activation summary API
-- section validation workflow
-- default template proposal flow
-- onboarding proposal API
-- `OnboardingProposal`
-- `apply_onboarding_proposal`
-- manual/template proposal apply flow
-- real AI onboarding provider integration
+- onboarding access (`get_onboarding_access_context`), selectors, and services
+- activation readiness, activation summary, mark-ready, and `activate_onboarding_session`
+- onboarding session API under `/api/v1/onboarding-sessions/`
+- runtime config read API (`GET .../runtime-config/`)
+- `OnboardingProposal` model, validation, section decisions, reject, and `apply_onboarding_proposal`
+- proposal list/detail, AI generate (`POST .../proposals/ai-generate/`), template fallback
+- real AI onboarding provider (`houston.establishments.ai_onboarding`) and `AIUsageLog`
+- mobile-first onboarding UI at `/onboarding` (`apps/web/src/features/onboarding/`)
+- generated OpenAPI types and TanStack Query hooks
 
-No runtime/onboarding API endpoint is currently confirmed in `apps/api/schema.yml`.
+Runtime configuration **writes** during onboarding use proposal apply (not `PUT
+runtime-config`). Manual/template proposals are created in services and tests; there is no
+HTTP create-proposal endpoint yet.
+
+All onboarding endpoints above are present in `apps/api/schema.yml`.
 
 ## Archived reference alignment
 
@@ -1153,6 +1154,69 @@ this plan, stop and report:
 - exact code/doc conflict
 - recommended resolution
 - why proceeding would be risky
+
+## Phase 2 closure (2026-05-29)
+
+Closure verified implementation against the Global Phase Definition of Done below.
+No new product capabilities were added during closure; Staff RBAC API tests and
+documentation alignment were updated.
+
+### Closure criteria (met)
+
+- Models, services, APIs, AI provider, `AIUsageLog`, frontend UI, and OpenAPI contract
+  are implemented and tested.
+- Draft establishments remain excluded from default auth bootstrap.
+- Manager and Staff cannot manage onboarding commands; Owner/Director path-scoped access
+  is enforced.
+- Frontend uses generated types and TanStack Query; no OpenAI keys in the web app.
+
+### Explicitly deferred (not Phase 2 blockers)
+
+| Item | Notes |
+|------|--------|
+| `PUT /onboarding-sessions/{id}/runtime-config/` | Runtime writes use proposal apply |
+| HTTP manual/template proposal create | Service-level only; UI uses AI generate + backend template fallback |
+| `GET /establishments/{id}/runtime-config/` | Post-activation read not exposed |
+| `GET /onboarding-sessions/` list | Selector exists; no list route |
+| `AIUsageLog` cost estimate | No cost field on model |
+| `AIUsageLog` `started` / `failed` rows | Only succeeded / fallback_* written today |
+| UI `source_mode: template` session start | API supports; web starts `manual` only |
+| Fully manual runtime UI without AI | Runtime card is read-only; population via proposal apply |
+
+### Known debt / risks
+
+- `CanManageRuntimeContext` is retained intentionally for future active-establishment
+  runtime APIs (workspace session context). Onboarding-session views use
+  `get_onboarding_access_context` instead.
+- Apply clears `ready_for_activation_at`; operators must mark-ready again after runtime
+  changes.
+- Production rate limiting for auth endpoints remains a later hardening task.
+
+### Phase 3 entry assumptions
+
+Phase 3 (Observation / Media / Transcription) may assume:
+
+- Active establishments have runtime modules/domains (and optional vocabulary/tags/hints/units).
+- Phase 1 auth, membership RBAC, and establishment scoping unchanged.
+- Onboarding AI (`ai_domain = onboarding`) is separate from future observation pipeline AI.
+- OpenAPI + generated TypeScript client workflow is established.
+
+Phase 3 must not assume: Observation APIs, Signal/Action feeds, post-activation runtime admin
+HTTP API, or realtime invalidation from Phase 2.
+
+### Manual E2E smoke (reference)
+
+1. Open `/onboarding?establishmentId={draft_uuid}` as Owner/Director.
+2. Start session → submit description (≥50 chars) → generate AI proposal (or template fallback).
+3. Accept/skip proposal sections → apply → inspect runtime-config GET.
+4. Ensure activation minimums (managers/domains via membership APIs if needed).
+5. Mark ready → activate → confirm bootstrap lists active establishment.
+
+Closure automated coverage: API integration tests exercise description submit, proposal
+section decisions, apply, mark-ready, activate, and bootstrap exclusion for draft
+establishments (`test_onboarding_api.py`, `test_onboarding_proposal_api.py`). Staff and
+Manager denial tests confirm command endpoints return `403` and read-only session paths
+return `404` when the actor lacks onboarding authority.
 
 ## Global Phase Definition of Done
 

@@ -2,6 +2,7 @@ import pytest
 from django.utils import timezone
 
 from houston.accounts.models import User
+from houston.ai.models import AIUsageLog
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     Establishment,
@@ -14,9 +15,11 @@ from houston.establishments.models import (
 )
 from houston.establishments.services import (
     InvalidActivityDescriptionError,
+    InvalidOnboardingActivationStateError,
     OnboardingAccessDeniedError,
     OnboardingReadinessError,
     OnboardingSessionTerminalError,
+    activate_onboarding_session,
     build_activation_summary,
     compute_activation_readiness,
     mark_onboarding_ready_for_activation,
@@ -308,6 +311,176 @@ def test_mark_ready_denies_manager_even_when_readiness_passes(onboarding_session
             session=onboarding_session,
             actor=manager,
         )
+
+
+def test_activate_onboarding_session_success_for_owner(onboarding_session, owner):
+    create_ready_runtime(onboarding_session, owner)
+    mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
+    onboarding_session.refresh_from_db()
+    ready_at = onboarding_session.ready_for_activation_at
+
+    result = activate_onboarding_session(session=onboarding_session, actor=owner)
+    onboarding_session.refresh_from_db()
+    onboarding_session.establishment.refresh_from_db()
+
+    assert result["activated"] is True
+    assert result["effective_can_activate"] is True
+    assert onboarding_session.status == OnboardingSession.Status.ACTIVATED
+    assert onboarding_session.activated_at is not None
+    assert onboarding_session.ready_for_activation_at == ready_at
+    assert onboarding_session.establishment.status == Establishment.Status.ACTIVE
+    assert AIUsageLog.objects.count() == 0
+
+
+def test_activate_onboarding_session_success_for_director(onboarding_session, owner):
+    create_ready_runtime(onboarding_session, owner)
+    director = User.objects.create_user(
+        username="director_activate",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=director,
+        establishment=onboarding_session.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    mark_onboarding_ready_for_activation(session=onboarding_session, actor=director)
+
+    activate_onboarding_session(session=onboarding_session, actor=director)
+    onboarding_session.refresh_from_db()
+    onboarding_session.establishment.refresh_from_db()
+
+    assert onboarding_session.status == OnboardingSession.Status.ACTIVATED
+    assert onboarding_session.establishment.status == Establishment.Status.ACTIVE
+
+
+def test_activate_onboarding_session_is_idempotent_for_same_activated_session(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+    mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
+    activate_onboarding_session(session=onboarding_session, actor=owner)
+    onboarding_session.refresh_from_db()
+    activated_at = onboarding_session.activated_at
+
+    result = activate_onboarding_session(session=onboarding_session, actor=owner)
+    onboarding_session.refresh_from_db()
+
+    assert result["activated"] is False
+    assert onboarding_session.status == OnboardingSession.Status.ACTIVATED
+    assert onboarding_session.activated_at == activated_at
+
+
+def test_activate_onboarding_session_requires_mark_ready_status(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+
+    with pytest.raises(InvalidOnboardingActivationStateError):
+        activate_onboarding_session(session=onboarding_session, actor=owner)
+
+    onboarding_session.refresh_from_db()
+    onboarding_session.establishment.refresh_from_db()
+    assert onboarding_session.status == OnboardingSession.Status.STARTED
+    assert onboarding_session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_activate_onboarding_session_requires_ready_timestamp(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+    onboarding_session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    onboarding_session.ready_for_activation_at = None
+    onboarding_session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+
+    with pytest.raises(InvalidOnboardingActivationStateError):
+        activate_onboarding_session(session=onboarding_session, actor=owner)
+
+    onboarding_session.refresh_from_db()
+    onboarding_session.establishment.refresh_from_db()
+    assert onboarding_session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert onboarding_session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_activate_onboarding_session_rejects_active_establishment_before_activation(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+    onboarding_session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
+    onboarding_session.ready_for_activation_at = timezone.now()
+    onboarding_session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
+    onboarding_session.establishment.status = Establishment.Status.ACTIVE
+    onboarding_session.establishment.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(InvalidOnboardingActivationStateError):
+        activate_onboarding_session(session=onboarding_session, actor=owner)
+
+    onboarding_session.refresh_from_db()
+    assert onboarding_session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert onboarding_session.activated_at is None
+
+
+def test_activate_onboarding_session_recomputes_readiness_before_transition(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+    mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
+    OperationalModule.objects.filter(establishment=onboarding_session.establishment).update(
+        active=False,
+    )
+
+    with pytest.raises(OnboardingReadinessError) as exc_info:
+        activate_onboarding_session(session=onboarding_session, actor=owner)
+
+    onboarding_session.refresh_from_db()
+    onboarding_session.establishment.refresh_from_db()
+    assert "missing_active_module" in blocker_codes(exc_info.value.readiness)
+    assert onboarding_session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
+    assert onboarding_session.establishment.status == Establishment.Status.DRAFT
+
+
+def test_activate_onboarding_session_denies_manager_even_when_ready(
+    onboarding_session,
+    owner,
+):
+    domains = create_ready_runtime(onboarding_session, owner)
+    manager = User.objects.create_user(
+        username="manager_denied_activation",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    manager_membership = EstablishmentMembership.objects.create(
+        user=manager,
+        establishment=onboarding_session.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    MembershipDomain.objects.create(
+        membership=manager_membership,
+        operational_domain=domains[0],
+    )
+    mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
+
+    with pytest.raises(OnboardingAccessDeniedError):
+        activate_onboarding_session(session=onboarding_session, actor=manager)
+
+
+def test_activate_onboarding_session_rejects_terminal_nonactivated_session(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+    onboarding_session.status = OnboardingSession.Status.CANCELED
+    onboarding_session.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(InvalidOnboardingActivationStateError):
+        activate_onboarding_session(session=onboarding_session, actor=owner)
 
 
 def test_build_activation_summary_uses_active_module_and_domain_names(

@@ -72,6 +72,10 @@ class OnboardingSessionTerminalError(Exception):
     pass
 
 
+class InvalidOnboardingActivationStateError(Exception):
+    pass
+
+
 class InvalidActivityDescriptionError(Exception):
     pass
 
@@ -1324,6 +1328,83 @@ def mark_onboarding_ready_for_activation(
         "readiness": readiness,
         "access": access,
         "effective_can_activate": effective_can_activate,
+    }
+
+
+@transaction.atomic
+def activate_onboarding_session(
+    *,
+    session: OnboardingSession,
+    actor,
+) -> dict:
+    session = _lock_onboarding_session(session)
+    establishment = (
+        Establishment.objects.select_for_update()
+        .select_related("organization")
+        .get(id=session.establishment_id)
+    )
+    session.establishment = establishment
+    session.organization = establishment.organization
+
+    if (
+        session.status == OnboardingSession.Status.ACTIVATED
+        and session.activated_at is not None
+        and establishment.status == Establishment.Status.ACTIVE
+    ):
+        access = get_onboarding_access_context(actor=actor, session=session)
+        if not access.can_manage:
+            raise OnboardingAccessDeniedError
+
+        readiness = compute_activation_readiness(session=session)
+        return {
+            "session": session,
+            "readiness": readiness,
+            "access": access,
+            "effective_can_activate": False,
+            "activated": False,
+        }
+
+    if OnboardingSession.is_terminal_status(session.status):
+        raise InvalidOnboardingActivationStateError(
+            "Terminal onboarding sessions cannot be activated."
+        )
+
+    access = get_onboarding_access_context(actor=actor, session=session)
+    if not access.can_manage:
+        raise OnboardingAccessDeniedError
+
+    if establishment.status != Establishment.Status.DRAFT:
+        raise InvalidOnboardingActivationStateError("Only draft establishments can be activated.")
+
+    if session.status != OnboardingSession.Status.READY_FOR_ACTIVATION:
+        raise InvalidOnboardingActivationStateError(
+            "Onboarding session must be marked ready before activation."
+        )
+
+    if session.ready_for_activation_at is None:
+        raise InvalidOnboardingActivationStateError(
+            "Onboarding session must have a ready timestamp before activation."
+        )
+
+    readiness = compute_activation_readiness(session=session)
+    effective_can_activate = readiness["is_ready"] and access.can_activate
+    if not effective_can_activate:
+        raise OnboardingReadinessError(readiness)
+
+    now = timezone.now()
+    establishment.status = Establishment.Status.ACTIVE
+    establishment.save(update_fields=["status", "updated_at"])
+
+    session.status = OnboardingSession.Status.ACTIVATED
+    session.activated_at = now
+    session.save(update_fields=["status", "activated_at", "updated_at"])
+
+    return {
+        "session": session,
+        "readiness": readiness,
+        "access": access,
+        "effective_can_activate": True,
+        "activated": True,
     }
 
 

@@ -244,6 +244,48 @@ def test_manager_is_denied_for_proposal_commands(api_client):
     assert response.status_code == 403
 
 
+def test_staff_is_denied_for_proposal_commands(api_client):
+    owner = create_user(username="proposal_api_staff_owner")
+    staff = create_user(username="proposal_api_staff")
+    session = create_onboarding_session(actor=owner)
+    proposal = create_manual_onboarding_proposal(
+        session=session,
+        actor=owner,
+        payload=valid_payload(),
+    )
+    EstablishmentMembership.objects.create(
+        user=staff,
+        establishment=session.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, user=staff)
+    list_response = api_client.get(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/",
+        **auth_headers(access_token),
+    )
+    section_response = api_client.post(
+        (
+            f"/api/v1/onboarding-sessions/{session.id}/proposals/{proposal.id}/"
+            "sections/operational_modules/decision/"
+        ),
+        {"decision": "accepted"},
+        format="json",
+        **auth_headers(access_token),
+    )
+    ai_generate_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/ai-generate/",
+        {"locale": "en-US"},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert list_response.status_code == 403
+    assert section_response.status_code == 403
+    assert ai_generate_response.status_code == 403
+
+
 def test_foreign_and_mismatched_proposals_are_denied_safely(api_client):
     actor = create_user(username="proposal_api_foreign_actor")
     owner = create_user(username="proposal_api_foreign_owner")
@@ -510,8 +552,8 @@ def test_apply_rejects_active_establishment_without_activation(api_client):
     assert OperationalModule.objects.count() == 0
 
 
-def test_no_activation_endpoint_exists(api_client):
-    owner = create_user(username="proposal_api_no_activate_owner")
+def test_activation_endpoint_does_not_activate_without_explicit_mark_ready(api_client):
+    owner = create_user(username="proposal_api_activate_requires_ready_owner")
     session = create_onboarding_session(actor=owner)
 
     access_token = login(api_client, user=owner)
@@ -521,4 +563,10 @@ def test_no_activation_endpoint_exists(api_client):
         **auth_headers(access_token),
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 409
+    assert response.json()["code"] == "invalid_onboarding_activation_state"
+    session.refresh_from_db()
+    session.establishment.refresh_from_db()
+    assert session.status == OnboardingSession.Status.STARTED
+    assert session.activated_at is None
+    assert session.establishment.status == Establishment.Status.DRAFT

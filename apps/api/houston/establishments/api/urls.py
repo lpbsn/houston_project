@@ -4,6 +4,7 @@ from houston.establishments.api.views import (
     MembershipDeactivateView,
     MembershipDetailView,
     MembershipListView,
+    OnboardingSessionActivateView,
     OnboardingSessionActivationSummaryView,
     OnboardingSessionCreateView,
     OnboardingSessionDescriptionView,
@@ -49,6 +50,11 @@ urlpatterns = [
         "onboarding-sessions/<uuid:session_id>/mark-ready/",
         OnboardingSessionMarkReadyView.as_view(),
         name="onboarding-session-mark-ready",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/activate/",
+        OnboardingSessionActivateView.as_view(),
+        name="onboarding-session-activate",
     ),
     path(
         "onboarding-sessions/<uuid:session_id>/proposals/",
