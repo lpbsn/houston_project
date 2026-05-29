@@ -20,10 +20,12 @@ export type OnboardingSessionCreateResponse =
   components['schemas']['OnboardingSessionCreateResponse']
 export type OnboardingSessionResponse = components['schemas']['OnboardingSessionResponse']
 export type ProposalCommandResponse = components['schemas']['ProposalCommandResponse']
+export type ProposalItemMutationRequest = components['schemas']['ProposalItemMutationRequest']
 export type ProposalSectionDecisionRequest =
   components['schemas']['ProposalSectionDecisionRequest']
 export type ProposalValidationErrorItem =
   components['schemas']['ProposalValidationErrorItem']
 export type RuntimeConfigResponse = components['schemas']['RuntimeConfigResponse']
+export type SectionEnum = components['schemas']['SectionEnum']
 export type SubmitActivityDescriptionRequest =
   components['schemas']['PatchedActivityDescriptionRequest']

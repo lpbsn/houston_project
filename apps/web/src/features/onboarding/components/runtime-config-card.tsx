@@ -1,4 +1,4 @@
-import { BookOpenText, Boxes, ClipboardList, Layers3, Route, Tags } from 'lucide-react'
+import { BookOpenText, Boxes, ClipboardList, Layers3, ListTree, Route, Tags } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -97,6 +97,15 @@ export function RuntimeConfigCard({
           emptyMessage="No active operational domains were returned."
         >
           <KeyedItemList items={runtimeConfig.active_domains} />
+        </RuntimeSection>
+
+        <RuntimeSection
+          icon={<ListTree className="size-4" />}
+          title="Active subjects"
+          count={runtimeConfig.active_subjects.length}
+          emptyMessage="No active operational subjects were returned."
+        >
+          <KeyedItemList items={runtimeConfig.active_subjects} />
         </RuntimeSection>
 
         <RuntimeSection

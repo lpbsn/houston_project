@@ -280,12 +280,25 @@ def test_onboarding_session_allows_historical_terminal_sessions(
 
 
 def test_onboarding_catalog_rows_are_seeded_by_migration():
-    assert set(
+    module_keys = set(
         OnboardingCatalogModule.objects.filter(active=True).values_list("key", flat=True)
-    ) >= {"hotel", "restaurant", "bar", "rooftop", "seminar_rooms", "coworking"}
-    assert set(
+    )
+    assert module_keys == {
+        "hotel",
+        "restaurant",
+        "retail_commerce",
+        "coworking_bureau",
+        "salle_de_sport",
+        "loisirs",
+    }
+    assert module_keys.isdisjoint({"bar", "rooftop", "seminar_rooms"})
+
+    domain_keys = set(
         OnboardingCatalogDomain.objects.filter(active=True).values_list("key", flat=True)
-    ) >= {"maintenance", "housekeeping", "security", "restaurant_room", "management"}
+    )
+    assert "hotel__hebergement" in domain_keys
+    assert domain_keys.isdisjoint({"maintenance", "housekeeping", "security"})
+
     assert set(OnboardingCatalogUnit.objects.filter(active=True).values_list("key", flat=True)) >= {
         "lobby",
         "rooms",
@@ -297,7 +310,7 @@ def test_onboarding_catalog_rows_are_seeded_by_migration():
 
 @pytest.mark.parametrize(
     "model_class",
-    [OnboardingCatalogModule, OnboardingCatalogDomain, OnboardingCatalogUnit],
+    [OnboardingCatalogModule, OnboardingCatalogUnit],
 )
 def test_onboarding_catalog_key_is_unique(model_class):
     model_class.objects.create(key="custom_key", label="Custom")
@@ -306,13 +319,29 @@ def test_onboarding_catalog_key_is_unique(model_class):
         model_class.objects.create(key="custom_key", label="Duplicate")
 
 
+def test_onboarding_catalog_domain_key_is_unique():
+    module = OnboardingCatalogModule.objects.create(key="custom_module", label="Custom module")
+    OnboardingCatalogDomain.objects.create(
+        catalog_module=module,
+        key="custom_domain",
+        label="Custom domain",
+    )
+
+    with pytest.raises(IntegrityError):
+        OnboardingCatalogDomain.objects.create(
+            catalog_module=module,
+            key="custom_domain",
+            label="Duplicate domain",
+        )
+
+
 @pytest.mark.parametrize(
     ("model_class", "field_values", "expected_field"),
     [
         (OnboardingCatalogModule, {"key": " ", "label": "Hotel"}, "key"),
         (OnboardingCatalogModule, {"key": "hotel", "label": " "}, "label"),
         (OnboardingCatalogDomain, {"key": " ", "label": "Maintenance"}, "key"),
-        (OnboardingCatalogDomain, {"key": "maintenance", "label": " "}, "label"),
+        (OnboardingCatalogDomain, {"key": "hotel__hebergement", "label": " "}, "label"),
         (OnboardingCatalogUnit, {"key": " ", "label": "Lobby"}, "key"),
         (OnboardingCatalogUnit, {"key": "lobby", "label": " "}, "label"),
     ],

@@ -12,6 +12,7 @@ from houston.establishments.models import (
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
+    OperationalSubject,
 )
 from houston.establishments.services import (
     InvalidActivityDescriptionError,
@@ -25,9 +26,19 @@ from houston.establishments.services import (
     mark_onboarding_ready_for_activation,
     submit_activity_description,
 )
+from houston.establishments.tests.conftest import (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
+
+READINESS_DOMAIN_KEYS = (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    "hotel__reception_hall",
+    "hotel__parties_communes",
+)
 
 
 @pytest.fixture
@@ -89,9 +100,9 @@ def create_ready_runtime(session, owner):
             label=label,
         )
         for key, label in [
-            ("maintenance", "Maintenance"),
-            ("housekeeping", "Housekeeping"),
-            ("security", "Security"),
+            (HOTEL_HEBERGEMENT_DOMAIN_KEY, "Hébergement"),
+            ("hotel__reception_hall", "Réception / Hall"),
+            ("hotel__parties_communes", "Parties communes"),
         ]
     ]
     manager = User.objects.create_user(
@@ -108,6 +119,12 @@ def create_ready_runtime(session, owner):
     MembershipDomain.objects.create(
         membership=manager_membership,
         operational_domain=domains[0],
+    )
+    OperationalSubject.objects.create(
+        establishment=establishment,
+        operational_domain=domains[0],
+        key=HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY,
+        label="Maintenance équipements",
     )
     return domains
 
@@ -217,8 +234,12 @@ def test_manager_without_domains_blocks_readiness(onboarding_session, owner):
         validated_at=timezone.now(),
     )
     OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    for key in ["maintenance", "housekeeping", "security"]:
-        OperationalDomain.objects.create(establishment=establishment, key=key, label=key.title())
+    for key in READINESS_DOMAIN_KEYS:
+        OperationalDomain.objects.create(
+            establishment=establishment,
+            key=key,
+            label=key.replace("__", " ").replace("_", " ").title(),
+        )
     manager = User.objects.create_user(
         username="manager_without_domains",
         password="secret",

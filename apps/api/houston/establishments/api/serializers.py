@@ -239,6 +239,7 @@ class RuntimeConfigResponseSerializer(serializers.Serializer):
     activity_description = ActivityDescriptionResponseSerializer(allow_null=True)
     active_modules = KeyedRuntimeItemSerializer(many=True)
     active_domains = KeyedRuntimeItemSerializer(many=True)
+    active_subjects = KeyedRuntimeItemSerializer(many=True)
     optional_units = KeyedRuntimeItemSerializer(many=True)
     optional_vocabulary = RuntimeVocabularyItemSerializer(many=True)
     optional_runtime_tags = RuntimeTagItemSerializer(many=True)
@@ -269,6 +270,7 @@ class ActivationSummaryResponseSerializer(serializers.Serializer):
     activity_description = ActivityDescriptionResponseSerializer(allow_null=True)
     active_modules = KeyedRuntimeItemSerializer(many=True)
     active_domains = KeyedRuntimeItemSerializer(many=True)
+    active_subjects = KeyedRuntimeItemSerializer(many=True)
     optional_units = KeyedRuntimeItemSerializer(many=True)
     optional_vocabulary = RuntimeVocabularyItemSerializer(many=True)
     optional_runtime_tags = RuntimeTagItemSerializer(many=True)
@@ -310,6 +312,15 @@ class ProposalCatalogItemSerializer(serializers.Serializer):
     label = serializers.CharField()
     reason = serializers.CharField(allow_blank=True, required=False)
     confidence_score = serializers.FloatField(allow_null=True, required=False)
+
+
+class ProposalDomainItemSerializer(ProposalCatalogItemSerializer):
+    module_key = serializers.CharField()
+
+
+class ProposalSubjectItemSerializer(ProposalCatalogItemSerializer):
+    domain_key = serializers.CharField()
+    module_key = serializers.CharField(required=False)
 
 
 class ProposalDomainOrUnitItemSerializer(ProposalCatalogItemSerializer):
@@ -354,7 +365,8 @@ class ProposalRoutingHintItemSerializer(serializers.Serializer):
 class OnboardingProposalPayloadSerializer(serializers.Serializer):
     schema_version = serializers.CharField()
     operational_modules = ProposalCatalogItemSerializer(many=True)
-    operational_domains = ProposalDomainOrUnitItemSerializer(many=True)
+    operational_domains = ProposalDomainItemSerializer(many=True)
+    operational_subjects = ProposalSubjectItemSerializer(many=True)
     operational_units = ProposalDomainOrUnitItemSerializer(many=True)
     runtime_vocabulary = ProposalVocabularyItemSerializer(many=True)
     runtime_tags = ProposalRuntimeTagItemSerializer(many=True)
@@ -387,6 +399,18 @@ class AIOnboardingGenerateRequestSerializer(serializers.Serializer):
         trim_whitespace=True,
         allow_blank=False,
     )
+
+
+class ProposalItemMutationRequestSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=[("add", "Add"), ("remove", "Remove")])
+    section = serializers.ChoiceField(
+        choices=[
+            ("operational_modules", "Modules"),
+            ("operational_domains", "Domains"),
+            ("operational_subjects", "Subjects"),
+        ]
+    )
+    key = serializers.CharField()
 
 
 class ProposalSectionDecisionRequestSerializer(serializers.Serializer):

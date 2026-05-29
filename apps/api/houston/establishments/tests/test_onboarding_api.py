@@ -17,6 +17,7 @@ from houston.establishments.models import (
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
+    OperationalSubject,
     OperationalUnit,
     RoutingHint,
     RoutingHintDomain,
@@ -24,9 +25,19 @@ from houston.establishments.models import (
     RuntimeTagDomain,
     RuntimeVocabulary,
 )
+from houston.establishments.tests.conftest import (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
+
+READINESS_DOMAIN_KEYS = (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    "hotel__reception_hall",
+    "hotel__parties_communes",
+)
 
 
 @pytest.fixture
@@ -117,7 +128,7 @@ def create_ready_runtime(session: OnboardingSession, actor: User) -> list[Operat
             key=key,
             label=key.replace("_", " ").title(),
         )
-        for key in ["maintenance", "housekeeping", "security"]
+        for key in READINESS_DOMAIN_KEYS
     ]
     manager = create_user(username=f"manager_ready_{uuid.uuid4().hex[:6]}")
     manager_membership = EstablishmentMembership.objects.create(
@@ -129,6 +140,12 @@ def create_ready_runtime(session: OnboardingSession, actor: User) -> list[Operat
     MembershipDomain.objects.create(
         membership=manager_membership,
         operational_domain=domains[0],
+    )
+    OperationalSubject.objects.create(
+        establishment=establishment,
+        operational_domain=domains[0],
+        key=HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY,
+        label="Maintenance équipements",
     )
     return domains
 
@@ -412,8 +429,8 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
     )
     domain = OperationalDomain.objects.create(
         establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        label="Hébergement",
     )
     OperationalDomain.objects.create(
         establishment=establishment,
@@ -471,13 +488,13 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
     assert response.status_code == 200
     body = response.json()
     assert [item["key"] for item in body["active_modules"]] == ["hotel"]
-    assert [item["key"] for item in body["active_domains"]] == ["maintenance"]
+    assert [item["key"] for item in body["active_domains"]] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert [item["key"] for item in body["optional_units"]] == ["lobby"]
-    assert body["optional_vocabulary"][0]["mapped_domain_key"] == "maintenance"
+    assert body["optional_vocabulary"][0]["mapped_domain_key"] == HOTEL_HEBERGEMENT_DOMAIN_KEY
     assert body["optional_vocabulary"][0]["mapped_unit_key"] == "lobby"
-    assert body["optional_runtime_tags"][0]["domain_keys"] == ["maintenance"]
+    assert body["optional_runtime_tags"][0]["domain_keys"] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert body["optional_routing_hints"][0]["suggested_unit_key"] == "lobby"
-    assert body["optional_routing_hints"][0]["domain_keys"] == ["maintenance"]
+    assert body["optional_routing_hints"][0]["domain_keys"] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert "foreign-domain" not in str(body)
 
 

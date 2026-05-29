@@ -13,6 +13,7 @@ import {
   getRuntimeConfig,
   listOnboardingProposals,
   markReady,
+  mutateOnboardingProposalItem,
   onboardingQueryKeys,
   rejectOnboardingProposal,
   startOnboardingSession,
@@ -25,6 +26,7 @@ import type {
   DecisionEnum,
   OnboardingSessionCreateRequest,
   ProposalCommandResponse,
+  ProposalItemMutationRequest,
   SubmitActivityDescriptionRequest,
 } from './types'
 
@@ -270,6 +272,19 @@ export function useApplyOnboardingProposal(sessionId: string, proposalId: string
         includeRuntimeConfig: true,
         includeSession: true,
       })
+    },
+  })
+}
+
+export function useProposalItemMutation(sessionId: string, proposalId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: ProposalItemMutationRequest) =>
+      mutateOnboardingProposalItem(sessionId, proposalId, input),
+    onSuccess: async (response) => {
+      setProposalCommandData(queryClient, sessionId, response)
+      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
     },
   })
 }

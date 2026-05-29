@@ -31,6 +31,7 @@ from houston.establishments.api.serializers import (
     OnboardingSessionCreateResponseSerializer,
     OnboardingSessionResponseSerializer,
     ProposalCommandResponseSerializer,
+    ProposalItemMutationRequestSerializer,
     ProposalSectionDecisionRequestSerializer,
     RuntimeConfigResponseSerializer,
     ScopedUserSearchRequestSerializer,
@@ -82,6 +83,7 @@ from houston.establishments.services import (
     start_onboarding_session,
     submit_activity_description,
     update_membership_for_management,
+    update_onboarding_proposal_items,
     validate_onboarding_proposal_section,
 )
 from houston.organizations.models import Organization
@@ -821,6 +823,54 @@ class OnboardingSessionProposalSectionDecisionView(APIView):
                 actor=request.user,
                 section=section,
                 decision=serializer.validated_data["decision"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalValidationError as exc:
+            return _proposal_validation_response(exc)
+        except OnboardingProposalStateError as exc:
+            return _proposal_state_response(str(exc))
+
+        return _proposal_command_response(actor=request.user, proposal=proposal)
+
+
+class OnboardingSessionProposalItemMutationView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=ProposalItemMutationRequestSerializer,
+        responses={
+            200: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description="Adds or removes one catalog item from an onboarding proposal payload.",
+    )
+    def post(self, request, session_id, proposal_id):
+        serializer = ProposalItemMutationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        try:
+            proposal = update_onboarding_proposal_items(
+                proposal=proposal_response,
+                actor=request.user,
+                section=serializer.validated_data["section"],
+                key=serializer.validated_data["key"],
+                action=serializer.validated_data["action"],
             )
         except OnboardingAccessDeniedError:
             return _forbidden_response()

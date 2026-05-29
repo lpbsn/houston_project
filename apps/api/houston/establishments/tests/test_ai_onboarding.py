@@ -30,7 +30,16 @@ from houston.establishments.models import (
     RuntimeTag,
     RuntimeVocabulary,
 )
-from houston.establishments.services import OnboardingAccessDeniedError
+from houston.establishments.services import (
+    OnboardingAccessDeniedError,
+    PROPOSAL_SCHEMA_VERSION,
+)
+from houston.establishments.tests.conftest import (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    HOTEL_MODULE_KEY,
+    valid_ai_modules_payload,
+    valid_v2_payload,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -41,7 +50,7 @@ class FakeProvider:
     model = "fake-onboarding-model"
 
     def __init__(self, payload=None, exc=None):
-        self.payload = payload or valid_ai_payload()
+        self.payload = payload or valid_ai_modules_payload()
         self.exc = exc
         self.calls: list[dict] = []
 
@@ -103,78 +112,6 @@ def onboarding_session(organization, owner):
     return session
 
 
-def valid_ai_payload() -> dict:
-    return {
-        "schema_version": "onboarding_proposal_v1",
-        "operational_modules": [
-            {
-                "key": "hotel",
-                "label": "Hotel",
-                "reason": "The establishment includes hotel operations.",
-                "confidence_score": 0.91,
-            }
-        ],
-        "operational_domains": [
-            {
-                "key": "maintenance",
-                "label": "Maintenance",
-                "related_modules": ["hotel"],
-                "reason": "Maintenance issues need routing.",
-                "confidence_score": 0.9,
-            },
-            {
-                "key": "housekeeping",
-                "label": "Housekeeping",
-                "related_modules": ["hotel"],
-                "reason": "Room operations need routing.",
-                "confidence_score": 0.88,
-            },
-            {
-                "key": "security",
-                "label": "Security",
-                "related_modules": ["hotel"],
-                "reason": "Safety issues need routing.",
-                "confidence_score": 0.82,
-            },
-        ],
-        "operational_units": [
-            {
-                "key": "lobby",
-                "label": "Lobby",
-                "related_modules": ["hotel"],
-                "reason": "The lobby is a shared operational area.",
-                "confidence_score": 0.77,
-            }
-        ],
-        "runtime_vocabulary": [
-            {
-                "term": "VRV",
-                "meaning": "HVAC equipment",
-                "mapped_domain_key": "maintenance",
-                "mapped_unit_key": "lobby",
-                "reason": "The team may use technical HVAC terms.",
-            }
-        ],
-        "runtime_tags": [
-            {
-                "key": "hvac",
-                "label": "HVAC",
-                "related_domain_keys": ["maintenance"],
-                "reason": "Helps classify HVAC issues.",
-            }
-        ],
-        "routing_hints": [
-            {
-                "pattern": "VRV",
-                "suggested_domain_keys": ["maintenance"],
-                "suggested_unit_key": "lobby",
-                "reason": "Route HVAC mentions to maintenance.",
-                "confidence_score": 0.8,
-            }
-        ],
-    }
-
-
 def test_input_builder_minimizes_provider_payload(onboarding_session, owner):
     EstablishmentMembership.objects.create(
         user=User.objects.create_user(
@@ -195,8 +132,8 @@ def test_input_builder_minimizes_provider_payload(onboarding_session, owner):
         "establishment_name",
         "activity_description",
         "active_module_catalog",
-        "active_domain_catalog",
-        "active_unit_catalog",
+        "active_domain_count",
+        "active_subject_count",
         "locale",
         "schema_version",
         "prompt_version",
@@ -226,7 +163,11 @@ def test_provider_success_creates_ai_proposal_only(onboarding_session, owner):
     assert provider.calls
     assert proposal.source == OnboardingProposal.Source.AI_PROPOSED
     assert proposal.status == OnboardingProposal.Status.READY
-    assert proposal.payload == validate_ai_onboarding_output(valid_ai_payload())
+    assert proposal.payload == validate_ai_onboarding_output(valid_ai_modules_payload())
+    assert proposal.payload["schema_version"] == PROPOSAL_SCHEMA_VERSION
+    assert proposal.payload["operational_modules"][0]["key"] == HOTEL_MODULE_KEY
+    assert len(proposal.payload["operational_domains"]) == 6
+    assert len(proposal.payload["operational_subjects"]) > 0
     assert OperationalModule.objects.count() == 0
     assert OperationalDomain.objects.count() == 0
     assert OperationalUnit.objects.count() == 0
@@ -282,10 +223,7 @@ def test_unauthorized_actor_does_not_call_provider(onboarding_session):
     [
         lambda payload: payload.update({"roles": []}),
         lambda payload: payload["operational_modules"][0].update({"key": "unknown_module"}),
-        lambda payload: payload.__setitem__(
-            "operational_domains",
-            payload["operational_domains"][:1],
-        ),
+        lambda payload: payload.__setitem__("operational_modules", []),
         lambda payload: payload.__setitem__(
             "runtime_tags",
             [
@@ -305,7 +243,7 @@ def test_invalid_provider_output_falls_back_to_template(
     owner,
     payload_mutator,
 ):
-    payload = valid_ai_payload()
+    payload = valid_ai_modules_payload()
     payload_mutator(payload)
     provider = FakeProvider(payload=payload)
 
@@ -317,7 +255,9 @@ def test_invalid_provider_output_falls_back_to_template(
 
     assert proposal.source == OnboardingProposal.Source.TEMPLATE
     assert proposal.status == OnboardingProposal.Status.READY
-    assert len(proposal.payload["operational_domains"]) == 3
+    expanded = valid_v2_payload()
+    assert len(proposal.payload["operational_domains"]) == len(expanded["operational_domains"])
+    assert len(proposal.payload["operational_subjects"]) == len(expanded["operational_subjects"])
     assert OperationalModule.objects.count() == 0
     assert OperationalDomain.objects.count() == 0
 
@@ -328,6 +268,9 @@ def test_invalid_provider_output_falls_back_to_template(
         "invalid_ai_proposal_payload",
     }
     assert usage_log.onboarding_proposal == proposal
+    stored_values = " ".join(str(value) for value in usage_log.__dict__.values())
+    assert "Hotel with restaurant" not in stored_values
+    assert "sk-" not in stored_values
     assert AIUsageLog.objects.count() == 1
 
 
@@ -357,7 +300,7 @@ def test_provider_failure_falls_back_to_template(onboarding_session, owner, exc)
 
 
 def test_excluded_sections_are_rejected_by_ai_output_validation():
-    payload = valid_ai_payload()
+    payload = valid_ai_modules_payload()
     payload["memberships"] = []
 
     with pytest.raises(AIOnboardingInvalidOutputError):

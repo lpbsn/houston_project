@@ -20,7 +20,11 @@ from houston.establishments.services import (
     create_ai_onboarding_proposal,
     create_manual_onboarding_proposal,
     create_template_onboarding_proposal,
-    validate_onboarding_proposal_section,
+)
+from houston.establishments.tests.conftest import (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    create_validated_proposal,
+    valid_v2_payload,
 )
 from houston.organizations.models import Organization
 
@@ -93,63 +97,6 @@ def create_onboarding_session(
     return session
 
 
-def valid_payload() -> dict:
-    return {
-        "schema_version": "onboarding_proposal_v1",
-        "operational_modules": [
-            {
-                "key": "hotel",
-                "label": "Hotel",
-                "reason": "The site has hotel operations.",
-                "confidence_score": None,
-            }
-        ],
-        "operational_domains": [
-            {
-                "key": "maintenance",
-                "label": "Maintenance",
-                "related_modules": ["hotel"],
-                "reason": "Technical issues need routing.",
-                "confidence_score": None,
-            },
-            {
-                "key": "housekeeping",
-                "label": "Housekeeping",
-                "related_modules": ["hotel"],
-                "reason": "Room operations need routing.",
-                "confidence_score": None,
-            },
-            {
-                "key": "security",
-                "label": "Security",
-                "related_modules": ["hotel"],
-                "reason": "Safety issues need routing.",
-                "confidence_score": None,
-            },
-        ],
-        "operational_units": [],
-        "runtime_vocabulary": [],
-        "runtime_tags": [],
-        "routing_hints": [],
-    }
-
-
-def create_validated_proposal(session: OnboardingSession, actor: User) -> OnboardingProposal:
-    proposal = create_manual_onboarding_proposal(
-        session=session,
-        actor=actor,
-        payload=valid_payload(),
-    )
-    for section in ["operational_modules", "operational_domains"]:
-        proposal = validate_onboarding_proposal_section(
-            proposal=proposal,
-            actor=actor,
-            section=section,
-            decision="accepted",
-        )
-    return proposal
-
-
 def test_proposal_endpoints_require_authentication(api_client):
     session_id = uuid.uuid4()
     proposal_id = uuid.uuid4()
@@ -190,7 +137,7 @@ def test_owner_can_list_and_retrieve_proposals(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=owner)
@@ -209,7 +156,7 @@ def test_owner_can_list_and_retrieve_proposals(api_client):
     body = detail_response.json()
     assert body["id"] == str(proposal.id)
     assert body["source"] == OnboardingProposal.Source.MANUAL
-    assert body["payload"]["schema_version"] == "onboarding_proposal_v1"
+    assert body["payload"]["schema_version"] == "onboarding_proposal_v2"
     assert "ai_usage_logs" not in body
     assert "provider" not in body
 
@@ -221,7 +168,7 @@ def test_manager_is_denied_for_proposal_commands(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
     EstablishmentMembership.objects.create(
         user=manager,
@@ -251,7 +198,7 @@ def test_staff_is_denied_for_proposal_commands(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
     EstablishmentMembership.objects.create(
         user=staff,
@@ -294,7 +241,7 @@ def test_foreign_and_mismatched_proposals_are_denied_safely(api_client):
     foreign_proposal = create_manual_onboarding_proposal(
         session=foreign_session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=actor)
@@ -320,7 +267,7 @@ def test_ai_generate_success_creates_ai_proposal_only(api_client, monkeypatch):
         return create_ai_onboarding_proposal(
             session=session,
             actor=actor,
-            payload=valid_payload(),
+            payload=valid_v2_payload(),
         )
 
     monkeypatch.setattr(
@@ -355,7 +302,7 @@ def test_ai_generate_fallback_returns_template_without_leakage(api_client, monke
         return create_template_onboarding_proposal(
             session=session,
             actor=actor,
-            payload=valid_payload(),
+            payload=valid_v2_payload(),
         )
 
     monkeypatch.setattr(
@@ -386,7 +333,7 @@ def test_ai_generate_open_proposal_conflict(api_client):
     create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=owner)
@@ -405,7 +352,7 @@ def test_section_decision_accepts_and_skips_sections(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=owner)
@@ -443,7 +390,7 @@ def test_required_section_skip_is_rejected(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=owner)
@@ -468,7 +415,7 @@ def test_reject_does_not_mutate_runtime(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=owner)
@@ -490,7 +437,7 @@ def test_apply_requires_validated_proposal(api_client):
     proposal = create_manual_onboarding_proposal(
         session=session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     access_token = login(api_client, user=owner)
@@ -525,8 +472,11 @@ def test_apply_mutates_runtime_without_activation(api_client):
     assert body["proposal"]["status"] == OnboardingProposal.Status.APPLIED
     assert body["session"]["status"] == OnboardingSession.Status.CONFIGURING_RUNTIME
     assert OperationalModule.objects.filter(key="hotel", active=True).exists()
-    assert OperationalDomain.objects.filter(key="maintenance", active=True).exists()
-    assert RuntimeTag.objects.count() == 0
+    assert OperationalDomain.objects.filter(
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        active=True,
+    ).exists()
+    assert RuntimeTag.objects.filter(key="hvac", active=True).exists()
     session.refresh_from_db()
     session.establishment.refresh_from_db()
     assert session.ready_for_activation_at is None

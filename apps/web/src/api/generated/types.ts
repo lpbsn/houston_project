@@ -366,6 +366,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds or removes one catalog item from an onboarding proposal payload. */
+        post: operations["v1_onboarding_sessions_proposals_items_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/": {
         parameters: {
             query?: never;
@@ -442,6 +459,12 @@ export interface components {
             /** @default en-US */
             locale: string;
         };
+        /**
+         * @description * `add` - Add
+         *     * `remove` - Remove
+         * @enum {string}
+         */
+        ActionEnum: "add" | "remove";
         ActivationBlocker: {
             code: string;
             message: string;
@@ -470,6 +493,7 @@ export interface components {
             activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
             active_modules: components["schemas"]["KeyedRuntimeItem"][];
             active_domains: components["schemas"]["KeyedRuntimeItem"][];
+            active_subjects: components["schemas"]["KeyedRuntimeItem"][];
             optional_units: components["schemas"]["KeyedRuntimeItem"][];
             optional_vocabulary: components["schemas"]["RuntimeVocabularyItem"][];
             optional_runtime_tags: components["schemas"]["RuntimeTagItem"][];
@@ -605,7 +629,8 @@ export interface components {
         OnboardingProposalPayload: {
             schema_version: string;
             operational_modules: components["schemas"]["ProposalCatalogItem"][];
-            operational_domains: components["schemas"]["ProposalDomainOrUnitItem"][];
+            operational_domains: components["schemas"]["ProposalDomainItem"][];
+            operational_subjects: components["schemas"]["ProposalSubjectItem"][];
             operational_units: components["schemas"]["ProposalDomainOrUnitItem"][];
             runtime_vocabulary: components["schemas"]["ProposalVocabularyItem"][];
             runtime_tags: components["schemas"]["ProposalRuntimeTagItem"][];
@@ -694,6 +719,14 @@ export interface components {
             session: components["schemas"]["OnboardingSessionResponse"];
             proposal: components["schemas"]["OnboardingProposalResponse"];
         };
+        ProposalDomainItem: {
+            key: string;
+            label: string;
+            reason?: string;
+            /** Format: double */
+            confidence_score?: number | null;
+            module_key: string;
+        };
         ProposalDomainOrUnitItem: {
             key: string;
             label: string;
@@ -701,6 +734,11 @@ export interface components {
             /** Format: double */
             confidence_score?: number | null;
             related_modules?: string[];
+        };
+        ProposalItemMutationRequest: {
+            action: components["schemas"]["ActionEnum"];
+            section: components["schemas"]["SectionEnum"];
+            key: string;
         };
         ProposalRoutingHintItem: {
             pattern: string;
@@ -718,6 +756,15 @@ export interface components {
         };
         ProposalSectionDecisionRequest: {
             decision: components["schemas"]["DecisionEnum"];
+        };
+        ProposalSubjectItem: {
+            key: string;
+            label: string;
+            reason?: string;
+            /** Format: double */
+            confidence_score?: number | null;
+            domain_key: string;
+            module_key?: string;
         };
         ProposalValidationErrorItem: {
             code: string;
@@ -753,6 +800,7 @@ export interface components {
             activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
             active_modules: components["schemas"]["KeyedRuntimeItem"][];
             active_domains: components["schemas"]["KeyedRuntimeItem"][];
+            active_subjects: components["schemas"]["KeyedRuntimeItem"][];
             optional_units: components["schemas"]["KeyedRuntimeItem"][];
             optional_vocabulary: components["schemas"]["RuntimeVocabularyItem"][];
             optional_runtime_tags: components["schemas"]["RuntimeTagItem"][];
@@ -788,6 +836,13 @@ export interface components {
             /** Format: uuid */
             membership_id: string;
         };
+        /**
+         * @description * `operational_modules` - Modules
+         *     * `operational_domains` - Domains
+         *     * `operational_subjects` - Subjects
+         * @enum {string}
+         */
+        SectionEnum: "operational_modules" | "operational_domains" | "operational_subjects";
         SwitchEstablishmentRequest: {
             /** Format: uuid */
             establishment_id: string;
@@ -1747,6 +1802,74 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCommandResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_onboarding_sessions_proposals_items_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalItemMutationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalItemMutationRequest"];
+                "multipart/form-data": components["schemas"]["ProposalItemMutationRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

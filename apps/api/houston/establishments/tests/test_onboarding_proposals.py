@@ -32,6 +32,11 @@ from houston.establishments.services import (
     validate_onboarding_proposal_payload,
     validate_onboarding_proposal_section,
 )
+from houston.establishments.tests.conftest import (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    create_validated_proposal,
+    valid_v2_payload,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -72,118 +77,24 @@ def onboarding_session(organization, owner):
     return session
 
 
-def valid_payload() -> dict:
-    return {
-        "schema_version": "onboarding_proposal_v1",
-        "operational_modules": [
-            {
-                "key": "hotel",
-                "label": "Hotel",
-                "reason": "The site has hotel operations.",
-                "confidence_score": None,
-            }
-        ],
-        "operational_domains": [
-            {
-                "key": "maintenance",
-                "label": "Maintenance",
-                "related_modules": ["hotel"],
-                "reason": "Technical issues need routing.",
-                "confidence_score": None,
-            },
-            {
-                "key": "housekeeping",
-                "label": "Housekeeping",
-                "related_modules": ["hotel"],
-                "reason": "Room operations need routing.",
-                "confidence_score": None,
-            },
-            {
-                "key": "security",
-                "label": "Security",
-                "related_modules": ["hotel"],
-                "reason": "Safety issues need routing.",
-                "confidence_score": None,
-            },
-        ],
-        "operational_units": [
-            {
-                "key": "lobby",
-                "label": "Lobby",
-                "related_modules": ["hotel"],
-                "reason": "Front-of-house area.",
-                "confidence_score": None,
-            }
-        ],
-        "runtime_vocabulary": [
-            {
-                "term": "VRV",
-                "meaning": "HVAC equipment",
-                "mapped_domain_key": "maintenance",
-                "mapped_unit_key": "lobby",
-                "reason": "Local technical term.",
-            }
-        ],
-        "runtime_tags": [
-            {
-                "key": "hvac",
-                "label": "HVAC",
-                "related_domain_keys": ["maintenance"],
-                "reason": "Helps classify HVAC issues.",
-            }
-        ],
-        "routing_hints": [
-            {
-                "pattern": "VRV",
-                "suggested_domain_keys": ["maintenance"],
-                "suggested_unit_key": "lobby",
-                "reason": "Route HVAC mentions to maintenance.",
-                "confidence_score": None,
-            }
-        ],
-    }
-
-
 def proposal_error_codes(exc_info) -> set[str]:
     return {error["code"] for error in exc_info.value.errors}
 
 
-def create_validated_proposal(session, owner, payload=None):
-    proposal = create_manual_onboarding_proposal(
-        session=session,
-        actor=owner,
-        payload=payload or valid_payload(),
-    )
-    for section in [
-        "operational_modules",
-        "operational_domains",
-        "operational_units",
-        "runtime_vocabulary",
-        "runtime_tags",
-        "routing_hints",
-    ]:
-        proposal = validate_onboarding_proposal_section(
-            proposal=proposal,
-            actor=owner,
-            section=section,
-            decision="accepted",
-        )
-    return proposal
-
-
 def test_valid_manual_payload_passes_against_active_catalog_rows():
-    sanitized = validate_onboarding_proposal_payload(valid_payload())
+    sanitized = validate_onboarding_proposal_payload(valid_v2_payload())
 
-    assert sanitized["schema_version"] == "onboarding_proposal_v1"
+    assert sanitized["schema_version"] == "onboarding_proposal_v2"
     assert sanitized["operational_modules"][0]["key"] == "hotel"
-    assert len(sanitized["operational_domains"]) == 3
+    assert len(sanitized["operational_domains"]) == 6
+    assert len(sanitized["operational_subjects"]) > 0
 
 
 def test_template_proposal_uses_same_validation_boundary(onboarding_session, owner):
     proposal = create_template_onboarding_proposal(
         session=onboarding_session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     assert proposal.source == OnboardingProposal.Source.TEMPLATE
@@ -193,8 +104,8 @@ def test_template_proposal_uses_same_validation_boundary(onboarding_session, own
 
 
 def test_inactive_catalog_key_is_rejected_as_unknown():
-    OnboardingCatalogDomain.objects.filter(key="security").update(active=False)
-    payload = valid_payload()
+    OnboardingCatalogDomain.objects.filter(key=HOTEL_HEBERGEMENT_DOMAIN_KEY).update(active=False)
+    payload = valid_v2_payload()
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
         validate_onboarding_proposal_payload(payload)
@@ -234,7 +145,7 @@ def test_inactive_catalog_key_is_rejected_as_unknown():
                 {
                     "term": "VRV",
                     "meaning": "Duplicate",
-                    "mapped_domain_key": "maintenance",
+                    "mapped_domain_key": HOTEL_HEBERGEMENT_DOMAIN_KEY,
                     "mapped_unit_key": "lobby",
                     "reason": "",
                 }
@@ -245,7 +156,7 @@ def test_inactive_catalog_key_is_rejected_as_unknown():
             lambda payload: payload["routing_hints"].append(
                 {
                     "pattern": "VRV",
-                    "suggested_domain_keys": ["maintenance"],
+                    "suggested_domain_keys": [HOTEL_HEBERGEMENT_DOMAIN_KEY],
                     "suggested_unit_key": "lobby",
                     "reason": "",
                     "confidence_score": None,
@@ -273,7 +184,7 @@ def test_inactive_catalog_key_is_rejected_as_unknown():
     ],
 )
 def test_payload_validation_returns_stable_error_codes(mutate_payload, expected_code):
-    payload = copy.deepcopy(valid_payload())
+    payload = copy.deepcopy(valid_v2_payload())
     mutate_payload(payload)
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
@@ -283,7 +194,7 @@ def test_payload_validation_returns_stable_error_codes(mutate_payload, expected_
 
 
 def test_payload_validation_enforces_caps():
-    payload = valid_payload()
+    payload = valid_v2_payload()
     payload["runtime_tags"] = [
         {"key": f"tag_{index}", "label": f"Tag {index}", "related_domain_keys": []}
         for index in range(31)
@@ -296,7 +207,7 @@ def test_payload_validation_enforces_caps():
 
 
 def test_payload_validation_rejects_invalid_mappings():
-    payload = valid_payload()
+    payload = valid_v2_payload()
     payload["runtime_vocabulary"][0]["mapped_domain_key"] = "pricing"
     payload["runtime_vocabulary"][0]["mapped_unit_key"] = "rooms"
     payload["routing_hints"][0]["suggested_domain_keys"] = ["pricing"]
@@ -314,13 +225,9 @@ def test_payload_validation_rejects_invalid_mappings():
 
 
 def test_payload_validation_rejects_too_many_suggested_domains():
-    payload = valid_payload()
+    payload = valid_v2_payload()
     payload["routing_hints"][0]["suggested_domain_keys"] = [
-        "maintenance",
-        "housekeeping",
-        "security",
-        "cleaning",
-        "management",
+        domain["key"] for domain in payload["operational_domains"][:5]
     ]
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
@@ -333,7 +240,7 @@ def test_create_and_section_validation_do_not_mutate_runtime(onboarding_session,
     proposal = create_manual_onboarding_proposal(
         session=onboarding_session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
     validate_onboarding_proposal_section(
         proposal=proposal,
@@ -353,7 +260,7 @@ def test_required_section_cannot_be_skipped(onboarding_session, owner):
     proposal = create_manual_onboarding_proposal(
         session=onboarding_session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
@@ -384,7 +291,7 @@ def test_manager_cannot_create_or_apply_proposal(onboarding_session):
         create_manual_onboarding_proposal(
             session=onboarding_session,
             actor=manager,
-            payload=valid_payload(),
+            payload=valid_v2_payload(),
         )
 
 
@@ -392,7 +299,7 @@ def test_apply_requires_validated_proposal(onboarding_session, owner):
     proposal = create_manual_onboarding_proposal(
         session=onboarding_session,
         actor=owner,
-        payload=valid_payload(),
+        payload=valid_v2_payload(),
     )
 
     with pytest.raises(OnboardingProposalStateError):
@@ -403,7 +310,7 @@ def test_apply_requires_validated_proposal(onboarding_session, owner):
 
 def test_apply_revalidates_against_active_catalog_rows(onboarding_session, owner):
     proposal = create_validated_proposal(onboarding_session, owner)
-    OnboardingCatalogDomain.objects.filter(key="security").update(active=False)
+    OnboardingCatalogDomain.objects.filter(key=HOTEL_HEBERGEMENT_DOMAIN_KEY).update(active=False)
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
         apply_onboarding_proposal(proposal=proposal, actor=owner)
@@ -480,9 +387,15 @@ def test_apply_preserves_omitted_manual_runtime_rows_and_membership_domain(
     assert onboarding_session.establishment.status == Establishment.Status.DRAFT
 
     assert OperationalModule.objects.get(key="hotel").source == OnboardingProposal.Source.MANUAL
-    assert OperationalDomain.objects.filter(key="maintenance", active=True).exists()
+    assert OperationalDomain.objects.filter(
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        active=True,
+    ).exists()
     assert OperationalUnit.objects.get(key="lobby").active is True
-    assert RuntimeVocabulary.objects.get(term="VRV").mapped_domain.key == "maintenance"
+    assert (
+        RuntimeVocabulary.objects.get(term="VRV").mapped_domain.key
+        == HOTEL_HEBERGEMENT_DOMAIN_KEY
+    )
     assert RuntimeTag.objects.get(key="hvac").domain_links.count() == 1
     assert RoutingHint.objects.get(pattern="VRV").domain_links.count() == 1
 
@@ -523,7 +436,7 @@ def test_apply_deactivates_only_omitted_proposal_managed_runtime_rows(
     assert managed_tag.managed_by_onboarding_proposal == first_proposal
     assert managed_hint.managed_by_onboarding_proposal == first_proposal
 
-    payload = valid_payload()
+    payload = valid_v2_payload()
     payload["operational_units"] = []
     payload["runtime_vocabulary"] = []
     payload["runtime_tags"] = []
@@ -557,6 +470,6 @@ def test_apply_updates_existing_runtime_rows(onboarding_session, owner):
         establishment=onboarding_session.establishment,
         key="hotel",
     )
-    assert module.label == "Hotel"
+    assert module.label == "Hôtel"
     assert module.active is True
     assert module.managed_by_onboarding_proposal == proposal

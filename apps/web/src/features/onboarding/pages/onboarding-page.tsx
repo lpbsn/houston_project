@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { ActivityDescriptionCard } from '@/features/onboarding/components/activity-description-card'
@@ -37,6 +37,7 @@ function readRouteParams(): OnboardingRouteParams {
 export function OnboardingPage() {
   const [routeParams, setRouteParams] = useState<OnboardingRouteParams>(() => readRouteParams())
   const startMutation = useStartOnboardingSession()
+  const autoStartAttemptedRef = useRef(false)
 
   useEffect(() => {
     const handlePopState = () => {
@@ -94,6 +95,19 @@ export function OnboardingPage() {
     }
   }
 
+  useEffect(() => {
+    autoStartAttemptedRef.current = false
+  }, [routeParams.establishmentId])
+
+  useEffect(() => {
+    if (routeParams.sessionId || !routeParams.establishmentId || autoStartAttemptedRef.current) {
+      return
+    }
+
+    autoStartAttemptedRef.current = true
+    void handleStartSession()
+  }, [routeParams.establishmentId, routeParams.sessionId])
+
   if (!routeParams.sessionId && !routeParams.establishmentId) {
     return (
       <OnboardingNotice
@@ -117,6 +131,10 @@ export function OnboardingPage() {
   }
 
   if (!routeParams.sessionId && routeParams.establishmentId) {
+    if (startMutation.isPending || startMutation.isSuccess) {
+      return <OnboardingLoadingState label="Starting onboarding session..." />
+    }
+
     return (
       <OnboardingStartCard
         establishmentId={routeParams.establishmentId}

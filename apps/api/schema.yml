@@ -1021,6 +1021,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingProposalErrorResponse'
           description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/:
+    post:
+      operationId: v1_onboarding_sessions_proposals_items_create
+      description: Adds or removes one catalog item from an onboarding proposal payload.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalItemMutationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalItemMutationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalItemMutationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalCommandResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
   /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/:
     post:
       operationId: v1_onboarding_sessions_proposals_reject_create
@@ -1260,6 +1330,14 @@ components:
         locale:
           type: string
           default: en-US
+    ActionEnum:
+      enum:
+      - add
+      - remove
+      type: string
+      description: |-
+        * `add` - Add
+        * `remove` - Remove
     ActivationBlocker:
       type: object
       properties:
@@ -1328,6 +1406,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KeyedRuntimeItem'
+        active_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
         optional_units:
           type: array
           items:
@@ -1364,6 +1446,7 @@ components:
       - access
       - active_domains
       - active_modules
+      - active_subjects
       - activity_description
       - blockers
       - effective_can_activate
@@ -1692,7 +1775,11 @@ components:
         operational_domains:
           type: array
           items:
-            $ref: '#/components/schemas/ProposalDomainOrUnitItem'
+            $ref: '#/components/schemas/ProposalDomainItem'
+        operational_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalSubjectItem'
         operational_units:
           type: array
           items:
@@ -1712,6 +1799,7 @@ components:
       required:
       - operational_domains
       - operational_modules
+      - operational_subjects
       - operational_units
       - routing_hints
       - runtime_tags
@@ -1911,6 +1999,25 @@ components:
       required:
       - proposal
       - session
+    ProposalDomainItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+        module_key:
+          type: string
+      required:
+      - key
+      - label
+      - module_key
     ProposalDomainOrUnitItem:
       type: object
       properties:
@@ -1931,6 +2038,19 @@ components:
       required:
       - key
       - label
+    ProposalItemMutationRequest:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        section:
+          $ref: '#/components/schemas/SectionEnum'
+        key:
+          type: string
+      required:
+      - action
+      - key
+      - section
     ProposalRoutingHintItem:
       type: object
       properties:
@@ -1974,6 +2094,27 @@ components:
           $ref: '#/components/schemas/DecisionEnum'
       required:
       - decision
+    ProposalSubjectItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+        domain_key:
+          type: string
+        module_key:
+          type: string
+      required:
+      - domain_key
+      - key
+      - label
     ProposalValidationErrorItem:
       type: object
       properties:
@@ -2060,6 +2201,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KeyedRuntimeItem'
+        active_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
         optional_units:
           type: array
           items:
@@ -2079,6 +2224,7 @@ components:
       required:
       - active_domains
       - active_modules
+      - active_subjects
       - activity_description
       - optional_routing_hints
       - optional_runtime_tags
@@ -2167,6 +2313,16 @@ components:
       - membership_id
       - role
       - username
+    SectionEnum:
+      enum:
+      - operational_modules
+      - operational_domains
+      - operational_subjects
+      type: string
+      description: |-
+        * `operational_modules` - Modules
+        * `operational_domains` - Domains
+        * `operational_subjects` - Subjects
     SwitchEstablishmentRequest:
       type: object
       properties:

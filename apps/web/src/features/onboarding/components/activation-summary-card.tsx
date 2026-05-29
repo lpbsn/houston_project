@@ -65,6 +65,7 @@ export function ActivationSummaryCard({
       ['Managers with domains', activationSummary.managers_with_domains_count],
       ['Active modules', activationSummary.active_modules.length],
       ['Active domains', activationSummary.active_domains.length],
+      ['Active subjects', activationSummary.active_subjects.length],
     ] as const
   }, [activationSummary])
 

@@ -13,6 +13,7 @@ from houston.establishments.api.views import (
     OnboardingSessionProposalAIGenerateView,
     OnboardingSessionProposalApplyView,
     OnboardingSessionProposalDetailView,
+    OnboardingSessionProposalItemMutationView,
     OnboardingSessionProposalListView,
     OnboardingSessionProposalRejectView,
     OnboardingSessionProposalSectionDecisionView,
@@ -78,6 +79,11 @@ urlpatterns = [
         ),
         OnboardingSessionProposalSectionDecisionView.as_view(),
         name="onboarding-session-proposal-section-decision",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/items/",
+        OnboardingSessionProposalItemMutationView.as_view(),
+        name="onboarding-session-proposal-item-mutation",
     ),
     path(
         "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/reject/",

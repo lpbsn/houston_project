@@ -9,7 +9,7 @@ import {
   Tags,
   XCircle,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import {
   useGenerateOnboardingProposal,
   useOnboardingProposal,
   useOnboardingProposals,
+  useProposalItemMutation,
   useProposalSectionDecision,
   useRejectOnboardingProposal,
 } from '@/features/onboarding/hooks'
@@ -26,6 +27,7 @@ import type {
   DecisionEnum,
   OnboardingProposalResponse,
   ProposalValidationErrorItem,
+  SectionEnum,
 } from '@/features/onboarding/types'
 import { OnboardingApiError } from '@/features/onboarding/api'
 import {
@@ -43,6 +45,26 @@ type ProposalCardProps = {
 type ProposalPayload = OnboardingProposalResponse['payload']
 type ProposalSectionKey = Exclude<keyof ProposalPayload, 'schema_version'>
 
+const REMOVABLE_TAXONOMY_SECTIONS = [
+  'operational_modules',
+  'operational_domains',
+  'operational_subjects',
+] as const satisfies readonly SectionEnum[]
+
+type RemovableTaxonomySection = (typeof REMOVABLE_TAXONOMY_SECTIONS)[number]
+
+const REVIEWABLE_PROPOSAL_STATUSES = new Set(['ready', 'partially_validated', 'validated'])
+
+function isRemovableTaxonomySection(
+  sectionKey: ProposalSectionKey,
+): sectionKey is RemovableTaxonomySection {
+  return REMOVABLE_TAXONOMY_SECTIONS.includes(sectionKey as RemovableTaxonomySection)
+}
+
+function canMutateProposalItems(proposal: OnboardingProposalResponse) {
+  return REVIEWABLE_PROPOSAL_STATUSES.has(proposal.status)
+}
+
 const PROPOSAL_SECTIONS: {
   emptyMessage: string
   key: ProposalSectionKey
@@ -57,6 +79,11 @@ const PROPOSAL_SECTIONS: {
     key: 'operational_domains',
     title: 'Domains',
     emptyMessage: 'No domain suggestions were returned.',
+  },
+  {
+    key: 'operational_subjects',
+    title: 'Subjects',
+    emptyMessage: 'No subject suggestions were returned.',
   },
   {
     key: 'operational_units',
@@ -111,6 +138,7 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [pendingSection, setPendingSection] = useState<string | null>(null)
+  const [pendingRemoveItem, setPendingRemoveItem] = useState<string | null>(null)
   const proposalsQuery = useOnboardingProposals(sessionId)
   const proposals = useMemo(() => sortByNewest(proposalsQuery.data ?? []), [proposalsQuery.data])
   const effectiveSelectedProposalId =
@@ -126,17 +154,21 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
   const sectionDecisionMutation = useProposalSectionDecision(sessionId, selectedProposal?.id ?? '')
   const rejectMutation = useRejectOnboardingProposal(sessionId, selectedProposal?.id ?? '')
   const applyMutation = useApplyOnboardingProposal(sessionId, selectedProposal?.id ?? '')
+  const itemMutation = useProposalItemMutation(sessionId, selectedProposal?.id ?? '')
   const activeMutationError =
     generateMutation.error ??
     sectionDecisionMutation.error ??
     rejectMutation.error ??
-    applyMutation.error
+    applyMutation.error ??
+    itemMutation.error
   const activeProposalErrors = getProposalErrorItems(activeMutationError)
   const isCommandPending =
     generateMutation.isPending ||
     sectionDecisionMutation.isPending ||
     rejectMutation.isPending ||
-    applyMutation.isPending
+    applyMutation.isPending ||
+    itemMutation.isPending
+  const canRemoveItems = selectedProposal ? canMutateProposalItems(selectedProposal) : false
 
   async function handleGenerateProposal() {
     setSuccessMessage(null)
@@ -195,6 +227,28 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
       setSuccessMessage('Proposal applied. Runtime configuration was refreshed from the backend.')
     } catch {
       setSuccessMessage(null)
+    }
+  }
+
+  async function handleRemoveItem(section: RemovableTaxonomySection, key: string) {
+    if (!selectedProposal) {
+      return
+    }
+
+    setSuccessMessage(null)
+    setPendingRemoveItem(`${section}:${key}`)
+
+    try {
+      await itemMutation.mutateAsync({
+        action: 'remove',
+        section,
+        key,
+      })
+      setSuccessMessage('Item retiré de la proposition.')
+    } catch {
+      setSuccessMessage(null)
+    } finally {
+      setPendingRemoveItem(null)
     }
   }
 
@@ -298,22 +352,37 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
           <>
             <ProposalSummary proposal={selectedProposal} />
             <ValidationErrorList errors={selectedProposal.validation_errors} />
-            {PROPOSAL_SECTIONS.map((section) => (
-              <ProposalSuggestionSection
-                decisionState={selectedProposal.section_validation[section.key]}
-                disabled={isCommandPending}
-                emptyMessage={section.emptyMessage}
-                errors={selectedProposal.validation_errors.filter(
-                  (error) => error.section === section.key,
-                )}
-                items={selectedProposal.payload[section.key]}
-                key={section.key}
-                pendingSection={pendingSection}
-                sectionKey={section.key}
-                title={section.title}
-                onDecision={handleSectionDecision}
-              />
-            ))}
+            {PROPOSAL_SECTIONS.map((section) => {
+              const removableSection = isRemovableTaxonomySection(section.key)
+                ? section.key
+                : null
+
+              return (
+                <ProposalSuggestionSection
+                  canRemoveItems={canRemoveItems && removableSection !== null}
+                  decisionState={selectedProposal.section_validation[section.key]}
+                  disabled={isCommandPending}
+                  emptyMessage={section.emptyMessage}
+                  errors={selectedProposal.validation_errors.filter(
+                    (error) => error.section === section.key,
+                  )}
+                  items={selectedProposal.payload[section.key]}
+                  key={section.key}
+                  pendingRemoveItem={pendingRemoveItem}
+                  pendingSection={pendingSection}
+                  sectionKey={section.key}
+                  title={section.title}
+                  onDecision={handleSectionDecision}
+                  onRemoveItem={
+                    removableSection
+                      ? (key) => {
+                          void handleRemoveItem(removableSection, key)
+                        }
+                      : undefined
+                  }
+                />
+              )
+            })}
 
             <ProposalCommands
               applyError={applyMutation.error}
@@ -419,22 +488,28 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 function ProposalSuggestionSection({
+  canRemoveItems,
   decisionState,
   disabled,
   emptyMessage,
   errors,
   items,
   onDecision,
+  onRemoveItem,
+  pendingRemoveItem,
   pendingSection,
   sectionKey,
   title,
 }: {
+  canRemoveItems: boolean
   decisionState: string | undefined
   disabled: boolean
   emptyMessage: string
   errors: ProposalValidationErrorItem[]
   items: ProposalPayload[ProposalSectionKey]
   onDecision: (section: string, decision: DecisionEnum) => void
+  onRemoveItem?: (key: string) => void
+  pendingRemoveItem: string | null
   pendingSection: string | null
   sectionKey: ProposalSectionKey
   title: string
@@ -498,13 +573,27 @@ function ProposalSuggestionSection({
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item, index) => (
-            <ProposalSuggestionItem
-              item={item}
-              key={getSuggestionKey(item, index)}
-              sectionKey={sectionKey}
-            />
-          ))}
+          {items.map((item, index) => {
+            const itemKey = getSuggestionKey(item, index)
+            const removePending = pendingRemoveItem === `${sectionKey}:${itemKey}`
+
+            return (
+              <ProposalSuggestionItem
+                item={item}
+                key={itemKey}
+                removePending={removePending}
+                removable={canRemoveItems && onRemoveItem !== undefined && 'key' in item}
+                sectionKey={sectionKey}
+                onRemove={
+                  onRemoveItem && 'key' in item && typeof item.key === 'string'
+                    ? () => {
+                        onRemoveItem(item.key)
+                      }
+                    : undefined
+                }
+              />
+            )
+          })}
         </div>
       )}
 
@@ -514,6 +603,10 @@ function ProposalSuggestionSection({
 }
 
 function SectionIcon({ sectionKey }: { sectionKey: ProposalSectionKey }) {
+  if (sectionKey === 'operational_subjects') {
+    return <ClipboardCheck className="size-4" />
+  }
+
   if (sectionKey === 'runtime_tags') {
     return <Tags className="size-4" />
   }
@@ -531,16 +624,37 @@ function SectionIcon({ sectionKey }: { sectionKey: ProposalSectionKey }) {
 
 function ProposalSuggestionItem({
   item,
+  onRemove,
+  removePending,
+  removable,
   sectionKey,
 }: {
   item: ProposalPayload[ProposalSectionKey][number]
+  onRemove?: () => void
+  removePending?: boolean
+  removable?: boolean
   sectionKey: ProposalSectionKey
 }) {
+  const removeAction =
+    removable && onRemove ? (
+      <Button
+        type="button"
+        variant="outline"
+        className="h-9 shrink-0 rounded-[0.85rem] border-[#f4d5d5] bg-white px-3 text-[#9d3b33] hover:bg-[#fff3f2]"
+        disabled={removePending}
+        onClick={onRemove}
+      >
+        {removePending ? <LoaderCircle className="size-4 animate-spin" /> : null}
+        Retirer
+      </Button>
+    ) : undefined
+
   if (sectionKey === 'routing_hints') {
     const routingHint = item as ProposalPayload['routing_hints'][number]
 
     return (
       <SuggestionShell
+        action={removeAction}
         badges={[
           ...(routingHint.suggested_domain_keys ?? []),
           routingHint.suggested_unit_key ?? null,
@@ -558,6 +672,7 @@ function ProposalSuggestionItem({
 
     return (
       <SuggestionShell
+        action={removeAction}
         badges={[vocabulary.mapped_domain_key ?? null, vocabulary.mapped_unit_key ?? null]}
         reason={vocabulary.reason}
         subtitle={vocabulary.meaning}
@@ -571,6 +686,7 @@ function ProposalSuggestionItem({
 
     return (
       <SuggestionShell
+        action={removeAction}
         badges={runtimeTag.related_domain_keys ?? []}
         reason={runtimeTag.reason}
         subtitle={runtimeTag.key}
@@ -579,12 +695,43 @@ function ProposalSuggestionItem({
     )
   }
 
+  if (sectionKey === 'operational_subjects') {
+    const subject = item as ProposalPayload['operational_subjects'][number]
+
+    return (
+      <SuggestionShell
+        action={removeAction}
+        badges={[subject.domain_key, subject.module_key ?? null]}
+        confidence={formatConfidence(subject.confidence_score)}
+        reason={subject.reason}
+        subtitle={subject.key}
+        title={subject.label}
+      />
+    )
+  }
+
+  if (sectionKey === 'operational_domains') {
+    const domain = item as ProposalPayload['operational_domains'][number]
+
+    return (
+      <SuggestionShell
+        action={removeAction}
+        badges={[domain.module_key]}
+        confidence={formatConfidence(domain.confidence_score)}
+        reason={domain.reason}
+        subtitle={domain.key}
+        title={domain.label}
+      />
+    )
+  }
+
   const keyedItem = item as ProposalPayload['operational_modules'][number] &
-    ProposalPayload['operational_domains'][number]
+    ProposalPayload['operational_units'][number]
 
   return (
     <SuggestionShell
-      badges={keyedItem.related_modules ?? []}
+      action={removeAction}
+      badges={'related_modules' in keyedItem ? (keyedItem.related_modules ?? []) : []}
       confidence={formatConfidence(keyedItem.confidence_score)}
       reason={keyedItem.reason}
       subtitle={keyedItem.key}
@@ -594,12 +741,14 @@ function ProposalSuggestionItem({
 }
 
 function SuggestionShell({
+  action,
   badges,
   confidence,
   reason,
   subtitle,
   title,
 }: {
+  action?: ReactNode
   badges: (string | null | undefined)[]
   confidence?: string | null
   reason?: string
@@ -615,11 +764,14 @@ function SuggestionShell({
           <div className="text-sm font-semibold">{title}</div>
           <div className="text-xs text-muted-foreground">{subtitle}</div>
         </div>
-        {confidence ? (
-          <Badge variant="outline" className="w-fit shrink-0 border-[#ebe2d5] bg-white">
-            {confidence}
-          </Badge>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {confidence ? (
+            <Badge variant="outline" className="w-fit border-[#ebe2d5] bg-white">
+              {confidence}
+            </Badge>
+          ) : null}
+          {action}
+        </div>
       </div>
 
       {reason ? <p className="mt-2 text-sm leading-6 text-muted-foreground">{reason}</p> : null}

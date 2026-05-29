@@ -13,6 +13,7 @@ from houston.establishments.models import (
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
+    OperationalSubject,
     OperationalUnit,
     RoutingHint,
     RoutingHintDomain,
@@ -165,7 +166,17 @@ def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
             OperationalDomain.objects.filter(
                 establishment_id=establishment_id,
                 active=True,
-            ).order_by("key", "id")
+            )
+            .select_related("operational_module")
+            .order_by("key", "id")
+        ),
+        "active_subjects": list(
+            OperationalSubject.objects.filter(
+                establishment_id=establishment_id,
+                active=True,
+            )
+            .select_related("operational_domain", "operational_domain__operational_module")
+            .order_by("key", "id")
         ),
         "optional_units": list(
             OperationalUnit.objects.filter(
