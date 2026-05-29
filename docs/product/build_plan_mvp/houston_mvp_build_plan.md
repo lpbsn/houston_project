@@ -72,6 +72,29 @@ Add Observation submission, optional media handling, audio transcription, and cl
 
 Add AI-assisted Observation interpretation, Signal creation or aggregation, and Signal Feed behavior.
 
+**Implementation gate:** Phase 4 code starts only after Phase B/C taxonomy and onboarding runtime (modules, domains, subjects) are live. Do not implement Signal, `MembershipFeedSubscription`, feed selectors, or feed API prematurely.
+
+**Deliverables (code, when Phase 4 starts):**
+
+- Signal model with single categorization triplet (module/domain/subject FKs)
+- Observation → CandidateSignal → validated Signal pipeline
+- `MembershipFeedSubscription` model + API (with Signal Feed, not before)
+- Signal Feed endpoint with `view_mode=personal|general`
+- OpenAPI + generated clients + backend tests
+
+**Future test scenarios (documentation only until Phase 4 code):**
+
+| Area | Scenarios to cover when implementing |
+| --- | --- |
+| Signal service | Establishment scope on all FKs; one triplet per Signal; multi-problem Observation → N Signals |
+| Feed subscriptions | Module/domain/subject CRUD; replace semantics; self-only API; unknown keys rejected |
+| Feed selectors | `signal_matches_subscription`; personal vs general; empty personal without subscriptions |
+| Feed API | `view_mode` query param; active statuses only; cross-tenant 404 |
+| Roles | Directeur / Gouvernante / Femme de chambre / Technicien Ma vue vs Vue générale (see `feed_domain.md`) |
+| Regression | No raw Observation text in feed items; OpenAPI drift check in CI |
+
+Detailed scenario tables: `signal_domain.md` §12, `feed_domain.md` §12, `feed_subscription_domain.md` §Future test scenarios.
+
 ### Phase 5 — Actions / Execution Feed
 
 Add Action lifecycle, assignment, execution, validation, and Execution Feed updates.

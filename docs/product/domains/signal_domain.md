@@ -1,7 +1,7 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-29
 Implementation status: not_started
 
 ## 1. Purpose
@@ -30,7 +30,7 @@ Signal is the operational object between Observation and Action. It is not the r
 - Signal creation from backend-validated candidate Signals proposed from Observation pipeline output.
 - Aggregation of a candidate Signal into an existing active Signal when backend validation decides it matches an ongoing situation.
 - Signal lifecycle statuses: `open`, `in_progress`, `resolved`, `canceled`, `archived`.
-- Routing, visibility, and actionability based on validated `detected_domains`.
+- Routing through **one primary categorization** per Signal: `operational_module`, `operational_domain`, `operational_subject` (optional `operational_unit` for location).
 - Human-controlled urgency.
 - Candidate pinned-open behavior for important visible Signals.
 - Safe Signal summaries for feed and detail surfaces.
@@ -67,9 +67,9 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - Frontend cannot treat local state as Signal status authority.
 - AI does not decide urgency in MVP.
 - AI does not create Actions in MVP.
-- `detected_domains` with confidence score > 0.5 are the validated routing basis for Signal visibility and actionability; there is no authoritative business `primary_domain` in MVP.
-- A user can see a Signal when backend authorization confirms an intersection between the Signal's retained detected domains and the user's subscribed/assigned operational domains, subject to RBAC.
-- A Manager can act on a Signal when backend command authorization confirms an intersection between the Signal's retained detected domains and the Manager's subscribed/assigned operational domains.
+- **One primary categorization per Signal** (`operational_module`, `operational_domain`, `operational_subject`). Legacy `detected_domains[]` is obsolete.
+- An Observation describing **multiple distinct problems** produces **multiple CandidateSignals** and, after validation, **multiple Signals** — never multiple categorizations on one Signal.
+- Ma vue feed visibility uses `MembershipFeedSubscription` matching (see `feed_subscription_domain.md`). RBAC action uses `MembershipDomain` and role rules.
 - Visibility does not imply actionability.
 - Realtime and notifications may help refresh attention, but they do not grant access and do not become business truth.
 
@@ -87,11 +87,11 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Lifecycle state such as `open`, `in_progress`, `resolved`, `canceled`, or `archived`.
   - Controls whether the Signal remains part of active operational supervision.
 
-- `SignalDomain`
-  - Validated operational domain attached to the Signal through `detected_domains`.
-  - Retained for product routing when confidence score is > 0.5.
-  - Multiple retained domains may drive visibility and actionability; there is no authoritative `primary_domain` in MVP.
+- `SignalCategorization`
+  - Single primary triplet: operational module, domain, and subject FKs on the Signal row.
+  - Optional operational unit for physical location only.
 
+- ~~`SignalDomain` / `detected_domains`~~ — **removed from MVP**; see `operational_taxonomy_domain.md`.
 - `SignalUrgency`
   - Human-controlled urgency state for the supervised situation.
   - Separate from status.
@@ -150,11 +150,9 @@ Not validated yet:
 - Signal visibility is establishment-scoped and backend-authorized.
 - RBAC baseline defines establishment membership, role, and operational-domain authority, but Signal-specific permission helpers remain candidate until Signal APIs/services exist.
 - Owner and Director target behavior: broad establishment-level Signal visibility and actionability, subject to RBAC.
-- Manager target behavior: Signal actionability requires backend authorization and an intersection between retained Signal domains and the Manager's assigned/subscribed operational domains.
-- Staff target behavior: authorized Signal visibility according to feed policy, without management command authority.
-- `detected_domains` with confidence score > 0.5 are the validated product basis for routing, visibility, and actionability.
-- Users subscribed/assigned to at least one retained Signal domain may see the Signal according to RBAC and feed visibility rules.
-- Managers subscribed/assigned to at least one retained Signal domain may perform management actions only when backend command authorization allows it.
+- Manager target behavior: actionability requires RBAC and `MembershipDomain` intersection with Signal's `operational_domain`.
+- Ma vue (`view_mode=personal`) filters by `MembershipFeedSubscription`, not by `MembershipDomain`.
+- Vue générale (`view_mode=general`) shows all active establishment Signals without subscription filter.
 - Visibility does not imply actionability.
 - Creating Actions from Signals, resolving Signals, canceling Signals, changing urgency, pinning, and editing Signal domains require backend command authorization when those workflows are implemented.
 - Notifications and realtime events do not grant Signal access.
@@ -235,3 +233,41 @@ Do not treat any Signal route as current API truth until it exists in `apps/api/
 - Do not let AI decide urgency or create Actions.
 - Do not implement frontend-only Signal lifecycle transitions.
 - When Signal APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
+
+## 12. Future test scenarios (Phase 4 — documentation only)
+
+Do **not** implement Signal model, services, fixtures, or tests before Phase 4. These scenarios guide implementation and acceptance.
+
+### Signal creation / validation
+
+| Scenario | Expected behavior |
+| --- | --- |
+| Valid triplet (module, domain, subject) same establishment | Signal persisted with FKs |
+| Module/domain/subject from another establishment | Rejected |
+| Optional unit from same establishment | Allowed; orthogonal to categorization |
+| Observation with one problem | One CandidateSignal → one Signal after validation |
+| Observation with N distinct problems | N CandidateSignals → N Signals (never multi-triplet on one row) |
+
+### Categorization invariants
+
+| Scenario | Expected behavior |
+| --- | --- |
+| Signal row | Exactly one primary triplet via FKs |
+| Legacy `detected_domains[]` shape | Not accepted in MVP |
+
+### Lifecycle (active feed eligibility)
+
+| Status | In active Signal Feed |
+| --- | --- |
+| `open`, `in_progress` | Yes |
+| `resolved`, `canceled`, `archived` | No (default) |
+
+### Aggregation (when pipeline exists)
+
+| Scenario | Expected behavior |
+| --- | --- |
+| Candidate matches active Signal | Aggregate into existing Signal |
+| Candidate matches resolved Signal | Create new Signal |
+| Aggregation target closed/archived | Rejected |
+
+Tests must use runtime taxonomy keys from onboarding (e.g. `hotel__hebergement__proprete_des_chambres`), not legacy flat domain keys.

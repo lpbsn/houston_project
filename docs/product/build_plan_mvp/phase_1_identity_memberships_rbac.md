@@ -95,7 +95,7 @@ This phase exists to stabilize the auth, membership, and permission baseline bef
 - Any code behavior change
 - Invitations
 - Password reset
-- Public signup
+- Public signup (private invite-only register is documented in `self_service_provisioning_domain.md`)
 - `me` or `logout_all` endpoints
 - Observation
 - Signal

@@ -1,7 +1,7 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-29
 Implementation status: implemented for Phase 1
 
 ## 1. Purpose
@@ -38,7 +38,8 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Establishment isolation is mandatory. Product APIs must not expose data outside authorized establishments.
 - Role and operational domain data in responses are UI hints, not security authority.
 - `owner` and `director` still require valid active membership; broad authority is never global.
-- Domain-scoped members must not act outside allowed operational domains unless explicitly authorized by validated product rules.
+- **`MembershipDomain`** links a membership to operational domains for **RBAC action scope** (managers/staff domain assignment).
+- **`MembershipFeedSubscription`** (future Phase 4) personalizes **Ma vue** only — see [`feed_subscription_domain.md`](feed_subscription_domain.md). It must not be used as a security boundary or mixed with RBAC checks.
 - Notifications and realtime events do not grant access.
 - Signed media URLs require backend authorization before generation.
 - Raw Observation text must not leak through feeds, notifications, realtime payloads, signed media flows, or unauthorized detail views.

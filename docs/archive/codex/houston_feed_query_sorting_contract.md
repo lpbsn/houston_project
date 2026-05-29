@@ -2,9 +2,11 @@
 
 **Version:** v0.1  
 **Date:** 2026-05-24  
-**Statut:** Décisions MVP validées  
+**Statut:** Décisions MVP validées — **alignement taxonomie 2026-05-29** (voir §5.4, §6, §9)  
 **Périmètre:** Houston MVP — Signal Feed, Execution Feed, Notification Center, query, filters, sorting, pagination, realtime refetch  
-**Source d’arbitrage:** réponses utilisateur du fichier `Texte collé(18).txt`
+**Source d’arbitrage:** réponses utilisateur du fichier `Texte collé(18).txt` + clôture Phase A taxonomie
+
+> **Alignement Phase A (2026-05-29):** Les sections historiques utilisant `detected_domains[]` ou l’intersection `Signal.detected_domains ↔ MembershipDomain/operational_domains` pour **Signal Feed Ma vue** sont **obsolètes**. La règle cible est documentée dans [`feed_domain.md`](../../product/domains/feed_domain.md) et [`feed_subscription_domain.md`](../../product/domains/feed_subscription_domain.md): **Ma vue Signal = match `MembershipFeedSubscription` (module/domain/subject)** ; **Vue générale Signal = tous les Signals actifs établissement**. **Execution Feed Ma vue = responsabilités assignées**, pas abonnements feed.
 
 **Documents liés :**
 - `Houston_rbac_permissions_domain.md`
@@ -139,11 +141,48 @@ Owner/Director:
 - access to all establishment feed items
 ```
 
+## 5.4 Alignement taxonomie — Signal Feed personal (remplace §6.1–6.4 legacy)
+
+```txt
+Signal Feed personal (Ma vue) =
+active Signals whose primary categorization matches
+at least one MembershipFeedSubscription of the user
+(module OR domain OR subject level).
+
+No subscription rows => empty personal feed (not an error).
+
+MembershipDomain / operational_domains RBAC scope
+does NOT define Signal Feed personal content.
+```
+
+## 5.5 Signal Feed general
+
+```txt
+Signal Feed general (Vue générale) =
+all active establishment Signals visible by RBAC feed access.
+No MembershipFeedSubscription filter.
+```
+
+## 5.6 Execution Feed personal (unchanged principle)
+
+```txt
+Execution Feed personal =
+assigned operational responsibilities only:
+- assigned Actions
+- assigned Shared Checklist Executions
+- own Personal Checklist Executions
+
+NOT filtered by MembershipFeedSubscription.
+Action inherits taxonomy from parent Signal; assignment drives visibility.
+```
+
 ---
 
-# 6. Signal Feed visibility
+# 6. Signal Feed visibility (LEGACY — superseded by §5.4–5.5)
 
-## 6.1 Staff — personal
+> **Obsolete:** `detected_domains` and intersection with `operational_domains` for Ma vue. Kept for historical traceability only.
+
+## 6.1 Staff — personal (OBSOLETE)
 
 ```txt
 Staff Signal Feed personal =
@@ -279,8 +318,10 @@ SignalFeedItem:
 - status
 - urgency
 - pinned
-- detected_domains
-- operational_unit
+- module_key
+- domain_key
+- subject_key
+- operational_unit_key
 - location_text
 - candidate_signal_count
 - media_count
@@ -296,10 +337,21 @@ SignalFeedItem:
 Signal Feed item shows candidate_signal_count.
 ```
 
-## 9.3 detected_domains
+## 9.3 Primary categorization (replaces detected_domains)
 
 ```txt
-Signal Feed item shows detected_domains badges, ordered by confidence desc.
+Signal Feed item shows module_key, domain_key, subject_key badges
+(single primary triplet per Signal).
+
+Legacy detected_domains[] with confidence ordering is obsolete.
+Do not show confidence_score in normal feed MVP.
+```
+
+## 9.3 legacy detected_domains (OBSOLETE)
+
+```txt
+Historical: detected_domains[] badges ordered by confidence.
+Superseded by single primary triplet (§9.3 Primary categorization).
 ```
 
 ## 9.4 confidence_score

@@ -9,6 +9,16 @@ Before coding any phase:
 6. Keep scope strict. Do not implement future phases.
 7. Run required checks and report changed files + commands + results.
 
+### Taxonomy programme gates
+
+| Phase | Backend allowed | Backend forbidden |
+| --- | --- | --- |
+| **A** | `docs/` updates only | Models, migrations, services, APIs, tests, `schema.yml` |
+| **B/C** | `establishments/` onboarding/runtime taxonomy after [`phase_a_closure.md`](../../docs/product/phase_a_closure.md) human sign-off | Signal, feeds, `MembershipFeedSubscription`, Observation pipeline code |
+| **4+** | Signal, feeds, Observation pipeline when build plan phase opens | Orphan subscription/feed code before Signal |
+
+Do not pop B/C or provisioning stashes during Phase A. Regenerate OpenAPI only after B/C API stabilizes.
+
 ## Clarification Gate
 
 Before implementing anything, inspect the relevant docs, current code, schema, and tests.

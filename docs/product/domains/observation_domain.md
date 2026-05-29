@@ -1,7 +1,7 @@
 # Observation Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-29
 Implementation status: not_started
 
 ## 1. Purpose
@@ -65,6 +65,8 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - Raw Observation text may be used internally by the authorized backend processing pipeline, but must not leak into normal product UI, feeds, notifications, realtime payloads, technical logs, or durable frontend storage.
 - Raw Observation text must not appear in normal product UI, feeds, notifications, realtime payloads, technical logs, or durable frontend storage.
 - Processing failure must not delete the submitted Observation.
+- **One Observation may yield zero, one, or many Signals** after backend validation of AI pipeline output; each Signal carries **one** primary module/domain/subject categorization (see [`signal_domain.md`](signal_domain.md), [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
+- Distinct problems described in one Observation must produce **multiple CandidateSignals**, never multiple categorizations on a single Signal.
 
 ## 5. Main Objects
 
@@ -79,6 +81,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - `ObservationOutcome`
   - Business result after processing, such as Signal creation, aggregation, or no structured Signal.
   - Separate from the raw Observation itself.
+  - Plural outcomes (`signals_created`) are normal when one Observation describes multiple distinct problems.
 
 - `ObservationMedia`
   - Optional photo media linked through Upload / Media.
@@ -112,6 +115,8 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
   - `signal_aggregated`
   - `no_signal_created`
   - `not_actionable`
+
+See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) for CandidateSignal shape and segmentation rules.
 
 - Processing statuses and outcomes are candidate until implemented in code and exposed through OpenAPI where applicable.
 
@@ -181,7 +186,7 @@ Do not treat any Observation or upload/media endpoint as implemented until it ex
 - Inspect current code before claiming Observation models, services, events, or endpoints exist.
 - Inspect `apps/api/schema.yml` before listing any Observation API as implemented.
 - Inspect Upload / Media before changing photo or audio rules.
-- Inspect AI documentation before changing transcription or processing contracts.
+- Inspect AI documentation and [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing transcription or processing contracts.
 - Inspect Signal documentation before changing create, aggregate, or outcome behavior.
 - Inspect Checklist documentation before changing checklist-origin context.
 - Inspect Security / RGPD before changing raw-text visibility, logging, retention, notification, or realtime rules.

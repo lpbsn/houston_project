@@ -1,7 +1,7 @@
 # AI Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-29
 Implementation status: not_started
 
 ## 1. Purpose
@@ -34,13 +34,13 @@ It does not own:
 ## 2. MVP Scope
 
 - Audio-to-editable-text transcription support before Observation submit.
-- AI onboarding proposals for runtime structure that still require human validation before activation.
-- AI Observation pipeline proposals from validated Observation text only.
+- AI onboarding proposals for runtime structure that still require human validation before activation (**modules-only** provider output; backend expands domains and subjects — see [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md)).
+- AI Observation pipeline proposals from validated Observation text only (contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
 - Structured outputs for business-affecting AI responses, with strict backend-side validation before any business persistence.
 - Product-level expectation that provider/model choices remain abstracted and replaceable, even though current code does not validate a concrete implementation yet.
 - Metadata-oriented AI usage tracking and safe failure handling principles.
 - Fallback expectations: manual text entry for transcription, manual or template-based onboarding continuation, and safe retry or failure handling for the Observation pipeline.
-- Candidate MVP target: the Observation pipeline may propose zero, one, or multiple candidate Signals, with a maximum of 5 per Observation not validated yet.
+- Candidate MVP target: the Observation pipeline may propose zero, one, or multiple **CandidateSignals**, each with **one** module/domain/subject triplet; a multi-problem Observation yields multiple candidates (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
 - AI must not receive image input in MVP.
 - AI does not analyze Chat in MVP.
 
@@ -102,11 +102,11 @@ It does not own:
 
 - `AIOnboardingProposal`
   - Candidate runtime-setup proposal that requires human validation before backend activation.
-  - Exact section shapes belong to onboarding-specific contract material, not this domain reference.
+  - Provider output: **`operational_modules` only** (`ai_onboarding_v3`); exact expanded shape in [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md).
 
 - `AIObservationPipelineResult`
-  - Candidate structured output proposing Signal creation, aggregation, or no actionable Signal.
-  - Backend validation remains mandatory before any Signal persistence.
+  - Candidate structured output with 0..N **CandidateSignals**, each one triplet.
+  - Contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
 
 - `PromptVersion`
   - Version identifier for control text used by an AI flow.
@@ -200,7 +200,9 @@ Candidate capabilities only:
 - Inspect `upload_media_domain.md` before changing audio or image boundaries.
 - Inspect `observation_domain.md` before changing pipeline input or submit-time validation assumptions.
 - Inspect the Signal domain source of truth before changing Signal creation or aggregation assumptions.
-- Inspect `runtime_config_onboarding_domain.md` before changing onboarding proposal scope or activation boundaries.
+- Inspect [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing Observation pipeline outputs or segmentation.
+- Inspect [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md) before changing onboarding proposal scope or activation boundaries.
+- Do not conflate onboarding AI (modules-only) with Observation pipeline AI (CandidateSignals).
 - Do not invent provider privacy guarantees, zero-retention claims, or training guarantees without validated evidence.
 - Do not treat schema-valid AI output as business-valid output.
 - Do not let AI write business tables directly.
