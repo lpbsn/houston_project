@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0002_accesstoken_sessionrefreshtoken_usersession_and_more'),
-        ('establishments', '0002_operational_domains'),
+        ("accounts", "0002_accesstoken_sessionrefreshtoken_usersession_and_more"),
+        ("establishments", "0002_operational_domains"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='usersession',
-            name='selected_establishment',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='selected_by_sessions', to='establishments.establishment'),
+            model_name="usersession",
+            name="selected_establishment",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="selected_by_sessions",
+                to="establishments.establishment",
+            ),
         ),
     ]

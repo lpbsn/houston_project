@@ -25,7 +25,7 @@ Houston remains a backend-authoritative operational workflow app.
 
 1. Phase 0 — Full-stack foundation ✅ completed
 2. Phase 1 — Identity / Memberships / RBAC ✅ completed
-3. Phase 2 — Runtime config / Onboarding
+3. Phase 2 — Runtime config / Onboarding ✅ completed
 4. Phase 3 — Observation / Media / Transcription
 5. Phase 4 — AI Pipeline / Signal Feed
 6. Phase 5 — Actions / Execution Feed
@@ -57,9 +57,12 @@ Foundation baseline is complete and no longer a pending MVP phase.
 
 Establish authenticated identity, establishment membership, backend authorization, and tenant-scoped visibility.
 
-### Phase 2 — Runtime config / Onboarding minimal
+### Phase 2 — Runtime config / Onboarding minimal ✅ completed
 
 Add minimal establishment setup and onboarding inputs required before operational use.
+
+See [phase_2_runtime_config_onboarding.md](phase_2_runtime_config_onboarding.md) (closure
+section) for deferred items and Phase 3 entry assumptions.
 
 ### Phase 3 — Observation / Media / Transcription
 

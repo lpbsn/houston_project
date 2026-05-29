@@ -18,6 +18,10 @@ def env_list(name: str, default: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def env_int(name: str, default: int) -> int:
+    return int(env_str(name, str(default)))
+
+
 SECRET_KEY = env_str("DJANGO_SECRET_KEY", "replace-me-for-local-dev")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
@@ -154,3 +158,12 @@ HOUSTON_AUTH_REFRESH_COOKIE_SECURE = env_bool(
     "HOUSTON_AUTH_REFRESH_COOKIE_SECURE",
     default=not DEBUG,
 )
+
+OPENAI_API_KEY = env_str("OPENAI_API_KEY", "")
+HOUSTON_AI_ONBOARDING_PROVIDER = env_str("HOUSTON_AI_ONBOARDING_PROVIDER", "openai")
+HOUSTON_AI_ONBOARDING_MODEL = env_str("HOUSTON_AI_ONBOARDING_MODEL", "gpt-4.1-mini")
+HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS = env_int(
+    "HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS",
+    30,
+)
+HOUSTON_AI_ONBOARDING_MAX_RETRIES = env_int("HOUSTON_AI_ONBOARDING_MAX_RETRIES", 2)

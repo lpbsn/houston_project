@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { LandingPage } from '@/features/landing/landing-page'
+import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 
-type AppPath = '/' | '/login' | '/app'
+type AppPath = '/' | '/login' | '/app' | '/onboarding'
 
 function normalizePathname(pathname: string): AppPath {
-  if (pathname === '/login' || pathname === '/app') {
+  if (pathname === '/login' || pathname === '/app' || pathname === '/onboarding') {
     return pathname
   }
 
@@ -70,7 +71,7 @@ function App() {
       return
     }
 
-    if (pathname === '/app' && !auth.isAuthenticated) {
+    if ((pathname === '/app' || pathname === '/onboarding') && !auth.isAuthenticated) {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, pathname])
@@ -80,6 +81,10 @@ function App() {
       return <AppPage />
     }
 
+    if (pathname === '/onboarding') {
+      return <OnboardingPage />
+    }
+
     return <LoginPage />
   }, [pathname])
 
@@ -87,33 +92,44 @@ function App() {
     return <LandingPage />
   }
 
-  const routeCopy = pathname === '/app'
-    ? {
-        headingBadge: 'Workspace shell',
-        title: 'Identity, context, and membership workspaces.',
-        description:
-          'This mobile-first shell renders only backend-approved session, establishment, membership, and scoped search data.',
-        actions: (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-            onClick={() => {
-              void auth.logout()
-            }}
-            disabled={auth.isLoggingOut}
-          >
-            {auth.isLoggingOut ? 'Signing out...' : 'Sign out'}
-          </Button>
-        ),
-      }
-    : {
-        headingBadge: 'Session access',
-        title: 'Sign in through the backend auth contract.',
-        description:
-          'Sessions stay backend-owned, refresh stays cookie-backed, and React only renders the approved bootstrap state.',
-        actions: undefined,
-      }
+  const signOutAction = (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+      onClick={() => {
+        void auth.logout()
+      }}
+      disabled={auth.isLoggingOut}
+    >
+      {auth.isLoggingOut ? 'Signing out...' : 'Sign out'}
+    </Button>
+  )
+
+  const routeCopy =
+    pathname === '/app'
+      ? {
+          headingBadge: 'Workspace shell',
+          title: 'Identity, context, and membership workspaces.',
+          description:
+            'This mobile-first shell renders only backend-approved session, establishment, membership, and scoped search data.',
+          actions: signOutAction,
+        }
+      : pathname === '/onboarding'
+        ? {
+            headingBadge: 'Runtime onboarding',
+            title: 'Prepare this establishment for operations.',
+            description:
+              'Review backend-owned onboarding state, activity details, runtime setup, and readiness blockers before marking the session ready.',
+            actions: signOutAction,
+          }
+        : {
+            headingBadge: 'Session access',
+            title: 'Sign in through the backend auth contract.',
+            description:
+              'Sessions stay backend-owned, refresh stays cookie-backed, and React only renders the approved bootstrap state.',
+            actions: undefined,
+          }
 
   return (
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">

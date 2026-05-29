@@ -6,7 +6,11 @@ from typing import Any
 from houston.accounts.authentication import AccessTokenAuthContext
 from houston.accounts.models import User
 from houston.accounts.selectors import resolve_active_membership
-from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.establishments.models import (
+    Establishment,
+    EstablishmentMembership,
+    OnboardingSession,
+)
 from houston.organizations.models import Organization
 
 CURRENT_ESTABLISHMENT_SESSION_KEY = "current_establishment_id"
@@ -17,6 +21,19 @@ ACCESS_STATE_INACTIVE_USER = "inactive_user"
 ACCESS_STATE_NO_MEMBERSHIPS = "no_memberships"
 ACCESS_STATE_READY = "ready"
 ACCESS_STATE_SELECTION_REQUIRED = "selection_required"
+
+_ONBOARDING_MANAGEMENT_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }
+)
+_ONBOARDING_ESTABLISHMENT_STATUSES = frozenset(
+    {
+        Establishment.Status.DRAFT,
+        Establishment.Status.ACTIVE,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -39,6 +56,19 @@ class ApiAccessContext:
     active_memberships: tuple[EstablishmentMembership, ...]
     active_membership: EstablishmentMembership | None
     selected_establishment: Establishment | None
+
+
+@dataclass(frozen=True)
+class OnboardingAccessContext:
+    actor: User | None
+    session: OnboardingSession
+    organization: Organization | None
+    establishment: Establishment | None
+    membership: EstablishmentMembership | None
+    can_access: bool
+    can_manage: bool
+    can_configure_runtime: bool
+    can_activate: bool
 
 
 def resolve_current_access_context(request: Any) -> CurrentAccessContext:
@@ -126,6 +156,98 @@ def resolve_current_access_context(request: Any) -> CurrentAccessContext:
         selected_membership=None,
         selected_establishment=None,
     )
+
+
+def get_onboarding_access_context(
+    *,
+    actor: User | None,
+    session: OnboardingSession,
+) -> OnboardingAccessContext:
+    organization = getattr(session, "organization", None)
+    establishment = getattr(session, "establishment", None)
+    membership = _get_onboarding_membership(actor=actor, session=session)
+    can_manage = _is_valid_onboarding_membership(
+        actor=actor,
+        session=session,
+        membership=membership,
+    )
+    can_activate = (
+        can_manage
+        and establishment is not None
+        and establishment.status == Establishment.Status.DRAFT
+    )
+
+    return OnboardingAccessContext(
+        actor=actor,
+        session=session,
+        organization=organization,
+        establishment=establishment,
+        membership=membership,
+        can_access=can_manage,
+        can_manage=can_manage,
+        can_configure_runtime=can_manage,
+        can_activate=can_activate,
+    )
+
+
+def _get_onboarding_membership(
+    *,
+    actor: User | None,
+    session: OnboardingSession,
+) -> EstablishmentMembership | None:
+    if actor is None or not getattr(actor, "is_authenticated", False):
+        return None
+
+    return (
+        EstablishmentMembership.objects.filter(
+            user=actor,
+            establishment_id=session.establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+        )
+        .select_related("user", "establishment", "establishment__organization")
+        .first()
+    )
+
+
+def _is_valid_onboarding_membership(
+    *,
+    actor: User | None,
+    session: OnboardingSession,
+    membership: EstablishmentMembership | None,
+) -> bool:
+    if actor is None or not getattr(actor, "is_authenticated", False):
+        return False
+
+    if actor.status != User.Status.ACTIVE:
+        return False
+
+    if membership is None:
+        return False
+
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+
+    if membership.role not in _ONBOARDING_MANAGEMENT_ROLES:
+        return False
+
+    establishment = getattr(membership, "establishment", None)
+    if establishment is None:
+        return False
+
+    if establishment.id != session.establishment_id:
+        return False
+
+    if establishment.status not in _ONBOARDING_ESTABLISHMENT_STATUSES:
+        return False
+
+    organization = getattr(establishment, "organization", None)
+    if organization is None or organization.status != Organization.Status.ACTIVE:
+        return False
+
+    if session.organization_id != establishment.organization_id:
+        return False
+
+    return True
 
 
 def _resolve_membership_from_session(

@@ -11,6 +11,10 @@ from houston.establishments.models import (
     EstablishmentMembership,
     MembershipDomain,
     OperationalDomain,
+    RoutingHint,
+    RoutingHintDomain,
+    RuntimeTag,
+    RuntimeTagDomain,
 )
 from houston.establishments.permissions import (
     CanManageMemberships,
@@ -390,6 +394,45 @@ def test_owner_and_director_domain_access_requires_existing_active_domain():
 
     assert can_access_domain(owner_membership, "housekeeping") is False
     assert can_access_domain(director_membership, "maintenance") is False
+
+
+def test_runtime_tag_domain_link_does_not_grant_domain_access():
+    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    domain = create_domain(
+        membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    runtime_tag = RuntimeTag.objects.create(
+        establishment=membership.establishment,
+        key="hvac",
+        label="HVAC",
+    )
+    RuntimeTagDomain.objects.create(
+        runtime_tag=runtime_tag,
+        operational_domain=domain,
+    )
+
+    assert can_access_domain(membership, "maintenance") is False
+
+
+def test_routing_hint_domain_link_does_not_grant_domain_access():
+    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    domain = create_domain(
+        membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    routing_hint = RoutingHint.objects.create(
+        establishment=membership.establishment,
+        pattern="VRV",
+    )
+    RoutingHintDomain.objects.create(
+        routing_hint=routing_hint,
+        operational_domain=domain,
+    )
+
+    assert can_access_domain(membership, "maintenance") is False
 
 
 def test_has_active_membership_allows_ready_and_selection_required_contexts(request_factory):

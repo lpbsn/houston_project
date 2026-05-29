@@ -1,9 +1,10 @@
 import { startTransition, type ReactNode, useDeferredValue, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Sparkles, UserRound } from 'lucide-react'
+import { ArrowRight, Building2, ClipboardCheck, Sparkles, UserRound } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   deactivateMembership,
@@ -342,6 +343,47 @@ export function AppPage() {
           onSelect={handleSelectEstablishment}
           errorMessage={selectorError}
         />
+      ) : null}
+
+      {activeMembership ? (
+        <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
+                Onboarding
+              </Badge>
+              <Badge variant="outline" className="border-[#ebe2d5] bg-[#fbf7f0]">
+                Backend verified
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
+                Runtime onboarding
+              </CardTitle>
+              <CardDescription className="text-sm leading-6">
+                Open the setup workflow for this establishment. The API decides whether this
+                account can start or resume onboarding.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 rounded-[1.15rem] border border-[#ebe2d5] bg-[#fbf7f0] px-4 py-3 text-sm text-muted-foreground">
+              <span className="rounded-full bg-[color:var(--primary)]/10 p-2 text-[color:var(--primary)]">
+                <ClipboardCheck className="size-4" />
+              </span>
+              <span>{activeMembership.establishment_name}</span>
+            </div>
+            <Button
+              asChild
+              className="h-11 rounded-[1rem]"
+            >
+              <a href={`/onboarding?establishmentId=${activeMembership.establishment_id}`}>
+                Open onboarding
+                <ArrowRight className="size-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
       <ScopedUserSearchCard

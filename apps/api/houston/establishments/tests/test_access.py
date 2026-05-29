@@ -12,10 +12,15 @@ from houston.establishments.access import (
     ACCESS_STATE_SELECTION_REQUIRED,
     CURRENT_ESTABLISHMENT_SESSION_KEY,
     get_api_access_context,
+    get_onboarding_access_context,
     resolve_api_access_context,
     resolve_current_access_context,
 )
-from houston.establishments.models import Establishment, EstablishmentMembership
+from houston.establishments.models import (
+    Establishment,
+    EstablishmentMembership,
+    OnboardingSession,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -239,6 +244,45 @@ def test_active_membership_resolution_ignores_establishments_under_non_active_or
     assert CURRENT_ESTABLISHMENT_SESSION_KEY not in request.session
 
 
+def test_active_membership_resolution_ignores_draft_establishments(
+    request_factory,
+    organization,
+    active_user,
+):
+    active_establishment = Establishment.objects.create(
+        name="Active",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    draft_establishment = Establishment.objects.create(
+        name="Draft",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    active_membership = EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=active_establishment,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=draft_establishment,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    request = build_request(
+        request_factory,
+        active_user,
+        session_value=str(draft_establishment.id),
+    )
+
+    context = resolve_current_access_context(request)
+
+    assert context.state == ACCESS_STATE_READY
+    assert context.active_memberships == (active_membership,)
+    assert context.selected_establishment == active_establishment
+    assert request.session[CURRENT_ESTABLISHMENT_SESSION_KEY] == str(active_establishment.id)
+
+
 def test_api_access_context_uses_auth_session_selected_establishment(
     request_factory,
     organization,
@@ -432,3 +476,203 @@ def test_api_access_context_is_cached_on_request(
     second_context = get_api_access_context(request)
 
     assert first_context is second_context
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    ],
+)
+def test_owner_and_director_can_manage_draft_onboarding_session(
+    organization,
+    active_user,
+    role,
+):
+    establishment = Establishment.objects.create(
+        name="Draft",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+        started_by=active_user,
+    )
+    membership = EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=establishment,
+        role=role,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    context = get_onboarding_access_context(actor=active_user, session=session)
+
+    assert context.membership == membership
+    assert context.can_access is True
+    assert context.can_manage is True
+    assert context.can_configure_runtime is True
+    assert context.can_activate is True
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    ],
+)
+def test_manager_and_staff_cannot_configure_or_activate_onboarding(
+    organization,
+    active_user,
+    role,
+):
+    establishment = Establishment.objects.create(
+        name="Draft",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+        started_by=active_user,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=establishment,
+        role=role,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    context = get_onboarding_access_context(actor=active_user, session=session)
+
+    assert context.can_access is False
+    assert context.can_manage is False
+    assert context.can_configure_runtime is False
+    assert context.can_activate is False
+
+
+@pytest.mark.parametrize(
+    ("user_status", "membership_status", "organization_status", "establishment_status"),
+    [
+        (
+            User.Status.SUSPENDED,
+            EstablishmentMembership.Status.ACTIVE,
+            Organization.Status.ACTIVE,
+            Establishment.Status.DRAFT,
+        ),
+        (
+            User.Status.ACTIVE,
+            EstablishmentMembership.Status.DEACTIVATED,
+            Organization.Status.ACTIVE,
+            Establishment.Status.DRAFT,
+        ),
+        (
+            User.Status.ACTIVE,
+            EstablishmentMembership.Status.ACTIVE,
+            Organization.Status.SUSPENDED,
+            Establishment.Status.DRAFT,
+        ),
+        (
+            User.Status.ACTIVE,
+            EstablishmentMembership.Status.ACTIVE,
+            Organization.Status.ACTIVE,
+            Establishment.Status.DEACTIVATED,
+        ),
+    ],
+)
+def test_invalid_onboarding_access_state_is_denied(
+    user_status,
+    membership_status,
+    organization_status,
+    establishment_status,
+):
+    organization = Organization.objects.create(
+        name="Org",
+        status=organization_status,
+    )
+    user = User.objects.create_user(
+        username="actor",
+        password="secret",
+        status=user_status,
+    )
+    establishment = Establishment.objects.create(
+        name="Draft",
+        organization=organization,
+        status=establishment_status,
+    )
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+        started_by=user,
+    )
+    EstablishmentMembership.objects.create(
+        user=user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=membership_status,
+    )
+
+    context = get_onboarding_access_context(actor=user, session=session)
+
+    assert context.can_access is False
+    assert context.can_manage is False
+    assert context.can_configure_runtime is False
+    assert context.can_activate is False
+
+
+def test_onboarding_access_denies_foreign_session(organization, active_user):
+    actor_establishment = Establishment.objects.create(
+        name="Actor Site",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    foreign_establishment = Establishment.objects.create(
+        name="Foreign Site",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    foreign_session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=foreign_establishment,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=actor_establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    context = get_onboarding_access_context(actor=active_user, session=foreign_session)
+
+    assert context.membership is None
+    assert context.can_access is False
+    assert context.can_activate is False
+
+
+def test_active_onboarding_session_access_cannot_activate_active_establishment(
+    organization,
+    active_user,
+):
+    establishment = Establishment.objects.create(
+        name="Active",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    session = OnboardingSession.objects.create(
+        organization=organization,
+        establishment=establishment,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    context = get_onboarding_access_context(actor=active_user, session=session)
+
+    assert context.can_manage is True
+    assert context.can_configure_runtime is True
+    assert context.can_activate is False

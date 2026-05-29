@@ -41,6 +41,11 @@ def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
 
 
 def can_manage_runtime_context(membership: EstablishmentMembership | None) -> bool:
+    """Owner/Director on an active establishment in workspace (session-selected) context.
+
+    Intended for post-activation runtime administration APIs. Onboarding-session routes use
+    ``get_onboarding_access_context`` instead (path-scoped session, draft/active establishment).
+    """
     return _has_role(membership, _ADMIN_ROLES)
 
 
@@ -152,6 +157,8 @@ class CanManageMemberships(BasePermission):
 
 
 class CanManageRuntimeContext(BasePermission):
+    """DRF guard for active-establishment runtime context; not used on onboarding-session views."""
+
     message = "You do not have permission to manage runtime context."
 
     def has_permission(self, request, view) -> bool:
