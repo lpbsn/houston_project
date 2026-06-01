@@ -111,6 +111,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/register/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Registers a new owner and provisions an organization, draft establishment, and onboarding session using a valid registration invite code. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        post: operations["v1_auth_register_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register/validate-owner/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates owner registration fields without provisioning any records. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        post: operations["v1_auth_register_validate_owner_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/switch_establishment/": {
         parameters: {
             query?: never;
@@ -122,6 +156,23 @@ export interface paths {
         put?: never;
         /** @description Selects the active establishment for the current auth session. Requires a valid bearer access token and stores the selection on the backend UserSession. */
         post: operations["v1_auth_switch_establishment_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/membership-invitations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Invites a staff or manager member to the active establishment. Returns a copyable invitation link; email delivery is not included in MVP. */
+        post: operations["v1_establishments_membership_invitations_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -180,6 +231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/operational-taxonomy/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the active operational taxonomy tree for membership scope assignment. */
+        get: operations["v1_establishments_operational_taxonomy_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/users/search/": {
         parameters: {
             query?: never;
@@ -189,6 +257,23 @@ export interface paths {
         };
         /** @description Searches active users in the current active establishment context. Results are tenant-filtered before serialization and return only a minimal membership-backed user summary. */
         get: operations["v1_establishments_users_search_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/workspace-summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns a read-only establishment workspace summary for the current active establishment context. Any active member may read this summary. */
+        get: operations["v1_establishments_workspace_summary_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -207,6 +292,23 @@ export interface paths {
         get: operations["v1_health_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{token}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        post: operations["v1_invitations_accept_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -298,6 +400,23 @@ export interface paths {
         patch: operations["v1_onboarding_sessions_description_partial_update"];
         trace?: never;
     };
+    "/api/v1/onboarding-sessions/{session_id}/director-invitations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Invites a Director to the draft establishment for an onboarding session. Creates or reuses a pending user and an invited director membership. */
+        post: operations["v1_onboarding_sessions_director_invitations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding-sessions/{session_id}/mark-ready/": {
         parameters: {
             query?: never;
@@ -360,6 +479,23 @@ export interface paths {
         put?: never;
         /** @description Applies a validated onboarding proposal into runtime configuration. This does not activate the establishment. */
         post: operations["v1_onboarding_sessions_proposals_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds or removes one catalog item from an onboarding proposal payload. */
+        post: operations["v1_onboarding_sessions_proposals_items_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -442,6 +578,12 @@ export interface components {
             /** @default en-US */
             locale: string;
         };
+        /**
+         * @description * `add` - Add
+         *     * `remove` - Remove
+         * @enum {string}
+         */
+        ActionEnum: "add" | "remove";
         ActivationBlocker: {
             code: string;
             message: string;
@@ -470,13 +612,13 @@ export interface components {
             activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
             active_modules: components["schemas"]["KeyedRuntimeItem"][];
             active_domains: components["schemas"]["KeyedRuntimeItem"][];
+            active_subjects: components["schemas"]["KeyedRuntimeItem"][];
             optional_units: components["schemas"]["KeyedRuntimeItem"][];
             optional_vocabulary: components["schemas"]["RuntimeVocabularyItem"][];
             optional_runtime_tags: components["schemas"]["RuntimeTagItem"][];
             optional_routing_hints: components["schemas"]["RoutingHintItem"][];
             initial_owner_director_count: number;
-            initial_manager_count: number;
-            managers_with_domains_count: number;
+            initial_director_count: number;
             readiness: components["schemas"]["ActivationReadinessResponse"];
             blockers: components["schemas"]["ActivationBlocker"][];
             access: components["schemas"]["OnboardingAccessResponse"];
@@ -495,6 +637,16 @@ export interface components {
         ActivityDescriptionUpdateResponse: {
             session: components["schemas"]["OnboardingSessionResponse"];
             activity_description: components["schemas"]["ActivityDescriptionResponse"];
+        };
+        AuthMembershipScopeItem: {
+            scope_type: string;
+            /** Format: uuid */
+            scope_id: string;
+        };
+        AuthMembershipScopeSummary: {
+            module_count: number;
+            domain_count: number;
+            subject_count: number;
         };
         AuthResponse: {
             authenticated: boolean;
@@ -523,6 +675,44 @@ export interface components {
         DetailResponse: {
             detail: string;
         };
+        DirectorInvitationAcceptErrorResponse: {
+            code: string;
+            detail: string;
+        };
+        DirectorInvitationAcceptRequest: {
+            password: string;
+            password_confirmation: string;
+        };
+        DirectorInvitationAcceptResponse: {
+            authenticated: boolean;
+            user: components["schemas"]["UserPublic"];
+            memberships: components["schemas"]["Membership"][];
+            active_membership: components["schemas"]["Membership"] | null;
+            access_token: string;
+            /** Format: date-time */
+            access_token_expires_at: string;
+            /** Format: uuid */
+            establishment_id: string;
+            /** Format: uuid */
+            onboarding_session_id?: string;
+        };
+        DirectorInvitationErrorResponse: {
+            code: string;
+            detail: string;
+        };
+        DirectorInvitationRequest: {
+            /** Format: email */
+            email: string;
+            first_name: string;
+            last_name: string;
+        };
+        DirectorInvitationResponse: {
+            membership: components["schemas"]["EstablishmentMembershipResponse"];
+            invitation_token: string;
+            /** Format: date-time */
+            invitation_expires_at: string;
+            invitation_accept_path: string;
+        };
         EstablishmentMembershipResponse: {
             /** Format: uuid */
             id: string;
@@ -535,7 +725,18 @@ export interface components {
             user: components["schemas"]["MembershipUserSummary"];
             role: string;
             status: string;
-            readonly operational_domains: string[];
+            readonly scopes: components["schemas"]["EstablishmentMembershipScopeItem"][];
+            readonly scope_summary: components["schemas"]["EstablishmentMembershipScopeSummary"];
+        };
+        EstablishmentMembershipScopeItem: {
+            scope_type: components["schemas"]["ScopeTypeEnum"];
+            /** Format: uuid */
+            scope_id: string;
+        };
+        EstablishmentMembershipScopeSummary: {
+            module_count: number;
+            domain_count: number;
+            subject_count: number;
         };
         HealthResponse: {
             status: string;
@@ -567,8 +768,31 @@ export interface components {
             organization_name: string;
             role: string;
             status: string;
-            operational_domains: string[];
+            scopes: components["schemas"]["AuthMembershipScopeItem"][];
+            scope_summary: components["schemas"]["AuthMembershipScopeSummary"];
         };
+        MembershipInvitationRequest: {
+            /** Format: email */
+            email: string;
+            first_name: string;
+            last_name: string;
+            role: components["schemas"]["MembershipInvitationRequestRoleEnum"];
+            scopes: components["schemas"]["EstablishmentMembershipScopeItem"][];
+        };
+        /**
+         * @description * `staff` - staff
+         *     * `manager` - manager
+         * @enum {string}
+         */
+        MembershipInvitationRequestRoleEnum: "staff" | "manager";
+        /**
+         * @description * `owner` - Owner
+         *     * `director` - Director
+         *     * `manager` - Manager
+         *     * `staff` - Staff
+         * @enum {string}
+         */
+        MembershipUpdateRequestRoleEnum: "owner" | "director" | "manager" | "staff";
         MembershipUserSummary: {
             /** Format: uuid */
             id: string;
@@ -605,7 +829,8 @@ export interface components {
         OnboardingProposalPayload: {
             schema_version: string;
             operational_modules: components["schemas"]["ProposalCatalogItem"][];
-            operational_domains: components["schemas"]["ProposalDomainOrUnitItem"][];
+            operational_domains: components["schemas"]["ProposalDomainItem"][];
+            operational_subjects: components["schemas"]["ProposalSubjectItem"][];
             operational_units: components["schemas"]["ProposalDomainOrUnitItem"][];
             runtime_vocabulary: components["schemas"]["ProposalVocabularyItem"][];
             runtime_tags: components["schemas"]["ProposalRuntimeTagItem"][];
@@ -676,12 +901,36 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        OperationalTaxonomyDomain: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            label: string;
+            subjects: components["schemas"]["OperationalTaxonomySubject"][];
+        };
+        OperationalTaxonomyModule: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            label: string;
+            domains: components["schemas"]["OperationalTaxonomyDomain"][];
+        };
+        OperationalTaxonomyResponse: {
+            modules: components["schemas"]["OperationalTaxonomyModule"][];
+            unassigned_domains: components["schemas"]["OperationalTaxonomyDomain"][];
+        };
+        OperationalTaxonomySubject: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            label: string;
+        };
         PatchedActivityDescriptionRequest: {
             description?: string;
         };
         PatchedMembershipUpdateRequest: {
-            role?: components["schemas"]["RoleEnum"];
-            operational_domains?: string[];
+            role?: components["schemas"]["MembershipUpdateRequestRoleEnum"];
+            scopes?: components["schemas"]["EstablishmentMembershipScopeItem"][];
         };
         ProposalCatalogItem: {
             key: string;
@@ -694,6 +943,14 @@ export interface components {
             session: components["schemas"]["OnboardingSessionResponse"];
             proposal: components["schemas"]["OnboardingProposalResponse"];
         };
+        ProposalDomainItem: {
+            key: string;
+            label: string;
+            reason?: string;
+            /** Format: double */
+            confidence_score?: number | null;
+            module_key: string;
+        };
         ProposalDomainOrUnitItem: {
             key: string;
             label: string;
@@ -701,6 +958,11 @@ export interface components {
             /** Format: double */
             confidence_score?: number | null;
             related_modules?: string[];
+        };
+        ProposalItemMutationRequest: {
+            action: components["schemas"]["ActionEnum"];
+            section: components["schemas"]["SectionEnum"];
+            key: string;
         };
         ProposalRoutingHintItem: {
             pattern: string;
@@ -719,6 +981,15 @@ export interface components {
         ProposalSectionDecisionRequest: {
             decision: components["schemas"]["DecisionEnum"];
         };
+        ProposalSubjectItem: {
+            key: string;
+            label: string;
+            reason?: string;
+            /** Format: double */
+            confidence_score?: number | null;
+            domain_key: string;
+            module_key?: string;
+        };
         ProposalValidationErrorItem: {
             code: string;
             section?: string;
@@ -732,14 +1003,43 @@ export interface components {
             mapped_unit_key?: string | null;
             reason?: string;
         };
-        /**
-         * @description * `owner` - Owner
-         *     * `director` - Director
-         *     * `manager` - Manager
-         *     * `staff` - Staff
-         * @enum {string}
-         */
-        RoleEnum: "owner" | "director" | "manager" | "staff";
+        RegistrationErrorResponse: {
+            detail: string;
+            code?: string;
+        };
+        RegistrationOwnerValidateRequest: {
+            invite_code: string;
+            first_name: string;
+            last_name: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            password_confirmation: string;
+        };
+        RegistrationRequest: {
+            invite_code: string;
+            first_name: string;
+            last_name: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            password_confirmation: string;
+            organization_name: string;
+            establishment_name: string;
+        };
+        RegistrationResponse: {
+            authenticated: boolean;
+            user: components["schemas"]["UserPublic"];
+            memberships: components["schemas"]["Membership"][];
+            active_membership: components["schemas"]["Membership"] | null;
+            access_token: string;
+            /** Format: date-time */
+            access_token_expires_at: string;
+            /** Format: uuid */
+            establishment_id: string;
+            /** Format: uuid */
+            onboarding_session_id: string;
+        };
         RoutingHintItem: {
             /** Format: uuid */
             id: string;
@@ -753,6 +1053,7 @@ export interface components {
             activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
             active_modules: components["schemas"]["KeyedRuntimeItem"][];
             active_domains: components["schemas"]["KeyedRuntimeItem"][];
+            active_subjects: components["schemas"]["KeyedRuntimeItem"][];
             optional_units: components["schemas"]["KeyedRuntimeItem"][];
             optional_vocabulary: components["schemas"]["RuntimeVocabularyItem"][];
             optional_runtime_tags: components["schemas"]["RuntimeTagItem"][];
@@ -777,6 +1078,13 @@ export interface components {
             source: string;
             active: boolean;
         };
+        /**
+         * @description * `module` - module
+         *     * `domain` - domain
+         *     * `subject` - subject
+         * @enum {string}
+         */
+        ScopeTypeEnum: "module" | "domain" | "subject";
         ScopedUserSearchResult: {
             /** Format: uuid */
             id: string;
@@ -788,6 +1096,19 @@ export interface components {
             /** Format: uuid */
             membership_id: string;
         };
+        /**
+         * @description * `operational_modules` - Modules
+         *     * `operational_domains` - Domains
+         *     * `operational_subjects` - Subjects
+         * @enum {string}
+         */
+        SectionEnum: "operational_modules" | "operational_domains" | "operational_subjects";
+        /**
+         * @description * `active` - active
+         *     * `invited` - invited
+         * @enum {string}
+         */
+        StatusEnum: "active" | "invited";
         SwitchEstablishmentRequest: {
             /** Format: uuid */
             establishment_id: string;
@@ -799,6 +1120,24 @@ export interface components {
             /** Format: email */
             email: string | null;
             identity_type: string;
+        };
+        WorkspaceSummaryDirector: {
+            display_name: string;
+            status: components["schemas"]["StatusEnum"];
+        };
+        WorkspaceSummaryEstablishment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        WorkspaceSummaryPerson: {
+            display_name: string;
+        };
+        WorkspaceSummaryResponse: {
+            establishment: components["schemas"]["WorkspaceSummaryEstablishment"];
+            owner: components["schemas"]["WorkspaceSummaryPerson"] | null;
+            director: components["schemas"]["WorkspaceSummaryDirector"] | null;
+            active_membership_count: number;
         };
     };
     responses: never;
@@ -990,6 +1329,87 @@ export interface operations {
             };
         };
     };
+    v1_auth_register_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RegistrationRequest"];
+                "multipart/form-data": components["schemas"]["RegistrationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_register_validate_owner_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationOwnerValidateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RegistrationOwnerValidateRequest"];
+                "multipart/form-data": components["schemas"]["RegistrationOwnerValidateRequest"];
+            };
+        };
+        responses: {
+            /** @description Owner registration fields are valid. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_auth_switch_establishment_create: {
         parameters: {
             query?: never;
@@ -1021,6 +1441,65 @@ export interface operations {
                 content?: never;
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_membership_invitations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipInvitationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MembershipInvitationRequest"];
+                "multipart/form-data": components["schemas"]["MembershipInvitationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1243,6 +1722,51 @@ export interface operations {
             };
         };
     };
+    v1_establishments_operational_taxonomy_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationalTaxonomyResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_users_search_list: {
         parameters: {
             query: {
@@ -1298,6 +1822,51 @@ export interface operations {
             };
         };
     };
+    v1_establishments_workspace_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSummaryResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_health_retrieve: {
         parameters: {
             query?: never;
@@ -1313,6 +1882,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    v1_invitations_accept_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectorInvitationAcceptRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DirectorInvitationAcceptRequest"];
+                "multipart/form-data": components["schemas"]["DirectorInvitationAcceptRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationAcceptResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationAcceptErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };
@@ -1584,6 +2196,73 @@ export interface operations {
             };
         };
     };
+    v1_onboarding_sessions_director_invitations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectorInvitationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DirectorInvitationRequest"];
+                "multipart/form-data": components["schemas"]["DirectorInvitationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingErrorResponse"];
+                };
+            };
+        };
+    };
     v1_onboarding_sessions_mark_ready_create: {
         parameters: {
             query?: never;
@@ -1747,6 +2426,74 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCommandResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_onboarding_sessions_proposals_items_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalItemMutationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalItemMutationRequest"];
+                "multipart/form-data": components["schemas"]["ProposalItemMutationRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

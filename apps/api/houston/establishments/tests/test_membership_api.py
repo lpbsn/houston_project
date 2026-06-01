@@ -11,9 +11,10 @@ from houston.accounts.models import User, UserSession
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OperationalDomain,
 )
+from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -33,7 +34,7 @@ def create_user(
     return User.objects.create_user(
         username=username,
         email=email or f"{username}@example.com",
-        password="secret",
+        password=TEST_PASSWORD,
         status=status,
     )
 
@@ -70,7 +71,7 @@ def create_membership(
             label=domain_key.title(),
             active=True,
         )
-        MembershipDomain.objects.create(
+        MembershipScope.objects.create(
             membership=membership,
             operational_domain=domain,
         )
@@ -83,7 +84,7 @@ def ensure_csrf(api_client: APIClient) -> str:
     return api_client.cookies["csrftoken"].value
 
 
-def login(api_client: APIClient, *, identifier: str, password: str = "secret") -> str:
+def login(api_client: APIClient, *, identifier: str, password: str = TEST_PASSWORD) -> str:
     csrf_token = ensure_csrf(api_client)
     response = api_client.post(
         "/api/v1/auth/login/",
@@ -224,7 +225,7 @@ def test_membership_detail_returns_not_found_for_foreign_membership(api_client):
     assert response.json() == {"detail": "Not found."}
 
 
-def test_membership_patch_updates_role_and_operational_domains(api_client):
+def test_membership_patch_updates_role_and_scopes(api_client):
     actor = create_user(username="owner_actor")
     actor_membership = create_membership(
         user=actor,
@@ -244,13 +245,13 @@ def test_membership_patch_updates_role_and_operational_domains(api_client):
         label="Housekeeping",
         active=True,
     )
-    OperationalDomain.objects.create(
+    maintenance = OperationalDomain.objects.create(
         establishment=actor_membership.establishment,
         key="maintenance",
         label="Maintenance",
         active=True,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=target_membership,
         operational_domain=housekeeping,
     )
@@ -263,7 +264,9 @@ def test_membership_patch_updates_role_and_operational_domains(api_client):
         ),
         {
             "role": EstablishmentMembership.Role.MANAGER,
-            "operational_domains": ["maintenance"],
+            "scopes": [
+                {"scope_type": "domain", "scope_id": str(maintenance.id)},
+            ],
         },
         format="json",
         **auth_headers(access_token),
@@ -272,18 +275,18 @@ def test_membership_patch_updates_role_and_operational_domains(api_client):
     assert response.status_code == 200
     body = response.json()
     assert body["role"] == EstablishmentMembership.Role.MANAGER
-    assert body["operational_domains"] == ["maintenance"]
+    assert body["scopes"] == [
+        {"scope_type": "domain", "scope_id": str(maintenance.id)},
+    ]
+    assert body["scope_summary"]["domain_count"] == 1
 
     target_membership.refresh_from_db()
     assert target_membership.role == EstablishmentMembership.Role.MANAGER
-    assert list(
-        MembershipDomain.objects.filter(membership=target_membership)
-        .select_related("operational_domain")
-        .values_list("operational_domain__key", flat=True)
-    ) == ["maintenance"]
+    assert MembershipScope.objects.filter(membership=target_membership).count() == 1
 
 
-def test_membership_patch_rejects_foreign_or_inactive_domains(api_client):
+def test_membership_patch_rejects_foreign_or_inactive_scopes(api_client):
+
     actor = create_user(username="owner_actor")
     actor_membership = create_membership(
         user=actor,
@@ -313,13 +316,13 @@ def test_membership_patch_rejects_foreign_or_inactive_domains(api_client):
         organization=Organization.objects.create(name="Cannes Group"),
         status=Establishment.Status.ACTIVE,
     )
-    OperationalDomain.objects.create(
+    foreign_domain = OperationalDomain.objects.create(
         establishment=foreign_establishment,
         key="security",
         label="Security",
         active=True,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=target_membership,
         operational_domain=active_domain,
     )
@@ -330,20 +333,19 @@ def test_membership_patch_rejects_foreign_or_inactive_domains(api_client):
             f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
             f"{target_membership.id}/"
         ),
-        {"operational_domains": [inactive_domain.key, "security"]},
+        {
+            "scopes": [
+                {"scope_type": "domain", "scope_id": str(inactive_domain.id)},
+                {"scope_type": "domain", "scope_id": str(foreign_domain.id)},
+            ]
+        },
         format="json",
         **auth_headers(access_token),
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "Operational domains must be active and belong to the same establishment."
-    }
-    assert list(
-        MembershipDomain.objects.filter(membership=target_membership)
-        .select_related("operational_domain")
-        .values_list("operational_domain__key", flat=True)
-    ) == ["housekeeping"]
+    assert "establishment" in response.json()["detail"].lower()
+    assert MembershipScope.objects.filter(membership=target_membership).count() == 1
 
 
 def test_membership_patch_cannot_demote_last_active_owner(api_client):
@@ -402,7 +404,7 @@ def test_membership_patch_can_demote_owner_when_another_active_owner_exists(api_
     assert second_owner.role == EstablishmentMembership.Role.DIRECTOR
 
 
-def test_membership_patch_can_update_domains_while_role_stays_owner(api_client):
+def test_membership_patch_rejects_scopes_for_owner_membership(api_client):
     actor = create_user(username="owner_actor")
     actor_membership = create_membership(
         user=actor,
@@ -415,21 +417,11 @@ def test_membership_patch_can_update_domains_while_role_stays_owner(api_client):
         role=EstablishmentMembership.Role.OWNER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    housekeeping = OperationalDomain.objects.create(
-        establishment=actor_membership.establishment,
-        key="housekeeping",
-        label="Housekeeping",
-        active=True,
-    )
-    OperationalDomain.objects.create(
+    security = OperationalDomain.objects.create(
         establishment=actor_membership.establishment,
         key="security",
         label="Security",
         active=True,
-    )
-    MembershipDomain.objects.create(
-        membership=target_owner,
-        operational_domain=housekeeping,
     )
 
     access_token = login(api_client, identifier=actor.email)
@@ -439,23 +431,16 @@ def test_membership_patch_can_update_domains_while_role_stays_owner(api_client):
             f"{target_owner.id}/"
         ),
         {
-            "role": EstablishmentMembership.Role.OWNER,
-            "operational_domains": ["security"],
+            "scopes": [
+                {"scope_type": "domain", "scope_id": str(security.id)},
+            ],
         },
         format="json",
         **auth_headers(access_token),
     )
 
-    assert response.status_code == 200
-    assert response.json()["role"] == EstablishmentMembership.Role.OWNER
-    assert response.json()["operational_domains"] == ["security"]
-    target_owner.refresh_from_db()
-    assert target_owner.role == EstablishmentMembership.Role.OWNER
-    assert list(
-        MembershipDomain.objects.filter(membership=target_owner)
-        .select_related("operational_domain")
-        .values_list("operational_domain__key", flat=True)
-    ) == ["security"]
+    assert response.status_code == 400
+    assert "owner or director" in response.json()["detail"].lower()
 
 
 def test_membership_deactivate_blocks_last_active_owner(api_client):
@@ -521,3 +506,92 @@ def test_membership_deactivate_succeeds_and_clears_selected_establishment(api_cl
     target_session.refresh_from_db()
     assert target_membership.status == EstablishmentMembership.Status.DEACTIVATED
     assert target_session.selected_establishment is None
+
+
+def test_director_cannot_patch_owner_membership(api_client):
+    actor = create_user(username="director_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        name="Nice",
+    )
+    owner_user = create_user(username="target_owner")
+    owner_membership = EstablishmentMembership.objects.create(
+        user=owner_user,
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{owner_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.STAFF},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+
+
+def test_director_cannot_deactivate_owner_membership(api_client):
+    actor = create_user(username="director_deactivate_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        name="Nice",
+    )
+    owner_user = create_user(username="owner_target")
+    owner_membership = EstablishmentMembership.objects.create(
+        user=owner_user,
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{owner_membership.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+
+
+def test_director_can_patch_manager_membership(api_client):
+    actor = create_user(username="director_patch_manager")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        name="Nice",
+    )
+    manager_user = create_user(username="manager_target")
+    manager_membership = EstablishmentMembership.objects.create(
+        user=manager_user,
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{manager_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.STAFF},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == EstablishmentMembership.Role.STAFF

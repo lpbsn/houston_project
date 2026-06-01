@@ -6,7 +6,7 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
@@ -24,6 +24,7 @@ from houston.establishments.selectors import (
     list_onboarding_sessions_for_actor,
 )
 from houston.establishments.services import build_activation_summary
+from houston.establishments.tests.conftest import HOTEL_HEBERGEMENT_DOMAIN_KEY
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -149,13 +150,13 @@ def test_runtime_config_selector_returns_only_same_establishment_data(
     )
     domain = OperationalDomain.objects.create(
         establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        label="Hébergement",
     )
     foreign_domain = OperationalDomain.objects.create(
         establishment=foreign_establishment,
-        key="maintenance",
-        label="Maintenance",
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        label="Hébergement",
     )
     OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
     OperationalModule.objects.create(
@@ -197,7 +198,7 @@ def test_runtime_config_selector_returns_only_same_establishment_data(
     config = get_runtime_config_for_session(session=session)
 
     assert [item.key for item in config["active_modules"]] == ["hotel"]
-    assert [item.key for item in config["active_domains"]] == ["maintenance"]
+    assert [item.key for item in config["active_domains"]] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert [item.key for item in config["optional_units"]] == ["lobby"]
     assert [item.term for item in config["optional_vocabulary"]] == ["VRV"]
     assert [item.key for item in config["optional_runtime_tags"]] == ["hvac"]
@@ -219,8 +220,8 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
     OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
     domain = OperationalDomain.objects.create(
         establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        label="Hébergement",
     )
     manager = User.objects.create_user(
         username="manager_selector",
@@ -233,7 +234,7 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.INVITED,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=domain,
     )
@@ -245,4 +246,4 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
     assert "validated_modules" not in summary
     assert "validated_domains" not in summary
     assert summary["active_modules"][0]["key"] == "hotel"
-    assert summary["active_domains"][0]["key"] == "maintenance"
+    assert summary["active_domains"][0]["key"] == HOTEL_HEBERGEMENT_DOMAIN_KEY

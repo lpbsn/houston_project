@@ -1,7 +1,7 @@
 # Action Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-29
 Implementation status: not_started
 
 ## 1. Purpose
@@ -61,12 +61,19 @@ Action is the execution object in the loop between Signal and validated operatio
 - Visibility does not imply command authority.
 - Action must not expose raw Observation text in detail views, feeds, notifications, realtime payloads, or normal technical logs.
 - Realtime and notifications may refresh attention, but they do not grant access and do not carry business truth.
+- **Action inherits operational taxonomy from its parent Signal** — `operational_module`, `operational_domain`, `operational_subject`, and optional `operational_unit` are copied or derived from the parent Signal at creation. Actions do **not** define an independent taxonomy layer in MVP.
+- Action domain keys used for RBAC (`MembershipScope` domain coverage) and Execution Feed filtering refer to the **inherited** Signal domain, not a separate Action taxonomy.
 
 ## 5. Main Objects
 
 - `Action`
   - Concrete execution work created from one parent Signal.
   - Assigned to one active establishment member in MVP.
+  - Inherits parent Signal operational taxonomy (module, domain, subject, optional unit).
+
+- `ActionTaxonomyContext`
+  - Read-only projection of parent Signal categorization for RBAC and Execution Feed.
+  - Not a separate editable taxonomy on the Action row in MVP.
 
 - `ActionStatus`
   - Lifecycle state such as `open`, `in_progress`, `pending_validation`, `done`, `canceled`, or `reopened`.
@@ -173,7 +180,9 @@ Do not treat any Action endpoint as implemented until it exists in `apps/api/sch
 
 ## 10. Frontend Expectations
 
-- When implemented, Execution Feed may show backend-authorized Actions as execution work items, but feed query and sorting rules are not owned by this domain.
+- When implemented, Execution Feed may show backend-authorized Actions as execution work items.
+- **Execution Feed Ma vue (`view_mode=personal`)** filters by **assigned operational responsibilities** (assignee, creator where product allows, checklist assignment) — **not** by `MembershipFeedSubscription`.
+- Signal Feed Ma vue uses feed subscriptions; Execution Feed Ma vue uses assignment/responsibility rules. See [`feed_domain.md`](feed_domain.md).
 - Action cards and detail views must show safe Action context, not raw Observation text.
 - Frontend may render backend-provided permission hints, but backend responses remain the authority for all commands.
 - Lifecycle changes must be sent as backend commands, not applied as frontend-owned state transitions.
@@ -190,6 +199,8 @@ Do not treat any Action endpoint as implemented until it exists in `apps/api/sch
 - Inspect `signal_domain.md` before changing Action creation from Signal or Signal-side effects.
 - Inspect `rbac_permissions_domain.md` before changing Action visibility or command authorization.
 - Inspect `observation_domain.md` and `security_rgpd_domain.md` before changing raw-text visibility or logging boundaries.
+- Inspect [`feed_domain.md`](feed_domain.md) before changing Execution Feed personal vs general assumptions.
+- Do not add independent Action module/domain/subject fields unrelated to the parent Signal in MVP.
 - Do not add a separate start command unless explicitly validated; assignee accept is the MVP start behavior.
 - Do not make Action a Signal, Observation, ChecklistTask, generic ticket, or free-floating task.
 - Do not let AI create Actions in MVP.

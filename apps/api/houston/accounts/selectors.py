@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from django.db.models import Prefetch
-
 from houston.accounts.models import User, UserSession
-from houston.establishments.models import (
-    Establishment,
-    EstablishmentMembership,
-    MembershipDomain,
+from houston.establishments.membership_scope import (
+    membership_scope_prefetch,
+    membership_scope_rows_for_membership,
 )
+from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
 
 
@@ -78,15 +76,6 @@ def resolve_active_membership(
 
 
 def _active_membership_queryset(user: User):
-    domain_prefetch = Prefetch(
-        "domain_links",
-        queryset=MembershipDomain.objects.filter(
-            operational_domain__active=True,
-        )
-        .select_related("operational_domain")
-        .order_by("operational_domain__key"),
-    )
-
     return (
         EstablishmentMembership.objects.filter(
             user=user,
@@ -95,7 +84,7 @@ def _active_membership_queryset(user: User):
             establishment__organization__status=Organization.Status.ACTIVE,
         )
         .select_related("establishment", "establishment__organization")
-        .prefetch_related(domain_prefetch)
+        .prefetch_related(membership_scope_prefetch())
         .order_by("establishment__name", "establishment_id")
     )
 
@@ -118,9 +107,13 @@ def _serialize_membership(membership: EstablishmentMembership) -> dict:
         "organization_name": membership.establishment.organization.name,
         "role": membership.role,
         "status": membership.status,
-        "operational_domains": [
-            link.operational_domain.key for link in membership.domain_links.all()
-        ],
+        **dict(
+            zip(
+                ("scopes", "scope_summary"),
+                membership_scope_rows_for_membership(membership),
+                strict=True,
+            )
+        ),
     }
 
 

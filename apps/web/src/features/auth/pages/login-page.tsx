@@ -1,7 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
-
 import { useAuth } from '@/app/auth-provider'
 import { LoginForm } from '@/features/auth/components/login-form'
 
@@ -19,12 +17,5 @@ export function LoginPage() {
     )
   }
 
-  return (
-    <div className="grid gap-4">
-      <Badge variant="outline" className="w-fit">
-        Authenticated access
-      </Badge>
-      <LoginForm />
-    </div>
-  )
+  return <LoginForm />
 }

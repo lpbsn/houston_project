@@ -3,7 +3,7 @@ import type { PropsWithChildren, ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 
 type AppShellProps = PropsWithChildren<{
-  headingBadge: string
+  headingBadge?: string
   title: string
   description: string
   actions?: ReactNode
@@ -26,9 +26,11 @@ export function AppShell({
                 <span className="text-[1.75rem] font-black tracking-[-0.06em] text-[color:var(--primary)] sm:text-[2rem]">
                   houston
                 </span>
-                <Badge className="max-w-full bg-[color:var(--primary)]/12 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--primary)] sm:px-3 sm:text-[0.68rem] sm:tracking-[0.22em]">
-                  {headingBadge}
-                </Badge>
+                {headingBadge ? (
+                  <Badge className="max-w-full bg-[color:var(--primary)]/12 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--primary)] sm:px-3 sm:text-[0.68rem] sm:tracking-[0.22em]">
+                    {headingBadge}
+                  </Badge>
+                ) : null}
               </div>
 
               <div className="space-y-2">

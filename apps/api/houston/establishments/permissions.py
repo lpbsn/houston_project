@@ -4,11 +4,15 @@ from rest_framework.permissions import BasePermission
 
 from houston.accounts.models import User
 from houston.establishments.access import get_api_access_context
+from houston.establishments.membership_scope import (
+    membership_scope_covers_domain,
+    membership_scope_covers_subject,
+)
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
-    MembershipDomain,
     OperationalDomain,
+    OperationalSubject,
 )
 from houston.organizations.models import Organization
 
@@ -82,7 +86,7 @@ def can_access_domain(
             key=normalized_domain_key,
             active=True,
         )
-        .only("id")
+        .select_related("operational_module")
         .first()
     )
     if domain is None:
@@ -91,10 +95,37 @@ def can_access_domain(
     if membership.role in _ADMIN_ROLES:
         return True
 
-    return MembershipDomain.objects.filter(
-        membership=membership,
-        operational_domain=domain,
-    ).exists()
+    return membership_scope_covers_domain(membership, domain)
+
+
+
+def can_access_subject(
+    membership: EstablishmentMembership | None,
+    subject_key: str,
+) -> bool:
+    if not _is_valid_membership(membership):
+        return False
+
+    normalized_subject_key = _normalize_domain_key(subject_key)
+    if normalized_subject_key is None:
+        return False
+
+    subject = (
+        OperationalSubject.objects.filter(
+            establishment=membership.establishment,
+            key=normalized_subject_key,
+            active=True,
+        )
+        .select_related("operational_domain", "operational_domain__operational_module")
+        .first()
+    )
+    if subject is None:
+        return False
+
+    if membership.role in _ADMIN_ROLES:
+        return True
+
+    return membership_scope_covers_subject(membership, subject)
 
 
 def _has_role(

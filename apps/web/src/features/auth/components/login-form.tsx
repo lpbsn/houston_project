@@ -2,14 +2,7 @@ import { LoaderCircle, LockKeyhole, UserRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 import { AuthApiError } from '@/features/auth/api'
@@ -42,10 +35,7 @@ export function LoginForm() {
     <Card className="border-white/60 bg-white/90 shadow-[0_24px_80px_-48px_rgba(15,59,72,0.45)] backdrop-blur">
       <CardHeader className="space-y-3">
         <CardTitle className="text-2xl">Sign in to Houston</CardTitle>
-        <CardDescription>
-          Your browser keeps only a short-lived access token in memory. Session continuity stays on
-          the backend through a secure refresh cookie.
-        </CardDescription>
+        <CardDescription>Enter your email or username and password to continue.</CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -105,10 +95,6 @@ export function LoginForm() {
           </Button>
         </form>
       </CardContent>
-
-      <CardFooter className="items-start text-sm text-muted-foreground">
-        Houston keeps permissions, memberships, and session validity on the API side.
-      </CardFooter>
     </Card>
   )
 }

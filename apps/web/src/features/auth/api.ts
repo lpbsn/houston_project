@@ -9,8 +9,13 @@ import type {
   EstablishmentMembershipResponse,
   LoginRequest,
   MembershipUpdateRequest,
-  ScopedUserSearchResult,
+  MembershipInvitationRequest,
+  RegistrationOwnerValidateRequest,
+  RegistrationRequest,
+  RegistrationResponse,
   SwitchEstablishmentRequest,
+  OperationalTaxonomyResponse,
+  WorkspaceSummaryResponse,
 } from './types'
 
 export const bootstrapQueryKey = ['auth', 'bootstrap'] as const
@@ -18,8 +23,10 @@ export const membershipListQueryKey = (establishmentId: string) =>
   ['workspace', 'memberships', establishmentId] as const
 export const membershipDetailQueryKey = (establishmentId: string, membershipId: string) =>
   ['workspace', 'memberships', establishmentId, membershipId] as const
-export const scopedUserSearchQueryKey = (establishmentId: string, query: string) =>
-  ['workspace', 'user-search', establishmentId, query] as const
+export const workspaceSummaryQueryKey = (establishmentId: string) =>
+  ['workspace', 'summary', establishmentId] as const
+export const operationalTaxonomyQueryKey = (establishmentId: string) =>
+  ['workspace', 'operational-taxonomy', establishmentId] as const
 
 class AuthApiError extends Error {
   status: number
@@ -31,6 +38,15 @@ class AuthApiError extends Error {
   }
 }
 
+const REGISTRATION_STEP1_FIELDS = new Set([
+  'invite_code',
+  'first_name',
+  'last_name',
+  'email',
+  'password',
+  'password_confirmation',
+])
+
 function getErrorDetail(error: unknown) {
   if (typeof error !== 'object' || !error || !('detail' in error)) {
     return null
@@ -38,6 +54,106 @@ function getErrorDetail(error: unknown) {
 
   const detail = (error as { detail?: unknown }).detail
   return typeof detail === 'string' ? detail : null
+}
+
+function getErrorCode(error: unknown) {
+  if (typeof error !== 'object' || !error || !('code' in error)) {
+    return null
+  }
+
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : null
+}
+
+function parseRegistrationFieldErrors(
+  error: unknown,
+): Partial<Record<string, string[]>> | undefined {
+  if (typeof error !== 'object' || !error) {
+    return undefined
+  }
+
+  const fieldErrors: Partial<Record<string, string[]>> = {}
+
+  for (const [key, value] of Object.entries(error)) {
+    if (key === 'detail' || key === 'code') {
+      continue
+    }
+
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+      fieldErrors[key] = value
+      continue
+    }
+
+    if (typeof value === 'string') {
+      fieldErrors[key] = [value]
+    }
+  }
+
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined
+}
+
+export class RegistrationValidationError extends Error {
+  status: number
+  code: string | null
+  fieldErrors?: Partial<Record<string, string[]>>
+
+  constructor(
+    message: string,
+    status: number,
+    options?: { code?: string | null; fieldErrors?: Partial<Record<string, string[]>> },
+  ) {
+    super(message)
+    this.name = 'RegistrationValidationError'
+    this.status = status
+    this.code = options?.code ?? null
+    this.fieldErrors = options?.fieldErrors
+  }
+}
+
+function buildRegistrationValidationError(
+  response: Response,
+  error: unknown,
+  fallbackMessage: string,
+) {
+  const code = getErrorCode(error)
+  const fieldErrors = parseRegistrationFieldErrors(error)
+  const detail = getErrorDetail(error)
+
+  let message = fallbackMessage
+
+  if (code === 'invalid_invite_code') {
+    message = detail ?? 'Invalid invitation code.'
+  } else if (code === 'duplicate_email') {
+    message = detail ?? 'An account with this email already exists.'
+  } else if (fieldErrors?.password?.length) {
+    message = fieldErrors.password.join(' ')
+  } else if (fieldErrors?.password_confirmation?.length) {
+    message = fieldErrors.password_confirmation[0] ?? message
+  } else if (fieldErrors?.invite_code?.length) {
+    message = fieldErrors.invite_code[0] ?? message
+  } else if (fieldErrors?.email?.length) {
+    message = fieldErrors.email[0] ?? message
+  } else if (detail) {
+    message = detail
+  }
+
+  return new RegistrationValidationError(message, response.status, { code, fieldErrors })
+}
+
+export function isRegistrationStep1Error(error: unknown) {
+  if (!(error instanceof RegistrationValidationError)) {
+    return false
+  }
+
+  if (error.code === 'invalid_invite_code' || error.code === 'duplicate_email') {
+    return true
+  }
+
+  if (!error.fieldErrors) {
+    return false
+  }
+
+  return Object.keys(error.fieldErrors).some((field) => REGISTRATION_STEP1_FIELDS.has(field))
 }
 
 function toBootstrapResponse(payload: AuthResponse): BootstrapResponse {
@@ -146,6 +262,51 @@ export async function login(input: LoginRequest) {
   setAccessToken(data.access_token)
 
   return data
+}
+
+export async function validateRegistrationOwner(input: RegistrationOwnerValidateRequest) {
+  const csrfToken = await ensureCsrfToken()
+  const { error, response } = await apiClient.POST('/api/v1/auth/register/validate-owner/', {
+    body: input,
+    credentials: 'include',
+    headers: {
+      'X-CSRFToken': csrfToken,
+    },
+  })
+
+  if (response.status === 204) {
+    return
+  }
+
+  throw buildRegistrationValidationError(
+    response,
+    error,
+    'Owner details could not be validated.',
+  )
+}
+
+export async function registerOnboarding(input: RegistrationRequest) {
+  const csrfToken = await ensureCsrfToken()
+  const { data, error, response } = await apiClient.POST('/api/v1/auth/register/', {
+    body: input,
+    credentials: 'include',
+    headers: {
+      'X-CSRFToken': csrfToken,
+    },
+  })
+
+  if (error || !data) {
+    throw buildRegistrationValidationError(
+      response,
+      error,
+      'Registration could not be completed.',
+    )
+  }
+
+  hydrateBootstrap(data)
+  setAccessToken(data.access_token)
+
+  return data as RegistrationResponse
 }
 
 export async function logout() {
@@ -315,13 +476,12 @@ export async function deactivateMembership(establishmentId: string, membershipId
   return result.data as EstablishmentMembershipResponse
 }
 
-export async function searchUsers(establishmentId: string, query: string) {
+export async function getOperationalTaxonomy(establishmentId: string) {
   const result = await withAuthRetry(
     (accessToken) =>
-      apiClient.GET('/api/v1/establishments/{establishment_id}/users/search/', {
+      apiClient.GET('/api/v1/establishments/{establishment_id}/operational-taxonomy/', {
         params: {
           path: { establishment_id: establishmentId },
-          query: { q: query },
         },
         headers: accessToken
           ? {
@@ -333,10 +493,65 @@ export async function searchUsers(establishmentId: string, query: string) {
   )
 
   if (result.error || !result.data) {
-    throw buildAuthError(result.response, result.error, 'User search is unavailable.')
+    throw buildAuthError(
+      result.response,
+      result.error,
+      'Operational taxonomy could not be loaded.',
+    )
   }
 
-  return result.data as ScopedUserSearchResult[]
+  return result.data as OperationalTaxonomyResponse
+}
+
+export async function getWorkspaceSummary(establishmentId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/workspace-summary/', {
+        params: {
+          path: { establishment_id: establishmentId },
+        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Establishment summary is unavailable.')
+  }
+
+  return result.data as WorkspaceSummaryResponse
+}
+
+export async function inviteMembership(
+  establishmentId: string,
+  input: MembershipInvitationRequest,
+) {
+  const csrfToken = await ensureCsrfToken()
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/membership-invitations/', {
+        params: {
+          path: { establishment_id: establishmentId },
+        },
+        body: input,
+        credentials: 'include',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-CSRFToken': csrfToken,
+        },
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Invitation could not be created.')
+  }
+
+  return result.data
 }
 
 export { AuthApiError }

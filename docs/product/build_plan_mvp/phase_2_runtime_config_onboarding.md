@@ -46,7 +46,7 @@ Current repository state confirms these Phase 0/1 foundations are implemented:
 - `EstablishmentMembership` exists with `owner`, `director`, `manager`, and `staff`
   roles plus `invited`, `active`, and `deactivated` statuses.
 - `OperationalDomain` exists inside `houston.establishments`.
-- `MembershipDomain` exists as the membership-scoped operational domain link.
+- `MembershipScope` is the membership-scoped operational RBAC source of truth (`module` / `domain` / `subject` IDs).
 - Auth/session endpoints are implemented and present in `apps/api/schema.yml`:
   - `GET /api/v1/auth/csrf/`
   - `POST /api/v1/auth/login/`
@@ -522,7 +522,7 @@ Definition of Done:
 - `OnboardingSession` foundation exists with database constraints for one non-terminal
   initial onboarding session per establishment.
 - Runtime model foundation exists with migrations.
-- Existing `OperationalDomain` and `MembershipDomain` behavior remains compatible.
+- Existing `OperationalDomain` taxonomy and `MembershipScope` RBAC remain compatible.
 - Runtime tags, routing hints, vocabulary, and units are not permission authorities.
 - Relevant model tests pass.
 

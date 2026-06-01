@@ -266,6 +266,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: v1_auth_register_create
+      description: Registers a new owner and provisions an organization, draft establishment,
+        and onboarding session using a valid registration invite code. Requires a
+        valid Django CSRF cookie and X-CSRFToken header.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegistrationRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/register/validate-owner/:
+    post:
+      operationId: v1_auth_register_validate_owner_create
+      description: Validates owner registration fields without provisioning any records.
+        Requires a valid Django CSRF cookie and X-CSRFToken header.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegistrationOwnerValidateRequest'
+        required: true
+      responses:
+        '204':
+          description: Owner registration fields are valid.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/auth/switch_establishment/:
     post:
       operationId: v1_auth_switch_establishment_create
@@ -298,6 +371,65 @@ paths:
         '400':
           description: Invalid request payload.
         '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/membership-invitations/:
+    post:
+      operationId: v1_establishments_membership_invitations_create
+      description: Invites a staff or manager member to the active establishment.
+        Returns a copyable invitation link; email delivery is not included in MVP.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipInvitationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipInvitationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipInvitationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -515,6 +647,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/operational-taxonomy/:
+    get:
+      operationId: v1_establishments_operational_taxonomy_retrieve
+      description: Returns the active operational taxonomy tree for membership scope
+        assignment.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalTaxonomyResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/users/search/:
     get:
       operationId: v1_establishments_users_search_list
@@ -567,6 +740,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/workspace-summary/:
+    get:
+      operationId: v1_establishments_workspace_summary_retrieve
+      description: Returns a read-only establishment workspace summary for the current
+        active establishment context. Any active member may read this summary.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceSummaryResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -578,6 +792,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+          description: ''
+  /api/v1/invitations/{token}/accept/:
+    post:
+      operationId: v1_invitations_accept_create
+      description: Accepts an establishment invitation, sets the account password,
+        activates the user and membership, and creates an auth session. Requires a
+        valid Django CSRF cookie and X-CSRFToken header.
+      parameters:
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DirectorInvitationAcceptRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DirectorInvitationAcceptRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DirectorInvitationAcceptRequest'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationAcceptResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationAcceptErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
           description: ''
   /api/v1/onboarding-sessions/:
     post:
@@ -821,6 +1080,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingErrorResponse'
           description: ''
+  /api/v1/onboarding-sessions/{session_id}/director-invitations/:
+    post:
+      operationId: v1_onboarding_sessions_director_invitations_create
+      description: Invites a Director to the draft establishment for an onboarding
+        session. Creates or reuses a pending user and an invited director membership.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DirectorInvitationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DirectorInvitationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DirectorInvitationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingErrorResponse'
+          description: ''
   /api/v1/onboarding-sessions/{session_id}/mark-ready/:
     post:
       operationId: v1_onboarding_sessions_mark_ready_create
@@ -982,6 +1306,76 @@ paths:
         required: true
       tags:
       - onboarding
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalCommandResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
+          description: ''
+  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/:
+    post:
+      operationId: v1_onboarding_sessions_proposals_items_create
+      description: Adds or removes one catalog item from an onboarding proposal payload.
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalItemMutationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalItemMutationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalItemMutationRequest'
+        required: true
       security:
       - BearerAccessToken: []
       responses:
@@ -1260,6 +1654,14 @@ components:
         locale:
           type: string
           default: en-US
+    ActionEnum:
+      enum:
+      - add
+      - remove
+      type: string
+      description: |-
+        * `add` - Add
+        * `remove` - Remove
     ActivationBlocker:
       type: object
       properties:
@@ -1328,6 +1730,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KeyedRuntimeItem'
+        active_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
         optional_units:
           type: array
           items:
@@ -1346,9 +1752,7 @@ components:
             $ref: '#/components/schemas/RoutingHintItem'
         initial_owner_director_count:
           type: integer
-        initial_manager_count:
-          type: integer
-        managers_with_domains_count:
+        initial_director_count:
           type: integer
         readiness:
           $ref: '#/components/schemas/ActivationReadinessResponse'
@@ -1364,13 +1768,13 @@ components:
       - access
       - active_domains
       - active_modules
+      - active_subjects
       - activity_description
       - blockers
       - effective_can_activate
       - establishment
-      - initial_manager_count
+      - initial_director_count
       - initial_owner_director_count
-      - managers_with_domains_count
       - optional_routing_hints
       - optional_runtime_tags
       - optional_units
@@ -1411,6 +1815,30 @@ components:
       required:
       - activity_description
       - session
+    AuthMembershipScopeItem:
+      type: object
+      properties:
+        scope_type:
+          type: string
+        scope_id:
+          type: string
+          format: uuid
+      required:
+      - scope_id
+      - scope_type
+    AuthMembershipScopeSummary:
+      type: object
+      properties:
+        module_count:
+          type: integer
+        domain_count:
+          type: integer
+        subject_count:
+          type: integer
+      required:
+      - domain_count
+      - module_count
+      - subject_count
     AuthResponse:
       type: object
       properties:
@@ -1480,6 +1908,101 @@ components:
           type: string
       required:
       - detail
+    DirectorInvitationAcceptErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+      required:
+      - code
+      - detail
+    DirectorInvitationAcceptRequest:
+      type: object
+      properties:
+        password:
+          type: string
+        password_confirmation:
+          type: string
+      required:
+      - password
+      - password_confirmation
+    DirectorInvitationAcceptResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserPublic'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        active_membership:
+          allOf:
+          - $ref: '#/components/schemas/Membership'
+          nullable: true
+        access_token:
+          type: string
+        access_token_expires_at:
+          type: string
+          format: date-time
+        establishment_id:
+          type: string
+          format: uuid
+        onboarding_session_id:
+          type: string
+          format: uuid
+      required:
+      - access_token
+      - access_token_expires_at
+      - active_membership
+      - authenticated
+      - establishment_id
+      - memberships
+      - user
+    DirectorInvitationErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+      required:
+      - code
+      - detail
+    DirectorInvitationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - email
+      - first_name
+      - last_name
+    DirectorInvitationResponse:
+      type: object
+      properties:
+        membership:
+          $ref: '#/components/schemas/EstablishmentMembershipResponse'
+        invitation_token:
+          type: string
+        invitation_expires_at:
+          type: string
+          format: date-time
+        invitation_accept_path:
+          type: string
+      required:
+      - invitation_accept_path
+      - invitation_expires_at
+      - invitation_token
+      - membership
     EstablishmentMembershipResponse:
       type: object
       properties:
@@ -1502,21 +2025,50 @@ components:
           type: string
         status:
           type: string
-        operational_domains:
+        scopes:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
+          readOnly: true
+        scope_summary:
+          allOf:
+          - $ref: '#/components/schemas/EstablishmentMembershipScopeSummary'
           readOnly: true
       required:
       - establishment_id
       - establishment_name
       - id
-      - operational_domains
       - organization_id
       - organization_name
       - role
+      - scope_summary
+      - scopes
       - status
       - user
+    EstablishmentMembershipScopeItem:
+      type: object
+      properties:
+        scope_type:
+          $ref: '#/components/schemas/ScopeTypeEnum'
+        scope_id:
+          type: string
+          format: uuid
+      required:
+      - scope_id
+      - scope_type
+    EstablishmentMembershipScopeSummary:
+      type: object
+      properties:
+        module_count:
+          type: integer
+        domain_count:
+          type: integer
+        subject_count:
+          type: integer
+      required:
+      - domain_count
+      - module_count
+      - subject_count
     HealthResponse:
       type: object
       properties:
@@ -1584,19 +2136,64 @@ components:
           type: string
         status:
           type: string
-        operational_domains:
+        scopes:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/AuthMembershipScopeItem'
+        scope_summary:
+          $ref: '#/components/schemas/AuthMembershipScopeSummary'
       required:
       - establishment_id
       - establishment_name
       - id
-      - operational_domains
       - organization_id
       - organization_name
       - role
+      - scope_summary
+      - scopes
       - status
+    MembershipInvitationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/MembershipInvitationRequestRoleEnum'
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
+      required:
+      - email
+      - first_name
+      - last_name
+      - role
+      - scopes
+    MembershipInvitationRequestRoleEnum:
+      enum:
+      - staff
+      - manager
+      type: string
+      description: |-
+        * `staff` - staff
+        * `manager` - manager
+    MembershipUpdateRequestRoleEnum:
+      enum:
+      - owner
+      - director
+      - manager
+      - staff
+      type: string
+      description: |-
+        * `owner` - Owner
+        * `director` - Director
+        * `manager` - Manager
+        * `staff` - Staff
     MembershipUserSummary:
       type: object
       properties:
@@ -1692,7 +2289,11 @@ components:
         operational_domains:
           type: array
           items:
-            $ref: '#/components/schemas/ProposalDomainOrUnitItem'
+            $ref: '#/components/schemas/ProposalDomainItem'
+        operational_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalSubjectItem'
         operational_units:
           type: array
           items:
@@ -1712,6 +2313,7 @@ components:
       required:
       - operational_domains
       - operational_modules
+      - operational_subjects
       - operational_units
       - routing_hints
       - runtime_tags
@@ -1870,6 +2472,72 @@ components:
       - started_by_id
       - status
       - updated_at
+    OperationalTaxonomyDomain:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+        subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalTaxonomySubject'
+      required:
+      - id
+      - key
+      - label
+      - subjects
+    OperationalTaxonomyModule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+        domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalTaxonomyDomain'
+      required:
+      - domains
+      - id
+      - key
+      - label
+    OperationalTaxonomyResponse:
+      type: object
+      properties:
+        modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalTaxonomyModule'
+        unassigned_domains:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationalTaxonomyDomain'
+      required:
+      - modules
+      - unassigned_domains
+    OperationalTaxonomySubject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - key
+      - label
     PatchedActivityDescriptionRequest:
       type: object
       properties:
@@ -1880,11 +2548,11 @@ components:
       type: object
       properties:
         role:
-          $ref: '#/components/schemas/RoleEnum'
-        operational_domains:
+          $ref: '#/components/schemas/MembershipUpdateRequestRoleEnum'
+        scopes:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
     ProposalCatalogItem:
       type: object
       properties:
@@ -1911,6 +2579,25 @@ components:
       required:
       - proposal
       - session
+    ProposalDomainItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+        module_key:
+          type: string
+      required:
+      - key
+      - label
+      - module_key
     ProposalDomainOrUnitItem:
       type: object
       properties:
@@ -1931,6 +2618,19 @@ components:
       required:
       - key
       - label
+    ProposalItemMutationRequest:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        section:
+          $ref: '#/components/schemas/SectionEnum'
+        key:
+          type: string
+      required:
+      - action
+      - key
+      - section
     ProposalRoutingHintItem:
       type: object
       properties:
@@ -1974,6 +2674,27 @@ components:
           $ref: '#/components/schemas/DecisionEnum'
       required:
       - decision
+    ProposalSubjectItem:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        reason:
+          type: string
+        confidence_score:
+          type: number
+          format: double
+          nullable: true
+        domain_key:
+          type: string
+        module_key:
+          type: string
+      required:
+      - domain_key
+      - key
+      - label
     ProposalValidationErrorItem:
       type: object
       properties:
@@ -2005,18 +2726,102 @@ components:
       required:
       - meaning
       - term
-    RoleEnum:
-      enum:
-      - owner
-      - director
-      - manager
-      - staff
-      type: string
-      description: |-
-        * `owner` - Owner
-        * `director` - Director
-        * `manager` - Manager
-        * `staff` - Staff
+    RegistrationErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        code:
+          type: string
+      required:
+      - detail
+    RegistrationOwnerValidateRequest:
+      type: object
+      properties:
+        invite_code:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        password_confirmation:
+          type: string
+      required:
+      - email
+      - first_name
+      - invite_code
+      - last_name
+      - password
+      - password_confirmation
+    RegistrationRequest:
+      type: object
+      properties:
+        invite_code:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        password_confirmation:
+          type: string
+        organization_name:
+          type: string
+        establishment_name:
+          type: string
+      required:
+      - email
+      - establishment_name
+      - first_name
+      - invite_code
+      - last_name
+      - organization_name
+      - password
+      - password_confirmation
+    RegistrationResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserPublic'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        active_membership:
+          allOf:
+          - $ref: '#/components/schemas/Membership'
+          nullable: true
+        access_token:
+          type: string
+        access_token_expires_at:
+          type: string
+          format: date-time
+        establishment_id:
+          type: string
+          format: uuid
+        onboarding_session_id:
+          type: string
+          format: uuid
+      required:
+      - access_token
+      - access_token_expires_at
+      - active_membership
+      - authenticated
+      - establishment_id
+      - memberships
+      - onboarding_session_id
+      - user
     RoutingHintItem:
       type: object
       properties:
@@ -2060,6 +2865,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KeyedRuntimeItem'
+        active_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyedRuntimeItem'
         optional_units:
           type: array
           items:
@@ -2079,6 +2888,7 @@ components:
       required:
       - active_domains
       - active_modules
+      - active_subjects
       - activity_description
       - optional_routing_hints
       - optional_runtime_tags
@@ -2140,6 +2950,16 @@ components:
       - meaning
       - source
       - term
+    ScopeTypeEnum:
+      enum:
+      - module
+      - domain
+      - subject
+      type: string
+      description: |-
+        * `module` - module
+        * `domain` - domain
+        * `subject` - subject
     ScopedUserSearchResult:
       type: object
       properties:
@@ -2167,6 +2987,24 @@ components:
       - membership_id
       - role
       - username
+    SectionEnum:
+      enum:
+      - operational_modules
+      - operational_domains
+      - operational_subjects
+      type: string
+      description: |-
+        * `operational_modules` - Modules
+        * `operational_domains` - Domains
+        * `operational_subjects` - Subjects
+    StatusEnum:
+      enum:
+      - active
+      - invited
+      type: string
+      description: |-
+        * `active` - active
+        * `invited` - invited
     SwitchEstablishmentRequest:
       type: object
       properties:
@@ -2194,6 +3032,54 @@ components:
       - id
       - identity_type
       - username
+    WorkspaceSummaryDirector:
+      type: object
+      properties:
+        display_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - display_name
+      - status
+    WorkspaceSummaryEstablishment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    WorkspaceSummaryPerson:
+      type: object
+      properties:
+        display_name:
+          type: string
+      required:
+      - display_name
+    WorkspaceSummaryResponse:
+      type: object
+      properties:
+        establishment:
+          $ref: '#/components/schemas/WorkspaceSummaryEstablishment'
+        owner:
+          allOf:
+          - $ref: '#/components/schemas/WorkspaceSummaryPerson'
+          nullable: true
+        director:
+          allOf:
+          - $ref: '#/components/schemas/WorkspaceSummaryDirector'
+          nullable: true
+        active_membership_count:
+          type: integer
+      required:
+      - active_membership_count
+      - director
+      - establishment
+      - owner
   securitySchemes:
     BearerAccessToken:
       type: http

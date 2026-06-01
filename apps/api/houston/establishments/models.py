@@ -88,7 +88,12 @@ class OnboardingCatalogModule(BaseModel):
 
 
 class OnboardingCatalogDomain(BaseModel):
-    key = models.CharField(max_length=100, unique=True)
+    catalog_module = models.ForeignKey(
+        OnboardingCatalogModule,
+        on_delete=models.CASCADE,
+        related_name="catalog_domains",
+    )
+    key = models.CharField(max_length=120, unique=True)
     label = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
     active = models.BooleanField(default=True)
@@ -101,6 +106,42 @@ class OnboardingCatalogDomain(BaseModel):
                 fields=["active", "sort_order", "key"],
                 name="onbrd_cat_domain_order_idx",
             ),
+            models.Index(fields=["catalog_module"], name="onbrd_cat_domain_mod_idx"),
+        ]
+        ordering = ["sort_order", "key"]
+
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.key, "key", errors)
+        _validate_nonblank(self.label, "label", errors)
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self) -> str:
+        return f"{self.label} [{self.key}]"
+
+
+class OnboardingCatalogSubject(BaseModel):
+    catalog_domain = models.ForeignKey(
+        OnboardingCatalogDomain,
+        on_delete=models.CASCADE,
+        related_name="catalog_subjects",
+    )
+    key = models.CharField(max_length=150, unique=True)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["active"], name="onbrd_cat_subj_active_idx"),
+            models.Index(
+                fields=["active", "sort_order", "key"],
+                name="onbrd_cat_subj_order_idx",
+            ),
+            models.Index(fields=["catalog_domain"], name="onbrd_cat_subj_dom_idx"),
         ]
         ordering = ["sort_order", "key"]
 
@@ -408,7 +449,15 @@ class EstablishmentMembership(BaseModel):
             models.UniqueConstraint(
                 fields=["user", "establishment"],
                 name="unique_user_establishment_membership",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["establishment"],
+                condition=Q(
+                    role="director",
+                    status__in=["invited", "active"],
+                ),
+                name="unique_active_or_invited_director_per_establishment",
+            ),
         ]
         indexes = [
             models.Index(fields=["establishment"], name="membership_est_idx"),
@@ -419,6 +468,28 @@ class EstablishmentMembership(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.user} @ {self.establishment}"
+
+
+class EstablishmentInvitation(BaseModel):
+    membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+        db_index=False,
+    )
+    token_digest = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["membership"], name="est_invitation_membership_idx"),
+            models.Index(fields=["expires_at"], name="est_invitation_expires_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Invitation for {self.membership_id}"
 
 
 class OperationalDomain(BaseModel):
@@ -433,7 +504,15 @@ class OperationalDomain(BaseModel):
         related_name="operational_domains",
         db_index=False,
     )
-    key = models.CharField(max_length=100)
+    operational_module = models.ForeignKey(
+        "OperationalModule",
+        on_delete=models.CASCADE,
+        related_name="operational_domains",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    key = models.CharField(max_length=120)
     label = models.CharField(max_length=255)
     source = models.CharField(
         max_length=20,
@@ -465,40 +544,194 @@ class OperationalDomain(BaseModel):
                 fields=["managed_by_onboarding_proposal"],
                 name="domain_managed_prop_idx",
             ),
+            models.Index(fields=["operational_module"], name="domain_op_module_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.establishment} :: {self.label} [{self.key}]"
 
 
-class MembershipDomain(BaseModel):
-    membership = models.ForeignKey(
-        EstablishmentMembership,
+class OperationalSubject(BaseModel):
+    class Source(models.TextChoices):
+        AI_PROPOSED = "ai_proposed", "AI Proposed"
+        MANUAL = "manual", "Manual"
+        TEMPLATE = "template", "Template"
+
+    establishment = models.ForeignKey(
+        Establishment,
         on_delete=models.CASCADE,
-        related_name="domain_links",
+        related_name="operational_subjects",
         db_index=False,
     )
     operational_domain = models.ForeignKey(
         OperationalDomain,
         on_delete=models.CASCADE,
-        related_name="membership_links",
+        related_name="operational_subjects",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    key = models.CharField(max_length=150)
+    label = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+    managed_by_onboarding_proposal = models.ForeignKey(
+        OnboardingProposal,
+        on_delete=models.SET_NULL,
+        related_name="managed_operational_subjects",
+        null=True,
+        blank=True,
         db_index=False,
     )
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["membership", "operational_domain"],
-                name="membership_domain_uniq",
+                fields=["establishment", "key"],
+                name="op_subject_est_key_uniq",
             )
         ]
         indexes = [
-            models.Index(fields=["membership"], name="mship_domain_mship_idx"),
-            models.Index(fields=["operational_domain"], name="mship_domain_domain_idx"),
+            models.Index(fields=["establishment"], name="subject_est_idx"),
+            models.Index(fields=["establishment", "active"], name="subject_est_active_idx"),
+            models.Index(fields=["key"], name="subject_key_idx"),
+            models.Index(
+                fields=["managed_by_onboarding_proposal"],
+                name="subject_managed_prop_idx",
+            ),
+            models.Index(fields=["operational_domain"], name="subject_op_domain_idx"),
         ]
 
+    def clean(self) -> None:
+        super().clean()
+        errors: dict[str, str] = {}
+        _validate_nonblank(self.key, "key", errors)
+        _validate_nonblank(self.label, "label", errors)
+        if errors:
+            raise ValidationError(errors)
+
     def __str__(self) -> str:
-        return f"{self.membership} -> {self.operational_domain.key}"
+        return f"{self.establishment} :: {self.label} [{self.key}]"
+
+
+class MembershipScope(BaseModel):
+    """Operational RBAC scope for manager/staff memberships (module, domain, or subject)."""
+
+    membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="scope_links",
+        db_index=False,
+    )
+    operational_module = models.ForeignKey(
+        "OperationalModule",
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    operational_domain = models.ForeignKey(
+        OperationalDomain,
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    operational_subject = models.ForeignKey(
+        OperationalSubject,
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        operational_module__isnull=False,
+                        operational_domain__isnull=True,
+                        operational_subject__isnull=True,
+                    )
+                    | Q(
+                        operational_module__isnull=True,
+                        operational_domain__isnull=False,
+                        operational_subject__isnull=True,
+                    )
+                    | Q(
+                        operational_module__isnull=True,
+                        operational_domain__isnull=True,
+                        operational_subject__isnull=False,
+                    )
+                ),
+                name="membership_scope_exactly_one_target",
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "operational_module"],
+                condition=Q(operational_module__isnull=False),
+                name="membership_scope_module_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "operational_domain"],
+                condition=Q(operational_domain__isnull=False),
+                name="membership_scope_domain_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "operational_subject"],
+                condition=Q(operational_subject__isnull=False),
+                name="membership_scope_subject_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["membership"], name="mship_scope_mship_idx"),
+            models.Index(fields=["operational_module"], name="mship_scope_module_idx"),
+            models.Index(fields=["operational_domain"], name="mship_scope_domain_idx"),
+            models.Index(fields=["operational_subject"], name="mship_scope_subject_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        set_count = sum(
+            1
+            for value in (
+                self.operational_module_id,
+                self.operational_domain_id,
+                self.operational_subject_id,
+            )
+            if value is not None
+        )
+        if set_count != 1:
+            raise ValidationError(
+                "Exactly one of operational_module, operational_domain, or "
+                "operational_subject must be set."
+            )
+
+    @property
+    def scope_type(self) -> str:
+        if self.operational_module_id is not None:
+            return "module"
+        if self.operational_domain_id is not None:
+            return "domain"
+        return "subject"
+
+    @property
+    def scope_id(self):
+        if self.operational_module_id is not None:
+            return self.operational_module_id
+        if self.operational_domain_id is not None:
+            return self.operational_domain_id
+        return self.operational_subject_id
+
+    def __str__(self) -> str:
+        return f"{self.membership} -> {self.scope_type}:{self.scope_id}"
 
 
 class EstablishmentActivityDescription(BaseModel):

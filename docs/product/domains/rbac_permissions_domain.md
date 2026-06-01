@@ -1,7 +1,7 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-05-29
 Implementation status: implemented for Phase 1
 
 ## 1. Purpose
@@ -38,7 +38,8 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Establishment isolation is mandatory. Product APIs must not expose data outside authorized establishments.
 - Role and operational domain data in responses are UI hints, not security authority.
 - `owner` and `director` still require valid active membership; broad authority is never global.
-- Domain-scoped members must not act outside allowed operational domains unless explicitly authorized by validated product rules.
+- **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `module`, `domain`, or `subject`; `scope_id`: taxonomy UUID). No label-based inference. Parent scopes are explicit only (module/domain rows are not expanded into child subjects in the database).
+- **`MembershipFeedSubscription`** (future Phase 4) personalizes **Ma vue** only — see [`feed_subscription_domain.md`](feed_subscription_domain.md). It must not be used as a security boundary or mixed with RBAC checks.
 - Notifications and realtime events do not grant access.
 - Signed media URLs require backend authorization before generation.
 - Raw Observation text must not leak through feeds, notifications, realtime payloads, signed media flows, or unauthorized detail views.
@@ -57,9 +58,9 @@ Identity, organization, establishment, membership lifecycle, and membership sele
   - Authorization root for establishment access.
   - Carries role and membership status; access fails closed if membership is missing or inactive.
 
-- OperationalDomain assignment
-  - Membership-domain links scope some actions and visibility inside an establishment.
-  - Current code validates linked active domains for domain access checks.
+- MembershipScope assignment
+  - Explicit module/domain/subject scope rows scope manager/staff action and visibility inside an establishment.
+  - `can_access_domain` / `can_access_subject` evaluate scope coverage; owner/director retain broad access without scope rows.
 
 - Resource visibility
   - Backend decision about whether a resource is visible at all inside the authorized establishment scope.
@@ -71,7 +72,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 
 ## 6. Lifecycle / Statuses
 
-Not applicable in MVP. RBAC evaluates current `User`, `EstablishmentMembership`, role, membership status, operational domains, establishment status, organization status, and resource state.
+Not applicable in MVP. RBAC evaluates current `User`, `EstablishmentMembership`, role, membership status, `MembershipScope` rows, establishment status, organization status, and resource state.
 
 Permission outcomes are:
 - allowed
@@ -94,17 +95,18 @@ Permission outcomes are:
 
 - Director
   - Broad establishment-level operational authority in MVP.
-  - Current implemented helpers match owner authority for the validated helper set.
+  - Current implemented helpers match owner authority for most validated helper sets.
+  - Membership management is narrower than owner authority: directors may manage manager and staff memberships only; they cannot manage owner memberships.
 
 - Manager
   - Management and action authority, mainly inside assigned operational domains.
   - Current implemented helpers allow action creation and validation, but not establishment settings or membership management.
-  - Domain access requires a linked active operational domain.
+  - Domain/subject access requires matching `MembershipScope` coverage (or owner/director broad access).
 
 - Staff
   - Reporting and execution role, not management authority.
   - Current implemented helpers allow app access, signal-feed access, and observation creation, but not action creation or action validation.
-  - Domain access requires a linked active operational domain.
+  - Domain/subject access requires matching `MembershipScope` coverage (or owner/director broad access).
 
 - Visibility vs actionability
   - Seeing a resource does not automatically allow acting on it.
@@ -125,7 +127,7 @@ No implemented RBAC-specific event contract is validated in current code or `app
 Candidate events only:
 - `PermissionDenied` candidate
 - `MembershipRoleChanged` candidate
-- `MembershipDomainScopeChanged` candidate
+- `MembershipScopeChanged` candidate
 - `ResourceAccessDenied` candidate
 
 ## 9. API Surface
@@ -151,7 +153,7 @@ Implemented response truths:
 - Auth responses and bootstrap expose backend-approved `memberships`.
 - `active_membership` is present when `UserSession.selected_establishment` resolves to a valid active membership.
 - Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
-- Membership payloads include `role` and `operational_domains` for UI context.
+- Membership payloads include `role`, `scopes`, and `scope_summary` for UI context (not authoritative for security).
 - Membership-management endpoints reuse bearer-session access context and DRF permission classes backed by `UserSession.selected_establishment`.
 - Membership-management list endpoints are tenant-filtered at selector/queryset level before serialization.
 - Current implemented membership-management authority is `owner` and `director`; `manager` and `staff` are denied.
@@ -174,7 +176,7 @@ Target API convention from active product docs, not yet confirmed by current pub
 
 ## 10. Frontend Expectations
 
-- Frontend receives membership, role, and operational-domain context from backend auth/bootstrap responses.
+- Frontend receives membership, role, and scope context (`scopes`, `scope_summary`) from backend auth/bootstrap responses.
 - Frontend may use backend-provided role or permission context to hide or show UI affordances, but must still submit commands to the backend for validation.
 - TanStack Query owns server state and refetch behavior.
 - Frontend must handle `401` as unauthenticated and should be prepared for `403` and `404` according to the target API convention above.

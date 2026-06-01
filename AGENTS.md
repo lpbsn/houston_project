@@ -78,6 +78,22 @@ For any authentication/session/security-related work, read and follow docs/archi
 
 ---
 
+## Phase execution gates (taxonomy / onboarding programme)
+
+When working on **Module → Domain → Subject** taxonomy or onboarding runtime:
+
+| Phase | Allowed | Forbidden |
+| --- | --- | --- |
+| **Phase A** | Documentation in `docs/` only | Application code, migrations, tests, fixtures, `schema.yml`, generated TS clients |
+| **Phase B/C** | Onboarding/runtime taxonomy code in `establishments/` (after human Phase A sign-off) | Signal, Signal Feed, `MembershipFeedSubscription`, Execution Feed, Observation pipeline runtime, Action taxonomy independent of Signal |
+| **Phase 4/5** | Signal, Signal Feed, subscriptions, Observation pipeline (when explicitly opened) | Premature feed/subscription code before Signal model |
+
+Authoritative closure gate: [`docs/product/phase_a_closure.md`](docs/product/phase_a_closure.md). **Do not restore B/C stashes or regenerate OpenAPI until Phase A is human-validated.**
+
+Key contracts: [`operational_taxonomy_domain.md`](docs/product/domains/operational_taxonomy_domain.md), [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md), [`ai_observation_pipeline_contract.md`](docs/product/domains/ai_observation_pipeline_contract.md), [`feed_subscription_domain.md`](docs/product/domains/feed_subscription_domain.md).
+
+---
+
 ## Agent workflow
 
 Before coding:

@@ -1,49 +1,67 @@
 import { Building2, LoaderCircle, ShieldCheck, UserRound } from 'lucide-react'
 
+import { OperationalScopeSelector } from '@/components/domain/operational-scope-selector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import {
+  canActorManageTargetRole,
+  canEditMembershipOperationalScopes,
+  getEditableRoleOptions,
+} from '@/features/auth/lib/membership-rbac'
+import type { MembershipScopeSelection, OperationalScopeTree } from '@/features/auth/lib/membership-scope'
 import type { EstablishmentMembershipResponse, RoleEnum } from '@/features/auth/types'
 import { cn } from '@/lib/utils'
 
-const ROLE_OPTIONS: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
-
 type MembershipManagementCardProps = {
-  domainDraft: string
+  actorRole: RoleEnum
   errorMessage: string | null
   isDeactivating: boolean
   isLoadingList: boolean
   isLoadingMembership: boolean
+  isLoadingTaxonomy: boolean
   isSaving: boolean
   memberships: EstablishmentMembershipResponse[]
   onDeactivate: () => void
-  onDomainDraftChange: (value: string) => void
   onRoleChange: (role: RoleEnum) => void
   onSave: () => void
+  onScopesChange: (scopes: MembershipScopeSelection[]) => void
   onSelectMembership: (membershipId: string) => void
   roleDraft: RoleEnum
+  scopeTree: OperationalScopeTree | null
+  scopeTaxonomyError: string | null
   selectedMembership: EstablishmentMembershipResponse | null
   selectedMembershipId: string | null
+  selectedScopes: MembershipScopeSelection[]
 }
 
 export function MembershipManagementCard({
-  domainDraft,
+  actorRole,
   errorMessage,
   isDeactivating,
   isLoadingList,
   isLoadingMembership,
+  isLoadingTaxonomy,
   isSaving,
   memberships,
   onDeactivate,
-  onDomainDraftChange,
   onRoleChange,
   onSave,
+  onScopesChange,
   onSelectMembership,
   roleDraft,
+  scopeTree,
+  scopeTaxonomyError,
   selectedMembership,
   selectedMembershipId,
+  selectedScopes,
 }: MembershipManagementCardProps) {
+  const editableRoleOptions = getEditableRoleOptions(actorRole)
+  const canEditSelectedMembership = selectedMembership
+    ? canActorManageTargetRole(actorRole, normalizeRole(selectedMembership.role))
+    : false
+  const canEditOperationalScopes = canEditMembershipOperationalScopes(roleDraft)
+
   return (
     <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
       <CardHeader className="gap-3">
@@ -52,11 +70,11 @@ export function MembershipManagementCard({
         </Badge>
         <div className="space-y-2">
           <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-            Membership workspace
+            Team and roles
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            Owners and directors can review memberships, update role and domain assignments, and
-            deactivate accounts inside the currently selected establishment.
+            Review memberships, update roles and operational périmètre, or deactivate members for
+            this establishment.
           </CardDescription>
         </div>
       </CardHeader>
@@ -70,6 +88,7 @@ export function MembershipManagementCard({
           <div className="space-y-3">
             {memberships.map((membership) => {
               const isSelected = membership.id === selectedMembershipId
+              const isEditable = canActorManageTargetRole(actorRole, normalizeRole(membership.role))
 
               return (
                 <button
@@ -108,14 +127,19 @@ export function MembershipManagementCard({
                           {membership.status}
                         </Badge>
                         <Badge variant="outline" className="border-[#ebe2d5] bg-white">
-                          {membership.operational_domains.length} domains
+                          {formatScopeSummaryLabel(membership)}
                         </Badge>
+                        {!isEditable ? (
+                          <Badge variant="outline" className="border-[#ebe2d5] bg-white">
+                            Read only
+                          </Badge>
+                        ) : null}
                       </div>
                     </div>
 
                     {isSelected ? (
                       <span className="rounded-full bg-[color:var(--primary)] px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-primary-foreground">
-                        Editing
+                        {canEditSelectedMembership ? 'Editing' : 'Viewing'}
                       </span>
                     ) : null}
                   </div>
@@ -129,7 +153,9 @@ export function MembershipManagementCard({
           {isLoadingMembership ? (
             <MembershipCardPlaceholder label="Loading membership details..." />
           ) : !selectedMembership ? (
-            <EmptyState message="Select a membership to review or edit its role and operational domains." />
+            <EmptyState message="Select a membership to review or edit its role and operational périmètre." />
+          ) : !canEditSelectedMembership ? (
+            <EmptyState message="You cannot manage this membership with your current role." />
           ) : (
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
@@ -154,7 +180,7 @@ export function MembershipManagementCard({
               <div className="space-y-2">
                 <div className="text-sm font-semibold">Role</div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {ROLE_OPTIONS.map((role) => (
+                  {editableRoleOptions.map((role) => (
                     <Button
                       key={role}
                       type="button"
@@ -173,18 +199,32 @@ export function MembershipManagementCard({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-sm font-semibold">Operational domains</div>
-                <Input
-                  value={domainDraft}
-                  onChange={(event) => onDomainDraftChange(event.target.value)}
-                  placeholder="housekeeping, maintenance"
-                  className="rounded-[1rem] border-[#e7dfd1] bg-[#fffdf8]"
+              {canEditOperationalScopes ? (
+                <OperationalScopeSelector
+                  tree={scopeTree}
+                  selectedScopes={selectedScopes}
+                  onChange={onScopesChange}
+                  isLoading={isLoadingTaxonomy}
+                  errorMessage={scopeTaxonomyError}
+                  disabled={isSaving}
                 />
-                <div className="text-xs leading-5 text-muted-foreground">
-                  Comma-separated active domain keys for this establishment.
-                </div>
-              </div>
+              ) : (
+                <OperationalScopeSelector
+                  tree={scopeTree}
+                  selectedScopes={selectedScopes}
+                  onChange={() => undefined}
+                  isLoading={isLoadingTaxonomy}
+                  errorMessage={scopeTaxonomyError}
+                  readOnly
+                />
+              )}
+
+              {!canEditOperationalScopes ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Le périmètre opérationnel complet s&apos;applique aux rôles propriétaire et
+                  directeur. Seuls les rôles staff et manager ont un périmètre modifiable.
+                </p>
+              ) : null}
 
               {errorMessage ? (
                 <div className="rounded-[1rem] border border-[#f4d5d5] bg-[#fff3f2] px-4 py-3 text-sm text-[#9d3b33]">
@@ -232,14 +272,33 @@ export function MembershipManagementCard({
             </div>
           )}
         </div>
-
-        <div className="rounded-[1.15rem] border border-[#ebe2d5] bg-[#fbf7f0] px-4 py-3 text-sm text-muted-foreground">
-          Role-based access stays backend-owned. This card only renders the API contract the
-          current workspace exposes.
-        </div>
       </CardContent>
     </Card>
   )
+}
+
+function formatScopeSummaryLabel(membership: EstablishmentMembershipResponse) {
+  const summary = membership.scope_summary
+  const parts: string[] = []
+
+  if (summary.module_count > 0) {
+    parts.push(`${summary.module_count} module${summary.module_count > 1 ? 's' : ''}`)
+  }
+
+  if (summary.domain_count > 0) {
+    parts.push(`${summary.domain_count} domaine${summary.domain_count > 1 ? 's' : ''}`)
+  }
+
+  if (summary.subject_count > 0) {
+    parts.push(`${summary.subject_count} sujet${summary.subject_count > 1 ? 's' : ''}`)
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : 'Aucun périmètre'
+}
+
+function normalizeRole(role: string | null | undefined): RoleEnum {
+  const options: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
+  return options.find((candidate) => candidate === role) ?? 'staff'
 }
 
 function MembershipCardPlaceholder({ label }: { label: string }) {

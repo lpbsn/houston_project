@@ -9,8 +9,10 @@ from houston.accounts.models import AccessToken, User, UserSession
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OperationalDomain,
+    OperationalModule,
+    OperationalSubject,
     RoutingHint,
     RoutingHintDomain,
     RuntimeTag,
@@ -22,6 +24,7 @@ from houston.establishments.permissions import (
     HasActiveMembership,
     can_access_app,
     can_access_domain,
+    can_access_subject,
     can_create_action,
     can_create_observation,
     can_manage_establishment_settings,
@@ -89,7 +92,7 @@ def create_domain(
 
 
 def link_membership_to_domain(membership, operational_domain):
-    return MembershipDomain.objects.create(
+    return MembershipScope.objects.create(
         membership=membership,
         operational_domain=operational_domain,
     )
@@ -525,3 +528,85 @@ def test_manage_permissions_fail_closed_without_selected_membership(request_fact
 
     assert CanManageMemberships().has_permission(request, None) is False
     assert CanManageRuntimeContext().has_permission(request, None) is False
+
+def test_manager_with_module_scope_can_access_child_domain():
+    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    module = OperationalModule.objects.create(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hotel",
+        active=True,
+    )
+    OperationalDomain.objects.create(
+        establishment=membership.establishment,
+        operational_module=module,
+        key="housekeeping",
+        label="Housekeeping",
+        active=True,
+    )
+    MembershipScope.objects.create(membership=membership, operational_module=module)
+
+    assert can_access_domain(membership, "housekeeping") is True
+    assert can_access_domain(membership, "security") is False
+
+
+def test_subject_only_scope_does_not_grant_domain_access():
+    membership = build_membership(role=EstablishmentMembership.Role.STAFF)
+    module = OperationalModule.objects.create(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hotel",
+        active=True,
+    )
+    proprete_domain = OperationalDomain.objects.create(
+        establishment=membership.establishment,
+        operational_module=module,
+        key="proprete_chambre",
+        label="Propreté chambre",
+        active=True,
+    )
+    subject = OperationalSubject.objects.create(
+        establishment=membership.establishment,
+        operational_domain=proprete_domain,
+        key="daily_cleaning",
+        label="Daily cleaning",
+        active=True,
+    )
+    MembershipScope.objects.create(membership=membership, operational_subject=subject)
+
+    assert can_access_subject(membership, "daily_cleaning") is True
+    assert can_access_domain(membership, "proprete_chambre") is False
+
+
+def test_label_collision_does_not_grant_domain_access_without_matching_scope_id():
+    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
+    module_a = OperationalModule.objects.create(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hotel",
+        active=True,
+    )
+    module_b = OperationalModule.objects.create(
+        establishment=membership.establishment,
+        key="restaurant",
+        label="Restaurant",
+        active=True,
+    )
+    domain_a = OperationalDomain.objects.create(
+        establishment=membership.establishment,
+        operational_module=module_a,
+        key="hotel_proprete",
+        label="Propreté",
+        active=True,
+    )
+    OperationalDomain.objects.create(
+        establishment=membership.establishment,
+        operational_module=module_b,
+        key="restaurant_proprete",
+        label="Propreté",
+        active=True,
+    )
+    MembershipScope.objects.create(membership=membership, operational_domain=domain_a)
+
+    assert can_access_domain(membership, "hotel_proprete") is True
+    assert can_access_domain(membership, "restaurant_proprete") is False

@@ -18,7 +18,7 @@ This domain owns global user identity, organization and establishment membership
 - `Establishment` as the operational tenant context.
 - `EstablishmentMembership` as the access link between a user and an establishment.
 - Membership-scoped role and membership status.
-- Membership-scoped operational domain assignments through membership-domain links.
+- Membership-scoped operational RBAC through `MembershipScope` rows (`module`, `domain`, or `subject` taxonomy IDs).
 - Backend-enforced establishment access based on active membership, active user, active establishment, and active organization.
 - Bootstrap-facing identity and membership context through the current auth API.
 - Mono-establishment default UX.
@@ -48,7 +48,7 @@ This domain owns global user identity, organization and establishment membership
 - Membership access also depends on an active `User`, active `Establishment`, and active `Organization`.
 - Backend enforces establishment scoping and all access checks.
 - Frontend state cannot grant permissions.
-- Role and operational domain scope are membership-scoped, not global user attributes.
+- Role and operational périmètre (`MembershipScope`) are membership-scoped, not global user attributes.
 - No product API may expose data outside establishments visible through valid memberships.
 - Establishment switching must not bypass backend authorization.
 - A selected establishment context must always be backed by a valid active membership.
@@ -68,7 +68,7 @@ This domain owns global user identity, organization and establishment membership
 - `EstablishmentMembership`
   - Joins a user to an establishment.
   - Carries membership role and membership status.
-  - Operational domains are attached through membership-scoped links, not on `User`.
+  - Operational périmètre is attached through `MembershipScope` rows (explicit taxonomy UUIDs), not on `User`.
 
 ## 6. Lifecycle / Statuses
 
@@ -135,14 +135,19 @@ Implemented response truths:
 - The last active owner cannot be demoted to another role.
 - The last-active-owner invariant is enforced in the service layer.
 - If another active owner exists, demotion is allowed.
+- Directors cannot patch, deactivate, or reassign owner memberships.
+- Directors may manage manager and staff memberships when they hold membership-management authority.
+- Owners may manage director, manager, and staff memberships subject to the last-active-owner invariant.
+- Any active member may read `GET /api/v1/establishments/{establishment_id}/workspace-summary/` for the current active establishment context.
 - Scoped user search is establishment-scoped and requires the path `establishment_id` to match the current active auth-session context.
 - Scoped user search returns active users with active memberships in the same active establishment only.
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
-- No invitation, password-reset, `me`, or `logout_all` endpoint is confirmed as implemented in `apps/api/schema.yml`.
+- Establishment invitation acceptance: `POST /api/v1/invitations/{token}/accept/` (password setup, session creation; CSRF required).
+- Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` for manual sharing (no email delivery in MVP).
+- Post-onboarding staff/manager invite with token: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` returns `invitation_token` for manual sharing (no email delivery in MVP).
 
 Candidate endpoints only:
 
-- Invitation endpoints
 - Password reset endpoints
 - Current-user endpoints beyond the implemented bootstrap contract
 

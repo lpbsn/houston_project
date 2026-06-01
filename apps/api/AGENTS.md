@@ -9,6 +9,16 @@ Before coding any phase:
 6. Keep scope strict. Do not implement future phases.
 7. Run required checks and report changed files + commands + results.
 
+### Taxonomy programme gates
+
+| Phase | Backend allowed | Backend forbidden |
+| --- | --- | --- |
+| **A** | `docs/` updates only | Models, migrations, services, APIs, tests, `schema.yml` |
+| **B/C** | `establishments/` onboarding/runtime taxonomy after [`phase_a_closure.md`](../../docs/product/phase_a_closure.md) human sign-off | Signal, feeds, `MembershipFeedSubscription`, Observation pipeline code |
+| **4+** | Signal, feeds, Observation pipeline when build plan phase opens | Orphan subscription/feed code before Signal |
+
+Do not pop B/C or provisioning stashes during Phase A. Regenerate OpenAPI only after B/C API stabilizes.
+
 ## Clarification Gate
 
 Before implementing anything, inspect the relevant docs, current code, schema, and tests.
@@ -166,7 +176,7 @@ Forbidden:
 - status changes from Django signals
 - hidden transition side effects
 
-Allowed transition endpoints include:
+Future transition endpoints (Phase 4/5 — **not in codebase yet**; do not implement prematurely):
 
 ```
 POST /actions/:id/accept
@@ -180,9 +190,9 @@ POST /signals/:id/cancel
 POST /signals/:id/pin
 POST /signals/:id/unpin
 POST /signals/:id/set_urgency
-POST /signals/:id/add_domain
-POST /signals/:id/remove_domain
 ```
+
+Legacy `POST /signals/:id/add_domain` and `POST /signals/:id/remove_domain` are **obsolete** for MVP (single module/domain/subject triplet per Signal).
 
 Each transition must:
 
@@ -232,13 +242,14 @@ Workers must reload sensitive content server-side.
 
 ### Signal
 
-Rules:
+Rules (Phase 4 — not implemented in codebase yet):
 
 - created only by backend service
 - aggregated only by backend service
-- `detected_domains` drives visibility and actionability
-- feed visibility is backend-owned
-- feed sorting is backend-owned
+- **one primary categorization per Signal**: `operational_module`, `operational_domain`, `operational_subject`; optional `operational_unit` (location only)
+- multi-problem Observation → multiple Signals after AI pipeline validation
+- **Ma vue** Signal Feed (future): `MembershipFeedSubscription` match at module/domain/subject level — not `detected_domains[]` (obsolete) and not `MembershipScope` used as feed filter
+- feed visibility and sorting are backend-owned
 - `last_activity_at` is maintained by backend
 
 ### Action
@@ -259,11 +270,13 @@ Generic status mutation endpoints are forbidden.
 
 ### Feeds
 
-Backend applies:
+Phase 4/5 — not implemented in codebase yet.
+
+Backend will apply:
 
 - RBAC
 - establishment scope
-- view mode
+- `view_mode=personal|general` (Signal Feed: personal uses feed subscriptions; Execution Feed personal uses assigned responsibilities)
 - filters
 - sorting
 - pagination

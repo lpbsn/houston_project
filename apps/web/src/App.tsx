@@ -6,25 +6,47 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
+import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { LandingPage } from '@/features/landing/landing-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 
 type AppPath = '/' | '/login' | '/app' | '/onboarding'
 
-function normalizePathname(pathname: string): AppPath {
-  if (pathname === '/login' || pathname === '/app' || pathname === '/onboarding') {
-    return pathname
+type AppRoute =
+  | { kind: 'static'; path: AppPath }
+  | { kind: 'invitation'; token: string }
+
+function parseInvitationToken(pathname: string): string | null {
+  const prefix = '/invitations/'
+  if (!pathname.startsWith(prefix)) {
+    return null
   }
 
-  return '/'
+  const remainder = pathname.slice(prefix.length)
+  const token = remainder.split('/').filter(Boolean)[0]
+
+  return token || null
 }
 
-function usePathname() {
-  const [pathname, setPathname] = useState<AppPath>(() => normalizePathname(window.location.pathname))
+function parseAppRoute(pathname: string): AppRoute {
+  const invitationToken = parseInvitationToken(pathname)
+  if (invitationToken) {
+    return { kind: 'invitation', token: invitationToken }
+  }
+
+  if (pathname === '/login' || pathname === '/app' || pathname === '/onboarding') {
+    return { kind: 'static', path: pathname }
+  }
+
+  return { kind: 'static', path: '/' }
+}
+
+function useAppRoute() {
+  const [route, setRoute] = useState<AppRoute>(() => parseAppRoute(window.location.pathname))
 
   useEffect(() => {
     const handlePopState = () => {
-      setPathname(normalizePathname(window.location.pathname))
+      setRoute(parseAppRoute(window.location.pathname))
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -34,24 +56,24 @@ function usePathname() {
     }
   }, [])
 
-  const navigate = (nextPathname: AppPath, options?: { replace?: boolean }) => {
-    if (window.location.pathname === nextPathname) {
-      setPathname(nextPathname)
+  const navigate = (pathname: string, options?: { replace?: boolean }) => {
+    if (window.location.pathname === pathname) {
+      setRoute(parseAppRoute(pathname))
       return
     }
 
     const method = options?.replace ? 'replaceState' : 'pushState'
-    window.history[method](null, '', nextPathname)
-    setPathname(nextPathname)
+    window.history[method](null, '', pathname)
+    setRoute(parseAppRoute(pathname))
   }
 
-  return { pathname, navigate }
+  return { route, navigate }
 }
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
-  const { pathname, navigate } = usePathname()
+  const { route, navigate } = useAppRoute()
 
   const motionProps = shouldReduceMotion
     ? {}
@@ -62,34 +84,51 @@ function App() {
       }
 
   useEffect(() => {
-    if (!auth.isReady) {
+    if (!auth.isReady || route.kind === 'invitation') {
       return
     }
 
-    if (pathname === '/login' && auth.isAuthenticated) {
+    if (route.path === '/login' && auth.isAuthenticated) {
       navigate('/app', { replace: true })
       return
     }
 
-    if ((pathname === '/app' || pathname === '/onboarding') && !auth.isAuthenticated) {
+    if (route.path === '/app' && !auth.isAuthenticated) {
       navigate('/login', { replace: true })
     }
-  }, [auth.isAuthenticated, auth.isReady, navigate, pathname])
+  }, [auth.isAuthenticated, auth.isReady, navigate, route])
 
   const routeContent = useMemo(() => {
-    if (pathname === '/app') {
+    if (route.kind === 'invitation') {
+      return (
+        <InvitationAcceptPage
+          token={route.token}
+          onAccepted={({ isDraftEstablishment }) => {
+            navigate(isDraftEstablishment ? '/onboarding' : '/app', { replace: true })
+          }}
+        />
+      )
+    }
+
+    if (route.path === '/app') {
       return <AppPage />
     }
 
-    if (pathname === '/onboarding') {
+    if (route.path === '/onboarding') {
       return <OnboardingPage />
     }
 
     return <LoginPage />
-  }, [pathname])
+  }, [navigate, route])
 
-  if (pathname === '/') {
+  if (route.kind === 'static' && route.path === '/') {
     return <LandingPage />
+  }
+
+  const handleSignOut = () => {
+    void auth.logout().then(() => {
+      navigate('/login', { replace: true })
+    })
   }
 
   const signOutAction = (
@@ -97,39 +136,68 @@ function App() {
       type="button"
       variant="outline"
       className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-      onClick={() => {
-        void auth.logout()
-      }}
+      onClick={handleSignOut}
       disabled={auth.isLoggingOut}
     >
       {auth.isLoggingOut ? 'Signing out...' : 'Sign out'}
     </Button>
   )
 
+  const signInAction = (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+      onClick={() => {
+        navigate('/login')
+      }}
+    >
+      Sign in
+    </Button>
+  )
+
   const routeCopy =
-    pathname === '/app'
+    route.kind === 'invitation'
       ? {
-          headingBadge: 'Workspace shell',
-          title: 'Identity, context, and membership workspaces.',
-          description:
-            'This mobile-first shell renders only backend-approved session, establishment, membership, and scoped search data.',
-          actions: signOutAction,
+          headingBadge: 'Invitation',
+          title: 'Accept invitation',
+          description: 'Create your password to join this establishment in Houston.',
+          actions: signInAction,
         }
-      : pathname === '/onboarding'
+      : route.path === '/app'
         ? {
-            headingBadge: 'Runtime onboarding',
-            title: 'Prepare this establishment for operations.',
-            description:
-              'Review backend-owned onboarding state, activity details, runtime setup, and readiness blockers before marking the session ready.',
+            title: "Gérer l'établissement",
+            description: 'Manage your establishment, team memberships, and invitations.',
             actions: signOutAction,
           }
-        : {
-            headingBadge: 'Session access',
-            title: 'Sign in through the backend auth contract.',
-            description:
-              'Sessions stay backend-owned, refresh stays cookie-backed, and React only renders the approved bootstrap state.',
-            actions: undefined,
-          }
+        : route.path === '/onboarding'
+          ? {
+              headingBadge: 'Onboarding',
+              title: auth.isAuthenticated
+                ? 'Prepare this establishment for operations.'
+                : 'Set up your organization.',
+              description: auth.isAuthenticated
+                ? 'Review activity details, runtime setup, and readiness before marking the session ready.'
+                : 'Enter your invitation code to create your organization and start onboarding.',
+              actions: auth.isAuthenticated ? signOutAction : signInAction,
+            }
+          : {
+              headingBadge: 'Sign in',
+              title: 'Welcome back',
+              description: 'Sign in to access your Houston workspace.',
+              actions: (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+                  onClick={() => {
+                    navigate('/onboarding')
+                  }}
+                >
+                  Onboarding
+                </Button>
+              ),
+            }
 
   return (
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">

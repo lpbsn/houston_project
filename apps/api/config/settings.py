@@ -138,6 +138,9 @@ HOUSTON_AUTH_ABSOLUTE_SESSION_TTL = timedelta(days=90)
 HOUSTON_AUTH_TOKEN_SALT = env_str("HOUSTON_AUTH_TOKEN_SALT", "houston.auth.token")
 HOUSTON_AUTH_TOKEN_PEPPER = env_str("HOUSTON_AUTH_TOKEN_PEPPER", SECRET_KEY)
 HOUSTON_AUTH_TOKEN_BYTES = int(env_str("HOUSTON_AUTH_TOKEN_BYTES", "48"))
+HOUSTON_DIRECTOR_INVITATION_TTL = timedelta(
+    days=int(env_str("HOUSTON_DIRECTOR_INVITATION_TTL_DAYS", "7"))
+)
 HOUSTON_AUTH_TOKEN_GENERATION_MAX_ATTEMPTS = int(
     env_str("HOUSTON_AUTH_TOKEN_GENERATION_MAX_ATTEMPTS", "5")
 )
@@ -159,6 +162,8 @@ HOUSTON_AUTH_REFRESH_COOKIE_SECURE = env_bool(
     default=not DEBUG,
 )
 
+HOUSTON_REGISTRATION_INVITE_CODES = env_list("HOUSTON_REGISTRATION_INVITE_CODES", "")
+
 OPENAI_API_KEY = env_str("OPENAI_API_KEY", "")
 HOUSTON_AI_ONBOARDING_PROVIDER = env_str("HOUSTON_AI_ONBOARDING_PROVIDER", "openai")
 HOUSTON_AI_ONBOARDING_MODEL = env_str("HOUSTON_AI_ONBOARDING_MODEL", "gpt-4.1-mini")
@@ -167,3 +172,23 @@ HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS = env_int(
     30,
 )
 HOUSTON_AI_ONBOARDING_MAX_RETRIES = env_int("HOUSTON_AI_ONBOARDING_MAX_RETRIES", 2)
+HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA = env_bool(
+    "HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA",
+    default=True,
+)
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]

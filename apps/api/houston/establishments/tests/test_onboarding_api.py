@@ -13,16 +13,22 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
+    OperationalSubject,
     OperationalUnit,
     RoutingHint,
     RoutingHintDomain,
     RuntimeTag,
     RuntimeTagDomain,
     RuntimeVocabulary,
+)
+from houston.establishments.tests.conftest import (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    READINESS_DOMAIN_KEYS,
+    first_catalog_subject_for_domain,
 )
 from houston.organizations.models import Organization
 
@@ -117,19 +123,24 @@ def create_ready_runtime(session: OnboardingSession, actor: User) -> list[Operat
             key=key,
             label=key.replace("_", " ").title(),
         )
-        for key in ["maintenance", "housekeeping", "security"]
+        for key in READINESS_DOMAIN_KEYS
     ]
-    manager = create_user(username=f"manager_ready_{uuid.uuid4().hex[:6]}")
-    manager_membership = EstablishmentMembership.objects.create(
-        user=manager,
+    director = create_user(username=f"director_ready_{uuid.uuid4().hex[:6]}")
+    EstablishmentMembership.objects.create(
+        user=director,
         establishment=establishment,
-        role=EstablishmentMembership.Role.MANAGER,
+        role=EstablishmentMembership.Role.DIRECTOR,
         status=EstablishmentMembership.Status.INVITED,
     )
-    MembershipDomain.objects.create(
-        membership=manager_membership,
-        operational_domain=domains[0],
-    )
+    domains_by_key = {domain.key: domain for domain in domains}
+    for domain_key in READINESS_DOMAIN_KEYS:
+        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
+        OperationalSubject.objects.create(
+            establishment=establishment,
+            operational_domain=domains_by_key[domain_key],
+            key=subject_key,
+            label=subject_label,
+        )
     return domains
 
 
@@ -412,8 +423,8 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
     )
     domain = OperationalDomain.objects.create(
         establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
+        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        label="Hébergement",
     )
     OperationalDomain.objects.create(
         establishment=establishment,
@@ -471,13 +482,13 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
     assert response.status_code == 200
     body = response.json()
     assert [item["key"] for item in body["active_modules"]] == ["hotel"]
-    assert [item["key"] for item in body["active_domains"]] == ["maintenance"]
+    assert [item["key"] for item in body["active_domains"]] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert [item["key"] for item in body["optional_units"]] == ["lobby"]
-    assert body["optional_vocabulary"][0]["mapped_domain_key"] == "maintenance"
+    assert body["optional_vocabulary"][0]["mapped_domain_key"] == HOTEL_HEBERGEMENT_DOMAIN_KEY
     assert body["optional_vocabulary"][0]["mapped_unit_key"] == "lobby"
-    assert body["optional_runtime_tags"][0]["domain_keys"] == ["maintenance"]
+    assert body["optional_runtime_tags"][0]["domain_keys"] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert body["optional_routing_hints"][0]["suggested_unit_key"] == "lobby"
-    assert body["optional_routing_hints"][0]["domain_keys"] == ["maintenance"]
+    assert body["optional_routing_hints"][0]["domain_keys"] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
     assert "foreign-domain" not in str(body)
 
 
@@ -504,7 +515,8 @@ def test_activation_summary_returns_readiness_blockers_and_access_flags(api_clie
         "missing_validated_description",
         "missing_active_module",
         "insufficient_active_domains",
-        "missing_active_or_invited_manager",
+        "insufficient_active_subjects",
+        "missing_active_or_invited_director",
     }
 
 
@@ -582,7 +594,7 @@ def test_manager_cannot_mark_ready_even_when_readiness_passes(api_client):
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=domains[0],
     )
@@ -765,7 +777,7 @@ def test_manager_cannot_activate_even_when_readiness_passes(api_client):
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=domains[0],
     )

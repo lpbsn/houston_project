@@ -1,6 +1,6 @@
-import { startTransition, type ReactNode, useDeferredValue, useMemo, useState } from 'react'
+import { startTransition, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Building2, ClipboardCheck, Sparkles, UserRound } from 'lucide-react'
+import { ArrowRight, ClipboardCheck } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Badge } from '@/components/ui/badge'
@@ -9,38 +9,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   deactivateMembership,
   getMembership,
+  getOperationalTaxonomy,
+  getWorkspaceSummary,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
-  scopedUserSearchQueryKey,
-  searchUsers,
+  operationalTaxonomyQueryKey,
   switchEstablishment,
   updateMembership,
+  workspaceSummaryQueryKey,
 } from '@/features/auth/api'
 import { EstablishmentSelectorCard } from '@/features/auth/components/establishment-selector-card'
+import { EstablishmentSummaryCard } from '@/features/auth/components/establishment-summary-card'
+import { MembershipInviteCard } from '@/features/auth/components/membership-invite-card'
 import { MembershipManagementCard } from '@/features/auth/components/membership-management-card'
-import { ScopedUserSearchCard } from '@/features/auth/components/scoped-user-search-card'
+import {
+  buildOperationalScopeTree,
+  normalizeScopesForSubmit,
+  scopesFromApiItems,
+  type MembershipScopeSelection,
+} from '@/features/auth/lib/membership-scope'
+import { canEditMembershipOperationalScopes } from '@/features/auth/lib/membership-rbac'
 import type {
   EstablishmentMembershipResponse,
   MembershipUpdateRequest,
   RoleEnum,
-  ScopedUserSearchResult,
 } from '@/features/auth/types'
 
 const MANAGEABLE_ROLES = new Set<RoleEnum>(['owner', 'director'])
 const ROLE_OPTIONS: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
 const EMPTY_MEMBERSHIPS: EstablishmentMembershipResponse[] = []
-const EMPTY_SEARCH_RESULTS: ScopedUserSearchResult[] = []
 
 function normalizeRole(role: string | null | undefined): RoleEnum {
   return ROLE_OPTIONS.find((candidate) => candidate === role) ?? 'staff'
-}
-
-function parseDomainDraft(value: string) {
-  return value
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
 }
 
 function toErrorMessage(error: unknown, fallback: string) {
@@ -53,33 +54,37 @@ function toErrorMessage(error: unknown, fallback: string) {
 
 export function AppPage() {
   const queryClient = useQueryClient()
-  const { activeMembership, memberships, user } = useAuth()
+  const { activeMembership, memberships } = useAuth()
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
   const [selectorError, setSelectorError] = useState<string | null>(null)
   const [selectedMembershipId, setSelectedMembershipId] = useState<string | null>(null)
   const [editorState, setEditorState] = useState<{
-    domainDraft: string
     membershipId: string | null
     roleDraft: RoleEnum
+    selectedScopes: MembershipScopeSelection[]
   }>({
     membershipId: null,
     roleDraft: 'staff',
-    domainDraft: '',
+    selectedScopes: [],
   })
   const [membershipMutationError, setMembershipMutationError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const deferredSearchQuery = useDeferredValue(searchQuery.trim())
 
   const activeEstablishmentId = activeMembership?.establishment_id ?? null
-  const canManageMemberships = MANAGEABLE_ROLES.has(normalizeRole(activeMembership?.role))
+  const actorRole = normalizeRole(activeMembership?.role)
+  const canManageMemberships = MANAGEABLE_ROLES.has(actorRole)
   const needsEstablishmentSelection = memberships.length > 1 && !activeMembership
-  const workspaceLabel = activeMembership?.establishment_name ?? 'No establishment selected'
-  const workspaceDescription = activeMembership
-    ? `${activeMembership.organization_name} · ${activeMembership.role}`
-    : 'Choose one establishment to unlock the backend-owned workspace context for this session.'
 
   const switchMutation = useMutation({
     mutationFn: switchEstablishment,
+  })
+
+  const workspaceSummaryQuery = useQuery({
+    queryKey: activeEstablishmentId
+      ? workspaceSummaryQueryKey(activeEstablishmentId)
+      : ['workspace', 'summary', 'idle'],
+    queryFn: () => getWorkspaceSummary(activeEstablishmentId!),
+    enabled: Boolean(activeEstablishmentId),
+    staleTime: 30_000,
   })
 
   const membershipsQuery = useQuery({
@@ -90,6 +95,20 @@ export function AppPage() {
     enabled: Boolean(activeEstablishmentId && canManageMemberships),
     staleTime: 30_000,
   })
+
+  const taxonomyQuery = useQuery({
+    queryKey: activeEstablishmentId
+      ? operationalTaxonomyQueryKey(activeEstablishmentId)
+      : ['workspace', 'operational-taxonomy', 'idle'],
+    queryFn: () => getOperationalTaxonomy(activeEstablishmentId!),
+    enabled: Boolean(activeEstablishmentId && canManageMemberships),
+    staleTime: 60_000,
+  })
+
+  const scopeTree = useMemo(
+    () => (taxonomyQuery.data ? buildOperationalScopeTree(taxonomyQuery.data) : null),
+    [taxonomyQuery.data],
+  )
 
   const membershipList = membershipsQuery.data ?? EMPTY_MEMBERSHIPS
   const effectiveSelectedMembershipId = useMemo(() => {
@@ -132,10 +151,13 @@ export function AppPage() {
         membership,
       )
       await queryClient.invalidateQueries({ queryKey: membershipListQueryKey(activeEstablishmentId) })
+      await queryClient.invalidateQueries({
+        queryKey: workspaceSummaryQueryKey(activeEstablishmentId),
+      })
       setEditorState({
         membershipId: membership.id,
         roleDraft: normalizeRole(membership.role),
-        domainDraft: membership.operational_domains.join(', '),
+        selectedScopes: scopesFromApiItems(membership.scopes),
       })
       setMembershipMutationError(null)
     },
@@ -149,72 +171,44 @@ export function AppPage() {
 
       return deactivateMembership(activeEstablishmentId, effectiveSelectedMembershipId)
     },
-    onSuccess: async (membership) => {
+    onSuccess: async () => {
       if (!activeEstablishmentId) {
         return
       }
 
       await queryClient.invalidateQueries({ queryKey: membershipListQueryKey(activeEstablishmentId) })
       await queryClient.invalidateQueries({
-        queryKey: membershipDetailQueryKey(activeEstablishmentId, membership.id),
+        queryKey: workspaceSummaryQueryKey(activeEstablishmentId),
       })
       startTransition(() => {
         setSelectedMembershipId(null)
         setEditorState({
           membershipId: null,
           roleDraft: 'staff',
-          domainDraft: '',
+          selectedScopes: [],
         })
         setMembershipMutationError(null)
       })
     },
   })
 
-  const scopedUserSearchQuery = useQuery({
-    queryKey: activeEstablishmentId
-      ? scopedUserSearchQueryKey(activeEstablishmentId, deferredSearchQuery)
-      : ['workspace', 'user-search', 'idle'],
-    queryFn: () => searchUsers(activeEstablishmentId!, deferredSearchQuery),
-    enabled: Boolean(activeEstablishmentId && deferredSearchQuery.length >= 2),
-    staleTime: 20_000,
-  })
-
   const selectedMembership = membershipDetailQuery.data ?? null
-  const searchResults = scopedUserSearchQuery.data ?? EMPTY_SEARCH_RESULTS
   const roleDraft =
     editorState.membershipId === selectedMembership?.id
       ? editorState.roleDraft
       : normalizeRole(selectedMembership?.role)
-  const domainDraft =
-    editorState.membershipId === selectedMembership?.id
-      ? editorState.domainDraft
-      : selectedMembership?.operational_domains.join(', ') ?? ''
-
-  const identityLabel = useMemo(() => {
-    if (!user) {
-      return 'Unknown user'
+  const selectedScopes = useMemo(() => {
+    if (editorState.membershipId === selectedMembership?.id) {
+      return editorState.selectedScopes
     }
 
-    return user.email ?? `@${user.username}`
-  }, [user])
+    return selectedMembership ? scopesFromApiItems(selectedMembership.scopes) : []
+  }, [editorState.membershipId, editorState.selectedScopes, selectedMembership])
 
-  const knownDomainKeys = useMemo(() => {
-    const keys = new Set<string>()
-
-    for (const membership of membershipList) {
-      for (const key of membership.operational_domains) {
-        keys.add(key)
-      }
-    }
-
-    return Array.from(keys).sort()
-  }, [membershipList])
-
-  const searchHint = activeEstablishmentId
-    ? deferredSearchQuery.length >= 2
-      ? `Searching ${workspaceLabel} for “${deferredSearchQuery}”.`
-      : 'Type at least two characters. Search stays inside the currently selected establishment.'
-    : 'Select an establishment first. Search cannot run without a backend-owned active workspace.'
+  const normalizedScopes = useMemo(
+    () => (scopeTree ? normalizeScopesForSubmit(selectedScopes, scopeTree) : []),
+    [scopeTree, selectedScopes],
+  )
 
   async function handleSelectEstablishment(establishmentId: string) {
     setSelectorError(null)
@@ -227,10 +221,9 @@ export function AppPage() {
         setEditorState({
           membershipId: null,
           roleDraft: 'staff',
-          domainDraft: '',
+          selectedScopes: [],
         })
         setMembershipMutationError(null)
-        setSearchQuery('')
       })
     } catch (error) {
       setSelectorError(toErrorMessage(error, 'We could not switch this establishment.'))
@@ -240,9 +233,17 @@ export function AppPage() {
   }
 
   async function handleSaveMembership() {
+    if (canEditMembershipOperationalScopes(roleDraft) && normalizedScopes.length === 0) {
+      setMembershipMutationError('Sélectionnez au moins une zone de responsabilité.')
+      return
+    }
+
     const nextInput: MembershipUpdateRequest = {
       role: roleDraft,
-      operational_domains: parseDomainDraft(domainDraft),
+    }
+
+    if (canEditMembershipOperationalScopes(roleDraft)) {
+      nextInput.scopes = normalizedScopes
     }
 
     try {
@@ -266,15 +267,15 @@ export function AppPage() {
     setEditorState({
       membershipId: selectedMembership?.id ?? effectiveSelectedMembershipId,
       roleDraft: role,
-      domainDraft,
+      selectedScopes,
     })
   }
 
-  function handleDomainDraftChange(value: string) {
+  function handleScopesChange(scopes: MembershipScopeSelection[]) {
     setEditorState({
       membershipId: selectedMembership?.id ?? effectiveSelectedMembershipId,
       roleDraft,
-      domainDraft: value,
+      selectedScopes: scopes,
     })
   }
 
@@ -283,58 +284,26 @@ export function AppPage() {
     setEditorState({
       membershipId: null,
       roleDraft: 'staff',
-      domainDraft: '',
+      selectedScopes: [],
     })
     setMembershipMutationError(null)
   }
 
+  const scopeTaxonomyError = taxonomyQuery.error
+    ? toErrorMessage(taxonomyQuery.error, 'La taxonomie opérationnelle est indisponible.')
+    : null
+
   return (
     <div className="space-y-4 sm:space-y-5">
-      <Card className="rounded-[1.85rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_24px_52px_-40px_rgba(46,72,173,0.28)]">
-        <CardHeader className="gap-3">
-          <div className="flex flex-wrap gap-2">
-            <Badge className="bg-[color:var(--primary)] text-primary-foreground">Live session</Badge>
-            <Badge variant="outline" className="border-[#ebe2d5] bg-[#fbf7f0]">
-              Backend-owned context
-            </Badge>
-          </div>
-          <div className="space-y-2">
-            <CardTitle className="text-[1.7rem] font-black tracking-[-0.06em]">
-              {workspaceLabel}
-            </CardTitle>
-            <CardDescription className="text-sm leading-6">{workspaceDescription}</CardDescription>
-          </div>
-        </CardHeader>
-
-        <CardContent className="grid gap-3 sm:grid-cols-3">
-          <SummaryTile
-            icon={<UserRound className="size-4" />}
-            label="Identity"
-            value={identityLabel}
-            supporting={user ? user.username : 'No user loaded'}
-          />
-          <SummaryTile
-            icon={<Building2 className="size-4" />}
-            label="Memberships"
-            value={`${memberships.length}`}
-            supporting={
-              memberships.length === 1
-                ? 'One active establishment'
-                : `${memberships.length} available establishments`
-            }
-          />
-          <SummaryTile
-            icon={<Sparkles className="size-4" />}
-            label="Domains"
-            value={activeMembership ? `${activeMembership.operational_domains.length}` : '0'}
-            supporting={
-              activeMembership
-                ? activeMembership.operational_domains.join(', ') || 'No domains assigned'
-                : 'Selection required first'
-            }
-          />
-        </CardContent>
-      </Card>
+      <EstablishmentSummaryCard
+        isLoading={workspaceSummaryQuery.isPending}
+        summary={workspaceSummaryQuery.data ?? null}
+        errorMessage={
+          workspaceSummaryQuery.error
+            ? toErrorMessage(workspaceSummaryQuery.error, 'Establishment summary is unavailable.')
+            : null
+        }
+      />
 
       {needsEstablishmentSelection ? (
         <EstablishmentSelectorCard
@@ -348,21 +317,16 @@ export function AppPage() {
       {activeMembership ? (
         <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
           <CardHeader className="gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
-                Onboarding
-              </Badge>
-              <Badge variant="outline" className="border-[#ebe2d5] bg-[#fbf7f0]">
-                Backend verified
-              </Badge>
-            </div>
+            <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
+              Establishment
+            </Badge>
             <div className="space-y-2">
               <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-                Runtime onboarding
+                Operational setup
               </CardTitle>
               <CardDescription className="text-sm leading-6">
-                Open the setup workflow for this establishment. The API decides whether this
-                account can start or resume onboarding.
+                Continue onboarding or runtime setup when this establishment still needs
+                configuration.
               </CardDescription>
             </div>
           </CardHeader>
@@ -373,10 +337,7 @@ export function AppPage() {
               </span>
               <span>{activeMembership.establishment_name}</span>
             </div>
-            <Button
-              asChild
-              className="h-11 rounded-[1rem]"
-            >
+            <Button asChild className="h-11 rounded-[1rem]">
               <a href={`/onboarding?establishmentId=${activeMembership.establishment_id}`}>
                 Open onboarding
                 <ArrowRight className="size-4" />
@@ -386,38 +347,32 @@ export function AppPage() {
         </Card>
       ) : null}
 
-      <ScopedUserSearchCard
-        query={searchQuery}
-        onQueryChange={setSearchQuery}
-        results={searchResults}
-        isSearching={scopedUserSearchQuery.isFetching}
-        errorMessage={
-          scopedUserSearchQuery.error
-            ? toErrorMessage(scopedUserSearchQuery.error, 'User search is unavailable.')
-            : null
-        }
-        hint={searchHint}
-      />
-
       {activeMembership ? (
         canManageMemberships ? (
-          <MembershipManagementCard
-            domainDraft={domainDraft}
-            errorMessage={membershipMutationError}
-            isDeactivating={deactivateMutation.isPending}
-            isLoadingList={membershipsQuery.isPending}
-            isLoadingMembership={membershipDetailQuery.isPending}
-            isSaving={updateMutation.isPending}
-            memberships={membershipList}
-            onDeactivate={handleDeactivateMembership}
-            onDomainDraftChange={handleDomainDraftChange}
-            onRoleChange={handleRoleChange}
-            onSave={handleSaveMembership}
-            onSelectMembership={handleSelectMembership}
-            roleDraft={roleDraft}
-            selectedMembership={selectedMembership}
-            selectedMembershipId={effectiveSelectedMembershipId}
-          />
+          <>
+            <MembershipManagementCard
+              actorRole={actorRole}
+              errorMessage={membershipMutationError}
+              isDeactivating={deactivateMutation.isPending}
+              isLoadingList={membershipsQuery.isPending}
+              isLoadingMembership={membershipDetailQuery.isPending}
+              isLoadingTaxonomy={taxonomyQuery.isPending}
+              isSaving={updateMutation.isPending}
+              memberships={membershipList}
+              onDeactivate={handleDeactivateMembership}
+              onRoleChange={handleRoleChange}
+              onSave={handleSaveMembership}
+              onScopesChange={handleScopesChange}
+              onSelectMembership={handleSelectMembership}
+              roleDraft={roleDraft}
+              scopeTree={scopeTree}
+              scopeTaxonomyError={scopeTaxonomyError}
+              selectedMembership={selectedMembership}
+              selectedMembershipId={effectiveSelectedMembershipId}
+              selectedScopes={selectedScopes}
+            />
+            <MembershipInviteCard establishmentId={activeMembership.establishment_id} />
+          </>
         ) : (
           <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
             <CardHeader className="gap-3">
@@ -426,71 +381,34 @@ export function AppPage() {
               </Badge>
               <div className="space-y-2">
                 <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-                  Membership editing stays limited
+                  Membership management unavailable
                 </CardTitle>
                 <CardDescription className="text-sm leading-6">
-                  This shell only opens role and domain editing for owner and director contexts.
-                  The backend still remains the authority for every permission decision.
+                  Your current role is{' '}
+                  <span className="font-semibold text-foreground">{activeMembership.role}</span>.
+                  Only owners and directors can manage memberships or send invitations.
                 </CardDescription>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="rounded-[1.15rem] border border-[#ebe2d5] bg-[#fbf7f0] px-4 py-4 text-sm text-muted-foreground">
-                Your current role is <span className="font-semibold text-foreground">{activeMembership.role}</span>.
-                Scoped user search is still available above.
-              </div>
-            </CardContent>
           </Card>
         )
       ) : (
         <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
           <CardHeader className="gap-3">
             <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
-              Workspace context
+              Establishment
             </Badge>
             <div className="space-y-2">
               <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-                Select one establishment to continue
+                Select an establishment to continue
               </CardTitle>
               <CardDescription className="text-sm leading-6">
-                Membership management and scoped search stay unavailable until the backend session
-                exposes one active membership.
+                Choose one establishment to view its summary and available management tools.
               </CardDescription>
             </div>
           </CardHeader>
         </Card>
       )}
-
-      {canManageMemberships && knownDomainKeys.length > 0 ? (
-        <div className="rounded-[1.15rem] border border-[#ebe2d5] bg-[#fbf7f0] px-4 py-3 text-sm text-muted-foreground">
-          Known active domain keys in this workspace: {knownDomainKeys.join(', ')}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function SummaryTile({
-  icon,
-  label,
-  supporting,
-  value,
-}: {
-  icon: ReactNode
-  label: string
-  supporting: string
-  value: string
-}) {
-  return (
-    <div className="rounded-[1.35rem] border border-[#ece5da] bg-white px-4 py-4 shadow-[0_14px_34px_-32px_rgba(46,72,173,0.22)]">
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <span className="rounded-full bg-[color:var(--primary)]/10 p-2 text-[color:var(--primary)]">
-          {icon}
-        </span>
-        {label}
-      </div>
-      <div className="text-[1.55rem] font-black tracking-[-0.05em] text-foreground">{value}</div>
-      <div className="mt-1 text-sm leading-6 text-muted-foreground">{supporting}</div>
     </div>
   )
 }

@@ -14,7 +14,14 @@ from houston.accounts.api.serializers import (
     BootstrapResponseSerializer,
     CsrfResponseSerializer,
     DetailResponseSerializer,
+    DirectorInvitationAcceptErrorResponseSerializer,
+    DirectorInvitationAcceptRequestSerializer,
+    DirectorInvitationAcceptResponseSerializer,
     LoginRequestSerializer,
+    RegistrationErrorResponseSerializer,
+    RegistrationOwnerValidateRequestSerializer,
+    RegistrationRequestSerializer,
+    RegistrationResponseSerializer,
     SwitchEstablishmentRequestSerializer,
 )
 from houston.accounts.authentication import (
@@ -25,18 +32,30 @@ from houston.accounts.selectors import build_bootstrap_payload
 from houston.accounts.services import (
     AUTHENTICATION_FAILED_DETAIL,
     INVALID_CREDENTIALS_DETAIL,
+    INVALID_REGISTRATION_INVITE_CODE_DETAIL,
+    REGISTRATION_DUPLICATE_EMAIL_DETAIL,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
+    InvalidRegistrationInviteCodeError,
     InvalidSelectedEstablishmentError,
     RefreshTokenReuseError,
+    RegistrationDuplicateEmailError,
     authenticate_user,
     clear_refresh_cookie,
     create_login_session,
     refresh_session,
+    register_onboarding_owner,
     resolve_session_for_logout,
     revoke_session,
     set_refresh_cookie,
     switch_selected_establishment,
+    validate_onboarding_owner_registration,
+)
+from houston.establishments.services import (
+    EstablishmentInvitationAlreadyAcceptedError,
+    EstablishmentInvitationExpiredError,
+    InvalidEstablishmentInvitationError,
+    accept_establishment_invitation,
 )
 
 
@@ -98,6 +117,170 @@ class LoginView(APIView):
             response=response,
             raw_refresh_token=bundle.refresh_token.raw_token,
             expires_at=bundle.refresh_token.record.expires_at,
+        )
+        return response
+
+
+class RegisterView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        tags=["auth"],
+        request=RegistrationRequestSerializer,
+        responses={
+            201: RegistrationResponseSerializer,
+            400: OpenApiResponse(response=RegistrationErrorResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Registers a new owner and provisions an organization, draft establishment, "
+            "and onboarding session using a valid registration invite code. Requires a "
+            "valid Django CSRF cookie and X-CSRFToken header."
+        ),
+    )
+    def post(self, request):
+        csrf_failure = _enforce_csrf(request)
+
+        if csrf_failure is not None:
+            return csrf_failure
+
+        serializer = RegistrationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            bundle = register_onboarding_owner(
+                request=request,
+                **serializer.validated_data,
+            )
+        except InvalidRegistrationInviteCodeError:
+            return Response(
+                {
+                    "detail": INVALID_REGISTRATION_INVITE_CODE_DETAIL,
+                    "code": "invalid_invite_code",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except RegistrationDuplicateEmailError:
+            return _registration_duplicate_email_response()
+
+        response = Response(bundle.payload, status=status.HTTP_201_CREATED)
+        set_refresh_cookie(
+            response=response,
+            raw_refresh_token=bundle.auth.refresh_token.raw_token,
+            expires_at=bundle.auth.refresh_token.record.expires_at,
+        )
+        return response
+
+
+class ValidateOwnerRegistrationView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        tags=["auth"],
+        request=RegistrationOwnerValidateRequestSerializer,
+        responses={
+            204: OpenApiResponse(description="Owner registration fields are valid."),
+            400: OpenApiResponse(response=RegistrationErrorResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Validates owner registration fields without provisioning any records. "
+            "Requires a valid Django CSRF cookie and X-CSRFToken header."
+        ),
+    )
+    def post(self, request):
+        csrf_failure = _enforce_csrf(request)
+
+        if csrf_failure is not None:
+            return csrf_failure
+
+        serializer = RegistrationOwnerValidateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            validate_onboarding_owner_registration(
+                invite_code=serializer.validated_data["invite_code"],
+                email=serializer.validated_data["email"],
+            )
+        except InvalidRegistrationInviteCodeError:
+            return Response(
+                {
+                    "detail": INVALID_REGISTRATION_INVITE_CODE_DETAIL,
+                    "code": "invalid_invite_code",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except RegistrationDuplicateEmailError:
+            return _registration_duplicate_email_response()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DirectorInvitationAcceptView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        tags=["auth"],
+        request=DirectorInvitationAcceptRequestSerializer,
+        responses={
+            201: DirectorInvitationAcceptResponseSerializer,
+            400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Accepts an establishment invitation, sets the account password, "
+            "activates the user and membership, and creates an auth session. Requires "
+            "a valid Django CSRF cookie and X-CSRFToken header."
+        ),
+    )
+    def post(self, request, token: str):
+        csrf_failure = _enforce_csrf(request)
+
+        if csrf_failure is not None:
+            return csrf_failure
+
+        serializer = DirectorInvitationAcceptRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            result = accept_establishment_invitation(
+                request=request,
+                raw_token=token,
+                password=serializer.validated_data["password"],
+            )
+        except EstablishmentInvitationExpiredError:
+            return Response(
+                {
+                    "code": "invitation_expired",
+                    "detail": "This invitation has expired.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except EstablishmentInvitationAlreadyAcceptedError:
+            return Response(
+                {
+                    "code": "invitation_already_accepted",
+                    "detail": "This invitation has already been accepted.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidEstablishmentInvitationError:
+            return Response(
+                {
+                    "code": "invitation_invalid",
+                    "detail": "This invitation is not valid.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response = Response(result.payload, status=status.HTTP_201_CREATED)
+        set_refresh_cookie(
+            response=response,
+            raw_refresh_token=result.auth.refresh_token.raw_token,
+            expires_at=result.auth.refresh_token.record.expires_at,
         )
         return response
 
@@ -245,6 +428,16 @@ class SwitchEstablishmentView(APIView):
             )
 
         return Response(payload)
+
+
+def _registration_duplicate_email_response() -> Response:
+    return Response(
+        {
+            "detail": REGISTRATION_DUPLICATE_EMAIL_DETAIL,
+            "code": "duplicate_email",
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 def _enforce_csrf(request) -> Response | None:

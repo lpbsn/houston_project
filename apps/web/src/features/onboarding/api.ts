@@ -7,6 +7,8 @@ import type {
   ActivationSummaryResponse,
   ActivityDescriptionUpdateResponse,
   DetailResponse,
+  DirectorInvitationRequest,
+  DirectorInvitationResponse,
   MarkReadyResponse,
   OnboardingErrorResponse,
   OnboardingProposalErrorResponse,
@@ -15,6 +17,7 @@ import type {
   OnboardingSessionCreateResponse,
   OnboardingSessionResponse,
   ProposalCommandResponse,
+  ProposalItemMutationRequest,
   ProposalSectionDecisionRequest,
   ProposalValidationErrorItem,
   RuntimeConfigResponse,
@@ -242,6 +245,30 @@ export async function getActivationSummary(sessionId: string) {
   return result.data as ActivationSummaryResponse
 }
 
+export async function inviteDirector(sessionId: string, input: DirectorInvitationRequest) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/director-invitations/', {
+        params: {
+          path: { session_id: sessionId },
+        },
+        body: input,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'Director invitation could not be sent.',
+    )
+  }
+
+  return result.data as DirectorInvitationResponse
+}
+
 export async function markReady(sessionId: string) {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -445,6 +472,37 @@ export async function applyOnboardingProposal(sessionId: string, proposalId: str
         | OnboardingProposalErrorResponse
         | undefined,
       'Onboarding proposal could not be applied.',
+    )
+  }
+
+  return result.data as ProposalCommandResponse
+}
+
+export async function mutateOnboardingProposalItem(
+  sessionId: string,
+  proposalId: string,
+  input: ProposalItemMutationRequest,
+) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/', {
+        params: {
+          path: { session_id: sessionId, proposal_id: proposalId },
+        },
+        body: input,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error as
+        | DetailResponse
+        | OnboardingProposalErrorResponse
+        | undefined,
+      'Proposal item could not be updated.',
     )
   }
 
