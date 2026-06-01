@@ -127,7 +127,7 @@ Frontend display states may include:
 - **Ma vue** (`view_mode=personal`): Signals matching user's `MembershipFeedSubscription` (module, domain, or subject level).
 - **Vue générale** (`view_mode=general`): all active establishment Signals; **no subscription filter**.
 - Feed subscriptions personalize Ma vue only; they are **not** security permissions (`feed_subscription_domain.md`).
-- RBAC and `MembershipDomain` govern action rights separately.
+- RBAC (`MembershipScope`) and feed subscriptions govern different concerns.
 - Visibility does not imply actionability.
 - Notifications and realtime events do not grant access.
 - Permission hints do not grant access.

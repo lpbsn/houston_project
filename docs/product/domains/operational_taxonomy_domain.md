@@ -23,7 +23,7 @@ Unit (optional, orthogonal) → physical location (e.g. Chambre 204)
 - Catalogue is backend authority; AI proposes modules only during onboarding.
 - Backend expands domains and subjects from catalogue FK tree.
 - Unit does not participate in feed subscriptions in MVP.
-- `MembershipDomain` (RBAC) ≠ `MembershipFeedSubscription` (Ma vue).
+- `MembershipScope` (RBAC) ≠ `MembershipFeedSubscription` (Ma vue).
 
 ## Proposal parent/child rules (§3.1)
 

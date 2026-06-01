@@ -122,9 +122,7 @@ class OpenAIOnboardingProvider:
             else settings.HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS
         )
         self.max_retries = (
-            max_retries
-            if max_retries is not None
-            else settings.HOUSTON_AI_ONBOARDING_MAX_RETRIES
+            max_retries if max_retries is not None else settings.HOUSTON_AI_ONBOARDING_MAX_RETRIES
         )
         self.use_strict_json_schema = (
             use_strict_json_schema
@@ -140,7 +138,7 @@ class OpenAIOnboardingProvider:
             raise AIOnboardingProviderUnavailableError("OpenAI API key is not configured.")
 
         try:
-            from openai import APIConnectionError, APITimeoutError, BadRequestError, OpenAI
+            from openai import BadRequestError, OpenAI
         except ImportError as exc:
             raise AIOnboardingProviderUnavailableError("OpenAI SDK is not installed.") from exc
 
@@ -162,7 +160,7 @@ class OpenAIOnboardingProvider:
                     response_format=openai_strict_response_format(),
                     response_format_mode=RESPONSE_FORMAT_JSON_SCHEMA_STRICT,
                 )
-            except BadRequestError as exc:
+            except BadRequestError:
                 self.last_strict_schema_fallback_reason = "openai_strict_schema_rejected"
                 logger.warning(
                     "OpenAI strict JSON schema rejected; falling back to json_object.",
@@ -555,7 +553,9 @@ def _build_failure_error_context(
         response_format_mode = token_response.response_format_mode
         provider_request_id = token_response.provider_request_id
     elif hasattr(provider, "last_response_format_mode"):
-        response_format_mode = getattr(provider, "last_response_format_mode", RESPONSE_FORMAT_JSON_OBJECT)
+        response_format_mode = getattr(
+            provider, "last_response_format_mode", RESPONSE_FORMAT_JSON_OBJECT
+        )
         provider_request_id = getattr(provider, "last_provider_request_id", "")
         strict_schema_fallback_reason = getattr(
             provider,

@@ -9,7 +9,7 @@ from houston.accounts.models import User
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OnboardingCatalogDomain,
     OnboardingProposal,
     OnboardingSession,
@@ -365,7 +365,7 @@ def test_apply_preserves_omitted_manual_runtime_rows_and_membership_domain(
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    membership_domain = MembershipDomain.objects.create(
+    membership_scope = MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=old_domain,
     )
@@ -393,8 +393,7 @@ def test_apply_preserves_omitted_manual_runtime_rows_and_membership_domain(
     ).exists()
     assert OperationalUnit.objects.get(key="lobby").active is True
     assert (
-        RuntimeVocabulary.objects.get(term="VRV").mapped_domain.key
-        == HOTEL_HEBERGEMENT_DOMAIN_KEY
+        RuntimeVocabulary.objects.get(term="VRV").mapped_domain.key == HOTEL_HEBERGEMENT_DOMAIN_KEY
     )
     assert RuntimeTag.objects.get(key="hvac").domain_links.count() == 1
     assert RoutingHint.objects.get(pattern="VRV").domain_links.count() == 1
@@ -417,7 +416,7 @@ def test_apply_preserves_omitted_manual_runtime_rows_and_membership_domain(
     assert old_vocab.managed_by_onboarding_proposal is None
     assert old_tag.managed_by_onboarding_proposal is None
     assert old_hint.managed_by_onboarding_proposal is None
-    assert MembershipDomain.objects.get(id=membership_domain.id).operational_domain == old_domain
+    assert MembershipScope.objects.get(id=membership_scope.id).operational_domain == old_domain
 
 
 def test_apply_deactivates_only_omitted_proposal_managed_runtime_rows(

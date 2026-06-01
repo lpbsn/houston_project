@@ -62,7 +62,9 @@ def merge_expanded_proposal(*, base_payload: dict, module_keys: list[str]) -> di
 
 
 def enforce_proposal_parent_child_coherence(payload: dict) -> dict:
-    modules = {item["key"]: item for item in payload.get("operational_modules", []) if item.get("key")}
+    modules = {
+        item["key"]: item for item in payload.get("operational_modules", []) if item.get("key")
+    }
     domains_raw = payload.get("operational_domains", [])
     subjects_raw = payload.get("operational_subjects", [])
 
@@ -103,7 +105,9 @@ def enforce_proposal_parent_child_coherence(payload: dict) -> dict:
         )
 
     for domain_item in domain_by_key.values():
-        modules.setdefault(domain_item["module_key"], _catalog_module_item(domain_item["module_key"]))
+        modules.setdefault(
+            domain_item["module_key"], _catalog_module_item(domain_item["module_key"])
+        )
 
     updated = dict(payload)
     updated["operational_modules"] = list(modules.values())
@@ -133,7 +137,9 @@ def apply_proposal_item_removal(*, payload: dict, section: str, key: str) -> dic
             item for item in updated.get("operational_domains", []) if item.get("key") != key
         ]
         updated["operational_subjects"] = [
-            item for item in updated.get("operational_subjects", []) if item.get("domain_key") != key
+            item
+            for item in updated.get("operational_subjects", [])
+            if item.get("domain_key") != key
         ]
     elif section == "operational_subjects":
         updated["operational_subjects"] = [
@@ -208,7 +214,9 @@ def _catalog_module_item(key: str) -> dict:
 def _catalog_domain_item(key: str) -> dict:
     row = next((item for item in load_arborescence_rows() if item.domain_key == key), None)
     if row is None:
-        catalog = OnboardingCatalogDomain.objects.select_related("catalog_module").filter(key=key).first()
+        catalog = (
+            OnboardingCatalogDomain.objects.select_related("catalog_module").filter(key=key).first()
+        )
         if catalog is None:
             raise KeyError(key)
         return {
@@ -230,10 +238,14 @@ def _catalog_domain_item(key: str) -> dict:
 def _catalog_subject_item(key: str) -> dict:
     row = next((item for item in load_arborescence_rows() if item.subject_key == key), None)
     if row is None:
-        catalog = OnboardingCatalogSubject.objects.select_related(
-            "catalog_domain",
-            "catalog_domain__catalog_module",
-        ).filter(key=key).first()
+        catalog = (
+            OnboardingCatalogSubject.objects.select_related(
+                "catalog_domain",
+                "catalog_domain__catalog_module",
+            )
+            .filter(key=key)
+            .first()
+        )
         if catalog is None:
             raise KeyError(key)
         return {

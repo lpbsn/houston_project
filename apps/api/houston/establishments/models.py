@@ -449,7 +449,15 @@ class EstablishmentMembership(BaseModel):
             models.UniqueConstraint(
                 fields=["user", "establishment"],
                 name="unique_user_establishment_membership",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["establishment"],
+                condition=Q(
+                    role="director",
+                    status__in=["invited", "active"],
+                ),
+                name="unique_active_or_invited_director_per_establishment",
+            ),
         ]
         indexes = [
             models.Index(fields=["establishment"], name="membership_est_idx"),
@@ -460,6 +468,28 @@ class EstablishmentMembership(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.user} @ {self.establishment}"
+
+
+class EstablishmentInvitation(BaseModel):
+    membership = models.ForeignKey(
+        EstablishmentMembership,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+        db_index=False,
+    )
+    token_digest = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["membership"], name="est_invitation_membership_idx"),
+            models.Index(fields=["expires_at"], name="est_invitation_expires_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Invitation for {self.membership_id}"
 
 
 class OperationalDomain(BaseModel):
@@ -588,34 +618,120 @@ class OperationalSubject(BaseModel):
         return f"{self.establishment} :: {self.label} [{self.key}]"
 
 
-class MembershipDomain(BaseModel):
+class MembershipScope(BaseModel):
+    """Operational RBAC scope for manager/staff memberships (module, domain, or subject)."""
+
     membership = models.ForeignKey(
         EstablishmentMembership,
         on_delete=models.CASCADE,
-        related_name="domain_links",
+        related_name="scope_links",
+        db_index=False,
+    )
+    operational_module = models.ForeignKey(
+        "OperationalModule",
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
         db_index=False,
     )
     operational_domain = models.ForeignKey(
         OperationalDomain,
         on_delete=models.CASCADE,
-        related_name="membership_links",
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    operational_subject = models.ForeignKey(
+        OperationalSubject,
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
         db_index=False,
     )
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        operational_module__isnull=False,
+                        operational_domain__isnull=True,
+                        operational_subject__isnull=True,
+                    )
+                    | Q(
+                        operational_module__isnull=True,
+                        operational_domain__isnull=False,
+                        operational_subject__isnull=True,
+                    )
+                    | Q(
+                        operational_module__isnull=True,
+                        operational_domain__isnull=True,
+                        operational_subject__isnull=False,
+                    )
+                ),
+                name="membership_scope_exactly_one_target",
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "operational_module"],
+                condition=Q(operational_module__isnull=False),
+                name="membership_scope_module_uniq",
+            ),
             models.UniqueConstraint(
                 fields=["membership", "operational_domain"],
-                name="membership_domain_uniq",
-            )
+                condition=Q(operational_domain__isnull=False),
+                name="membership_scope_domain_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "operational_subject"],
+                condition=Q(operational_subject__isnull=False),
+                name="membership_scope_subject_uniq",
+            ),
         ]
         indexes = [
-            models.Index(fields=["membership"], name="mship_domain_mship_idx"),
-            models.Index(fields=["operational_domain"], name="mship_domain_domain_idx"),
+            models.Index(fields=["membership"], name="mship_scope_mship_idx"),
+            models.Index(fields=["operational_module"], name="mship_scope_module_idx"),
+            models.Index(fields=["operational_domain"], name="mship_scope_domain_idx"),
+            models.Index(fields=["operational_subject"], name="mship_scope_subject_idx"),
         ]
 
+    def clean(self) -> None:
+        super().clean()
+        set_count = sum(
+            1
+            for value in (
+                self.operational_module_id,
+                self.operational_domain_id,
+                self.operational_subject_id,
+            )
+            if value is not None
+        )
+        if set_count != 1:
+            raise ValidationError(
+                "Exactly one of operational_module, operational_domain, or "
+                "operational_subject must be set."
+            )
+
+    @property
+    def scope_type(self) -> str:
+        if self.operational_module_id is not None:
+            return "module"
+        if self.operational_domain_id is not None:
+            return "domain"
+        return "subject"
+
+    @property
+    def scope_id(self):
+        if self.operational_module_id is not None:
+            return self.operational_module_id
+        if self.operational_domain_id is not None:
+            return self.operational_domain_id
+        return self.operational_subject_id
+
     def __str__(self) -> str:
-        return f"{self.membership} -> {self.operational_domain.key}"
+        return f"{self.membership} -> {self.scope_type}:{self.scope_id}"
 
 
 class EstablishmentActivityDescription(BaseModel):

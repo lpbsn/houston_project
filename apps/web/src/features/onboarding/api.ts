@@ -7,6 +7,8 @@ import type {
   ActivationSummaryResponse,
   ActivityDescriptionUpdateResponse,
   DetailResponse,
+  DirectorInvitationRequest,
+  DirectorInvitationResponse,
   MarkReadyResponse,
   OnboardingErrorResponse,
   OnboardingProposalErrorResponse,
@@ -241,6 +243,30 @@ export async function getActivationSummary(sessionId: string) {
   }
 
   return result.data as ActivationSummaryResponse
+}
+
+export async function inviteDirector(sessionId: string, input: DirectorInvitationRequest) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/director-invitations/', {
+        params: {
+          path: { session_id: sessionId },
+        },
+        body: input,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'Director invitation could not be sent.',
+    )
+  }
+
+  return result.data as DirectorInvitationResponse
 }
 
 export async function markReady(sessionId: string) {

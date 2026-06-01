@@ -1,14 +1,14 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-05-29
-Implementation status: partial (API partial in codebase when Phase B/C restored; contract below is target)
+Last reviewed: 2026-05-30
+Implementation status: **implemented** (onboarding/runtime API — Phase 2 + taxonomy subjects extension)
 
 ## 1. Purpose
 
 This domain initializes and later evolves the establishment-scoped runtime structure Houston uses for operational workflows.
 
-Implementation status is `partial`: current code validates `Organization`, `Establishment`, `EstablishmentMembership`, `OperationalDomain`, membership-domain links, establishment lifecycle status, and runtime-management permission helpers, but no public runtime/onboarding API is confirmed in `apps/api/schema.yml`.
+Public onboarding/runtime API is **implemented**. Authoritative contract: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (paths under `/api/v1/onboarding-sessions/`). Current code includes catalogue hierarchy (modules, domains, subjects), proposals v2, AI modules-only expansion, item-level mutations, runtime config, activation readiness, and activation.
 
 Domain boundaries:
 - Identity / Membership owns `User`, `Organization`, `Establishment`, and `EstablishmentMembership` lifecycle.
@@ -65,8 +65,9 @@ Activation minimum:
 - at least 3 operational domains validated
 - at least 1 operational subject validated per active domain in applied proposal
 - at least 1 active Owner or Director
-- at least 1 active or invited Manager
-- operational domains assigned to initial managers
+- exactly one active or invited Director membership on a user distinct from the initial Owner (at most one invited/active Director per establishment; deactivated Directors do not satisfy the gate)
+- Director invitation during draft onboarding via `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` (returns one-time `invitation_token` and `invitation_accept_path` for manual sharing)
+- Director accepts via `POST /api/v1/invitations/{token}/accept/` (sets password, activates user/membership, creates auth session)
 
 Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md)) applies during manual item edit and validation.
 
@@ -90,7 +91,7 @@ Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](ope
 
 - `OperationalDomain`
   - Stable operational scope under a module (hierarchical key, e.g. `hotel__hebergement`).
-  - Used for RBAC domain assignment (`MembershipDomain`) and Signal/Action routing.
+  - Used for manager/staff RBAC (`MembershipScope`) and Signal/Action routing. `MembershipFeedSubscription` (future) is separate from RBAC.
 
 - `OperationalSubject`
   - Finest operational problem type under a domain (hierarchical key, e.g. `hotel__hebergement__proprete_des_chambres`).
@@ -118,8 +119,8 @@ Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](ope
   - Target payload: `schema_version: onboarding_proposal_v2` with sections `operational_modules`, `operational_domains`, `operational_subjects`, optional units/vocabulary/tags/routing_hints.
   - AI path: modules-only from provider → backend expansion + validation.
 
-- `OnboardingProposalItemMutation` (candidate API)
-  - Add/remove individual module, domain, or subject keys with automatic parent/child coherence.
+- `OnboardingProposalItemMutation` (implemented API)
+  - `POST /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/` — add/remove module, domain, or subject keys with automatic parent/child coherence.
 
 - `OnboardingValidation`
   - Human approval step for sections of proposed runtime context before backend activation.
@@ -135,9 +136,10 @@ Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](ope
   - Current code validates `draft`, `active`, and `deactivated`.
   - Onboarding must not treat the establishment as operationally active before backend activation.
 
-- Onboarding session or proposal statuses
-  - Not validated yet as implemented backend statuses.
-  - Candidate progression only: started, description submitted, AI processing, proposal ready, sections validated, activated.
+- `OnboardingSession` statuses (implemented on `OnboardingSession` model)
+  - `started`, `description_submitted`, `configuring_runtime`, `proposal_ready`, `validating_sections`, `ready_for_activation`, `activated`, `failed`, `canceled`
+- `OnboardingProposal` statuses (implemented)
+  - Includes `draft`, `ready`, `partially_validated`, `validated`, `applied`, `rejected`, `superseded`
 
 - Runtime context sections
   - Validation is expected to happen by section where useful.
@@ -198,7 +200,7 @@ Candidate endpoint capabilities only:
 - activate establishment
 - update runtime config
 - rerun AI proposal
-- invite initial manager or director
+- invite initial director during onboarding (`POST .../director-invitations/`)
 
 ## 10. Frontend Expectations
 

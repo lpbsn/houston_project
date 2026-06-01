@@ -102,19 +102,24 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 ## Local Setup
 
 1. Copy `.env.example` to `.env`.
-2. Start the stack:
+2. Set backend-only onboarding variables in `.env` (never commit real secrets):
+   - `HOUSTON_REGISTRATION_INVITE_CODES` — comma-separated codes required for public `/onboarding` registration (empty disables registration).
+   - `OPENAI_API_KEY` — server-only OpenAI key for live onboarding AI (optional in dev if you rely on template fallback).
+   - `HOUSTON_AI_ONBOARDING_MODEL`, `HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS`, `HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA` — optional tuning; see `.env.example` for defaults.
+   - Do not put API keys or invite codes in `VITE_*` variables.
+3. Start the stack:
 
 ```bash
 docker compose up --build
 ```
 
-3. Apply database migrations:
+4. Apply database migrations:
 
 ```bash
 make migrate
 ```
 
-4. Generate the backend schema and frontend API types when needed:
+5. Generate the backend schema and frontend API types when needed:
 
 ```bash
 make schema

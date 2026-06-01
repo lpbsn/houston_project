@@ -1,20 +1,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
+from django.http import HttpRequest
 from django.utils import timezone
 
-from houston.accounts.models import UserSession
+from houston.accounts import tokens as auth_tokens
+from houston.accounts.models import User, UserSession
 from houston.establishments.access import get_onboarding_access_context
+from houston.establishments.membership_scope import (
+    InvalidMembershipScopeAssignmentError,
+    MembershipScopeInput,
+    assign_membership_scopes,
+    scopes_not_allowed_for_role,
+)
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     Establishment,
     EstablishmentActivityDescription,
+    EstablishmentInvitation,
     EstablishmentMembership,
-    MembershipDomain,
     OnboardingCatalogDomain,
     OnboardingCatalogModule,
     OnboardingCatalogSubject,
@@ -31,6 +41,7 @@ from houston.establishments.models import (
     RuntimeTagDomain,
     RuntimeVocabulary,
 )
+from houston.establishments.permissions import can_manage_memberships
 from houston.establishments.proposal_catalog import (
     apply_proposal_item_addition,
     apply_proposal_item_removal,
@@ -49,15 +60,23 @@ class MembershipManagementNotFoundError(Exception):
     pass
 
 
-class InvalidMembershipDomainAssignmentError(Exception):
-    pass
-
-
 class CannotDeactivateLastActiveOwnerError(Exception):
     pass
 
 
 class CannotDemoteLastActiveOwnerError(Exception):
+    pass
+
+
+class MembershipManagementForbiddenError(Exception):
+    pass
+
+
+class InvalidMembershipInvitationInputError(Exception):
+    pass
+
+
+class MembershipInvitationRoleNotAllowedError(Exception):
     pass
 
 
@@ -109,10 +128,51 @@ class OnboardingProposalStateError(Exception):
     pass
 
 
+class DirectorInvitationDuplicateError(Exception):
+    pass
+
+
+class DirectorInvitationAlreadyExistsError(Exception):
+    pass
+
+
+class DirectorInvitationOwnerNotAllowedError(Exception):
+    pass
+
+
+class InvalidDirectorInvitationInputError(Exception):
+    pass
+
+
+class InvalidEstablishmentInvitationError(Exception):
+    pass
+
+
+class EstablishmentInvitationExpiredError(Exception):
+    pass
+
+
+class EstablishmentInvitationAlreadyAcceptedError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class DirectorInvitationResult:
+    membership: EstablishmentMembership
+    invitation_token: str
+    invitation_expires_at: datetime
+
+
+@dataclass(frozen=True)
+class DirectorInvitationAcceptResult:
+    auth: object
+    payload: dict
+
+
 @dataclass(frozen=True)
 class MembershipUpdateInput:
     role: str | None = None
-    operational_domains: list[str] | None = None
+    scopes: list[MembershipScopeInput] | None = None
 
 
 PROPOSAL_SCHEMA_VERSION = "onboarding_proposal_v2"
@@ -1481,7 +1541,10 @@ def compute_activation_readiness(*, session: OnboardingSession) -> dict:
             "is_skippable": False,
         },
         "subjects": {
-            "is_ready": counts["active_subjects_count"] >= 1,
+            "is_ready": (
+                counts["active_subjects_count"] >= 1
+                and counts["active_domains_without_subjects_count"] == 0
+            ),
             "required": True,
             "is_skippable": False,
         },
@@ -1505,12 +1568,8 @@ def compute_activation_readiness(*, session: OnboardingSession) -> dict:
             "required": False,
             "is_skippable": True,
         },
-        "managers": {
-            "is_ready": (
-                counts["active_or_invited_manager_count"] >= 1
-                and counts["managers_with_domains_count"]
-                == counts["active_or_invited_manager_count"]
-            ),
+        "director": {
+            "is_ready": counts["active_or_invited_director_count"] >= 1,
             "required": True,
             "is_skippable": False,
         },
@@ -1568,11 +1627,467 @@ def build_activation_summary(*, session: OnboardingSession) -> dict:
             _serialize_routing_hint(item) for item in config["optional_routing_hints"]
         ],
         "initial_owner_director_count": counts["active_owner_or_director_count"],
-        "initial_manager_count": counts["active_or_invited_manager_count"],
-        "managers_with_domains_count": counts["managers_with_domains_count"],
+        "initial_director_count": counts["active_or_invited_director_count"],
         "readiness": readiness,
         "blockers": readiness["blockers"],
     }
+
+
+@transaction.atomic
+def invite_director_during_onboarding(
+    *,
+    session: OnboardingSession,
+    actor,
+    email: str,
+    first_name: str,
+    last_name: str,
+) -> DirectorInvitationResult:
+    session = _lock_onboarding_session(session)
+    _ensure_non_terminal_onboarding_session(session)
+
+    access = get_onboarding_access_context(actor=actor, session=session)
+    if not access.can_manage:
+        raise OnboardingAccessDeniedError
+
+    if session.establishment.status != Establishment.Status.DRAFT:
+        raise InvalidOnboardingActivationStateError(
+            "Director invitations are only allowed for draft establishments."
+        )
+
+    normalized_email = User.normalize_email_value(email)
+    if normalized_email is None:
+        raise InvalidDirectorInvitationInputError("A valid email is required.")
+
+    normalized_first_name = first_name.strip()
+    normalized_last_name = last_name.strip()
+    if not normalized_first_name or not normalized_last_name:
+        raise InvalidDirectorInvitationInputError("First and last name are required.")
+
+    establishment = session.establishment
+    owner_user_ids = _active_owner_user_ids(establishment_id=establishment.id)
+
+    if User.objects.filter(id__in=owner_user_ids, email__iexact=normalized_email).exists():
+        raise DirectorInvitationOwnerNotAllowedError
+
+    existing_user = User.objects.filter(email__iexact=normalized_email).first()
+    if existing_user is not None and existing_user.id in owner_user_ids:
+        raise DirectorInvitationOwnerNotAllowedError
+
+    existing_membership = None
+    if existing_user is not None:
+        existing_membership = EstablishmentMembership.objects.filter(
+            user=existing_user,
+            establishment=establishment,
+        ).first()
+
+    if existing_membership is not None:
+        if existing_membership.status in {
+            EstablishmentMembership.Status.INVITED,
+            EstablishmentMembership.Status.ACTIVE,
+        }:
+            raise DirectorInvitationDuplicateError
+
+        if (
+            existing_membership.status == EstablishmentMembership.Status.DEACTIVATED
+            and existing_membership.role == EstablishmentMembership.Role.DIRECTOR
+        ):
+            if _count_non_owner_directors(
+                establishment_id=establishment.id,
+                owner_user_ids=owner_user_ids,
+            ) >= 1:
+                raise DirectorInvitationAlreadyExistsError
+
+            existing_membership.status = EstablishmentMembership.Status.INVITED
+            existing_membership.save(update_fields=["status", "updated_at"])
+            existing_user.first_name = normalized_first_name
+            existing_user.last_name = normalized_last_name
+            existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
+            return _issue_director_invitation_for_membership(existing_membership)
+
+        raise DirectorInvitationDuplicateError
+
+    if (
+        _count_non_owner_directors(
+            establishment_id=establishment.id,
+            owner_user_ids=owner_user_ids,
+        )
+        >= 1
+    ):
+        raise DirectorInvitationAlreadyExistsError
+
+    from houston.accounts.services import resolve_or_create_pending_user_for_invite
+
+    user = resolve_or_create_pending_user_for_invite(
+        email=normalized_email,
+        first_name=normalized_first_name,
+        last_name=normalized_last_name,
+        existing_user=existing_user,
+    )
+
+    if user.id in owner_user_ids:
+        raise DirectorInvitationOwnerNotAllowedError
+
+    membership = EstablishmentMembership.objects.create(
+        user=user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.INVITED,
+    )
+    return _issue_director_invitation_for_membership(membership)
+
+
+@transaction.atomic
+def accept_director_invitation(
+    *,
+    request: HttpRequest,
+    raw_token: str,
+    password: str,
+) -> DirectorInvitationAcceptResult:
+    token_digest = auth_tokens.digest_token(raw_token.strip())
+    now = timezone.now()
+
+    invitation = (
+        EstablishmentInvitation.objects.select_for_update()
+        .select_related(
+            "membership",
+            "membership__user",
+            "membership__establishment",
+            "membership__establishment__organization",
+        )
+        .filter(token_digest=token_digest)
+        .first()
+    )
+
+    if invitation is None:
+        raise InvalidEstablishmentInvitationError
+
+    if invitation.accepted_at is not None:
+        raise EstablishmentInvitationAlreadyAcceptedError
+
+    if invitation.revoked_at is not None:
+        raise InvalidEstablishmentInvitationError
+
+    if invitation.expires_at <= now:
+        raise EstablishmentInvitationExpiredError
+
+    membership = invitation.membership
+    user = membership.user
+
+    if membership.role != EstablishmentMembership.Role.DIRECTOR:
+        raise InvalidEstablishmentInvitationError
+
+    if membership.status != EstablishmentMembership.Status.INVITED:
+        raise InvalidEstablishmentInvitationError
+
+    if user.status != User.Status.PENDING:
+        raise InvalidEstablishmentInvitationError
+
+    return _finalize_establishment_invitation_accept(
+        request=request,
+        invitation=invitation,
+        membership=membership,
+        user=user,
+        password=password,
+    )
+
+
+_INVITATION_ACCEPT_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    }
+)
+
+
+@transaction.atomic
+def accept_establishment_invitation(
+    *,
+    request: HttpRequest,
+    raw_token: str,
+    password: str,
+) -> DirectorInvitationAcceptResult:
+    token_digest = auth_tokens.digest_token(raw_token.strip())
+    now = timezone.now()
+
+    invitation = (
+        EstablishmentInvitation.objects.select_for_update()
+        .select_related(
+            "membership",
+            "membership__user",
+            "membership__establishment",
+            "membership__establishment__organization",
+        )
+        .filter(token_digest=token_digest)
+        .first()
+    )
+
+    if invitation is None:
+        raise InvalidEstablishmentInvitationError
+
+    if invitation.accepted_at is not None:
+        raise EstablishmentInvitationAlreadyAcceptedError
+
+    if invitation.revoked_at is not None:
+        raise InvalidEstablishmentInvitationError
+
+    if invitation.expires_at <= now:
+        raise EstablishmentInvitationExpiredError
+
+    membership = invitation.membership
+    user = membership.user
+
+    if membership.role not in _INVITATION_ACCEPT_ROLES:
+        raise InvalidEstablishmentInvitationError
+
+    if membership.status != EstablishmentMembership.Status.INVITED:
+        raise InvalidEstablishmentInvitationError
+
+    if user.status != User.Status.PENDING:
+        raise InvalidEstablishmentInvitationError
+
+    return _finalize_establishment_invitation_accept(
+        request=request,
+        invitation=invitation,
+        membership=membership,
+        user=user,
+        password=password,
+    )
+
+
+def _finalize_establishment_invitation_accept(
+    *,
+    request: HttpRequest,
+    invitation: EstablishmentInvitation,
+    membership: EstablishmentMembership,
+    user: User,
+    password: str,
+) -> DirectorInvitationAcceptResult:
+    now = timezone.now()
+
+    user.set_password(password)
+    user.status = User.Status.ACTIVE
+    user.save(update_fields=["password", "status", "updated_at"])
+
+    membership.status = EstablishmentMembership.Status.ACTIVE
+    membership.save(update_fields=["status", "updated_at"])
+
+    invitation.accepted_at = now
+    invitation.save(update_fields=["accepted_at", "updated_at"])
+
+    from houston.accounts.services import (
+        build_auth_response_payload,
+        create_login_session,
+    )
+
+    auth_bundle = create_login_session(request=request, user=user)
+    auth_session = auth_bundle.session
+    auth_session.selected_establishment = membership.establishment
+    auth_session.save(update_fields=["selected_establishment", "updated_at"])
+
+    payload = build_auth_response_payload(
+        session=auth_session,
+        access_token=auth_bundle.access_token,
+    )
+    payload["establishment_id"] = membership.establishment_id
+
+    onboarding_session = (
+        OnboardingSession.objects.filter(
+            establishment_id=membership.establishment_id,
+        )
+        .exclude(
+            status__in=[
+                OnboardingSession.Status.ACTIVATED,
+                OnboardingSession.Status.FAILED,
+                OnboardingSession.Status.CANCELED,
+            ],
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if onboarding_session is not None:
+        payload["onboarding_session_id"] = onboarding_session.id
+
+    return DirectorInvitationAcceptResult(
+        auth=auth_bundle,
+        payload=payload,
+    )
+
+
+@transaction.atomic
+def invite_membership_for_establishment(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    email: str,
+    first_name: str,
+    last_name: str,
+    role: str,
+    scopes: list[MembershipScopeInput] | None = None,
+) -> DirectorInvitationResult:
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        raise MembershipManagementNotFoundError
+
+    if not can_manage_memberships(current_membership):
+        raise MembershipManagementForbiddenError
+
+    if role not in {
+        EstablishmentMembership.Role.STAFF,
+        EstablishmentMembership.Role.MANAGER,
+    }:
+        raise MembershipInvitationRoleNotAllowedError
+
+    if not _can_actor_invite_role(actor_role=current_membership.role, invited_role=role):
+        raise MembershipInvitationRoleNotAllowedError
+
+    establishment = Establishment.objects.select_related("organization").get(id=establishment_id)
+    if establishment.status != Establishment.Status.ACTIVE:
+        raise InvalidMembershipInvitationInputError(
+            "Membership invitations are only allowed for active establishments."
+        )
+
+    normalized_email = User.normalize_email_value(email)
+    if normalized_email is None:
+        raise InvalidMembershipInvitationInputError("A valid email is required.")
+
+    normalized_first_name = first_name.strip()
+    normalized_last_name = last_name.strip()
+    if not normalized_first_name or not normalized_last_name:
+        raise InvalidMembershipInvitationInputError("First and last name are required.")
+
+    if not scopes:
+        raise InvalidMembershipInvitationInputError(
+            "At least one operational scope is required for staff and manager invitations."
+        )
+
+    existing_user = User.objects.filter(email__iexact=normalized_email).first()
+    existing_membership = None
+    if existing_user is not None:
+        existing_membership = EstablishmentMembership.objects.filter(
+            user=existing_user,
+            establishment=establishment,
+        ).first()
+
+    if existing_membership is not None:
+        if existing_membership.status in {
+            EstablishmentMembership.Status.INVITED,
+            EstablishmentMembership.Status.ACTIVE,
+        }:
+            raise DirectorInvitationDuplicateError
+
+        if existing_membership.status == EstablishmentMembership.Status.DEACTIVATED:
+            existing_membership.role = role
+            existing_membership.status = EstablishmentMembership.Status.INVITED
+            existing_membership.save(update_fields=["role", "status", "updated_at"])
+            existing_user.first_name = normalized_first_name
+            existing_user.last_name = normalized_last_name
+            existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
+            assign_membership_scopes(
+                membership=existing_membership,
+                scope_inputs=scopes,
+            )
+            return _issue_establishment_invitation_for_membership(existing_membership)
+
+        raise DirectorInvitationDuplicateError
+
+    from houston.accounts.services import resolve_or_create_pending_user_for_invite
+
+    user = resolve_or_create_pending_user_for_invite(
+        email=normalized_email,
+        first_name=normalized_first_name,
+        last_name=normalized_last_name,
+        existing_user=existing_user,
+    )
+
+    membership = EstablishmentMembership.objects.create(
+        user=user,
+        establishment=establishment,
+        role=role,
+        status=EstablishmentMembership.Status.INVITED,
+    )
+
+    assign_membership_scopes(membership=membership, scope_inputs=scopes)
+
+    return _issue_establishment_invitation_for_membership(membership)
+
+
+def _can_actor_manage_target_membership(
+    *,
+    actor_membership: EstablishmentMembership | None,
+    target_membership: EstablishmentMembership,
+) -> bool:
+    if actor_membership is None:
+        return False
+
+    allowed_targets = _MANAGEABLE_TARGET_ROLES_BY_ACTOR.get(actor_membership.role)
+    if allowed_targets is None:
+        return False
+
+    return target_membership.role in allowed_targets
+
+
+def _can_actor_manage_target_role(
+    *,
+    actor_membership: EstablishmentMembership | None,
+    target_role: str,
+) -> bool:
+    if actor_membership is None:
+        return False
+
+    allowed_targets = _MANAGEABLE_TARGET_ROLES_BY_ACTOR.get(actor_membership.role)
+    if allowed_targets is None:
+        return False
+
+    return target_role in allowed_targets
+
+
+def _can_actor_invite_role(*, actor_role: str, invited_role: str) -> bool:
+    if invited_role not in {
+        EstablishmentMembership.Role.STAFF,
+        EstablishmentMembership.Role.MANAGER,
+    }:
+        return False
+
+    allowed_targets = _MANAGEABLE_TARGET_ROLES_BY_ACTOR.get(actor_role)
+    if allowed_targets is None:
+        return False
+
+    return invited_role in allowed_targets
+
+
+_MANAGEABLE_TARGET_ROLES_BY_ACTOR = {
+    EstablishmentMembership.Role.OWNER: {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    },
+    EstablishmentMembership.Role.DIRECTOR: {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    },
+}
+
+
+def _issue_establishment_invitation_for_membership(
+    membership: EstablishmentMembership,
+) -> DirectorInvitationResult:
+    _revoke_pending_invitations(membership=membership)
+    raw_token, invitation = _create_establishment_invitation(membership=membership)
+    return DirectorInvitationResult(
+        membership=_reload_membership_for_response(membership.id),
+        invitation_token=raw_token,
+        invitation_expires_at=invitation.expires_at,
+    )
+
+
+def _revoke_pending_invitations(*, membership: EstablishmentMembership) -> None:
+    now = timezone.now()
+    EstablishmentInvitation.objects.filter(
+        membership=membership,
+        accepted_at__isnull=True,
+        revoked_at__isnull=True,
+    ).update(revoked_at=now, updated_at=now)
 
 
 @transaction.atomic
@@ -1699,9 +2214,21 @@ def update_membership_for_management(
     if membership is None:
         raise MembershipManagementNotFoundError
 
+    if not _can_actor_manage_target_membership(
+        actor_membership=current_membership,
+        target_membership=membership,
+    ):
+        raise MembershipManagementForbiddenError
+
     update_fields: list[str] = []
 
     if update_input.role is not None and membership.role != update_input.role:
+        if not _can_actor_manage_target_role(
+            actor_membership=current_membership,
+            target_role=update_input.role,
+        ):
+            raise MembershipManagementForbiddenError
+
         if _would_demote_last_active_owner(
             membership=membership,
             next_role=update_input.role,
@@ -1714,10 +2241,20 @@ def update_membership_for_management(
     if update_fields:
         membership.save(update_fields=[*update_fields, "updated_at"])
 
-    if update_input.operational_domains is not None:
-        _replace_membership_domains(
+    effective_role = update_input.role if update_input.role is not None else membership.role
+
+    if update_input.scopes is not None:
+        if scopes_not_allowed_for_role(effective_role):
+            raise InvalidMembershipScopeAssignmentError(
+                "Operational scopes cannot be assigned to owner or director memberships."
+            )
+        if not update_input.scopes:
+            raise InvalidMembershipScopeAssignmentError(
+                "At least one operational scope is required for staff and manager memberships."
+            )
+        assign_membership_scopes(
             membership=membership,
-            operational_domain_keys=update_input.operational_domains,
+            scope_inputs=update_input.scopes,
         )
 
     membership.refresh_from_db()
@@ -1738,6 +2275,12 @@ def deactivate_membership_for_management(
     )
     if membership is None:
         raise MembershipManagementNotFoundError
+
+    if not _can_actor_manage_target_membership(
+        actor_membership=current_membership,
+        target_membership=membership,
+    ):
+        raise MembershipManagementForbiddenError
 
     if (
         membership.status == EstablishmentMembership.Status.ACTIVE
@@ -1818,26 +2361,20 @@ def _set_status_after_description_submit(session: OnboardingSession) -> None:
 
 def _activation_counts(session: OnboardingSession) -> dict:
     establishment_id = session.establishment_id
-    managers = EstablishmentMembership.objects.filter(
-        establishment_id=establishment_id,
-        role=EstablishmentMembership.Role.MANAGER,
-        status__in=[
-            EstablishmentMembership.Status.ACTIVE,
-            EstablishmentMembership.Status.INVITED,
-        ],
-    )
-    managers_with_domains_count = (
-        managers.annotate(
-            active_domains_count=Count(
-                "domain_links",
-                filter=Q(
-                    domain_links__operational_domain__active=True,
-                    domain_links__operational_domain__establishment_id=establishment_id,
-                ),
-                distinct=True,
+    owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
+
+    active_domains_without_subjects_count = (
+        OperationalDomain.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        )
+        .annotate(
+            active_subject_count=Count(
+                "operational_subjects",
+                filter=Q(operational_subjects__active=True),
             )
         )
-        .filter(active_domains_count__gte=1)
+        .filter(active_subject_count=0)
         .count()
     )
 
@@ -1851,6 +2388,7 @@ def _activation_counts(session: OnboardingSession) -> dict:
         "active_subjects_count": session.establishment.operational_subjects.filter(
             active=True,
         ).count(),
+        "active_domains_without_subjects_count": active_domains_without_subjects_count,
         "active_owner_or_director_count": EstablishmentMembership.objects.filter(
             establishment_id=establishment_id,
             status=EstablishmentMembership.Status.ACTIVE,
@@ -1859,8 +2397,16 @@ def _activation_counts(session: OnboardingSession) -> dict:
                 EstablishmentMembership.Role.DIRECTOR,
             ],
         ).count(),
-        "active_or_invited_manager_count": managers.count(),
-        "managers_with_domains_count": managers_with_domains_count,
+        "active_or_invited_director_count": EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.DIRECTOR,
+            status__in=[
+                EstablishmentMembership.Status.ACTIVE,
+                EstablishmentMembership.Status.INVITED,
+            ],
+        )
+        .exclude(user_id__in=owner_user_ids)
+        .count(),
     }
 
 
@@ -1892,19 +2438,29 @@ def _activation_blockers(
     if counts["active_domains_count"] < 3:
         blockers.append(_blocker("insufficient_active_domains"))
 
+    if counts["active_subjects_count"] < 1:
+        blockers.append(_blocker("insufficient_active_subjects"))
+
+    domains_without_subjects = counts["active_domains_without_subjects_count"]
+    if counts["active_domains_count"] > 0 and domains_without_subjects > 0:
+        blockers.append(
+            _blocker(
+                "domains_without_active_subjects",
+                message=(f"{domains_without_subjects} active domain(s) have no active subjects"),
+            )
+        )
+
     if counts["active_owner_or_director_count"] < 1:
         blockers.append(_blocker("missing_active_owner_or_director"))
 
-    if counts["active_or_invited_manager_count"] < 1:
-        blockers.append(_blocker("missing_active_or_invited_manager"))
-    elif counts["managers_with_domains_count"] != counts["active_or_invited_manager_count"]:
-        blockers.append(_blocker("manager_domains_missing"))
+    if counts["active_or_invited_director_count"] < 1:
+        blockers.append(_blocker("missing_active_or_invited_director"))
 
     return blockers
 
 
-def _blocker(code: str) -> dict:
-    return {"code": code, "message": code.replace("_", " ")}
+def _blocker(code: str, *, message: str | None = None) -> dict:
+    return {"code": code, "message": message or code.replace("_", " ")}
 
 
 def _is_valid_activity_description(
@@ -1996,75 +2552,6 @@ def _serialize_routing_hint(routing_hint) -> dict:
     }
 
 
-def _replace_membership_domains(
-    *,
-    membership: EstablishmentMembership,
-    operational_domain_keys: list[str],
-) -> None:
-    normalized_keys = _normalize_domain_keys(operational_domain_keys)
-    domains_by_key = {
-        domain.key: domain
-        for domain in OperationalDomain.objects.filter(
-            establishment=membership.establishment,
-            active=True,
-            key__in=normalized_keys,
-        ).only("id", "key")
-    }
-
-    if len(domains_by_key) != len(normalized_keys):
-        raise InvalidMembershipDomainAssignmentError(
-            "Operational domains must be active and belong to the same establishment."
-        )
-
-    requested_domain_ids = {domains_by_key[key].id for key in normalized_keys}
-
-    MembershipDomain.objects.filter(membership=membership).exclude(
-        operational_domain_id__in=requested_domain_ids
-    ).delete()
-
-    existing_domain_ids = set(
-        MembershipDomain.objects.filter(membership=membership).values_list(
-            "operational_domain_id",
-            flat=True,
-        )
-    )
-    missing_links = [
-        MembershipDomain(
-            membership=membership,
-            operational_domain=domains_by_key[key],
-        )
-        for key in normalized_keys
-        if domains_by_key[key].id not in existing_domain_ids
-    ]
-    if missing_links:
-        MembershipDomain.objects.bulk_create(missing_links)
-
-
-def _normalize_domain_keys(domain_keys: list[str]) -> list[str]:
-    normalized_keys: list[str] = []
-    seen_keys: set[str] = set()
-
-    for domain_key in domain_keys:
-        if not isinstance(domain_key, str):
-            raise InvalidMembershipDomainAssignmentError(
-                "Operational domain keys must be non-empty strings."
-            )
-
-        normalized_key = domain_key.strip()
-        if not normalized_key:
-            raise InvalidMembershipDomainAssignmentError(
-                "Operational domain keys must be non-empty strings."
-            )
-
-        if normalized_key in seen_keys:
-            continue
-
-        seen_keys.add(normalized_key)
-        normalized_keys.append(normalized_key)
-
-    return normalized_keys
-
-
 def _is_last_active_owner(membership: EstablishmentMembership) -> bool:
     return (
         EstablishmentMembership.objects.filter(
@@ -2103,6 +2590,34 @@ def _clear_selected_establishment_for_membership(
     )
 
 
+def _active_owner_user_ids(*, establishment_id) -> set:
+    return set(
+        EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.OWNER,
+            status=EstablishmentMembership.Status.ACTIVE,
+        ).values_list("user_id", flat=True)
+    )
+
+
+def _count_non_owner_directors(
+    *,
+    establishment_id,
+    owner_user_ids: set | None = None,
+) -> int:
+    if owner_user_ids is None:
+        owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
+
+    return EstablishmentMembership.objects.filter(
+        establishment_id=establishment_id,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status__in=[
+            EstablishmentMembership.Status.INVITED,
+            EstablishmentMembership.Status.ACTIVE,
+        ],
+    ).exclude(user_id__in=owner_user_ids).count()
+
+
 def _reload_membership_for_response(membership_id) -> EstablishmentMembership:
     return (
         EstablishmentMembership.objects.select_related(
@@ -2110,6 +2625,44 @@ def _reload_membership_for_response(membership_id) -> EstablishmentMembership:
             "establishment",
             "establishment__organization",
         )
-        .prefetch_related("domain_links__operational_domain")
+        .prefetch_related(
+            "scope_links__operational_module",
+            "scope_links__operational_domain",
+            "scope_links__operational_subject",
+        )
         .get(id=membership_id)
     )
+
+
+def _issue_director_invitation_for_membership(
+    membership: EstablishmentMembership,
+) -> DirectorInvitationResult:
+    return _issue_establishment_invitation_for_membership(membership)
+
+
+def _revoke_pending_director_invitations(*, membership: EstablishmentMembership) -> None:
+    _revoke_pending_invitations(membership=membership)
+
+
+def _create_establishment_invitation(
+    *,
+    membership: EstablishmentMembership,
+) -> tuple[str, EstablishmentInvitation]:
+    expires_at = timezone.now() + settings.HOUSTON_DIRECTOR_INVITATION_TTL
+
+    for _ in range(settings.HOUSTON_AUTH_TOKEN_GENERATION_MAX_ATTEMPTS):
+        raw_token = auth_tokens.generate_raw_token()
+        token_digest = auth_tokens.digest_token(raw_token)
+
+        try:
+            with transaction.atomic():
+                invitation = EstablishmentInvitation.objects.create(
+                    membership=membership,
+                    token_digest=token_digest,
+                    expires_at=expires_at,
+                )
+                return raw_token, invitation
+        except IntegrityError:
+            continue
+
+    raise RuntimeError("Unable to generate a unique establishment invitation token digest.")

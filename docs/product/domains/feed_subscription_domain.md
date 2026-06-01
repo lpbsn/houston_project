@@ -12,7 +12,7 @@ Feed subscriptions personalize **Ma vue** (`view_mode=personal`). They are **not
 
 - User may subscribe at **Module**, **Domain**, or **Subject** level.
 - Unit subscriptions are **out of scope** for MVP.
-- Subscriptions do not grant action rights; RBAC remains on `MembershipDomain` and role rules.
+- Subscriptions do not grant action rights; RBAC remains on `MembershipScope` and role rules.
 
 ## Main object (future)
 
@@ -48,7 +48,7 @@ A Signal matches a subscription when **any** level matches:
 
 | Concern | Owner |
 | --- | --- |
-| Action on Signal | RBAC + `MembershipDomain` |
+| Action on Signal | RBAC (`MembershipScope`) + role rules |
 | Ma vue content | `MembershipFeedSubscription` |
 | Feed access (can open feed) | `can_view_signal_feed` + establishment membership |
 

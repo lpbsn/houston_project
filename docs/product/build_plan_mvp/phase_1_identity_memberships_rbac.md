@@ -44,7 +44,7 @@ This phase exists to stabilize the auth, membership, and permission baseline bef
   - `Establishment`
   - `EstablishmentMembership`
   - `OperationalDomain`
-  - `MembershipDomain`
+  - `MembershipScope` (replaces legacy `MembershipDomain`)
 - Active bootstrap memberships are already filtered by:
   - active user
   - active membership

@@ -1,10 +1,13 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { ActivityDescriptionCard } from '@/features/onboarding/components/activity-description-card'
 import { ActivationSummaryCard } from '@/features/onboarding/components/activation-summary-card'
+import { DirectorInviteCard } from '@/features/onboarding/components/director-invite-card'
 import { OnboardingHeroCard } from '@/features/onboarding/components/onboarding-hero-card'
+import { OnboardingRegistrationCard } from '@/features/onboarding/components/onboarding-registration-card'
 import { OnboardingStartCard } from '@/features/onboarding/components/onboarding-start-card'
 import {
   OnboardingErrorState,
@@ -34,7 +37,25 @@ function readRouteParams(): OnboardingRouteParams {
   }
 }
 
+function writeRouteParams(nextParams: OnboardingRouteParams) {
+  const searchParams = new URLSearchParams()
+
+  if (nextParams.establishmentId) {
+    searchParams.set('establishmentId', nextParams.establishmentId)
+  }
+
+  if (nextParams.sessionId) {
+    searchParams.set('sessionId', nextParams.sessionId)
+  }
+
+  const query = searchParams.toString()
+  const nextUrl = query ? `/onboarding?${query}` : '/onboarding'
+
+  window.history.replaceState(null, '', nextUrl)
+}
+
 export function OnboardingPage() {
+  const { isAuthenticated, isReady } = useAuth()
   const [routeParams, setRouteParams] = useState<OnboardingRouteParams>(() => readRouteParams())
   const startMutation = useStartOnboardingSession()
   const autoStartAttemptedRef = useRef(false)
@@ -51,14 +72,24 @@ export function OnboardingPage() {
     }
   }, [])
 
+  const handleRegistered = useCallback((result: { establishmentId: string; sessionId: string }) => {
+    const nextParams = {
+      establishmentId: result.establishmentId,
+      sessionId: result.sessionId,
+    }
+
+    writeRouteParams(nextParams)
+    setRouteParams(nextParams)
+  }, [])
+
   const sessionQuery = useOnboardingSession(routeParams.sessionId, {
-    enabled: Boolean(routeParams.sessionId),
+    enabled: Boolean(routeParams.sessionId) && isAuthenticated,
   })
   const runtimeConfigQuery = useRuntimeConfig(routeParams.sessionId, {
-    enabled: Boolean(routeParams.sessionId),
+    enabled: Boolean(routeParams.sessionId) && isAuthenticated,
   })
   const activationSummaryQuery = useActivationSummary(routeParams.sessionId, {
-    enabled: Boolean(routeParams.sessionId),
+    enabled: Boolean(routeParams.sessionId) && isAuthenticated,
   })
 
   const activityDescription = useMemo(
@@ -69,7 +100,9 @@ export function OnboardingPage() {
     [activationSummaryQuery.data?.activity_description, runtimeConfigQuery.data?.activity_description],
   )
 
-  async function handleStartSession() {
+  const canGenerateProposal = Boolean(activityDescription?.validated_at)
+
+  const handleStartSession = useCallback(async () => {
     if (!routeParams.establishmentId) {
       return
     }
@@ -83,37 +116,46 @@ export function OnboardingPage() {
         establishmentId: routeParams.establishmentId,
         sessionId: response.session.id,
       }
-      const searchParams = new URLSearchParams({
-        establishmentId: nextParams.establishmentId,
-        sessionId: nextParams.sessionId,
-      })
 
-      window.history.replaceState(null, '', `/onboarding?${searchParams.toString()}`)
+      writeRouteParams(nextParams)
       setRouteParams(nextParams)
     } catch {
       // The start card renders the backend error from mutation state.
     }
-  }
+  }, [routeParams.establishmentId, startMutation])
 
   useEffect(() => {
     autoStartAttemptedRef.current = false
   }, [routeParams.establishmentId])
 
   useEffect(() => {
-    if (routeParams.sessionId || !routeParams.establishmentId || autoStartAttemptedRef.current) {
+    if (
+      !isAuthenticated ||
+      routeParams.sessionId ||
+      !routeParams.establishmentId ||
+      autoStartAttemptedRef.current
+    ) {
       return
     }
 
     autoStartAttemptedRef.current = true
     void handleStartSession()
-  }, [routeParams.establishmentId, routeParams.sessionId])
+  }, [handleStartSession, isAuthenticated, routeParams.establishmentId, routeParams.sessionId])
+
+  if (!isReady) {
+    return <OnboardingLoadingState label="Checking your session..." />
+  }
 
   if (!routeParams.sessionId && !routeParams.establishmentId) {
+    if (!isAuthenticated) {
+      return <OnboardingRegistrationCard onRegistered={handleRegistered} />
+    }
+
     return (
       <OnboardingNotice
         tone="muted"
-        title="Open onboarding from a workspace."
-        message="This page needs an establishment id to start onboarding or a session id to load an existing onboarding session."
+        title="Open onboarding from your workspace."
+        message="Choose an establishment from your workspace to start or resume onboarding."
         actions={
           <Button
             asChild
@@ -181,7 +223,7 @@ export function OnboardingPage() {
         sessionId={routeParams.sessionId}
       />
 
-      <ProposalCard sessionId={routeParams.sessionId} />
+      <ProposalCard canGenerateProposal={canGenerateProposal} sessionId={routeParams.sessionId} />
 
       <RuntimeConfigCard
         error={runtimeConfigQuery.error}
@@ -190,6 +232,16 @@ export function OnboardingPage() {
           void runtimeConfigQuery.refetch()
         }}
         runtimeConfig={runtimeConfigQuery.data ?? null}
+      />
+
+      <DirectorInviteCard
+        activationSummary={activationSummaryQuery.data ?? null}
+        error={activationSummaryQuery.error}
+        isLoading={activationSummaryQuery.isPending}
+        onRetry={() => {
+          void activationSummaryQuery.refetch()
+        }}
+        sessionId={routeParams.sessionId}
       />
 
       <ActivationSummaryCard

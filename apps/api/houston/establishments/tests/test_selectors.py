@@ -6,7 +6,7 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
@@ -234,7 +234,7 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.INVITED,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=domain,
     )

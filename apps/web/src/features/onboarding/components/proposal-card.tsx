@@ -9,7 +9,7 @@ import {
   Tags,
   XCircle,
 } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,11 @@ import type {
 } from '@/features/onboarding/types'
 import { OnboardingApiError } from '@/features/onboarding/api'
 import {
+  getProposalSuggestionKey,
+  ProposalSuggestionItem,
+} from '@/features/onboarding/components/proposal-suggestion-item'
+import { ProposalTaxonomyReview } from '@/features/onboarding/components/proposal-taxonomy-review'
+import {
   OnboardingErrorState,
   OnboardingLoadingState,
   OnboardingNotice,
@@ -39,52 +44,29 @@ import {
 } from './onboarding-state'
 
 type ProposalCardProps = {
+  canGenerateProposal: boolean
   sessionId: string
 }
 
 type ProposalPayload = OnboardingProposalResponse['payload']
 type ProposalSectionKey = Exclude<keyof ProposalPayload, 'schema_version'>
 
-const REMOVABLE_TAXONOMY_SECTIONS = [
-  'operational_modules',
-  'operational_domains',
-  'operational_subjects',
-] as const satisfies readonly SectionEnum[]
-
-type RemovableTaxonomySection = (typeof REMOVABLE_TAXONOMY_SECTIONS)[number]
+type RemovableTaxonomySection = Extract<
+  SectionEnum,
+  'operational_modules' | 'operational_domains' | 'operational_subjects'
+>
 
 const REVIEWABLE_PROPOSAL_STATUSES = new Set(['ready', 'partially_validated', 'validated'])
-
-function isRemovableTaxonomySection(
-  sectionKey: ProposalSectionKey,
-): sectionKey is RemovableTaxonomySection {
-  return REMOVABLE_TAXONOMY_SECTIONS.includes(sectionKey as RemovableTaxonomySection)
-}
 
 function canMutateProposalItems(proposal: OnboardingProposalResponse) {
   return REVIEWABLE_PROPOSAL_STATUSES.has(proposal.status)
 }
 
-const PROPOSAL_SECTIONS: {
+const OPTIONAL_PROPOSAL_SECTIONS: {
   emptyMessage: string
   key: ProposalSectionKey
   title: string
 }[] = [
-  {
-    key: 'operational_modules',
-    title: 'Modules',
-    emptyMessage: 'No module suggestions were returned.',
-  },
-  {
-    key: 'operational_domains',
-    title: 'Domains',
-    emptyMessage: 'No domain suggestions were returned.',
-  },
-  {
-    key: 'operational_subjects',
-    title: 'Subjects',
-    emptyMessage: 'No subject suggestions were returned.',
-  },
   {
     key: 'operational_units',
     title: 'Units',
@@ -126,15 +108,7 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value))
 }
 
-function formatConfidence(value: number | null | undefined) {
-  if (typeof value !== 'number') {
-    return null
-  }
-
-  return `${Math.round(value * 100)}%`
-}
-
-export function ProposalCard({ sessionId }: ProposalCardProps) {
+export function ProposalCard({ canGenerateProposal, sessionId }: ProposalCardProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [pendingSection, setPendingSection] = useState<string | null>(null)
@@ -299,7 +273,7 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
         <Button
           type="button"
           className="h-11 w-full rounded-[1rem]"
-          disabled={generateMutation.isPending}
+          disabled={!canGenerateProposal || generateMutation.isPending}
           onClick={handleGenerateProposal}
         >
           {generateMutation.isPending ? (
@@ -315,11 +289,17 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
           )}
         </Button>
 
+        {!canGenerateProposal ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            Save your activity description above before generating an AI proposal.
+          </p>
+        ) : null}
+
         {proposals.length === 0 ? (
           <OnboardingNotice
             tone="muted"
             title="No proposal yet."
-            message="Generate an AI proposal after the activity description is available. The backend will create a proposal only; it will not apply runtime configuration automatically."
+            message="Generate an AI proposal after your activity description is saved. The backend will create a proposal only; it will not apply runtime configuration automatically."
           />
         ) : null}
 
@@ -352,37 +332,38 @@ export function ProposalCard({ sessionId }: ProposalCardProps) {
           <>
             <ProposalSummary proposal={selectedProposal} />
             <ValidationErrorList errors={selectedProposal.validation_errors} />
-            {PROPOSAL_SECTIONS.map((section) => {
-              const removableSection = isRemovableTaxonomySection(section.key)
-                ? section.key
-                : null
-
-              return (
-                <ProposalSuggestionSection
-                  canRemoveItems={canRemoveItems && removableSection !== null}
-                  decisionState={selectedProposal.section_validation[section.key]}
-                  disabled={isCommandPending}
-                  emptyMessage={section.emptyMessage}
-                  errors={selectedProposal.validation_errors.filter(
-                    (error) => error.section === section.key,
-                  )}
-                  items={selectedProposal.payload[section.key]}
-                  key={section.key}
-                  pendingRemoveItem={pendingRemoveItem}
-                  pendingSection={pendingSection}
-                  sectionKey={section.key}
-                  title={section.title}
-                  onDecision={handleSectionDecision}
-                  onRemoveItem={
-                    removableSection
-                      ? (key) => {
-                          void handleRemoveItem(removableSection, key)
-                        }
-                      : undefined
-                  }
-                />
-              )
-            })}
+            <ProposalTaxonomyReview
+              key={selectedProposal.id}
+              canRemoveItems={canRemoveItems}
+              disabled={isCommandPending}
+              payload={selectedProposal.payload}
+              pendingRemoveItem={pendingRemoveItem}
+              pendingSection={pendingSection}
+              sectionValidation={selectedProposal.section_validation}
+              validationErrors={selectedProposal.validation_errors}
+              onDecision={handleSectionDecision}
+              onRemoveItem={(section, key) => {
+                void handleRemoveItem(section, key)
+              }}
+            />
+            {OPTIONAL_PROPOSAL_SECTIONS.map((section) => (
+              <ProposalSuggestionSection
+                canRemoveItems={false}
+                decisionState={selectedProposal.section_validation[section.key]}
+                disabled={isCommandPending}
+                emptyMessage={section.emptyMessage}
+                errors={selectedProposal.validation_errors.filter(
+                  (error) => error.section === section.key,
+                )}
+                items={selectedProposal.payload[section.key]}
+                key={section.key}
+                pendingRemoveItem={pendingRemoveItem}
+                pendingSection={pendingSection}
+                sectionKey={section.key}
+                title={section.title}
+                onDecision={handleSectionDecision}
+              />
+            ))}
 
             <ProposalCommands
               applyError={applyMutation.error}
@@ -574,7 +555,7 @@ function ProposalSuggestionSection({
       ) : (
         <div className="space-y-2">
           {items.map((item, index) => {
-            const itemKey = getSuggestionKey(item, index)
+            const itemKey = getProposalSuggestionKey(item, index)
             const removePending = pendingRemoveItem === `${sectionKey}:${itemKey}`
 
             return (
@@ -620,189 +601,6 @@ function SectionIcon({ sectionKey }: { sectionKey: ProposalSectionKey }) {
   }
 
   return <Bot className="size-4" />
-}
-
-function ProposalSuggestionItem({
-  item,
-  onRemove,
-  removePending,
-  removable,
-  sectionKey,
-}: {
-  item: ProposalPayload[ProposalSectionKey][number]
-  onRemove?: () => void
-  removePending?: boolean
-  removable?: boolean
-  sectionKey: ProposalSectionKey
-}) {
-  const removeAction =
-    removable && onRemove ? (
-      <Button
-        type="button"
-        variant="outline"
-        className="h-9 shrink-0 rounded-[0.85rem] border-[#f4d5d5] bg-white px-3 text-[#9d3b33] hover:bg-[#fff3f2]"
-        disabled={removePending}
-        onClick={onRemove}
-      >
-        {removePending ? <LoaderCircle className="size-4 animate-spin" /> : null}
-        Retirer
-      </Button>
-    ) : undefined
-
-  if (sectionKey === 'routing_hints') {
-    const routingHint = item as ProposalPayload['routing_hints'][number]
-
-    return (
-      <SuggestionShell
-        action={removeAction}
-        badges={[
-          ...(routingHint.suggested_domain_keys ?? []),
-          routingHint.suggested_unit_key ?? null,
-        ]}
-        confidence={formatConfidence(routingHint.confidence_score)}
-        reason={routingHint.reason}
-        subtitle="Routing pattern"
-        title={routingHint.pattern}
-      />
-    )
-  }
-
-  if (sectionKey === 'runtime_vocabulary') {
-    const vocabulary = item as ProposalPayload['runtime_vocabulary'][number]
-
-    return (
-      <SuggestionShell
-        action={removeAction}
-        badges={[vocabulary.mapped_domain_key ?? null, vocabulary.mapped_unit_key ?? null]}
-        reason={vocabulary.reason}
-        subtitle={vocabulary.meaning}
-        title={vocabulary.term}
-      />
-    )
-  }
-
-  if (sectionKey === 'runtime_tags') {
-    const runtimeTag = item as ProposalPayload['runtime_tags'][number]
-
-    return (
-      <SuggestionShell
-        action={removeAction}
-        badges={runtimeTag.related_domain_keys ?? []}
-        reason={runtimeTag.reason}
-        subtitle={runtimeTag.key}
-        title={runtimeTag.label}
-      />
-    )
-  }
-
-  if (sectionKey === 'operational_subjects') {
-    const subject = item as ProposalPayload['operational_subjects'][number]
-
-    return (
-      <SuggestionShell
-        action={removeAction}
-        badges={[subject.domain_key, subject.module_key ?? null]}
-        confidence={formatConfidence(subject.confidence_score)}
-        reason={subject.reason}
-        subtitle={subject.key}
-        title={subject.label}
-      />
-    )
-  }
-
-  if (sectionKey === 'operational_domains') {
-    const domain = item as ProposalPayload['operational_domains'][number]
-
-    return (
-      <SuggestionShell
-        action={removeAction}
-        badges={[domain.module_key]}
-        confidence={formatConfidence(domain.confidence_score)}
-        reason={domain.reason}
-        subtitle={domain.key}
-        title={domain.label}
-      />
-    )
-  }
-
-  const keyedItem = item as ProposalPayload['operational_modules'][number] &
-    ProposalPayload['operational_units'][number]
-
-  return (
-    <SuggestionShell
-      action={removeAction}
-      badges={'related_modules' in keyedItem ? (keyedItem.related_modules ?? []) : []}
-      confidence={formatConfidence(keyedItem.confidence_score)}
-      reason={keyedItem.reason}
-      subtitle={keyedItem.key}
-      title={keyedItem.label}
-    />
-  )
-}
-
-function SuggestionShell({
-  action,
-  badges,
-  confidence,
-  reason,
-  subtitle,
-  title,
-}: {
-  action?: ReactNode
-  badges: (string | null | undefined)[]
-  confidence?: string | null
-  reason?: string
-  subtitle: string
-  title: string
-}) {
-  const visibleBadges = badges.filter((badge): badge is string => Boolean(badge))
-
-  return (
-    <div className="rounded-[1rem] border border-[#ebe2d5] bg-[#fffdf9] px-3 py-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold">{title}</div>
-          <div className="text-xs text-muted-foreground">{subtitle}</div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {confidence ? (
-            <Badge variant="outline" className="w-fit border-[#ebe2d5] bg-white">
-              {confidence}
-            </Badge>
-          ) : null}
-          {action}
-        </div>
-      </div>
-
-      {reason ? <p className="mt-2 text-sm leading-6 text-muted-foreground">{reason}</p> : null}
-
-      {visibleBadges.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {visibleBadges.map((badge) => (
-            <Badge key={badge} variant="outline" className="border-[#ebe2d5] bg-[#fbf7f0]">
-              {badge}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function getSuggestionKey(item: ProposalPayload[ProposalSectionKey][number], index: number) {
-  if ('key' in item && typeof item.key === 'string') {
-    return item.key
-  }
-
-  if ('term' in item && typeof item.term === 'string') {
-    return item.term
-  }
-
-  if ('pattern' in item && typeof item.pattern === 'string') {
-    return item.pattern
-  }
-
-  return `${index}`
 }
 
 function ValidationErrorList({

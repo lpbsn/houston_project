@@ -12,7 +12,7 @@ from houston.accounts.models import SessionRefreshToken, User, UserSession
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OperationalDomain,
 )
 from houston.organizations.models import Organization
@@ -64,7 +64,7 @@ def create_membership(
             key=domain_key,
             label=domain_key.replace("_", " ").title(),
         )
-        MembershipDomain.objects.create(membership=membership, operational_domain=domain)
+        MembershipScope.objects.create(membership=membership, operational_domain=domain)
 
     return membership
 
@@ -156,7 +156,13 @@ def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
     assert body["authenticated"] is True
     assert body["user"]["email"] == "manager@example.com"
     assert len(body["memberships"]) == 1
-    assert body["memberships"][0]["operational_domains"] == ["housekeeping"]
+    housekeeping_domain = OperationalDomain.objects.get(
+        establishment=membership.establishment,
+        key="housekeeping",
+    )
+    assert body["memberships"][0]["scopes"] == [
+        {"scope_type": "domain", "scope_id": str(housekeeping_domain.id)}
+    ]
     assert body["active_membership"]["establishment_name"] == "Demo Hotel"
     assert "access_token" in body
     assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME in response.cookies
@@ -238,7 +244,7 @@ def test_inactive_user_login_returns_same_generic_error(api_client):
 
 
 def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, active_user):
-    create_membership(user=active_user, domains=["housekeeping"])
+    membership = create_membership(user=active_user, domains=["housekeeping"])
     csrf_token = ensure_csrf(api_client)
     login_response = login(
         api_client,
@@ -258,7 +264,13 @@ def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, a
     assert body["authenticated"] is True
     assert "memberships" in body
     assert "active_memberships" not in body
-    assert body["memberships"][0]["operational_domains"] == ["housekeeping"]
+    housekeeping_domain = OperationalDomain.objects.get(
+        establishment=membership.establishment,
+        key="housekeeping",
+    )
+    assert body["memberships"][0]["scopes"] == [
+        {"scope_type": "domain", "scope_id": str(housekeeping_domain.id)}
+    ]
 
 
 def test_bootstrap_without_bearer_returns_unauthorized(api_client):

@@ -4,11 +4,11 @@ from django.db import models
 from django.db.models import Prefetch, Q
 
 from houston.accounts.models import User
+from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipDomain,
     OnboardingProposal,
     OnboardingSession,
     OperationalDomain,
@@ -58,6 +58,95 @@ def get_membership_for_management(
         .filter(id=membership_id)
         .first()
     )
+
+
+def get_workspace_summary_for_establishment(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> dict | None:
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        return None
+
+    establishment = current_membership.establishment
+
+    owner_membership = (
+        EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.OWNER,
+            status=EstablishmentMembership.Status.ACTIVE,
+        )
+        .select_related("user")
+        .order_by("created_at", "id")
+        .first()
+    )
+
+    director_membership = (
+        EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.DIRECTOR,
+            status__in=[
+                EstablishmentMembership.Status.ACTIVE,
+                EstablishmentMembership.Status.INVITED,
+            ],
+        )
+        .select_related("user")
+        .order_by(
+            models.Case(
+                models.When(status=EstablishmentMembership.Status.ACTIVE, then=0),
+                default=1,
+            ),
+            "created_at",
+            "id",
+        )
+        .first()
+    )
+
+    active_membership_count = EstablishmentMembership.objects.filter(
+        establishment_id=establishment_id,
+        status=EstablishmentMembership.Status.ACTIVE,
+    ).count()
+
+    return {
+        "establishment": {
+            "id": establishment.id,
+            "name": establishment.name,
+        },
+        "owner": _serialize_workspace_person(owner_membership),
+        "director": _serialize_workspace_director(director_membership),
+        "active_membership_count": active_membership_count,
+    }
+
+
+def _serialize_workspace_person(membership: EstablishmentMembership | None) -> dict | None:
+    if membership is None:
+        return None
+
+    return {"display_name": _membership_display_name(membership.user)}
+
+
+def _serialize_workspace_director(membership: EstablishmentMembership | None) -> dict | None:
+    if membership is None:
+        return None
+
+    return {
+        "display_name": _membership_display_name(membership.user),
+        "status": membership.status,
+    }
+
+
+def _membership_display_name(user: User) -> str:
+    full_name = user.get_full_name().strip()
+    if full_name:
+        return full_name
+
+    if user.username:
+        return user.username
+
+    if user.email:
+        return user.email
+
+    return str(user.id)
 
 
 def search_users_for_establishment(
@@ -281,18 +370,99 @@ def _get_activity_description(establishment_id):
 
 
 def _management_membership_queryset(*, establishment_id):
-    domain_prefetch = Prefetch(
-        "domain_links",
-        queryset=MembershipDomain.objects.filter(
-            operational_domain__active=True,
-        )
-        .select_related("operational_domain")
-        .order_by("operational_domain__key"),
-    )
-
     return (
         EstablishmentMembership.objects.filter(establishment_id=establishment_id)
         .select_related("user", "establishment", "establishment__organization")
-        .prefetch_related(domain_prefetch)
+        .prefetch_related(membership_scope_prefetch())
         .order_by("user__username", "user__email", "id")
     )
+
+def get_operational_taxonomy_for_establishment(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> dict | None:
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        return None
+
+    if current_membership.status != EstablishmentMembership.Status.ACTIVE:
+        return None
+
+    modules = list(
+        OperationalModule.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        ).order_by("label", "key", "id")
+    )
+    domains = list(
+        OperationalDomain.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        ).order_by("label", "key", "id")
+    )
+    subjects = list(
+        OperationalSubject.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        ).order_by("label", "key", "id")
+    )
+
+    domains_by_module: dict = {}
+    for domain in domains:
+        domains_by_module.setdefault(domain.operational_module_id, []).append(domain)
+
+    subjects_by_domain: dict = {}
+    for subject in subjects:
+        subjects_by_domain.setdefault(subject.operational_domain_id, []).append(subject)
+
+    module_payload = []
+    for module in modules:
+        domain_payload = []
+        for domain in domains_by_module.get(module.id, []):
+            domain_payload.append(
+                {
+                    "id": domain.id,
+                    "key": domain.key,
+                    "label": domain.label,
+                    "subjects": [
+                        {
+                            "id": subject.id,
+                            "key": subject.key,
+                            "label": subject.label,
+                        }
+                        for subject in subjects_by_domain.get(domain.id, [])
+                    ],
+                }
+            )
+        module_payload.append(
+            {
+                "id": module.id,
+                "key": module.key,
+                "label": module.label,
+                "domains": domain_payload,
+            }
+        )
+
+    unassigned_domains = []
+    for domain in domains_by_module.get(None, []):
+        unassigned_domains.append(
+            {
+                "id": domain.id,
+                "key": domain.key,
+                "label": domain.label,
+                "subjects": [
+                    {
+                        "id": subject.id,
+                        "key": subject.key,
+                        "label": subject.label,
+                    }
+                    for subject in subjects_by_domain.get(domain.id, [])
+                ],
+            }
+        )
+
+    return {
+        "modules": module_payload,
+        "unassigned_domains": unassigned_domains,
+    }
+

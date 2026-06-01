@@ -1,14 +1,30 @@
 from __future__ import annotations
 
+from houston.establishments.catalog import load_arborescence_rows
 from houston.establishments.proposal_catalog import merge_expanded_proposal
 from houston.establishments.services import (
     create_manual_onboarding_proposal,
     validate_onboarding_proposal_section,
 )
 
+TEST_PASSWORD = "SecurePass123!"
+
 HOTEL_MODULE_KEY = "hotel"
 HOTEL_HEBERGEMENT_DOMAIN_KEY = "hotel__hebergement"
 HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY = "hotel__hebergement__maintenance_equipements"
+
+READINESS_DOMAIN_KEYS = (
+    HOTEL_HEBERGEMENT_DOMAIN_KEY,
+    "hotel__reception_hall",
+    "hotel__parties_communes",
+)
+
+
+def first_catalog_subject_for_domain(domain_key: str) -> tuple[str, str]:
+    for row in load_arborescence_rows():
+        if row.domain_key == domain_key:
+            return row.subject_key, row.subject_label
+    raise KeyError(domain_key)
 
 
 def valid_v2_payload(**overrides) -> dict:

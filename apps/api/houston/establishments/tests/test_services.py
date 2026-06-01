@@ -8,7 +8,7 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
@@ -28,17 +28,12 @@ from houston.establishments.services import (
 )
 from houston.establishments.tests.conftest import (
     HOTEL_HEBERGEMENT_DOMAIN_KEY,
-    HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY,
+    READINESS_DOMAIN_KEYS,
+    first_catalog_subject_for_domain,
 )
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
-
-READINESS_DOMAIN_KEYS = (
-    HOTEL_HEBERGEMENT_DOMAIN_KEY,
-    "hotel__reception_hall",
-    "hotel__parties_communes",
-)
 
 
 @pytest.fixture
@@ -105,27 +100,26 @@ def create_ready_runtime(session, owner):
             ("hotel__parties_communes", "Parties communes"),
         ]
     ]
-    manager = User.objects.create_user(
-        username="manager_ready_runtime",
+    director = User.objects.create_user(
+        username="director_ready_runtime",
         password="secret",
         status=User.Status.ACTIVE,
     )
-    manager_membership = EstablishmentMembership.objects.create(
-        user=manager,
+    EstablishmentMembership.objects.create(
+        user=director,
         establishment=establishment,
-        role=EstablishmentMembership.Role.MANAGER,
+        role=EstablishmentMembership.Role.DIRECTOR,
         status=EstablishmentMembership.Status.INVITED,
     )
-    MembershipDomain.objects.create(
-        membership=manager_membership,
-        operational_domain=domains[0],
-    )
-    OperationalSubject.objects.create(
-        establishment=establishment,
-        operational_domain=domains[0],
-        key=HOTEL_HEBERGEMENT_MAINTENANCE_SUBJECT_KEY,
-        label="Maintenance équipements",
-    )
+    domains_by_key = {domain.key: domain for domain in domains}
+    for domain_key in READINESS_DOMAIN_KEYS:
+        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
+        OperationalSubject.objects.create(
+            establishment=establishment,
+            operational_domain=domains_by_key[domain_key],
+            key=subject_key,
+            label=subject_label,
+        )
     return domains
 
 
@@ -202,7 +196,8 @@ def test_activation_readiness_returns_blockers_when_setup_is_empty(onboarding_se
         "missing_validated_description",
         "missing_active_module",
         "insufficient_active_domains",
-        "missing_active_or_invited_manager",
+        "insufficient_active_subjects",
+        "missing_active_or_invited_director",
     }
     assert "required_sections_not_validated" not in blocker_codes(readiness)
 
@@ -220,12 +215,14 @@ def test_activation_readiness_passes_when_minimum_criteria_are_met(
     assert readiness["counts"]["active_modules_count"] == 1
     assert readiness["counts"]["active_domains_count"] == 3
     assert readiness["counts"]["active_owner_or_director_count"] == 1
-    assert readiness["counts"]["active_or_invited_manager_count"] == 1
-    assert readiness["counts"]["managers_with_domains_count"] == 1
+    assert readiness["counts"]["active_or_invited_director_count"] == 1
     assert all(section["is_ready"] for section in readiness["sections"].values())
 
 
-def test_manager_without_domains_blocks_readiness(onboarding_session, owner):
+def test_activation_readiness_blocks_when_active_domains_lack_subjects(
+    onboarding_session,
+    owner,
+):
     establishment = onboarding_session.establishment
     EstablishmentActivityDescription.objects.create(
         establishment=establishment,
@@ -241,7 +238,67 @@ def test_manager_without_domains_blocks_readiness(onboarding_session, owner):
             label=key.replace("__", " ").replace("_", " ").title(),
         )
     manager = User.objects.create_user(
-        username="manager_without_domains",
+        username="manager_domains_without_subjects",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    manager_membership = EstablishmentMembership.objects.create(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.INVITED,
+    )
+    MembershipScope.objects.create(
+        membership=manager_membership,
+        operational_domain=OperationalDomain.objects.get(
+            establishment=establishment,
+            key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
+        ),
+    )
+
+    readiness = compute_activation_readiness(session=onboarding_session)
+
+    assert readiness["is_ready"] is False
+    assert "insufficient_active_subjects" in blocker_codes(readiness)
+    assert "domains_without_active_subjects" in blocker_codes(readiness)
+    assert readiness["counts"]["active_domains_without_subjects_count"] == 3
+
+
+def test_activation_readiness_blocks_when_one_active_domain_lacks_subjects(
+    onboarding_session,
+    owner,
+):
+    create_ready_runtime(onboarding_session, owner)
+    establishment = onboarding_session.establishment
+    OperationalSubject.objects.filter(establishment=establishment).filter(
+        operational_domain__key="hotel__reception_hall",
+    ).delete()
+
+    readiness = compute_activation_readiness(session=onboarding_session)
+
+    assert readiness["is_ready"] is False
+    assert "domains_without_active_subjects" in blocker_codes(readiness)
+    assert readiness["counts"]["active_subjects_count"] >= 1
+    assert readiness["counts"]["active_domains_without_subjects_count"] == 1
+
+
+def test_manager_invited_does_not_satisfy_readiness(onboarding_session, owner):
+    establishment = onboarding_session.establishment
+    EstablishmentActivityDescription.objects.create(
+        establishment=establishment,
+        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
+        submitted_by=owner,
+        validated_at=timezone.now(),
+    )
+    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
+    for key in READINESS_DOMAIN_KEYS:
+        OperationalDomain.objects.create(
+            establishment=establishment,
+            key=key,
+            label=key.replace("__", " ").replace("_", " ").title(),
+        )
+    manager = User.objects.create_user(
+        username="manager_only_readiness",
         password="secret",
         status=User.Status.ACTIVE,
     )
@@ -249,13 +306,80 @@ def test_manager_without_domains_blocks_readiness(onboarding_session, owner):
         user=manager,
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
-        status=EstablishmentMembership.Status.ACTIVE,
+        status=EstablishmentMembership.Status.INVITED,
     )
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
     assert readiness["is_ready"] is False
-    assert "manager_domains_missing" in blocker_codes(readiness)
+    assert "missing_active_or_invited_director" in blocker_codes(readiness)
+    assert readiness["counts"]["active_or_invited_director_count"] == 0
+
+
+def test_owner_alone_does_not_satisfy_director_readiness(onboarding_session, owner):
+    establishment = onboarding_session.establishment
+    EstablishmentActivityDescription.objects.create(
+        establishment=establishment,
+        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
+        submitted_by=owner,
+        validated_at=timezone.now(),
+    )
+    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
+    domains = [
+        OperationalDomain.objects.create(
+            establishment=establishment,
+            key=key,
+            label=key.replace("__", " ").replace("_", " ").title(),
+        )
+        for key in READINESS_DOMAIN_KEYS
+    ]
+    domains_by_key = {domain.key: domain for domain in domains}
+    for domain_key in READINESS_DOMAIN_KEYS:
+        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
+        OperationalSubject.objects.create(
+            establishment=establishment,
+            operational_domain=domains_by_key[domain_key],
+            key=subject_key,
+            label=subject_label,
+        )
+
+    readiness = compute_activation_readiness(session=onboarding_session)
+
+    assert readiness["is_ready"] is False
+    assert "missing_active_or_invited_director" in blocker_codes(readiness)
+    assert readiness["counts"]["active_owner_or_director_count"] == 1
+    assert readiness["counts"]["active_or_invited_director_count"] == 0
+
+
+def test_deactivated_director_does_not_satisfy_activation_readiness(onboarding_session, owner):
+    create_ready_runtime(onboarding_session, owner)
+    director_membership = EstablishmentMembership.objects.get(
+        establishment=onboarding_session.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    director_membership.status = EstablishmentMembership.Status.DEACTIVATED
+    director_membership.save(update_fields=["status", "updated_at"])
+
+    readiness = compute_activation_readiness(session=onboarding_session)
+
+    assert readiness["is_ready"] is False
+    assert "missing_active_or_invited_director" in blocker_codes(readiness)
+    assert readiness["counts"]["active_or_invited_director_count"] == 0
+
+
+def test_active_director_satisfies_readiness(onboarding_session, owner):
+    create_ready_runtime(onboarding_session, owner)
+    director_membership = EstablishmentMembership.objects.get(
+        establishment=onboarding_session.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    director_membership.status = EstablishmentMembership.Status.ACTIVE
+    director_membership.save(update_fields=["status", "updated_at"])
+
+    readiness = compute_activation_readiness(session=onboarding_session)
+
+    assert readiness["is_ready"] is True
+    assert readiness["counts"]["active_or_invited_director_count"] == 1
 
 
 def test_optional_sections_do_not_block_readiness(onboarding_session, owner):
@@ -319,7 +443,7 @@ def test_mark_ready_denies_manager_even_when_readiness_passes(onboarding_session
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=domains[0],
     )
@@ -355,17 +479,15 @@ def test_activate_onboarding_session_success_for_owner(onboarding_session, owner
 
 def test_activate_onboarding_session_success_for_director(onboarding_session, owner):
     create_ready_runtime(onboarding_session, owner)
-    director = User.objects.create_user(
-        username="director_activate",
-        password="secret",
-        status=User.Status.ACTIVE,
-    )
-    EstablishmentMembership.objects.create(
-        user=director,
+    director_membership = EstablishmentMembership.objects.get(
         establishment=onboarding_session.establishment,
         role=EstablishmentMembership.Role.DIRECTOR,
-        status=EstablishmentMembership.Status.ACTIVE,
     )
+    director_membership.status = EstablishmentMembership.Status.ACTIVE
+    director_membership.save(update_fields=["status", "updated_at"])
+    director = director_membership.user
+    director.status = User.Status.ACTIVE
+    director.save(update_fields=["status", "updated_at"])
     mark_onboarding_ready_for_activation(session=onboarding_session, actor=director)
 
     activate_onboarding_session(session=onboarding_session, actor=director)
@@ -482,7 +604,7 @@ def test_activate_onboarding_session_denies_manager_even_when_ready(
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipDomain.objects.create(
+    MembershipScope.objects.create(
         membership=manager_membership,
         operational_domain=domains[0],
     )

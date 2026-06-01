@@ -8,7 +8,9 @@ from rest_framework.test import APIClient
 
 from houston.accounts.models import User
 from houston.establishments.models import (
+    ACTIVITY_DESCRIPTION_MIN_LENGTH,
     Establishment,
+    EstablishmentActivityDescription,
     EstablishmentMembership,
     OnboardingProposal,
     OnboardingSession,
@@ -95,6 +97,24 @@ def create_onboarding_session(
         status=EstablishmentMembership.Status.ACTIVE,
     )
     return session
+
+
+def ensure_validated_activity_description(
+    *,
+    session: OnboardingSession,
+    actor: User,
+    description: str | None = None,
+) -> EstablishmentActivityDescription:
+    return EstablishmentActivityDescription.objects.create(
+        establishment=session.establishment,
+        description=description
+        or (
+            "Hotel with restaurant, rooftop, seminar rooms, bar, maintenance, "
+            "housekeeping, security, and guest experience operations."
+        ),
+        submitted_by=actor,
+        validated_at=timezone.now(),
+    )
 
 
 def test_proposal_endpoints_require_authentication(api_client):
@@ -256,6 +276,69 @@ def test_foreign_and_mismatched_proposals_are_denied_safely(api_client):
 
     assert foreign_response.status_code == 404
     assert mismatched_response.status_code == 404
+
+
+
+
+def test_ai_generate_without_openai_key_falls_back_to_template(api_client, settings):
+    settings.OPENAI_API_KEY = ""
+    settings.HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA = True
+    owner = create_user(username="proposal_api_ai_fallback_live_owner")
+    session = create_onboarding_session(actor=owner)
+    ensure_validated_activity_description(session=session, actor=owner)
+
+    access_token = login(api_client, user=owner)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/ai-generate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["proposal"]["source"] == OnboardingProposal.Source.TEMPLATE
+    assert OperationalModule.objects.count() == 0
+    assert OperationalDomain.objects.count() == 0
+
+
+def test_ai_generate_without_activity_description_returns_400(api_client):
+    owner = create_user(username="proposal_api_ai_missing_description_owner")
+    session = create_onboarding_session(actor=owner)
+
+    access_token = login(api_client, user=owner)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/ai-generate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "invalid_activity_description"
+    assert "activity description" in body["detail"].lower()
+    assert OnboardingProposal.objects.count() == 0
+
+
+def test_ai_generate_rejects_unvalidated_activity_description(api_client):
+    owner = create_user(username="proposal_api_ai_unvalidated_description_owner")
+    session = create_onboarding_session(actor=owner)
+    EstablishmentActivityDescription.objects.create(
+        establishment=session.establishment,
+        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
+        submitted_by=owner,
+        validated_at=None,
+    )
+
+    access_token = login(api_client, user=owner)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/ai-generate/",
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_activity_description"
+    assert OnboardingProposal.objects.count() == 0
 
 
 def test_ai_generate_success_creates_ai_proposal_only(api_client, monkeypatch):

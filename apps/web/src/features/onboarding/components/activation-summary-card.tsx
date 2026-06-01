@@ -61,8 +61,7 @@ export function ActivationSummaryCard({
 
     return [
       ['Owner/director memberships', activationSummary.initial_owner_director_count],
-      ['Manager memberships', activationSummary.initial_manager_count],
-      ['Managers with domains', activationSummary.managers_with_domains_count],
+      ['Director memberships', activationSummary.initial_director_count],
       ['Active modules', activationSummary.active_modules.length],
       ['Active domains', activationSummary.active_domains.length],
       ['Active subjects', activationSummary.active_subjects.length],

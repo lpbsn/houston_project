@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from houston.establishments.ai_onboarding_provider_schema import (
     AI_ONBOARDING_PROVIDER_SCHEMA_NAME,
     openai_strict_response_format,

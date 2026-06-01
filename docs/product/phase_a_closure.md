@@ -36,7 +36,7 @@ Gate: **Phase B/C authorized** — onboarding/runtime taxonomy only (see constra
 | Signal Feed Ma vue | `MembershipFeedSubscription` match (module/domain/subject) |
 | Signal Feed general | All active establishment Signals |
 | Execution Feed Ma vue | Assigned responsibilities — **not** feed subscriptions |
-| RBAC | `MembershipDomain` ≠ feed subscriptions |
+| RBAC | `MembershipScope` ≠ feed subscriptions |
 
 ## Activation minimum sujets (décision Phase A)
 

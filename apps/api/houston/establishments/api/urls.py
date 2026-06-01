@@ -1,14 +1,18 @@
 from django.urls import path
 
+from houston.accounts.api.views import DirectorInvitationAcceptView
 from houston.establishments.api.views import (
+    EstablishmentOperationalTaxonomyView,
     MembershipDeactivateView,
     MembershipDetailView,
+    MembershipInvitationView,
     MembershipListView,
     OnboardingSessionActivateView,
     OnboardingSessionActivationSummaryView,
     OnboardingSessionCreateView,
     OnboardingSessionDescriptionView,
     OnboardingSessionDetailView,
+    OnboardingSessionDirectorInvitationView,
     OnboardingSessionMarkReadyView,
     OnboardingSessionProposalAIGenerateView,
     OnboardingSessionProposalApplyView,
@@ -19,9 +23,15 @@ from houston.establishments.api.views import (
     OnboardingSessionProposalSectionDecisionView,
     OnboardingSessionRuntimeConfigView,
     ScopedUserSearchView,
+    WorkspaceSummaryView,
 )
 
 urlpatterns = [
+    path(
+        "invitations/<str:token>/accept/",
+        DirectorInvitationAcceptView.as_view(),
+        name="director-invitation-accept",
+    ),
     path(
         "onboarding-sessions/",
         OnboardingSessionCreateView.as_view(),
@@ -46,6 +56,11 @@ urlpatterns = [
         "onboarding-sessions/<uuid:session_id>/activation-summary/",
         OnboardingSessionActivationSummaryView.as_view(),
         name="onboarding-session-activation-summary",
+    ),
+    path(
+        "onboarding-sessions/<uuid:session_id>/director-invitations/",
+        OnboardingSessionDirectorInvitationView.as_view(),
+        name="onboarding-session-director-invitation",
     ),
     path(
         "onboarding-sessions/<uuid:session_id>/mark-ready/",
@@ -94,6 +109,21 @@ urlpatterns = [
         "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/apply/",
         OnboardingSessionProposalApplyView.as_view(),
         name="onboarding-session-proposal-apply",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/operational-taxonomy/",
+        EstablishmentOperationalTaxonomyView.as_view(),
+        name="establishment-operational-taxonomy",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/workspace-summary/",
+        WorkspaceSummaryView.as_view(),
+        name="establishment-workspace-summary",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/membership-invitations/",
+        MembershipInvitationView.as_view(),
+        name="establishment-membership-invitation",
     ),
     path(
         "establishments/<uuid:establishment_id>/memberships/",

@@ -8,7 +8,7 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipDomain,
+    MembershipScope,
     OnboardingCatalogDomain,
     OnboardingCatalogModule,
     OnboardingCatalogUnit,
@@ -142,45 +142,45 @@ def test_auth_user_model_setting():
     assert settings.AUTH_USER_MODEL == "accounts.User"
 
 
-def test_membership_domain_unique_membership_and_domain(user, establishment):
+def test_membership_scope_unique_domain_per_membership(user, establishment):
     membership = EstablishmentMembership.objects.create(user=user, establishment=establishment)
     domain = OperationalDomain.objects.create(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
     )
-    MembershipDomain.objects.create(membership=membership, operational_domain=domain)
+    MembershipScope.objects.create(membership=membership, operational_domain=domain)
 
     with pytest.raises(IntegrityError):
-        MembershipDomain.objects.create(membership=membership, operational_domain=domain)
+        MembershipScope.objects.create(membership=membership, operational_domain=domain)
 
 
-def test_membership_delete_cascades_membership_domain(user, establishment):
+def test_membership_delete_cascades_membership_scope(user, establishment):
     membership = EstablishmentMembership.objects.create(user=user, establishment=establishment)
     domain = OperationalDomain.objects.create(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
     )
-    MembershipDomain.objects.create(membership=membership, operational_domain=domain)
+    MembershipScope.objects.create(membership=membership, operational_domain=domain)
 
     membership.delete()
 
-    assert MembershipDomain.objects.count() == 0
+    assert MembershipScope.objects.count() == 0
 
 
-def test_operational_domain_delete_cascades_membership_domain(user, establishment):
+def test_operational_domain_delete_cascades_membership_scope(user, establishment):
     membership = EstablishmentMembership.objects.create(user=user, establishment=establishment)
     domain = OperationalDomain.objects.create(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
     )
-    MembershipDomain.objects.create(membership=membership, operational_domain=domain)
+    MembershipScope.objects.create(membership=membership, operational_domain=domain)
 
     domain.delete()
 
-    assert MembershipDomain.objects.count() == 0
+    assert MembershipScope.objects.count() == 0
 
 
 def test_onboarding_session_defaults(organization, establishment, user):

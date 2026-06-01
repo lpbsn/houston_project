@@ -21,8 +21,12 @@ from houston.establishments.api.serializers import (
     ActivityDescriptionRequestSerializer,
     ActivityDescriptionUpdateResponseSerializer,
     AIOnboardingGenerateRequestSerializer,
+    DirectorInvitationErrorResponseSerializer,
+    DirectorInvitationRequestSerializer,
+    DirectorInvitationResponseSerializer,
     EstablishmentMembershipResponseSerializer,
     MarkReadyResponseSerializer,
+    MembershipInvitationRequestSerializer,
     MembershipUpdateRequestSerializer,
     OnboardingErrorResponseSerializer,
     OnboardingProposalErrorResponseSerializer,
@@ -30,13 +34,16 @@ from houston.establishments.api.serializers import (
     OnboardingSessionCreateRequestSerializer,
     OnboardingSessionCreateResponseSerializer,
     OnboardingSessionResponseSerializer,
+    OperationalTaxonomyResponseSerializer,
     ProposalCommandResponseSerializer,
     ProposalItemMutationRequestSerializer,
     ProposalSectionDecisionRequestSerializer,
     RuntimeConfigResponseSerializer,
     ScopedUserSearchRequestSerializer,
     ScopedUserSearchResultSerializer,
+    WorkspaceSummaryResponseSerializer,
 )
+from houston.establishments.membership_scope import parse_membership_scope_inputs
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
@@ -52,7 +59,9 @@ from houston.establishments.selectors import (
     get_membership_for_management,
     get_onboarding_proposal_for_actor,
     get_onboarding_session_for_actor,
+    get_operational_taxonomy_for_establishment,
     get_runtime_config_for_session,
+    get_workspace_summary_for_establishment,
     list_memberships_for_management,
     list_onboarding_proposals_for_actor,
     search_users_for_establishment,
@@ -62,10 +71,17 @@ from houston.establishments.services import (
     ActiveOnboardingSessionExistsError,
     CannotDeactivateLastActiveOwnerError,
     CannotDemoteLastActiveOwnerError,
+    DirectorInvitationAlreadyExistsError,
+    DirectorInvitationDuplicateError,
+    DirectorInvitationOwnerNotAllowedError,
     InvalidActivityDescriptionError,
-    InvalidMembershipDomainAssignmentError,
+    InvalidDirectorInvitationInputError,
+    InvalidMembershipInvitationInputError,
+    InvalidMembershipScopeAssignmentError,
     InvalidOnboardingActivationStateError,
     InvalidOnboardingSessionScopeError,
+    MembershipInvitationRoleNotAllowedError,
+    MembershipManagementForbiddenError,
     MembershipManagementNotFoundError,
     MembershipUpdateInput,
     OnboardingAccessDeniedError,
@@ -78,6 +94,8 @@ from houston.establishments.services import (
     apply_onboarding_proposal,
     build_activation_summary,
     deactivate_membership_for_management,
+    invite_director_during_onboarding,
+    invite_membership_for_establishment,
     mark_onboarding_ready_for_activation,
     reject_onboarding_proposal,
     start_onboarding_session,
@@ -185,12 +203,16 @@ class MembershipDetailView(APIView):
                 membership_id=membership_id,
                 update_input=MembershipUpdateInput(
                     role=serializer.validated_data.get("role"),
-                    operational_domains=serializer.validated_data.get("operational_domains"),
+                    scopes=(
+                        parse_membership_scope_inputs(serializer.validated_data["scopes"])
+                        if "scopes" in serializer.validated_data
+                        else None
+                    ),
                 ),
             )
         except MembershipManagementNotFoundError:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        except InvalidMembershipDomainAssignmentError as exc:
+        except InvalidMembershipScopeAssignmentError as exc:
             return Response(
                 {"detail": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -199,6 +221,14 @@ class MembershipDetailView(APIView):
             return Response(
                 {"detail": "The last active owner cannot be demoted."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except MembershipManagementForbiddenError:
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot manage this membership.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         response_serializer = EstablishmentMembershipResponseSerializer(membership)
@@ -244,9 +274,176 @@ class MembershipDeactivateView(APIView):
                 {"detail": "The last active owner cannot be deactivated."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except MembershipManagementForbiddenError:
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot manage this membership.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = EstablishmentMembershipResponseSerializer(membership)
         return Response(serializer.data)
+
+
+
+
+class EstablishmentOperationalTaxonomyView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageMemberships,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        responses={
+            200: OperationalTaxonomyResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Returns the active operational taxonomy tree for membership scope assignment."
+        ),
+    )
+    def get(self, request, establishment_id):
+        access_context = get_api_access_context(request)
+        taxonomy = get_operational_taxonomy_for_establishment(
+            current_membership=access_context.active_membership,
+            establishment_id=establishment_id,
+        )
+        if taxonomy is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = OperationalTaxonomyResponseSerializer(taxonomy)
+        return Response(serializer.data)
+
+
+class WorkspaceSummaryView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        responses={
+            200: WorkspaceSummaryResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Returns a read-only establishment workspace summary for the current "
+            "active establishment context. Any active member may read this summary."
+        ),
+    )
+    def get(self, request, establishment_id):
+        access_context = get_api_access_context(request)
+        summary = get_workspace_summary_for_establishment(
+            current_membership=access_context.active_membership,
+            establishment_id=establishment_id,
+        )
+        if summary is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = WorkspaceSummaryResponseSerializer(summary)
+        return Response(serializer.data)
+
+
+class MembershipInvitationView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageMemberships,
+    ]
+
+    @extend_schema(
+        tags=["memberships"],
+        request=MembershipInvitationRequestSerializer,
+        responses={
+            201: DirectorInvitationResponseSerializer,
+            400: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Invites a staff or manager member to the active establishment. "
+            "Returns a copyable invitation link; email delivery is not included in MVP."
+        ),
+    )
+    def post(self, request, establishment_id):
+        request_serializer = MembershipInvitationRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+
+        access_context = get_api_access_context(request)
+
+        try:
+            invitation_result = invite_membership_for_establishment(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                email=request_serializer.validated_data["email"],
+                first_name=request_serializer.validated_data["first_name"],
+                last_name=request_serializer.validated_data["last_name"],
+                role=request_serializer.validated_data["role"],
+                scopes=parse_membership_scope_inputs(
+                    request_serializer.validated_data["scopes"]
+                ),
+            )
+        except MembershipManagementNotFoundError:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        except MembershipManagementForbiddenError:
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot invite members for this establishment.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except MembershipInvitationRoleNotAllowedError:
+            return Response(
+                {
+                    "code": "membership_invitation_role_not_allowed",
+                    "detail": "Only staff and manager roles can be invited from this workspace.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DirectorInvitationDuplicateError:
+            return Response(
+                {
+                    "code": "membership_invitation_duplicate",
+                    "detail": "This user is already associated with the establishment.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidMembershipInvitationInputError as exc:
+            return Response(
+                {"code": "membership_invitation_invalid", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidMembershipScopeAssignmentError as exc:
+            return Response(
+                {"code": "membership_invitation_invalid", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        response_serializer = DirectorInvitationResponseSerializer(
+            {
+                "membership": invitation_result.membership,
+                "invitation_token": invitation_result.invitation_token,
+                "invitation_expires_at": invitation_result.invitation_expires_at,
+                "invitation_accept_path": (
+                    f"/invitations/{invitation_result.invitation_token}"
+                ),
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ScopedUserSearchView(APIView):
@@ -535,6 +732,98 @@ class OnboardingSessionActivationSummaryView(APIView):
         return Response(_build_activation_summary_payload(session=session, actor=request.user))
 
 
+class OnboardingSessionDirectorInvitationView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=DirectorInvitationRequestSerializer,
+        responses={
+            201: DirectorInvitationResponseSerializer,
+            400: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
+        },
+        description=(
+            "Invites a Director to the draft establishment for an onboarding session. "
+            "Creates or reuses a pending user and an invited director membership."
+        ),
+    )
+    def post(self, request, session_id):
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability=_ONBOARDING_CAPABILITY_ACTIVATE,
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        request_serializer = DirectorInvitationRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+
+        try:
+            invitation_result = invite_director_during_onboarding(
+                session=session_response,
+                actor=request.user,
+                email=request_serializer.validated_data["email"],
+                first_name=request_serializer.validated_data["first_name"],
+                last_name=request_serializer.validated_data["last_name"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except InvalidOnboardingActivationStateError as exc:
+            return Response(
+                {"code": "invalid_onboarding_state", "detail": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except DirectorInvitationOwnerNotAllowedError:
+            return Response(
+                {
+                    "code": "director_invitation_owner_not_allowed",
+                    "detail": "The establishment owner cannot be invited as Director.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DirectorInvitationDuplicateError:
+            return Response(
+                {
+                    "code": "director_invitation_duplicate",
+                    "detail": "This user is already associated with the establishment.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DirectorInvitationAlreadyExistsError:
+            return Response(
+                {
+                    "code": "director_invitation_already_exists",
+                    "detail": "This establishment already has an invited or active Director.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidDirectorInvitationInputError as exc:
+            return Response(
+                {"code": "director_invitation_invalid", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OnboardingSessionTerminalError:
+            return _terminal_session_response()
+
+        response_serializer = DirectorInvitationResponseSerializer(
+            {
+                "membership": invitation_result.membership,
+                "invitation_token": invitation_result.invitation_token,
+                "invitation_expires_at": invitation_result.invitation_expires_at,
+                "invitation_accept_path": (
+                    f"/invitations/{invitation_result.invitation_token}"
+                ),
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
 class OnboardingSessionMarkReadyView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -763,6 +1052,14 @@ class OnboardingSessionProposalAIGenerateView(APIView):
                 session=session_response,
                 actor=request.user,
                 locale=serializer.validated_data["locale"],
+            )
+        except InvalidActivityDescriptionError as exc:
+            return Response(
+                {
+                    "code": "invalid_activity_description",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except ActiveOnboardingProposalExistsError:
             return _proposal_conflict_response(

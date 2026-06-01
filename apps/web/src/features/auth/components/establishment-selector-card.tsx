@@ -1,7 +1,6 @@
 import { ArrowRight, Building2, LoaderCircle } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Membership } from '@/features/auth/types'
 
@@ -29,8 +28,7 @@ export function EstablishmentSelectorCard({
             Choose your establishment
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            This session has multiple active memberships. The backend needs one selected
-            establishment before it can expose an active workspace context.
+            You belong to several establishments. Select one to manage it in this workspace.
           </CardDescription>
         </div>
       </CardHeader>
@@ -64,7 +62,7 @@ export function EstablishmentSelectorCard({
                     {membership.role}
                   </Badge>
                   <Badge variant="outline" className="border-[#ebe2d5] bg-white">
-                    {membership.operational_domains.length} domains
+                    {formatMembershipScopeLabel(membership)}
                   </Badge>
                 </div>
               </div>
@@ -81,11 +79,34 @@ export function EstablishmentSelectorCard({
             {errorMessage}
           </div>
         ) : null}
-
-        <Button variant="outline" className="h-11 w-full rounded-[1.2rem]" disabled>
-          Backend-owned establishment context
-        </Button>
       </CardContent>
     </Card>
   )
+}
+
+function formatMembershipScopeLabel(membership: Membership) {
+  const summary = membership.scope_summary
+  const parts: string[] = []
+
+  if (summary.module_count > 0) {
+    parts.push(`${summary.module_count} module${summary.module_count > 1 ? 's' : ''}`)
+  }
+
+  if (summary.domain_count > 0) {
+    parts.push(`${summary.domain_count} domaine${summary.domain_count > 1 ? 's' : ''}`)
+  }
+
+  if (summary.subject_count > 0) {
+    parts.push(`${summary.subject_count} sujet${summary.subject_count > 1 ? 's' : ''}`)
+  }
+
+  if (parts.length > 0) {
+    return parts.join(' · ')
+  }
+
+  if (membership.role === 'owner' || membership.role === 'director') {
+    return 'Périmètre complet'
+  }
+
+  return 'Aucun périmètre'
 }

@@ -12,6 +12,7 @@ from houston.establishments.ai_onboarding import (
     AIOnboardingProviderResponse,
     AIOnboardingProviderTimeoutError,
     AIOnboardingProviderUnavailableError,
+    OpenAIOnboardingProvider,
     build_ai_onboarding_input,
     run_ai_onboarding_interpretation,
     validate_ai_onboarding_output,
@@ -31,11 +32,10 @@ from houston.establishments.models import (
     RuntimeVocabulary,
 )
 from houston.establishments.services import (
-    OnboardingAccessDeniedError,
     PROPOSAL_SCHEMA_VERSION,
+    OnboardingAccessDeniedError,
 )
 from houston.establishments.tests.conftest import (
-    HOTEL_HEBERGEMENT_DOMAIN_KEY,
     HOTEL_MODULE_KEY,
     valid_ai_modules_payload,
     valid_v2_payload,
@@ -110,6 +110,14 @@ def onboarding_session(organization, owner):
         validated_at=timezone.now(),
     )
     return session
+
+
+def test_openai_provider_reads_strict_json_schema_setting(settings):
+    settings.HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA = False
+
+    provider = OpenAIOnboardingProvider(api_key="test-key")
+
+    assert provider.use_strict_json_schema is False
 
 
 def test_input_builder_minimizes_provider_payload(onboarding_session, owner):

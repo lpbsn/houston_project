@@ -1,0 +1,12 @@
+---
+description: React/Vite frontend rules for files under apps/web.
+globs:
+  - "apps/web/**/*"
+alwaysApply: false
+---
+
+Before editing frontend code:
+- Read apps/web/AGENTS.md.
+- Follow React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Zustand minimal, Framer Motion, PWA rules.
+- Keep mobile-first UX.
+- Use generated OpenAPI client, not hand-written API types.

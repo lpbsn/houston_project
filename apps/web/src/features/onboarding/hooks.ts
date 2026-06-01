@@ -11,6 +11,7 @@ import {
   getOnboardingSession,
   getOnboardingProposal,
   getRuntimeConfig,
+  inviteDirector,
   listOnboardingProposals,
   markReady,
   mutateOnboardingProposalItem,
@@ -24,6 +25,7 @@ import type {
   ActivationResponse,
   ActivationSummaryResponse,
   DecisionEnum,
+  DirectorInvitationRequest,
   OnboardingSessionCreateRequest,
   ProposalCommandResponse,
   ProposalItemMutationRequest,
@@ -145,6 +147,19 @@ export function useActivationSummary(
     queryFn: () => getActivationSummary(sessionId!),
     enabled: isQueryEnabled(sessionId, options),
     staleTime: options?.staleTime,
+  })
+}
+
+export function useInviteDirector(sessionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: DirectorInvitationRequest) => inviteDirector(sessionId, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: onboardingQueryKeys.activationSummary(sessionId),
+      })
+    },
   })
 }
 

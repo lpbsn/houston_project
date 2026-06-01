@@ -62,7 +62,7 @@ Action is the execution object in the loop between Signal and validated operatio
 - Action must not expose raw Observation text in detail views, feeds, notifications, realtime payloads, or normal technical logs.
 - Realtime and notifications may refresh attention, but they do not grant access and do not carry business truth.
 - **Action inherits operational taxonomy from its parent Signal** — `operational_module`, `operational_domain`, `operational_subject`, and optional `operational_unit` are copied or derived from the parent Signal at creation. Actions do **not** define an independent taxonomy layer in MVP.
-- Action domain keys used for RBAC (`MembershipDomain`) and Execution Feed filtering refer to the **inherited** Signal domain, not a separate Action taxonomy.
+- Action domain keys used for RBAC (`MembershipScope` domain coverage) and Execution Feed filtering refer to the **inherited** Signal domain, not a separate Action taxonomy.
 
 ## 5. Main Objects
 

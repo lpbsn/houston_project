@@ -29,6 +29,9 @@ DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py", "*_test.py"]
 testpaths = ["apps/api/houston"]
 addopts = "-ra"
+markers = [
+    "openai_smoke: opt-in live OpenAI onboarding test (requires HOUSTON_RUN_OPENAI_SMOKE_TEST=1)",
+]
 
 [tool.ruff]
 line-length = 100

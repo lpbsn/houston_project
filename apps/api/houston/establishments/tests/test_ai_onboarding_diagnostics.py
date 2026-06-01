@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from houston.establishments.ai_onboarding import AIOnboardingInvalidOutputError

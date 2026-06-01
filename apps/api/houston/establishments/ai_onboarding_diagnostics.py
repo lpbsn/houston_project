@@ -184,7 +184,12 @@ def _json_pointer(location: tuple[Any, ...]) -> str:
 
 
 def _sanitize_value(key: str, value: Any) -> Any:
-    if key in {"missing_fields", "invalid_field_paths", "business_error_codes", "pydantic_error_types"}:
+    if key in {
+        "missing_fields",
+        "invalid_field_paths",
+        "business_error_codes",
+        "pydantic_error_types",
+    }:
         if not isinstance(value, list):
             return []
         cleaned: list[str] = []
@@ -219,7 +224,11 @@ def _sanitize_value(key: str, value: Any) -> Any:
 
 
 def _contains_sensitive_fragment(value: Any) -> bool:
-    serialized = json.dumps(value, ensure_ascii=False).lower() if not isinstance(value, str) else value.lower()
+    serialized = (
+        json.dumps(value, ensure_ascii=False).lower()
+        if not isinstance(value, str)
+        else value.lower()
+    )
     return any(fragment in serialized for fragment in _SENSITIVE_SUBSTRINGS)
 
 
