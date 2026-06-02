@@ -19,6 +19,7 @@ from houston.establishments.models import (
     RuntimeTagDomain,
 )
 from houston.establishments.permissions import (
+    CanInviteMemberships,
     CanManageMemberships,
     CanManageRuntimeContext,
     HasActiveMembership,
@@ -27,6 +28,7 @@ from houston.establishments.permissions import (
     can_access_subject,
     can_create_action,
     can_create_observation,
+    can_invite_memberships,
     can_manage_establishment_settings,
     can_manage_memberships,
     can_manage_runtime_context,
@@ -126,6 +128,7 @@ def assert_all_permissions_denied(membership):
     assert can_access_app(membership) is False
     assert can_manage_establishment_settings(membership) is False
     assert can_manage_memberships(membership) is False
+    assert can_invite_memberships(membership) is False
     assert can_manage_runtime_context(membership) is False
     assert can_view_signal_feed(membership) is False
     assert can_create_observation(membership) is False
@@ -140,6 +143,7 @@ def test_owner_permissions():
     assert can_access_app(membership) is True
     assert can_manage_establishment_settings(membership) is True
     assert can_manage_memberships(membership) is True
+    assert can_invite_memberships(membership) is True
     assert can_manage_runtime_context(membership) is True
     assert can_view_signal_feed(membership) is True
     assert can_create_observation(membership) is True
@@ -153,6 +157,7 @@ def test_director_permissions():
     assert can_access_app(membership) is True
     assert can_manage_establishment_settings(membership) is True
     assert can_manage_memberships(membership) is True
+    assert can_invite_memberships(membership) is True
     assert can_manage_runtime_context(membership) is True
     assert can_view_signal_feed(membership) is True
     assert can_create_observation(membership) is True
@@ -166,6 +171,7 @@ def test_manager_permissions():
     assert can_access_app(membership) is True
     assert can_manage_establishment_settings(membership) is False
     assert can_manage_memberships(membership) is False
+    assert can_invite_memberships(membership) is True
     assert can_manage_runtime_context(membership) is False
     assert can_view_signal_feed(membership) is True
     assert can_create_observation(membership) is True
@@ -179,6 +185,7 @@ def test_staff_permissions():
     assert can_access_app(membership) is True
     assert can_manage_establishment_settings(membership) is False
     assert can_manage_memberships(membership) is False
+    assert can_invite_memberships(membership) is False
     assert can_manage_runtime_context(membership) is False
     assert can_view_signal_feed(membership) is True
     assert can_create_observation(membership) is True
@@ -508,6 +515,30 @@ def test_manage_membership_permissions_follow_rbac_helpers(
     assert CanManageRuntimeContext().has_permission(request, None) is expected_allowed
 
 
+@pytest.mark.parametrize(
+    ("role", "expected_allowed"),
+    [
+        (EstablishmentMembership.Role.OWNER, True),
+        (EstablishmentMembership.Role.DIRECTOR, True),
+        (EstablishmentMembership.Role.MANAGER, True),
+        (EstablishmentMembership.Role.STAFF, False),
+    ],
+)
+def test_invite_membership_permissions_follow_rbac_helpers(
+    request_factory,
+    role,
+    expected_allowed,
+):
+    membership = build_membership(role=role)
+    request = build_permission_request(
+        request_factory,
+        user=membership.user,
+        selected_establishment=membership.establishment,
+    )
+
+    assert CanInviteMemberships().has_permission(request, None) is expected_allowed
+
+
 def test_manage_permissions_fail_closed_without_selected_membership(request_factory):
     owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
     EstablishmentMembership.objects.create(
@@ -528,6 +559,7 @@ def test_manage_permissions_fail_closed_without_selected_membership(request_fact
 
     assert CanManageMemberships().has_permission(request, None) is False
     assert CanManageRuntimeContext().has_permission(request, None) is False
+    assert CanInviteMemberships().has_permission(request, None) is False
 
 def test_manager_with_module_scope_can_access_child_domain():
     membership = build_membership(role=EstablishmentMembership.Role.MANAGER)

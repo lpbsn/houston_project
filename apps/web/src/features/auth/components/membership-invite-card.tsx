@@ -21,6 +21,7 @@ import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
 
 type MembershipInviteCardProps = {
   establishmentId: string
+  allowedTargetRoles?: MembershipInvitationRequestRoleEnum[]
 }
 
 type InviteForm = {
@@ -37,6 +38,8 @@ const emptyForm: InviteForm = {
   role: 'staff',
 }
 
+const DEFAULT_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['staff', 'manager']
+
 function buildInvitationAcceptUrl(acceptPath: string) {
   if (acceptPath.startsWith('http://') || acceptPath.startsWith('https://')) {
     return acceptPath
@@ -45,7 +48,10 @@ function buildInvitationAcceptUrl(acceptPath: string) {
   return `${window.location.origin}${acceptPath.startsWith('/') ? acceptPath : `/${acceptPath}`}`
 }
 
-export function MembershipInviteCard({ establishmentId }: MembershipInviteCardProps) {
+export function MembershipInviteCard({
+  establishmentId,
+  allowedTargetRoles,
+}: MembershipInviteCardProps) {
   const [form, setForm] = useState<InviteForm>(emptyForm)
   const [selectedScopes, setSelectedScopes] = useState<MembershipScopeSelection[]>([])
   const [invitationLink, setInvitationLink] = useState<string | null>(null)
@@ -69,13 +75,43 @@ export function MembershipInviteCard({ establishmentId }: MembershipInviteCardPr
     [scopeTree, selectedScopes],
   )
 
+  const roleOptions = useMemo(() => {
+    if (allowedTargetRoles) {
+      const seen = new Set<MembershipInvitationRequestRoleEnum>()
+      const deduped: MembershipInvitationRequestRoleEnum[] = []
+      for (const role of allowedTargetRoles) {
+        if (role === 'staff' || role === 'manager') {
+          if (!seen.has(role)) {
+            deduped.push(role)
+            seen.add(role)
+          }
+        }
+      }
+      return deduped
+    }
+    return DEFAULT_TARGET_ROLES
+  }, [allowedTargetRoles])
+
+  const hasRoleOptions = roleOptions.length > 0
+  const selectedRole = hasRoleOptions
+    ? roleOptions.includes(form.role)
+      ? form.role
+      : roleOptions[0]
+    : null
+  const isRoleAllowed = selectedRole ? roleOptions.includes(selectedRole) : false
+  const isManagerRestrictedToStaff = hasRoleOptions && roleOptions.length === 1 && roleOptions[0] === 'staff'
+
   const canSubmit = useMemo(() => {
+    if (!hasRoleOptions || !isRoleAllowed) {
+      return false
+    }
+
     if (!form.email.trim() || !form.first_name.trim() || !form.last_name.trim()) {
       return false
     }
 
     return normalizedScopes.length > 0
-  }, [form, normalizedScopes.length])
+  }, [form, hasRoleOptions, isRoleAllowed, normalizedScopes.length])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -84,6 +120,14 @@ export function MembershipInviteCard({ establishmentId }: MembershipInviteCardPr
     setIsSubmitting(true)
 
     try {
+      if (!hasRoleOptions) {
+        throw new Error('Aucun rôle invitable pour votre profil.')
+      }
+
+      if (!selectedRole || !roleOptions.includes(selectedRole)) {
+        throw new Error('Le rôle sélectionné n’est pas autorisé pour votre profil.')
+      }
+
       if (!scopeTree || normalizedScopes.length === 0) {
         throw new Error('Sélectionnez au moins une zone de responsabilité.')
       }
@@ -92,7 +136,7 @@ export function MembershipInviteCard({ establishmentId }: MembershipInviteCardPr
         email: form.email.trim(),
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
-        role: form.role as MembershipInvitationRequestRoleEnum,
+        role: selectedRole as MembershipInvitationRequestRoleEnum,
         scopes: normalizedScopes,
       })
 
@@ -137,6 +181,19 @@ export function MembershipInviteCard({ establishmentId }: MembershipInviteCardPr
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {!hasRoleOptions ? (
+          <div className="rounded-[1rem] border border-[#e7dfd1] bg-[#fffaf2] px-4 py-3 text-sm text-[#5f574d]">
+            Aucun rôle invitable pour votre profil.
+          </div>
+        ) : null}
+
+        {isManagerRestrictedToStaff ? (
+          <div className="rounded-[1rem] border border-[#e7dfd1] bg-[#fffaf2] px-4 py-3 text-sm text-[#5f574d]">
+            Vous pouvez inviter uniquement un membre Staff dans votre périmètre opérationnel.
+          </div>
+        ) : null}
+
+        {hasRoleOptions ? (
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field
@@ -160,19 +217,25 @@ export function MembershipInviteCard({ establishmentId }: MembershipInviteCardPr
 
           <div className="space-y-2">
             <div className="text-sm font-semibold">Role</div>
-            <div className="grid grid-cols-2 gap-2">
-              {(['staff', 'manager'] as const).map((role) => (
-                <Button
-                  key={role}
-                  type="button"
-                  variant={form.role === role ? 'default' : 'outline'}
-                  className="h-11 rounded-[1rem]"
-                  onClick={() => setForm((current) => ({ ...current, role }))}
-                >
-                  {role}
-                </Button>
-              ))}
-            </div>
+            {roleOptions.length === 1 ? (
+              <Button type="button" className="h-11 rounded-[1rem] capitalize" disabled>
+                {roleOptions[0]}
+              </Button>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {roleOptions.map((role) => (
+                  <Button
+                    key={role}
+                    type="button"
+                    variant={selectedRole === role ? 'default' : 'outline'}
+                    className="h-11 rounded-[1rem] capitalize"
+                    onClick={() => setForm((current) => ({ ...current, role }))}
+                  >
+                    {role}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
           <OperationalScopeSelector
@@ -210,6 +273,7 @@ export function MembershipInviteCard({ establishmentId }: MembershipInviteCardPr
             )}
           </Button>
         </form>
+        ) : null}
 
         {invitationLink ? (
           <div className="space-y-3 rounded-[1.35rem] border border-[#dce8d0] bg-[#f7fbf2] px-4 py-4">

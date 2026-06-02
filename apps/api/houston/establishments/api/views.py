@@ -51,6 +51,7 @@ from houston.establishments.models import (
     OnboardingSession,
 )
 from houston.establishments.permissions import (
+    CanInviteMemberships,
     CanManageMemberships,
     HasActiveMembership,
 )
@@ -360,7 +361,7 @@ class MembershipInvitationView(APIView):
     permission_classes = [
         permissions.IsAuthenticated,
         HasActiveMembership,
-        CanManageMemberships,
+        CanInviteMemberships,
     ]
 
     @extend_schema(
@@ -412,7 +413,7 @@ class MembershipInvitationView(APIView):
                     "code": "membership_invitation_role_not_allowed",
                     "detail": "Only staff and manager roles can be invited from this workspace.",
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_403_FORBIDDEN,
             )
         except DirectorInvitationDuplicateError:
             return Response(
