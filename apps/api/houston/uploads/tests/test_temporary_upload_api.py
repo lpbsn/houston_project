@@ -158,4 +158,24 @@ def test_api_rejects_audio_file_for_temporary_upload(api_client):
     )
 
     assert response.status_code == 400
-    assert response.json()["code"] in {"invalid_image", "unsupported_image_type"}
+    body = response.json()
+    assert body["code"] in {"invalid_image", "unsupported_image_type"}
+    assert isinstance(body["detail"], str)
+
+
+def test_api_rejects_missing_file_for_temporary_upload(api_client):
+    establishment = _establishment()
+    token = _login(api_client, establishment)
+
+    response = api_client.post(
+        uploads_url(establishment.id),
+        {},
+        format="multipart",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "missing_file",
+        "detail": "A file is required.",
+    }

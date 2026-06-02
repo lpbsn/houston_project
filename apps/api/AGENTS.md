@@ -377,7 +377,7 @@ Never:
 - make frontend state the authorization authority
 - use JWT for MVP auth
 
-Before production, add explicit rate limiting for login and refresh.
+Auth throttling for public auth mutation endpoints is implemented via DRF `ScopedRateThrottle` (see [`authentication_charter.md`](../../docs/architecture/authentication_charter.md)).
 
 ------
 
@@ -456,7 +456,7 @@ Logs may contain:
 - user ID
 - establishment ID
 - event type
-- error code
+- error code (see [`api_error_contract.md`](../../docs/architecture/api_error_contract.md) for supported values and response shapes)
 - latency
 - provider/model metadata
 - status

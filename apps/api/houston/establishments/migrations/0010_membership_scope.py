@@ -6,26 +6,110 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0009_establishment_invitation'),
+        ("establishments", "0009_establishment_invitation"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MembershipScope',
+            name="MembershipScope",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('membership', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='scope_links', to='establishments.establishmentmembership')),
-                ('operational_domain', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='membership_scopes', to='establishments.operationaldomain')),
-                ('operational_module', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='membership_scopes', to='establishments.operationalmodule')),
-                ('operational_subject', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='membership_scopes', to='establishments.operationalsubject')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "membership",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="scope_links",
+                        to="establishments.establishmentmembership",
+                    ),
+                ),
+                (
+                    "operational_domain",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="membership_scopes",
+                        to="establishments.operationaldomain",
+                    ),
+                ),
+                (
+                    "operational_module",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="membership_scopes",
+                        to="establishments.operationalmodule",
+                    ),
+                ),
+                (
+                    "operational_subject",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="membership_scopes",
+                        to="establishments.operationalsubject",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['membership'], name='mship_scope_mship_idx'), models.Index(fields=['operational_module'], name='mship_scope_module_idx'), models.Index(fields=['operational_domain'], name='mship_scope_domain_idx'), models.Index(fields=['operational_subject'], name='mship_scope_subject_idx')],
-                'constraints': [models.CheckConstraint(condition=models.Q(models.Q(('operational_domain__isnull', True), ('operational_module__isnull', False), ('operational_subject__isnull', True)), models.Q(('operational_domain__isnull', False), ('operational_module__isnull', True), ('operational_subject__isnull', True)), models.Q(('operational_domain__isnull', True), ('operational_module__isnull', True), ('operational_subject__isnull', False)), _connector='OR'), name='membership_scope_exactly_one_target'), models.UniqueConstraint(condition=models.Q(('operational_module__isnull', False)), fields=('membership', 'operational_module'), name='membership_scope_module_uniq'), models.UniqueConstraint(condition=models.Q(('operational_domain__isnull', False)), fields=('membership', 'operational_domain'), name='membership_scope_domain_uniq'), models.UniqueConstraint(condition=models.Q(('operational_subject__isnull', False)), fields=('membership', 'operational_subject'), name='membership_scope_subject_uniq')],
+                "indexes": [
+                    models.Index(fields=["membership"], name="mship_scope_mship_idx"),
+                    models.Index(fields=["operational_module"], name="mship_scope_module_idx"),
+                    models.Index(fields=["operational_domain"], name="mship_scope_domain_idx"),
+                    models.Index(fields=["operational_subject"], name="mship_scope_subject_idx"),
+                ],
+                "constraints": [
+                    models.CheckConstraint(
+                        condition=models.Q(
+                            models.Q(
+                                ("operational_domain__isnull", True),
+                                ("operational_module__isnull", False),
+                                ("operational_subject__isnull", True),
+                            ),
+                            models.Q(
+                                ("operational_domain__isnull", False),
+                                ("operational_module__isnull", True),
+                                ("operational_subject__isnull", True),
+                            ),
+                            models.Q(
+                                ("operational_domain__isnull", True),
+                                ("operational_module__isnull", True),
+                                ("operational_subject__isnull", False),
+                            ),
+                            _connector="OR",
+                        ),
+                        name="membership_scope_exactly_one_target",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("operational_module__isnull", False)),
+                        fields=("membership", "operational_module"),
+                        name="membership_scope_module_uniq",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("operational_domain__isnull", False)),
+                        fields=("membership", "operational_domain"),
+                        name="membership_scope_domain_uniq",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("operational_subject__isnull", False)),
+                        fields=("membership", "operational_subject"),
+                        name="membership_scope_subject_uniq",
+                    ),
+                ],
             },
         ),
     ]

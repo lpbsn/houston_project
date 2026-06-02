@@ -561,6 +561,7 @@ def test_manage_permissions_fail_closed_without_selected_membership(request_fact
     assert CanManageRuntimeContext().has_permission(request, None) is False
     assert CanInviteMemberships().has_permission(request, None) is False
 
+
 def test_manager_with_module_scope_can_access_child_domain():
     membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
     module = OperationalModule.objects.create(

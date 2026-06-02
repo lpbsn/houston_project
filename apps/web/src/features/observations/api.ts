@@ -33,6 +33,29 @@ function getAuthHeaders(accessToken: string | null) {
     : undefined
 }
 
+async function fetchWithAuthRetry(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  const result = await withAuthRetry(async (token) => {
+    const headers = new Headers(init.headers)
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    } else {
+      headers.delete('Authorization')
+    }
+
+    const response = await fetch(input, {
+      ...init,
+      headers,
+    })
+
+    return { response }
+  })
+
+  return result.response
+}
+
 function parseError(response: Response, payload: unknown): ObservationsApiError {
   const body = typeof payload === 'object' && payload !== null ? payload : {}
   const detail =
@@ -46,16 +69,15 @@ function parseError(response: Response, payload: unknown): ObservationsApiError 
 export async function uploadTemporaryPhoto(
   establishmentId: string,
   file: File,
-  accessToken: string,
 ): Promise<TemporaryUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch(
+  const response = await fetchWithAuthRetry(
     `/api/v1/establishments/${establishmentId}/temporary-uploads/`,
     {
       method: 'POST',
-      headers: getAuthHeaders(accessToken),
+      headers: getAuthHeaders(null),
       body: formData,
     },
   )
@@ -71,13 +93,12 @@ export async function uploadTemporaryPhoto(
 export async function deleteTemporaryPhoto(
   establishmentId: string,
   uploadId: string,
-  accessToken: string,
 ): Promise<void> {
-  const response = await fetch(
+  const response = await fetchWithAuthRetry(
     `/api/v1/establishments/${establishmentId}/temporary-uploads/${uploadId}/`,
     {
       method: 'DELETE',
-      headers: getAuthHeaders(accessToken),
+      headers: getAuthHeaders(null),
     },
   )
 
@@ -93,16 +114,15 @@ export async function transcribeAudio(
   establishmentId: string,
   file: Blob,
   fileName: string,
-  accessToken: string,
 ): Promise<TranscriptionResponse> {
   const formData = new FormData()
   formData.append('file', file, fileName)
 
-  const response = await fetch(
+  const response = await fetchWithAuthRetry(
     `/api/v1/establishments/${establishmentId}/transcriptions/`,
     {
       method: 'POST',
-      headers: getAuthHeaders(accessToken),
+      headers: getAuthHeaders(null),
       body: formData,
     },
   )

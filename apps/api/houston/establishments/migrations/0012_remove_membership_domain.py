@@ -4,13 +4,12 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0011_backfill_membership_scope_from_domain'),
+        ("establishments", "0011_backfill_membership_scope_from_domain"),
     ]
 
     operations = [
         migrations.DeleteModel(
-            name='MembershipDomain',
+            name="MembershipDomain",
         ),
     ]

@@ -8,6 +8,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from houston.accounts.models import User
 from houston.ai.transcription import (
+    TranscriptionInvalidAudioError,
     TranscriptionResult,
     TranscriptionServiceError,
 )
@@ -124,5 +125,30 @@ def test_transcription_deletes_temp_file_on_provider_failure(
     )
 
     assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "transcription_error"
+    assert isinstance(body["detail"], str)
     assert created_paths
     assert all(not path.exists() for path in created_paths)
+
+
+def test_transcription_rejects_invalid_audio_upload(api_client):
+    establishment = _establishment()
+    _, token = _staff(api_client, establishment)
+
+    with patch(
+        "houston.uploads.api.transcription_views.validate_transcription_audio_upload",
+        side_effect=TranscriptionInvalidAudioError("invalid audio"),
+    ):
+        response = api_client.post(
+            transcriptions_url(establishment.id),
+            {"file": SimpleUploadedFile("note.bin", b"invalid", content_type="audio/webm")},
+            format="multipart",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "invalid_audio",
+        "detail": "Invalid audio upload.",
+    }

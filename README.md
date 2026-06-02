@@ -69,19 +69,18 @@ The project currently uses a Django modular monolith as the business authority a
 - Selected establishment stored on `UserSession.selected_establishment`
 - Phase 1 membership management API for owner/director users
 - Phase 1 scoped user search for the current active establishment
+- Phase 2 runtime config / onboarding minimal ✅ completed
+- Observation submission (text + optional validated photo temporary uploads)
+- Temporary photo uploads + private media storage (authorized only)
+- Audio transcription endpoint (temporary audio deleted after each request)
 
 ## What Is Not Implemented Yet
-
-- Observations
-- Signals
-- Actions
-- Checklists
-- Uploads
-- AI pipeline
+- Signal pipeline complete (Phase 4)
+- Action lifecycle + Execution Feed (Phase 5)
+- Checklists runtime (if not yet exposed via API)
 - Notifications
-- Realtime business workflows
+- Realtime business workflows + advanced feed surface
 - Production-grade frontend feature surface
-- Phase 2 work
 
 ## Auth Notes
 
@@ -95,7 +94,7 @@ The project currently uses a Django modular monolith as the business authority a
 - Selected establishment is stored on `UserSession.selected_establishment`.
 - `memberships` in bootstrap responses are already filtered to active backend truth.
 - Membership management and scoped user search are implemented for the current active establishment context.
-- Phase 2 has not started.
+- Phase 2 runtime config / onboarding minimal is completed.
 
 Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the Phase 1 product contract. They must not be expanded into product UI.
 

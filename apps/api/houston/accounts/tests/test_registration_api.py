@@ -189,7 +189,9 @@ def test_missing_invite_code_returns_400_and_creates_nothing(api_client):
     response = post_register(api_client, csrf_token, payload)
 
     assert response.status_code == 400
-    assert "invite_code" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "invite_code" in response.data["errors"]
     assert count_provisioned_entities() == before
 
 
@@ -205,7 +207,9 @@ def test_password_mismatch_returns_400_and_creates_nothing(api_client):
     )
 
     assert response.status_code == 400
-    assert "password_confirmation" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "password_confirmation" in response.data["errors"]
     assert count_provisioned_entities() == before
 
 
@@ -252,7 +256,9 @@ def test_weak_password_returns_400_and_creates_nothing(api_client):
     )
 
     assert response.status_code == 400
-    assert "password" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "password" in response.data["errors"]
     assert count_provisioned_entities() == before
 
 
@@ -272,7 +278,9 @@ def test_password_below_minimum_length_returns_400_and_creates_nothing(api_clien
     )
 
     assert response.status_code == 400
-    assert "password" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "password" in response.data["errors"]
     assert count_provisioned_entities() == before
 
 
@@ -292,7 +300,9 @@ def test_validate_owner_rejects_short_password(api_client):
     )
 
     assert response.status_code == 400
-    assert "password" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "password" in response.data["errors"]
     assert count_provisioned_entities() == before
 
 
@@ -312,8 +322,9 @@ def test_validate_owner_rejects_common_password(api_client):
     )
 
     assert response.status_code == 400
-    assert "password" in response.data
-    assert response.data["password"]
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert response.data["errors"]["password"]
     assert count_provisioned_entities() == before
 
 
@@ -329,7 +340,9 @@ def test_validate_owner_rejects_password_mismatch(api_client):
     )
 
     assert response.status_code == 400
-    assert "password_confirmation" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "password_confirmation" in response.data["errors"]
     assert count_provisioned_entities() == before
 
 

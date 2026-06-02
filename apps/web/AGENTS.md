@@ -89,6 +89,10 @@ API usage should flow through:
 generated client -> API wrapper/hook -> TanStack Query -> component
 ```
 
+Auth retry + multipart upload guidance:
+- Prefer the shared `withAuthRetry` helper from `src/api/client.ts` for 401 -> refresh retry flows.
+- For multipart submission (e.g. observations media), use `FormData` and do not manually force the `Content-Type` header; let the browser set the multipart boundary (see `src/features/observations/api.ts`).
+- For the invitation accept flow, do not clear/purge auth state before the API request succeeds; update auth state only after success (see `src/features/invitations/api.ts`).
 ------
 
 ## Server state vs UI state
@@ -296,6 +300,7 @@ Frontend validation may cover:
 Frontend validation must not replace backend validation.
 
 When backend returns validation errors, display them clearly.
+Backend error responses follow the standardized `{ code, detail, errors? }` contract documented in [`api_error_contract.md`](../../docs/architecture/api_error_contract.md).
 
 ------
 

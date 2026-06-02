@@ -5,15 +5,18 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0007_catalog_subjects_and_hierarchy'),
+        ("establishments", "0007_catalog_subjects_and_hierarchy"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddConstraint(
-            model_name='establishmentmembership',
-            constraint=models.UniqueConstraint(condition=models.Q(('role', 'director'), ('status__in', ['invited', 'active'])), fields=('establishment',), name='unique_active_or_invited_director_per_establishment'),
+            model_name="establishmentmembership",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("role", "director"), ("status__in", ["invited", "active"])),
+                fields=("establishment",),
+                name="unique_active_or_invited_director_per_establishment",
+            ),
         ),
     ]

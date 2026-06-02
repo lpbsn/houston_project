@@ -1,7 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
-import { getAccessToken } from '@/features/auth/session'
 
 import {
   deleteTemporaryPhoto,
@@ -16,11 +15,10 @@ export function useUploadTemporaryPhotoMutation(establishmentId: string | null) 
 
   return useMutation({
     mutationFn: async (file: File) => {
-      const accessToken = getAccessToken()
-      if (!establishmentId || !accessToken) {
+      if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return uploadTemporaryPhoto(establishmentId, file, accessToken)
+      return uploadTemporaryPhoto(establishmentId, file)
     },
   })
 }
@@ -30,11 +28,10 @@ export function useDeleteTemporaryPhotoMutation(establishmentId: string | null) 
 
   return useMutation({
     mutationFn: async (uploadId: string) => {
-      const accessToken = getAccessToken()
-      if (!establishmentId || !accessToken) {
+      if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      await deleteTemporaryPhoto(establishmentId, uploadId, accessToken)
+      await deleteTemporaryPhoto(establishmentId, uploadId)
     },
   })
 }
@@ -44,11 +41,10 @@ export function useTranscribeAudioMutation(establishmentId: string | null) {
 
   return useMutation({
     mutationFn: async (input: { blob: Blob; fileName: string }) => {
-      const accessToken = getAccessToken()
-      if (!establishmentId || !accessToken) {
+      if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return transcribeAudio(establishmentId, input.blob, input.fileName, accessToken)
+      return transcribeAudio(establishmentId, input.blob, input.fileName)
     },
   })
 }

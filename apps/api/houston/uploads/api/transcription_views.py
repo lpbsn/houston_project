@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from houston.accounts.api.serializers import DetailResponseSerializer
+from houston.accounts.api.serializers import ApiErrorResponseSerializer, DetailResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.ai.transcription import (
     TranscriptionInvalidAudioError,
@@ -47,12 +47,12 @@ class TranscriptionCreateView(EstablishmentScopedObservationMixin, APIView):
         },
         responses={
             200: TranscriptionResponseSerializer,
-            400: OpenApiResponse(response=DetailResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
-            408: OpenApiResponse(response=DetailResponseSerializer),
-            503: OpenApiResponse(response=DetailResponseSerializer),
+            408: OpenApiResponse(response=ApiErrorResponseSerializer),
+            503: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
             "Accepts multipart audio, transcribes via backend OpenAI, deletes the temp file "

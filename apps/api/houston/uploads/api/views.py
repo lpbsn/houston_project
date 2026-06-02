@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from houston.accounts.api.serializers import DetailResponseSerializer
+from houston.accounts.api.serializers import ApiErrorResponseSerializer, DetailResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.establishments.permissions import HasActiveMembership
 from houston.uploads.access import resolve_observation_actor_membership
@@ -51,9 +51,9 @@ class TemporaryUploadListCreateView(EstablishmentScopedObservationMixin, APIView
         },
         responses={
             201: TemporaryUploadResponseSerializer,
-            400: OpenApiResponse(response=DetailResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description="Creates a temporary private photo upload for an Observation.",
@@ -113,9 +113,9 @@ class TemporaryUploadDeleteView(EstablishmentScopedObservationMixin, APIView):
         tags=["uploads"],
         responses={
             204: OpenApiResponse(description="Deleted."),
-            400: OpenApiResponse(response=DetailResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description="Deletes an unlinked temporary photo upload owned by the current user.",

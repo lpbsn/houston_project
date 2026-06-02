@@ -5,7 +5,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from houston.accounts.api.serializers import DetailResponseSerializer
+from houston.accounts.api.serializers import ApiErrorResponseSerializer, DetailResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.establishments.access import (
     get_api_access_context,
@@ -120,8 +120,8 @@ class MembershipListView(APIView):
         tags=["memberships"],
         responses={
             200: EstablishmentMembershipResponseSerializer(many=True),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -154,8 +154,8 @@ class MembershipDetailView(APIView):
         tags=["memberships"],
         responses={
             200: EstablishmentMembershipResponseSerializer,
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -181,9 +181,9 @@ class MembershipDetailView(APIView):
         request=MembershipUpdateRequestSerializer,
         responses={
             200: EstablishmentMembershipResponseSerializer,
-            400: OpenApiResponse(response=DetailResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -249,9 +249,9 @@ class MembershipDeactivateView(APIView):
         request=None,
         responses={
             200: EstablishmentMembershipResponseSerializer,
-            400: OpenApiResponse(response=DetailResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -286,8 +286,6 @@ class MembershipDeactivateView(APIView):
 
         serializer = EstablishmentMembershipResponseSerializer(membership)
         return Response(serializer.data)
-
-
 
 
 class EstablishmentOperationalTaxonomyView(APIView):
@@ -370,8 +368,8 @@ class MembershipInvitationView(APIView):
         responses={
             201: DirectorInvitationResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -393,9 +391,7 @@ class MembershipInvitationView(APIView):
                 first_name=request_serializer.validated_data["first_name"],
                 last_name=request_serializer.validated_data["last_name"],
                 role=request_serializer.validated_data["role"],
-                scopes=parse_membership_scope_inputs(
-                    request_serializer.validated_data["scopes"]
-                ),
+                scopes=parse_membership_scope_inputs(request_serializer.validated_data["scopes"]),
             )
         except MembershipManagementNotFoundError:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -439,9 +435,7 @@ class MembershipInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (
-                    f"/invitations/{invitation_result.invitation_token}"
-                ),
+                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -513,8 +507,8 @@ class OnboardingSessionCreateView(APIView):
             200: OnboardingSessionCreateResponseSerializer,
             201: OnboardingSessionCreateResponseSerializer,
             400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -640,8 +634,8 @@ class OnboardingSessionDescriptionView(APIView):
         responses={
             200: ActivityDescriptionUpdateResponseSerializer,
             400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
         },
@@ -743,8 +737,8 @@ class OnboardingSessionDirectorInvitationView(APIView):
         responses={
             201: DirectorInvitationResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
         },
@@ -817,9 +811,7 @@ class OnboardingSessionDirectorInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (
-                    f"/invitations/{invitation_result.invitation_token}"
-                ),
+                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -835,8 +827,8 @@ class OnboardingSessionMarkReadyView(APIView):
         responses={
             200: MarkReadyResponseSerializer,
             400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
         },
@@ -896,8 +888,8 @@ class OnboardingSessionActivateView(APIView):
         responses={
             200: ActivationResponseSerializer,
             400: OpenApiResponse(response=OnboardingErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingErrorResponseSerializer),
         },
@@ -1025,8 +1017,8 @@ class OnboardingSessionProposalAIGenerateView(APIView):
         responses={
             201: ProposalCommandResponseSerializer,
             400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
             503: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
@@ -1095,8 +1087,8 @@ class OnboardingSessionProposalSectionDecisionView(APIView):
         responses={
             200: ProposalCommandResponseSerializer,
             400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },
@@ -1142,8 +1134,8 @@ class OnboardingSessionProposalItemMutationView(APIView):
         responses={
             200: ProposalCommandResponseSerializer,
             400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },
@@ -1229,8 +1221,8 @@ class OnboardingSessionProposalApplyView(APIView):
         responses={
             200: ProposalCommandResponseSerializer,
             400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },

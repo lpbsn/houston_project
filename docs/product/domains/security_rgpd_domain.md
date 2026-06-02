@@ -1,7 +1,7 @@
 # Security / RGPD Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-02
 Implementation status: partial
 
 ## 1. Purpose
@@ -17,6 +17,8 @@ Identity / Membership defines who the user is and which establishment they belon
 - Data minimization, purpose limitation, and retention limitation at product level.
 - Raw Observation privacy boundaries across feeds, notifications, realtime, logs, and frontend state.
 - Private media principles for photos and temporary audio handling.
+- Private-by-default photo storage and cleanup through `PrivateMediaStorage` under `HOUSTON_PRIVATE_MEDIA_ROOT` (see [`upload_media_domain.md`](upload_media_domain.md)).
+- Temporary transcription audio must not be preserved as a `TemporaryUpload`-like persistent artifact; only validated transcription text is persisted in MVP.
 - AI input/output privacy boundaries: only validated pipeline inputs may be sent to AI; Chat and images are excluded from AI analysis in MVP.
 - Minimal technical logging, minimal notification payloads, and minimal realtime payloads.
 - High-level incident handling and DSAR/export/delete expectations only.
@@ -127,7 +129,7 @@ Implemented security truths confirmed today:
 - Login, refresh, and logout are CSRF-protected.
 - Bootstrap is bearer-authenticated.
 - Auth responses expose backend-approved membership context.
-- No export, delete, privacy, media, support, or security-admin endpoint is currently confirmed as implemented.
+- No export, delete, privacy-admin, support, or security-admin endpoint is currently confirmed as implemented. Media privacy endpoints (temporary photos + transcription audio) are covered by [`upload_media_domain.md`](upload_media_domain.md).
 
 Candidate endpoints only:
 

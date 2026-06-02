@@ -7,9 +7,11 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import (
+    ApiErrorResponseSerializer,
     AuthResponseSerializer,
     BootstrapResponseSerializer,
     CsrfResponseSerializer,
@@ -18,11 +20,11 @@ from houston.accounts.api.serializers import (
     DirectorInvitationAcceptRequestSerializer,
     DirectorInvitationAcceptResponseSerializer,
     LoginRequestSerializer,
-    RegistrationErrorResponseSerializer,
     RegistrationOwnerValidateRequestSerializer,
     RegistrationRequestSerializer,
     RegistrationResponseSerializer,
     SwitchEstablishmentRequestSerializer,
+    ValidationErrorResponseSerializer,
 )
 from houston.accounts.authentication import (
     BearerAccessTokenAuthentication,
@@ -58,6 +60,19 @@ from houston.establishments.services import (
     accept_establishment_invitation,
 )
 
+_THROTTLED_OPENAPI_RESPONSE = OpenApiResponse(response=ApiErrorResponseSerializer)
+
+
+class AuthRateLimitedMixin:
+    """Applies ScopedRateThrottle when HOUSTON_AUTH_THROTTLE_ENABLED is true."""
+
+    throttle_scope: str
+
+    def get_throttles(self):
+        if not settings.HOUSTON_AUTH_THROTTLE_ENABLED:
+            return []
+        return [ScopedRateThrottle()]
+
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class CsrfCookieView(APIView):
@@ -73,17 +88,19 @@ class CsrfCookieView(APIView):
         return Response({"detail": "CSRF cookie set."})
 
 
-class LoginView(APIView):
+class LoginView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_LOGIN
 
     @extend_schema(
         tags=["auth"],
         request=LoginRequestSerializer,
         responses={
             200: AuthResponseSerializer,
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Logs in with an email or username identifier. Requires a valid Django CSRF "
@@ -106,8 +123,9 @@ class LoginView(APIView):
                 password=serializer.validated_data["password"],
             )
         except InvalidCredentialsError:
-            return Response(
-                {"detail": INVALID_CREDENTIALS_DETAIL},
+            return _api_error_response(
+                code="not_authenticated",
+                detail=INVALID_CREDENTIALS_DETAIL,
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -121,17 +139,19 @@ class LoginView(APIView):
         return response
 
 
-class RegisterView(APIView):
+class RegisterView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER
 
     @extend_schema(
         tags=["auth"],
         request=RegistrationRequestSerializer,
         responses={
             201: RegistrationResponseSerializer,
-            400: OpenApiResponse(response=RegistrationErrorResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Registers a new owner and provisions an organization, draft establishment, "
@@ -173,17 +193,19 @@ class RegisterView(APIView):
         return response
 
 
-class ValidateOwnerRegistrationView(APIView):
+class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE
 
     @extend_schema(
         tags=["auth"],
         request=RegistrationOwnerValidateRequestSerializer,
         responses={
             204: OpenApiResponse(description="Owner registration fields are valid."),
-            400: OpenApiResponse(response=RegistrationErrorResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Validates owner registration fields without provisioning any records. "
@@ -218,9 +240,10 @@ class ValidateOwnerRegistrationView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class DirectorInvitationAcceptView(APIView):
+class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT
 
     @extend_schema(
         tags=["auth"],
@@ -228,7 +251,8 @@ class DirectorInvitationAcceptView(APIView):
         responses={
             201: DirectorInvitationAcceptResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Accepts an establishment invitation, sets the account password, "
@@ -285,17 +309,19 @@ class DirectorInvitationAcceptView(APIView):
         return response
 
 
-class RefreshView(APIView):
+class RefreshView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REFRESH
 
     @extend_schema(
         tags=["auth"],
         request=None,
         responses={
             200: AuthResponseSerializer,
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Rotates the HttpOnly refresh token cookie and issues a new opaque access token. "
@@ -312,8 +338,9 @@ class RefreshView(APIView):
         raw_refresh_token = request.COOKIES.get(settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME)
 
         if not raw_refresh_token:
-            response = Response(
-                {"detail": AUTHENTICATION_FAILED_DETAIL},
+            response = _api_error_response(
+                code="not_authenticated",
+                detail=AUTHENTICATION_FAILED_DETAIL,
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             clear_refresh_cookie(response=response)
@@ -322,8 +349,9 @@ class RefreshView(APIView):
         try:
             bundle = refresh_session(raw_refresh_token=raw_refresh_token)
         except (InvalidRefreshTokenError, RefreshTokenReuseError):
-            response = Response(
-                {"detail": AUTHENTICATION_FAILED_DETAIL},
+            response = _api_error_response(
+                code="not_authenticated",
+                detail=AUTHENTICATION_FAILED_DETAIL,
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             clear_refresh_cookie(response=response)
@@ -348,7 +376,7 @@ class LogoutView(APIView):
         request=None,
         responses={
             204: OpenApiResponse(description="Session revoked and refresh cookie cleared."),
-            403: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
             "Revokes the current session, preferring the bearer access token when available "
@@ -385,7 +413,7 @@ class BootstrapView(APIView):
         tags=["auth"],
         responses={
             200: BootstrapResponseSerializer,
-            401: OpenApiResponse(response=DetailResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description="Returns the authenticated bootstrap payload for the current bearer token.",
     )
@@ -402,8 +430,8 @@ class SwitchEstablishmentView(APIView):
         request=SwitchEstablishmentRequestSerializer,
         responses={
             200: BootstrapResponseSerializer,
-            400: OpenApiResponse(description="Invalid request payload."),
-            401: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ValidationErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
@@ -440,6 +468,10 @@ def _registration_duplicate_email_response() -> Response:
     )
 
 
+def _api_error_response(*, code: str, detail: str, status: int) -> Response:
+    return Response({"code": code, "detail": detail}, status=status)
+
+
 def _enforce_csrf(request) -> Response | None:
     csrf_middleware = CsrfViewMiddleware(lambda csrf_request: None)
     failure_response = csrf_middleware.process_view(request._request, None, (), {})
@@ -447,7 +479,8 @@ def _enforce_csrf(request) -> Response | None:
     if failure_response is None:
         return None
 
-    return Response(
-        {"detail": "CSRF validation failed."},
+    return _api_error_response(
+        code="permission_denied",
+        detail="CSRF validation failed.",
         status=status.HTTP_403_FORBIDDEN,
     )

@@ -109,7 +109,6 @@ def can_access_domain(
     return membership_scope_covers_domain(membership, domain)
 
 
-
 def can_access_subject(
     membership: EstablishmentMembership | None,
     subject_key: str,

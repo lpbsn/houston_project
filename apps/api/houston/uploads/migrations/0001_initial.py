@@ -9,33 +9,75 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('establishments', '0012_remove_membership_domain'),
+        ("establishments", "0012_remove_membership_domain"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='TemporaryUpload',
+            name="TemporaryUpload",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('file', models.FileField(max_length=512, storage=houston.uploads.private_storage.get_private_media_storage, upload_to=houston.uploads.models.temporary_upload_path)),
-                ('content_type', models.CharField(max_length=120)),
-                ('stored_extension', models.CharField(max_length=16)),
-                ('size_bytes', models.PositiveIntegerField()),
-                ('status', models.CharField(choices=[('validated', 'Validated'), ('linked', 'Linked'), ('deleted', 'Deleted')], default='validated', max_length=20)),
-                ('expires_at', models.DateTimeField()),
-                ('linked_at', models.DateTimeField(blank=True, null=True)),
-                ('establishment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='temporary_uploads', to='establishments.establishment')),
-                ('uploaded_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='temporary_uploads', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "file",
+                    models.FileField(
+                        max_length=512,
+                        storage=houston.uploads.private_storage.get_private_media_storage,
+                        upload_to=houston.uploads.models.temporary_upload_path,
+                    ),
+                ),
+                ("content_type", models.CharField(max_length=120)),
+                ("stored_extension", models.CharField(max_length=16)),
+                ("size_bytes", models.PositiveIntegerField()),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("validated", "Validated"),
+                            ("linked", "Linked"),
+                            ("deleted", "Deleted"),
+                        ],
+                        default="validated",
+                        max_length=20,
+                    ),
+                ),
+                ("expires_at", models.DateTimeField()),
+                ("linked_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="temporary_uploads",
+                        to="establishments.establishment",
+                    ),
+                ),
+                (
+                    "uploaded_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="temporary_uploads",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['establishment', 'status', 'expires_at'], name='tmp_upload_est_status_exp_idx'), models.Index(fields=['uploaded_by'], name='tmp_upload_user_idx')],
+                "indexes": [
+                    models.Index(
+                        fields=["establishment", "status", "expires_at"],
+                        name="tmp_upload_est_status_exp_idx",
+                    ),
+                    models.Index(fields=["uploaded_by"], name="tmp_upload_user_idx"),
+                ],
             },
         ),
     ]

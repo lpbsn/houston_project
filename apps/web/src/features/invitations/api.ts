@@ -3,7 +3,7 @@ import { queryClient } from '@/lib/query-client'
 
 import { bootstrapQueryKey } from '@/features/auth/api'
 import { ensureCsrfToken } from '@/features/auth/csrf'
-import { clearAccessToken, setAccessToken } from '@/features/auth/session'
+import { setAccessToken } from '@/features/auth/session'
 import type { DirectorInvitationAcceptResponse } from '@/features/invitations/types'
 import type { BootstrapResponse } from '@/features/auth/types'
 
@@ -57,9 +57,6 @@ export async function acceptDirectorInvitation(
   token: string,
   input: { password: string; password_confirmation: string },
 ) {
-  clearAccessToken()
-  queryClient.removeQueries({ queryKey: bootstrapQueryKey, exact: true })
-
   const csrfToken = await ensureCsrfToken()
   const { data, error, response } = await apiClient.POST('/api/v1/invitations/{token}/accept/', {
     params: {
