@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { LoaderCircle, Mic, Trash2 } from 'lucide-react'
+import { ImagePlus, LoaderCircle, Mic, Trash2 } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
@@ -67,6 +67,7 @@ export function ReportPage() {
   const photoHint = useMemo(() => {
     return `${photos.length}/${MAX_OBSERVATION_PHOTOS} photo(s) — optionnel`
   }, [photos.length])
+  const latestTranscript = transcribeMutation.data?.text?.trim() ?? ''
 
   const handlePhotoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -225,82 +226,101 @@ export function ReportPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="rounded-[1.75rem] border-[#e7dfd1] bg-[#fffaf2] p-5">
-        <label className="text-sm font-medium text-[#1f1a14]" htmlFor="observation-text">
+    <div className="flex flex-col gap-4 rounded-2xl bg-[#F5F4F0] p-4 sm:p-5">
+      <h1 className="text-lg font-semibold text-[#1a1a1a]">Nouveau signal</h1>
+
+      <Card className="space-y-3 rounded-2xl border-[#E8E6DF] bg-white p-4">
+        <p className="text-xs uppercase tracking-[0.04em] text-[#7d7b75]">
+          Décris à la voix puis complète si besoin
+        </p>
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            className="h-24 w-24 rounded-full bg-[#1B4FD8] p-0 text-white shadow-[0_6px_24px_rgba(27,79,216,0.35)] hover:bg-[#1B4FD8]/95"
+            disabled={isTranscribing || submitMutation.isPending}
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+            aria-label={isRecording ? 'Arrêter l’enregistrement' : 'Démarrer l’enregistrement vocal'}
+          >
+            {isTranscribing ? (
+              <LoaderCircle className="h-8 w-8 animate-spin" />
+            ) : (
+              <Mic className="h-8 w-8" />
+            )}
+          </Button>
+        </div>
+        <p className="text-center text-xs text-[#7d7b75]">
+          {isTranscribing ? 'Transcription en cours...' : isRecording ? 'Enregistrement en cours' : 'Appuie pour dicter'}
+        </p>
+        {latestTranscript ? (
+          <div className="rounded-xl bg-[#EEF2FF] px-3 py-2 text-center text-sm text-[#1B4FD8]">
+            “{latestTranscript}”
+          </div>
+        ) : null}
+      </Card>
+
+      <div className="flex items-center gap-2 px-1">
+        <div className="h-px flex-1 bg-[#E8E6DF]" />
+        <span className="text-[11px] text-[#a3a19a]">ou décris par écrit</span>
+        <div className="h-px flex-1 bg-[#E8E6DF]" />
+      </div>
+
+      <Card className="rounded-2xl border-[#E8E6DF] bg-white p-4">
+        <label
+          className="text-xs uppercase tracking-[0.04em] text-[#7d7b75]"
+          htmlFor="observation-text"
+        >
           Description
         </label>
         <textarea
           id="observation-text"
-          className="mt-2 min-h-36 w-full rounded-[1rem] border border-[#e7dfd1] bg-white px-3 py-2 text-sm text-[#1f1a14] outline-none focus:border-[#c9b89a]"
+          className="mt-2 min-h-[88px] w-full resize-none rounded-[14px] border border-[#E8E6DF] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#1B4FD8]/45"
           value={text}
           onChange={(event) => setText(event.target.value.slice(0, OBSERVATION_TEXT_MAX_LENGTH))}
           placeholder="Décrivez la situation (10 à 1000 caractères)."
         />
-        <p className="mt-1 text-xs text-[#7a7268]">
+        <p className="mt-1 text-xs text-[#7d7b75]">
           {textLength}/{OBSERVATION_TEXT_MAX_LENGTH} caractères
         </p>
       </Card>
 
-      <Card className="rounded-[1.75rem] border-[#e7dfd1] bg-[#fffaf2] p-5">
+      <Card className="rounded-2xl border-[#E8E6DF] bg-white p-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-[#1f1a14]">Audio</p>
-          <p className="text-xs text-[#7a7268]">Non conservé après transcription</p>
+          <p className="text-xs uppercase tracking-[0.04em] text-[#7d7b75]">Photos</p>
+          <p className="text-xs text-[#7d7b75]">{photoHint}</p>
         </div>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 flex-1 rounded-[1rem] border-[#e7dfd1]"
-            disabled={isTranscribing || submitMutation.isPending}
-            onClick={isRecording ? handleStopRecording : handleStartRecording}
+        <div className="mt-3">
+          <label
+            className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-[14px] border border-dashed border-[#E8E6DF] bg-[#F0EFE9] text-[#7d7b75] transition hover:bg-[#ebe9e2]"
+            aria-disabled={photos.length >= MAX_OBSERVATION_PHOTOS || uploadMutation.isPending}
           >
-            {isTranscribing ? (
-              <>
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                Transcription...
-              </>
-            ) : isRecording ? (
-              'Arrêter'
-            ) : (
-              <>
-                <Mic className="mr-2 h-4 w-4" />
-                Dicter
-              </>
-            )}
-          </Button>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
+              className="sr-only"
+              disabled={photos.length >= MAX_OBSERVATION_PHOTOS || uploadMutation.isPending}
+              onChange={handlePhotoSelect}
+            />
+            <ImagePlus className="h-5 w-5" />
+            <span className="text-xs font-medium">Ajouter</span>
+          </label>
         </div>
-      </Card>
-
-      <Card className="rounded-[1.75rem] border-[#e7dfd1] bg-[#fffaf2] p-5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-[#1f1a14]">Photos</p>
-          <p className="text-xs text-[#7a7268]">{photoHint}</p>
-        </div>
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
-          className="mt-3 block w-full text-sm text-[#5f574d]"
-          disabled={photos.length >= MAX_OBSERVATION_PHOTOS || uploadMutation.isPending}
-          onChange={handlePhotoSelect}
-        />
         <ul className="mt-3 space-y-2">
           {photos.map((photo) => (
             <li
               key={photo.localId}
-              className="flex items-center justify-between rounded-[1rem] border border-[#efe6d7] bg-white px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-[14px] border border-[#E8E6DF] bg-[#F0EFE9] px-3 py-2 text-sm"
             >
-              <span className="truncate text-[#1f1a14]">{photo.file.name}</span>
+              <span className="truncate text-[#1a1a1a]">{photo.file.name}</span>
               <div className="flex items-center gap-2">
                 {photo.status === 'uploading' ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin text-[#7a7268]" />
+                  <LoaderCircle className="h-4 w-4 animate-spin text-[#7d7b75]" />
                 ) : null}
                 {photo.status === 'failed' ? (
                   <span className="text-xs text-[#9a3b2e]">Échec</span>
                 ) : null}
                 <button
                   type="button"
-                  className="text-[#7a7268] hover:text-[#1f1a14]"
+                  className="text-[#7d7b75] hover:text-[#1a1a1a]"
                   onClick={() => void handleRemovePhoto(photo)}
                   aria-label="Supprimer la photo"
                 >
@@ -313,14 +333,14 @@ export function ReportPage() {
       </Card>
 
       {formError ? (
-        <p className="rounded-[1rem] border border-[#f0d4cf] bg-[#fff5f3] px-3 py-2 text-sm text-[#9a3b2e]">
+        <p className="rounded-[14px] border border-[#f0d4cf] bg-[#fff5f3] px-3 py-2 text-sm text-[#9a3b2e]">
           {formError}
         </p>
       ) : null}
 
       <Button
         type="button"
-        className="h-11 w-full rounded-[1rem]"
+        className="h-11 w-full rounded-2xl bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
         disabled={!canSubmit}
         onClick={() => void handleSubmit()}
       >
@@ -330,7 +350,7 @@ export function ReportPage() {
             Envoi...
           </>
         ) : (
-          'Envoyer l’observation'
+          'Envoyer le signal'
         )}
       </Button>
     </div>

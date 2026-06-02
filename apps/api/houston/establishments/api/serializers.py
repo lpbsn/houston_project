@@ -149,10 +149,7 @@ class MembershipInvitationRequestSerializer(serializers.Serializer):
     first_name = serializers.CharField(trim_whitespace=True)
     last_name = serializers.CharField(trim_whitespace=True)
     role = serializers.ChoiceField(
-        choices=[
-            EstablishmentMembership.Role.STAFF,
-            EstablishmentMembership.Role.MANAGER,
-        ],
+        choices=EstablishmentMembership.Role.choices,
     )
     scopes = MembershipScopeItemSerializer(many=True)
 

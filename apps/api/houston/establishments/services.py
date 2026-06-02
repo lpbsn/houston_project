@@ -17,6 +17,10 @@ from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
     assign_membership_scopes,
+    membership_scope_covers_domain,
+    membership_scope_covers_module,
+    membership_scope_covers_subject,
+    normalize_membership_scope_inputs,
     scopes_not_allowed_for_role,
 )
 from houston.establishments.models import (
@@ -41,7 +45,6 @@ from houston.establishments.models import (
     RuntimeTagDomain,
     RuntimeVocabulary,
 )
-from houston.establishments.permissions import can_manage_memberships
 from houston.establishments.proposal_catalog import (
     apply_proposal_item_addition,
     apply_proposal_item_removal,
@@ -1928,7 +1931,7 @@ def invite_membership_for_establishment(
     if current_membership is None or current_membership.establishment_id != establishment_id:
         raise MembershipManagementNotFoundError
 
-    if not can_manage_memberships(current_membership):
+    if not _can_actor_invite_memberships(current_membership=current_membership):
         raise MembershipManagementForbiddenError
 
     if role not in {
@@ -1958,6 +1961,19 @@ def invite_membership_for_establishment(
     if not scopes:
         raise InvalidMembershipInvitationInputError(
             "At least one operational scope is required for staff and manager invitations."
+        )
+
+    normalized_scopes = normalize_membership_scope_inputs(
+        establishment=establishment,
+        scope_inputs=scopes,
+    )
+    if (
+        current_membership.role == EstablishmentMembership.Role.MANAGER
+        and role == EstablishmentMembership.Role.STAFF
+    ):
+        _ensure_manager_scope_covers_invited_scopes(
+            manager_membership=current_membership,
+            resolved_invited_scopes=normalized_scopes,
         )
 
     existing_user = User.objects.filter(email__iexact=normalized_email).first()
@@ -2055,6 +2071,44 @@ def _can_actor_invite_role(*, actor_role: str, invited_role: str) -> bool:
     return invited_role in allowed_targets
 
 
+def _can_actor_invite_memberships(
+    *,
+    current_membership: EstablishmentMembership,
+) -> bool:
+    return current_membership.role in _MANAGEABLE_TARGET_ROLES_BY_ACTOR
+
+
+def _ensure_manager_scope_covers_invited_scopes(
+    *,
+    manager_membership: EstablishmentMembership,
+    resolved_invited_scopes,
+) -> None:
+    for resolved_scope in resolved_invited_scopes:
+        if resolved_scope.operational_module is not None:
+            if membership_scope_covers_module(
+                manager_membership,
+                resolved_scope.operational_module,
+            ):
+                continue
+            raise MembershipManagementForbiddenError
+
+        if resolved_scope.operational_domain is not None:
+            if membership_scope_covers_domain(
+                manager_membership,
+                resolved_scope.operational_domain,
+            ):
+                continue
+            raise MembershipManagementForbiddenError
+
+        assert resolved_scope.operational_subject is not None
+        if membership_scope_covers_subject(
+            manager_membership,
+            resolved_scope.operational_subject,
+        ):
+            continue
+        raise MembershipManagementForbiddenError
+
+
 _MANAGEABLE_TARGET_ROLES_BY_ACTOR = {
     EstablishmentMembership.Role.OWNER: {
         EstablishmentMembership.Role.OWNER,
@@ -2066,6 +2120,10 @@ _MANAGEABLE_TARGET_ROLES_BY_ACTOR = {
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.STAFF,
     },
+    EstablishmentMembership.Role.MANAGER: {
+        EstablishmentMembership.Role.STAFF,
+    },
+    EstablishmentMembership.Role.STAFF: set(),
 }
 
 

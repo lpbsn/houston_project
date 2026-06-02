@@ -22,6 +22,13 @@ _ADMIN_ROLES = frozenset(
         EstablishmentMembership.Role.DIRECTOR,
     }
 )
+_INVITATION_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+    }
+)
 _ACTION_ROLES = frozenset(
     {
         EstablishmentMembership.Role.OWNER,
@@ -42,6 +49,10 @@ def can_manage_establishment_settings(membership: EstablishmentMembership | None
 
 def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
     return _has_role(membership, _ADMIN_ROLES)
+
+
+def can_invite_memberships(membership: EstablishmentMembership | None) -> bool:
+    return _has_role(membership, _INVITATION_ROLES)
 
 
 def can_manage_runtime_context(membership: EstablishmentMembership | None) -> bool:
@@ -185,6 +196,14 @@ class CanManageMemberships(BasePermission):
     def has_permission(self, request, view) -> bool:
         access_context = get_api_access_context(request)
         return can_manage_memberships(access_context.active_membership)
+
+
+class CanInviteMemberships(BasePermission):
+    message = "You do not have permission to invite memberships."
+
+    def has_permission(self, request, view) -> bool:
+        access_context = get_api_access_context(request)
+        return can_invite_memberships(access_context.active_membership)
 
 
 class CanManageRuntimeContext(BasePermission):
