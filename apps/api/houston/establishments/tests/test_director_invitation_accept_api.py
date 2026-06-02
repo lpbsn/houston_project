@@ -3,8 +3,11 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.conf import settings
+from django.core.cache import caches
 from django.test import override_settings
 from django.utils import timezone
+from rest_framework.settings import api_settings as drf_api_settings
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
@@ -29,12 +32,13 @@ def api_client():
     return APIClient(enforce_csrf_checks=True)
 
 
-def post_accept(api_client: APIClient, csrf_token: str, token: str, payload: dict):
+def post_accept(api_client: APIClient, csrf_token: str, token: str, payload: dict, **extra_headers):
     return api_client.post(
         f"/api/v1/invitations/{token}/accept/",
         payload,
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
+        **extra_headers,
     )
 
 
@@ -335,3 +339,68 @@ def test_accept_staff_invitation_keeps_membership_scopes(api_client):
     assert MembershipScope.objects.filter(membership_id=membership_id).count() == 1
     membership = EstablishmentMembership.objects.get(id=membership_id)
     assert membership.status == EstablishmentMembership.Status.ACTIVE
+
+
+def test_accept_over_limit_returns_429(api_client, monkeypatch):
+    import rest_framework.throttling as drf_throttling
+
+    throttle_test_rates = {
+        "auth_login": "2/minute",
+        "auth_refresh": "3/minute",
+        "auth_register": "2/hour",
+        "auth_register_validate": "2/hour",
+        "auth_invitation_accept": "2/hour",
+    }
+    monkeypatch.setattr(
+        drf_throttling.SimpleRateThrottle,
+        "THROTTLE_RATES",
+        throttle_test_rates,
+    )
+
+    rest_framework = {
+        **settings.REST_FRAMEWORK,
+        "DEFAULT_THROTTLE_RATES": throttle_test_rates,
+        "NUM_PROXIES": 1,
+    }
+    throttle_caches = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "invitation-throttle-test",
+        }
+    }
+    with override_settings(
+        CACHES=throttle_caches,
+        REST_FRAMEWORK=rest_framework,
+        HOUSTON_AUTH_THROTTLE_ENABLED=True,
+    ):
+        drf_api_settings.reload()
+        caches["default"].clear()
+        csrf_token = ensure_csrf(api_client)
+        ip_headers = {"HTTP_X_FORWARDED_FOR": "203.0.113.50"}
+        accept_payload = {
+            "password": REGISTRATION_PASSWORD,
+            "password_confirmation": REGISTRATION_PASSWORD,
+        }
+
+        for _ in range(2):
+            response = post_accept(
+                api_client,
+                csrf_token,
+                "invalid-invitation-token",
+                accept_payload,
+                **ip_headers,
+            )
+            assert response.status_code == 400
+            assert response.data["code"] == "invitation_invalid"
+
+        response = post_accept(
+            api_client,
+            csrf_token,
+            "invalid-invitation-token",
+            accept_payload,
+            **ip_headers,
+        )
+        assert response.status_code == 429
+        assert response.json()["code"] == "throttled"
+        assert response.json()["detail"].startswith("Request was throttled")
+        caches["default"].clear()

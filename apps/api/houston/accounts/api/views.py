@@ -7,6 +7,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import (
@@ -59,6 +60,19 @@ from houston.establishments.services import (
     accept_establishment_invitation,
 )
 
+_THROTTLED_OPENAPI_RESPONSE = OpenApiResponse(response=ApiErrorResponseSerializer)
+
+
+class AuthRateLimitedMixin:
+    """Applies ScopedRateThrottle when HOUSTON_AUTH_THROTTLE_ENABLED is true."""
+
+    throttle_scope: str
+
+    def get_throttles(self):
+        if not settings.HOUSTON_AUTH_THROTTLE_ENABLED:
+            return []
+        return [ScopedRateThrottle()]
+
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class CsrfCookieView(APIView):
@@ -74,9 +88,10 @@ class CsrfCookieView(APIView):
         return Response({"detail": "CSRF cookie set."})
 
 
-class LoginView(APIView):
+class LoginView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_LOGIN
 
     @extend_schema(
         tags=["auth"],
@@ -85,6 +100,7 @@ class LoginView(APIView):
             200: AuthResponseSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Logs in with an email or username identifier. Requires a valid Django CSRF "
@@ -123,9 +139,10 @@ class LoginView(APIView):
         return response
 
 
-class RegisterView(APIView):
+class RegisterView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER
 
     @extend_schema(
         tags=["auth"],
@@ -134,6 +151,7 @@ class RegisterView(APIView):
             201: RegistrationResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Registers a new owner and provisions an organization, draft establishment, "
@@ -175,9 +193,10 @@ class RegisterView(APIView):
         return response
 
 
-class ValidateOwnerRegistrationView(APIView):
+class ValidateOwnerRegistrationView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE
 
     @extend_schema(
         tags=["auth"],
@@ -186,6 +205,7 @@ class ValidateOwnerRegistrationView(APIView):
             204: OpenApiResponse(description="Owner registration fields are valid."),
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Validates owner registration fields without provisioning any records. "
@@ -220,9 +240,10 @@ class ValidateOwnerRegistrationView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class DirectorInvitationAcceptView(APIView):
+class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT
 
     @extend_schema(
         tags=["auth"],
@@ -231,6 +252,7 @@ class DirectorInvitationAcceptView(APIView):
             201: DirectorInvitationAcceptResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Accepts an establishment invitation, sets the account password, "
@@ -287,9 +309,10 @@ class DirectorInvitationAcceptView(APIView):
         return response
 
 
-class RefreshView(APIView):
+class RefreshView(AuthRateLimitedMixin, APIView):
     authentication_classes = []
     permission_classes = []
+    throttle_scope = settings.AUTH_THROTTLE_SCOPE_REFRESH
 
     @extend_schema(
         tags=["auth"],
@@ -298,6 +321,7 @@ class RefreshView(APIView):
             200: AuthResponseSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Rotates the HttpOnly refresh token cookie and issues a new opaque access token. "

@@ -136,6 +136,86 @@ REDIS_URL = env_str("REDIS_URL", "redis://redis:6379/0")
 CELERY_BROKER_URL = env_str("CELERY_BROKER_URL", "redis://redis:6379/1")
 CELERY_RESULT_BACKEND = env_str("CELERY_RESULT_BACKEND", "redis://redis:6379/2")
 
+# Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.
+AUTH_THROTTLE_SCOPE_LOGIN = "auth_login"
+AUTH_THROTTLE_SCOPE_REFRESH = "auth_refresh"
+AUTH_THROTTLE_SCOPE_REGISTER = "auth_register"
+AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE = "auth_register_validate"
+AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT = "auth_invitation_accept"
+
+# Emergency / dev kill switch for auth throttling (prefer high DEBUG quotas over disabling).
+HOUSTON_AUTH_THROTTLE_ENABLED = env_bool("HOUSTON_AUTH_THROTTLE_ENABLED", default=True)
+
+_AUTH_THROTTLE_DEBUG_RATE = "1000/minute"
+
+
+def _redis_throttle_cache_url() -> str:
+    """Dedicated Redis DB for throttle counters (default db 3)."""
+    explicit = os.getenv("HOUSTON_CACHE_REDIS_URL")
+    if explicit:
+        return explicit
+    if "/" in REDIS_URL.rsplit("/", 1)[-1] and REDIS_URL.rsplit("/", 1)[-1].isdigit():
+        return REDIS_URL.rsplit("/", 1)[0] + "/3"
+    return f"{REDIS_URL.rstrip('/')}/3"
+
+
+def _build_default_caches() -> dict:
+    cache_redis_url = os.getenv("HOUSTON_CACHE_REDIS_URL")
+    if cache_redis_url:
+        return {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": cache_redis_url,
+            }
+        }
+    if DEBUG:
+        return {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            }
+        }
+    return {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _redis_throttle_cache_url(),
+        }
+    }
+
+
+def _auth_throttle_rates() -> dict[str, str]:
+    if DEBUG:
+        rates = {
+            AUTH_THROTTLE_SCOPE_LOGIN: _AUTH_THROTTLE_DEBUG_RATE,
+            AUTH_THROTTLE_SCOPE_REFRESH: _AUTH_THROTTLE_DEBUG_RATE,
+            AUTH_THROTTLE_SCOPE_REGISTER: _AUTH_THROTTLE_DEBUG_RATE,
+            AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE: _AUTH_THROTTLE_DEBUG_RATE,
+            AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT: _AUTH_THROTTLE_DEBUG_RATE,
+        }
+    else:
+        rates = {
+            AUTH_THROTTLE_SCOPE_LOGIN: "10/minute",
+            AUTH_THROTTLE_SCOPE_REFRESH: "30/minute",
+            AUTH_THROTTLE_SCOPE_REGISTER: "5/hour",
+            AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE: "30/hour",
+            AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT: "10/hour",
+        }
+
+    env_overrides = {
+        AUTH_THROTTLE_SCOPE_LOGIN: "HOUSTON_THROTTLE_AUTH_LOGIN",
+        AUTH_THROTTLE_SCOPE_REFRESH: "HOUSTON_THROTTLE_AUTH_REFRESH",
+        AUTH_THROTTLE_SCOPE_REGISTER: "HOUSTON_THROTTLE_AUTH_REGISTER",
+        AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE: "HOUSTON_THROTTLE_AUTH_REGISTER_VALIDATE",
+        AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT: "HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT",
+    }
+    for scope, env_name in env_overrides.items():
+        override = os.getenv(env_name)
+        if override:
+            rates[scope] = override
+    return rates
+
+
+CACHES = _build_default_caches()
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels.layers.InMemoryChannelLayer"
@@ -151,6 +231,7 @@ REST_FRAMEWORK = {
         "houston.accounts.authentication.BearerAccessTokenAuthentication",
     ],
     "EXCEPTION_HANDLER": "houston.core.api.exceptions.api_exception_handler",
+    "DEFAULT_THROTTLE_RATES": _auth_throttle_rates(),
 }
 
 SPECTACULAR_SETTINGS = {
