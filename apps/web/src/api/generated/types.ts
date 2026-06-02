@@ -844,23 +844,9 @@ export interface components {
             email: string;
             first_name: string;
             last_name: string;
-            role: components["schemas"]["MembershipInvitationRequestRoleEnum"];
+            role: components["schemas"]["RoleEnum"];
             scopes: components["schemas"]["EstablishmentMembershipScopeItem"][];
         };
-        /**
-         * @description * `staff` - staff
-         *     * `manager` - manager
-         * @enum {string}
-         */
-        MembershipInvitationRequestRoleEnum: "staff" | "manager";
-        /**
-         * @description * `owner` - Owner
-         *     * `director` - Director
-         *     * `manager` - Manager
-         *     * `staff` - Staff
-         * @enum {string}
-         */
-        MembershipUpdateRequestRoleEnum: "owner" | "director" | "manager" | "staff";
         MembershipUserSummary: {
             /** Format: uuid */
             id: string;
@@ -1009,7 +995,7 @@ export interface components {
             description?: string;
         };
         PatchedMembershipUpdateRequest: {
-            role?: components["schemas"]["MembershipUpdateRequestRoleEnum"];
+            role?: components["schemas"]["RoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeItem"][];
         };
         ProposalCatalogItem: {
@@ -1120,6 +1106,14 @@ export interface components {
             /** Format: uuid */
             onboarding_session_id: string;
         };
+        /**
+         * @description * `owner` - Owner
+         *     * `director` - Director
+         *     * `manager` - Manager
+         *     * `staff` - Staff
+         * @enum {string}
+         */
+        RoleEnum: "owner" | "director" | "manager" | "staff";
         RoutingHintItem: {
             /** Format: uuid */
             id: string;

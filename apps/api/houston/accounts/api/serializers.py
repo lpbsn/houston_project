@@ -33,13 +33,13 @@ class UserPublicSerializer(serializers.Serializer):
     identity_type = serializers.CharField()
 
 
-@extend_schema_serializer(component_name='AuthMembershipScopeItem')
+@extend_schema_serializer(component_name="AuthMembershipScopeItem")
 class MembershipScopeItemSerializer(serializers.Serializer):
     scope_type = serializers.CharField()
     scope_id = serializers.UUIDField()
 
 
-@extend_schema_serializer(component_name='AuthMembershipScopeSummary')
+@extend_schema_serializer(component_name="AuthMembershipScopeSummary")
 class MembershipScopeSummarySerializer(serializers.Serializer):
     module_count = serializers.IntegerField()
     domain_count = serializers.IntegerField()

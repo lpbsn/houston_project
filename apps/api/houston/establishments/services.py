@@ -1694,10 +1694,13 @@ def invite_director_during_onboarding(
             existing_membership.status == EstablishmentMembership.Status.DEACTIVATED
             and existing_membership.role == EstablishmentMembership.Role.DIRECTOR
         ):
-            if _count_non_owner_directors(
-                establishment_id=establishment.id,
-                owner_user_ids=owner_user_ids,
-            ) >= 1:
+            if (
+                _count_non_owner_directors(
+                    establishment_id=establishment.id,
+                    owner_user_ids=owner_user_ids,
+                )
+                >= 1
+            ):
                 raise DirectorInvitationAlreadyExistsError
 
             existing_membership.status = EstablishmentMembership.Status.INVITED
@@ -2666,14 +2669,18 @@ def _count_non_owner_directors(
     if owner_user_ids is None:
         owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
 
-    return EstablishmentMembership.objects.filter(
-        establishment_id=establishment_id,
-        role=EstablishmentMembership.Role.DIRECTOR,
-        status__in=[
-            EstablishmentMembership.Status.INVITED,
-            EstablishmentMembership.Status.ACTIVE,
-        ],
-    ).exclude(user_id__in=owner_user_ids).count()
+    return (
+        EstablishmentMembership.objects.filter(
+            establishment_id=establishment_id,
+            role=EstablishmentMembership.Role.DIRECTOR,
+            status__in=[
+                EstablishmentMembership.Status.INVITED,
+                EstablishmentMembership.Status.ACTIVE,
+            ],
+        )
+        .exclude(user_id__in=owner_user_ids)
+        .count()
+    )
 
 
 def _reload_membership_for_response(membership_id) -> EstablishmentMembership:

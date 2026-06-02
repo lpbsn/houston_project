@@ -8,10 +8,7 @@ from houston.uploads.private_storage import get_private_media_storage
 
 def temporary_upload_path(instance: TemporaryUpload, filename: str) -> str:
     extension = instance.stored_extension or "bin"
-    return (
-        f"establishments/{instance.establishment_id}/temporary/"
-        f"{instance.id}.{extension}"
-    )
+    return f"establishments/{instance.establishment_id}/temporary/{instance.id}.{extension}"
 
 
 class TemporaryUpload(BaseModel):

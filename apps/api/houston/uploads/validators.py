@@ -49,6 +49,7 @@ _PIL_FORMAT_TO_CANONICAL: dict[str, tuple[str, str]] = {
     "HEIC": ("image/heic", "heic"),
 }
 
+
 def _ensure_heif_opener_registered() -> None:
     if pillow_heif is not None:
         pillow_heif.register_heif_opener()

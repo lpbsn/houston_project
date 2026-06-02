@@ -6,7 +6,9 @@ def forwards(apps, schema_editor):
     MembershipScope = apps.get_model("establishments", "MembershipScope")
 
     scopes_to_create = []
-    for membership_domain in MembershipDomain.objects.select_related("operational_domain").iterator():
+    for membership_domain in MembershipDomain.objects.select_related(
+        "operational_domain"
+    ).iterator():
         scopes_to_create.append(
             MembershipScope(
                 membership_id=membership_domain.membership_id,
@@ -24,7 +26,6 @@ def backwards(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("establishments", "0010_membership_scope"),
     ]

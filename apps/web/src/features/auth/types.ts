@@ -12,8 +12,8 @@ export type Membership = components['schemas']['Membership']
 export type MembershipInvitationRequest = components['schemas']['MembershipInvitationRequest']
 export type MembershipUpdateRequest = components['schemas']['PatchedMembershipUpdateRequest']
 export type MembershipInvitationRequestRoleEnum =
-  components['schemas']['MembershipInvitationRequestRoleEnum']
-export type RoleEnum = components['schemas']['MembershipUpdateRequestRoleEnum']
+  Extract<MembershipInvitationRequest['role'], 'staff' | 'manager'>
+export type RoleEnum = NonNullable<MembershipUpdateRequest['role']>
 export type SwitchEstablishmentRequest = components['schemas']['SwitchEstablishmentRequest']
 export type UserPublic = components['schemas']['UserPublic']
 export type WorkspaceSummaryResponse = components['schemas']['WorkspaceSummaryResponse']

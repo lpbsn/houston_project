@@ -6,49 +6,104 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('establishments', '0012_remove_membership_domain'),
+        ("establishments", "0012_remove_membership_domain"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ObservationProcessing',
+            name="ObservationProcessing",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('status', models.CharField(choices=[('queued', 'Queued'), ('processing', 'Processing'), ('processed', 'Processed'), ('retrying', 'Retrying'), ('failed', 'Failed')], default='queued', max_length=20)),
-                ('queued_at', models.DateTimeField()),
-                ('last_error_code', models.CharField(blank=True, default='', max_length=80)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("queued", "Queued"),
+                            ("processing", "Processing"),
+                            ("processed", "Processed"),
+                            ("retrying", "Retrying"),
+                            ("failed", "Failed"),
+                        ],
+                        default="queued",
+                        max_length=20,
+                    ),
+                ),
+                ("queued_at", models.DateTimeField()),
+                ("last_error_code", models.CharField(blank=True, default="", max_length=80)),
             ],
         ),
         migrations.CreateModel(
-            name='Observation',
+            name="Observation",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('raw_text', models.TextField(max_length=1000)),
-                ('origin', models.CharField(choices=[('direct_report', 'Direct report')], default='direct_report', max_length=40)),
-                ('submitted_at', models.DateTimeField()),
-                ('establishment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='observations', to='establishments.establishment')),
-                ('submitted_by_membership', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='submitted_observations', to='establishments.establishmentmembership')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("raw_text", models.TextField(max_length=1000)),
+                (
+                    "origin",
+                    models.CharField(
+                        choices=[("direct_report", "Direct report")],
+                        default="direct_report",
+                        max_length=40,
+                    ),
+                ),
+                ("submitted_at", models.DateTimeField()),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="observations",
+                        to="establishments.establishment",
+                    ),
+                ),
+                (
+                    "submitted_by_membership",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="submitted_observations",
+                        to="establishments.establishmentmembership",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='ObservationMedia',
+            name="ObservationMedia",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('position', models.PositiveSmallIntegerField()),
-                ('content_type', models.CharField(max_length=120)),
-                ('size_bytes', models.PositiveIntegerField()),
-                ('storage_key', models.CharField(max_length=512)),
-                ('observation', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='media_items', to='observations.observation')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("position", models.PositiveSmallIntegerField()),
+                ("content_type", models.CharField(max_length=120)),
+                ("size_bytes", models.PositiveIntegerField()),
+                ("storage_key", models.CharField(max_length=512)),
+                (
+                    "observation",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="media_items",
+                        to="observations.observation",
+                    ),
+                ),
             ],
         ),
     ]

@@ -278,8 +278,6 @@ def test_foreign_and_mismatched_proposals_are_denied_safely(api_client):
     assert mismatched_response.status_code == 404
 
 
-
-
 def test_ai_generate_without_openai_key_falls_back_to_template(api_client, settings):
     settings.OPENAI_API_KEY = ""
     settings.HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA = True

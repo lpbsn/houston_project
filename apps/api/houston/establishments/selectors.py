@@ -377,6 +377,7 @@ def _management_membership_queryset(*, establishment_id):
         .order_by("user__username", "user__email", "id")
     )
 
+
 def get_operational_taxonomy_for_establishment(
     *,
     current_membership: EstablishmentMembership | None,
@@ -465,4 +466,3 @@ def get_operational_taxonomy_for_establishment(
         "modules": module_payload,
         "unassigned_domains": unassigned_domains,
     }
-

@@ -31,7 +31,7 @@ class MembershipUserSummarySerializer(serializers.Serializer):
         return str(user.id)
 
 
-@extend_schema_serializer(component_name='EstablishmentMembershipScopeItem')
+@extend_schema_serializer(component_name="EstablishmentMembershipScopeItem")
 class MembershipScopeItemSerializer(serializers.Serializer):
     scope_type = serializers.ChoiceField(
         choices=["module", "domain", "subject"],
@@ -39,7 +39,7 @@ class MembershipScopeItemSerializer(serializers.Serializer):
     scope_id = serializers.UUIDField()
 
 
-@extend_schema_serializer(component_name='EstablishmentMembershipScopeSummary')
+@extend_schema_serializer(component_name="EstablishmentMembershipScopeSummary")
 class MembershipScopeSummarySerializer(serializers.Serializer):
     module_count = serializers.IntegerField()
     domain_count = serializers.IntegerField()
@@ -78,13 +78,9 @@ class MembershipUpdateRequestSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if not attrs:
-            raise serializers.ValidationError(
-                "At least one of role or scopes must be provided."
-            )
+            raise serializers.ValidationError("At least one of role or scopes must be provided.")
 
         return attrs
-
-
 
 
 class OperationalTaxonomySubjectSerializer(serializers.Serializer):
@@ -110,6 +106,7 @@ class OperationalTaxonomyModuleSerializer(serializers.Serializer):
 class OperationalTaxonomyResponseSerializer(serializers.Serializer):
     modules = OperationalTaxonomyModuleSerializer(many=True)
     unassigned_domains = OperationalTaxonomyDomainSerializer(many=True)
+
 
 class ScopedUserSearchRequestSerializer(serializers.Serializer):
     q = serializers.CharField(

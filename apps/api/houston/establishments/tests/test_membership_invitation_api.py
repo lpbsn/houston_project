@@ -170,9 +170,7 @@ def test_owner_can_invite_staff_with_domain_scope(api_client):
     assert response.status_code == 201
     body = response.json()
     assert body["membership"]["role"] == EstablishmentMembership.Role.STAFF
-    assert body["membership"]["scopes"] == [
-        {"scope_type": "domain", "scope_id": str(domain.id)}
-    ]
+    assert body["membership"]["scopes"] == [{"scope_type": "domain", "scope_id": str(domain.id)}]
     assert body["membership"]["scope_summary"]["domain_count"] == 1
 
 

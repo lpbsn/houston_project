@@ -5,39 +5,50 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('observations', '0001_initial'),
-        ('uploads', '0001_initial'),
+        ("observations", "0001_initial"),
+        ("uploads", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='observationmedia',
-            name='temporary_upload',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='observation_media', to='uploads.temporaryupload'),
+            model_name="observationmedia",
+            name="temporary_upload",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="observation_media",
+                to="uploads.temporaryupload",
+            ),
         ),
         migrations.AddField(
-            model_name='observationprocessing',
-            name='observation',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='processing', to='observations.observation'),
+            model_name="observationprocessing",
+            name="observation",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="processing",
+                to="observations.observation",
+            ),
         ),
         migrations.AddIndex(
-            model_name='observation',
-            index=models.Index(fields=['establishment', 'submitted_at'], name='observation_est_submitted_idx'),
+            model_name="observation",
+            index=models.Index(
+                fields=["establishment", "submitted_at"], name="observation_est_submitted_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='observationmedia',
-            index=models.Index(fields=['observation'], name='observation_media_obs_idx'),
+            model_name="observationmedia",
+            index=models.Index(fields=["observation"], name="observation_media_obs_idx"),
         ),
         migrations.AddConstraint(
-            model_name='observationmedia',
-            constraint=models.UniqueConstraint(fields=('observation', 'position'), name='observation_media_unique_position'),
+            model_name="observationmedia",
+            constraint=models.UniqueConstraint(
+                fields=("observation", "position"), name="observation_media_unique_position"
+            ),
         ),
         migrations.AddIndex(
-            model_name='observationprocessing',
-            index=models.Index(fields=['status', 'queued_at'], name='obs_processing_status_idx'),
+            model_name="observationprocessing",
+            index=models.Index(fields=["status", "queued_at"], name="obs_processing_status_idx"),
         ),
     ]

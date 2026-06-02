@@ -5,26 +5,36 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ai', '0001_initial'),
-        ('establishments', '0012_remove_membership_domain'),
-        ('observations', '0001_initial'),
+        ("ai", "0001_initial"),
+        ("establishments", "0012_remove_membership_domain"),
+        ("observations", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='aiusagelog',
-            name='observation',
-            field=models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='ai_usage_logs', to='observations.observation'),
+            model_name="aiusagelog",
+            name="observation",
+            field=models.ForeignKey(
+                blank=True,
+                db_index=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="ai_usage_logs",
+                to="observations.observation",
+            ),
         ),
         migrations.AlterField(
-            model_name='aiusagelog',
-            name='ai_domain',
-            field=models.CharField(choices=[('onboarding', 'Onboarding'), ('transcription', 'Transcription')], default='onboarding', max_length=40),
+            model_name="aiusagelog",
+            name="ai_domain",
+            field=models.CharField(
+                choices=[("onboarding", "Onboarding"), ("transcription", "Transcription")],
+                default="onboarding",
+                max_length=40,
+            ),
         ),
         migrations.AddIndex(
-            model_name='aiusagelog',
-            index=models.Index(fields=['observation'], name='ai_usage_observation_idx'),
+            model_name="aiusagelog",
+            index=models.Index(fields=["observation"], name="ai_usage_observation_idx"),
         ),
     ]

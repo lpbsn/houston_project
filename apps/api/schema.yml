@@ -2398,7 +2398,7 @@ components:
         last_name:
           type: string
         role:
-          $ref: '#/components/schemas/MembershipInvitationRequestRoleEnum'
+          $ref: '#/components/schemas/RoleEnum'
         scopes:
           type: array
           items:
@@ -2409,26 +2409,6 @@ components:
       - last_name
       - role
       - scopes
-    MembershipInvitationRequestRoleEnum:
-      enum:
-      - staff
-      - manager
-      type: string
-      description: |-
-        * `staff` - staff
-        * `manager` - manager
-    MembershipUpdateRequestRoleEnum:
-      enum:
-      - owner
-      - director
-      - manager
-      - staff
-      type: string
-      description: |-
-        * `owner` - Owner
-        * `director` - Director
-        * `manager` - Manager
-        * `staff` - Staff
     MembershipUserSummary:
       type: object
       properties:
@@ -2816,7 +2796,7 @@ components:
       type: object
       properties:
         role:
-          $ref: '#/components/schemas/MembershipUpdateRequestRoleEnum'
+          $ref: '#/components/schemas/RoleEnum'
         scopes:
           type: array
           items:
@@ -3090,6 +3070,18 @@ components:
       - memberships
       - onboarding_session_id
       - user
+    RoleEnum:
+      enum:
+      - owner
+      - director
+      - manager
+      - staff
+      type: string
+      description: |-
+        * `owner` - Owner
+        * `director` - Director
+        * `manager` - Manager
+        * `staff` - Staff
     RoutingHintItem:
       type: object
       properties:

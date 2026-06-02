@@ -288,8 +288,6 @@ class MembershipDeactivateView(APIView):
         return Response(serializer.data)
 
 
-
-
 class EstablishmentOperationalTaxonomyView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
@@ -393,9 +391,7 @@ class MembershipInvitationView(APIView):
                 first_name=request_serializer.validated_data["first_name"],
                 last_name=request_serializer.validated_data["last_name"],
                 role=request_serializer.validated_data["role"],
-                scopes=parse_membership_scope_inputs(
-                    request_serializer.validated_data["scopes"]
-                ),
+                scopes=parse_membership_scope_inputs(request_serializer.validated_data["scopes"]),
             )
         except MembershipManagementNotFoundError:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -439,9 +435,7 @@ class MembershipInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (
-                    f"/invitations/{invitation_result.invitation_token}"
-                ),
+                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
@@ -817,9 +811,7 @@ class OnboardingSessionDirectorInvitationView(APIView):
                 "membership": invitation_result.membership,
                 "invitation_token": invitation_result.invitation_token,
                 "invitation_expires_at": invitation_result.invitation_expires_at,
-                "invitation_accept_path": (
-                    f"/invitations/{invitation_result.invitation_token}"
-                ),
+                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
