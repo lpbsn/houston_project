@@ -169,7 +169,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/auth/csrf/:
     get:
@@ -214,13 +214,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/auth/logout/:
     post:
@@ -237,7 +237,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/auth/refresh/:
     post:
@@ -258,13 +258,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/auth/register/:
     post:
@@ -297,13 +297,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationErrorResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/auth/register/validate-owner/:
     post:
@@ -331,13 +331,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RegistrationErrorResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/auth/switch_establishment/:
     post:
@@ -369,12 +369,16 @@ paths:
                 $ref: '#/components/schemas/BootstrapResponse'
           description: ''
         '400':
-          description: Invalid request payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+          description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -427,13 +431,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -470,13 +474,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -517,13 +521,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -574,19 +578,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -627,19 +631,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -686,25 +690,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/operational-taxonomy/:
     get:
@@ -784,19 +788,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -833,19 +837,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -891,19 +895,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -915,13 +919,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '503':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/users/search/:
     get:
@@ -1071,7 +1075,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/onboarding-sessions/:
     post:
@@ -1117,13 +1121,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1198,13 +1202,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1295,13 +1299,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1360,13 +1364,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1413,13 +1417,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1560,13 +1564,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1630,13 +1634,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1757,13 +1761,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -1821,13 +1825,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetailResponse'
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -2050,6 +2054,19 @@ components:
       required:
       - activity_description
       - session
+    ApiErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        errors:
+          type: object
+          additionalProperties: {}
+      required:
+      - code
+      - detail
     AuthMembershipScopeItem:
       type: object
       properties:
@@ -2974,15 +2991,6 @@ components:
       required:
       - meaning
       - term
-    RegistrationErrorResponse:
-      type: object
-      properties:
-        detail:
-          type: string
-        code:
-          type: string
-      required:
-      - detail
     RegistrationOwnerValidateRequest:
       type: object
       properties:
@@ -3321,6 +3329,20 @@ components:
       - id
       - identity_type
       - username
+    ValidationErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        errors:
+          type: object
+          additionalProperties: {}
+      required:
+      - code
+      - detail
+      - errors
     WorkspaceSummaryDirector:
       type: object
       properties:

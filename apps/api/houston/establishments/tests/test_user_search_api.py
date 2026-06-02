@@ -214,7 +214,10 @@ def test_search_requires_minimum_query_length(api_client):
     )
 
     assert response.status_code == 400
-    assert response.json() == {"q": ["Ensure this field has at least 2 characters."]}
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert body["detail"] == "Request validation failed."
+    assert body["errors"]["q"] == ["Ensure this field has at least 2 characters."]
 
 
 def test_search_excludes_inactive_and_foreign_memberships(api_client):

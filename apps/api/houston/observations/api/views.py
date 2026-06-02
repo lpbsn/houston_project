@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from houston.accounts.api.serializers import DetailResponseSerializer
+from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.establishments.permissions import HasActiveMembership
 from houston.observations.api.serializers import (
@@ -35,10 +35,10 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
         request=ObservationSubmitRequestSerializer,
         responses={
             201: ObservationSubmitResponseSerializer,
-            400: OpenApiResponse(response=DetailResponseSerializer),
-            401: OpenApiResponse(response=DetailResponseSerializer),
-            403: OpenApiResponse(response=DetailResponseSerializer),
-            404: OpenApiResponse(response=DetailResponseSerializer),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
             "Submits a validated Observation with optional linked temporary photo uploads. "

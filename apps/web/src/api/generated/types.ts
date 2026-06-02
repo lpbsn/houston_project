@@ -706,6 +706,13 @@ export interface components {
             session: components["schemas"]["OnboardingSessionResponse"];
             activity_description: components["schemas"]["ActivityDescriptionResponse"];
         };
+        ApiErrorResponse: {
+            code: string;
+            detail: string;
+            errors?: {
+                [key: string]: unknown;
+            };
+        };
         AuthMembershipScopeItem: {
             scope_type: string;
             /** Format: uuid */
@@ -1069,10 +1076,6 @@ export interface components {
             mapped_unit_key?: string | null;
             reason?: string;
         };
-        RegistrationErrorResponse: {
-            detail: string;
-            code?: string;
-        };
         RegistrationOwnerValidateRequest: {
             invite_code: string;
             first_name: string;
@@ -1208,6 +1211,13 @@ export interface components {
             email: string | null;
             identity_type: string;
         };
+        ValidationErrorResponse: {
+            code: string;
+            detail: string;
+            errors: {
+                [key: string]: unknown;
+            };
+        };
         WorkspaceSummaryDirector: {
             display_name: string;
             status: components["schemas"]["StatusEnum"];
@@ -1290,7 +1300,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1342,7 +1352,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1350,7 +1360,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1376,7 +1386,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1403,7 +1413,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1411,7 +1421,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1444,7 +1454,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegistrationErrorResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1452,7 +1462,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1484,7 +1494,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegistrationErrorResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1492,7 +1502,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1520,19 +1530,20 @@ export interface operations {
                     "application/json": components["schemas"]["BootstrapResponse"];
                 };
             };
-            /** @description Invalid request payload. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
             };
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1583,7 +1594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1591,7 +1602,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1628,7 +1639,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1636,7 +1647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1674,7 +1685,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1682,7 +1693,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1726,7 +1737,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -1734,7 +1745,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1742,7 +1753,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1780,7 +1791,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -1788,7 +1799,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1796,7 +1807,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1839,7 +1850,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -1847,7 +1858,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1855,7 +1866,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1863,7 +1874,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -1944,7 +1955,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -1952,7 +1963,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -1960,7 +1971,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -1997,7 +2008,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -2005,7 +2016,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2013,7 +2024,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2057,7 +2068,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {
@@ -2065,7 +2076,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2073,7 +2084,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2089,7 +2100,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             503: {
@@ -2097,7 +2108,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -2259,7 +2270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -2308,7 +2319,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2316,7 +2327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2398,7 +2409,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2406,7 +2417,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2502,7 +2513,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2510,7 +2521,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2569,7 +2580,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2577,7 +2588,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2630,7 +2641,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2638,7 +2649,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2783,7 +2794,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2791,7 +2802,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2851,7 +2862,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2859,7 +2870,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -2974,7 +2985,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -2982,7 +2993,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {
@@ -3041,7 +3052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {
@@ -3049,7 +3060,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DetailResponse"];
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             404: {

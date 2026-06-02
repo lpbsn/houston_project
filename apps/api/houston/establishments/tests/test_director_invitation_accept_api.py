@@ -205,7 +205,9 @@ def test_password_mismatch_returns_400(api_client):
     )
 
     assert response.status_code == 400
-    assert "password_confirmation" in response.data
+    assert response.data["code"] == "validation_error"
+    assert response.data["detail"] == "Request validation failed."
+    assert "password_confirmation" in response.data["errors"]
 
     membership = invitation_result.membership
     membership.refresh_from_db()

@@ -242,6 +242,9 @@ def test_invitation_rejects_invalid_scope_id(api_client):
     )
 
     assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "membership_invitation_invalid"
+    assert isinstance(body["detail"], str)
 
 
 def test_invitation_rejects_cross_establishment_scope(api_client):
@@ -328,6 +331,9 @@ def test_cannot_invite_owner_or_director_roles(api_client):
             **auth_headers(access_token),
         )
         assert response.status_code == 403
+        body = response.json()
+        assert body["code"] == "membership_invitation_role_not_allowed"
+        assert isinstance(body["detail"], str)
 
 
 def test_staff_cannot_invite_members(api_client):
@@ -348,6 +354,9 @@ def test_staff_cannot_invite_members(api_client):
     )
 
     assert response.status_code == 403
+    body = response.json()
+    assert body["code"] == "permission_denied"
+    assert isinstance(body["detail"], str)
 
 
 def test_manager_can_invite_staff_with_module_scope(api_client):

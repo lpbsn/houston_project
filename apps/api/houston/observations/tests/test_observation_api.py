@@ -128,6 +128,11 @@ def test_submit_rejects_short_text(api_client):
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
     assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert body["detail"] == "Request validation failed."
+    assert "errors" in body
+    assert "text" in body["errors"]
 
 
 def test_submit_with_temporary_photo_upload(api_client):

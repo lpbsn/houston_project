@@ -150,6 +150,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "houston.accounts.authentication.BearerAccessTokenAuthentication",
     ],
+    "EXCEPTION_HANDLER": "houston.core.api.exceptions.api_exception_handler",
 }
 
 SPECTACULAR_SETTINGS = {

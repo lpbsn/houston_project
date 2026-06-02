@@ -13,6 +13,16 @@ class DetailResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
 
 
+class ApiErrorResponseSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+    errors = serializers.DictField(required=False)
+
+
+class ValidationErrorResponseSerializer(ApiErrorResponseSerializer):
+    errors = serializers.DictField()
+
+
 class CsrfResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
 

@@ -138,6 +138,10 @@ def test_login_without_csrf_is_forbidden(api_client, active_user):
     )
 
     assert response.status_code == 403
+    assert response.json() == {
+        "code": "permission_denied",
+        "detail": "CSRF validation failed.",
+    }
 
 
 def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
@@ -220,7 +224,10 @@ def test_invalid_login_returns_generic_error(api_client, active_user):
     )
 
     assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid credentials."}
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "Invalid credentials.",
+    }
 
 
 def test_inactive_user_login_returns_same_generic_error(api_client):
@@ -240,7 +247,10 @@ def test_inactive_user_login_returns_same_generic_error(api_client):
     )
 
     assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid credentials."}
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "Invalid credentials.",
+    }
 
 
 def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, active_user):
@@ -277,6 +287,10 @@ def test_bootstrap_without_bearer_returns_unauthorized(api_client):
     response = api_client.get("/api/v1/auth/bootstrap/")
 
     assert response.status_code == 401
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "Authentication credentials were not provided.",
+    }
 
 
 def test_bootstrap_with_invalid_bearer_returns_unauthorized(api_client):
@@ -286,6 +300,10 @@ def test_bootstrap_with_invalid_bearer_returns_unauthorized(api_client):
     )
 
     assert response.status_code == 401
+    assert response.json() == {
+        "code": "authentication_failed",
+        "detail": "Invalid access token.",
+    }
 
 
 def test_bootstrap_filters_inactive_memberships_establishments_and_organizations(
@@ -363,6 +381,10 @@ def test_switch_establishment_requires_bearer_auth(api_client, active_user):
     )
 
     assert response.status_code == 401
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "Authentication credentials were not provided.",
+    }
 
 
 def test_switch_establishment_selects_active_membership_for_session(api_client, active_user):
@@ -468,6 +490,10 @@ def test_switch_establishment_with_invalid_uuid_returns_bad_request(api_client, 
     )
 
     assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert body["detail"] == "Request validation failed."
+    assert "errors" in body
 
 
 def test_refresh_without_csrf_is_forbidden(api_client, active_user):
@@ -483,6 +509,10 @@ def test_refresh_without_csrf_is_forbidden(api_client, active_user):
     response = api_client.post("/api/v1/auth/refresh/")
 
     assert response.status_code == 403
+    assert response.json() == {
+        "code": "permission_denied",
+        "detail": "CSRF validation failed.",
+    }
 
 
 def test_refresh_with_csrf_succeeds_and_rotates_refresh_token(api_client, active_user):
@@ -572,6 +602,10 @@ def test_unknown_refresh_token_returns_unauthorized(api_client, active_user):
     response = api_client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
 
     assert response.status_code == 401
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "Authentication failed.",
+    }
 
 
 def test_expired_refresh_token_returns_unauthorized(api_client, active_user):
@@ -590,6 +624,10 @@ def test_expired_refresh_token_returns_unauthorized(api_client, active_user):
     response = api_client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
 
     assert response.status_code == 401
+    assert response.json() == {
+        "code": "not_authenticated",
+        "detail": "Authentication failed.",
+    }
 
 
 def test_logout_without_csrf_is_forbidden(api_client, active_user):
@@ -609,6 +647,10 @@ def test_logout_without_csrf_is_forbidden(api_client, active_user):
     )
 
     assert response.status_code == 403
+    assert response.json() == {
+        "code": "permission_denied",
+        "detail": "CSRF validation failed.",
+    }
 
 
 def test_logout_with_csrf_revokes_session_and_clears_cookie(api_client, active_user):
