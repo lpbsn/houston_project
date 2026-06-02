@@ -1,8 +1,8 @@
 # AI Domain
 
 Status: authoritative
-Last reviewed: 2026-05-29
-Implementation status: not_started
+Last reviewed: 2026-06-01
+Implementation status: partial (onboarding + Phase 3 transcription; observation pipeline Phase 4)
 
 ## 1. Purpose
 
@@ -166,16 +166,13 @@ Candidate events only:
 
 Current API truth is `apps/api/schema.yml`.
 
-Confirmed today in `apps/api/schema.yml`:
-- no AI-specific public API surface
+Confirmed in `apps/api/schema.yml` (Phase 3 subset):
+- Onboarding AI: `POST /api/v1/onboarding-sessions/{session_id}/proposals/ai-generate/` (see establishments/onboarding docs).
+- Transcription: `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio, `AIUsageLog` domain `transcription`, model configurable (`HOUSTON_AI_TRANSCRIPTION_MODEL`, default `gpt-4o-transcribe`).
 
-The current public schema exposes schema, auth, and health routes only. AI capabilities remain candidate until they appear in `apps/api/schema.yml`.
-
-Candidate capabilities only:
-- temporary audio transcription
-- onboarding AI proposal run
+Candidate capabilities only (Phase 4+):
 - Observation submit followed by backend-triggered AI pipeline processing
-- AI processing status fetch
+- dedicated AI processing status fetch beyond submit's `processing_status`
 - metadata-only admin or support failure detail
 
 ## 10. Frontend Expectations

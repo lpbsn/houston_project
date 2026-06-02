@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Houston — Maquette</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbit&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { background:#1a1a1a; display:flex; justify-content:center; align-items:center; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+
+/* PHONE */
+.phone { width:375px; height:812px; background:#F5F4F0; border-radius:40px; overflow:hidden; position:relative; box-shadow:0 40px 80px rgba(0,0,0,0.5); border:8px solid #222; display:flex; flex-direction:column; }
+
+/* SCREENS */
+.screen { display:none; flex-direction:column; height:100%; background:#F5F4F0; }
+.screen.active { display:flex; }
+
+/* STATUSBAR */
+.sb { background:#fff; padding:12px 20px 8px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+.sb span { font-size:12px; font-weight:600; color:#1a1a1a; }
+
+/* TOPBAR */
+.topbar { background:#fff; padding:8px 16px 12px; border-bottom:0.5px solid #E8E6DF; flex-shrink:0; }
+.topbar-row { display:flex; align-items:center; justify-content:space-between; }
+.logo { font-size:18px; font-weight:400; color:#0A0A0A; letter-spacing:0.02em; font-family:'Orbit', sans-serif; }
+.icon-btn { width:32px; height:32px; border-radius:50%; background:#F0EFE9; display:flex; align-items:center; justify-content:center; cursor:pointer; border:none; font-size:14px; }
+.back-btn { font-size:13px; color:#1B4FD8; cursor:pointer; }
+.topbar h1 { font-size:20px; font-weight:600; color:#1a1a1a; margin-top:8px; }
+
+/* TABS */
+.tabs { display:flex; gap:6px; margin-top:8px; overflow-x:auto; }
+.tab { font-size:11px; padding:5px 11px; border-radius:20px; border:0.5px solid #ddd; color:#888; background:transparent; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+.tab.active { background:#1B4FD8; color:#fff; border-color:#1B4FD8; font-weight:500; }
+
+/* FEED */
+.feed { flex:1; overflow-y:auto; padding:10px 12px; display:flex; flex-direction:column; gap:8px; background:#F5F4F0; }
+
+/* BOTTOM NAV */
+.bnav { background:#fff; border-top:0.5px solid #E8E6DF; display:grid; grid-template-columns:1fr 1fr 56px 1fr 1fr; align-items:center; height:72px; padding-bottom:10px; flex-shrink:0; }
+.ni { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:6px 0; }
+.ni .icon { font-size:20px; color:#bbb; display:flex; align-items:center; justify-content:center; } .ni .icon svg { stroke:#bbb; } .ni.active .icon svg { stroke:#1B4FD8; }
+.ni .label { font-size:9px; color:#bbb; font-weight:500; }
+.ni.active .icon { color:#1B4FD8; }
+.ni.active .label { color:#1B4FD8; }
+.fab-wrap { display:flex; justify-content:center; align-items:flex-start; margin-top:-18px; }
+.fab { width:56px; height:56px; border-radius:28px; background:#1B4FD8; border:4px solid #fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 20px rgba(27,79,216,0.45); font-size:26px; color:#fff; line-height:1; }
+
+/* CARDS */
+.card { background:#fff; border-radius:14px; border:0.5px solid #E8E6DF; padding:12px 14px; cursor:pointer; position:relative; margin-bottom:0; }
+.card.new { border-left:4px solid #1B4FD8; border-radius:0 14px 14px 0; }
+.card.new.urg { border-left:4px solid #E24B4A; }
+.card.seen { opacity:0.65; background:#F9F8F5; }
+.card.assigned { border-left:3px solid #1D9E75; border-radius:0 14px 14px 0; }
+.card.mine { border-left:3px solid #1B4FD8; border-radius:0 14px 14px 0; }
+.card-hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px; }
+.card-title { font-size:13px; font-weight:600; color:#1a1a1a; margin:3px 0 4px; }
+.card-title.dim { font-weight:400; color:#666; }
+.card-zone { font-size:11px; color:#888; margin-bottom:5px; }
+.card-foot { display:flex; justify-content:space-between; align-items:center; padding-top:7px; border-top:0.5px solid #F0EFE9; }
+.asgn { font-size:11px; color:#888; display:flex; align-items:center; gap:5px; }
+.av { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:7px; font-weight:700; }
+.av-b { background:#BFCFFF; color:#1B4FD8; }
+.av-t { background:#9FE1CB; color:#085041; }
+.av-a { background:#FAC775; color:#633806; }
+
+/* BADGES */
+.badge { font-size:9px; padding:3px 8px; border-radius:3px; font-weight:700; letter-spacing:0.03em; }
+.b-red { background:#E24B4A; color:#fff; }
+.b-amber { background:#EF9F27; color:#fff; }
+.b-gray { background:#E8E6DF; color:#555; }
+.b-green { background:#1D9E75; color:#fff; }
+.b-blue { background:#1B4FD8; color:#fff; }
+.b-gold { background:#C8A84B; color:#fff; }
+.b-orange { background:#EF9F27; color:#fff; }
+
+/* SLA BAR */
+.sla-track { height:4px; background:#F0EFE9; border-radius:2px; margin:6px 0 2px; }
+.sla-fill { height:4px; border-radius:2px; }
+.sla-meta { display:flex; justify-content:space-between; }
+.sla-txt { font-size:10px; font-weight:500; }
+.sla-ref { font-size:10px; color:#aaa; }
+
+/* SECTION LABELS */
+.slabel { font-size:10px; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:0.06em; display:flex; align-items:center; gap:6px; padding:4px 0 2px; }
+.dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+/* ZONE GROUPS */
+.zone-hdr { display:flex; align-items:center; gap:8px; padding:8px 2px 6px; }
+.zone-bar { width:4px; height:16px; border-radius:2px; flex-shrink:0; }
+.zone-name { font-size:12px; font-weight:700; color:#1a1a1a; flex:1; }
+.zone-count { font-size:10px; color:#aaa; }
+
+/* FILTERS */
+.filters { background:#fff; border-bottom:0.5px solid #E8E6DF; padding:8px 12px; display:flex; gap:8px; flex-shrink:0; }
+.fsel { flex:1; background:#F5F4F0; border:0.5px solid #E8E6DF; border-radius:10px; padding:7px 10px; display:flex; justify-content:space-between; align-items:center; }
+.flabel { font-size:9px; color:#aaa; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+.fval { font-size:11px; font-weight:700; color:#1a1a1a; }
+
+/* DETAIL */
+.dbody { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+.dcard { background:#fff; border-radius:14px; border:0.5px solid #E8E6DF; padding:14px; }
+.dlabel { font-size:11px; color:#aaa; font-weight:500; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px; }
+.dtitle { font-size:17px; font-weight:600; color:#1a1a1a; margin-bottom:4px; }
+.dtext { font-size:13px; color:#444; line-height:1.5; }
+.action-bar { padding:10px 12px 16px; background:#fff; border-top:0.5px solid #E8E6DF; flex-shrink:0; }
+.action-bar button { width:100%; padding:12px; background:#1D9E75; color:#fff; border:none; border-radius:14px; font-size:14px; font-weight:700; cursor:pointer; }
+
+/* CHECKLIST */
+.cl-block { background:#fff; border-radius:14px; border:2px solid #EF9F27; padding:12px 14px; cursor:pointer; }
+.cl-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.cl-title { font-size:13px; font-weight:700; color:#1a1a1a; }
+.cl-dead { font-size:10px; color:#854F0B; background:#FAEEDA; padding:3px 8px; border-radius:20px; font-weight:600; }
+.cl-track { height:4px; background:#F0EFE9; border-radius:2px; margin-bottom:5px; }
+.cl-fill { height:4px; background:#EF9F27; border-radius:2px; }
+.cl-meta { display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:8px; }
+.cl-items { display:flex; flex-direction:column; gap:5px; margin-bottom:8px; }
+.cl-item { display:flex; align-items:center; gap:8px; font-size:12px; }
+.ck-done { width:18px; height:18px; border-radius:5px; background:#EAF3DE; border:1px solid #639922; display:flex; align-items:center; justify-content:center; font-size:10px; color:#3B6D11; flex-shrink:0; }
+.ck-todo { width:18px; height:18px; border-radius:5px; border:1.5px solid #ccc; flex-shrink:0; }
+.ck-err { width:18px; height:18px; border-radius:5px; background:#FCEBEB; border:1.5px solid #E24B4A; display:flex; align-items:center; justify-content:center; font-size:10px; color:#A32D2D; flex-shrink:0; }
+.cl-cta { background:#FEF3DC; color:#854F0B; border:none; border-radius:10px; padding:8px; font-size:12px; font-weight:500; width:100%; cursor:pointer; }
+
+/* VOICE */
+.vbtn { width:100px; height:100px; border-radius:50%; background:#1B4FD8; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 6px 24px rgba(27,79,216,0.4); }
+.vbtn.rec { background:#E24B4A; box-shadow:0 0 0 12px rgba(226,75,74,0.15),0 6px 24px rgba(226,75,74,0.4); }
+.vtranscript { background:#EEF2FF; border-radius:12px; padding:12px; font-size:13px; color:#1B4FD8; text-align:center; width:100%; }
+
+/* KANBAN */
+.kboard { display:flex; gap:10px; padding:10px 12px; overflow-x:auto; flex:1; align-items:flex-start; }
+.kcol { min-width:155px; display:flex; flex-direction:column; gap:7px; flex-shrink:0; }
+.kcol-hdr { display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:8px; margin-bottom:2px; }
+.kcol-title { font-size:10px; font-weight:700; letter-spacing:0.04em; }
+.kcol-count { font-size:10px; font-weight:700; width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; }
+.kcard { background:#fff; border-radius:10px; border:0.5px solid #E8E6DF; padding:10px; cursor:pointer; }
+.kcard-title { font-size:12px; font-weight:600; color:#1a1a1a; margin-bottom:4px; line-height:1.3; }
+.kcard-zone { font-size:10px; color:#aaa; margin-bottom:5px; }
+.kcard-foot { display:flex; justify-content:space-between; align-items:center; }
+.kav { width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; }
+.ksla { font-size:10px; font-weight:600; }
+
+/* CHAT */
+.chat-row { display:flex; align-items:center; gap:12px; padding:12px 16px; background:#fff; border-bottom:0.5px solid #F0EFE9; cursor:pointer; }
+.chat-av { width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.chat-av.round { border-radius:23px; position:relative; }
+.chat-online { position:absolute; bottom:1px; right:1px; width:10px; height:10px; border-radius:5px; border:2px solid #fff; }
+.chat-name { font-size:13px; font-weight:600; color:#1a1a1a; }
+.chat-preview { font-size:12px; color:#888; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chat-badge { width:18px; height:18px; border-radius:9px; background:#E24B4A; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#fff; flex-shrink:0; }
+.chat-msg { display:flex; align-items:flex-end; gap:8px; }
+.chat-bubble-left { background:#fff; border-radius:14px 14px 14px 4px; padding:10px 12px; border:0.5px solid #E8E6DF; max-width:72%; font-size:13px; color:#1a1a1a; line-height:1.4; }
+.chat-bubble-right { background:#1B4FD8; border-radius:14px 14px 4px 14px; padding:10px 12px; max-width:72%; font-size:13px; color:#fff; line-height:1.4; }
+.chat-time { font-size:10px; color:#aaa; }
+.chat-input { padding:8px 12px 16px; background:#fff; border-top:0.5px solid #E8E6DF; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.chat-input input { flex:1; border:0.5px solid #E8E6DF; border-radius:20px; padding:9px 14px; font-size:13px; outline:none; background:#F5F4F0; font-family:inherit; }
+.chat-send { width:32px; height:32px; border-radius:50%; background:#1B4FD8; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; color:#fff; flex-shrink:0; }
+
+/* PROFILE */
+.profile-hdr { background:#fff; padding:20px 16px; display:flex; flex-direction:column; align-items:center; gap:8px; border-bottom:0.5px solid #E8E6DF; }
+.profile-av { width:70px; height:70px; border-radius:35px; background:#BFCFFF; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; color:#1B4FD8; }
+.settings-item { background:#fff; border-radius:14px; border:0.5px solid #E8E6DF; padding:13px 14px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+
+/* CONSIGNE BOX */
+.consigne { background:#FEF3DC; border-radius:14px; border:0.5px solid #EF9F27; padding:12px 14px; }
+
+/* ALERT VALIDATION */
+.alert-val { background:#FEF3DC; border:1.5px solid #EF9F27; border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px; }
+
+/* TOGGLE LISTE/KANBAN */
+.toggle-lk { display:flex; background:#F5F4F0; border-radius:8px; padding:2px; border:0.5px solid #E8E6DF; }
+.toggle-lk button { padding:4px 10px; border-radius:6px; border:none; font-size:11px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="phone" id="app">
+
+<!-- ==================== SCREEN: OBSERVATIONS ==================== -->
+<div class="screen active" id="screen-obs">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" onclick="go('screen-settings')">···</button>
+      <div class="logo">houston</div>
+      <div style="width:32px"></div>
+    </div>
+    <h1>Signaux</h1>
+    <div class="tabs">
+      <div class="tab active">Ma zone</div>
+      <div class="tab">Vue globale</div>
+    </div>
+  </div>
+  <div class="filters">
+    <div class="fsel"><span class="flabel">État</span><span class="fval">Tous ▾</span></div>
+    <div class="fsel"><span class="flabel">Catégorie</span><span class="fval">Toutes ▾</span></div>
+  </div>
+  <div class="feed">
+
+    <!-- EN ATTENTE -->
+    <div class="slabel"><span class="dot" style="background:#E24B4A"></span> En attente · 3</div>
+    <div class="card new urg" onclick="go('screen-detail-obs')">
+      <div class="card-hdr"><div style="display:flex;gap:5px"><span class="badge b-red">⚠ URGENT</span><span class="badge b-gray">Maintenance</span></div><span style="font-size:10px;color:#aaa">4 min</span></div>
+      <div class="card-title">Climatisation en panne</div>
+      <div class="card-zone">📍 Rooftop · Salle principale</div>
+      <div class="card-foot"><div class="asgn">Marie R.</div><span class="badge b-gray">EN ATTENTE</span></div>
+    </div>
+    <div class="card new" onclick="go('screen-detail-obs')">
+      <div class="card-hdr"><span class="badge b-amber">Hygiène</span><span style="font-size:10px;color:#aaa">12 min</span></div>
+      <div class="card-title">Sol glissant près de l'entrée</div>
+      <div class="card-zone">📍 Rooftop · Entrée</div>
+      <div class="card-foot"><div class="asgn">Alice L.</div><span class="badge b-gray">EN ATTENTE</span></div>
+    </div>
+    <div class="card new" onclick="go('screen-detail-obs')">
+      <div class="card-hdr"><span class="badge b-amber">Conformité</span><span style="font-size:10px;color:#aaa">8 min</span></div>
+      <div class="card-title">Température frigo B hors norme</div>
+      <div class="card-zone">📍 Cuisine · Chambre froide</div>
+      <div class="card-foot"><div class="asgn">Tom B.</div><span class="badge b-gray">EN ATTENTE</span></div>
+    </div>
+
+    <!-- PLAN D'ÉXECUTION -->
+    <div class="slabel" style="margin-top:4px"><span class="dot" style="background:#1B4FD8"></span> Plan d'éxecution · 1</div>
+    <div class="card seen" onclick="go('screen-detail-obs-action')">
+      <div class="card-hdr"><div style="display:flex;gap:5px"><span class="badge b-red">⚠ URGENT</span><span class="badge b-gray">Stock</span></div><span style="font-size:10px;color:#aaa">22 min</span></div>
+      <div class="card-title dim">Rupture stock sirop mojito</div>
+      <div class="card-zone">📍 Rooftop · Bar</div>
+      <div class="card-foot"><div class="asgn"><div class="av av-t">SL</div>Sarah L.</div><span class="badge b-blue">PLAN D'ÉXECUTION</span></div>
+    </div>
+
+    <!-- RÉSOLUS -->
+    <div class="slabel" style="margin-top:4px"><span class="dot" style="background:#1D9E75"></span> Résolus · 1</div>
+    <div class="card seen" onclick="go('screen-detail-obs')">
+      <div class="card-hdr"><span class="badge b-gray">Sécurité</span><span style="font-size:10px;color:#aaa">1h</span></div>
+      <div class="card-title dim">Extincteur à recharger</div>
+      <div class="card-zone">📍 Rooftop · Escalier B</div>
+      <div class="card-foot"><div class="asgn"><div class="av av-a">JD</div>Jean D.</div><span class="badge b-green">RÉSOLU</span></div>
+    </div>
+
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: DETAIL OBS (sans action) ==================== -->
+<div class="screen" id="screen-detail-obs">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row"><div class="back-btn" onclick="back()">← Retour</div><span style="font-size:11px;color:#aaa">Signal</span></div>
+  </div>
+  <div class="dbody">
+    <div class="dcard">
+      <div class="dtitle">Sol glissant près de l'entrée</div>
+      <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><span class="badge b-amber">Hygiène</span><span class="badge b-gray">Sans action</span></div>
+      <div style="font-size:11px;color:#aaa">📍 Rooftop · Entrée · il y a 12 min</div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px">Signalé par Alice L.</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Description</div>
+      <div class="dtext">Le sol près de l'entrée principale est glissant, probablement suite à un renversement. Risque de chute client.</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Photo</div>
+      <div style="width:80px;height:80px;background:#EEF2FF;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-top:6px">📷</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Commentaires</div>
+      <div style="font-size:12px;color:#aaa;font-style:italic;padding:8px 0">Aucun commentaire pour l'instant.</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input style="flex:1;border:0.5px solid #E8E6DF;border-radius:10px;padding:8px 12px;font-size:12px;outline:none;background:#F5F4F0;font-family:inherit" placeholder="Ajouter un commentaire..." />
+        <button style="background:#1B4FD8;color:#fff;border:none;border-radius:10px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer">↑</button>
+      </div>
+    </div>
+  </div>
+  <div style="padding:10px 12px 16px;background:#fff;border-top:0.5px solid #E8E6DF;flex-shrink:0;display:flex;gap:8px">
+    <button onclick="go('screen-create-action')" style="flex:1;padding:13px;background:#1B4FD8;color:#fff;border:none;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer">⚡ Plan d'éxecution</button>
+    <button style="flex:1;padding:13px;background:#EAF3DE;color:#3B6D11;border:0.5px solid #5DCAA5;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer">✅ Résolu</button>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: DETAIL OBS (avec plan d'éxecution) ==================== -->
+<div class="screen" id="screen-detail-obs-action">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row"><div class="back-btn" onclick="back()">← Retour</div><span style="font-size:11px;color:#aaa">Signal</span></div>
+  </div>
+  <div class="dbody">
+    <div class="dcard">
+      <div class="dtitle">Climatisation en panne</div>
+      <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><span class="badge b-red">⚠ URGENT</span><span class="badge b-gray">Maintenance</span><span class="badge b-blue">En cours</span></div>
+      <div style="font-size:11px;color:#aaa">📍 Rooftop · Salle principale · il y a 4 min</div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px">Signalé par Marie R.</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Description</div>
+      <div class="dtext">La climatisation de la salle principale ne fonctionne plus depuis l'ouverture. Bruit anormal puis arrêt complet.</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Plan d'éxecution · Assigné à</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <div class="av av-a" style="width:28px;height:28px;font-size:11px">JD</div>
+        <div><div style="font-size:13px;font-weight:500">Jean Dupont</div><div style="font-size:11px;color:#888">Responsable maintenance</div></div>
+      </div>
+      <div class="sla-track"><div class="sla-fill" style="width:15%;background:#E24B4A"></div></div>
+      <div class="sla-meta"><span class="sla-txt" style="color:#A32D2D">⏱ 6 min restantes</span><span class="sla-ref">SLA 30 min</span></div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Commentaires</div>
+      <div style="background:#F5F4F0;border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:#1a1a1a;margin-bottom:3px">Jean D. <span style="font-weight:400;color:#aaa;font-size:10px">09:40</span></div>
+        <div style="font-size:12px;color:#444">Je regarde ça tout de suite, technicien prévenu.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input style="flex:1;border:0.5px solid #E8E6DF;border-radius:10px;padding:8px 12px;font-size:12px;outline:none;background:#F5F4F0;font-family:inherit" placeholder="Ajouter un commentaire..." />
+        <button style="background:#1B4FD8;color:#fff;border:none;border-radius:10px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer">↑</button>
+      </div>
+    </div>
+  </div>
+  <div class="action-bar"><button>✅ Marquer comme résolu</button></div>
+</div>
+
+<!-- ==================== SCREEN: ACTIONS ==================== -->
+<div class="screen" id="screen-actions">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" onclick="go('screen-settings')">···</button>
+      <div class="logo">houston</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="toggleCreateMenu()" style="width:32px;height:32px;border-radius:50%;background:#1B4FD8;color:#fff;border:none;font-size:20px;font-weight:300;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1">+</button>
+      </div>
+    </div>
+    <div class="topbar-row" style="margin-top:10px;align-items:center">
+      <h1 style="margin-top:0">Éxecution</h1>
+      <div class="toggle-lk">
+        <button id="btn-l" onclick="showL()" style="background:#1B4FD8;color:#fff;font-weight:600">≡ Liste</button>
+        <button id="btn-k" onclick="showK()" style="background:transparent;color:#888;font-weight:500">⊞ Kanban</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU CRÉATION (dropdown) -->
+  <div id="create-menu" style="display:none;position:absolute;top:130px;right:12px;z-index:100;background:#fff;border-radius:16px;border:0.5px solid #E8E6DF;box-shadow:0 8px 32px rgba(0,0,0,0.12);overflow:hidden;width:240px">
+    <div style="padding:10px 14px;font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;border-bottom:0.5px solid #F0EFE9">Créer</div>
+    <div onclick="toggleCreateMenu();go('screen-create-action')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;border-bottom:0.5px solid #F0EFE9;transition:background 0.1s" onmouseover="this.style.background='#F5F4F0'" onmouseout="this.style.background='#fff'">
+      <div style="width:38px;height:38px;border-radius:10px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⚡</div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Plan d'éxecution</div>
+        <div style="font-size:11px;color:#aaa;margin-top:2px">Assigner une tâche à un membre</div>
+      </div>
+    </div>
+    <div onclick="toggleCreateMenu();go('screen-create-ronde')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer" onmouseover="this.style.background='#F5F4F0'" onmouseout="this.style.background='#fff'">
+      <div style="width:38px;height:38px;border-radius:10px;background:#FEF3DC;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">☑</div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">To do list</div>
+        <div style="font-size:11px;color:#aaa;margin-top:2px">Créer une liste de points à vérifier</div>
+      </div>
+    </div>
+  </div>
+  <!-- Overlay pour fermer le menu -->
+  <div id="create-overlay" style="display:none;position:absolute;inset:0;z-index:99" onclick="toggleCreateMenu()"></div>
+  <!-- VUE LISTE -->
+  <div id="vl" class="feed">
+    <!-- Checklist en cours -->
+    <div class="cl-block" onclick="go('screen-checklist-detail')">
+      <div class="cl-hdr"><span class="cl-title">☑ To do ouverture</span><span class="cl-dead">⏱ avant 10h00</span></div>
+      <div class="cl-track"><div class="cl-fill" style="width:33%"></div></div>
+      <div class="cl-meta"><span>4 / 12 points</span><span>📍 Rooftop</span></div>
+      <div class="cl-items">
+        <div class="cl-item"><div class="ck-done">✓</div><span style="text-decoration:line-through;color:#aaa">Températures frigos vérifiées</span></div>
+        <div class="cl-item"><div class="ck-todo"></div><span>Vérification stock bar</span></div>
+        <div class="cl-item"><div class="ck-todo"></div><span>Contrôle propreté salle</span></div>
+      </div>
+      <button class="cl-cta">→ Continuer</button>
+    </div>
+    <!-- Assignées à moi -->
+    <div class="slabel"><span class="dot" style="background:#1D9E75"></span> Assignées à moi · 2</div>
+    <div class="card assigned" onclick="go('screen-detail-action-assigned')">
+      <div class="card-hdr"><div style="display:flex;gap:5px"><span class="badge b-red">⚠ URGENT</span><span class="badge b-gray">Maintenance</span></div></div>
+      <div class="card-title">Réparer la climatisation</div>
+      <div class="card-zone">📍 Rooftop · Salle principale</div>
+      <div class="sla-track"><div class="sla-fill" style="width:15%;background:#E24B4A"></div></div>
+      <div class="sla-meta"><span class="sla-txt" style="color:#A32D2D">⏱ 6 min restantes</span><span class="sla-ref">SLA 30 min</span></div>
+      <div class="card-foot"><div class="asgn"><div class="av av-a">JD</div>Créé par Jean D.</div><span class="badge b-gray">EN ATTENTE</span></div>
+    </div>
+    <div class="card assigned" onclick="go('screen-detail-action')">
+      <div class="card-hdr"><div style="display:flex;gap:5px"><span class="badge b-amber">Normal</span><span class="badge b-gray">Maintenance</span></div></div>
+      <div class="card-title">Remplacer ampoule WC hommes</div>
+      <div class="card-zone">📍 Rooftop · WC hommes</div>
+      <div class="sla-track"><div class="sla-fill" style="width:55%;background:#EF9F27"></div></div>
+      <div class="sla-meta"><span class="sla-txt" style="color:#854F0B">⏱ 2h10 restantes</span><span class="sla-ref">SLA 4h</span></div>
+      <div class="card-foot"><div class="asgn"><div class="av av-t">SL</div>Créé par Sarah L.</div><span class="badge b-blue">EN COURS</span></div>
+    </div>
+    <!-- Créées par moi -->
+    <div class="slabel"><span class="dot" style="background:#1B4FD8"></span> Créées par moi · 1</div>
+    <!-- Card en attente de validation — mise en évidence amber -->
+    <div onclick="go('screen-detail-action')" style="background:#FEF3DC;border-radius:14px;border:2px solid #EF9F27;padding:12px 14px;cursor:pointer;position:relative">
+      <!-- Bandeau haut -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(239,159,39,0.2)">
+        <span style="font-size:14px">🔔</span>
+        <span style="font-size:11px;font-weight:700;color:#854F0B">En attente de votre validation</span>
+        <span style="font-size:10px;color:#EF9F27;margin-left:auto">il y a 5 min</span>
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:6px"><span class="badge b-amber">Normal</span><span class="badge b-gray">Stock</span></div>
+      <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px">Commander sirop mojito</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">📍 Rooftop · Bar</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="asgn"><div class="av av-b">MK</div>Marc K. a terminé</div>
+        <span style="font-size:11px;font-weight:600;color:#EF9F27">Voir le détail →</span>
+      </div>
+    </div>
+  </div>
+  <!-- VUE KANBAN -->
+  <div id="vk" class="kboard" style="display:none">
+    <div class="kcol">
+      <div class="kcol-hdr" style="background:#F0EFE9"><span class="kcol-title" style="color:#555">EN ATTENTE</span><span class="kcol-count" style="background:#ccc;color:#fff">1</span></div>
+      <div class="kcard" onclick="go('screen-detail-action-assigned')" style="border-left:3px solid #E24B4A;border-radius:0 10px 10px 0">
+        <div class="kcard-title">Réparer la climatisation</div>
+        <div class="kcard-zone">📍 Salle principale</div>
+        <div class="kcard-foot"><div class="kav av-a">JD</div><span class="ksla" style="color:#E24B4A">⏱ 6 min</span></div>
+      </div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-hdr" style="background:#EEF2FF"><span class="kcol-title" style="color:#1B4FD8">EN COURS</span><span class="kcol-count" style="background:#1B4FD8;color:#fff">1</span></div>
+      <div class="kcard" onclick="go('screen-detail-action')">
+        <div class="kcard-title">Remplacer ampoule WC</div>
+        <div class="kcard-zone">📍 WC hommes</div>
+        <div class="kcard-foot"><div class="kav av-t">SL</div><span class="ksla" style="color:#854F0B">⏱ 2h10</span></div>
+      </div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-hdr" style="background:#FFFBF0"><span class="kcol-title" style="color:#EF9F27">VALIDATION</span><span class="kcol-count" style="background:#EF9F27;color:#fff">1</span></div>
+      <div class="kcard" onclick="go('screen-detail-action')" style="border:1.5px solid #EF9F27">
+        <div class="kcard-title">Commander sirop mojito</div>
+        <div class="kcard-zone">📍 Bar</div>
+        <div style="font-size:9px;font-weight:700;color:#EF9F27;margin:3px 0">⏳ En att. validation</div>
+        <div class="kcard-foot"><div class="kav av-b">MK</div><span class="ksla" style="color:#EF9F27">Finaliser</span></div>
+      </div>
+    </div>
+    <div class="kcol">
+      <div class="kcol-hdr" style="background:#EAF3DE"><span class="kcol-title" style="color:#3B6D11">RÉSOLU</span><span class="kcol-count" style="background:#1D9E75;color:#fff">1</span></div>
+      <div class="kcard" onclick="go('screen-detail-action')" style="opacity:0.7">
+        <div class="kcard-title">Nettoyage sol entrée</div>
+        <div class="kcard-zone">📍 Entrée principale</div>
+        <div class="kcard-foot"><div class="kav av-t">AL</div><span class="ksla" style="color:#1D9E75">✓ Fait</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: NOUVELLE OBSERVATION ==================== -->
+<div class="screen" id="screen-create">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" onclick="go('screen-settings')">···</button>
+      <div class="logo">houston</div>
+      <div style="width:32px"></div>
+    </div>
+    <h1>Nouveau signal</h1>
+  </div>
+  <div class="feed" style="align-items:center;gap:16px;padding:20px 16px">
+    <!-- Bouton vocal -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;padding:10px 0">
+      <p style="font-size:13px;color:#aaa;text-align:center">Appuie et décris le problème à voix haute</p>
+      <button class="vbtn" id="vbtn" onclick="toggleV()"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+      <div class="vtranscript" id="vtxt" style="display:none">"Grille d'entrée qui grince à l'ouverture, semble forcer sur le rail gauche"</div>
+      <p style="font-size:10px;color:#bbb;text-align:center">L'IA détecte automatiquement la zone, la catégorie et l'assignation</p>
+    </div>
+    <!-- Séparateur -->
+    <div style="display:flex;align-items:center;gap:10px;width:100%">
+      <div style="flex:1;height:0.5px;background:#E8E6DF"></div>
+      <span style="font-size:11px;color:#bbb;white-space:nowrap">ou décris par écrit</span>
+      <div style="flex:1;height:0.5px;background:#E8E6DF"></div>
+    </div>
+    <!-- Description -->
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:12px 14px;width:100%">
+      <div style="font-size:11px;color:#aaa;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">Description</div>
+      <textarea style="font-size:13px;color:#1a1a1a;border:none;background:none;width:100%;resize:none;outline:none;line-height:1.5;font-family:inherit;height:72px" placeholder="Décrivez le problème observé..."></textarea>
+    </div>
+    <!-- Photo -->
+    <div style="width:100%">
+      <div style="font-size:11px;color:#aaa;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Photos</div>
+      <div style="width:80px;height:80px;border-radius:14px;border:1.5px dashed #ccc;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span style="font-size:10px;color:#aaa;margin-top:3px">Ajouter</span>
+      </div>
+    </div>
+    <!-- Envoyer -->
+    <div style="width:100%;padding-bottom:8px">
+      <button onclick="back()" style="width:100%;padding:14px;background:#1B4FD8;color:#fff;border:none;border-radius:16px;font-size:15px;font-weight:700;cursor:pointer">Envoyer le signal</button>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: CRÉER PLAN D'ÉXECUTION ==================== -->
+<div class="screen" id="screen-create-action">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">Annuler</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Plan d'éxecution</span>
+      <button onclick="go('screen-detail-action')" style="background:#1B4FD8;color:#fff;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer">Créer</button>
+    </div>
+    <div style="margin-top:10px;background:#F0F4FF;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:14px">👁</span>
+      <div><div style="font-size:10px;color:#1B4FD8;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">Signal liée</div>
+      <div style="font-size:12px;color:#1a1a1a;font-weight:500">Climatisation en panne · Rooftop</div></div>
+    </div>
+  </div>
+  <div class="feed" style="gap:12px">
+    <!-- Responsable -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Responsable assigné</div>
+      <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:12px 14px">
+        <div style="display:flex;gap:10px;margin-bottom:10px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div class="av av-a" style="width:44px;height:44px;font-size:14px;font-weight:700;border:2px solid #1B4FD8">JD</div>
+            <span style="font-size:10px;color:#1B4FD8;font-weight:600">Jean D.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div class="av av-t" style="width:44px;height:44px;font-size:14px;font-weight:700">SL</div>
+            <span style="font-size:10px;color:#888">Sarah L.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div class="av av-b" style="width:44px;height:44px;font-size:14px;font-weight:700">MK</div>
+            <span style="font-size:10px;color:#888">Marc K.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div style="width:44px;height:44px;border-radius:22px;background:#F0EFE9;border:1.5px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:18px;color:#aaa">+</div>
+            <span style="font-size:10px;color:#aaa">Autre</span>
+          </div>
+        </div>
+        <div style="background:#EEF2FF;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px">
+          <div class="av av-a" style="width:24px;height:24px;font-size:9px">JD</div>
+          <div><div style="font-size:12px;font-weight:600;color:#1a1a1a">Jean Dupont</div><div style="font-size:10px;color:#888">Responsable maintenance</div></div>
+          <span style="margin-left:auto">✓</span>
+        </div>
+      </div>
+    </div>
+    <!-- Deadline -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Deadline</div>
+      <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:12px 14px">
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <span style="padding:6px 12px;border-radius:20px;background:#FCEBEB;color:#A32D2D;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #F09595">30 min</span>
+          <span style="padding:6px 12px;border-radius:20px;background:#FAEEDA;color:#854F0B;font-size:11px;font-weight:600;cursor:pointer">2h</span>
+          <span style="padding:6px 12px;border-radius:20px;background:#F0EFE9;color:#666;font-size:11px;cursor:pointer">Ce soir</span>
+          <span style="padding:6px 12px;border-radius:20px;background:#F0EFE9;color:#666;font-size:11px;cursor:pointer">Demain</span>
+        </div>
+        <div style="border-top:0.5px solid #F0EFE9;padding-top:10px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;color:#888">Heure limite</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="background:#F0EFE9;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;color:#1a1a1a">10</div>
+            <span style="font-weight:700;color:#888">:</span>
+            <div style="background:#EEF2FF;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;color:#1B4FD8">15</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Consigne -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Consigne</div>
+      <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:12px 14px">
+        <textarea style="font-size:13px;color:#1a1a1a;border:none;background:none;width:100%;resize:none;outline:none;line-height:1.6;font-family:inherit;min-height:80px" placeholder="Décrivez ce qui doit être fait...">Vérifier le disjoncteur en local technique B. Si pas de problème électrique, appeler le technicien Daikin (num dans le carnet de bord).</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: DETAIL ACTION (créateur) ==================== -->
+<div class="screen" id="screen-detail-action">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row"><div class="back-btn" onclick="back()">← Retour</div><span style="font-size:10px;color:#888">Vue créateur</span></div>
+    <div style="margin-top:6px"><h1>Plan d'éxecution</h1></div>
+  </div>
+  <div class="dbody">
+    <div class="dcard">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="dtitle" style="flex:1;margin-right:10px">Commander sirop mojito</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+          <div class="av av-b" style="width:34px;height:34px;font-size:12px;font-weight:700">MK</div>
+          <span style="font-size:9px;color:#888">Marc K.</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><span class="badge b-amber">Normal</span><span class="badge b-gray">Stock</span><span class="badge b-orange">⏳ Validation</span></div>
+      <div style="font-size:11px;color:#aaa">📍 Rooftop · Bar</div>
+      <div style="font-size:11px;color:#aaa;margin-top:3px">📋 Commander sirop mojito auprès du fournisseur habituel.</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Deadline</div>
+      <div class="sla-track" style="margin-top:6px"><div class="sla-fill" style="width:75%;background:#639922"></div></div>
+      <div class="sla-meta"><span class="sla-txt" style="color:#3B6D11">⏱ 5h restantes</span><span class="sla-ref">avant 17h00</span></div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Commentaires</div>
+      <div style="background:#F5F4F0;border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:#1a1a1a;margin-bottom:3px">Marc K. <span style="font-weight:400;color:#aaa;font-size:10px">14:20</span></div>
+        <div style="font-size:12px;color:#444">Commande passée, livraison demain matin.</div>
+        <div style="margin-top:4px;font-size:10px;color:#1B4FD8;cursor:pointer">↩ Répondre</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input style="flex:1;border:0.5px solid #E8E6DF;border-radius:10px;padding:9px 12px;font-size:12px;outline:none;background:#F5F4F0;font-family:inherit" placeholder="Ajouter un commentaire..." />
+        <button style="background:#1B4FD8;color:#fff;border:none;border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;cursor:pointer">↑</button>
+      </div>
+    </div>
+  </div>
+  <div style="padding:10px 12px 16px;background:#fff;border-top:0.5px solid #E8E6DF;flex-shrink:0;display:flex;flex-direction:column;gap:8px">
+    <div style="background:#FEF3DC;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;border:1px solid #EF9F27">
+      <span style="font-size:18px">🔔</span>
+      <div><div style="font-size:12px;font-weight:700;color:#854F0B">Marc K. a signalé la fin de l'action</div>
+      <div style="font-size:11px;color:#854F0B;opacity:0.8;margin-top:1px">il y a 5 min · avec preuve jointe</div></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button style="flex:1;padding:12px;background:#1D9E75;color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer">✅ Valider — Résolu</button>
+      <button style="flex:1;padding:12px;background:#E24B4A;color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer">✗ Refuser</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: DETAIL ACTION (assigné) ==================== -->
+<div class="screen" id="screen-detail-action-assigned">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row"><div class="back-btn" onclick="back()">← Retour</div><span style="font-size:10px;color:#888">Vue assigné</span></div>
+    <div style="margin-top:6px"><h1>Plan d'éxecution</h1></div>
+  </div>
+  <div class="dbody">
+    <div class="dcard">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="dtitle" style="flex:1;margin-right:10px">Réparer la climatisation</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+          <div class="av av-t" style="width:34px;height:34px;font-size:12px;font-weight:700">MR</div>
+          <span style="font-size:9px;color:#888">Marie R.</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:4px">Créé par Marie R.</div>
+      <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><span class="badge b-red">⚠ URGENT</span><span class="badge b-gray">Maintenance</span><span class="badge b-gray">EN ATTENTE</span></div>
+      <div style="font-size:11px;color:#aaa">📍 Rooftop · Salle principale</div>
+    </div>
+    <div class="consigne">
+      <div style="font-size:10px;color:#854F0B;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">📋 Consigne</div>
+      <div style="font-size:13px;color:#633806;line-height:1.6">Vérifier le disjoncteur en local technique B. Si pas de problème électrique, appeler le technicien Daikin (num dans le carnet de bord).</div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Deadline</div>
+      <div class="sla-track" style="margin-top:6px"><div class="sla-fill" style="width:15%;background:#E24B4A"></div></div>
+      <div class="sla-meta"><span class="sla-txt" style="color:#A32D2D">⏱ 6 min restantes</span><span class="sla-ref">avant 10h15</span></div>
+    </div>
+    <div class="dcard">
+      <div class="dlabel">Commentaires</div>
+      <div style="background:#EEF2FF;border-radius:10px;padding:10px;margin-bottom:8px;border-left:2px solid #1B4FD8">
+        <div style="font-size:11px;font-weight:600;color:#1B4FD8;margin-bottom:3px">Jean D. <span style="font-weight:400;color:#aaa;font-size:10px">(vous)</span> 09:40</div>
+        <div style="font-size:12px;color:#444">Je regarde ça tout de suite, technicien prévenu.</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input style="flex:1;border:0.5px solid #E8E6DF;border-radius:10px;padding:9px 12px;font-size:12px;outline:none;background:#F5F4F0;font-family:inherit" placeholder="Ajouter un commentaire..." />
+        <button style="background:#1B4FD8;color:#fff;border:none;border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;cursor:pointer">↑</button>
+      </div>
+    </div>
+  </div>
+  <div style="padding:10px 12px 16px;background:#fff;border-top:0.5px solid #E8E6DF;flex-shrink:0;display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;gap:8px;align-items:center;background:#F5F4F0;border-radius:12px;padding:10px 12px;border:0.5px solid #E8E6DF">
+      <span style="font-size:18px">📎</span>
+      <div style="flex:1"><div style="font-size:12px;font-weight:600;color:#1a1a1a">Ajouter une preuve</div><div style="font-size:10px;color:#aaa">Photo ou description de ce qui a été fait</div></div>
+      <div style="display:flex;gap:8px">
+        <div style="width:32px;height:32px;border-radius:8px;background:#fff;border:0.5px solid #E8E6DF;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <div style="width:32px;height:32px;border-radius:8px;background:#fff;border:0.5px solid #E8E6DF;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px">✏️</div>
+      </div>
+    </div>
+    <button style="width:100%;padding:13px;background:#1B4FD8;color:#fff;border:none;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer">📨 Signaler la fin au créateur</button>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: RONDES (gestion checklists) ==================== -->
+<div class="screen" id="screen-checklists">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" onclick="go('screen-settings')">···</button>
+      <div class="logo">houston</div>
+      <button onclick="go('screen-create-ronde')" style="background:#1B4FD8;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Créer</button>
+    </div>
+    <h1>To do list</h1>
+  </div>
+  <div class="feed" style="gap:10px">
+    <div class="slabel"><span class="dot" style="background:#EF9F27"></span> En cours · 1</div>
+    <div class="cl-block" onclick="go('screen-checklist-detail')">
+      <div class="cl-hdr"><span class="cl-title">☑ To do ouverture</span><span class="cl-dead">⏱ avant 10h00</span></div>
+      <div class="cl-track"><div class="cl-fill" style="width:33%"></div></div>
+      <div class="cl-meta"><span>4 / 12 points complétés</span><span>📍 Rooftop</span></div>
+      <div class="cl-items">
+        <div class="cl-item"><div class="ck-done">✓</div><span style="text-decoration:line-through;color:#aaa">Températures frigos vérifiées</span></div>
+        <div class="cl-item"><div class="ck-todo"></div><span>Vérification stock bar</span></div>
+      </div>
+      <button class="cl-cta">→ Continuer</button>
+    </div>
+    <div class="slabel" style="margin-top:4px"><span class="dot" style="background:#1D9E75"></span> Complétées aujourd'hui · 2</div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:12px 14px;opacity:0.75;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:600">Contrôle HACCP matin</span>
+        <span class="badge b-green">✓ COMPLÉTÉE</span>
+      </div>
+      <div style="font-size:11px;color:#888">📍 Cuisine · Bar · complétée à 08:30</div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <div class="asgn"><div class="av av-t">SL</div>Sarah L.</div>
+        <span style="font-size:11px;color:#aaa">12/12 ✓</span>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:12px 14px;opacity:0.75;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:600">Vérification sécurité incendie</span>
+        <span class="badge b-green">✓ COMPLÉTÉE</span>
+      </div>
+      <div style="font-size:11px;color:#888">📍 Tous espaces · complétée à 09:00</div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <div class="asgn"><div class="av av-b">MK</div>Marc K.</div>
+        <span style="font-size:11px;color:#aaa">8/8 ✓</span>
+      </div>
+    </div>
+    <div class="slabel" style="margin-top:4px"><span class="dot" style="background:#1B4FD8"></span> Mes modèles · 3</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="background:#EEF2FF;border-radius:12px;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border:0.5px solid #C5D3F8">
+        <div><div style="font-size:13px;font-weight:600;color:#1B4FD8">To do ouverture</div><div style="font-size:11px;color:#888;margin-top:2px">12 points · Quotidienne</div></div>
+        <span style="font-size:11px;color:#1B4FD8">▶ Lancer</span>
+      </div>
+      <div style="background:#EEF2FF;border-radius:12px;padding:11px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border:0.5px solid #C5D3F8">
+        <div><div style="font-size:13px;font-weight:600;color:#1B4FD8">Contrôle HACCP</div><div style="font-size:11px;color:#888;margin-top:2px">8 points · 2× par jour</div></div>
+        <span style="font-size:11px;color:#1B4FD8">▶ Lancer</span>
+      </div>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: CRÉER UNE RONDE ==================== -->
+<div class="screen" id="screen-create-to do">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">Annuler</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Nouvelle to do list</span>
+      <button onclick="back()" style="background:#1B4FD8;color:#fff;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer">Créer</button>
+    </div>
+  </div>
+  <div class="feed" style="gap:14px">
+
+    <!-- Nom -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Nom de la to do</div>
+      <input style="width:100%;border:0.5px solid #E8E6DF;border-radius:12px;padding:12px 14px;font-size:14px;outline:none;background:#fff;font-family:inherit;color:#1a1a1a" placeholder="Ex : To do fermeture..." value="To do ouverture" />
+    </div>
+
+    <!-- Zone -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Zone concernée</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="padding:7px 14px;border-radius:20px;background:#1B4FD8;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Rooftop</span>
+        <span style="padding:7px 14px;border-radius:20px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;border:0.5px solid #E8E6DF">Cuisine</span>
+        <span style="padding:7px 14px;border-radius:20px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;border:0.5px solid #E8E6DF">Bar</span>
+        <span style="padding:7px 14px;border-radius:20px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;border:0.5px solid #E8E6DF">Parties communes</span>
+        <span style="padding:7px 14px;border-radius:20px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;border:0.5px solid #E8E6DF">Tous</span>
+      </div>
+    </div>
+
+    <!-- Points de contrôle -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Points de contrôle</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+
+        <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px">
+          <div class="ck-todo"></div>
+          <span style="font-size:13px;flex:1;color:#1a1a1a">Désactiver l'alarme</span>
+        </div>
+
+        <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px">
+          <div class="ck-todo"></div>
+          <span style="font-size:13px;flex:1;color:#1a1a1a">Allumer les lumières salle</span>
+        </div>
+
+        <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px">
+          <div class="ck-todo"></div>
+          <span style="font-size:13px;flex:1;color:#1a1a1a">Vérifier les issues de secours</span>
+        </div>
+
+        <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px">
+          <div class="ck-todo"></div>
+          <span style="font-size:13px;flex:1;color:#1a1a1a">Températures frigos</span>
+        </div>
+
+        <!-- Ajouter un point -->
+        <div style="background:#F5F4F0;border-radius:12px;border:1.5px dashed #C8C6BE;padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer">
+          <div style="width:18px;height:18px;border-radius:5px;border:1.5px solid #1B4FD8;display:flex;align-items:center;justify-content:center;font-size:14px;color:#1B4FD8;flex-shrink:0">+</div>
+          <span style="font-size:13px;color:#1B4FD8;font-weight:500">Ajouter un point de contrôle</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fréquence -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Fréquence</div>
+      <div style="display:flex;gap:8px">
+        <span style="flex:1;padding:10px;border-radius:12px;background:#1B4FD8;color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-align:center">Quotidienne</span>
+        <span style="flex:1;padding:10px;border-radius:12px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;text-align:center;border:0.5px solid #E8E6DF">Hebdo</span>
+        <span style="flex:1;padding:10px;border-radius:12px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;text-align:center;border:0.5px solid #E8E6DF">Unique</span>
+      </div>
+    </div>
+
+    <!-- Heure limite -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Heure limite d'exécution</div>
+      <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:12px 14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;color:#888">Compléter avant</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="background:#EEF2FF;border-radius:8px;padding:6px 12px;font-size:14px;font-weight:700;color:#1B4FD8">10</div>
+          <span style="font-weight:700;color:#888">:</span>
+          <div style="background:#EEF2FF;border-radius:8px;padding:6px 12px;font-size:14px;font-weight:700;color:#1B4FD8">00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Assigné à -->
+    <div style="padding-bottom:16px">
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Assignée à</div>
+      <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:12px 14px">
+        <div style="display:flex;gap:10px;margin-bottom:10px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div class="av av-t" style="width:40px;height:40px;font-size:13px;font-weight:700;border:2px solid #1B4FD8">MR</div>
+            <span style="font-size:10px;color:#1B4FD8;font-weight:600">Marie R.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div class="av av-a" style="width:40px;height:40px;font-size:13px;font-weight:700">JD</div>
+            <span style="font-size:10px;color:#888">Jean D.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div class="av av-b" style="width:40px;height:40px;font-size:13px;font-weight:700">MK</div>
+            <span style="font-size:10px;color:#888">Marc K.</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div style="width:40px;height:40px;border-radius:20px;background:#F0EFE9;border:1.5px dashed #ccc;display:flex;align-items:center;justify-content:center;font-size:18px;color:#aaa">+</div>
+            <span style="font-size:10px;color:#aaa">Autre</span>
+          </div>
+        </div>
+        <div style="background:#EEF2FF;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px">
+          <div class="av av-t" style="width:22px;height:22px;font-size:8px">MR</div>
+          <div style="font-size:12px;font-weight:600;color:#1a1a1a;flex:1">Marie Renaud</div>
+          <span style="font-size:11px;color:#1B4FD8">✓</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== SCREEN: DETAIL CHECKLIST ==================== -->
+<div class="screen" id="screen-checklist-detail">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row"><div class="back-btn" onclick="back()">← Retour</div><span class="cl-dead">⏱ avant 10h00</span></div>
+    <h1>To do ouverture</h1>
+    <div style="font-size:11px;color:#888;margin-top:2px">📍 Rooftop</div>
+    <div style="margin-top:8px">
+      <div class="cl-track" style="height:5px"><div class="cl-fill" style="height:5px;width:33%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-top:4px"><span>4 / 12 points</span><span>33%</span></div>
+    </div>
+  </div>
+  <div class="feed" style="gap:6px">
+    <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;padding:4px 2px">Accès &amp; sécurité</div>
+    <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px;opacity:0.55">
+      <div class="ck-done">✓</div><span style="font-size:13px;text-decoration:line-through;color:#aaa">Désactiver l'alarme</span>
+    </div>
+    <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px;opacity:0.55">
+      <div class="ck-done">✓</div><span style="font-size:13px;text-decoration:line-through;color:#aaa">Allumer les lumières salle</span>
+    </div>
+    <div style="background:#FCEBEB;border-radius:12px;border:0.5px solid #F09595;padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="go('screen-create')">
+      <div class="ck-err">!</div>
+      <div style="flex:1"><div style="font-size:13px;color:#A32D2D">Ouvrir la grille d'entrée</div><div style="font-size:11px;color:#A32D2D;margin-top:2px">👁 Signal créée : grille qui grince</div></div>
+      <span style="font-size:12px;color:#aaa">›</span>
+    </div>
+    <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="go('screen-create')">
+      <div class="ck-todo"></div><span style="font-size:13px;color:#1a1a1a;flex:1">Vérifier les issues de secours</span><span style="font-size:13px;color:#1B4FD8">+</span>
+    </div>
+    <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;padding:6px 2px 2px">Cuisine &amp; bar</div>
+    <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px;opacity:0.55">
+      <div class="ck-done">✓</div><span style="font-size:13px;text-decoration:line-through;color:#aaa">Températures frigos vérifiées</span>
+    </div>
+    <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="go('screen-create')">
+      <div class="ck-todo"></div><span style="font-size:13px;flex:1">Vérification stock bar</span><span style="font-size:13px;color:#1B4FD8">+</span>
+    </div>
+    <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="go('screen-create')">
+      <div class="ck-todo"></div><span style="font-size:13px;flex:1">Contrôle DLC produits frais</span><span style="font-size:13px;color:#1B4FD8">+</span>
+    </div>
+  </div>
+  <div style="padding:8px 12px 12px;background:#F5F4F0;flex-shrink:0">
+    <button onclick="go('screen-create')" style="width:100%;background:#1D9E75;color:#fff;border:none;border-radius:20px;padding:12px;font-size:13px;font-weight:600;cursor:pointer">+ Signaler un problème</button>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: CHAT LISTE ==================== -->
+<div class="screen" id="screen-chat">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="icon-btn" onclick="go('screen-settings')">···</button>
+      <div class="logo">houston</div>
+      <button class="icon-btn">✏️</button>
+    </div>
+    <h1>Messages</h1>
+    <div style="margin-top:10px;background:#F5F4F0;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px;border:0.5px solid #E8E6DF">
+      <span style="color:#aaa">🔍</span><span style="font-size:13px;color:#ccc">Rechercher...</span>
+    </div>
+  </div>
+  <div class="feed" style="padding:0;gap:0">
+    <div style="padding:10px 16px 4px;font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.06em">Groupes</div>
+    <div class="chat-row" onclick="go('screen-chat-conv')">
+      <div class="chat-av" style="background:#1B4FD8">🏠</div>
+      <div style="flex:1;min-width:0">
+        <div class="chat-name">Équipe Rooftop</div>
+        <div class="chat-preview">Jean D. : Technicien Daikin prévenu pour 10h</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:10px;color:#aaa">09:38</span>
+        <div class="chat-badge">3</div>
+      </div>
+    </div>
+    <div class="chat-row" onclick="go('screen-chat-conv')">
+      <div class="chat-av" style="background:#1D9E75">👔</div>
+      <div style="flex:1;min-width:0">
+        <div class="chat-name">Managers du site</div>
+        <div class="chat-preview">Marie R. : Réunion brief à 14h en salle B</div>
+      </div>
+      <span style="font-size:10px;color:#aaa">Hier</span>
+    </div>
+    <div class="chat-row" onclick="go('screen-chat-conv')">
+      <div class="chat-av" style="background:#EF9F27">🍸</div>
+      <div style="flex:1;min-width:0">
+        <div class="chat-name">Bar &amp; Cuisine</div>
+        <div class="chat-preview">Sarah L. : Stock mojito réappro demain matin</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:10px;color:#aaa">Hier</span>
+        <div class="chat-badge" style="background:#1B4FD8">1</div>
+      </div>
+    </div>
+    <div style="padding:10px 16px 4px;font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;margin-top:4px">Messages directs</div>
+    <div class="chat-row" onclick="go('screen-chat-dm')">
+      <div class="chat-av round" style="background:#FAC775;color:#633806;font-size:15px;font-weight:700">JD
+        <div class="chat-online" style="background:#1D9E75"></div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="chat-name">Jean Dupont</div>
+        <div class="chat-preview">Je regarde ça tout de suite 👍</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:10px;color:#aaa">09:40</span>
+        <div class="chat-badge">2</div>
+      </div>
+    </div>
+    <div class="chat-row" onclick="go('screen-chat-dm')">
+      <div class="chat-av round" style="background:#9FE1CB;color:#085041;font-size:15px;font-weight:700">SL
+        <div class="chat-online" style="background:#ccc"></div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="chat-name">Sarah Laurent</div>
+        <div class="chat-preview">Ok reçu merci !</div>
+      </div>
+      <span style="font-size:10px;color:#aaa">Hier</span>
+    </div>
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: CHAT CONVERSATION ==================== -->
+<div class="screen" id="screen-chat-conv">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar" style="padding-bottom:8px">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">← Retour</div>
+      <div style="text-align:center"><div style="font-size:14px;font-weight:700;color:#1a1a1a">Équipe Rooftop</div><div style="font-size:10px;color:#888">5 membres</div></div>
+      <button class="icon-btn">ℹ️</button>
+    </div>
+  </div>
+  <div class="feed" style="gap:10px;justify-content:flex-end">
+    <div class="chat-msg">
+      <div class="av av-a" style="width:28px;height:28px;font-size:10px;flex-shrink:0">JD</div>
+      <div><div style="font-size:10px;color:#888;margin-bottom:3px">Jean D.</div>
+      <div class="chat-bubble-left">Technicien Daikin prévenu, il arrive à 10h</div>
+      <div class="chat-time">09:38</div></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <div><div class="chat-bubble-right">Merci Jean. Clients attendus à 10h30 donc on a de la marge.</div>
+      <div class="chat-time" style="text-align:right">09:40 · Lu ✓✓</div></div>
+    </div>
+    <div class="chat-msg">
+      <div class="av av-a" style="width:28px;height:28px;font-size:10px;flex-shrink:0">JD</div>
+      <div><div style="font-size:10px;color:#888;margin-bottom:3px">Jean D.</div>
+      <div class="chat-bubble-left">👍 Je vous tiens au courant dès que c'est réglé</div>
+      <div class="chat-time">09:41</div></div>
+    </div>
+  </div>
+  <div class="chat-input">
+    <button style="width:32px;height:32px;border-radius:50%;background:#F5F4F0;border:0.5px solid #E8E6DF;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+    <input placeholder="Message..." />
+    <div class="chat-send">↑</div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: CHAT DM ==================== -->
+<div class="screen" id="screen-chat-dm">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar" style="padding-bottom:8px">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">← Retour</div>
+      <div style="text-align:center"><div style="font-size:14px;font-weight:700;color:#1a1a1a">Jean Dupont</div><div style="font-size:10px;color:#1D9E75">● En ligne</div></div>
+      <button class="icon-btn">ℹ️</button>
+    </div>
+  </div>
+  <div class="feed" style="gap:10px">
+    <div class="chat-msg">
+      <div class="av av-a" style="width:28px;height:28px;font-size:10px;flex-shrink:0">JD</div>
+      <div><div class="chat-bubble-left">Je regarde ça tout de suite 👍</div><div class="chat-time">09:38</div></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <div><div class="chat-bubble-right">Ok merci Jean. Clients à 10h30, c'est urgent.</div>
+      <div class="chat-time" style="text-align:right">09:39 · Lu ✓✓</div></div>
+    </div>
+    <div class="chat-msg">
+      <div class="av av-a" style="width:28px;height:28px;font-size:10px;flex-shrink:0">JD</div>
+      <div><div class="chat-bubble-left">Technicien en route, arrive dans 15 min 🔧</div><div class="chat-time">09:40</div></div>
+    </div>
+  </div>
+  <div class="chat-input">
+    <button style="width:32px;height:32px;border-radius:50%;background:#F5F4F0;border:0.5px solid #E8E6DF;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;flex-shrink:0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+    <input placeholder="Message..." />
+    <div class="chat-send">↑</div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: RÉGLAGES ==================== -->
+<div class="screen" id="screen-settings">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">← Retour</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Réglages</span>
+      <div style="width:48px"></div>
+    </div>
+  </div>
+  <div class="feed" style="gap:8px">
+
+    <div class="slabel">Mon compte</div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div onclick="go('screen-profile')" style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="av av-t" style="width:36px;height:36px;font-size:12px;font-weight:700">MR</div>
+          <div><div style="font-size:13px;font-weight:600;color:#1a1a1a">Marie Renaud</div><div style="font-size:11px;color:#888">Responsable de zone · Rooftop</div></div>
+        </div>
+        <span style="font-size:13px;color:#aaa">›</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <span style="font-size:13px;color:#1a1a1a">Modifier mon profil</span>
+        <span style="font-size:13px;color:#aaa">›</span>
+      </div>
+    </div>
+
+    <div class="slabel" style="margin-top:4px">Mon établissement</div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9;cursor:pointer">
+        <div><div style="font-size:13px;font-weight:600;color:#1a1a1a">Le Palais Nancy</div><div style="font-size:11px;color:#888">Etablissement actif</div></div>
+        <span style="font-size:9px;background:#1D9E75;color:#fff;padding:3px 8px;border-radius:3px;font-weight:700">ACTIF</span>
+      </div>
+      <div onclick="go('screen-membres')" style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9;cursor:pointer">
+        <span style="font-size:13px;color:#1a1a1a">Gérer les membres</span>
+        <span style="font-size:13px;color:#aaa">›</span>
+      </div>
+      <div onclick="go('screen-categories')" style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <span style="font-size:13px;color:#1a1a1a">Catégories & zones</span>
+        <span style="font-size:13px;color:#aaa">›</span>
+      </div>
+    </div>
+
+    <div class="slabel" style="margin-top:4px">Notifications</div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9">
+        <span style="font-size:13px;color:#1a1a1a">Nouveaux signaux</span>
+        <div style="width:42px;height:24px;border-radius:12px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:18px;height:18px;border-radius:9px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9">
+        <span style="font-size:13px;color:#1a1a1a">Plans d'éxecution assignés</span>
+        <div style="width:42px;height:24px;border-radius:12px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:18px;height:18px;border-radius:9px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px">
+        <span style="font-size:13px;color:#1a1a1a">Rappels to do list</span>
+        <div style="width:42px;height:24px;border-radius:12px;background:#E8E6DF;position:relative;cursor:pointer"><div style="width:18px;height:18px;border-radius:9px;background:#fff;position:absolute;left:3px;top:3px"></div></div>
+      </div>
+    </div>
+
+    <div class="slabel" style="margin-top:4px">Préférences</div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9;cursor:pointer">
+        <span style="font-size:13px;color:#1a1a1a">Langue</span>
+        <span style="font-size:12px;color:#888">Français ›</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <span style="font-size:13px;color:#1a1a1a">Apparence</span>
+        <span style="font-size:12px;color:#888">Clair ›</span>
+      </div>
+    </div>
+
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden;margin-top:4px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <span style="font-size:13px;color:#E24B4A;font-weight:500">Se déconnecter</span>
+      </div>
+    </div>
+
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: MEMBRES ==================== -->
+<div class="screen" id="screen-membres">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">← Retour</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Membres</span>
+      <button onclick="go('screen-ajouter-membre')" style="background:#1B4FD8;color:#fff;border:none;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Ajouter</button>
+    </div>
+  </div>
+  <div class="feed" style="gap:0;padding:0">
+
+    <!-- Directeurs -->
+    <div style="padding:10px 16px 4px;font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;background:#F5F4F0">Directeurs · 1</div>
+    <div style="background:#fff;border-bottom:0.5px solid #F0EFE9;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go('screen-membre-detail')">
+      <div class="av av-t" style="width:40px;height:40px;font-size:14px;font-weight:700;flex-shrink:0">MR</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Marie Renaud</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">marie.r@lepalais.fr · 06 12 34 56 78</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:9px;background:#EEF2FF;color:#1B4FD8;padding:3px 8px;border-radius:3px;font-weight:700">DIRECTEUR</span>
+        <span style="font-size:12px;color:#aaa">›</span>
+      </div>
+    </div>
+
+    <!-- Managers -->
+    <div style="padding:10px 16px 4px;font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;background:#F5F4F0">Managers · 2</div>
+    <div style="background:#fff;border-bottom:0.5px solid #F0EFE9;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go('screen-membre-detail')">
+      <div class="av av-a" style="width:40px;height:40px;font-size:14px;font-weight:700;flex-shrink:0">JD</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Jean Dupont</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">jean.d@lepalais.fr · 06 23 45 67 89</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:9px;background:#EAF3DE;color:#3B6D11;padding:3px 8px;border-radius:3px;font-weight:700">MANAGER</span>
+        <span style="font-size:12px;color:#aaa">›</span>
+      </div>
+    </div>
+    <div style="background:#fff;border-bottom:0.5px solid #F0EFE9;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go('screen-membre-detail')">
+      <div class="av av-b" style="width:40px;height:40px;font-size:14px;font-weight:700;flex-shrink:0">SL</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Sarah Laurent</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">sarah.l@lepalais.fr · 06 34 56 78 90</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:9px;background:#EAF3DE;color:#3B6D11;padding:3px 8px;border-radius:3px;font-weight:700">MANAGER</span>
+        <span style="font-size:12px;color:#aaa">›</span>
+      </div>
+    </div>
+
+    <!-- Staff -->
+    <div style="padding:10px 16px 4px;font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.06em;background:#F5F4F0">Staff · 3</div>
+    <div style="background:#fff;border-bottom:0.5px solid #F0EFE9;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go('screen-membre-detail')">
+      <div style="width:40px;height:40px;border-radius:20px;background:#E8E6DF;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#666;flex-shrink:0">AL</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Alice Lambert</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">alice.l@lepalais.fr · 06 45 67 89 01</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:9px;background:#F5F4F0;color:#888;padding:3px 8px;border-radius:3px;font-weight:700;border:0.5px solid #E8E6DF">STAFF</span>
+        <span style="font-size:12px;color:#aaa">›</span>
+      </div>
+    </div>
+    <div style="background:#fff;border-bottom:0.5px solid #F0EFE9;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go('screen-membre-detail')">
+      <div style="width:40px;height:40px;border-radius:20px;background:#E8E6DF;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#666;flex-shrink:0">MK</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Marc Klein</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">marc.k@lepalais.fr · 06 56 78 90 12</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:9px;background:#F5F4F0;color:#888;padding:3px 8px;border-radius:3px;font-weight:700;border:0.5px solid #E8E6DF">STAFF</span>
+        <span style="font-size:12px;color:#aaa">›</span>
+      </div>
+    </div>
+    <div style="background:#fff;padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go('screen-membre-detail')">
+      <div style="width:40px;height:40px;border-radius:20px;background:#E8E6DF;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#666;flex-shrink:0">TB</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">Tom Bernard</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">tom.b@lepalais.fr · 06 67 89 01 23</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span style="font-size:9px;background:#F5F4F0;color:#888;padding:3px 8px;border-radius:3px;font-weight:700;border:0.5px solid #E8E6DF">STAFF</span>
+        <span style="font-size:12px;color:#aaa">›</span>
+      </div>
+    </div>
+
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: AJOUTER MEMBRE ==================== -->
+<div class="screen" id="screen-ajouter-membre">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">Annuler</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Nouveau membre</span>
+      <button onclick="back()" style="background:#1B4FD8;color:#fff;border:none;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">Ajouter</button>
+    </div>
+  </div>
+  <div class="feed" style="gap:14px">
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Informations</div>
+      <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Prénom</span>
+          <input style="flex:1;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent;color:#1a1a1a" placeholder="Prénom..." />
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Nom</span>
+          <input style="flex:1;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent;color:#1a1a1a" placeholder="Nom..." />
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Téléphone</span>
+          <input style="flex:1;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent;color:#1a1a1a" placeholder="06 00 00 00 00" type="tel" />
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Email</span>
+          <input style="flex:1;border:none;outline:none;font-size:13px;font-family:inherit;background:transparent;color:#1a1a1a" placeholder="email@..." type="email" />
+        </div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Poste</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="background:#EEF2FF;border-radius:12px;border:2px solid #1B4FD8;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+          <div><div style="font-size:13px;font-weight:700;color:#1B4FD8">Directeur</div><div style="font-size:11px;color:#888;margin-top:2px">Accès complet · Gestion de l'établissement</div></div>
+          <div style="width:18px;height:18px;border-radius:9px;background:#1B4FD8;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff">✓</div>
+        </div>
+        <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+          <div><div style="font-size:13px;font-weight:600;color:#1a1a1a">Manager</div><div style="font-size:11px;color:#888;margin-top:2px">Signaux, éxecutions, to do · Gestion d'équipe</div></div>
+          <div style="width:18px;height:18px;border-radius:9px;border:1.5px solid #ccc"></div>
+        </div>
+        <div style="background:#fff;border-radius:12px;border:0.5px solid #E8E6DF;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+          <div><div style="font-size:13px;font-weight:600;color:#1a1a1a">Staff</div><div style="font-size:11px;color:#888;margin-top:2px">Signaux uniquement · To do assignées</div></div>
+          <div style="width:18px;height:18px;border-radius:9px;border:1.5px solid #ccc"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: DETAIL MEMBRE ==================== -->
+<div class="screen" id="screen-membre-detail">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">← Retour</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Jean Dupont</span>
+      <button style="background:transparent;color:#E24B4A;border:0.5px solid #E24B4A;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Supprimer</button>
+    </div>
+  </div>
+  <div class="feed" style="gap:14px">
+
+    <!-- Infos -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Informations</div>
+      <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Prénom</span>
+          <span style="font-size:13px;color:#1a1a1a">Jean</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Nom</span>
+          <span style="font-size:13px;color:#1a1a1a">Dupont</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Téléphone</span>
+          <span style="font-size:13px;color:#1B4FD8">06 23 45 67 89</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px">
+          <span style="font-size:12px;color:#888;width:72px;flex-shrink:0">Email</span>
+          <span style="font-size:13px;color:#1B4FD8">jean.d@lepalais.fr</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Poste -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Poste</div>
+      <div style="display:flex;gap:8px">
+        <span style="flex:1;padding:10px;border-radius:12px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;text-align:center;border:0.5px solid #E8E6DF">Directeur</span>
+        <span style="flex:1;padding:10px;border-radius:12px;background:#1B4FD8;color:#fff;font-size:12px;font-weight:600;cursor:pointer;text-align:center">Manager</span>
+        <span style="flex:1;padding:10px;border-radius:12px;background:#F5F4F0;color:#888;font-size:12px;cursor:pointer;text-align:center;border:0.5px solid #E8E6DF">Staff</span>
+      </div>
+    </div>
+
+    <!-- Autorisations -->
+    <div>
+      <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Autorisations</div>
+      <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+        <div style="padding:8px 14px;background:#F5F4F0;font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">Signaux</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:13px;color:#1a1a1a">Créer un signal</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:13px;color:#1a1a1a">Voir tous les signaux</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px">
+          <span style="font-size:13px;color:#1a1a1a">Résoudre un signal</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="padding:8px 14px;background:#F5F4F0;font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">Éxecution</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:13px;color:#1a1a1a">Créer un plan d'éxecution</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:13px;color:#1a1a1a">Assigner une éxecution</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px">
+          <span style="font-size:13px;color:#1a1a1a">Valider la fin d'une éxecution</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="padding:8px 14px;background:#F5F4F0;font-size:10px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">To do list</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:13px;color:#1a1a1a">Créer une to do list</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#1D9E75;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;right:3px;top:3px"></div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px">
+          <span style="font-size:13px;color:#1a1a1a">Gérer les membres</span>
+          <div style="width:36px;height:20px;border-radius:10px;background:#E8E6DF;position:relative;cursor:pointer"><div style="width:14px;height:14px;border-radius:7px;background:#fff;position:absolute;left:3px;top:3px"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: CATÉGORIES ==================== -->
+<div class="screen" id="screen-categories">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="back-btn" onclick="back()">← Retour</div>
+      <span style="font-size:15px;font-weight:600;color:#1a1a1a">Catégories</span>
+      <button style="background:#1B4FD8;color:#fff;border:none;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">+ Ajouter</button>
+    </div>
+    <div style="margin-top:10px;background:#F5F4F0;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px;border:0.5px solid #E8E6DF">
+      <span style="color:#aaa;font-size:14px">🔍</span>
+      <span style="font-size:13px;color:#ccc">Rechercher une catégorie...</span>
+    </div>
+  </div>
+  <div class="feed" style="gap:8px">
+
+    <div style="font-size:11px;color:#888;line-height:1.5;background:#EEF2FF;border-radius:10px;padding:10px 12px;border:0.5px solid #C5D3F8">
+      <span style="font-weight:600;color:#1B4FD8">Hôtel avec restaurant</span> · Le Palais Nancy<br>
+      <span style="font-size:10px">Les catégories définies lors de l'onboarding. Touchez pour modifier.</span>
+    </div>
+
+    <!-- Catégorie 1 : Chambres -->
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:0.5px solid #F0EFE9;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:8px;height:8px;border-radius:4px;background:#1B4FD8"></div>
+          <span style="font-size:13px;font-weight:700;color:#1a1a1a">Chambres</span>
+          <span style="font-size:10px;color:#aaa">4 sous-catégories</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span>
+          <span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span>
+          <span style="font-size:13px;color:#aaa">▾</span>
+        </div>
+      </div>
+      <!-- Sous-catégories -->
+      <div style="display:block">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 10px 36px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#444">Propreté</span>
+          <div style="display:flex;gap:10px"><span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span><span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 10px 36px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#444">Expérience client</span>
+          <div style="display:flex;gap:10px"><span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span><span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 10px 36px;border-bottom:0.5px solid #F0EFE9">
+          <span style="font-size:12px;color:#444">Maintenance</span>
+          <div style="display:flex;gap:10px"><span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span><span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 10px 36px">
+          <span style="font-size:12px;color:#444">RH & Planning</span>
+          <div style="display:flex;gap:10px"><span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span><span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span></div>
+        </div>
+        <div style="padding:8px 16px 10px 36px">
+          <button style="font-size:11px;color:#1B4FD8;background:#EEF2FF;border:0.5px solid #C5D3F8;border-radius:6px;padding:5px 10px;cursor:pointer">+ Sous-catégorie</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catégorie 2 : Desk d'accueil -->
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:8px;height:8px;border-radius:4px;background:#EF9F27"></div>
+          <span style="font-size:13px;font-weight:700;color:#1a1a1a">Desk d'accueil</span>
+          <span style="font-size:10px;color:#aaa">3 sous-catégories</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span>
+          <span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span>
+          <span style="font-size:13px;color:#aaa">›</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catégorie 3 : Restaurant -->
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:8px;height:8px;border-radius:4px;background:#E24B4A"></div>
+          <span style="font-size:13px;font-weight:700;color:#1a1a1a">Restaurant</span>
+          <span style="font-size:10px;color:#aaa">5 sous-catégories</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span>
+          <span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span>
+          <span style="font-size:13px;color:#aaa">›</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Catégorie 4 : Spa -->
+    <div style="background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:8px;height:8px;border-radius:4px;background:#1D9E75"></div>
+          <span style="font-size:13px;font-weight:700;color:#1a1a1a">Spa & Bien-être</span>
+          <span style="font-size:10px;color:#aaa">3 sous-catégories</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:11px;color:#1B4FD8;cursor:pointer">✏️</span>
+          <span style="font-size:11px;color:#E24B4A;cursor:pointer">✕</span>
+          <span style="font-size:13px;color:#aaa">›</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN: PROFIL ==================== -->
+<div class="screen" id="screen-profile">
+  <div class="sb"><span>9:41</span><span>●●● ⬤</span></div>
+  <div class="topbar">
+    <div class="topbar-row"><div class="back-btn" onclick="back()">← Retour</div></div>
+  </div>
+  <div class="profile-hdr">
+    <div class="profile-av">MR</div>
+    <div style="font-size:18px;font-weight:600;color:#1a1a1a">Marie Renaud</div>
+    <div style="font-size:12px;color:#888">Responsable de zone</div>
+    <div style="font-size:11px;color:#1B4FD8;background:#EEF2FF;padding:3px 10px;border-radius:20px">📍 Rooftop</div>
+  </div>
+  <div class="feed" style="padding-top:12px">
+    <div class="slabel">Mon activité</div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1B4FD8">12</div><div style="font-size:11px;color:#888;margin-top:2px">Signaux</div></div>
+      <div style="flex:1;background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1D9E75">8</div><div style="font-size:11px;color:#888;margin-top:2px">Résolues</div></div>
+      <div style="flex:1;background:#fff;border-radius:14px;border:0.5px solid #E8E6DF;padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:#EF9F27">4</div><div style="font-size:11px;color:#888;margin-top:2px">En cours</div></div>
+    </div>
+    <div class="slabel" style="margin-top:4px">Paramètres</div>
+    <div class="settings-item"><span style="font-size:13px;color:#1a1a1a">Notifications</span><span style="font-size:12px;color:#888">Activées ›</span></div>
+    <div class="settings-item"><span style="font-size:13px;color:#1a1a1a">Langue</span><span style="font-size:12px;color:#888">Français ›</span></div>
+    <div class="settings-item" style="margin-top:8px"><span style="font-size:13px;color:#E24B4A">Se déconnecter</span></div>
+  </div>
+  <div class="bnav">
+    <div class="ni" onclick="go('screen-obs')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="label">Signaux</div></div>
+    <div class="ni" onclick="go('screen-actions')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="label">Éxecution</div></div>
+    <div class="fab-wrap"><div class="fab" onclick="go('screen-create')">+</div></div>
+    <div class="ni" onclick="go('screen-chat')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="label">Chat</div></div>
+    <div class="ni" onclick="go('screen-profile')"><div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="label">Profil</div></div>
+  </div>
+</div>
+
+</div><!-- /phone -->
+
+<script>
+const hist = ['screen-obs'];
+function toggleCreateMenu() {
+  const m = document.getElementById('create-menu');
+  const o = document.getElementById('create-overlay');
+  const open = m.style.display === 'none';
+  m.style.display = open ? 'block' : 'none';
+  o.style.display = open ? 'block' : 'none';
+}
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (hist[hist.length-1] !== id) hist.push(id);
+}
+function back() {
+  if (hist.length > 1) { hist.pop(); go(hist[hist.length-1]); hist.pop(); }
+}
+let rec = false;
+function toggleV() {
+  const b = document.getElementById('vbtn'), t = document.getElementById('vtxt');
+  rec = !rec;
+  b.className = 'vbtn' + (rec ? ' rec' : '');
+  b.innerHTML = '<span style="font-size:38px">' + (rec ? '⏹️' : '🎙️') + '</span>';
+  t.style.display = rec ? 'none' : 'block';
+}
+function showL() {
+  document.getElementById('vl').style.display = 'flex';
+  document.getElementById('vk').style.display = 'none';
+  document.getElementById('btn-l').style.cssText = 'background:#1B4FD8;color:#fff;font-weight:600;padding:4px 10px;border-radius:6px;border:none;font-size:11px;cursor:pointer';
+  document.getElementById('btn-k').style.cssText = 'background:transparent;color:#888;font-weight:500;padding:4px 10px;border-radius:6px;border:none;font-size:11px;cursor:pointer';
+}
+function showK() {
+  document.getElementById('vl').style.display = 'none';
+  document.getElementById('vk').style.display = 'flex';
+  document.getElementById('btn-k').style.cssText = 'background:#1B4FD8;color:#fff;font-weight:600;padding:4px 10px;border-radius:6px;border:none;font-size:11px;cursor:pointer';
+  document.getElementById('btn-l').style.cssText = 'background:transparent;color:#888;font-weight:500;padding:4px 10px;border-radius:6px;border:none;font-size:11px;cursor:pointer';
+}
+</script>
+</body>
+</html>

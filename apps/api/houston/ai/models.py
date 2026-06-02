@@ -8,6 +8,7 @@ from houston.core.models import BaseModel
 class AIUsageLog(BaseModel):
     class Domain(models.TextChoices):
         ONBOARDING = "onboarding", "Onboarding"
+        TRANSCRIPTION = "transcription", "Transcription"
 
     class Status(models.TextChoices):
         STARTED = "started", "Started"
@@ -56,6 +57,14 @@ class AIUsageLog(BaseModel):
         blank=True,
         db_index=False,
     )
+    observation = models.ForeignKey(
+        "observations.Observation",
+        on_delete=models.SET_NULL,
+        related_name="ai_usage_logs",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
 
     class Meta:
         indexes = [
@@ -64,6 +73,7 @@ class AIUsageLog(BaseModel):
             models.Index(fields=["establishment"], name="ai_usage_est_idx"),
             models.Index(fields=["onboarding_session"], name="ai_usage_session_idx"),
             models.Index(fields=["onboarding_proposal"], name="ai_usage_prop_idx"),
+            models.Index(fields=["observation"], name="ai_usage_observation_idx"),
             models.Index(fields=["created_at"], name="ai_usage_created_idx"),
         ]
 

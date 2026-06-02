@@ -315,6 +315,28 @@ export function AppPage() {
       ) : null}
 
       {activeMembership ? (
+        <Card className="rounded-[1.75rem] border-[#e7dfd1] bg-[#fffaf2]">
+          <CardHeader className="gap-2">
+            <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
+              Terrain
+            </Badge>
+            <CardTitle className="text-xl font-semibold">Faire remonter une observation</CardTitle>
+            <CardDescription className="text-sm">
+              Texte ou dictée audio, photos optionnelles (max. 3).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild className="h-11 w-full rounded-[1rem] sm:w-auto">
+              <a href="/app/report">
+                Ouvrir le reporting
+                <ArrowRight className="size-4" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeMembership ? (
         <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
           <CardHeader className="gap-3">
             <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">

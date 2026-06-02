@@ -9,8 +9,9 @@ import { LoginPage } from '@/features/auth/pages/login-page'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { LandingPage } from '@/features/landing/landing-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
+import { ReportPage } from '@/features/observations/pages/report-page'
 
-type AppPath = '/' | '/login' | '/app' | '/onboarding'
+type AppPath = '/' | '/login' | '/app' | '/app/report' | '/onboarding'
 
 type AppRoute =
   | { kind: 'static'; path: AppPath }
@@ -34,7 +35,12 @@ function parseAppRoute(pathname: string): AppRoute {
     return { kind: 'invitation', token: invitationToken }
   }
 
-  if (pathname === '/login' || pathname === '/app' || pathname === '/onboarding') {
+  if (
+    pathname === '/login' ||
+    pathname === '/app' ||
+    pathname === '/app/report' ||
+    pathname === '/onboarding'
+  ) {
     return { kind: 'static', path: pathname }
   }
 
@@ -93,7 +99,10 @@ function App() {
       return
     }
 
-    if (route.path === '/app' && !auth.isAuthenticated) {
+    if (
+      (route.path === '/app' || route.path === '/app/report') &&
+      !auth.isAuthenticated
+    ) {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, route])
@@ -112,6 +121,10 @@ function App() {
 
     if (route.path === '/app') {
       return <AppPage />
+    }
+
+    if (route.path === '/app/report') {
+      return <ReportPage />
     }
 
     if (route.path === '/onboarding') {
@@ -164,13 +177,21 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
-      : route.path === '/app'
+      : route.path === '/app/report'
         ? {
-            title: "Gérer l'établissement",
-            description: 'Manage your establishment, team memberships, and invitations.',
+            headingBadge: 'Terrain',
+            title: 'Faire remonter une observation',
+            description:
+              'Texte ou audio transcrit, photos optionnelles. L’audio n’est pas conservé.',
             actions: signOutAction,
           }
-        : route.path === '/onboarding'
+        : route.path === '/app'
+          ? {
+              title: "Gérer l'établissement",
+              description: 'Manage your establishment, team memberships, and invitations.',
+              actions: signOutAction,
+            }
+          : route.path === '/onboarding'
           ? {
               headingBadge: 'Onboarding',
               title: auth.isAuthenticated

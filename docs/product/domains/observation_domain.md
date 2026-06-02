@@ -1,8 +1,8 @@
 # Observation Domain
 
 Status: authoritative
-Last reviewed: 2026-05-29
-Implementation status: not_started
+Last reviewed: 2026-06-01
+Implementation status: implemented (Phase 3 MVP — submit + processing queued; pipeline Phase 4)
 
 ## 1. Purpose
 
@@ -158,16 +158,14 @@ Candidate events only:
 Current API truth is `apps/api/schema.yml`.
 
 Implemented endpoints confirmed in `apps/api/schema.yml`:
-- none for Observation
+- `POST /api/v1/establishments/{establishment_id}/observations/` — submit with `text` (maps to internal `raw_text`) and optional `temporary_upload_ids`; response includes `id`, `submitted_at`, `media_count`, `processing_status` only (no raw text).
 
 Candidate API capabilities only:
-- submit Observation
 - submit checklist-origin Observation
-- fetch submitted Observation processing status
-- submit Observation with linked temporary upload references
-- internal or admin retry processing command
+- `GET` processing status (deferred; submit returns `processing_status=queued` in Phase 3)
+- internal or admin retry processing command (Phase 4+)
 
-Do not treat any Observation or upload/media endpoint as implemented until it exists in `apps/api/schema.yml`.
+Upload, transcription, and media endpoints are documented in [`upload_media_domain.md`](upload_media_domain.md).
 
 ## 10. Frontend Expectations
 

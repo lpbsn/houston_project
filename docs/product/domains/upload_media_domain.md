@@ -1,8 +1,8 @@
 # Upload / Media Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
-Implementation status: not_started
+Last reviewed: 2026-06-01
+Implementation status: implemented (Phase 3 MVP — temporary photos + private storage; audio via transcription endpoint only)
 
 ## 1. Purpose
 
@@ -133,19 +133,18 @@ Candidate events only:
 
 Current API truth is `apps/api/schema.yml`.
 
-Confirmed by schema today:
+Implemented endpoints confirmed in `apps/api/schema.yml`:
 
-- None for upload/media.
+- `POST /api/v1/establishments/{establishment_id}/temporary-uploads/` — multipart photo (`jpeg`, `png`, `heic`/`heif` with server validation); private storage, no public URL in response.
+- `DELETE /api/v1/establishments/{establishment_id}/temporary-uploads/{upload_id}/`
+- `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio only; backend OpenAI transcription; temp file deleted after each request; **not** stored as `TemporaryUpload`.
+
+Management command: `cleanup_expired_uploads` for orphaned validated photo uploads.
 
 Candidate API capabilities only:
 
-- create a temporary upload
-- delete a temporary upload
-- submit transcription audio
-- request authorized short-lived media access
-- submit an Observation with temporary upload references
-
-Exact endpoint paths, request bodies, and response shapes are candidate until they exist in `apps/api/schema.yml`.
+- request authorized short-lived media access (read path for linked Observation media)
+- direct browser-to-storage upload
 
 ## 10. Frontend Expectations
 

@@ -647,6 +647,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/observations/:
+    post:
+      operationId: v1_establishments_observations_create
+      description: Submits a validated Observation with optional linked temporary
+        photo uploads. Raw text is persisted internally and is not returned.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - observations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObservationSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ObservationSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ObservationSubmitRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationSubmitResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/operational-taxonomy/:
     get:
       operationId: v1_establishments_operational_taxonomy_retrieve
@@ -683,6 +742,182 @@ paths:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/temporary-uploads/:
+    post:
+      operationId: v1_establishments_temporary_uploads_create
+      description: Creates a temporary private photo upload for an Observation.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - uploads
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemporaryUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/temporary-uploads/{upload_id}/:
+    delete:
+      operationId: v1_establishments_temporary_uploads_destroy
+      description: Deletes an unlinked temporary photo upload owned by the current
+        user.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: upload_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - uploads
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/transcriptions/:
+    post:
+      operationId: v1_establishments_transcriptions_create
+      description: Accepts multipart audio, transcribes via backend OpenAI, deletes
+        the temp file in all cases, and returns editable text. Audio is never persisted.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - uploads
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -2214,6 +2449,39 @@ components:
       - email
       - id
       - username
+    ObservationSubmitRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 10
+        temporary_upload_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 3
+      required:
+      - text
+    ObservationSubmitResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        submitted_at:
+          type: string
+          format: date-time
+        media_count:
+          type: integer
+        processing_status:
+          type: string
+      required:
+      - id
+      - media_count
+      - processing_status
+      - submitted_at
     OnboardingAccessResponse:
       type: object
       properties:
@@ -3013,6 +3281,35 @@ components:
           format: uuid
       required:
       - establishment_id
+    TemporaryUploadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+      - id
+      - status
+    TranscriptionResponse:
+      type: object
+      properties:
+        text:
+          type: string
+        language:
+          type: string
+        correlation_id:
+          type: string
+          format: uuid
+      required:
+      - correlation_id
+      - language
+      - text
     UserPublic:
       type: object
       properties:
