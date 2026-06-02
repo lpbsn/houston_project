@@ -92,6 +92,10 @@ Authoritative closure gate: [`docs/product/phase_a_closure.md`](docs/product/pha
 
 Key contracts: [`operational_taxonomy_domain.md`](docs/product/domains/operational_taxonomy_domain.md), [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md), [`ai_observation_pipeline_contract.md`](docs/product/domains/ai_observation_pipeline_contract.md), [`feed_subscription_domain.md`](docs/product/domains/feed_subscription_domain.md).
 
+RBAC source of truth: `MembershipScope` (see [`rbac_permissions_domain.md`](docs/product/domains/rbac_permissions_domain.md)). `MembershipDomain` is legacy/historical and must not be reintroduced in active documentation.
+
+Auth + API error contracts: use [`authentication_charter.md`](docs/architecture/authentication_charter.md) (incl. auth throttling) and [`api_error_contract.md`](docs/architecture/api_error_contract.md).
+
 ---
 
 ## Agent workflow

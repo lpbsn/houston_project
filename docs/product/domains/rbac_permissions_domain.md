@@ -14,7 +14,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 
 - Backend-enforced authorization for establishment-scoped product access.
 - Membership-backed roles: `owner`, `director`, `manager`, `staff`.
-- Membership-backed operational domain scope through membership-domain links.
+- Membership-backed operational domain scope through `MembershipScope` rows.
 - Establishment visibility checks, action permission checks, and domain access checks.
 - Backend permission enforcement for API reads, writes, command endpoints, feeds, realtime subscriptions, signed media access, notifications, comments, and chat access.
 - Frontend permission hints as convenience only, never as security authority.
@@ -39,6 +39,8 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Role and operational domain data in responses are UI hints, not security authority.
 - `owner` and `director` still require valid active membership; broad authority is never global.
 - **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `module`, `domain`, or `subject`; `scope_id`: taxonomy UUID). No label-based inference. Parent scopes are explicit only (module/domain rows are not expanded into child subjects in the database).
+- **`MembershipDomain`** is legacy/historical and must not be used as an active RBAC model. Authorization root is `MembershipScope` rows.
+- `operational_domains` is onboarding proposal context (taxonomy selection), not the RBAC source of truth used by authorization checks.
 - **`MembershipFeedSubscription`** (future Phase 4) personalizes **Ma vue** only — see [`feed_subscription_domain.md`](feed_subscription_domain.md). It must not be used as a security boundary or mixed with RBAC checks.
 - Notifications and realtime events do not grant access.
 - Signed media URLs require backend authorization before generation.

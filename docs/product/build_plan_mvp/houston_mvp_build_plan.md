@@ -68,9 +68,13 @@ section) for deferred items and Phase 3 entry assumptions.
 
 Add Observation submission, optional media handling, audio transcription, and cleanup lifecycle.
 
+Current API truth implements this Phase 3 subset: Observation submit, temporary photo uploads (temporary-uploads), and audio transcription (transcriptions). Observation processing starts with `processing_status=queued`, while Signal/Action/Feed APIs remain outside the current schema.
+
 ### Phase 4 — AI Pipeline / Signal Feed
 
 Add AI-assisted Observation interpretation, Signal creation or aggregation, and Signal Feed behavior.
+
+Not yet implemented in the current API contract (`apps/api/schema.yml`): Signal Feed and related Signal/Aggregation endpoints are Phase 4 candidate surface.
 
 **Implementation gate:** Phase 4 code starts only after Phase B/C taxonomy and onboarding runtime (modules, domains, subjects) are live. Do not implement Signal, `MembershipFeedSubscription`, feed selectors, or feed API prematurely.
 

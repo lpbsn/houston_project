@@ -167,7 +167,7 @@ Use explicit domain separation:
 
 - Do not create a new Django app in this phase.
 - Keep runtime config implementation inside `houston.establishments` because
-  `OperationalDomain`, membership-domain links, and runtime permission helpers already
+  `OperationalDomain`, `MembershipScope` rows, and runtime permission helpers already
   live there.
 - Phase 2 includes a minimal `OnboardingSession` foundation.
 - Phase 2 includes an `OnboardingProposal` foundation.

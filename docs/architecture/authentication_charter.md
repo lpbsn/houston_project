@@ -215,10 +215,11 @@ Tokens never grant business permissions by themselves.
 
 ## 10. Error handling
 
-Login failure must return the generic error:
+Login-like failures must return the generic error contract defined in [`api_error_contract.md`](api_error_contract.md) (see `{ code, detail }`).
 
 ```json
 {
+  "code": "not_authenticated",
   "detail": "Invalid credentials."
 }
 ```
@@ -262,10 +263,50 @@ After auth API changes, run:
 
 Generated frontend OpenAPI types must not be edited manually.
 
-## 13. Security TODOs
+## 13. Auth throttling (Batch 3) + Security TODOs
 
-Before production:
+Auth throttling for public auth mutation endpoints is implemented via DRF `ScopedRateThrottle` when `HOUSTON_AUTH_THROTTLE_ENABLED=true` (default).
 
-- add login rate limiting
-- add refresh rate limiting
+### Protected endpoints
+
+- `POST /api/v1/auth/login/`
+- `POST /api/v1/auth/refresh/`
+- `POST /api/v1/auth/register/`
+- `POST /api/v1/auth/register/validate-owner/`
+- `POST /api/v1/invitations/{token}/accept/`
+
+### Throttling response contract (429)
+
+```json
+{
+  "code": "throttled",
+  "detail": "Request was throttled. Expected available in N seconds."
+}
+```
+
+### Cache / storage strategy
+
+- Dedicated Redis DB for throttle counters: DB `/3` in prod / non-DEBUG (derived from `REDIS_URL`).
+- Optional override: `HOUSTON_CACHE_REDIS_URL` to point to a dedicated Redis DB.
+- DEBUG fallback: `LocMemCache` when no explicit Redis URL is provided.
+
+### Configuration (override quotas)
+
+- `HOUSTON_AUTH_THROTTLE_ENABLED`
+- `HOUSTON_CACHE_REDIS_URL`
+- `HOUSTON_THROTTLE_AUTH_LOGIN`
+- `HOUSTON_THROTTLE_AUTH_REFRESH`
+- `HOUSTON_THROTTLE_AUTH_REGISTER`
+- `HOUSTON_THROTTLE_AUTH_REGISTER_VALIDATE`
+- `HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT`
+
+### Known intentional debts (post-MVP)
+
+- throttling is IP-only
+- no fingerprint per identifier
+- no throttling by refresh-cookie hash
+- Redis shared requirement in prod multi-worker
+
+### Remaining security TODOs
+
 - add suspicious token reuse monitoring and alerting
