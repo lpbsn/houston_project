@@ -14,10 +14,10 @@ describe('processing-status-labels', () => {
     expect(getProcessingUxLabel('analysis_processing')).toBe('Analyse en cours')
     expect(getProcessingUxLabel('analysis_retrying')).toBe('Nouvelle tentative d’analyse')
     expect(getProcessingUxLabel('signal_created')).toBe(
-      'Signal créé. Le feed a été mis à jour.',
+      'Signal créé. La liste des signaux a été mise à jour.',
     )
     expect(getProcessingUxLabel('signal_updated')).toBe(
-      'Signal mis à jour. Le feed a été mis à jour.',
+      'Signal mis à jour. La liste des signaux a été mise à jour.',
     )
     expect(getProcessingUxLabel('no_signal_created')).toBe(
       'Observation enregistrée, aucun signal actionnable détecté',

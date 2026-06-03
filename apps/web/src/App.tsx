@@ -1,15 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { useAuth } from '@/app/auth-provider'
+import {
+  getTerrainContentKey,
+  getTerrainRouteConfig,
+  usesTerrainShell,
+} from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
-import { BottomMobileNav, type TerrainPath } from '@/components/layout/bottom-mobile-nav'
+import { TerrainShell } from '@/components/layout/terrain-shell'
+import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
-import { ComingSoonPage } from '@/features/common/pages/coming-soon-page'
+import { ChatPage } from '@/features/chat/pages/chat-page'
+import { ExecutionFeedPage } from '@/features/execution/pages/execution-feed-page'
 import { SignalDetailPage } from '@/features/signals/pages/signal-detail-page'
 import { SignalFeedPage } from '@/features/signals/pages/signal-feed-page'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
@@ -162,6 +169,12 @@ function App() {
     }
   }, [navigate, route])
 
+  const handleSignOut = useCallback(() => {
+    void auth.logout().then(() => {
+      navigate('/login', { replace: true })
+    })
+  }, [auth, navigate])
+
   const routeContent = useMemo(() => {
     if (route.kind === 'invitation') {
       return (
@@ -176,10 +189,7 @@ function App() {
 
     if (route.kind === 'signal-detail') {
       return (
-        <SignalDetailPage
-          signalId={route.signalId}
-          onBack={() => navigate('/signals')}
-        />
+        <SignalDetailPage signalId={route.signalId} />
       )
     }
 
@@ -200,15 +210,21 @@ function App() {
     }
 
     if (route.path === '/execution') {
-      return <ComingSoonPage featureLabel="Feed Exécution" />
+      return <ExecutionFeedPage />
     }
 
     if (route.path === '/chat') {
-      return <ComingSoonPage featureLabel="Chat" />
+      return <ChatPage />
     }
 
     if (route.path === '/profile') {
-      return <ProfilePage />
+      return (
+        <ProfilePage
+          onNavigate={navigate}
+          onSignOut={handleSignOut}
+          isLoggingOut={auth.isLoggingOut}
+        />
+      )
     }
 
     if (route.path === '/team/invite') {
@@ -220,16 +236,10 @@ function App() {
     }
 
     return <LoginPage />
-  }, [navigate, route])
+  }, [auth.isLoggingOut, handleSignOut, navigate, route])
 
   if (route.kind === 'static' && route.path === '/') {
     return <LandingPage />
-  }
-
-  const handleSignOut = () => {
-    void auth.logout().then(() => {
-      navigate('/login', { replace: true })
-    })
   }
 
   const signOutAction = (
@@ -265,56 +275,13 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
-      : route.kind === 'signal-detail'
+      : route.kind === 'static' && route.path === '/team/invite'
         ? {
-            headingBadge: 'Terrain',
-            title: 'Détail signal',
-            description: 'Situation opérationnelle structurée.',
+            headingBadge: 'Compte',
+            title: 'Inviter un membre',
+            description: "Créez un lien d'invitation pour un nouveau membre de l'équipe.",
             actions: signOutAction,
           }
-        : route.kind === 'static' && (route.path === '/app/report' || route.path === '/reporting')
-        ? {
-            headingBadge: 'Terrain',
-            title: 'Faire remonter une observation',
-            description:
-              'Texte ou audio transcrit, photos optionnelles. L’audio n’est pas conservé.',
-            actions: signOutAction,
-          }
-        : route.kind === 'static' && route.path === '/signals'
-          ? {
-              headingBadge: 'Terrain',
-              title: 'Signaux',
-              description: 'Vue terrain des signaux actifs.',
-              actions: signOutAction,
-            }
-          : route.kind === 'static' && route.path === '/execution'
-            ? {
-                headingBadge: 'Terrain',
-                title: 'Feed Exécution',
-                description: 'Suivi des exécutions terrain. Fonctionnalité bientôt disponible.',
-                actions: signOutAction,
-              }
-            : route.kind === 'static' && route.path === '/chat'
-              ? {
-                  headingBadge: 'Terrain',
-                  title: 'Chat',
-                  description: 'Messagerie opérationnelle. Fonctionnalité bientôt disponible.',
-                  actions: signOutAction,
-                }
-              : route.kind === 'static' && route.path === '/profile'
-                ? {
-                    headingBadge: 'Compte',
-                    title: 'Profil',
-                    description: 'Résumé de votre contexte utilisateur et membership actif.',
-                    actions: signOutAction,
-                  }
-                : route.kind === 'static' && route.path === '/team/invite'
-                  ? {
-                      headingBadge: 'Compte',
-                      title: 'Inviter un membre',
-                      description: "Créez un lien d'invitation pour un nouveau membre de l'équipe.",
-                      actions: signOutAction,
-                    }
         : route.kind === 'static' && route.path === '/app'
           ? {
               title: "Gérer l'établissement",
@@ -322,47 +289,63 @@ function App() {
               actions: signOutAction,
             }
           : route.kind === 'static' && route.path === '/onboarding'
-          ? {
-              headingBadge: 'Onboarding',
-              title: auth.isAuthenticated
-                ? 'Prepare this establishment for operations.'
-                : 'Set up your organization.',
-              description: auth.isAuthenticated
-                ? 'Review activity details, runtime setup, and readiness before marking the session ready.'
-                : 'Enter your invitation code to create your organization and start onboarding.',
-              actions: auth.isAuthenticated ? signOutAction : signInAction,
-            }
-          : {
-              headingBadge: 'Sign in',
-              title: 'Welcome back',
-              description: 'Sign in to access your Houston workspace.',
-              actions: (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-                  onClick={() => {
-                    navigate('/onboarding')
-                  }}
-                >
-                  Onboarding
-                </Button>
-              ),
-            }
+            ? {
+                headingBadge: 'Onboarding',
+                title: auth.isAuthenticated
+                  ? 'Prepare this establishment for operations.'
+                  : 'Set up your organization.',
+                description: auth.isAuthenticated
+                  ? 'Review activity details, runtime setup, and readiness before marking the session ready.'
+                  : 'Enter your invitation code to create your organization and start onboarding.',
+                actions: auth.isAuthenticated ? signOutAction : signInAction,
+              }
+            : {
+                headingBadge: 'Sign in',
+                title: 'Welcome back',
+                description: 'Sign in to access your Houston workspace.',
+                actions: (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+                    onClick={() => {
+                      navigate('/onboarding')
+                    }}
+                  >
+                    Onboarding
+                  </Button>
+                ),
+              }
 
-  const showBottomNav =
-    (route.kind === 'static' &&
-      (route.path === '/reporting' ||
-        route.path === '/signals' ||
-        route.path === '/execution' ||
-        route.path === '/chat' ||
-        route.path === '/profile')) ||
-    route.kind === 'signal-detail'
-  const activeTerrainPath: TerrainPath | null = showBottomNav
-    ? route.kind === 'signal-detail'
-      ? '/signals'
-      : (route.path as TerrainPath)
-    : null
+  if (usesTerrainShell(route)) {
+    const terrainConfig = getTerrainRouteConfig(route)
+    return (
+      <TerrainShell
+        contentKey={getTerrainContentKey(route)}
+        showBottomNav={terrainConfig.showBottomNav}
+        activeNavPath={terrainConfig.activeNavPath}
+        mainScroll={terrainConfig.mainScroll}
+        navigate={navigate}
+        topbar={
+          <TerrainTopbar
+            variant={terrainConfig.topbarVariant}
+            title={terrainConfig.title}
+            pageTitle={terrainConfig.pageTitle}
+            showBottomBorder={
+              !(route.kind === 'static' && route.path === '/signals')
+            }
+            onBack={
+              terrainConfig.backPath
+                ? () => navigate(terrainConfig.backPath!)
+                : undefined
+            }
+          />
+        }
+      >
+        {routeContent}
+      </TerrainShell>
+    )
+  }
 
   return (
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">
@@ -372,9 +355,8 @@ function App() {
         description={routeCopy.description}
         actions={routeCopy.actions}
       >
-        <div className={showBottomNav ? 'pb-24 sm:pb-6' : undefined}>{routeContent}</div>
+        {routeContent}
       </AppShell>
-      {activeTerrainPath ? <BottomMobileNav activePath={activeTerrainPath} navigate={navigate} /> : null}
     </motion.main>
   )
 }

@@ -1,9 +1,9 @@
-import { ArrowLeft, LoaderCircle } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
 
+import { SignalDetailMediaPlaceholder } from '../components/signal-detail-media-placeholder'
 import { SignalPinUrgencyActions } from '../components/signal-pin-urgency-actions'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalTaxonomyBadges } from '../components/signal-taxonomy-badges'
@@ -15,10 +15,11 @@ import {
   useUnpinSignalMutation,
 } from '../hooks'
 import { SignalsApiError } from '../api'
+import { formatSignalRelativeTime } from '../lib/signal-display'
+import type { SignalDetail } from '../types'
 
 type SignalDetailPageProps = {
   signalId: string
-  onBack: () => void
 }
 
 function getErrorMessage(error: unknown): string {
@@ -31,7 +32,19 @@ function getErrorMessage(error: unknown): string {
   return 'Une erreur est survenue.'
 }
 
-export function SignalDetailPage({ signalId, onBack }: SignalDetailPageProps) {
+function formatDescriptionContent(structuredSummary: string): string {
+  const trimmed = structuredSummary.trim()
+  return trimmed.length > 0 ? trimmed : 'Description indisponible.'
+}
+
+function resolveMediaCount(signal: SignalDetail): number {
+  if (signal.media_count > 0) {
+    return signal.media_count
+  }
+  return signal.source_context.media_count ?? 0
+}
+
+export function SignalDetailPage({ signalId }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
@@ -45,7 +58,7 @@ export function SignalDetailPage({ signalId, onBack }: SignalDetailPageProps) {
 
   if (detailQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-[#6b5f52]">
+      <div className="flex items-center justify-center py-16 text-[#7D7B75]">
         <LoaderCircle className="h-6 w-6 animate-spin" />
       </div>
     )
@@ -53,56 +66,44 @@ export function SignalDetailPage({ signalId, onBack }: SignalDetailPageProps) {
 
   if (detailQuery.isError || !detailQuery.data) {
     return (
-      <div className="space-y-4">
-        <Button type="button" variant="ghost" className="rounded-xl px-0" onClick={onBack}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Retour
-        </Button>
-        <p className="text-sm text-[#a32d2d]">{getErrorMessage(detailQuery.error)}</p>
-      </div>
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message={getErrorMessage(detailQuery.error)}
+        onRetry={() => void detailQuery.refetch()}
+      />
     )
   }
 
   const signal = detailQuery.data
+  const reporterName = signal.source_context.reporter_display_name?.trim()
+  const mediaCount = resolveMediaCount(signal)
 
   return (
-    <div className="flex flex-col gap-4">
-      <Button type="button" variant="ghost" className="w-fit rounded-xl px-0" onClick={onBack}>
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Retour
-      </Button>
-
-      <Card className="gap-4 rounded-2xl border border-[#e7dfd1] bg-white p-4">
-        <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-2.5 px-3 pb-4 pt-2">
+      <TerrainCard>
+        <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
+        <div className="mt-2 flex flex-wrap gap-1.5">
           <SignalUrgencyBadge urgency={signal.urgency} />
           <SignalTaxonomyBadges domainKey={signal.domain_key} subjectKey={signal.subject_key} />
-          <SignalStatusBadge status={signal.status} />
+          <SignalStatusBadge status={signal.status} variant="detail" />
         </div>
-        <h2 className="text-xl font-semibold text-[#2a2218]">{signal.title}</h2>
-        {signal.location_text ? (
-          <p className="text-xs text-[#9a8f82]">📍 {signal.location_text}</p>
+        <p className="mt-2 text-[11px] text-[#aaa]">
+          {signal.location_text ? `📍 ${signal.location_text} · ` : ''}
+          il y a {formatSignalRelativeTime(signal.last_activity_at)}
+        </p>
+        {reporterName ? (
+          <p className="mt-1 text-[11px] text-[#aaa]">Signalé par {reporterName}</p>
         ) : null}
-        {signal.source_context.reporter_display_name ? (
-          <p className="text-xs text-[#9a8f82]">
-            Signalé par {signal.source_context.reporter_display_name}
-          </p>
-        ) : null}
-      </Card>
+      </TerrainCard>
 
-      <Card className="gap-2 rounded-2xl border border-[#e7dfd1] bg-[#fffaf2] p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-[#9a8f82]">
-          Résumé structuré
-        </h3>
-        <p className="text-sm leading-relaxed text-[#4a4034]">{signal.structured_summary}</p>
-      </Card>
+      <TerrainCard>
+        <TerrainFieldLabel>Description</TerrainFieldLabel>
+        <p className="mt-2 text-[13px] leading-relaxed text-[#444]">
+          {formatDescriptionContent(signal.structured_summary)}
+        </p>
+      </TerrainCard>
 
-      {signal.source_context.media_count > 0 ? (
-        <Card className="rounded-2xl border border-[#e7dfd1] bg-white p-4">
-          <p className="text-sm text-[#6b5f52]">
-            {signal.source_context.media_count} photo(s) liée(s) à l&apos;observation source.
-          </p>
-        </Card>
-      ) : null}
+      <SignalDetailMediaPlaceholder mediaCount={mediaCount} />
 
       <SignalPinUrgencyActions
         hints={signal.permission_hints}

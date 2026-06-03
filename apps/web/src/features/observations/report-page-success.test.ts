@@ -32,7 +32,7 @@ describe('report-page success state', () => {
   it('does not show feed CTA for no_signal_created or analysis_failed', () => {
     expect(shouldShowSignalFeedNavigation('no_signal_created')).toBe(false)
     expect(shouldShowSignalFeedNavigation('analysis_failed')).toBe(false)
-    expect(getProcessingUxLabel('no_signal_created')).not.toContain('feed a été mis à jour')
+    expect(getProcessingUxLabel('no_signal_created')).not.toContain('liste des signaux a été mise à jour')
   })
 
   it('formats popup headline for two signals without using signal_ids for navigation', () => {

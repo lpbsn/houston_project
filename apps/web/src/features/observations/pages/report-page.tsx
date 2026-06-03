@@ -1,9 +1,18 @@
 import { useMemo, useRef, useState } from 'react'
-import { ImagePlus, LoaderCircle, Mic, Trash2 } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
+import { useReducedMotion } from 'framer-motion'
 
 import { useAuth } from '@/app/auth-provider'
+import {
+  TerrainCard,
+  TerrainErrorState,
+  TerrainFieldLabel,
+  TerrainOrDivider,
+} from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { ReportPhotosSection, type ReportPhotoDraft } from '@/features/observations/components/report-photos-section'
+import { ReportSuccessPanel } from '@/features/observations/components/report-success-panel'
+import { ReportVoiceSection } from '@/features/observations/components/report-voice-section'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
   useDeleteTemporaryPhotoMutation,
@@ -18,7 +27,6 @@ import {
 } from '@/features/observations/processing-status-labels'
 import {
   formatProcessingSuccessHeadline,
-  formatSignalSummaryLine,
   shouldShowProcessingSignalList,
 } from '@/features/observations/processing-status-popup'
 import {
@@ -26,13 +34,8 @@ import {
   OBSERVATION_TEXT_MAX_LENGTH,
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
-
-type PhotoDraft = {
-  localId: string
-  file: File
-  uploadId: string | null
-  status: 'uploading' | 'ready' | 'failed'
-}
+import { terrain } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 type ReportPageProps = {
   onNavigate?: (pathname: string) => void
@@ -49,11 +52,12 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function ReportPage({ onNavigate }: ReportPageProps) {
+  const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
   const [text, setText] = useState('')
-  const [photos, setPhotos] = useState<PhotoDraft[]>([])
+  const [photos, setPhotos] = useState<ReportPhotoDraft[]>([])
   const [formError, setFormError] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
@@ -84,7 +88,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     !isTranscribing
 
   const photoHint = useMemo(() => {
-    return `${photos.length}/${MAX_OBSERVATION_PHOTOS} photo(s) — optionnel`
+    return `${photos.length}/${MAX_OBSERVATION_PHOTOS} photos — optionnel`
   }, [photos.length])
   const latestTranscript = transcribeMutation.data?.text?.trim() ?? ''
 
@@ -116,7 +120,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
       return
     }
     if (photos.length >= MAX_OBSERVATION_PHOTOS) {
-      setFormError(`Maximum ${MAX_OBSERVATION_PHOTOS} photos.`)
+      setFormError(`Limite : ${MAX_OBSERVATION_PHOTOS} photos maximum.`)
       return
     }
 
@@ -146,7 +150,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     }
   }
 
-  const handleRemovePhoto = async (photo: PhotoDraft) => {
+  const handleRemovePhoto = async (photo: ReportPhotoDraft) => {
     setPhotos((current) => current.filter((item) => item.localId !== photo.localId))
     if (photo.uploadId && establishmentId) {
       try {
@@ -238,179 +242,87 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     onNavigate('/signals')
   }
 
+  const pageShell = (content: React.ReactNode) => (
+    <div className="flex flex-col gap-4 px-3 pb-4 pt-2">{content}</div>
+  )
+
   if (!establishmentId) {
-    return (
-      <Card className="rounded-[1.75rem] border-[#e7dfd1] bg-[#fffaf2] p-5">
-        <p className="text-sm text-[#5f574d]">
+    return pageShell(
+      <TerrainCard>
+        <p className={cn('text-sm', terrain.muted)}>
           Sélectionnez un établissement actif pour faire remonter une observation.
         </p>
-      </Card>
+      </TerrainCard>,
     )
   }
 
   if (submittedObservationId) {
-    return (
-      <Card className="rounded-[1.75rem] border-[#d8ead8] bg-[#f4fbf4] p-5">
-        <h2 className="text-lg font-semibold text-[#1f1a14]">Observation envoyée</h2>
-        <div className="mt-2 flex items-center gap-2 text-sm text-[#5f574d]">
-          {processingQuery.isLoading || processingQuery.isFetching ? (
-            <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
-          ) : null}
-          <p>{processingLabel}</p>
-        </div>
-        {processingSuccessHeadline ? (
-          <p className="mt-2 text-sm font-medium text-[#1f1a14]">{processingSuccessHeadline}</p>
-        ) : null}
-        {showProcessingSignalList && processingSignals.length > 0 ? (
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#5f574d]">
-            {processingSignals.map((signal) => (
-              <li key={signal.id}>{formatSignalSummaryLine(signal)}</li>
-            ))}
-          </ul>
-        ) : null}
-        {processingQuery.isError ? (
-          <p className="mt-2 text-sm text-[#9a3b2e]">{getErrorMessage(processingQuery.error)}</p>
-        ) : null}
-        <p className="mt-1 text-xs text-[#7a7268]">Référence : {submittedObservationId}</p>
-        {showSignalFeedLink && onNavigate ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 h-10 w-full rounded-[1rem]"
-            onClick={handleGoToSignalFeed}
-          >
-            Aller au feed Signal
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          className="mt-3 h-10 w-full rounded-[1rem]"
-          onClick={() => {
-            setSubmittedObservationId(null)
-          }}
-        >
-          Nouvelle observation
-        </Button>
-      </Card>
+    return pageShell(
+      <ReportSuccessPanel
+        observationId={submittedObservationId}
+        processingLabel={processingLabel}
+        processingSuccessHeadline={processingSuccessHeadline}
+        showProcessingSignalList={showProcessingSignalList}
+        processingSignals={processingSignals}
+        isProcessingLoading={processingQuery.isLoading || processingQuery.isFetching}
+        processingErrorMessage={
+          processingQuery.isError ? getErrorMessage(processingQuery.error) : null
+        }
+        showSignalFeedLink={showSignalFeedLink}
+        onGoToSignalFeed={onNavigate ? handleGoToSignalFeed : undefined}
+        onNewObservation={() => setSubmittedObservationId(null)}
+      />,
     )
   }
 
-  return (
-    <div className="flex flex-col gap-4 rounded-2xl bg-[#F5F4F0] p-4 sm:p-5">
-      <h1 className="text-lg font-semibold text-[#1a1a1a]">Nouveau signal</h1>
+  return pageShell(
+    <>
+      <ReportVoiceSection
+        shouldReduceMotion={shouldReduceMotion}
+        isRecording={isRecording}
+        isTranscribing={isTranscribing}
+        isSubmitPending={submitMutation.isPending}
+        latestTranscript={latestTranscript}
+        onStartRecording={() => void handleStartRecording()}
+        onStopRecording={handleStopRecording}
+      />
 
-      <Card className="space-y-3 rounded-2xl border-[#E8E6DF] bg-white p-4">
-        <p className="text-xs uppercase tracking-[0.04em] text-[#7d7b75]">
-          Décris à la voix puis complète si besoin
-        </p>
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            className="h-24 w-24 rounded-full bg-[#1B4FD8] p-0 text-white shadow-[0_6px_24px_rgba(27,79,216,0.35)] hover:bg-[#1B4FD8]/95"
-            disabled={isTranscribing || submitMutation.isPending}
-            onClick={isRecording ? handleStopRecording : handleStartRecording}
-            aria-label={isRecording ? 'Arrêter l’enregistrement' : 'Démarrer l’enregistrement vocal'}
-          >
-            {isTranscribing ? (
-              <LoaderCircle className="h-8 w-8 animate-spin" />
-            ) : (
-              <Mic className="h-8 w-8" />
-            )}
-          </Button>
-        </div>
-        <p className="text-center text-xs text-[#7d7b75]">
-          {isTranscribing ? 'Transcription en cours...' : isRecording ? 'Enregistrement en cours' : 'Appuie pour dicter'}
-        </p>
-        {latestTranscript ? (
-          <div className="rounded-xl bg-[#EEF2FF] px-3 py-2 text-center text-sm text-[#1B4FD8]">
-            “{latestTranscript}”
-          </div>
-        ) : null}
-      </Card>
+      <TerrainOrDivider />
 
-      <div className="flex items-center gap-2 px-1">
-        <div className="h-px flex-1 bg-[#E8E6DF]" />
-        <span className="text-[11px] text-[#a3a19a]">ou décris par écrit</span>
-        <div className="h-px flex-1 bg-[#E8E6DF]" />
-      </div>
-
-      <Card className="rounded-2xl border-[#E8E6DF] bg-white p-4">
-        <label
-          className="text-xs uppercase tracking-[0.04em] text-[#7d7b75]"
-          htmlFor="observation-text"
-        >
-          Description
-        </label>
+      <TerrainCard>
+        <TerrainFieldLabel htmlFor="observation-text">Description</TerrainFieldLabel>
         <textarea
           id="observation-text"
-          className="mt-2 min-h-[88px] w-full resize-none rounded-[14px] border border-[#E8E6DF] bg-white px-3 py-2 text-sm text-[#1a1a1a] outline-none focus:border-[#1B4FD8]/45"
+          className={cn(
+            'mt-2 min-h-[72px] w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed outline-none',
+            terrain.foreground,
+            'placeholder:text-[#aaa]',
+          )}
           value={text}
           onChange={(event) => setText(event.target.value.slice(0, OBSERVATION_TEXT_MAX_LENGTH))}
-          placeholder="Décrivez la situation (10 à 1000 caractères)."
+          placeholder="Décrivez le problème observé..."
         />
-        <p className="mt-1 text-xs text-[#7d7b75]">
-          {textLength}/{OBSERVATION_TEXT_MAX_LENGTH} caractères
+        <p className={cn('mt-1 text-xs', terrain.muted)}>
+          {textLength}/{OBSERVATION_TEXT_MAX_LENGTH} caractères (min. {OBSERVATION_TEXT_MIN_LENGTH})
         </p>
-      </Card>
+      </TerrainCard>
 
-      <Card className="rounded-2xl border-[#E8E6DF] bg-white p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs uppercase tracking-[0.04em] text-[#7d7b75]">Photos</p>
-          <p className="text-xs text-[#7d7b75]">{photoHint}</p>
-        </div>
-        <div className="mt-3">
-          <label
-            className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-[14px] border border-dashed border-[#E8E6DF] bg-[#F0EFE9] text-[#7d7b75] transition hover:bg-[#ebe9e2]"
-            aria-disabled={photos.length >= MAX_OBSERVATION_PHOTOS || uploadMutation.isPending}
-          >
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
-              className="sr-only"
-              disabled={photos.length >= MAX_OBSERVATION_PHOTOS || uploadMutation.isPending}
-              onChange={handlePhotoSelect}
-            />
-            <ImagePlus className="h-5 w-5" />
-            <span className="text-xs font-medium">Ajouter</span>
-          </label>
-        </div>
-        <ul className="mt-3 space-y-2">
-          {photos.map((photo) => (
-            <li
-              key={photo.localId}
-              className="flex items-center justify-between rounded-[14px] border border-[#E8E6DF] bg-[#F0EFE9] px-3 py-2 text-sm"
-            >
-              <span className="truncate text-[#1a1a1a]">{photo.file.name}</span>
-              <div className="flex items-center gap-2">
-                {photo.status === 'uploading' ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin text-[#7d7b75]" />
-                ) : null}
-                {photo.status === 'failed' ? (
-                  <span className="text-xs text-[#9a3b2e]">Échec</span>
-                ) : null}
-                <button
-                  type="button"
-                  className="text-[#7d7b75] hover:text-[#1a1a1a]"
-                  onClick={() => void handleRemovePhoto(photo)}
-                  aria-label="Supprimer la photo"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <ReportPhotosSection
+        photos={photos}
+        photoHint={photoHint}
+        isUploadPending={uploadMutation.isPending}
+        onPhotoSelect={(event) => void handlePhotoSelect(event)}
+        onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
+      />
 
-      {formError ? (
-        <p className="rounded-[14px] border border-[#f0d4cf] bg-[#fff5f3] px-3 py-2 text-sm text-[#9a3b2e]">
-          {formError}
-        </p>
-      ) : null}
+      {formError ? <TerrainErrorState message={formError} /> : null}
 
       <Button
         type="button"
-        className="h-11 w-full rounded-2xl bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
+        className={cn(
+          'h-12 w-full rounded-2xl text-[15px] font-bold text-white hover:bg-[#1B4FD8]/95',
+          terrain.primaryBg,
+        )}
         disabled={!canSubmit}
         onClick={() => void handleSubmit()}
       >
@@ -423,6 +335,6 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
           'Envoyer le signal'
         )}
       </Button>
-    </div>
+    </>,
   )
 }

@@ -6,38 +6,49 @@ import {
   Signal,
   UserRound,
 } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
 
+import type { TerrainNavPath } from '@/app/terrain-routes'
+import { terrainTapProps } from '@/lib/terrain-motion'
 import { cn } from '@/lib/utils'
 
-export type TerrainPath = '/reporting' | '/signals' | '/execution' | '/chat' | '/profile'
-
 type BottomMobileNavProps = {
-  activePath: TerrainPath
+  activePath: TerrainNavPath
   navigate: (pathname: string, options?: { replace?: boolean }) => void
+  className?: string
 }
 
 type NavItem = {
-  path: TerrainPath
+  path: TerrainNavPath
   label: string
   icon: ComponentType<{ className?: string }>
   isPrimary?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/signals', label: 'Signal', icon: Signal },
+  { path: '/signals', label: 'Signaux', icon: Signal },
   { path: '/execution', label: 'Exécution', icon: CirclePlay },
-  { path: '/reporting', label: 'Signaler', icon: Plus, isPrimary: true },
+  { path: '/reporting', label: '', icon: Plus, isPrimary: true },
   { path: '/chat', label: 'Chat', icon: MessageCircle },
   { path: '/profile', label: 'Profil', icon: UserRound },
 ]
 
-export function BottomMobileNav({ activePath, navigate }: BottomMobileNavProps) {
+const MotionA = motion.a
+
+export function BottomMobileNav({ activePath, navigate, className }: BottomMobileNavProps) {
+  const shouldReduceMotion = useReducedMotion()
+  const tapProps = terrainTapProps(shouldReduceMotion)
+  const NavLink = shouldReduceMotion ? 'a' : MotionA
+
   return (
     <nav
       aria-label="Navigation terrain"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8E6DF] bg-white sm:hidden"
+      className={cn(
+        'w-full shrink-0 overflow-visible border-t border-[#E8E6DF] bg-white',
+        className,
+      )}
     >
-      <ul className="mx-auto grid max-w-md grid-cols-5 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1">
+      <ul className="grid grid-cols-5 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1">
         {NAV_ITEMS.map((item) => {
           const isActive = activePath === item.path
           const Icon = item.icon
@@ -45,15 +56,16 @@ export function BottomMobileNav({ activePath, navigate }: BottomMobileNavProps) 
           if (item.isPrimary) {
             return (
               <li key={item.path} className="flex items-start justify-center">
-                <a
+                <NavLink
                   href={item.path}
-                  aria-label="+ Signaler"
+                  aria-label="Nouveau signal"
                   aria-current={isActive ? 'page' : undefined}
                   onClick={(event) => {
                     event.preventDefault()
                     navigate('/reporting')
                   }}
                   className="flex min-h-11 min-w-11 flex-col items-center justify-start"
+                  {...tapProps}
                 >
                   <span
                     className={cn(
@@ -63,17 +75,14 @@ export function BottomMobileNav({ activePath, navigate }: BottomMobileNavProps) 
                   >
                     <Icon className="h-6 w-6" />
                   </span>
-                  <span className="-mt-2 text-[11px] font-medium leading-none text-[#1B4FD8]">
-                    Signaler
-                  </span>
-                </a>
+                </NavLink>
               </li>
             )
           }
 
           return (
             <li key={item.path} className="flex items-center justify-center">
-              <a
+              <NavLink
                 href={item.path}
                 aria-current={isActive ? 'page' : undefined}
                 onClick={(event) => {
@@ -84,10 +93,11 @@ export function BottomMobileNav({ activePath, navigate }: BottomMobileNavProps) 
                   'flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
                   isActive && 'text-[#1B4FD8]',
                 )}
+                {...tapProps}
               >
                 <Icon className={cn('h-5 w-5', isActive && 'stroke-[2.5]')} />
                 <span className="text-[11px] font-medium leading-none">{item.label}</span>
-              </a>
+              </NavLink>
             </li>
           )
         })}
