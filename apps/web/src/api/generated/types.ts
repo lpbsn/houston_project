@@ -2235,7 +2235,15 @@ export interface operations {
     v1_establishments_signal_feed_retrieve: {
         parameters: {
             query: {
+                /** @description Comma-separated operational domain keys (max 50). */
+                domain_keys?: string;
+                /** @description Comma-separated operational module keys (max 20). */
+                module_keys?: string;
                 page_size?: number;
+                /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
+                statuses?: string;
+                /** @description Comma-separated operational subject keys (max 100). */
+                subject_keys?: string;
                 view_mode: "general" | "personal";
             };
             header?: never;

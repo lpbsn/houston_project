@@ -826,6 +826,11 @@ paths:
     get:
       operationId: v1_establishments_signal_feed_retrieve
       parameters:
+      - in: query
+        name: domain_keys
+        schema:
+          type: string
+        description: Comma-separated operational domain keys (max 50).
       - in: path
         name: establishment_id
         schema:
@@ -833,9 +838,25 @@ paths:
           format: uuid
         required: true
       - in: query
+        name: module_keys
+        schema:
+          type: string
+        description: Comma-separated operational module keys (max 20).
+      - in: query
         name: page_size
         schema:
           type: integer
+      - in: query
+        name: statuses
+        schema:
+          type: string
+        description: 'Comma-separated feed statuses: open, in_progress, resolved (max
+          3).'
+      - in: query
+        name: subject_keys
+        schema:
+          type: string
+        description: Comma-separated operational subject keys (max 100).
       - in: query
         name: view_mode
         schema:

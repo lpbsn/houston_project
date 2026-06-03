@@ -1,3 +1,5 @@
+export type { SignalFeedFilters } from './lib/signal-feed-filters'
+
 export type SignalViewMode = 'personal' | 'general'
 
 export type PermissionHints = {
@@ -26,11 +28,19 @@ export type SignalFeedItem = {
   permission_hints: PermissionHints
 }
 
+export type SignalFeedAppliedFilters = {
+  view_mode: SignalViewMode
+  statuses: string[]
+  module_keys: string[]
+  domain_keys: string[]
+  subject_keys: string[]
+}
+
 export type SignalFeedResponse = {
   items: SignalFeedItem[]
   next_cursor: string | null
   has_more: boolean
-  applied_filters: { view_mode: SignalViewMode }
+  applied_filters: SignalFeedAppliedFilters
 }
 
 export type SourceContext = {

@@ -8,6 +8,7 @@ from django.db.models import Case, IntegerField, Prefetch, QuerySet, Value, When
 from houston.establishments.membership_scope import build_signal_feed_scope_q
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
+from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
 from houston.signals.models import Signal, SignalSourceObservation
 
 ViewMode = Literal["personal", "general"]
@@ -85,22 +86,27 @@ def signal_feed_queryset(
     *,
     membership: EstablishmentMembership,
     view_mode: ViewMode,
+    filters: SignalFeedFilters | None = None,
 ) -> QuerySet[Signal]:
     queryset = feed_signals_for_establishment(establishment_id=membership.establishment_id)
 
     if view_mode == "general":
+        queryset = apply_feed_filters(queryset, filters=filters)
         return apply_feed_sorting(queryset)
 
     if membership.role in {
         EstablishmentMembership.Role.OWNER,
         EstablishmentMembership.Role.DIRECTOR,
     }:
+        queryset = apply_feed_filters(queryset, filters=filters)
         return apply_feed_sorting(queryset)
 
     scope_q = build_signal_feed_scope_q(membership=membership)
     if scope_q is None:
         return apply_feed_sorting(queryset.none())
-    return apply_feed_sorting(queryset.filter(scope_q))
+    queryset = queryset.filter(scope_q)
+    queryset = apply_feed_filters(queryset, filters=filters)
+    return apply_feed_sorting(queryset)
 
 
 def get_signal_for_detail(

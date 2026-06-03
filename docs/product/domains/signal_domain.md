@@ -193,7 +193,7 @@ Candidate events only:
 Current API truth is `apps/api/schema.yml`.
 
 Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establishments/{establishment_id}/`):
-- `GET signal-feed/` — active Signals only (`view_mode=personal|general`)
+- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `module_keys`, `domain_keys`, `subject_keys` (comma-separated, OR within category, AND with status); response includes `applied_filters`
 - `GET signals/{signal_id}/` — active Signal detail
 - `POST signals/{signal_id}/pin/`
 - `POST signals/{signal_id}/unpin/`

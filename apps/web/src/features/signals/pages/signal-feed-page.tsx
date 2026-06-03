@@ -8,11 +8,19 @@ import {
   TerrainSectionLabel,
 } from '@/components/ui/terrain'
 import { SignalCard } from '../components/signal-card'
-import { SignalFeedFiltersPlaceholder } from '../components/signal-feed-filters-placeholder'
+import {
+  EMPTY_SIGNAL_FEED_FILTERS,
+  SignalFeedFiltersBar,
+} from '../components/signal-feed-filters-bar'
 import { SignalFeedTabs } from '../components/signal-feed-tabs'
 import { useSignalFeedQuery } from '../hooks'
 import { SignalsApiError } from '../api'
 import { groupFeedItemsByStatus } from '../lib/signal-display'
+import {
+  hasActiveSignalFeedFilters,
+  normalizeSignalFeedFilters,
+  type SignalFeedFilters,
+} from '../lib/signal-feed-filters'
 import type { SignalFeedItem, SignalViewMode } from '../types'
 
 type SignalFeedPageProps = {
@@ -33,8 +41,11 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const [viewMode, setViewMode] = useState<SignalViewMode>('personal')
+  const [filters, setFilters] = useState<SignalFeedFilters>(EMPTY_SIGNAL_FEED_FILTERS)
 
-  const feedQuery = useSignalFeedQuery(establishmentId, viewMode)
+  const normalizedFilters = normalizeSignalFeedFilters(filters)
+  const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters)
+  const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
 
   if (!establishmentId) {
     return (
@@ -57,13 +68,32 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
     </div>
   )
 
+  function handleClearFilters() {
+    setFilters(EMPTY_SIGNAL_FEED_FILTERS)
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-[#E8E6DF] bg-white">
         <div className="px-3 pb-3 pt-1">
           <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
         </div>
-        <SignalFeedFiltersPlaceholder />
+        <SignalFeedFiltersBar
+          establishmentId={establishmentId}
+          filters={filters}
+          onFiltersChange={setFilters}
+        />
+        {filtersActive ? (
+          <div className="border-t border-[#E8E6DF] px-3 pb-2 pt-0">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="text-[11px] font-semibold text-[#1B4FD8]"
+            >
+              Effacer les filtres
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3">
@@ -81,7 +111,23 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           />
         ) : null}
 
-        {feedQuery.isSuccess && feedQuery.data.items.length === 0 ? (
+        {feedQuery.isSuccess && feedQuery.data.items.length === 0 && filtersActive ? (
+          <div className="mx-3 mt-3 space-y-2">
+            <TerrainEmptyState
+              title="Aucun résultat"
+              description="Aucun signal ne correspond à ces filtres."
+            />
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="text-[11px] font-semibold text-[#1B4FD8]"
+            >
+              Effacer les filtres
+            </button>
+          </div>
+        ) : null}
+
+        {feedQuery.isSuccess && feedQuery.data.items.length === 0 && !filtersActive ? (
           <TerrainEmptyState
             className="mx-3 mt-3"
             title="Aucun signal actif"

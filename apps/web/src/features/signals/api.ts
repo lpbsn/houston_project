@@ -1,11 +1,14 @@
 import { withAuthRetry } from '@/api/client'
 
-import type { SignalDetail, SignalFeedResponse, SignalViewMode } from './types'
+import { appendSignalFeedFiltersToSearchParams, normalizeSignalFeedFilters } from './lib/signal-feed-filters'
+import type { SignalDetail, SignalFeedFilters, SignalFeedResponse, SignalViewMode } from './types'
+
+export type { SignalFeedFilters } from './lib/signal-feed-filters'
 
 export const signalsQueryKeys = {
   all: ['signals'] as const,
-  feed: (establishmentId: string, viewMode: SignalViewMode) =>
-    ['signals', 'feed', establishmentId, viewMode] as const,
+  feed: (establishmentId: string, viewMode: SignalViewMode, filters: SignalFeedFilters) =>
+    ['signals', 'feed', establishmentId, viewMode, normalizeSignalFeedFilters(filters)] as const,
   detail: (establishmentId: string, signalId: string) =>
     ['signals', 'detail', establishmentId, signalId] as const,
 }
@@ -54,8 +57,10 @@ function parseError(response: Response, payload: unknown): SignalsApiError {
 export async function fetchSignalFeed(
   establishmentId: string,
   viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
 ): Promise<SignalFeedResponse> {
   const params = new URLSearchParams({ view_mode: viewMode })
+  appendSignalFeedFiltersToSearchParams(params, filters)
   const response = await fetchWithAuthRetry(
     `/api/v1/establishments/${establishmentId}/signal-feed/?${params.toString()}`,
     { method: 'GET' },

@@ -10,18 +10,22 @@ import {
   signalsQueryKeys,
   unpinSignal,
 } from './api'
-import type { SignalDetail, SignalViewMode } from './types'
+import type { SignalDetail, SignalFeedFilters, SignalViewMode } from './types'
 
-export function useSignalFeedQuery(establishmentId: string | null, viewMode: SignalViewMode) {
+export function useSignalFeedQuery(
+  establishmentId: string | null,
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+) {
   return useQuery({
     queryKey: establishmentId
-      ? signalsQueryKeys.feed(establishmentId, viewMode)
+      ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
       : ['signals', 'feed', 'none'],
     queryFn: () => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchSignalFeed(establishmentId, viewMode)
+      return fetchSignalFeed(establishmentId, viewMode, filters)
     },
     enabled: Boolean(establishmentId),
   })
