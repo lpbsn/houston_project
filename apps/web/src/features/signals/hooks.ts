@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  cancelSignal,
   fetchSignalDetail,
   fetchSignalFeed,
   pinSignal,
+  resolveSignal,
   setSignalUrgency,
   signalsQueryKeys,
   unpinSignal,
 } from './api'
-import type { SignalViewMode } from './types'
+import type { SignalDetail, SignalViewMode } from './types'
 
 export function useSignalFeedQuery(establishmentId: string | null, viewMode: SignalViewMode) {
   return useQuery({
@@ -82,6 +84,67 @@ export function useSignalUrgencyMutation(establishmentId: string | null, signalI
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+    },
+  })
+}
+
+type SignalLifecycleMutationOptions = {
+  onClosed?: () => void
+}
+
+function useSignalLifecycleMutationSuccess(
+  establishmentId: string | null,
+  signalId: string | null,
+  options?: SignalLifecycleMutationOptions,
+) {
+  const queryClient = useQueryClient()
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+    if (establishmentId && signalId) {
+      queryClient.removeQueries({
+        queryKey: signalsQueryKeys.detail(establishmentId, signalId),
+      })
+    }
+    options?.onClosed?.()
+  }
+}
+
+export function useCancelSignalMutation(
+  establishmentId: string | null,
+  signalId: string | null,
+  options?: SignalLifecycleMutationOptions,
+) {
+  const handleSuccess = useSignalLifecycleMutationSuccess(establishmentId, signalId, options)
+  return useMutation({
+    mutationFn: async () => {
+      if (!establishmentId || !signalId) {
+        throw new Error('Signal introuvable.')
+      }
+      return cancelSignal(establishmentId, signalId)
+    },
+    onSuccess: () => {
+      handleSuccess()
+    },
+  })
+}
+
+export function useResolveSignalMutation(
+  establishmentId: string | null,
+  signalId: string | null,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      if (!establishmentId || !signalId) {
+        throw new Error('Signal introuvable.')
+      }
+      return resolveSignal(establishmentId, signalId)
+    },
+    onSuccess: (detail: SignalDetail) => {
+      void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+      if (establishmentId && signalId) {
+        queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, signalId), detail)
+      }
     },
   })
 }

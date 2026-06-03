@@ -314,6 +314,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/": {
         parameters: {
             query?: never;
@@ -324,6 +340,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["v1_establishments_signals_pin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_resolve_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1136,6 +1168,8 @@ export interface components {
         PermissionHints: {
             can_pin: boolean;
             can_set_urgency: boolean;
+            can_cancel: boolean;
+            can_resolve: boolean;
         };
         ProposalCatalogItem: {
             key: string;
@@ -1330,6 +1364,7 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            reporter_display_name?: string | null;
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
             source_context: components["schemas"]["SourceContext"];
@@ -1352,6 +1387,7 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            reporter_display_name?: string | null;
             permission_hints: components["schemas"]["PermissionHints"];
         };
         SignalFeedResponse: {
@@ -2298,6 +2334,52 @@ export interface operations {
             };
         };
     };
+    v1_establishments_signals_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_signals_pin_create: {
         parameters: {
             query?: never;
@@ -2316,6 +2398,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_resolve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {

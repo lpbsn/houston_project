@@ -924,6 +924,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/cancel/:
+    post:
+      operationId: v1_establishments_signals_cancel_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/:
     post:
       operationId: v1_establishments_signals_pin_create
@@ -950,6 +995,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/:
+    post:
+      operationId: v1_establishments_signals_resolve_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
           content:
@@ -3219,8 +3309,14 @@ components:
           type: boolean
         can_set_urgency:
           type: boolean
+        can_cancel:
+          type: boolean
+        can_resolve:
+          type: boolean
       required:
+      - can_cancel
       - can_pin
+      - can_resolve
       - can_set_urgency
     ProposalCatalogItem:
       type: object
@@ -3704,6 +3800,9 @@ components:
         created_at:
           type: string
           format: date-time
+        reporter_display_name:
+          type: string
+          nullable: true
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
         structured_summary:
@@ -3763,6 +3862,9 @@ components:
         created_at:
           type: string
           format: date-time
+        reporter_display_name:
+          type: string
+          nullable: true
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
       required:

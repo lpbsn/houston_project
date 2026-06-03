@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 
 import {
   formatSignalRelativeTime,
-  getSignalCardLeftAccentClass,
+  getSignalCardLeftAccentColor,
   getSignalCardSurfaceClass,
 } from '../lib/signal-display'
 import type { SignalFeedItem } from '../types'
@@ -20,17 +20,18 @@ type SignalCardProps = {
 
 export function SignalCard({ item, onSelect }: SignalCardProps) {
   const shouldReduceMotion = useReducedMotion()
-  const leftAccent = getSignalCardLeftAccentClass(item)
+  const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
 
   const card = (
     <article
       className={cn(
         'cursor-pointer rounded-[14px] border border-[#E8E6DF] bg-white py-3 pl-3 pr-3.5',
-        'border-l-4 transition hover:border-[#1B4FD8]/30',
-        leftAccent,
+        'border-l-4 transition',
+        'hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30',
         surfaceClass,
       )}
+      style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -60,10 +61,13 @@ export function SignalCard({ item, onSelect }: SignalCardProps) {
         <p className="mt-1 text-[11px] text-[#888]">📍 {item.location_text}</p>
       ) : null}
       <div className="mt-2 flex items-center justify-between border-t border-[#F0EFE9] pt-2">
-        <span className="text-[11px] text-[#888]">
+        <span className="flex items-center gap-2 text-[11px] text-[#888]">
+          {item.reporter_display_name?.trim() ? (
+            <span>{item.reporter_display_name.trim()}</span>
+          ) : null}
           {item.is_pinned ? (
             <span className="font-medium text-[#1B4FD8]">Épinglé</span>
-          ) : (
+          ) : item.reporter_display_name?.trim() ? null : (
             '\u00a0'
           )}
         </span>

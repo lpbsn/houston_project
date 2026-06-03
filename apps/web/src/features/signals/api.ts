@@ -128,3 +128,33 @@ export async function setSignalUrgency(
   }
   return payload as SignalDetail
 }
+
+export async function cancelSignal(
+  establishmentId: string,
+  signalId: string,
+): Promise<SignalDetail> {
+  const response = await fetchWithAuthRetry(
+    `/api/v1/establishments/${establishmentId}/signals/${signalId}/cancel/`,
+    { method: 'POST' },
+  )
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw parseError(response, payload)
+  }
+  return payload as SignalDetail
+}
+
+export async function resolveSignal(
+  establishmentId: string,
+  signalId: string,
+): Promise<SignalDetail> {
+  const response = await fetchWithAuthRetry(
+    `/api/v1/establishments/${establishmentId}/signals/${signalId}/resolve/`,
+    { method: 'POST' },
+  )
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw parseError(response, payload)
+  }
+  return payload as SignalDetail
+}

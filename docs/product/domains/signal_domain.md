@@ -1,8 +1,8 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-05-29
-Implementation status: not_started
+Last reviewed: 2026-06-03
+Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; archive, Actions-from-Signal, timeline not implemented)
 
 ## 1. Purpose
 
@@ -37,7 +37,7 @@ Signal is the operational object between Observation and Action. It is not the r
 - Relationship to linked Actions, contextual comments, safe timeline entries, and linked Observation media context without exposing raw Observation text.
 - Establishment-scoped backend authorization for Signal visibility and commands.
 
-This domain describes the validated MVP target behavior. Current code and `apps/api/schema.yml` still show Signal implementation as not started.
+This domain describes the validated MVP target behavior. Current code and `apps/api/schema.yml` confirm partial Signal implementation (see §9).
 
 ## 3. Out of Scope
 
@@ -120,11 +120,12 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 
 - `resolved`
   - Situation considered operationally handled.
-  - Exact manual and automatic resolution rules depend on Action lifecycle implementation and are not validated in code yet.
+  - Manual resolution is available via backend command `POST .../signals/{id}/resolve/` from active statuses (`open`, `in_progress`).
+  - Automatic resolution when all linked Actions are terminal is a future Action-domain behavior; not implemented in current code.
 
 - `canceled`
   - Situation intentionally closed as no longer relevant to pursue.
-  - Exact cancellation categories and reasons are not validated yet.
+  - **MVP cancellation does not require a category, reason, or justification payload.** The command is `POST .../signals/{id}/cancel/` with no mandatory request body.
 
 - `archived`
   - Historical state outside the active operational feed by default.
@@ -137,9 +138,16 @@ Validated target transition rules:
 - A recurring issue after a closed Signal should create a new Signal rather than silently reuse the closed one.
 - `archived` is out of the active Signal feed by default.
 
+Validated in current code:
+- Manual cancel and resolve from `open` or `in_progress` only (active statuses).
+- Default Signal Feed includes `open`, `in_progress`, and `resolved`; `canceled` and `archived` are excluded.
+- Feed sorting places all active Signals before any `resolved` Signal (`status_group_rank` before pin/urgency).
+- `resolved` Signals are readable on detail (read-only via `permission_hints`); `canceled` and `archived` are not exposed on detail by default.
+- Resolve transition forces unpin (clears pin fields) and resets `high` urgency to `normal` (model has `normal` / `high` only).
+
 Not validated yet:
 - exact automatic transition from `open` to `in_progress`
-- exact automatic transition from active states to `resolved`
+- exact automatic transition from active states to `resolved` via Action completion
 - exact reopen behavior
 - exact archival timing
 - exact stored representation of multi-domain confidence scores
@@ -148,17 +156,18 @@ Not validated yet:
 ## 7. Permissions
 
 - Signal visibility is establishment-scoped and backend-authorized.
-- RBAC baseline defines establishment membership, role, and operational-domain authority, but Signal-specific permission helpers remain candidate until Signal APIs/services exist.
+- RBAC baseline defines establishment membership, role, and operational-domain authority. Signal command helpers exist for implemented APIs.
 - Owner and Director target behavior: broad establishment-level Signal visibility and actionability, subject to RBAC.
 - Manager target behavior: actionability requires RBAC (`MembershipScope` domain coverage) and Signal's `operational_domain`.
-- Ma vue (`view_mode=personal`) filters by **`MembershipScope`** (Owner/Director: all active establishment Signals).
-- Vue générale (`view_mode=general`) shows all active establishment Signals without subscription filter.
+- Ma vue (`view_mode=personal`) filters by **`MembershipScope`** (Owner/Director: all feed-visible establishment Signals).
+- Vue générale (`view_mode=general`) shows all feed-visible establishment Signals without subscription filter.
 - Visibility does not imply actionability.
-- Creating Actions from Signals, resolving Signals, canceling Signals, changing urgency, pinning, and editing Signal domains require backend command authorization when those workflows are implemented.
+- Resolving Signals, canceling Signals, changing urgency, and pinning require backend command authorization (implemented). Creating Actions from Signals and editing Signal domains remain future workflows.
+- **Cancel and resolve** (implemented): Owner and Director may act on any active Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy; **Staff are denied** cancel and resolve.
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
 
-Exact per-command Signal permission rules remain candidate until Signal APIs and services exist in current code and in `apps/api/schema.yml`.
+API responses expose `permission_hints` (`can_pin`, `can_set_urgency`, `can_cancel`, `can_resolve`) for UI display; backend permission checks on command endpoints remain authoritative.
 
 ## 8. Events
 
@@ -183,23 +192,22 @@ Candidate events only:
 
 Current API truth is `apps/api/schema.yml`.
 
-Current schema confirmation:
-- no Signal routes are confirmed today
+Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establishments/{establishment_id}/`):
+- `GET signal-feed/` — active Signals only (`view_mode=personal|general`)
+- `GET signals/{signal_id}/` — active Signal detail
+- `POST signals/{signal_id}/pin/`
+- `POST signals/{signal_id}/unpin/`
+- `PATCH signals/{signal_id}/urgency/` — body `{ "urgency": "normal" | "high" }`
+- `POST signals/{signal_id}/cancel/` — **no mandatory body**; sets status `canceled`
+- `POST signals/{signal_id}/resolve/` — **no mandatory body**; sets status `resolved`
 
-Candidate API capabilities only:
-- Signal Feed
-- Signal detail
-- resolve Signal
-- cancel Signal
-- pin Signal
-- unpin Signal
-- set Signal urgency
-- add Signal domain
-- remove Signal domain
+Not implemented in current schema:
+- archive Signal
+- add/remove Signal domain
 - create Action from Signal
 - fetch Signal timeline or events
 
-Do not treat any Signal route as current API truth until it exists in `apps/api/schema.yml`.
+Do not treat any Signal route as implemented until it exists in `apps/api/schema.yml`.
 
 ## 10. Frontend Expectations
 

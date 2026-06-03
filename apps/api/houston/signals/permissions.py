@@ -62,6 +62,8 @@ def can_pin_signal(
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
+    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+        return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
     if membership.role in _ADMIN_ROLES:
@@ -74,3 +76,34 @@ def can_set_signal_urgency(
     signal: Signal,
 ) -> bool:
     return can_pin_signal(membership, signal)
+
+
+def can_cancel_signal(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    return _can_cancel_or_resolve_signal(membership, signal)
+
+
+def can_resolve_signal(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    return _can_cancel_or_resolve_signal(membership, signal)
+
+
+def _can_cancel_or_resolve_signal(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    if membership is None:
+        return False
+    if signal.establishment_id != membership.establishment_id:
+        return False
+    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+        return False
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return False
+    if membership.role in _ADMIN_ROLES:
+        return True
+    return signal_matches_membership_scope(membership, signal)

@@ -18,9 +18,21 @@ from houston.signals.api.serializers import (
     serialize_signal_feed_item,
 )
 from houston.signals.exceptions import SignalStateError, SignalValidationError
-from houston.signals.permissions import can_pin_signal, can_set_signal_urgency, can_view_signal_feed
+from houston.signals.permissions import (
+    can_cancel_signal,
+    can_pin_signal,
+    can_resolve_signal,
+    can_set_signal_urgency,
+    can_view_signal_feed,
+)
 from houston.signals.selectors import get_signal_for_detail, signal_feed_queryset
-from houston.signals.services import pin_signal, set_signal_urgency, unpin_signal
+from houston.signals.services import (
+    cancel_signal,
+    pin_signal,
+    resolve_signal,
+    set_signal_urgency,
+    unpin_signal,
+)
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
 
@@ -193,6 +205,60 @@ class SignalUnpinView(EstablishmentScopedSignalMixin, APIView):
         )
 
 
+class SignalCancelView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        tags=["signals"],
+        request=None,
+        responses={
+            200: SignalDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, signal_id):
+        return _signal_lifecycle_command_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            signal_id=signal_id,
+            action="cancel",
+        )
+
+
+class SignalResolveView(EstablishmentScopedSignalMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewSignalFeed,
+    ]
+
+    @extend_schema(
+        tags=["signals"],
+        request=None,
+        responses={
+            200: SignalDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, signal_id):
+        return _signal_lifecycle_command_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            signal_id=signal_id,
+            action="resolve",
+        )
+
+
 class SignalUrgencyView(EstablishmentScopedSignalMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
@@ -248,6 +314,57 @@ class SignalUrgencyView(EstablishmentScopedSignalMixin, APIView):
 
         payload = serialize_signal_detail(signal=signal, membership=membership)
         return Response(SignalDetailSerializer(payload).data)
+
+
+def _signal_lifecycle_command_response(
+    *,
+    request,
+    establishment_id: uuid.UUID,
+    signal_id: str,
+    action: str,
+) -> Response:
+    membership = resolve_observation_actor_membership(
+        request,
+        establishment_id=establishment_id,
+    )
+    if membership is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    signal = get_signal_for_detail(
+        membership=membership,
+        signal_id=uuid.UUID(str(signal_id)),
+    )
+    if signal is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if action == "cancel":
+        if not can_cancel_signal(membership, signal):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+    elif action == "resolve":
+        if not can_resolve_signal(membership, signal):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+    else:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        if action == "cancel":
+            signal = cancel_signal(signal=signal)
+        else:
+            signal = resolve_signal(signal=signal)
+    except SignalStateError as exc:
+        return Response(
+            {"code": exc.error_code, "detail": "Invalid signal state."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    payload = serialize_signal_detail(signal=signal, membership=membership)
+    return Response(SignalDetailSerializer(payload).data)
 
 
 def _signal_command_response(

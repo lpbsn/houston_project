@@ -514,3 +514,48 @@ def set_signal_urgency(*, signal: Signal, urgency: str) -> Signal:
     touch_signal_activity(signal=signal)
     signal.save(update_fields=["urgency", "last_activity_at", "updated_at"])
     return signal
+
+
+@transaction.atomic
+def cancel_signal(*, signal: Signal) -> Signal:
+    return _transition_active_signal_to_terminal(
+        signal=signal,
+        target_status=Signal.Status.CANCELED,
+    )
+
+
+@transaction.atomic
+def resolve_signal(*, signal: Signal) -> Signal:
+    return _transition_active_signal_to_terminal(
+        signal=signal,
+        target_status=Signal.Status.RESOLVED,
+        reset_high_urgency=True,
+    )
+
+
+def _transition_active_signal_to_terminal(
+    *,
+    signal: Signal,
+    target_status: str,
+    reset_high_urgency: bool = False,
+) -> Signal:
+    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+        raise SignalStateError("Only active signals can be canceled or resolved.")
+    signal.status = target_status
+    signal.is_pinned = False
+    signal.pinned_at = None
+    signal.pinned_by_membership = None
+    update_fields = [
+        "status",
+        "is_pinned",
+        "pinned_at",
+        "pinned_by_membership",
+        "last_activity_at",
+        "updated_at",
+    ]
+    if reset_high_urgency and signal.urgency == Signal.Urgency.HIGH:
+        signal.urgency = Signal.Urgency.NORMAL
+        update_fields.append("urgency")
+    touch_signal_activity(signal=signal)
+    signal.save(update_fields=update_fields)
+    return signal

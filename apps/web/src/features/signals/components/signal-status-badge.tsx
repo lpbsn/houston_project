@@ -1,5 +1,6 @@
-import type { HoustonBadgeVariant } from '@/lib/terrain-styles'
 import { HoustonBadge } from '@/components/ui/terrain'
+
+import { getSignalStatusBadgeVariant } from '../lib/signal-display'
 
 type SignalStatusBadgeProps = {
   status: string
@@ -8,24 +9,18 @@ type SignalStatusBadgeProps = {
 }
 
 const LABELS: Record<string, string> = {
-  open: 'EN ATTENTE',
-  in_progress: 'EN COURS',
-  resolved: 'RÉSOLU',
-  archived: 'ARCHIVÉ',
-}
-
-const BADGE_VARIANTS: Record<string, HoustonBadgeVariant> = {
-  open: 'gray',
-  in_progress: 'blue',
-  resolved: 'green',
-  archived: 'gray',
+  open: 'En attente',
+  in_progress: 'En cours',
+  resolved: 'Résolu',
+  canceled: 'Annulée',
+  archived: 'Archivé',
 }
 
 const ARCHIVED_BADGE_CLASS = 'bg-[#555] text-white'
 
 export function SignalStatusBadge({ status }: SignalStatusBadgeProps) {
-  const label = LABELS[status] ?? status.toUpperCase()
-  const badgeVariant = BADGE_VARIANTS[status] ?? 'gray'
+  const label = LABELS[status] ?? status
+  const badgeVariant = getSignalStatusBadgeVariant(status)
 
   if (status === 'archived') {
     return <HoustonBadge variant={badgeVariant} className={ARCHIVED_BADGE_CLASS}>{label}</HoustonBadge>

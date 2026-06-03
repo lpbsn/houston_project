@@ -3,12 +3,15 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.signals.models import Signal
+from houston.signals.reporter_display import reporter_display_name_for_signal
 from houston.signals.services import structured_summary_short
 
 
 class PermissionHintsSerializer(serializers.Serializer):
     can_pin = serializers.BooleanField()
     can_set_urgency = serializers.BooleanField()
+    can_cancel = serializers.BooleanField()
+    can_resolve = serializers.BooleanField()
 
 
 class SignalFeedItemSerializer(serializers.Serializer):
@@ -26,6 +29,7 @@ class SignalFeedItemSerializer(serializers.Serializer):
     media_count = serializers.IntegerField()
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
+    reporter_display_name = serializers.CharField(allow_null=True, required=False)
     permission_hints = PermissionHintsSerializer()
 
 
@@ -52,7 +56,12 @@ class SignalUrgencyRequestSerializer(serializers.Serializer):
 
 
 def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
-    from houston.signals.permissions import can_pin_signal, can_set_signal_urgency
+    from houston.signals.permissions import (
+        can_cancel_signal,
+        can_pin_signal,
+        can_resolve_signal,
+        can_set_signal_urgency,
+    )
 
     media_count = 0
     link = signal.source_observation_links.select_related("observation").first()
@@ -74,9 +83,12 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "media_count": media_count,
         "last_activity_at": signal.last_activity_at,
         "created_at": signal.created_at,
+        "reporter_display_name": reporter_display_name_for_signal(signal),
         "permission_hints": {
             "can_pin": can_pin_signal(membership, signal),
             "can_set_urgency": can_set_signal_urgency(membership, signal),
+            "can_cancel": can_cancel_signal(membership, signal),
+            "can_resolve": can_resolve_signal(membership, signal),
         },
     }
 

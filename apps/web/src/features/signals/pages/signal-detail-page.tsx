@@ -4,12 +4,15 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
 
 import { SignalDetailMediaPlaceholder } from '../components/signal-detail-media-placeholder'
+import { SignalLifecycleActions } from '../components/signal-lifecycle-actions'
 import { SignalPinUrgencyActions } from '../components/signal-pin-urgency-actions'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalTaxonomyBadges } from '../components/signal-taxonomy-badges'
 import { SignalUrgencyBadge } from '../components/signal-urgency-badge'
 import {
+  useCancelSignalMutation,
   usePinSignalMutation,
+  useResolveSignalMutation,
   useSignalDetailQuery,
   useSignalUrgencyMutation,
   useUnpinSignalMutation,
@@ -20,6 +23,7 @@ import type { SignalDetail } from '../types'
 
 type SignalDetailPageProps = {
   signalId: string
+  onNavigate: (pathname: string) => void
 }
 
 function getErrorMessage(error: unknown): string {
@@ -44,17 +48,32 @@ function resolveMediaCount(signal: SignalDetail): number {
   return signal.source_context.media_count ?? 0
 }
 
-export function SignalDetailPage({ signalId }: SignalDetailPageProps) {
+export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+
+  const lifecycleClosed = () => {
+    onNavigate('/signals')
+  }
 
   const detailQuery = useSignalDetailQuery(establishmentId, signalId)
   const pinMutation = usePinSignalMutation(establishmentId, signalId)
   const unpinMutation = useUnpinSignalMutation(establishmentId, signalId)
   const urgencyMutation = useSignalUrgencyMutation(establishmentId, signalId)
+  const cancelMutation = useCancelSignalMutation(establishmentId, signalId, {
+    onClosed: lifecycleClosed,
+  })
+  const resolveMutation = useResolveSignalMutation(establishmentId, signalId)
+
+  const lifecycleError =
+    cancelMutation.error ?? resolveMutation.error ?? null
 
   const isPending =
-    pinMutation.isPending || unpinMutation.isPending || urgencyMutation.isPending
+    pinMutation.isPending ||
+    unpinMutation.isPending ||
+    urgencyMutation.isPending ||
+    cancelMutation.isPending ||
+    resolveMutation.isPending
 
   if (detailQuery.isLoading) {
     return (
@@ -114,6 +133,19 @@ export function SignalDetailPage({ signalId }: SignalDetailPageProps) {
         onUnpin={() => void unpinMutation.mutate()}
         onSetUrgency={(urgency) => void urgencyMutation.mutate(urgency)}
       />
+
+      <SignalLifecycleActions
+        hints={signal.permission_hints}
+        isPending={isPending}
+        onCancel={() => void cancelMutation.mutate()}
+        onResolve={() => void resolveMutation.mutate()}
+      />
+
+      {lifecycleError ? (
+        <p className="px-1 text-sm text-destructive" role="alert">
+          {getErrorMessage(lifecycleError)}
+        </p>
+      ) : null}
     </div>
   )
 }

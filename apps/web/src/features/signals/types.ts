@@ -3,6 +3,8 @@ export type SignalViewMode = 'personal' | 'general'
 export type PermissionHints = {
   can_pin: boolean
   can_set_urgency: boolean
+  can_cancel: boolean
+  can_resolve: boolean
 }
 
 export type SignalFeedItem = {
@@ -20,6 +22,7 @@ export type SignalFeedItem = {
   media_count: number
   last_activity_at: string
   created_at: string
+  reporter_display_name: string | null
   permission_hints: PermissionHints
 }
 

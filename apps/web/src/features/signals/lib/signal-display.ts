@@ -1,4 +1,4 @@
-import type { TerrainSectionDotVariant } from '@/lib/terrain-styles'
+import type { HoustonBadgeVariant, TerrainSectionDotVariant } from '@/lib/terrain-styles'
 
 import type { SignalFeedItem } from '../types'
 
@@ -18,18 +18,19 @@ export function formatSignalRelativeTime(iso: string): string {
 }
 
 export type SignalFeedStatusGroup = {
-  status: 'open' | 'in_progress'
+  status: 'open' | 'in_progress' | 'resolved'
   label: string
   dotVariant: TerrainSectionDotVariant
   items: SignalFeedItem[]
 }
 
 const STATUS_GROUP_META: Record<
-  'open' | 'in_progress',
+  'open' | 'in_progress' | 'resolved',
   { label: string; dotVariant: TerrainSectionDotVariant }
 > = {
   open: { label: 'En attente', dotVariant: 'danger' },
   in_progress: { label: 'En cours', dotVariant: 'primary' },
+  resolved: { label: 'Résolus', dotVariant: 'muted' },
 }
 
 /**
@@ -39,7 +40,7 @@ const STATUS_GROUP_META: Record<
 export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatusGroup[] | null {
   const open = items.filter((item) => item.status === 'open')
   const inProgress = items.filter((item) => item.status === 'in_progress')
-  const other = items.filter((item) => item.status !== 'open' && item.status !== 'in_progress')
+  const resolved = items.filter((item) => item.status === 'resolved')
 
   const presentGroups: SignalFeedStatusGroup[] = []
   if (open.length > 0) {
@@ -56,12 +57,11 @@ export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatu
       items: inProgress,
     })
   }
-  if (other.length > 0) {
+  if (resolved.length > 0) {
     presentGroups.push({
-      status: 'in_progress',
-      label: 'Autres',
-      dotVariant: 'muted',
-      items: other,
+      status: 'resolved',
+      ...STATUS_GROUP_META.resolved,
+      items: resolved,
     })
   }
 
@@ -108,29 +108,76 @@ export function getFeedCategoryLabel(
   return null
 }
 
+/** Left border accent classes for feed cards (terrain palette). */
+export const SIGNAL_CARD_LEFT_ACCENT = {
+  urgent: 'border-l-[#E24B4A]',
+  pinned: 'border-l-[#1a1a1a]',
+  open: 'border-l-[#EF9F27]',
+  in_progress: 'border-l-[#1B4FD8]',
+  resolved: 'border-l-[#1D9E75]',
+  archived: 'border-l-[#555]',
+  neutral: 'border-l-[#7D7B75]',
+} as const
+
+/** Left border accent hex colors for feed cards (inline style; beats global border-color). */
+export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
+  urgent: '#E24B4A',
+  pinned: '#1a1a1a',
+  open: '#EF9F27',
+  in_progress: '#1B4FD8',
+  resolved: '#1D9E75',
+  archived: '#555',
+  neutral: '#7D7B75',
+} as const
+
 /**
- * Left border accent for feed cards. Urgent red always wins; in_progress stays visually quieter.
+ * Left border accent for feed cards.
+ * Priority: urgent → pinned → status (archived and canceled/unknown use distinct neutrals).
  */
 export function getSignalCardLeftAccentClass(item: SignalFeedItem): string {
+  return SIGNAL_CARD_LEFT_ACCENT[getSignalCardLeftAccentColorKey(item)]
+}
+
+function getSignalCardLeftAccentColorKey(
+  item: SignalFeedItem,
+): keyof typeof SIGNAL_CARD_LEFT_ACCENT_COLOR {
   if (item.urgency === 'high') {
-    return 'border-l-[#E24B4A]'
+    return 'urgent'
   }
   if (item.is_pinned) {
-    return 'border-l-[#1B4FD8]'
+    return 'pinned'
   }
   if (item.status === 'open') {
-    return 'border-l-[#1B4FD8]/50'
+    return 'open'
   }
   if (item.status === 'in_progress') {
-    return 'border-l-transparent'
+    return 'in_progress'
   }
   if (item.status === 'resolved') {
-    return 'border-l-[#1D9E75]'
+    return 'resolved'
   }
   if (item.status === 'archived') {
-    return 'border-l-[#555]'
+    return 'archived'
   }
-  return 'border-l-transparent'
+  return 'neutral'
+}
+
+/** Hex color for feed card left border (use with inline style.borderLeftColor). */
+export function getSignalCardLeftAccentColor(item: SignalFeedItem): string {
+  return SIGNAL_CARD_LEFT_ACCENT_COLOR[getSignalCardLeftAccentColorKey(item)]
+}
+
+export function getSignalStatusBadgeVariant(status: string): HoustonBadgeVariant {
+  if (status === 'open') {
+    return 'amber'
+  }
+  if (status === 'in_progress') {
+    return 'blue'
+  }
+  if (status === 'resolved') {
+    return 'green'
+  }
+  return 'gray'
 }
 
 export function getSignalCardSurfaceClass(item: SignalFeedItem): string {

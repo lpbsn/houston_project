@@ -1,9 +1,11 @@
 from django.urls import path
 
 from houston.signals.api.views import (
+    SignalCancelView,
     SignalDetailView,
     SignalFeedView,
     SignalPinView,
+    SignalResolveView,
     SignalUnpinView,
     SignalUrgencyView,
 )
@@ -33,5 +35,15 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/urgency/",
         SignalUrgencyView.as_view(),
         name="signal-urgency",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/cancel/",
+        SignalCancelView.as_view(),
+        name="signal-cancel",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/resolve/",
+        SignalResolveView.as_view(),
+        name="signal-resolve",
     ),
 ]

@@ -189,7 +189,7 @@ function App() {
 
     if (route.kind === 'signal-detail') {
       return (
-        <SignalDetailPage signalId={route.signalId} />
+        <SignalDetailPage signalId={route.signalId} onNavigate={navigate} />
       )
     }
 
