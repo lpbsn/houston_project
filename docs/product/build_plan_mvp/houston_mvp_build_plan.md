@@ -26,7 +26,7 @@ Houston remains a backend-authoritative operational workflow app.
 1. Phase 0 — Full-stack foundation ✅ completed
 2. Phase 1 — Identity / Memberships / RBAC ✅ completed
 3. Phase 2 — Runtime config / Onboarding ✅ completed
-4. Phase 3 — Observation / Media / Transcription
+4. Phase 3 — Observation / Media / Transcription ✅ completed
 5. Phase 4 — AI Pipeline / Signal Feed
 6. Phase 5 — Actions / Execution Feed
 7. Phase 6 — Notifications
@@ -76,28 +76,28 @@ Add AI-assisted Observation interpretation, Signal creation or aggregation, and 
 
 Not yet implemented in the current API contract (`apps/api/schema.yml`): Signal Feed and related Signal/Aggregation endpoints are Phase 4 candidate surface.
 
-**Implementation gate:** Phase 4 code starts only after Phase B/C taxonomy and onboarding runtime (modules, domains, subjects) are live. Do not implement Signal, `MembershipFeedSubscription`, feed selectors, or feed API prematurely.
+**Implementation gate:** Phase 4 code starts only after Phase B/C taxonomy and onboarding runtime (modules, domains, subjects) are live.
 
 **Deliverables (code, when Phase 4 starts):**
 
 - Signal model with single categorization triplet (module/domain/subject FKs)
-- Observation → CandidateSignal → validated Signal pipeline
-- `MembershipFeedSubscription` model + API (with Signal Feed, not before)
-- Signal Feed endpoint with `view_mode=personal|general`
+- Observation → CandidateSignal → validated Signal pipeline (Celery + OpenAI provider + fake provider for tests)
+- Signal Feed endpoint `signal-feed` with `view_mode=personal|general` (**Ma vue** filters by `MembershipScope`; Owner/Director personal = all active)
+- Signal Detail + pin/unpin/urgency commands (no manual Signal CRUD)
 - OpenAPI + generated clients + backend tests
+- **`MembershipFeedSubscription` is out of scope for Phase 4** (see `feed_subscription_domain.md`)
 
 **Future test scenarios (documentation only until Phase 4 code):**
 
 | Area | Scenarios to cover when implementing |
 | --- | --- |
 | Signal service | Establishment scope on all FKs; one triplet per Signal; multi-problem Observation → N Signals |
-| Feed subscriptions | Module/domain/subject CRUD; replace semantics; self-only API; unknown keys rejected |
-| Feed selectors | `signal_matches_subscription`; personal vs general; empty personal without subscriptions |
+| Feed selectors | `signal_matches_membership_scope`; personal vs general; empty personal without scopes |
 | Feed API | `view_mode` query param; active statuses only; cross-tenant 404 |
 | Roles | Directeur / Gouvernante / Femme de chambre / Technicien Ma vue vs Vue générale (see `feed_domain.md`) |
 | Regression | No raw Observation text in feed items; OpenAPI drift check in CI |
 
-Detailed scenario tables: `signal_domain.md` §12, `feed_domain.md` §12, `feed_subscription_domain.md` §Future test scenarios.
+Detailed scenario tables: `signal_domain.md` §12, `feed_domain.md` §12. See [phase_4_ai_pipeline_signal_feed.md](phase_4_ai_pipeline_signal_feed.md).
 
 ### Phase 5 — Actions / Execution Feed
 

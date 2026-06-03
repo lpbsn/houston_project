@@ -7,10 +7,20 @@ import { Card } from '@/components/ui/card'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
   useDeleteTemporaryPhotoMutation,
+  useObservationProcessingStatusQuery,
   useSubmitObservationMutation,
   useTranscribeAudioMutation,
   useUploadTemporaryPhotoMutation,
 } from '@/features/observations/hooks'
+import {
+  getProcessingUxLabel,
+  shouldShowSignalFeedNavigation,
+} from '@/features/observations/processing-status-labels'
+import {
+  formatProcessingSuccessHeadline,
+  formatSignalSummaryLine,
+  shouldShowProcessingSignalList,
+} from '@/features/observations/processing-status-popup'
 import {
   MAX_OBSERVATION_PHOTOS,
   OBSERVATION_TEXT_MAX_LENGTH,
@@ -24,6 +34,10 @@ type PhotoDraft = {
   status: 'uploading' | 'ready' | 'failed'
 }
 
+type ReportPageProps = {
+  onNavigate?: (pathname: string) => void
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof ObservationsApiError) {
     return error.detail
@@ -34,7 +48,7 @@ function getErrorMessage(error: unknown): string {
   return 'Une erreur est survenue.'
 }
 
-export function ReportPage() {
+export function ReportPage({ onNavigate }: ReportPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
@@ -44,7 +58,6 @@ export function ReportPage() {
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [submittedObservationId, setSubmittedObservationId] = useState<string | null>(null)
-  const [processingStatus, setProcessingStatus] = useState<string | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -53,6 +66,12 @@ export function ReportPage() {
   const deleteMutation = useDeleteTemporaryPhotoMutation(establishmentId)
   const transcribeMutation = useTranscribeAudioMutation(establishmentId)
   const submitMutation = useSubmitObservationMutation(establishmentId)
+
+  const processingQuery = useObservationProcessingStatusQuery(
+    establishmentId,
+    submittedObservationId,
+    { enabled: Boolean(submittedObservationId) },
+  )
 
   const trimmedText = text.trim()
   const textLength = trimmedText.length
@@ -68,6 +87,27 @@ export function ReportPage() {
     return `${photos.length}/${MAX_OBSERVATION_PHOTOS} photo(s) — optionnel`
   }, [photos.length])
   const latestTranscript = transcribeMutation.data?.text?.trim() ?? ''
+
+  const processingLabel = processingQuery.data?.ux_status
+    ? getProcessingUxLabel(processingQuery.data.ux_status)
+    : getProcessingUxLabel('analysis_queued')
+
+  const showSignalFeedLink =
+    processingQuery.data?.ux_status != null &&
+    shouldShowSignalFeedNavigation(processingQuery.data.ux_status)
+
+  const processingSignals = processingQuery.data?.signals ?? []
+
+  const processingSuccessHeadline = processingQuery.data?.ux_status
+    ? formatProcessingSuccessHeadline(
+        processingSignals.length,
+        processingQuery.data.ux_status,
+      )
+    : null
+
+  const showProcessingSignalList = shouldShowProcessingSignalList(
+    processingQuery.data?.ux_status,
+  )
 
   const handlePhotoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -184,12 +224,18 @@ export function ReportPage() {
           .filter((id): id is string => Boolean(id)),
       })
       setSubmittedObservationId(response.id)
-      setProcessingStatus(response.processing_status)
       setText('')
       setPhotos([])
     } catch (error) {
       setFormError(getErrorMessage(error))
     }
+  }
+
+  const handleGoToSignalFeed = () => {
+    if (!onNavigate) {
+      return
+    }
+    onNavigate('/signals')
   }
 
   if (!establishmentId) {
@@ -206,17 +252,41 @@ export function ReportPage() {
     return (
       <Card className="rounded-[1.75rem] border-[#d8ead8] bg-[#f4fbf4] p-5">
         <h2 className="text-lg font-semibold text-[#1f1a14]">Observation envoyée</h2>
-        <p className="mt-2 text-sm text-[#5f574d]">
-          Votre signalement a bien été enregistré. L&apos;analyse est en cours
-          {processingStatus ? ` (${processingStatus})` : ''}.
-        </p>
+        <div className="mt-2 flex items-center gap-2 text-sm text-[#5f574d]">
+          {processingQuery.isLoading || processingQuery.isFetching ? (
+            <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
+          ) : null}
+          <p>{processingLabel}</p>
+        </div>
+        {processingSuccessHeadline ? (
+          <p className="mt-2 text-sm font-medium text-[#1f1a14]">{processingSuccessHeadline}</p>
+        ) : null}
+        {showProcessingSignalList && processingSignals.length > 0 ? (
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#5f574d]">
+            {processingSignals.map((signal) => (
+              <li key={signal.id}>{formatSignalSummaryLine(signal)}</li>
+            ))}
+          </ul>
+        ) : null}
+        {processingQuery.isError ? (
+          <p className="mt-2 text-sm text-[#9a3b2e]">{getErrorMessage(processingQuery.error)}</p>
+        ) : null}
         <p className="mt-1 text-xs text-[#7a7268]">Référence : {submittedObservationId}</p>
+        {showSignalFeedLink && onNavigate ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 h-10 w-full rounded-[1rem]"
+            onClick={handleGoToSignalFeed}
+          >
+            Aller au feed Signal
+          </Button>
+        ) : null}
         <Button
           type="button"
-          className="mt-4 h-10 w-full rounded-[1rem]"
+          className="mt-3 h-10 w-full rounded-[1rem]"
           onClick={() => {
             setSubmittedObservationId(null)
-            setProcessingStatus(null)
           }}
         >
           Nouvelle observation

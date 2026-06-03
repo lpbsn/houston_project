@@ -77,4 +77,15 @@ def submit_observation(
         upload.linked_at = now
         upload.save(update_fields=["status", "linked_at", "updated_at"])
 
+    observation_id = observation.id
+    transaction.on_commit(
+        lambda: _enqueue_observation_processing(observation_id),
+    )
+
     return observation
+
+
+def _enqueue_observation_processing(observation_id: uuid.UUID) -> None:
+    from houston.signals.tasks import process_observation_task
+
+    process_observation_task.delay(str(observation_id))

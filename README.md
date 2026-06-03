@@ -73,9 +73,10 @@ The project currently uses a Django modular monolith as the business authority a
 - Observation submission (text + optional validated photo temporary uploads)
 - Temporary photo uploads + private media storage (authorized only)
 - Audio transcription endpoint (temporary audio deleted after each request)
+- Phase 4 AI observation pipeline → Signal feed/detail (Celery + fake/OpenAI providers)
+- Signal feed (`/signals`) and detail with pin/unpin/urgency commands (no manual Signal CRUD)
 
 ## What Is Not Implemented Yet
-- Signal pipeline complete (Phase 4)
 - Action lifecycle + Execution Feed (Phase 5)
 - Checklists runtime (if not yet exposed via API)
 - Notifications
@@ -105,6 +106,8 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
    - `HOUSTON_REGISTRATION_INVITE_CODES` — comma-separated codes required for public `/onboarding` registration (empty disables registration).
    - `OPENAI_API_KEY` — server-only OpenAI key for live onboarding AI (optional in dev if you rely on template fallback).
    - `HOUSTON_AI_ONBOARDING_MODEL`, `HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS`, `HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA` — optional tuning; see `.env.example` for defaults.
+   - `HOUSTON_AI_OBSERVATION_PROVIDER` — use `openai` with a valid `OPENAI_API_KEY` for realistic manual Signaler testing (default in `.env.example`). Automated pytest forces `fake` automatically. Do not use `fake` to validate real-world observation understanding (it may produce generic titles like "Structured issue").
+   - `HOUSTON_AI_OBSERVATION_MODEL`, `HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS`, `HOUSTON_AI_OBSERVATION_MAX_RETRIES` — optional tuning for observation → signal processing.
    - Do not put API keys or invite codes in `VITE_*` variables.
 3. Start the stack:
 
@@ -118,7 +121,29 @@ docker compose up --build
 make migrate
 ```
 
-5. Generate the backend schema and frontend API types when needed:
+5. For observation → signal processing (manual Signaler):
+
+- Set in `.env`: `HOUSTON_AI_OBSERVATION_PROVIDER=openai` and `OPENAI_API_KEY=...` (see `.env.example`). Start the API and Celery worker:
+
+```bash
+docker compose up -d api celery
+```
+
+(`make up` also starts `celery` alongside `api` and `web`.)
+
+- After changing env vars, recreate both containers:
+
+```bash
+docker compose up -d --force-recreate api celery
+```
+
+Requires Redis (`CELERY_BROKER_URL`). Without the `celery` service, submitted observations stay `queued`. Automated tests use the fake provider via pytest fixtures (no live OpenAI in CI).
+
+- Poll processing status after submit: `GET /api/v1/establishments/{id}/observations/{observation_id}/processing-status/`
+
+Optional live OpenAI smoke (not CI standard): set `HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1` and run `pytest -m openai_observation_smoke`.
+
+6. Generate the backend schema and frontend API types when needed:
 
 ```bash
 make schema
@@ -139,6 +164,64 @@ make up
 make down
 make shell
 ```
+
+## Docker security (local)
+
+- **api** and **celery** run as the non-root container user `houston` (see [`infra/docker/api/Dockerfile`](infra/docker/api/Dockerfile)). `chown` in the image applies to `/opt/venv` only; the bind mount `.:/app` uses **host file ownership** — image `chown` on `/app` does not fix runtime permissions.
+- **Linux only** — if you get `Permission denied` on the bind mount, use a local `docker-compose.override.yml` (do not commit secrets):
+
+```yaml
+services:
+  api:
+    user: "${UID}:${GID}"
+  celery:
+    user: "${UID}:${GID}"
+```
+
+- **`private_media`** — operational uploads live under `apps/api/private_media/` (gitignored). Create on the host before first upload: `mkdir -p apps/api/private_media`. Django fails fast at `manage.py check` if the path is not writable (`uploads.E001`).
+- **Last resort (Linux)** — if permissions still block writes, a named volume for `private_media` only is documented in troubleshooting; do not add it by default.
+- **Bind mount risk** — if `.env` exists at the repo root, processes in api/celery can read `/app/.env`. Never commit `.env`.
+- **`docker compose config`** may print interpolated secrets — do not paste output into public tickets or CI logs. Do **not** run `docker compose config | grep -E 'OPENAI|SECRET|PASSWORD'` in shareable logs.
+- **Postgres (5432)** and **Redis (6379)** are exposed on the host for local dev; tighten before pre-prod.
+- **Phase 4** — observation processing needs the celery worker: `docker compose up -d api celery`. After `.env` changes: `docker compose up -d --force-recreate api celery`. Automated pytest does **not** require the Compose celery service (fixtures use the fake provider).
+
+Safe env smoke checks (no secret values):
+
+```bash
+docker compose exec api id
+docker compose exec celery id
+docker compose exec api python -c "import os; print('observation_provider=', os.getenv('HOUSTON_AI_OBSERVATION_PROVIDER',''))"
+docker compose exec api python -c "import os; print('broker=', os.getenv('CELERY_BROKER_URL','').split('@')[-1])"
+docker compose exec api python manage.py check
+```
+
+Post-hardening validation (from repo root):
+
+```bash
+docker compose config
+docker compose build api celery
+docker compose up -d api celery
+docker compose exec api id
+docker compose exec celery id
+docker compose logs celery --tail=100
+docker compose exec api python manage.py check
+docker compose exec api python manage.py shell -c "
+from pathlib import Path
+from django.conf import settings
+p = Path(settings.HOUSTON_PRIVATE_MEDIA_ROOT) / '.write-test'
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text('ok')
+print('write_ok=', p.exists())
+p.unlink()
+"
+docker compose exec api pytest houston/observations houston/signals houston/ai
+docker compose exec api ruff check .
+cd apps/web && npm run typecheck && npm run lint && npm run build
+```
+
+Or run `make docker-verify-security` for a short non-root + `manage.py check` subset.
+
+Pre-prod trajectory (not in local `make up`): host-injected secrets, no app bind mount, optional Docker Secrets / secret manager, internal DB/Redis ports, Redis auth, healthchecks, production image without dev dependency group.
 
 ## Backend Commands
 

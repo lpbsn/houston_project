@@ -84,12 +84,28 @@ class ObservationProcessing(BaseModel):
         on_delete=models.CASCADE,
         related_name="processing",
     )
+
+    class Outcome(models.TextChoices):
+        SIGNALS_CREATED = "signals_created", "Signals created"
+        SIGNAL_AGGREGATED = "signal_aggregated", "Signal aggregated"
+        NO_SIGNAL_CREATED = "no_signal_created", "No signal created"
+        NOT_ACTIONABLE = "not_actionable", "Not actionable"
+
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.QUEUED,
     )
     queued_at = models.DateTimeField()
+    processing_started_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    outcome = models.CharField(
+        max_length=32,
+        choices=Outcome.choices,
+        blank=True,
+        default="",
+    )
     last_error_code = models.CharField(max_length=80, blank=True, default="")
 
     class Meta:

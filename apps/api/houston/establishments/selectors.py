@@ -378,33 +378,35 @@ def _management_membership_queryset(*, establishment_id):
     )
 
 
-def get_operational_taxonomy_for_establishment(
-    *,
-    current_membership: EstablishmentMembership | None,
-    establishment_id,
-) -> dict | None:
-    if current_membership is None or current_membership.establishment_id != establishment_id:
-        return None
+def _operational_taxonomy_active_filter(*, active_only: bool) -> dict:
+    if active_only:
+        return {"active": True}
+    return {}
 
-    if current_membership.status != EstablishmentMembership.Status.ACTIVE:
-        return None
+
+def _build_operational_taxonomy_tree(
+    *,
+    establishment_id,
+    active_only: bool = True,
+) -> dict:
+    active_filter = _operational_taxonomy_active_filter(active_only=active_only)
 
     modules = list(
         OperationalModule.objects.filter(
             establishment_id=establishment_id,
-            active=True,
+            **active_filter,
         ).order_by("label", "key", "id")
     )
     domains = list(
         OperationalDomain.objects.filter(
             establishment_id=establishment_id,
-            active=True,
+            **active_filter,
         ).order_by("label", "key", "id")
     )
     subjects = list(
         OperationalSubject.objects.filter(
             establishment_id=establishment_id,
-            active=True,
+            **active_filter,
         ).order_by("label", "key", "id")
     )
 
@@ -416,53 +418,95 @@ def get_operational_taxonomy_for_establishment(
     for subject in subjects:
         subjects_by_domain.setdefault(subject.operational_domain_id, []).append(subject)
 
+    def _domain_payload(domain: OperationalDomain) -> dict:
+        return {
+            "id": domain.id,
+            "key": domain.key,
+            "label": domain.label,
+            "subjects": [
+                {
+                    "id": subject.id,
+                    "key": subject.key,
+                    "label": subject.label,
+                }
+                for subject in subjects_by_domain.get(domain.id, [])
+            ],
+        }
+
     module_payload = []
     for module in modules:
-        domain_payload = []
-        for domain in domains_by_module.get(module.id, []):
-            domain_payload.append(
-                {
-                    "id": domain.id,
-                    "key": domain.key,
-                    "label": domain.label,
-                    "subjects": [
-                        {
-                            "id": subject.id,
-                            "key": subject.key,
-                            "label": subject.label,
-                        }
-                        for subject in subjects_by_domain.get(domain.id, [])
-                    ],
-                }
-            )
         module_payload.append(
             {
                 "id": module.id,
                 "key": module.key,
                 "label": module.label,
-                "domains": domain_payload,
-            }
-        )
-
-    unassigned_domains = []
-    for domain in domains_by_module.get(None, []):
-        unassigned_domains.append(
-            {
-                "id": domain.id,
-                "key": domain.key,
-                "label": domain.label,
-                "subjects": [
-                    {
-                        "id": subject.id,
-                        "key": subject.key,
-                        "label": subject.label,
-                    }
-                    for subject in subjects_by_domain.get(domain.id, [])
+                "domains": [
+                    _domain_payload(domain)
+                    for domain in domains_by_module.get(module.id, [])
                 ],
             }
         )
 
+    unassigned_domains = [_domain_payload(domain) for domain in domains_by_module.get(None, [])]
+
+    units = [
+        {
+            "id": unit.id,
+            "key": unit.key,
+            "label": unit.label,
+        }
+        for unit in OperationalUnit.objects.filter(
+            establishment_id=establishment_id,
+            **active_filter,
+        ).order_by("label", "key", "id")
+    ]
+
     return {
         "modules": module_payload,
         "unassigned_domains": unassigned_domains,
+        "units": units,
+    }
+
+
+def get_establishment_operational_taxonomy_snapshot(
+    *,
+    establishment_id,
+    active_only: bool = True,
+) -> dict | None:
+    establishment = Establishment.objects.filter(pk=establishment_id).only("id", "name").first()
+    if establishment is None:
+        return None
+
+    tree = _build_operational_taxonomy_tree(
+        establishment_id=establishment_id,
+        active_only=active_only,
+    )
+    return {
+        "establishment_id": establishment.id,
+        "establishment_name": establishment.name,
+        **tree,
+    }
+
+
+def get_operational_taxonomy_for_establishment(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> dict | None:
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        return None
+
+    if current_membership.status != EstablishmentMembership.Status.ACTIVE:
+        return None
+
+    snapshot = get_establishment_operational_taxonomy_snapshot(
+        establishment_id=establishment_id,
+        active_only=True,
+    )
+    if snapshot is None:
+        return None
+
+    return {
+        "modules": snapshot["modules"],
+        "unassigned_domains": snapshot["unassigned_domains"],
     }

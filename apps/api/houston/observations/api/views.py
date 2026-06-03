@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from houston.accounts.api.serializers import ApiErrorResponseSerializer
+from houston.accounts.api.serializers import (
+    ApiErrorResponseSerializer,
+    DetailResponseSerializer,
+)
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.establishments.permissions import HasActiveMembership
 from houston.observations.api.serializers import (
+    ObservationProcessingStatusResponseSerializer,
     ObservationSubmitRequestSerializer,
     ObservationSubmitResponseSerializer,
 )
@@ -13,6 +17,7 @@ from houston.observations.exceptions import (
     ObservationValidationError,
 )
 from houston.observations.models import ObservationProcessing
+from houston.observations.selectors import get_observation_processing_status
 from houston.observations.services import submit_observation
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
@@ -86,3 +91,69 @@ class ObservationSubmitView(EstablishmentScopedObservationMixin, APIView):
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ObservationProcessingStatusView(EstablishmentScopedObservationMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanSubmitObservation,
+    ]
+
+    @extend_schema(
+        tags=["observations"],
+        responses={
+            200: ObservationProcessingStatusResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Returns AI pipeline processing status for a submitted Observation. "
+            "Does not expose raw observation text or AI prompts."
+        ),
+    )
+    def get(self, request, establishment_id, observation_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        projection = get_observation_processing_status(
+            establishment_id=self.establishment_id,
+            observation_id=observation_id,
+        )
+        if projection is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        response_serializer = ObservationProcessingStatusResponseSerializer(
+            {
+                "observation_id": projection.observation_id,
+                "status": projection.status,
+                "outcome": projection.outcome,
+                "signal_ids": projection.signal_ids,
+                "signals": [
+                    {
+                        "id": summary.id,
+                        "title": summary.title,
+                        "operational_module_key": summary.operational_module_key,
+                        "operational_module_label": summary.operational_module_label,
+                        "operational_domain_key": summary.operational_domain_key,
+                        "operational_domain_label": summary.operational_domain_label,
+                        "operational_subject_key": summary.operational_subject_key,
+                        "operational_subject_label": summary.operational_subject_label,
+                        "location_text": summary.location_text,
+                    }
+                    for summary in projection.signals
+                ],
+                "last_error_code": projection.last_error_code,
+                "ux_status": projection.ux_status,
+                "created_at": projection.created_at,
+                "updated_at": projection.updated_at,
+                "processed_at": projection.processed_at,
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)

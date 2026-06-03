@@ -2,7 +2,7 @@
 
 Status: authoritative (contract)  
 Last reviewed: 2026-05-29  
-Implementation status: **not_started** — doc Phase A only (V5); code with Phase 4 Signal/Feed
+Implementation status: **deferred** — doc Phase A only (V5). **Out of scope for Phase 4 MVP**; Ma vue uses `MembershipScope` instead.
 
 ## Purpose
 

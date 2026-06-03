@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 
 from houston.establishments.models import (
     Establishment,
@@ -181,6 +181,27 @@ def membership_scope_covers_subject(
             if scope.operational_module_id == subject_domain.operational_module_id:
                 return True
     return False
+
+
+def build_signal_feed_scope_q(*, membership: EstablishmentMembership) -> Q | None:
+    """
+    Build a Signal feed filter from explicit MembershipScope rows (strict FK per row).
+
+    Returns None when the membership has no scope links (personal feed must be empty).
+    """
+    conditions = Q()
+    has_scope = False
+    for scope in _iter_membership_scopes(membership):
+        has_scope = True
+        if scope.operational_module_id is not None:
+            conditions |= Q(operational_module_id=scope.operational_module_id)
+        elif scope.operational_domain_id is not None:
+            conditions |= Q(operational_domain_id=scope.operational_domain_id)
+        elif scope.operational_subject_id is not None:
+            conditions |= Q(operational_subject_id=scope.operational_subject_id)
+    if not has_scope:
+        return None
+    return conditions
 
 
 def _iter_membership_scopes(membership: EstablishmentMembership) -> Iterable[MembershipScope]:

@@ -69,7 +69,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - AI does not create Actions in MVP.
 - **One primary categorization per Signal** (`operational_module`, `operational_domain`, `operational_subject`). Legacy `detected_domains[]` is obsolete.
 - An Observation describing **multiple distinct problems** produces **multiple CandidateSignals** and, after validation, **multiple Signals** — never multiple categorizations on one Signal.
-- Ma vue feed visibility uses `MembershipFeedSubscription` matching (see `feed_subscription_domain.md`). RBAC action uses `MembershipScope` and role rules.
+- Ma vue feed visibility uses **`MembershipScope`** matching in Phase 4 (Owner/Director: all active). RBAC action uses `MembershipScope` and role rules. `MembershipFeedSubscription` is out of scope Phase 4.
 - Visibility does not imply actionability.
 - Realtime and notifications may help refresh attention, but they do not grant access and do not become business truth.
 
@@ -151,7 +151,7 @@ Not validated yet:
 - RBAC baseline defines establishment membership, role, and operational-domain authority, but Signal-specific permission helpers remain candidate until Signal APIs/services exist.
 - Owner and Director target behavior: broad establishment-level Signal visibility and actionability, subject to RBAC.
 - Manager target behavior: actionability requires RBAC (`MembershipScope` domain coverage) and Signal's `operational_domain`.
-- Ma vue (`view_mode=personal`) filters by `MembershipFeedSubscription`, not by `MembershipScope`.
+- Ma vue (`view_mode=personal`) filters by **`MembershipScope`** (Owner/Director: all active establishment Signals).
 - Vue générale (`view_mode=general`) shows all active establishment Signals without subscription filter.
 - Visibility does not imply actionability.
 - Creating Actions from Signals, resolving Signals, canceling Signals, changing urgency, pinning, and editing Signal domains require backend command authorization when those workflows are implemented.

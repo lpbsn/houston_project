@@ -10,6 +10,8 @@ import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { ComingSoonPage } from '@/features/common/pages/coming-soon-page'
+import { SignalDetailPage } from '@/features/signals/pages/signal-detail-page'
+import { SignalFeedPage } from '@/features/signals/pages/signal-feed-page'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { LandingPage } from '@/features/landing/landing-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
@@ -23,6 +25,7 @@ type AppPath =
   | '/onboarding'
   | '/reporting'
   | '/signals'
+  | `/signals/${string}`
   | '/execution'
   | '/chat'
   | '/profile'
@@ -30,6 +33,7 @@ type AppPath =
 
 type AppRoute =
   | { kind: 'static'; path: AppPath }
+  | { kind: 'signal-detail'; signalId: string }
   | { kind: 'invitation'; token: string }
 
 function parseInvitationToken(pathname: string): string | null {
@@ -44,10 +48,25 @@ function parseInvitationToken(pathname: string): string | null {
   return token || null
 }
 
+function parseSignalDetailId(pathname: string): string | null {
+  const prefix = '/signals/'
+  if (!pathname.startsWith(prefix)) {
+    return null
+  }
+  const remainder = pathname.slice(prefix.length)
+  const signalId = remainder.split('/').filter(Boolean)[0]
+  return signalId || null
+}
+
 function parseAppRoute(pathname: string): AppRoute {
   const invitationToken = parseInvitationToken(pathname)
   if (invitationToken) {
     return { kind: 'invitation', token: invitationToken }
+  }
+
+  const signalId = parseSignalDetailId(pathname)
+  if (signalId) {
+    return { kind: 'signal-detail', signalId }
   }
 
   if (
@@ -115,22 +134,24 @@ function App() {
       return
     }
 
-    if (route.path === '/login' && auth.isAuthenticated) {
+    if (route.kind === 'static' && route.path === '/login' && auth.isAuthenticated) {
       navigate('/app', { replace: true })
       return
     }
 
-    if (
-      (route.path === '/app' ||
-        route.path === '/app/report' ||
-        route.path === '/reporting' ||
-        route.path === '/signals' ||
-        route.path === '/execution' ||
-        route.path === '/chat' ||
-        route.path === '/profile' ||
-        route.path === '/team/invite') &&
-      !auth.isAuthenticated
-    ) {
+    const isProtectedRoute =
+      (route.kind === 'static' &&
+        (route.path === '/app' ||
+          route.path === '/app/report' ||
+          route.path === '/reporting' ||
+          route.path === '/signals' ||
+          route.path === '/execution' ||
+          route.path === '/chat' ||
+          route.path === '/profile' ||
+          route.path === '/team/invite')) ||
+      route.kind === 'signal-detail'
+
+    if (isProtectedRoute && !auth.isAuthenticated) {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, route])
@@ -153,16 +174,29 @@ function App() {
       )
     }
 
+    if (route.kind === 'signal-detail') {
+      return (
+        <SignalDetailPage
+          signalId={route.signalId}
+          onBack={() => navigate('/signals')}
+        />
+      )
+    }
+
+    if (route.kind !== 'static') {
+      return <LoginPage />
+    }
+
     if (route.path === '/app') {
       return <AppPage />
     }
 
     if (route.path === '/app/report' || route.path === '/reporting') {
-      return <ReportPage />
+      return <ReportPage onNavigate={navigate} />
     }
 
     if (route.path === '/signals') {
-      return <ComingSoonPage featureLabel="Feed Signal" />
+      return <SignalFeedPage onOpenSignal={(id) => navigate(`/signals/${id}`)} />
     }
 
     if (route.path === '/execution') {
@@ -231,7 +265,14 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
-      : route.path === '/app/report' || route.path === '/reporting'
+      : route.kind === 'signal-detail'
+        ? {
+            headingBadge: 'Terrain',
+            title: 'Détail signal',
+            description: 'Situation opérationnelle structurée.',
+            actions: signOutAction,
+          }
+        : route.kind === 'static' && (route.path === '/app/report' || route.path === '/reporting')
         ? {
             headingBadge: 'Terrain',
             title: 'Faire remonter une observation',
@@ -239,48 +280,48 @@ function App() {
               'Texte ou audio transcrit, photos optionnelles. L’audio n’est pas conservé.',
             actions: signOutAction,
           }
-        : route.path === '/signals'
+        : route.kind === 'static' && route.path === '/signals'
           ? {
               headingBadge: 'Terrain',
-              title: 'Feed Signal',
-              description: 'Vue terrain des signaux. Fonctionnalité bientôt disponible.',
+              title: 'Signaux',
+              description: 'Vue terrain des signaux actifs.',
               actions: signOutAction,
             }
-          : route.path === '/execution'
+          : route.kind === 'static' && route.path === '/execution'
             ? {
                 headingBadge: 'Terrain',
                 title: 'Feed Exécution',
                 description: 'Suivi des exécutions terrain. Fonctionnalité bientôt disponible.',
                 actions: signOutAction,
               }
-            : route.path === '/chat'
+            : route.kind === 'static' && route.path === '/chat'
               ? {
                   headingBadge: 'Terrain',
                   title: 'Chat',
                   description: 'Messagerie opérationnelle. Fonctionnalité bientôt disponible.',
                   actions: signOutAction,
                 }
-              : route.path === '/profile'
+              : route.kind === 'static' && route.path === '/profile'
                 ? {
                     headingBadge: 'Compte',
                     title: 'Profil',
                     description: 'Résumé de votre contexte utilisateur et membership actif.',
                     actions: signOutAction,
                   }
-                : route.path === '/team/invite'
+                : route.kind === 'static' && route.path === '/team/invite'
                   ? {
                       headingBadge: 'Compte',
                       title: 'Inviter un membre',
                       description: "Créez un lien d'invitation pour un nouveau membre de l'équipe.",
                       actions: signOutAction,
                     }
-        : route.path === '/app'
+        : route.kind === 'static' && route.path === '/app'
           ? {
               title: "Gérer l'établissement",
               description: 'Manage your establishment, team memberships, and invitations.',
               actions: signOutAction,
             }
-          : route.path === '/onboarding'
+          : route.kind === 'static' && route.path === '/onboarding'
           ? {
               headingBadge: 'Onboarding',
               title: auth.isAuthenticated
@@ -310,13 +351,18 @@ function App() {
             }
 
   const showBottomNav =
-    route.kind === 'static' &&
-    (route.path === '/reporting' ||
-      route.path === '/signals' ||
-      route.path === '/execution' ||
-      route.path === '/chat' ||
-      route.path === '/profile')
-  const activeTerrainPath = showBottomNav ? (route.path as TerrainPath) : null
+    (route.kind === 'static' &&
+      (route.path === '/reporting' ||
+        route.path === '/signals' ||
+        route.path === '/execution' ||
+        route.path === '/chat' ||
+        route.path === '/profile')) ||
+    route.kind === 'signal-detail'
+  const activeTerrainPath: TerrainPath | null = showBottomNav
+    ? route.kind === 'signal-detail'
+      ? '/signals'
+      : (route.path as TerrainPath)
+    : null
 
   return (
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">

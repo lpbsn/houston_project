@@ -15,6 +15,7 @@ venv/
 local_settings.py
 db.sqlite3
 media/
+apps/api/private_media/
 staticfiles/
 
 # Node / frontend tooling

@@ -1,36 +1,72 @@
+x-api-build: &api_build
+  context: .
+  dockerfile: infra/docker/api/Dockerfile
+
+x-api-environment: &api_environment
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+  DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-replace-me-for-local-dev}
+  POSTGRES_DB: ${POSTGRES_DB:-houston}
+  POSTGRES_HOST: postgres
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-houston}
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: ${POSTGRES_USER:-houston}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+  HOUSTON_REGISTRATION_INVITE_CODES: ${HOUSTON_REGISTRATION_INVITE_CODES:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  HOUSTON_AI_ONBOARDING_PROVIDER: ${HOUSTON_AI_ONBOARDING_PROVIDER:-openai}
+  HOUSTON_AI_ONBOARDING_MODEL: ${HOUSTON_AI_ONBOARDING_MODEL:-gpt-4.1-mini}
+  HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS: ${HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS:-30}
+  HOUSTON_AI_ONBOARDING_MAX_RETRIES: ${HOUSTON_AI_ONBOARDING_MAX_RETRIES:-2}
+  HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA: ${HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA:-1}
+  HOUSTON_AI_OBSERVATION_PROVIDER: ${HOUSTON_AI_OBSERVATION_PROVIDER:-openai}
+  HOUSTON_AI_OBSERVATION_MODEL: ${HOUSTON_AI_OBSERVATION_MODEL:-gpt-4.1-mini}
+  HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS: ${HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS:-30}
+  HOUSTON_AI_OBSERVATION_MAX_RETRIES: ${HOUSTON_AI_OBSERVATION_MAX_RETRIES:-2}
+
 services:
   api:
-    build:
-      context: .
-      dockerfile: infra/docker/api/Dockerfile
+    build: *api_build
     command: ["/app/infra/docker/api/entrypoint.sh"]
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-    environment:
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-replace-me-for-local-dev}
-      POSTGRES_DB: ${POSTGRES_DB:-houston}
-      POSTGRES_HOST: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-houston}
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-houston}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
-      HOUSTON_REGISTRATION_INVITE_CODES: ${HOUSTON_REGISTRATION_INVITE_CODES:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      HOUSTON_AI_ONBOARDING_PROVIDER: ${HOUSTON_AI_ONBOARDING_PROVIDER:-openai}
-      HOUSTON_AI_ONBOARDING_MODEL: ${HOUSTON_AI_ONBOARDING_MODEL:-gpt-4.1-mini}
-      HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS: ${HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS:-30}
-      HOUSTON_AI_ONBOARDING_MAX_RETRIES: ${HOUSTON_AI_ONBOARDING_MAX_RETRIES:-2}
-      HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA: ${HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA:-1}
+    environment: *api_environment
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
+
+  celery:
+    build: *api_build
+    security_opt:
+      - no-new-privileges:true
+    command:
+      [
+        "uv",
+        "run",
+        "celery",
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-n",
+        "houston-worker@%h",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment: *api_environment
     volumes:
       - .:/app
 

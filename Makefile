@@ -1,16 +1,22 @@
 .PHONY: build up down check test lint schema shell migrate migrations-check \
-	web-install web-dev web-build web-typecheck web-api-generate verify
+	web-install web-dev web-build web-typecheck web-api-generate verify \
+	docker-verify-security
 
 build:
 	docker compose build
 
 up:
-	docker compose up --build
+	docker compose up --build api celery web
 
 down:
 	docker compose down
 
 check:
+	docker compose exec api python manage.py check
+
+docker-verify-security:
+	docker compose exec api id
+	docker compose exec celery id
 	docker compose exec api python manage.py check
 
 test:

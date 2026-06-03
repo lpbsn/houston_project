@@ -4,6 +4,8 @@ export type ObservationSubmitRequest =
   components['schemas']['ObservationSubmitRequest']
 export type ObservationSubmitResponse =
   components['schemas']['ObservationSubmitResponse']
+export type ObservationProcessingStatusResponse =
+  components['schemas']['ObservationProcessingStatusResponse']
 export type TemporaryUploadResponse =
   components['schemas']['TemporaryUploadResponse']
 export type TranscriptionResponse =

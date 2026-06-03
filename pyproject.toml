@@ -33,6 +33,8 @@ testpaths = ["apps/api/houston"]
 addopts = "-ra"
 markers = [
     "openai_smoke: opt-in live OpenAI onboarding test (requires HOUSTON_RUN_OPENAI_SMOKE_TEST=1)",
+    "openai_observation_smoke: opt-in live OpenAI observation pipeline test (requires HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1)",
+    "allow_openai_observation_propose: test may call OpenAIObservationPipelineProvider.propose (e.g. missing API key guard test)",
     "openai_transcription_smoke: opt-in live OpenAI transcription test",
 ]
 

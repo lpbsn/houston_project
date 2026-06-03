@@ -248,6 +248,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns AI pipeline processing status for a submitted Observation. Does not expose raw observation text or AI prompts. */
+        get: operations["v1_establishments_observations_processing_status_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/operational-taxonomy/": {
         parameters: {
             query?: never;
@@ -263,6 +280,86 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signal-feed/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_signal_feed_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_signals_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_pin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/unpin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_signals_unpin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/urgency/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["v1_establishments_signals_urgency_partial_update"];
         trace?: never;
     };
     "/api/v1/establishments/{establishment_id}/temporary-uploads/": {
@@ -862,6 +959,34 @@ export interface components {
             /** Format: email */
             email: string | null;
         };
+        ObservationProcessingSignalSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            operational_module_key: string;
+            operational_module_label: string;
+            operational_domain_key: string;
+            operational_domain_label: string;
+            operational_subject_key: string;
+            operational_subject_label: string;
+            location_text: string;
+        };
+        ObservationProcessingStatusResponse: {
+            /** Format: uuid */
+            observation_id: string;
+            status: string;
+            outcome: string;
+            signal_ids: string[];
+            signals: components["schemas"]["ObservationProcessingSignalSummary"][];
+            last_error_code: string;
+            ux_status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            processed_at: string | null;
+        };
         ObservationSubmitRequest: {
             text: string;
             temporary_upload_ids?: string[];
@@ -1004,6 +1129,13 @@ export interface components {
         PatchedMembershipUpdateRequest: {
             role?: components["schemas"]["RoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeItem"][];
+        };
+        PatchedSignalUrgencyRequest: {
+            urgency?: components["schemas"]["UrgencyEnum"];
+        };
+        PermissionHints: {
+            can_pin: boolean;
+            can_set_urgency: boolean;
         };
         ProposalCatalogItem: {
             key: string;
@@ -1180,6 +1312,62 @@ export interface components {
          * @enum {string}
          */
         SectionEnum: "operational_modules" | "operational_domains" | "operational_subjects";
+        SignalDetail: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            structured_summary_short: string;
+            status: string;
+            urgency: string;
+            is_pinned: boolean;
+            module_key: string;
+            domain_key: string;
+            subject_key: string;
+            operational_unit_key: string | null;
+            location_text: string;
+            media_count: number;
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
+            permission_hints: components["schemas"]["PermissionHints"];
+            structured_summary: string;
+            source_context: components["schemas"]["SourceContext"];
+        };
+        SignalFeedItem: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            structured_summary_short: string;
+            status: string;
+            urgency: string;
+            is_pinned: boolean;
+            module_key: string;
+            domain_key: string;
+            subject_key: string;
+            operational_unit_key: string | null;
+            location_text: string;
+            media_count: number;
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
+            permission_hints: components["schemas"]["PermissionHints"];
+        };
+        SignalFeedResponse: {
+            items: components["schemas"]["SignalFeedItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
+            applied_filters: {
+                [key: string]: unknown;
+            };
+        };
+        SourceContext: {
+            /** Format: date-time */
+            submitted_at: string | null;
+            reporter_display_name: string;
+            media_count: number;
+        };
         /**
          * @description * `active` - active
          *     * `invited` - invited
@@ -1203,6 +1391,12 @@ export interface components {
             /** Format: uuid */
             correlation_id: string;
         };
+        /**
+         * @description * `normal` - normal
+         *     * `high` - high
+         * @enum {string}
+         */
+        UrgencyEnum: "normal" | "high";
         UserPublic: {
             /** Format: uuid */
             id: string;
@@ -1911,6 +2105,52 @@ export interface operations {
             };
         };
     };
+    v1_establishments_observations_processing_status_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                observation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationProcessingStatusResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_operational_taxonomy_retrieve: {
         parameters: {
             query?: never;
@@ -1952,6 +2192,236 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signal_feed_retrieve: {
+        parameters: {
+            query: {
+                page_size?: number;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_pin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_unpin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_urgency_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSignalUrgencyRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSignalUrgencyRequest"];
+                "multipart/form-data": components["schemas"]["PatchedSignalUrgencyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

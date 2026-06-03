@@ -111,6 +111,7 @@ It does not own:
 - `PromptVersion`
   - Version identifier for control text used by an AI flow.
   - Full prompt text storage does not belong in this domain reference.
+  - Observation pipeline: `prompt_version` (e.g. `ai_observation_pipeline_v2`) is independent of response `schema_version` (e.g. `ai_observation_pipeline_v1`); both are recorded on `AIUsageLog`.
 
 - `AIError`
   - Safe technical failure state with normalized error metadata.

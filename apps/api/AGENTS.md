@@ -248,7 +248,7 @@ Rules (Phase 4 — not implemented in codebase yet):
 - aggregated only by backend service
 - **one primary categorization per Signal**: `operational_module`, `operational_domain`, `operational_subject`; optional `operational_unit` (location only)
 - multi-problem Observation → multiple Signals after AI pipeline validation
-- **Ma vue** Signal Feed (future): `MembershipFeedSubscription` match at module/domain/subject level — not `detected_domains[]` (obsolete) and not `MembershipScope` used as feed filter
+- **Ma vue** Signal Feed: `MembershipScope` match at module/domain/subject level (Owner/Director: all active) — not `detected_domains[]` (obsolete). `MembershipFeedSubscription` is out of scope Phase 4.
 - feed visibility and sorting are backend-owned
 - `last_activity_at` is maintained by backend
 
@@ -276,7 +276,7 @@ Backend will apply:
 
 - RBAC
 - establishment scope
-- `view_mode=personal|general` (Signal Feed: personal uses feed subscriptions; Execution Feed personal uses assigned responsibilities)
+- `view_mode=personal|general` (Signal Feed: personal uses `MembershipScope`; Execution Feed personal uses assigned responsibilities)
 - filters
 - sorting
 - pagination

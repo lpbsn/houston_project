@@ -734,6 +734,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/:
+    get:
+      operationId: v1_establishments_observations_processing_status_retrieve
+      description: Returns AI pipeline processing status for a submitted Observation.
+        Does not expose raw observation text or AI prompts.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: observation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - observations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationProcessingStatusResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/operational-taxonomy/:
     get:
       operationId: v1_establishments_operational_taxonomy_retrieve
@@ -774,6 +821,242 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signal-feed/:
+    get:
+      operationId: v1_establishments_signal_feed_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/:
+    get:
+      operationId: v1_establishments_signals_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/:
+    post:
+      operationId: v1_establishments_signals_pin_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/unpin/:
+    post:
+      operationId: v1_establishments_signals_unpin_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/urgency/:
+    patch:
+      operationId: v1_establishments_signals_urgency_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - signals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalUrgencyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalUrgencyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSignalUrgencyRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/temporary-uploads/:
     post:
@@ -2476,6 +2759,82 @@ components:
       - email
       - id
       - username
+    ObservationProcessingSignalSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        operational_module_key:
+          type: string
+        operational_module_label:
+          type: string
+        operational_domain_key:
+          type: string
+        operational_domain_label:
+          type: string
+        operational_subject_key:
+          type: string
+        operational_subject_label:
+          type: string
+        location_text:
+          type: string
+      required:
+      - id
+      - location_text
+      - operational_domain_key
+      - operational_domain_label
+      - operational_module_key
+      - operational_module_label
+      - operational_subject_key
+      - operational_subject_label
+      - title
+    ObservationProcessingStatusResponse:
+      type: object
+      properties:
+        observation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        outcome:
+          type: string
+        signal_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObservationProcessingSignalSummary'
+        last_error_code:
+          type: string
+        ux_status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - created_at
+      - last_error_code
+      - observation_id
+      - outcome
+      - processed_at
+      - signal_ids
+      - signals
+      - status
+      - updated_at
+      - ux_status
     ObservationSubmitRequest:
       type: object
       properties:
@@ -2848,6 +3207,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
+    PatchedSignalUrgencyRequest:
+      type: object
+      properties:
+        urgency:
+          $ref: '#/components/schemas/UrgencyEnum'
+    PermissionHints:
+      type: object
+      properties:
+        can_pin:
+          type: boolean
+        can_set_urgency:
+          type: boolean
+      required:
+      - can_pin
+      - can_set_urgency
     ProposalCatalogItem:
       type: object
       properties:
@@ -3295,6 +3669,153 @@ components:
         * `operational_modules` - Modules
         * `operational_domains` - Domains
         * `operational_subjects` - Subjects
+    SignalDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        structured_summary_short:
+          type: string
+        status:
+          type: string
+        urgency:
+          type: string
+        is_pinned:
+          type: boolean
+        module_key:
+          type: string
+        domain_key:
+          type: string
+        subject_key:
+          type: string
+        operational_unit_key:
+          type: string
+          nullable: true
+        location_text:
+          type: string
+        media_count:
+          type: integer
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/PermissionHints'
+        structured_summary:
+          type: string
+        source_context:
+          $ref: '#/components/schemas/SourceContext'
+      required:
+      - created_at
+      - domain_key
+      - id
+      - is_pinned
+      - last_activity_at
+      - location_text
+      - media_count
+      - module_key
+      - operational_unit_key
+      - permission_hints
+      - source_context
+      - status
+      - structured_summary
+      - structured_summary_short
+      - subject_key
+      - title
+      - urgency
+    SignalFeedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        structured_summary_short:
+          type: string
+        status:
+          type: string
+        urgency:
+          type: string
+        is_pinned:
+          type: boolean
+        module_key:
+          type: string
+        domain_key:
+          type: string
+        subject_key:
+          type: string
+        operational_unit_key:
+          type: string
+          nullable: true
+        location_text:
+          type: string
+        media_count:
+          type: integer
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/PermissionHints'
+      required:
+      - created_at
+      - domain_key
+      - id
+      - is_pinned
+      - last_activity_at
+      - location_text
+      - media_count
+      - module_key
+      - operational_unit_key
+      - permission_hints
+      - status
+      - structured_summary_short
+      - subject_key
+      - title
+      - urgency
+    SignalFeedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalFeedItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+        applied_filters:
+          type: object
+          additionalProperties: {}
+      required:
+      - applied_filters
+      - has_more
+      - items
+      - next_cursor
+    SourceContext:
+      type: object
+      properties:
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        reporter_display_name:
+          type: string
+        media_count:
+          type: integer
+      required:
+      - media_count
+      - reporter_display_name
+      - submitted_at
     StatusEnum:
       enum:
       - active
@@ -3340,6 +3861,14 @@ components:
       - correlation_id
       - language
       - text
+    UrgencyEnum:
+      enum:
+      - normal
+      - high
+      type: string
+      description: |-
+        * `normal` - normal
+        * `high` - high
     UserPublic:
       type: object
       properties:

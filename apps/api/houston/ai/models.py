@@ -9,6 +9,7 @@ class AIUsageLog(BaseModel):
     class Domain(models.TextChoices):
         ONBOARDING = "onboarding", "Onboarding"
         TRANSCRIPTION = "transcription", "Transcription"
+        OBSERVATION_PIPELINE = "observation_pipeline", "Observation pipeline"
 
     class Status(models.TextChoices):
         STARTED = "started", "Started"
@@ -32,6 +33,7 @@ class AIUsageLog(BaseModel):
     output_tokens = models.PositiveIntegerField(null=True, blank=True)
     total_tokens = models.PositiveIntegerField(null=True, blank=True)
     error_code = models.CharField(max_length=80, blank=True, default="")
+    error_context = models.JSONField(default=dict)
     correlation_id = models.UUIDField(db_index=True)
     establishment = models.ForeignKey(
         "establishments.Establishment",

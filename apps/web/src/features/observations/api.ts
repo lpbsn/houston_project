@@ -1,6 +1,7 @@
 import { apiClient, withAuthRetry } from '@/api/client'
 
 import type {
+  ObservationProcessingStatusResponse,
   ObservationSubmitRequest,
   ObservationSubmitResponse,
   TemporaryUploadResponse,
@@ -9,6 +10,8 @@ import type {
 
 export const observationsQueryKeys = {
   all: ['observations'] as const,
+  processingStatus: (establishmentId: string, observationId: string) =>
+    ['observations', 'processing-status', establishmentId, observationId] as const,
 }
 
 export class ObservationsApiError extends Error {
@@ -145,6 +148,32 @@ export async function submitObservation(
       body,
       headers: getAuthHeaders(token),
     }),
+  )
+
+  if (result.response.ok && result.data) {
+    return result.data
+  }
+
+  throw parseError(result.response, result.error)
+}
+
+export async function fetchObservationProcessingStatus(
+  establishmentId: string,
+  observationId: string,
+): Promise<ObservationProcessingStatusResponse> {
+  const result = await withAuthRetry((token) =>
+    apiClient.GET(
+      '/api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/',
+      {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            observation_id: observationId,
+          },
+        },
+        headers: getAuthHeaders(token),
+      },
+    ),
   )
 
   if (result.response.ok && result.data) {

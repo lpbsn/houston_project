@@ -124,10 +124,10 @@ Frontend display states may include:
 - Feed access is establishment-scoped and backend-authorized.
 - Current code proves active members can view Signal Feed through `can_view_signal_feed(...)`.
 - Current code does not prove feed object-level rules or `ExecutionFeed` rules yet.
-- **Ma vue** (`view_mode=personal`): Signals matching user's `MembershipFeedSubscription` (module, domain, or subject level).
-- **Vue générale** (`view_mode=general`): all active establishment Signals; **no subscription filter**.
-- Feed subscriptions personalize Ma vue only; they are **not** security permissions (`feed_subscription_domain.md`).
-- RBAC (`MembershipScope`) and feed subscriptions govern different concerns.
+- **Ma vue** (`view_mode=personal`): active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes.
+- **Vue générale** (`view_mode=general`): all active establishment Signals.
+- `MembershipFeedSubscription` is **out of scope Phase 4** (`feed_subscription_domain.md`).
+- RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering in Phase 4.
 - Visibility does not imply actionability.
 - Notifications and realtime events do not grant access.
 - Permission hints do not grant access.
@@ -136,7 +136,7 @@ Frontend display states may include:
 
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
-| **Signal Feed** | Active Signals matching user's **`MembershipFeedSubscription`** (module, domain, or subject). Empty if no subscriptions. | All active establishment Signals. **No subscription filter.** RBAC feed access only. |
+| **Signal Feed** | Active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes. | All active establishment Signals. RBAC feed access only. |
 | **Execution Feed** | Items where the user has **operational responsibility**: assigned Actions, assigned shared checklist executions, own personal checklist work. **Not** driven by feed subscriptions. | Broader establishment execution visibility per role (see archive contract §12). **Not** subscription-based. |
 
 Feed subscriptions personalize **Signal Feed Ma vue only**. They are not permissions and do not filter Execution Feed.
@@ -210,7 +210,7 @@ Candidate API expectations:
 
 ## 12. Future test scenarios (Phase 4 — documentation only)
 
-Do **not** implement these tests before Signal model, `MembershipFeedSubscription`, feed selectors, and feed API exist. They define the acceptance matrix for Phase 4 implementation.
+Do **not** implement these tests before Signal model, feed selectors, and feed API exist. They define the acceptance matrix for Phase 4 implementation.
 
 ### Signal Feed API
 
