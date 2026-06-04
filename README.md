@@ -101,6 +101,10 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 ## Local Setup
 
+**macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Chaque machine a sa propre base Postgres (volume Docker local).
+
+**Frontend local vs conteneur `web`** : `make up` démarre aussi le service Docker `web` sur le port 5173 ; pour le frontend en npm sur l’hôte, utilisez `make up-backend` puis `make web-dev` (ne pas lancer les deux frontends en parallèle).
+
 1. Copy `.env.example` to `.env`.
 2. Set backend-only onboarding variables in `.env` (never commit real secrets):
    - `HOUSTON_REGISTRATION_INVITE_CODES` — comma-separated codes required for public `/onboarding` registration (empty disables registration).

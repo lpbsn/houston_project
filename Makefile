@@ -1,4 +1,4 @@
-.PHONY: build up down check test lint schema shell migrate migrations-check \
+.PHONY: build up up-backend down check test lint schema shell migrate migrations-check \
 	web-install web-dev web-build web-typecheck web-api-generate verify \
 	docker-verify-security
 
@@ -7,6 +7,9 @@ build:
 
 up:
 	docker compose up --build api celery web
+
+up-backend:
+	docker compose up -d postgres redis api celery
 
 down:
 	docker compose down
