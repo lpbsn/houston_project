@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-03
-Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; archive, Actions-from-Signal, timeline not implemented)
+Implementation status: partial (feed, detail, pin, urgency, cancel, resolve; Action side effects via Phase 5; archive, timeline not implemented)
 
 ## 1. Purpose
 
@@ -121,7 +121,8 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - `resolved`
   - Situation considered operationally handled.
   - Manual resolution is available via backend command `POST .../signals/{id}/resolve/` from active statuses (`open`, `in_progress`).
-  - Automatic resolution when all linked Actions are terminal is a future Action-domain behavior; not implemented in current code.
+  - Automatic resolution when all linked Actions are terminal is implemented in Phase 5 (Action services).
+- `POST .../resolve/` returns **409** `business_conflict` when linked Actions are still active.
 
 - `canceled`
   - Situation intentionally closed as no longer relevant to pursue.
@@ -204,8 +205,9 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 Not implemented in current schema:
 - archive Signal
 - add/remove Signal domain
-- create Action from Signal
 - fetch Signal timeline or events
+
+Action creation is via `POST .../actions/` with optional `signal` (Phase 5), not a nested Signal sub-resource.
 
 Do not treat any Signal route as implemented until it exists in `apps/api/schema.yml`.
 

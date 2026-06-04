@@ -1,6 +1,7 @@
 export type AppRoute =
   | { kind: 'static'; path: string }
   | { kind: 'signal-detail'; signalId: string }
+  | { kind: 'action-detail'; actionId: string }
   | { kind: 'invitation'; token: string }
 
 export type TerrainNavPath =
@@ -12,10 +13,14 @@ export type TerrainNavPath =
 
 export type TerrainMainScroll = 'auto' | 'hidden'
 
+/** Detail topbar: centered title (signal) vs title below back (action). */
+export type TerrainDetailTitleLayout = 'centered' | 'belowBack'
+
 export type TerrainRouteConfig = {
   topbarVariant: 'hub' | 'detail'
   title?: string
   pageTitle?: string
+  detailTitleLayout?: TerrainDetailTitleLayout
   backPath?: string
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
@@ -31,7 +36,7 @@ const TERRAIN_HUB_PATHS = new Set<string>([
 ])
 
 export function usesTerrainShell(route: AppRoute): boolean {
-  if (route.kind === 'signal-detail') {
+  if (route.kind === 'signal-detail' || route.kind === 'action-detail') {
     return true
   }
   if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
@@ -46,6 +51,17 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       topbarVariant: 'detail',
       title: 'Signal',
       backPath: '/signals',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'action-detail') {
+    return {
+      topbarVariant: 'detail',
+      title: "Plan d'exécution",
+      detailTitleLayout: 'belowBack',
+      backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
     }
@@ -77,7 +93,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       pageTitle: 'Exécution',
       showBottomNav: true,
       activeNavPath: '/execution',
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     }
   }
 
@@ -108,6 +124,10 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
 export function getTerrainContentKey(route: AppRoute): string {
   if (route.kind === 'signal-detail') {
     return `signal-detail-${route.signalId}`
+  }
+
+  if (route.kind === 'action-detail') {
+    return `action-detail-${route.actionId}`
   }
 
   if (route.kind === 'static') {

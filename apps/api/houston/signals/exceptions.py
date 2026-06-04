@@ -15,3 +15,7 @@ class SignalStateError(SignalServiceError):
 
 class SignalPermissionError(SignalServiceError):
     error_code = "permission_denied"
+
+
+class SignalBusinessConflictError(SignalServiceError):
+    error_code = "business_conflict"

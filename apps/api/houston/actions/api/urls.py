@@ -1,0 +1,67 @@
+from django.urls import path
+
+from houston.actions.api.views import (
+    ActionAcceptView,
+    ActionCancelView,
+    ActionCreateView,
+    ActionDetailView,
+    ActionDueAtView,
+    ActionMarkDoneView,
+    ActionReassignView,
+    ActionReopenView,
+    ActionValidateView,
+    ExecutionFeedView,
+)
+
+urlpatterns = [
+    path(
+        "establishments/<uuid:establishment_id>/execution-feed/",
+        ExecutionFeedView.as_view(),
+        name="execution-feed",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/",
+        ActionCreateView.as_view(),
+        name="action-create",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/",
+        ActionDetailView.as_view(),
+        name="action-detail",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/accept/",
+        ActionAcceptView.as_view(),
+        name="action-accept",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/mark-done/",
+        ActionMarkDoneView.as_view(),
+        name="action-mark-done",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/validate/",
+        ActionValidateView.as_view(),
+        name="action-validate",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/reopen/",
+        ActionReopenView.as_view(),
+        name="action-reopen",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/cancel/",
+        ActionCancelView.as_view(),
+        name="action-cancel",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/reassign/",
+        ActionReassignView.as_view(),
+        name="action-reassign",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/actions/<uuid:action_id>/due-at/",
+        ActionDueAtView.as_view(),
+        name="action-due-at",
+    ),
+]

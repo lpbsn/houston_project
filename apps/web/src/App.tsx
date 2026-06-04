@@ -8,6 +8,7 @@ import {
   usesTerrainShell,
 } from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
+import { TerrainHubHeaderActionProvider } from '@/components/layout/terrain-hub-header-action'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { ChatPage } from '@/features/chat/pages/chat-page'
+import { ActionDetailPage } from '@/features/actions/pages/action-detail-page'
 import { ExecutionFeedPage } from '@/features/execution/pages/execution-feed-page'
 import { SignalDetailPage } from '@/features/signals/pages/signal-detail-page'
 import { SignalFeedPage } from '@/features/signals/pages/signal-feed-page'
@@ -33,6 +35,7 @@ type AppPath =
   | '/reporting'
   | '/signals'
   | `/signals/${string}`
+  | `/actions/${string}`
   | '/execution'
   | '/chat'
   | '/profile'
@@ -41,6 +44,7 @@ type AppPath =
 type AppRoute =
   | { kind: 'static'; path: AppPath }
   | { kind: 'signal-detail'; signalId: string }
+  | { kind: 'action-detail'; actionId: string }
   | { kind: 'invitation'; token: string }
 
 function parseInvitationToken(pathname: string): string | null {
@@ -65,6 +69,16 @@ function parseSignalDetailId(pathname: string): string | null {
   return signalId || null
 }
 
+function parseActionDetailId(pathname: string): string | null {
+  const prefix = '/actions/'
+  if (!pathname.startsWith(prefix)) {
+    return null
+  }
+  const remainder = pathname.slice(prefix.length)
+  const actionId = remainder.split('/').filter(Boolean)[0]
+  return actionId || null
+}
+
 function parseAppRoute(pathname: string): AppRoute {
   const invitationToken = parseInvitationToken(pathname)
   if (invitationToken) {
@@ -74,6 +88,11 @@ function parseAppRoute(pathname: string): AppRoute {
   const signalId = parseSignalDetailId(pathname)
   if (signalId) {
     return { kind: 'signal-detail', signalId }
+  }
+
+  const actionId = parseActionDetailId(pathname)
+  if (actionId) {
+    return { kind: 'action-detail', actionId }
   }
 
   if (
@@ -156,7 +175,8 @@ function App() {
           route.path === '/chat' ||
           route.path === '/profile' ||
           route.path === '/team/invite')) ||
-      route.kind === 'signal-detail'
+      route.kind === 'signal-detail' ||
+      route.kind === 'action-detail'
 
     if (isProtectedRoute && !auth.isAuthenticated) {
       navigate('/login', { replace: true })
@@ -193,6 +213,10 @@ function App() {
       )
     }
 
+    if (route.kind === 'action-detail') {
+      return <ActionDetailPage actionId={route.actionId} onNavigate={navigate} />
+    }
+
     if (route.kind !== 'static') {
       return <LoginPage />
     }
@@ -210,7 +234,7 @@ function App() {
     }
 
     if (route.path === '/execution') {
-      return <ExecutionFeedPage />
+      return <ExecutionFeedPage onOpenAction={(id) => navigate(`/actions/${id}`)} />
     }
 
     if (route.path === '/chat') {
@@ -320,30 +344,36 @@ function App() {
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
     return (
-      <TerrainShell
-        contentKey={getTerrainContentKey(route)}
-        showBottomNav={terrainConfig.showBottomNav}
-        activeNavPath={terrainConfig.activeNavPath}
-        mainScroll={terrainConfig.mainScroll}
-        navigate={navigate}
-        topbar={
-          <TerrainTopbar
-            variant={terrainConfig.topbarVariant}
-            title={terrainConfig.title}
-            pageTitle={terrainConfig.pageTitle}
-            showBottomBorder={
-              !(route.kind === 'static' && route.path === '/signals')
-            }
-            onBack={
-              terrainConfig.backPath
-                ? () => navigate(terrainConfig.backPath!)
-                : undefined
-            }
-          />
-        }
-      >
-        {routeContent}
-      </TerrainShell>
+      <TerrainHubHeaderActionProvider>
+        <TerrainShell
+          contentKey={getTerrainContentKey(route)}
+          showBottomNav={terrainConfig.showBottomNav}
+          activeNavPath={terrainConfig.activeNavPath}
+          mainScroll={terrainConfig.mainScroll}
+          navigate={navigate}
+          topbar={
+            <TerrainTopbar
+              variant={terrainConfig.topbarVariant}
+              title={terrainConfig.title}
+              pageTitle={terrainConfig.pageTitle}
+              detailTitleLayout={terrainConfig.detailTitleLayout}
+              showBottomBorder={
+                !(
+                  route.kind === 'static' &&
+                  (route.path === '/signals' || route.path === '/execution')
+                )
+              }
+              onBack={
+                terrainConfig.backPath
+                  ? () => navigate(terrainConfig.backPath!)
+                  : undefined
+              }
+            />
+          }
+        >
+          {routeContent}
+        </TerrainShell>
+      </TerrainHubHeaderActionProvider>
     )
   }
 

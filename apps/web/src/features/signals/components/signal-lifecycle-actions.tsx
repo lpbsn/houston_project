@@ -1,8 +1,9 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { TerrainCard, TerrainFieldLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { terrain } from '@/lib/terrain-styles'
 import { terrainTapProps } from '@/lib/terrain-motion'
+import { cn } from '@/lib/utils'
 
 import type { PermissionHints } from '../types'
 
@@ -16,8 +17,8 @@ type SignalLifecycleActionsProps = {
   isPending: boolean
 }
 
-const outlineActionClassName =
-  'inline-flex h-10 flex-1 shrink-0 items-center justify-center rounded-xl border border-[#E8E6DF] bg-background px-4 text-sm font-medium whitespace-nowrap outline-none select-none disabled:pointer-events-none disabled:opacity-50'
+const lifecycleActionClassName =
+  'inline-flex h-10 flex-1 items-center justify-center rounded-2xl px-3 text-[14px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50'
 
 export function SignalLifecycleActions({
   hints,
@@ -42,20 +43,16 @@ export function SignalLifecycleActions({
     label: string,
     onClick: () => void,
     key: string,
-    variant: 'default' | 'destructive' = 'default',
+    tone: 'success' | 'danger',
   ) => {
-    const destructiveClass =
-      variant === 'destructive'
-        ? 'border-[#E8E6DF] text-[#8B4513]'
-        : 'border-[#E8E6DF]'
+    const toneClass = tone === 'success' ? terrain.successBg : terrain.dangerBg
 
     if (shouldReduceMotion || isPending) {
       return (
         <Button
           key={key}
           type="button"
-          variant="outline"
-          className={`h-10 flex-1 rounded-xl text-sm ${destructiveClass}`}
+          className={cn('h-10 flex-1 rounded-2xl text-[14px] font-semibold text-white', toneClass)}
           disabled={isPending}
           onClick={onClick}
         >
@@ -68,7 +65,7 @@ export function SignalLifecycleActions({
       <motion.button
         key={key}
         type="button"
-        className={`${outlineActionClassName} ${destructiveClass}`}
+        className={cn(lifecycleActionClassName, toneClass)}
         disabled={isPending}
         onClick={onClick}
         {...terrainTapProps(shouldReduceMotion)}
@@ -79,16 +76,13 @@ export function SignalLifecycleActions({
   }
 
   return (
-    <TerrainCard>
-      <TerrainFieldLabel>Clôture du signal</TerrainFieldLabel>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {hints.can_resolve
-          ? renderActionButton('Résolu', onResolve, 'resolve')
-          : null}
-        {hints.can_cancel
-          ? renderActionButton('Annuler', handleCancelClick, 'cancel', 'destructive')
-          : null}
-      </div>
-    </TerrainCard>
+    <div className="flex w-full gap-2">
+      {hints.can_resolve
+        ? renderActionButton('Résolu', onResolve, 'resolve', 'success')
+        : null}
+      {hints.can_cancel
+        ? renderActionButton('Annuler', handleCancelClick, 'cancel', 'danger')
+        : null}
+    </div>
   )
 }

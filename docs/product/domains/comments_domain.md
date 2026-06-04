@@ -41,7 +41,8 @@ Comments owns contextual discussion attached to authorized business objects.
 - Comment visibility and creation are subject-scoped.
 - Backend authorization is required for comment reads and writes.
 - Comments never create access.
-- Mentions never extend access or visibility.
+- Mentions never extend access or visibility in MVP (comments not implemented).
+- **Future exception (documented, not implemented):** mention on a Signal may grant narrow read + linked-Action create via `SignalAccessGrant` — see [`signal_access_grant_domain.md`](signal_access_grant_domain.md). Does not expand domain scope.
 - Signal comments and Action comments have different scopes.
 - Signal comments may be visible in linked Action context as read-only context.
 - Action comments do not automatically propagate to sibling Actions or the parent Signal.

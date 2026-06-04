@@ -1,0 +1,478 @@
+from __future__ import annotations
+
+import uuid
+
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from rest_framework import permissions, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from houston.accounts.api.serializers import ApiErrorResponseSerializer
+from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.actions.api.serializers import (
+    ActionCreateRequestSerializer,
+    ActionDetailSerializer,
+    ActionDueAtRequestSerializer,
+    ActionReassignRequestSerializer,
+    ExecutionFeedResponseSerializer,
+    serialize_action_detail,
+    serialize_action_feed_item,
+)
+from houston.actions.exceptions import ActionStateError, ActionValidationError
+from houston.actions.models import Action
+from houston.actions.permissions import (
+    can_accept_action,
+    can_cancel_action,
+    can_mark_action_done,
+    can_reassign_action,
+    can_reopen_action,
+    can_update_action_due_at,
+    can_validate_action_on_object,
+)
+from houston.actions.selectors import (
+    apply_execution_feed_sorting,
+    execution_feed_queryset,
+    get_action_for_detail,
+)
+from houston.actions.services import (
+    accept_action,
+    cancel_action,
+    create_action,
+    mark_action_done,
+    reassign_action,
+    reopen_action,
+    update_action_due_at,
+    validate_action,
+)
+from houston.establishments.permissions import HasActiveMembership, can_create_action
+from houston.uploads.access import resolve_observation_actor_membership
+from houston.uploads.api.views import EstablishmentScopedObservationMixin
+
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 50
+
+
+class EstablishmentScopedActionMixin(EstablishmentScopedObservationMixin):
+    pass
+
+
+class CanAccessActions(permissions.BasePermission):
+    message = "You do not have permission to access actions."
+
+    def has_permission(self, request, view) -> bool:
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=view.establishment_id,
+        )
+        return can_create_action(membership) or membership is not None
+
+
+def _parse_page_size(raw: str | None) -> int:
+    if raw is None or raw == "":
+        return DEFAULT_PAGE_SIZE
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_PAGE_SIZE
+    return min(max(value, 1), MAX_PAGE_SIZE)
+
+
+def _action_overdue(action: Action) -> bool:
+    if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
+        return False
+    return action.due_at < timezone.now()
+
+
+def _action_command_error_response(exc: Exception) -> Response:
+    if isinstance(exc, ActionValidationError):
+        return Response(
+            {"code": exc.error_code, "detail": str(exc) or "Validation failed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if isinstance(exc, ActionStateError):
+        return Response(
+            {"code": exc.error_code, "detail": "Invalid action state."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return Response(
+        {"code": "api_error", "detail": "Request failed."},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+class ExecutionFeedView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["actions"],
+        parameters=[
+            OpenApiParameter(
+                name="view_mode",
+                required=True,
+                type=str,
+                enum=["personal", "general"],
+            ),
+            OpenApiParameter(name="page_size", required=False, type=int),
+        ],
+        responses={
+            200: ExecutionFeedResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        view_mode = request.query_params.get("view_mode", "").strip().lower()
+        if view_mode not in {"personal", "general"}:
+            return Response(
+                {
+                    "code": "validation_error",
+                    "detail": "view_mode must be personal or general.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page_size = _parse_page_size(request.query_params.get("page_size"))
+        queryset = apply_execution_feed_sorting(
+            execution_feed_queryset(
+                membership=membership,
+                view_mode=view_mode,  # type: ignore[arg-type]
+            ),
+            membership=membership,
+        )
+        total_count = queryset.count()
+        items_qs = list(queryset[:page_size])
+
+        payload = {
+            "items": [
+                {
+                    "item_type": "action",
+                    "action": serialize_action_feed_item(
+                        action=action,
+                        membership=membership,
+                        is_overdue=_action_overdue(action),
+                    ),
+                }
+                for action in items_qs
+            ],
+            "next_cursor": None,
+            "has_more": total_count > page_size,
+        }
+        return Response(ExecutionFeedResponseSerializer(payload).data)
+
+
+class ActionCreateView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["actions"],
+        request=ActionCreateRequestSerializer,
+        responses={
+            201: ActionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not can_create_action(membership):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        body = ActionCreateRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+
+        try:
+            action = create_action(
+                establishment_id=self.establishment_id,
+                created_by=membership,
+                title=data["title"],
+                instruction=data["instruction"],
+                assigned_to_id=data["assigned_to"],
+                due_at=data["due_at"],
+                module_key=data["module_key"],
+                domain_key=data["domain_key"],
+                subject_key=data["subject_key"],
+                signal_id=data.get("signal"),
+            )
+        except ActionValidationError as exc:
+            return _action_command_error_response(exc)
+
+        action = get_action_for_detail(membership=membership, action_id=action.id)
+        payload = serialize_action_detail(
+            action=action,
+            membership=membership,
+            is_overdue=_action_overdue(action),
+        )
+        return Response(ActionDetailSerializer(payload).data, status=status.HTTP_201_CREATED)
+
+
+class ActionDetailView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["actions"],
+        responses={
+            200: ActionDetailSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request, establishment_id, action_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        action = get_action_for_detail(
+            membership=membership,
+            action_id=uuid.UUID(str(action_id)),
+        )
+        if action is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = serialize_action_detail(
+            action=action,
+            membership=membership,
+            is_overdue=_action_overdue(action),
+        )
+        return Response(ActionDetailSerializer(payload).data)
+
+
+class ActionAcceptView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    def post(self, request, establishment_id, action_id):
+        return _action_transition_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+            permission_check=can_accept_action,
+            service_fn=accept_action,
+        )
+
+
+class ActionMarkDoneView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    def post(self, request, establishment_id, action_id):
+        return _action_transition_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+            permission_check=can_mark_action_done,
+            service_fn=mark_action_done,
+        )
+
+
+class ActionValidateView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    def post(self, request, establishment_id, action_id):
+        return _action_transition_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+            permission_check=can_validate_action_on_object,
+            service_fn=validate_action,
+        )
+
+
+class ActionReopenView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    def post(self, request, establishment_id, action_id):
+        return _action_transition_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+            permission_check=can_reopen_action,
+            service_fn=reopen_action,
+        )
+
+
+class ActionCancelView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    def post(self, request, establishment_id, action_id):
+        return _action_transition_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+            permission_check=can_cancel_action,
+            service_fn=cancel_action,
+        )
+
+
+class ActionReassignView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["actions"],
+        request=ActionReassignRequestSerializer,
+        responses={200: ActionDetailSerializer},
+    )
+    def post(self, request, establishment_id, action_id):
+        membership, action, error = _load_action_for_command(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+        )
+        if error is not None:
+            return error
+        if not can_reassign_action(membership, action):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        body = ActionReassignRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        try:
+            action = reassign_action(
+                action=action,
+                assigned_to_id=body.validated_data["assigned_to"],
+            )
+        except (ActionStateError, ActionValidationError) as exc:
+            return _action_command_error_response(exc)
+        action = get_action_for_detail(membership=membership, action_id=action.id)
+        payload = serialize_action_detail(
+            action=action,
+            membership=membership,
+            is_overdue=_action_overdue(action),
+        )
+        return Response(ActionDetailSerializer(payload).data)
+
+
+class ActionDueAtView(EstablishmentScopedActionMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["actions"],
+        request=ActionDueAtRequestSerializer,
+        responses={200: ActionDetailSerializer},
+    )
+    def patch(self, request, establishment_id, action_id):
+        membership, action, error = _load_action_for_command(
+            request=request,
+            establishment_id=self.establishment_id,
+            action_id=action_id,
+        )
+        if error is not None:
+            return error
+        if not can_update_action_due_at(membership, action):
+            return Response(
+                {"code": "permission_denied", "detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        body = ActionDueAtRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        try:
+            action = update_action_due_at(
+                action=action,
+                due_at=body.validated_data["due_at"],
+            )
+        except ActionStateError as exc:
+            return _action_command_error_response(exc)
+        action = get_action_for_detail(membership=membership, action_id=action.id)
+        payload = serialize_action_detail(
+            action=action,
+            membership=membership,
+            is_overdue=_action_overdue(action),
+        )
+        return Response(ActionDetailSerializer(payload).data)
+
+
+def _load_action_for_command(*, request, establishment_id, action_id):
+    membership = resolve_observation_actor_membership(
+        request,
+        establishment_id=establishment_id,
+    )
+    if membership is None:
+        return None, None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    action = get_action_for_detail(
+        membership=membership,
+        action_id=uuid.UUID(str(action_id)),
+    )
+    if action is None:
+        return membership, None, Response(
+            {"detail": "Not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return membership, action, None
+
+
+def _action_transition_response(
+    *,
+    request,
+    establishment_id,
+    action_id,
+    permission_check,
+    service_fn,
+) -> Response:
+    membership, action, error = _load_action_for_command(
+        request=request,
+        establishment_id=establishment_id,
+        action_id=action_id,
+    )
+    if error is not None:
+        return error
+    if not permission_check(membership, action):
+        return Response(
+            {"code": "permission_denied", "detail": "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    try:
+        action = service_fn(action=action)
+    except (ActionStateError, ActionValidationError) as exc:
+        return _action_command_error_response(exc)
+    action = get_action_for_detail(membership=membership, action_id=action.id)
+    payload = serialize_action_detail(
+        action=action,
+        membership=membership,
+        is_overdue=_action_overdue(action),
+    )
+    return Response(ActionDetailSerializer(payload).data)

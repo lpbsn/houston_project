@@ -33,7 +33,11 @@ from houston.signals.constants import (
     MAX_CANDIDATES_PER_OBSERVATION,
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
-from houston.signals.exceptions import SignalStateError, SignalValidationError
+from houston.signals.exceptions import (
+    SignalBusinessConflictError,
+    SignalStateError,
+    SignalValidationError,
+)
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
 
 if TYPE_CHECKING:
@@ -526,6 +530,16 @@ def cancel_signal(*, signal: Signal) -> Signal:
 
 @transaction.atomic
 def resolve_signal(*, signal: Signal) -> Signal:
+    from houston.actions.constants import ACTIVE_ACTION_STATUSES as ACTIVE_LINKED_ACTION_STATUSES
+    from houston.actions.models import Action
+
+    if Action.objects.filter(
+        signal_id=signal.id,
+        status__in=ACTIVE_LINKED_ACTION_STATUSES,
+    ).exists():
+        raise SignalBusinessConflictError(
+            "Cannot resolve signal while linked actions are still active."
+        )
     return _transition_active_signal_to_terminal(
         signal=signal,
         target_status=Signal.Status.RESOLVED,

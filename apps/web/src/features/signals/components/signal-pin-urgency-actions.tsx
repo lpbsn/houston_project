@@ -1,6 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { TerrainCard, TerrainFieldLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { terrainTapProps } from '@/lib/terrain-motion'
 
@@ -17,7 +16,7 @@ type SignalPinUrgencyActionsProps = {
 }
 
 const outlineActionClassName =
-  'inline-flex h-10 flex-1 shrink-0 items-center justify-center rounded-xl border border-[#E8E6DF] bg-background px-4 text-sm font-medium whitespace-nowrap outline-none select-none disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex h-7 shrink-0 items-center justify-center rounded-[10px] border border-[#E8E6DF] bg-background px-2 text-[11px] font-medium whitespace-nowrap text-[#555] outline-none select-none disabled:pointer-events-none disabled:opacity-50'
 
 export function SignalPinUrgencyActions({
   hints,
@@ -45,7 +44,7 @@ export function SignalPinUrgencyActions({
           key={key}
           type="button"
           variant="outline"
-          className="h-10 flex-1 rounded-xl border-[#E8E6DF] text-sm"
+          className="h-7 rounded-[10px] border-[#E8E6DF] px-2 text-[11px] font-medium text-[#555]"
           disabled={isPending}
           onClick={onClick}
         >
@@ -69,24 +68,21 @@ export function SignalPinUrgencyActions({
   }
 
   return (
-    <TerrainCard>
-      <TerrainFieldLabel>Gestion du signal</TerrainFieldLabel>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {hints.can_pin
-          ? renderActionButton(
-              isPinned ? 'Désépingler' : 'Épingler',
-              isPinned ? onUnpin : onPin,
-              'pin',
-            )
-          : null}
-        {hints.can_set_urgency
-          ? renderActionButton(
-              urgency === 'high' ? 'Priorité normale' : 'Marquer urgent',
-              () => onSetUrgency(urgency === 'high' ? 'normal' : 'high'),
-              'urgency',
-            )
-          : null}
-      </div>
-    </TerrainCard>
+    <div className="flex flex-wrap gap-1.5 px-0.5">
+      {hints.can_pin
+        ? renderActionButton(
+            isPinned ? 'Désépingler' : 'Épingler',
+            isPinned ? onUnpin : onPin,
+            'pin',
+          )
+        : null}
+      {hints.can_set_urgency
+        ? renderActionButton(
+            urgency === 'high' ? 'Priorité normale' : 'Marquer urgent',
+            () => onSetUrgency(urgency === 'high' ? 'normal' : 'high'),
+            'urgency',
+          )
+        : null}
+    </div>
   )
 }

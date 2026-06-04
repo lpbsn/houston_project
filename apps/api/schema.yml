@@ -410,6 +410,365 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/actions/:
+    post:
+      operationId: v1_establishments_actions_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/:
+    get:
+      operationId: v1_establishments_actions_retrieve
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/accept/:
+    post:
+      operationId: v1_establishments_actions_accept_create
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/cancel/:
+    post:
+      operationId: v1_establishments_actions_cancel_create
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/due-at/:
+    patch:
+      operationId: v1_establishments_actions_due_at_partial_update
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActionDueAtRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActionDueAtRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActionDueAtRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/mark-done/:
+    post:
+      operationId: v1_establishments_actions_mark_done_create
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/reassign/:
+    post:
+      operationId: v1_establishments_actions_reassign_create
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionReassignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionReassignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionReassignRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/reopen/:
+    post:
+      operationId: v1_establishments_actions_reopen_create
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/validate/:
+    post:
+      operationId: v1_establishments_actions_validate_create
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionDetail'
+          description: ''
+  /api/v1/establishments/{establishment_id}/execution-feed/:
+    get:
+      operationId: v1_establishments_execution_feed_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - actions
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/membership-invitations/:
     post:
       operationId: v1_establishments_membership_invitations_create
@@ -2317,6 +2676,112 @@ components:
         locale:
           type: string
           default: en-US
+    ActionCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        instruction:
+          type: string
+          maxLength: 2000
+        assigned_to:
+          type: string
+          format: uuid
+        due_at:
+          type: string
+          format: date-time
+        module_key:
+          type: string
+        domain_key:
+          type: string
+        subject_key:
+          type: string
+        signal:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - assigned_to
+      - domain_key
+      - due_at
+      - instruction
+      - module_key
+      - subject_key
+      - title
+    ActionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        instruction_short:
+          type: string
+        status:
+          type: string
+        due_at:
+          type: string
+          format: date-time
+        is_overdue:
+          type: boolean
+        module_key:
+          type: string
+        domain_key:
+          type: string
+        subject_key:
+          type: string
+        signal_summary:
+          allOf:
+          - $ref: '#/components/schemas/ActionSignalSummary'
+          nullable: true
+        assigned_to_display_name:
+          type: string
+        created_by_display_name:
+          type: string
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ActionPermissionHints'
+        instruction:
+          type: string
+        accepted_at:
+          type: string
+          format: date-time
+          nullable: true
+        marked_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - accepted_at
+      - assigned_to_display_name
+      - created_at
+      - created_by_display_name
+      - domain_key
+      - due_at
+      - id
+      - instruction
+      - instruction_short
+      - is_overdue
+      - last_activity_at
+      - marked_done_at
+      - module_key
+      - permission_hints
+      - signal_summary
+      - status
+      - subject_key
+      - title
+      - validated_at
     ActionEnum:
       enum:
       - add
@@ -2325,6 +2790,120 @@ components:
       description: |-
         * `add` - Add
         * `remove` - Remove
+    ActionFeedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        instruction_short:
+          type: string
+        status:
+          type: string
+        due_at:
+          type: string
+          format: date-time
+        is_overdue:
+          type: boolean
+        module_key:
+          type: string
+        domain_key:
+          type: string
+        subject_key:
+          type: string
+        signal_summary:
+          allOf:
+          - $ref: '#/components/schemas/ActionSignalSummary'
+          nullable: true
+        assigned_to_display_name:
+          type: string
+        created_by_display_name:
+          type: string
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ActionPermissionHints'
+      required:
+      - assigned_to_display_name
+      - created_at
+      - created_by_display_name
+      - domain_key
+      - due_at
+      - id
+      - instruction_short
+      - is_overdue
+      - last_activity_at
+      - module_key
+      - permission_hints
+      - signal_summary
+      - status
+      - subject_key
+      - title
+    ActionPermissionHints:
+      type: object
+      properties:
+        can_accept:
+          type: boolean
+        can_mark_done:
+          type: boolean
+        can_validate:
+          type: boolean
+        can_reopen:
+          type: boolean
+        can_cancel:
+          type: boolean
+        can_reassign:
+          type: boolean
+        can_update_due_at:
+          type: boolean
+      required:
+      - can_accept
+      - can_cancel
+      - can_mark_done
+      - can_reassign
+      - can_reopen
+      - can_update_due_at
+      - can_validate
+    ActionReassignRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          format: uuid
+      required:
+      - assigned_to
+    ActionSignalSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        urgency:
+          type: string
+        module_key:
+          type: string
+        domain_key:
+          type: string
+        subject_key:
+          type: string
+      required:
+      - domain_key
+      - id
+      - module_key
+      - status
+      - subject_key
+      - title
+      - urgency
     ActivationBlocker:
       type: object
       properties:
@@ -2745,6 +3324,32 @@ components:
       - domain_count
       - module_count
       - subject_count
+    ExecutionFeedItem:
+      type: object
+      properties:
+        item_type:
+          type: string
+        action:
+          $ref: '#/components/schemas/ActionFeedItem'
+      required:
+      - action
+      - item_type
+    ExecutionFeedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExecutionFeedItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+      required:
+      - has_more
+      - items
+      - next_cursor
     HealthResponse:
       type: object
       properties:
@@ -3303,6 +3908,12 @@ components:
       - id
       - key
       - label
+    PatchedActionDueAtRequest:
+      type: object
+      properties:
+        due_at:
+          type: string
+          format: date-time
     PatchedActivityDescriptionRequest:
       type: object
       properties:

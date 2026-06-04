@@ -162,6 +162,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/actions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_actions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/due-at/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["v1_establishments_actions_due_at_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/mark-done/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_mark_done_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/reassign/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_reassign_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/reopen/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_reopen_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/validate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_actions_validate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/execution-feed/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_execution_feed_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/membership-invitations/": {
         parameters: {
             query?: never;
@@ -775,12 +935,97 @@ export interface components {
             /** @default en-US */
             locale: string;
         };
+        ActionCreateRequest: {
+            title: string;
+            instruction: string;
+            /** Format: uuid */
+            assigned_to: string;
+            /** Format: date-time */
+            due_at: string;
+            module_key: string;
+            domain_key: string;
+            subject_key: string;
+            /** Format: uuid */
+            signal?: string | null;
+        };
+        ActionDetail: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            instruction_short: string;
+            status: string;
+            /** Format: date-time */
+            due_at: string;
+            is_overdue: boolean;
+            module_key: string;
+            domain_key: string;
+            subject_key: string;
+            signal_summary: components["schemas"]["ActionSignalSummary"] | null;
+            assigned_to_display_name: string;
+            created_by_display_name: string;
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
+            permission_hints: components["schemas"]["ActionPermissionHints"];
+            instruction: string;
+            /** Format: date-time */
+            accepted_at: string | null;
+            /** Format: date-time */
+            marked_done_at: string | null;
+            /** Format: date-time */
+            validated_at: string | null;
+        };
         /**
          * @description * `add` - Add
          *     * `remove` - Remove
          * @enum {string}
          */
         ActionEnum: "add" | "remove";
+        ActionFeedItem: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            instruction_short: string;
+            status: string;
+            /** Format: date-time */
+            due_at: string;
+            is_overdue: boolean;
+            module_key: string;
+            domain_key: string;
+            subject_key: string;
+            signal_summary: components["schemas"]["ActionSignalSummary"] | null;
+            assigned_to_display_name: string;
+            created_by_display_name: string;
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
+            permission_hints: components["schemas"]["ActionPermissionHints"];
+        };
+        ActionPermissionHints: {
+            can_accept: boolean;
+            can_mark_done: boolean;
+            can_validate: boolean;
+            can_reopen: boolean;
+            can_cancel: boolean;
+            can_reassign: boolean;
+            can_update_due_at: boolean;
+        };
+        ActionReassignRequest: {
+            /** Format: uuid */
+            assigned_to: string;
+        };
+        ActionSignalSummary: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            status: string;
+            urgency: string;
+            module_key: string;
+            domain_key: string;
+            subject_key: string;
+        };
         ActivationBlocker: {
             code: string;
             message: string;
@@ -941,6 +1186,15 @@ export interface components {
             module_count: number;
             domain_count: number;
             subject_count: number;
+        };
+        ExecutionFeedItem: {
+            item_type: string;
+            action: components["schemas"]["ActionFeedItem"];
+        };
+        ExecutionFeedResponse: {
+            items: components["schemas"]["ExecutionFeedItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
         };
         HealthResponse: {
             status: string;
@@ -1154,6 +1408,10 @@ export interface components {
             id: string;
             key: string;
             label: string;
+        };
+        PatchedActionDueAtRequest: {
+            /** Format: date-time */
+            due_at?: string;
         };
         PatchedActivityDescriptionRequest: {
             description?: string;
@@ -1814,6 +2072,317 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionCreateRequest"];
+                "multipart/form-data": components["schemas"]["ActionCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_accept_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_due_at_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedActionDueAtRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedActionDueAtRequest"];
+                "multipart/form-data": components["schemas"]["PatchedActionDueAtRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_mark_done_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_reassign_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionReassignRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionReassignRequest"];
+                "multipart/form-data": components["schemas"]["ActionReassignRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_reopen_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_validate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_execution_feed_retrieve: {
+        parameters: {
+            query: {
+                page_size?: number;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
