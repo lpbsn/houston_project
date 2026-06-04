@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { LoaderCircle, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
-import { useSetTerrainHubHeaderAction } from '@/components/layout/terrain-hub-header-action'
+import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
+import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
 import { TerrainComingSoonState } from '@/components/layout/terrain-empty-state'
 import { TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
@@ -12,6 +13,7 @@ import type { ExecutionViewMode } from '@/features/actions/types'
 
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionActionCard } from '../components/execution-action-card'
+import { ExecutionChecklistsPlaceholderSection } from '../components/execution-checklists-placeholder-section'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { groupExecutionActionsBySection } from '../lib/execution-action-sections'
 
@@ -48,26 +50,18 @@ export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPag
   const role = auth.bootstrap?.active_membership?.role
   const canCreate = role === 'owner' || role === 'director' || role === 'manager'
 
-  const headerAction = useMemo(() => {
-    if (!canCreate) {
-      return null
-    }
-
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 rounded-xl text-[#1a1a1a] hover:bg-[#F5F4F0]"
-        aria-label="Créer"
-        onClick={() => setIsCreateMenuOpen(true)}
-      >
-        <Plus className="h-5 w-5" />
-      </Button>
-    )
-  }, [canCreate])
-
-  useSetTerrainHubHeaderAction(headerAction)
+  const createAction = canCreate ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl"
+      aria-label="Créer"
+      onClick={() => setIsCreateMenuOpen(true)}
+    >
+      <Plus className="h-5 w-5" />
+    </Button>
+  ) : null
 
   if (!establishmentId) {
     return (
@@ -82,11 +76,11 @@ export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPag
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectAction={() => onNavigate?.('/actions/new')}
       />
-      <div className="shrink-0 border-b border-[#E8E6DF] bg-white">
-        <div className="px-3 pb-3 pt-1">
+      <TerrainHubSubheader>
+        <TerrainHubViewToolbar trailing={createAction}>
           <ExecutionFeedTabs viewMode={viewMode} onChange={setViewMode} />
-        </div>
-      </div>
+        </TerrainHubViewToolbar>
+      </TerrainHubSubheader>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-4">
         {feedQuery.isLoading ? (
           <div className="flex items-center justify-center py-16 text-[#7D7B75]">
@@ -99,34 +93,36 @@ export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPag
             onRetry={() => void feedQuery.refetch()}
           />
         ) : null}
-        {feedQuery.isSuccess && feedQuery.data.items.length === 0 ? (
-          <TerrainComingSoonState
-            title="Aucune action"
-            description={getEmptyFeedDescription(viewMode)}
-          />
-        ) : null}
-        {feedQuery.isSuccess && feedQuery.data.items.length > 0 ? (
+        {feedQuery.isSuccess ? (
           <div className="flex flex-col gap-3 pt-5">
-            {groupExecutionActionsBySection(
-              feedQuery.data.items.flatMap((entry) =>
-                entry.item_type === 'action' && entry.action ? [entry.action] : [],
-              ),
-            ).map((group) => (
-              <section key={group.section}>
-                <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
-                  {group.label} · {group.items.length}
-                </TerrainSectionLabel>
-                <div className="flex flex-col gap-3 px-3">
-                  {group.items.map((item) => (
-                    <ExecutionActionCard
-                      key={item.id}
-                      item={item}
-                      onSelect={(id) => onOpenAction?.(id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            <ExecutionChecklistsPlaceholderSection />
+            {feedQuery.data.items.length === 0 ? (
+              <TerrainComingSoonState
+                title="Aucune action"
+                description={getEmptyFeedDescription(viewMode)}
+              />
+            ) : (
+              groupExecutionActionsBySection(
+                feedQuery.data.items.flatMap((entry) =>
+                  entry.item_type === 'action' && entry.action ? [entry.action] : [],
+                ),
+              ).map((group) => (
+                <section key={group.section}>
+                  <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
+                    {group.label} · {group.items.length}
+                  </TerrainSectionLabel>
+                  <div className="flex flex-col gap-3 px-3">
+                    {group.items.map((item) => (
+                      <ExecutionActionCard
+                        key={item.id}
+                        item={item}
+                        onSelect={(id) => onOpenAction?.(id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
           </div>
         ) : null}
       </div>

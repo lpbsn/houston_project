@@ -72,6 +72,23 @@ export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatu
   return presentGroups
 }
 
+/** Splits API-ordered feed items into pinned (top zone) and unpinned (status sections). */
+export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
+  pinnedItems: SignalFeedItem[]
+  unpinnedItems: SignalFeedItem[]
+} {
+  const pinnedItems: SignalFeedItem[] = []
+  const unpinnedItems: SignalFeedItem[] = []
+  for (const item of items) {
+    if (item.is_pinned) {
+      pinnedItems.push(item)
+    } else {
+      unpinnedItems.push(item)
+    }
+  }
+  return { pinnedItems, unpinnedItems }
+}
+
 export function subjectLabelFromKey(subjectKey: string): string {
   return subjectKey.split('__').pop() ?? subjectKey
 }
@@ -90,6 +107,7 @@ function isTaxonomyKeyPresent(key: string | undefined | null): boolean {
 
 /**
  * Feed compact « Catégorie » label: operational subject first, then domain, then module.
+ * @deprecated Prefer `getFeedModuleBadgeLabel` + `getFeedSecondaryTaxonomyBadgeLabel` on feed cards.
  */
 export function getFeedCategoryLabel(
   subjectKey: string,
@@ -106,6 +124,43 @@ export function getFeedCategoryLabel(
     return moduleLabelFromKey(moduleKey)
   }
   return null
+}
+
+export function getFeedModuleBadgeLabel(moduleKey: string): string | null {
+  if (!isTaxonomyKeyPresent(moduleKey)) {
+    return null
+  }
+  return moduleLabelFromKey(moduleKey)
+}
+
+export function getFeedSubjectBadgeLabel(subjectKey: string): string | null {
+  if (!isTaxonomyKeyPresent(subjectKey)) {
+    return null
+  }
+  return subjectLabelFromKey(subjectKey)
+}
+
+export function getFeedDomainBadgeLabel(domainKey: string): string | null {
+  if (!isTaxonomyKeyPresent(domainKey)) {
+    return null
+  }
+  return domainLabelFromKey(domainKey)
+}
+
+/** Subject badge label, or domain fallback when subject is absent (feed compact). */
+/** @deprecated Use separate module/domain/subject badge labels in FeedTaxonomyBadges. */
+export function getFeedSecondaryTaxonomyBadgeLabel(
+  subjectKey: string,
+  domainKey: string,
+): string | null {
+  const subjectLabel = getFeedSubjectBadgeLabel(subjectKey)
+  if (subjectLabel) {
+    return subjectLabel
+  }
+  if (!isTaxonomyKeyPresent(domainKey)) {
+    return null
+  }
+  return domainLabelFromKey(domainKey)
 }
 
 /** Left border accent classes for feed cards (terrain palette). */
@@ -130,9 +185,23 @@ export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   neutral: '#7D7B75',
 } as const
 
+/** Shell for pinned feed cards (same family as execution pending-validation cards; neutral palette). */
+export const PINNED_SIGNAL_CARD_CLASS =
+  'border border-[#E8E6DF] bg-[#F0EFE9] p-3 hover:border-[#7D7B75]/60'
+
+export const PINNED_SIGNAL_CARD_SEPARATOR_CLASS = 'border-t border-[#E8E6DF]'
+
+export const PINNED_SIGNAL_CARD_BANNER_LABEL = 'Épinglé'
+
+export const PINNED_SIGNAL_CARD_DETAIL_CTA = 'Voir le détail →'
+
+export function getPinnedSignalCardClassName(): string {
+  return PINNED_SIGNAL_CARD_CLASS
+}
+
 /**
- * Left border accent for feed cards.
- * Priority: urgent → pinned → status (archived and canceled/unknown use distinct neutrals).
+ * Left border accent for standard feed cards.
+ * Priority: urgent → status (archived and canceled/unknown use distinct neutrals).
  */
 export function getSignalCardLeftAccentClass(item: SignalFeedItem): string {
   return SIGNAL_CARD_LEFT_ACCENT[getSignalCardLeftAccentColorKey(item)]
@@ -143,9 +212,6 @@ function getSignalCardLeftAccentColorKey(
 ): keyof typeof SIGNAL_CARD_LEFT_ACCENT_COLOR {
   if (item.urgency === 'high') {
     return 'urgent'
-  }
-  if (item.is_pinned) {
-    return 'pinned'
   }
   if (item.status === 'open') {
     return 'open'
@@ -183,10 +249,6 @@ export function getSignalStatusBadgeVariant(status: string): HoustonBadgeVariant
 export function getSignalCardSurfaceClass(item: SignalFeedItem): string {
   const classes: string[] = []
   if (item.urgency === 'high') {
-    return classes.join(' ')
-  }
-  if (item.is_pinned) {
-    classes.push('bg-[#fafbff]')
     return classes.join(' ')
   }
   if (item.status === 'in_progress') {

@@ -1,7 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
-import { useTerrainHubHeaderAction } from '@/components/layout/terrain-hub-header-action'
+import { HoustonLogo } from '@/components/domain/houston-logo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -22,30 +22,25 @@ export function TerrainTopbar({
   onBack,
   showBottomBorder = true,
 }: TerrainTopbarProps) {
-  const headerAction = useTerrainHubHeaderAction()
-
   if (variant === 'hub') {
     return (
       <header
         className={cn(
           'shrink-0 bg-white',
           showBottomBorder && 'border-b border-[#E8E6DF]',
-          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3',
+          'pt-[max(0.75rem,env(safe-area-inset-top))] pb-1.5',
         )}
       >
-        <div className="flex items-center justify-center px-4">
-          <span className="text-lg font-semibold tracking-wide text-[#0A0A0A]">houston</span>
+        <div className="flex flex-col gap-0.5 px-3">
+          <div className="flex h-16 items-center justify-center">
+            <HoustonLogo />
+          </div>
+          {pageTitle ? (
+            <h1 className="text-left text-xl font-semibold leading-tight text-[#1a1a1a]">
+              {pageTitle}
+            </h1>
+          ) : null}
         </div>
-        {pageTitle ? (
-          headerAction ? (
-            <div className="mt-2 flex items-center justify-between gap-3 px-4">
-              <h1 className="text-xl font-semibold text-[#1a1a1a]">{pageTitle}</h1>
-              {headerAction}
-            </div>
-          ) : (
-            <h1 className="mt-2 px-4 text-xl font-semibold text-[#1a1a1a]">{pageTitle}</h1>
-          )
-        ) : null}
       </header>
     )
   }
@@ -99,7 +94,7 @@ export function TerrainTopbar({
         ) : (
           <span className="w-16" aria-hidden />
         )}
-        <span className="text-sm font-medium text-[#7D7B75]">{title ?? 'Signal'}</span>
+        <span className="text-sm font-medium text-[#1a1a1a]">{title ?? 'Signal'}</span>
         <span className="w-16" aria-hidden />
       </div>
     </header>

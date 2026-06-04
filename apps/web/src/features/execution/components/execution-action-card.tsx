@@ -4,13 +4,13 @@ import type { KeyboardEvent } from 'react'
 import type { ActionFeedItem } from '@/features/actions/types'
 import { ActionStatusBadge } from '@/features/actions/components/action-status-badge'
 import { ActionDeadlineProgressBar } from '@/components/domain/action-deadline-progress-bar'
+import { FeedTaxonomyBadges } from '@/components/domain/feed-taxonomy-badges'
 import {
   formatActionCompletedByLabel,
   formatActionCreatorFooterLabel,
   formatActionValidationRelativeTime,
   formatActionValidationWaitingLabel,
   getActionCardLeftAccentColor,
-  getActionDomainBadgeLabel,
   getActionLocationText,
   getDisplayNameInitials,
   isActionPendingValidationCard,
@@ -43,7 +43,6 @@ function PendingValidationExecutionActionCard({
   onSelect,
 }: ExecutionActionCardProps) {
   const showUrgentBadge = shouldShowActionUrgentBadge(item.signal_summary)
-  const domainLabel = getActionDomainBadgeLabel(item.domain_key)
   const locationText = getActionLocationText(item.signal_summary)
   const assigneeInitials = getDisplayNameInitials(item.assigned_to_display_name)
   const completedByLabel = formatActionCompletedByLabel(item.assigned_to_display_name)
@@ -75,7 +74,11 @@ function PendingValidationExecutionActionCard({
 
       <div className="mb-2 flex flex-wrap gap-1">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
-        {domainLabel ? <HoustonBadge variant="gray">{domainLabel}</HoustonBadge> : null}
+        <FeedTaxonomyBadges
+          moduleKey={item.module_key}
+          subjectKey={item.subject_key}
+          domainKey={item.domain_key}
+        />
       </div>
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
@@ -108,7 +111,6 @@ function PendingValidationExecutionActionCard({
 function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps) {
   const leftAccentColor = getActionCardLeftAccentColor(item.status)
   const showUrgentBadge = shouldShowActionUrgentBadge(item.signal_summary)
-  const domainLabel = getActionDomainBadgeLabel(item.domain_key)
   const locationText = getActionLocationText(item.signal_summary)
   const creatorInitials = getDisplayNameInitials(item.created_by_display_name)
   const creatorLabel = formatActionCreatorFooterLabel(item.created_by_display_name)
@@ -124,7 +126,11 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
     >
       <div className="mb-2 flex flex-wrap gap-1">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
-        {domainLabel ? <HoustonBadge variant="gray">{domainLabel}</HoustonBadge> : null}
+        <FeedTaxonomyBadges
+          moduleKey={item.module_key}
+          subjectKey={item.subject_key}
+          domainKey={item.domain_key}
+        />
       </div>
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>

@@ -35,6 +35,12 @@ export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   blue: 'bg-[#1B4FD8] text-white',
 }
 
+/** Feed taxonomy: module badge (darkest). */
+export const feedTaxonomyModuleBadgeClassName = 'bg-[#7D7B75] text-white'
+
+/** Feed taxonomy: domain badge (between module and subject). */
+export const feedTaxonomyDomainBadgeClassName = 'bg-[#9A9892] text-white'
+
 export type TerrainSectionDotVariant = 'danger' | 'primary' | 'muted' | 'warning' | 'success'
 
 export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string> = {

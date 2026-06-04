@@ -1,3 +1,4 @@
+import { FeedTaxonomyBadges } from '@/components/domain/feed-taxonomy-badges'
 import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
 
 import type { ActionDetail } from '../types'
@@ -5,7 +6,6 @@ import { ActionStatusBadge } from './action-status-badge'
 import {
   formatActionCreatorFooterLabel,
   formatCompactDisplayName,
-  getActionDomainBadgeLabel,
   getActionLocationText,
   getDisplayNameInitials,
   shouldShowActionUrgentBadge,
@@ -17,7 +17,6 @@ type ActionDetailSummaryCardProps = {
 
 export function ActionDetailSummaryCard({ action }: ActionDetailSummaryCardProps) {
   const showUrgentBadge = shouldShowActionUrgentBadge(action.signal_summary)
-  const domainLabel = getActionDomainBadgeLabel(action.domain_key)
   const locationText = getActionLocationText(action.signal_summary)
   const assigneeInitials = getDisplayNameInitials(action.assigned_to_display_name)
   const assigneeLabel =
@@ -48,7 +47,11 @@ export function ActionDetailSummaryCard({ action }: ActionDetailSummaryCardProps
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
-        {domainLabel ? <HoustonBadge variant="gray">{domainLabel}</HoustonBadge> : null}
+        <FeedTaxonomyBadges
+          moduleKey={action.module_key}
+          domainKey={action.domain_key}
+          subjectKey={action.subject_key}
+        />
         <ActionStatusBadge status={action.status} labelVariant="feed" />
       </div>
 

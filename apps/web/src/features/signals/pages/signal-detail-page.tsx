@@ -120,7 +120,11 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <SignalUrgencyBadge urgency={signal.urgency} />
-            <SignalTaxonomyBadges domainKey={signal.domain_key} subjectKey={signal.subject_key} />
+            <SignalTaxonomyBadges
+              moduleKey={signal.module_key}
+              domainKey={signal.domain_key}
+              subjectKey={signal.subject_key}
+            />
             <SignalStatusBadge status={signal.status} variant="detail" />
           </div>
           <p className="mt-2 text-[11px] text-[#aaa]">

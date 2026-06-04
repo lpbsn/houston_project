@@ -8,7 +8,6 @@ import {
   usesTerrainShell,
 } from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
-import { TerrainHubHeaderActionProvider } from '@/components/layout/terrain-hub-header-action'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
@@ -388,37 +387,37 @@ function App() {
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
     return (
-      <TerrainHubHeaderActionProvider>
-        <TerrainShell
-          contentKey={getTerrainContentKey(route)}
-          showBottomNav={terrainConfig.showBottomNav}
-          activeNavPath={terrainConfig.activeNavPath}
-          mainScroll={terrainConfig.mainScroll}
-          navigate={navigate}
-          topbar={
-            <TerrainTopbar
-              variant={terrainConfig.topbarVariant}
-              title={terrainConfig.title}
-              pageTitle={terrainConfig.pageTitle}
-              detailTitleLayout={terrainConfig.detailTitleLayout}
-              showBottomBorder={
-                route.kind !== 'signal-action-create' &&
-                !(
-                  route.kind === 'static' &&
-                  (route.path === '/signals' || route.path === '/execution')
-                )
-              }
-              onBack={
-                terrainConfig.backPath
-                  ? () => navigate(terrainConfig.backPath!)
-                  : undefined
-              }
-            />
-          }
-        >
-          {routeContent}
-        </TerrainShell>
-      </TerrainHubHeaderActionProvider>
+      <TerrainShell
+        contentKey={getTerrainContentKey(route)}
+        showBottomNav={terrainConfig.showBottomNav}
+        activeNavPath={terrainConfig.activeNavPath}
+        mainScroll={terrainConfig.mainScroll}
+        navigate={navigate}
+        topbar={
+          <TerrainTopbar
+            variant={terrainConfig.topbarVariant}
+            title={terrainConfig.title}
+            pageTitle={terrainConfig.pageTitle}
+            detailTitleLayout={terrainConfig.detailTitleLayout}
+            showBottomBorder={
+              route.kind !== 'signal-action-create' &&
+              !(
+                route.kind === 'static' &&
+                (route.path === '/signals' ||
+                  route.path === '/execution' ||
+                  route.path === '/profile')
+              )
+            }
+            onBack={
+              terrainConfig.backPath
+                ? () => navigate(terrainConfig.backPath!)
+                : undefined
+            }
+          />
+        }
+      >
+        {routeContent}
+      </TerrainShell>
     )
   }
 

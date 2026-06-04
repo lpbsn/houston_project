@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
+import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
+import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import {
   TerrainEmptyState,
   TerrainErrorState,
@@ -15,7 +17,7 @@ import {
 import { SignalFeedTabs } from '../components/signal-feed-tabs'
 import { useSignalFeedQuery } from '../hooks'
 import { SignalsApiError } from '../api'
-import { groupFeedItemsByStatus } from '../lib/signal-display'
+import { groupFeedItemsByStatus, partitionFeedPinnedItems } from '../lib/signal-display'
 import {
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
@@ -53,17 +55,25 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
     )
   }
 
+  const feedItems =
+    feedQuery.isSuccess && feedQuery.data.items.length > 0 ? feedQuery.data.items : null
+  const { pinnedItems, unpinnedItems } = feedItems
+    ? partitionFeedPinnedItems(feedItems)
+    : { pinnedItems: [], unpinnedItems: [] }
   const groups =
-    feedQuery.isSuccess && feedQuery.data.items.length > 0
-      ? groupFeedItemsByStatus(feedQuery.data.items)
-      : null
+    unpinnedItems.length > 0 ? groupFeedItemsByStatus(unpinnedItems) : null
 
   const listClassName = 'flex flex-col gap-3 px-3'
 
-  const renderItems = (items: SignalFeedItem[]) => (
+  const renderItems = (items: SignalFeedItem[], variant: 'feed' | 'pinned' = 'feed') => (
     <div className={listClassName}>
       {items.map((item) => (
-        <SignalCard key={item.id} item={item} onSelect={onOpenSignal} />
+        <SignalCard
+          key={item.id}
+          item={item}
+          variant={variant}
+          onSelect={onOpenSignal}
+        />
       ))}
     </div>
   )
@@ -74,10 +84,10 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-[#E8E6DF] bg-white">
-        <div className="px-3 pb-3 pt-1">
+      <TerrainHubSubheader>
+        <TerrainHubViewToolbar>
           <SignalFeedTabs viewMode={viewMode} onChange={setViewMode} />
-        </div>
+        </TerrainHubViewToolbar>
         <SignalFeedFiltersBar
           establishmentId={establishmentId}
           filters={filters}
@@ -94,7 +104,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
             </button>
           </div>
         ) : null}
-      </div>
+      </TerrainHubSubheader>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-3">
         {feedQuery.isLoading ? (
@@ -139,21 +149,25 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           />
         ) : null}
 
-        {feedQuery.isSuccess && feedQuery.data.items.length > 0 && groups ? (
+        {feedQuery.isSuccess && feedQuery.data.items.length > 0 ? (
           <div className="flex flex-col gap-3 pt-5">
-            {groups.map((group) => (
-              <section key={group.status}>
-                <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
-                  {group.label} · {group.items.length}
-                </TerrainSectionLabel>
-                {renderItems(group.items)}
-              </section>
-            ))}
-          </div>
-        ) : null}
+            {pinnedItems.length > 0 ? renderItems(pinnedItems, 'pinned') : null}
 
-        {feedQuery.isSuccess && feedQuery.data.items.length > 0 && !groups ? (
-          <div className="pt-5">{renderItems(feedQuery.data.items)}</div>
+            {groups
+              ? groups.map((group) => (
+                  <section key={group.status}>
+                    <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
+                      {group.label} · {group.items.length}
+                    </TerrainSectionLabel>
+                    {renderItems(group.items)}
+                  </section>
+                ))
+              : null}
+
+            {!groups && unpinnedItems.length > 0 ? (
+              <div>{renderItems(unpinnedItems)}</div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>

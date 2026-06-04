@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getFeedCategoryLabel,
+  getFeedDomainBadgeLabel,
+  getFeedModuleBadgeLabel,
+  getFeedSecondaryTaxonomyBadgeLabel,
+  getFeedSubjectBadgeLabel,
+  getPinnedSignalCardClassName,
   getSignalCardLeftAccentClass,
   getSignalCardLeftAccentColor,
   getSignalStatusBadgeVariant,
   groupFeedItemsByStatus,
+  partitionFeedPinnedItems,
+  PINNED_SIGNAL_CARD_BANNER_LABEL,
+  PINNED_SIGNAL_CARD_CLASS,
+  PINNED_SIGNAL_CARD_DETAIL_CTA,
+  PINNED_SIGNAL_CARD_SEPARATOR_CLASS,
   SIGNAL_CARD_LEFT_ACCENT,
   SIGNAL_CARD_LEFT_ACCENT_COLOR,
 } from './signal-display'
@@ -86,6 +97,44 @@ describe('groupFeedItemsByStatus', () => {
   })
 })
 
+describe('partitionFeedPinnedItems', () => {
+  it('splits pinned and unpinned while preserving API order', () => {
+    const items = [
+      item({ id: 'a', is_pinned: true }),
+      item({ id: 'b', is_pinned: false }),
+      item({ id: 'c', is_pinned: true }),
+      item({ id: 'd', is_pinned: false }),
+    ]
+    const { pinnedItems, unpinnedItems } = partitionFeedPinnedItems(items)
+    expect(pinnedItems.map((entry) => entry.id)).toEqual(['a', 'c'])
+    expect(unpinnedItems.map((entry) => entry.id)).toEqual(['b', 'd'])
+  })
+
+  it('excludes pinned items from status grouping when using unpinned only', () => {
+    const { unpinnedItems } = partitionFeedPinnedItems([
+      item({ id: 'pinned-open', is_pinned: true, status: 'open' }),
+      item({ id: 'plain-open', status: 'open' }),
+      item({ id: 'progress', status: 'in_progress' }),
+    ])
+    const groups = groupFeedItemsByStatus(unpinnedItems)
+    expect(groups).toHaveLength(2)
+    expect(groups?.[0].items.map((entry) => entry.id)).toEqual(['plain-open'])
+    expect(groups?.[1].items.map((entry) => entry.id)).toEqual(['progress'])
+  })
+})
+
+describe('pinned signal card display helpers', () => {
+  it('uses neutral shell without left accent (pending-validation card family)', () => {
+    expect(getPinnedSignalCardClassName()).toBe(PINNED_SIGNAL_CARD_CLASS)
+    expect(PINNED_SIGNAL_CARD_CLASS).toContain('border-[#E8E6DF]')
+    expect(PINNED_SIGNAL_CARD_CLASS).toContain('bg-[#F0EFE9]')
+    expect(PINNED_SIGNAL_CARD_CLASS).not.toContain('border-l-')
+    expect(PINNED_SIGNAL_CARD_SEPARATOR_CLASS).toBe('border-t border-[#E8E6DF]')
+    expect(PINNED_SIGNAL_CARD_BANNER_LABEL).toBe('Épinglé')
+    expect(PINNED_SIGNAL_CARD_DETAIL_CTA).toBe('Voir le détail →')
+  })
+})
+
 describe('getSignalCardLeftAccentClass', () => {
   it('returns urgent red when urgency is high, even if pinned', () => {
     expect(
@@ -103,17 +152,17 @@ describe('getSignalCardLeftAccentClass', () => {
     ).toBe(SIGNAL_CARD_LEFT_ACCENT.urgent)
   })
 
-  it('returns pinned black when pinned and not urgent', () => {
+  it('uses status accent when pinned flag is set but standard feed card is used', () => {
     expect(
       getSignalCardLeftAccentClass(
         item({ id: '1', is_pinned: true, status: 'open' }),
       ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.pinned)
+    ).toBe(SIGNAL_CARD_LEFT_ACCENT.open)
     expect(
       getSignalCardLeftAccentClass(
         item({ id: '2', is_pinned: true, status: 'in_progress' }),
       ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.pinned)
+    ).toBe(SIGNAL_CARD_LEFT_ACCENT.in_progress)
   })
 
   it('returns status colors for standard non-urgent non-pinned items', () => {
@@ -158,17 +207,17 @@ describe('getSignalCardLeftAccentColor', () => {
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.urgent)
   })
 
-  it('returns pinned black when pinned and not urgent', () => {
+  it('uses status accent color when pinned flag is set but standard feed card is used', () => {
     expect(
       getSignalCardLeftAccentColor(
         item({ id: '1', is_pinned: true, status: 'open' }),
       ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.pinned)
+    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.open)
     expect(
       getSignalCardLeftAccentColor(
         item({ id: '2', is_pinned: true, status: 'in_progress' }),
       ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.pinned)
+    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.in_progress)
   })
 
   it('returns status colors for standard non-urgent non-pinned items', () => {
@@ -193,6 +242,35 @@ describe('getSignalCardLeftAccentColor', () => {
     expect(
       getSignalCardLeftAccentColor(item({ id: '3', status: 'draft' })),
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.neutral)
+  })
+})
+
+describe('feed taxonomy badge labels', () => {
+  it('returns module, domain, and subject labels from key suffixes', () => {
+    expect(getFeedModuleBadgeLabel('hotel')).toBe('hotel')
+    expect(getFeedModuleBadgeLabel('restaurant__service')).toBe('service')
+    expect(getFeedDomainBadgeLabel('hotel__rooms')).toBe('rooms')
+    expect(getFeedSubjectBadgeLabel('restaurant__salle__maintenance')).toBe('maintenance')
+  })
+
+  it('returns null for empty taxonomy keys', () => {
+    expect(getFeedModuleBadgeLabel('')).toBeNull()
+    expect(getFeedModuleBadgeLabel('   ')).toBeNull()
+    expect(getFeedDomainBadgeLabel('')).toBeNull()
+    expect(getFeedSubjectBadgeLabel('')).toBeNull()
+  })
+
+  it('uses domain as secondary fallback when subject is absent', () => {
+    expect(getFeedSecondaryTaxonomyBadgeLabel('', 'hotel__rooms')).toBe('rooms')
+    expect(getFeedSecondaryTaxonomyBadgeLabel('hotel__rooms__cleaning', 'hotel__rooms')).toBe(
+      'cleaning',
+    )
+  })
+
+  it('keeps getFeedCategoryLabel legacy priority for single-badge callers', () => {
+    expect(getFeedCategoryLabel('a__subject', 'a__domain', 'module')).toBe('subject')
+    expect(getFeedCategoryLabel('', 'a__domain', 'module')).toBe('domain')
+    expect(getFeedCategoryLabel('', '', 'module')).toBe('module')
   })
 })
 

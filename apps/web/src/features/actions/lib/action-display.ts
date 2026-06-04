@@ -1,5 +1,3 @@
-import { domainLabelFromKey } from '@/features/signals/lib/signal-display'
-
 const STATUS_LABELS: Record<string, string> = {
   open: 'À faire',
   in_progress: 'En cours',
@@ -71,14 +69,6 @@ export function formatActionStatusLabel(status: string): string {
 
 export function formatActionExecutionFeedStatusLabel(status: string): string {
   return EXECUTION_FEED_STATUS_LABELS[status] ?? status
-}
-
-export function getActionDomainBadgeLabel(domainKey: string): string | null {
-  const trimmed = domainKey.trim()
-  if (!trimmed) {
-    return null
-  }
-  return domainLabelFromKey(trimmed)
 }
 
 type ActionSignalSummaryLike = {
