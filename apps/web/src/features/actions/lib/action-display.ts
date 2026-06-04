@@ -10,12 +10,12 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const EXECUTION_FEED_STATUS_LABELS: Record<string, string> = {
-  open: 'EN ATTENTE',
-  in_progress: 'EN COURS',
-  pending_validation: 'À VALIDER',
-  reopened: 'RÉOUVERTE',
-  done: 'TERMINÉE',
-  canceled: 'ANNULÉE',
+  open: 'En attente',
+  in_progress: 'En cours',
+  pending_validation: 'À valider',
+  reopened: 'Rouverte',
+  done: 'Terminée',
+  canceled: 'Annulée',
 }
 
 const DEADLINE_CRITICAL_REMAINING_RATIO = 0.2
@@ -70,7 +70,7 @@ export function formatActionStatusLabel(status: string): string {
 }
 
 export function formatActionExecutionFeedStatusLabel(status: string): string {
-  return EXECUTION_FEED_STATUS_LABELS[status] ?? status.toUpperCase()
+  return EXECUTION_FEED_STATUS_LABELS[status] ?? status
 }
 
 export function getActionDomainBadgeLabel(domainKey: string): string | null {
@@ -153,6 +153,25 @@ export function getActionDeadlineRemainingPercent(
   return Math.min(100, Math.max(0, deadlineRemainingPercent))
 }
 
+/** Fill color for the shrinking deadline bar: green → yellow → red as time runs out. */
+export const ACTION_DEADLINE_BAR_FILL_COLOR = {
+  green: '#1D9E75',
+  yellow: '#EF9F27',
+  red: '#E24B4A',
+} as const
+
+export function getActionDeadlineBarFillColor(remainingPercent: number): string {
+  const remaining = Math.min(100, Math.max(0, remainingPercent))
+
+  if (remaining > 66.67) {
+    return ACTION_DEADLINE_BAR_FILL_COLOR.green
+  }
+  if (remaining > 33.33) {
+    return ACTION_DEADLINE_BAR_FILL_COLOR.yellow
+  }
+  return ACTION_DEADLINE_BAR_FILL_COLOR.red
+}
+
 export function isActionDeadlineCritical({
   dueAt,
   isOverdue,
@@ -186,6 +205,17 @@ export function isActionDeadlineCritical({
   return false
 }
 
+const MEMBERSHIP_ROLE_LABELS: Record<string, string> = {
+  owner: 'Propriétaire',
+  director: 'Directeur',
+  manager: 'Manager',
+  staff: 'Équipe',
+}
+
+export function formatMembershipRoleDisplay(role: string): string {
+  return MEMBERSHIP_ROLE_LABELS[role] ?? role
+}
+
 export function getDisplayNameInitials(displayName: string): string {
   const trimmed = displayName.trim()
   if (!trimmed) {
@@ -203,7 +233,7 @@ export function getDisplayNameInitials(displayName: string): string {
   return trimmed.slice(0, 2).toUpperCase()
 }
 
-function getShortCreatorDisplayName(displayName: string): string {
+export function formatCompactDisplayName(displayName: string): string {
   const trimmed = displayName.trim()
   if (!trimmed) {
     return trimmed
@@ -222,7 +252,7 @@ function getShortCreatorDisplayName(displayName: string): string {
 }
 
 export function formatActionCreatorFooterLabel(createdByDisplayName: string): string {
-  const shortName = getShortCreatorDisplayName(createdByDisplayName)
+  const shortName = formatCompactDisplayName(createdByDisplayName)
   if (!shortName) {
     return 'Créé par —'
   }
@@ -270,7 +300,7 @@ export function formatActionValidationRelativeTime(
 }
 
 export function formatActionCompletedByLabel(assignedToDisplayName: string): string {
-  const shortName = getShortCreatorDisplayName(assignedToDisplayName)
+  const shortName = formatCompactDisplayName(assignedToDisplayName)
   if (!shortName) {
     return 'Action terminée'
   }

@@ -52,7 +52,9 @@ describe('groupFeedItemsByStatus', () => {
     ])
     expect(groups).toHaveLength(2)
     expect(groups?.[0].label).toBe('En attente')
+    expect(groups?.[0].dotVariant).toBe('warning')
     expect(groups?.[1].label).toBe('En cours')
+    expect(groups?.[1].dotVariant).toBe('primary')
   })
 
   it('returns three sections with resolved last when all statuses are present', () => {
@@ -63,8 +65,11 @@ describe('groupFeedItemsByStatus', () => {
     ])
     expect(groups).toHaveLength(3)
     expect(groups?.[0].label).toBe('En attente')
+    expect(groups?.[0].dotVariant).toBe('warning')
     expect(groups?.[1].label).toBe('En cours')
+    expect(groups?.[1].dotVariant).toBe('primary')
     expect(groups?.[2].label).toBe('Résolus')
+    expect(groups?.[2].dotVariant).toBe('success')
     expect(groups?.[2].items.map((entry) => entry.id)).toEqual(['3'])
   })
 
@@ -75,7 +80,9 @@ describe('groupFeedItemsByStatus', () => {
     ])
     expect(groups).toHaveLength(2)
     expect(groups?.[0].label).toBe('En attente')
+    expect(groups?.[0].dotVariant).toBe('warning')
     expect(groups?.[1].label).toBe('Résolus')
+    expect(groups?.[1].dotVariant).toBe('success')
   })
 })
 

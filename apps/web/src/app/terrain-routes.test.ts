@@ -17,6 +17,11 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
   })
 
+  it('returns true for action create routes', () => {
+    expect(usesTerrainShell({ kind: 'signal-action-create', signalId: 'abc' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'action-create' })).toBe(true)
+  })
+
   it('returns false for non-terrain routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/app' })).toBe(false)
     expect(usesTerrainShell({ kind: 'static', path: '/login' })).toBe(false)
@@ -28,7 +33,7 @@ describe('getTerrainRouteConfig', () => {
   it('configures hub routes with bottom nav, page title, and main scroll', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/reporting' })).toEqual({
       topbarVariant: 'hub',
-      pageTitle: 'Nouveau signal',
+      pageTitle: 'Nouvelle Observation',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'auto',
@@ -47,7 +52,7 @@ describe('getTerrainRouteConfig', () => {
       pageTitle: 'Exécution',
       showBottomNav: true,
       activeNavPath: '/execution',
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     })
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/chat' })).toEqual({
@@ -77,11 +82,32 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
-  it('configures action detail with title below back', () => {
+  it('configures action detail with centered topbar title', () => {
     expect(getTerrainRouteConfig({ kind: 'action-detail', actionId: 'x' })).toEqual({
       topbarVariant: 'detail',
-      title: "Plan d'exécution",
-      detailTitleLayout: 'belowBack',
+      title: 'Action',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures signal-linked action create with centered topbar and back to signal', () => {
+    expect(
+      getTerrainRouteConfig({ kind: 'signal-action-create', signalId: 'sig-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: "Plan d'action",
+      backPath: '/signals/sig-1',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures free action create with centered topbar', () => {
+    expect(getTerrainRouteConfig({ kind: 'action-create' })).toEqual({
+      topbarVariant: 'detail',
+      title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -108,6 +134,13 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'signal-detail', signalId: 'abc-123' })).toBe(
       'signal-detail-abc-123',
     )
+  })
+
+  it('maps action create routes to stable keys', () => {
+    expect(getTerrainContentKey({ kind: 'signal-action-create', signalId: 'abc' })).toBe(
+      'signal-action-create-abc',
+    )
+    expect(getTerrainContentKey({ kind: 'action-create' })).toBe('action-create')
   })
 
   it('throws for non-terrain routes', () => {

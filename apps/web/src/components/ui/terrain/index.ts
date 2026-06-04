@@ -6,6 +6,7 @@
 export { HoustonBadge } from './houston-badge'
 export { TerrainBottomSheet } from './terrain-bottom-sheet'
 export { TerrainCard } from './terrain-card'
+export { TerrainDetailFieldCard } from './terrain-detail-field-card'
 export { TerrainComingSoonState } from './terrain-coming-soon-state'
 export { TerrainEmptyState } from './terrain-empty-state'
 export { TerrainErrorState } from './terrain-error-state'

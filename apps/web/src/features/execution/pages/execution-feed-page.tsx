@@ -6,9 +6,8 @@ import { useSetTerrainHubHeaderAction } from '@/components/layout/terrain-hub-he
 import { Button } from '@/components/ui/button'
 import { TerrainComingSoonState } from '@/components/layout/terrain-empty-state'
 import { TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
-import { ActionCreateForm } from '@/features/actions/components/action-create-form'
 import { ActionsApiError } from '@/features/actions/api'
-import { useCreateActionMutation, useExecutionFeedQuery } from '@/features/actions/hooks'
+import { useExecutionFeedQuery } from '@/features/actions/hooks'
 import type { ExecutionViewMode } from '@/features/actions/types'
 
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
@@ -18,6 +17,7 @@ import { groupExecutionActionsBySection } from '../lib/execution-action-sections
 
 type ExecutionFeedPageProps = {
   onOpenAction?: (actionId: string) => void
+  onNavigate?: (pathname: string) => void
 }
 
 function getErrorMessage(error: unknown): string {
@@ -37,21 +37,19 @@ function getEmptyFeedDescription(viewMode: ExecutionViewMode): string {
   return 'Aucune action visible dans votre périmètre pour le moment.'
 }
 
-export function ExecutionFeedPage({ onOpenAction }: ExecutionFeedPageProps) {
+export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
-  const [showCreateForm, setShowCreateForm] = useState(false)
 
   const feedQuery = useExecutionFeedQuery(establishmentId, viewMode)
-  const createMutation = useCreateActionMutation(establishmentId)
 
   const role = auth.bootstrap?.active_membership?.role
   const canCreate = role === 'owner' || role === 'director' || role === 'manager'
 
   const headerAction = useMemo(() => {
-    if (!canCreate || showCreateForm) {
+    if (!canCreate) {
       return null
     }
 
@@ -67,7 +65,7 @@ export function ExecutionFeedPage({ onOpenAction }: ExecutionFeedPageProps) {
         <Plus className="h-5 w-5" />
       </Button>
     )
-  }, [canCreate, showCreateForm])
+  }, [canCreate])
 
   useSetTerrainHubHeaderAction(headerAction)
 
@@ -77,32 +75,12 @@ export function ExecutionFeedPage({ onOpenAction }: ExecutionFeedPageProps) {
     )
   }
 
-  if (showCreateForm && canCreate) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col px-3 pb-4 pt-2">
-        <h2 className="mb-3 text-base font-semibold text-[#1a1a1a]">Nouvelle action</h2>
-        <ActionCreateForm
-          onCancel={() => setShowCreateForm(false)}
-          onCreated={(id) => {
-            setShowCreateForm(false)
-            onOpenAction?.(id)
-          }}
-          onSubmit={async (body) => createMutation.mutateAsync(body)}
-          isSubmitting={createMutation.isPending}
-          errorMessage={
-            createMutation.error ? getErrorMessage(createMutation.error) : null
-          }
-        />
-      </div>
-    )
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ExecutionCreateMenuSheet
         open={isCreateMenuOpen}
         onClose={() => setIsCreateMenuOpen(false)}
-        onSelectAction={() => setShowCreateForm(true)}
+        onSelectAction={() => onNavigate?.('/actions/new')}
       />
       <div className="shrink-0 border-b border-[#E8E6DF] bg-white">
         <div className="px-3 pb-3 pt-1">

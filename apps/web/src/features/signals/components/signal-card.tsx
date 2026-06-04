@@ -1,7 +1,7 @@
-import { motion, useReducedMotion } from 'framer-motion'
+import type { KeyboardEvent } from 'react'
 
-import { terrainTapProps } from '@/lib/terrain-motion'
-import { cn } from '@/lib/utils'
+import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
+import { terrainFeedInteractiveCardClassName } from '@/lib/terrain-styles'
 
 import {
   formatSignalRelativeTime,
@@ -18,31 +18,35 @@ type SignalCardProps = {
   onSelect: (signalId: string) => void
 }
 
+function handleCardKeyDown(
+  event: KeyboardEvent<HTMLElement>,
+  onSelect: (signalId: string) => void,
+  signalId: string,
+) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    onSelect(signalId)
+  }
+}
+
 export function SignalCard({ item, onSelect }: SignalCardProps) {
-  const shouldReduceMotion = useReducedMotion()
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
+  const reporterName = item.reporter_display_name?.trim() ?? ''
+  const reporterInitials = reporterName
+    ? getDisplayNameInitials(reporterName)
+    : null
 
-  const card = (
+  return (
     <article
-      className={cn(
-        'cursor-pointer rounded-[14px] border border-[#E8E6DF] bg-white py-3 pl-3 pr-3.5',
-        'border-l-4 transition',
-        'hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30',
-        surfaceClass,
-      )}
+      className={terrainFeedInteractiveCardClassName(surfaceClass)}
       style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onSelect(item.id)
-        }
-      }}
+      onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >
-      <div className="mb-1 flex items-start justify-between gap-2">
+      <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex flex-wrap gap-1">
           <SignalUrgencyBadge urgency={item.urgency} />
           <SignalTaxonomyBadges
@@ -52,35 +56,43 @@ export function SignalCard({ item, onSelect }: SignalCardProps) {
             compact
           />
         </div>
-        <span className="shrink-0 text-[10px] text-[#aaa]">
+        <span className="shrink-0 text-[11px] text-[#888]">
           {formatSignalRelativeTime(item.last_activity_at)}
         </span>
       </div>
-      <h3 className="text-[13px] font-semibold text-[#1a1a1a]">{item.title}</h3>
+
+      <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
+
       {item.location_text ? (
-        <p className="mt-1 text-[11px] text-[#888]">📍 {item.location_text}</p>
+        <p className="mt-1.5 text-[12px] text-[#888]">
+          <span className="text-[#E24B4A]" aria-hidden>
+            📍{' '}
+          </span>
+          {item.location_text}
+        </p>
       ) : null}
-      <div className="mt-2 flex items-center justify-between border-t border-[#F0EFE9] pt-2">
-        <span className="flex items-center gap-2 text-[11px] text-[#888]">
-          {item.reporter_display_name?.trim() ? (
-            <span>{item.reporter_display_name.trim()}</span>
+
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0EFE9] pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {reporterInitials ? (
+            <div
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#1B4FD8]"
+              aria-hidden
+            >
+              {reporterInitials}
+            </div>
           ) : null}
-          {item.is_pinned ? (
-            <span className="font-medium text-[#1B4FD8]">Épinglé</span>
-          ) : item.reporter_display_name?.trim() ? null : (
-            '\u00a0'
-          )}
-        </span>
-        <SignalStatusBadge status={item.status} />
+          <span className="flex min-w-0 items-center gap-2 truncate text-[11px] text-[#888]">
+            {reporterName ? <span className="truncate">{reporterName}</span> : null}
+            {item.is_pinned ? (
+              <span className="shrink-0 font-medium text-[#1B4FD8]">Épinglé</span>
+            ) : reporterName ? null : (
+              '\u00a0'
+            )}
+          </span>
+        </div>
+        <SignalStatusBadge status={item.status} variant="feed" />
       </div>
     </article>
-  )
-
-  if (shouldReduceMotion) {
-    return card
-  }
-
-  return (
-    <motion.div {...terrainTapProps(shouldReduceMotion)}>{card}</motion.div>
   )
 }

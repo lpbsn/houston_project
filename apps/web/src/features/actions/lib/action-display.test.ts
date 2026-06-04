@@ -4,13 +4,16 @@ import {
   ACTION_CARD_LEFT_ACCENT_COLOR,
   formatActionCompletedByLabel,
   formatActionCreatorFooterLabel,
+  formatCompactDisplayName,
   formatActionDueByTimeLabel,
   formatActionExecutionFeedStatusLabel,
   formatActionStatusLabel,
   formatActionValidationRelativeTime,
   formatActionValidationWaitingLabel,
   getActionCardLeftAccentColor,
+  getActionDeadlineBarFillColor,
   getActionDeadlineRemainingPercent,
+  ACTION_DEADLINE_BAR_FILL_COLOR,
   getActionLocationText,
   getDisplayNameInitials,
   isActionDeadlineCritical,
@@ -27,13 +30,17 @@ describe('formatActionStatusLabel', () => {
 })
 
 describe('formatActionExecutionFeedStatusLabel', () => {
-  it('maps feed statuses to uppercase labels', () => {
-    expect(formatActionExecutionFeedStatusLabel('open')).toBe('EN ATTENTE')
-    expect(formatActionExecutionFeedStatusLabel('in_progress')).toBe('EN COURS')
-    expect(formatActionExecutionFeedStatusLabel('pending_validation')).toBe('À VALIDER')
-    expect(formatActionExecutionFeedStatusLabel('done')).toBe('TERMINÉE')
-    expect(formatActionExecutionFeedStatusLabel('canceled')).toBe('ANNULÉE')
-    expect(formatActionExecutionFeedStatusLabel('reopened')).toBe('RÉOUVERTE')
+  it('maps feed statuses to sentence-case labels', () => {
+    expect(formatActionExecutionFeedStatusLabel('open')).toBe('En attente')
+    expect(formatActionExecutionFeedStatusLabel('in_progress')).toBe('En cours')
+    expect(formatActionExecutionFeedStatusLabel('pending_validation')).toBe('À valider')
+    expect(formatActionExecutionFeedStatusLabel('done')).toBe('Terminée')
+    expect(formatActionExecutionFeedStatusLabel('canceled')).toBe('Annulée')
+    expect(formatActionExecutionFeedStatusLabel('reopened')).toBe('Rouverte')
+  })
+
+  it('returns unknown status keys as-is', () => {
+    expect(formatActionExecutionFeedStatusLabel('draft')).toBe('draft')
   })
 })
 
@@ -152,6 +159,23 @@ describe('getActionDeadlineRemainingPercent', () => {
   })
 })
 
+describe('getActionDeadlineBarFillColor', () => {
+  it('returns green when most of the deadline window remains', () => {
+    expect(getActionDeadlineBarFillColor(100)).toBe(ACTION_DEADLINE_BAR_FILL_COLOR.green)
+    expect(getActionDeadlineBarFillColor(80)).toBe(ACTION_DEADLINE_BAR_FILL_COLOR.green)
+  })
+
+  it('returns yellow in the middle third of remaining time', () => {
+    expect(getActionDeadlineBarFillColor(50)).toBe(ACTION_DEADLINE_BAR_FILL_COLOR.yellow)
+    expect(getActionDeadlineBarFillColor(40)).toBe(ACTION_DEADLINE_BAR_FILL_COLOR.yellow)
+  })
+
+  it('returns red when little time remains', () => {
+    expect(getActionDeadlineBarFillColor(20)).toBe(ACTION_DEADLINE_BAR_FILL_COLOR.red)
+    expect(getActionDeadlineBarFillColor(0)).toBe(ACTION_DEADLINE_BAR_FILL_COLOR.red)
+  })
+})
+
 describe('isActionDeadlineCritical', () => {
   it('returns true when overdue', () => {
     expect(
@@ -173,6 +197,25 @@ describe('isActionDeadlineCritical', () => {
         now: new Date('2026-06-04T08:15:00.000Z').getTime(),
       }),
     ).toBe(false)
+  })
+})
+
+describe('formatCompactDisplayName', () => {
+  it('formats first name and last initial', () => {
+    expect(formatCompactDisplayName('Marie Dupont')).toBe('Marie D.')
+  })
+
+  it('returns single name unchanged', () => {
+    expect(formatCompactDisplayName('Jean')).toBe('Jean')
+  })
+
+  it('returns empty string for blank input', () => {
+    expect(formatCompactDisplayName('')).toBe('')
+    expect(formatCompactDisplayName('   ')).toBe('')
+  })
+
+  it('keeps already compact names', () => {
+    expect(formatCompactDisplayName('Jean D.')).toBe('Jean D.')
   })
 })
 

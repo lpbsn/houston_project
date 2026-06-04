@@ -3,26 +3,25 @@ import type { KeyboardEvent } from 'react'
 
 import type { ActionFeedItem } from '@/features/actions/types'
 import { ActionStatusBadge } from '@/features/actions/components/action-status-badge'
+import { ActionDeadlineProgressBar } from '@/components/domain/action-deadline-progress-bar'
 import {
   formatActionCompletedByLabel,
   formatActionCreatorFooterLabel,
-  formatActionDueByTimeLabel,
-  formatActionRemainingTimeLabel,
   formatActionValidationRelativeTime,
   formatActionValidationWaitingLabel,
   getActionCardLeftAccentColor,
-  getActionDeadlineRemainingPercent,
   getActionDomainBadgeLabel,
   getActionLocationText,
   getDisplayNameInitials,
-  isActionDeadlineCritical,
   isActionPendingValidationCard,
   resolveActionValidationRelativeTimeIso,
   shouldShowActionUrgentBadge,
 } from '@/features/actions/lib/action-display'
 import { HoustonBadge } from '@/components/ui/terrain'
-import { cn } from '@/lib/utils'
-
+import {
+  terrainFeedCardBaseClassName,
+  terrainFeedInteractiveCardClassName,
+} from '@/lib/terrain-styles'
 type ExecutionActionCardProps = {
   item: ActionFeedItem
   onSelect: (actionId: string) => void
@@ -54,9 +53,8 @@ function PendingValidationExecutionActionCard({
 
   return (
     <article
-      className={cn(
-        'cursor-pointer rounded-[22px] border border-[#E69138] bg-[#FFF9ED] p-4 transition',
-        'hover:border-[#E69138]/80',
+      className={terrainFeedCardBaseClassName(
+        'border border-[#E69138] bg-[#FFF9ED] hover:border-[#E69138]/80',
       )}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
@@ -112,22 +110,12 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
   const showUrgentBadge = shouldShowActionUrgentBadge(item.signal_summary)
   const domainLabel = getActionDomainBadgeLabel(item.domain_key)
   const locationText = getActionLocationText(item.signal_summary)
-  const deadlineRemainingPercent = getActionDeadlineRemainingPercent(item.created_at, item.due_at)
-  const isDeadlineCritical = isActionDeadlineCritical({
-    dueAt: item.due_at,
-    isOverdue: item.is_overdue,
-    createdAt: item.created_at,
-  })
   const creatorInitials = getDisplayNameInitials(item.created_by_display_name)
   const creatorLabel = formatActionCreatorFooterLabel(item.created_by_display_name)
 
   return (
     <article
-      className={cn(
-        'cursor-pointer rounded-[22px] border border-[#E8E6DF] bg-white p-4',
-        'border-l-4 transition',
-        'hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30',
-      )}
+      className={terrainFeedInteractiveCardClassName()}
       style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
@@ -150,43 +138,15 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
         </p>
       ) : null}
 
-      <div className="mt-3">
-        <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
-          <span
-            className={cn(
-              isDeadlineCritical ? 'font-medium text-[#B91C1C]' : 'text-[#666]',
-            )}
-          >
-            {formatActionRemainingTimeLabel(item.due_at, item.is_overdue)}
-          </span>
-          {item.due_at ? (
-            <span
-              className={cn(
-                'shrink-0',
-                isDeadlineCritical ? 'font-medium text-[#B91C1C]' : 'text-[#888]',
-              )}
-            >
-              {formatActionDueByTimeLabel(item.due_at)}
-            </span>
-          ) : null}
-        </div>
-        <div
-          className="h-1 overflow-hidden rounded-full bg-[#F0EFE9]"
-          role="progressbar"
-          aria-valuenow={Math.round(deadlineRemainingPercent)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Progression vers l'échéance"
-        >
-          <div
-            className={cn(
-              'h-full rounded-full transition-[width]',
-              isDeadlineCritical ? 'bg-[#E24B4A]' : 'bg-[#1B4FD8]',
-            )}
-            style={{ width: `${deadlineRemainingPercent}%` }}
+      {item.due_at ? (
+        <div className="mt-3">
+          <ActionDeadlineProgressBar
+            createdAt={item.created_at}
+            dueAt={item.due_at}
+            isOverdue={item.is_overdue}
           />
         </div>
-      </div>
+      ) : null}
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0EFE9] pt-3">
         <div className="flex min-w-0 items-center gap-2">

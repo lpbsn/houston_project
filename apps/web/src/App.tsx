@@ -17,6 +17,7 @@ import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { ChatPage } from '@/features/chat/pages/chat-page'
+import { ActionCreatePage } from '@/features/actions/pages/action-create-page'
 import { ActionDetailPage } from '@/features/actions/pages/action-detail-page'
 import { ExecutionFeedPage } from '@/features/execution/pages/execution-feed-page'
 import { SignalDetailPage } from '@/features/signals/pages/signal-detail-page'
@@ -44,6 +45,8 @@ type AppPath =
 type AppRoute =
   | { kind: 'static'; path: AppPath }
   | { kind: 'signal-detail'; signalId: string }
+  | { kind: 'signal-action-create'; signalId: string }
+  | { kind: 'action-create' }
   | { kind: 'action-detail'; actionId: string }
   | { kind: 'invitation'; token: string }
 
@@ -59,17 +62,28 @@ function parseInvitationToken(pathname: string): string | null {
   return token || null
 }
 
+function parseSignalActionCreateId(pathname: string): string | null {
+  const match = pathname.match(/^\/signals\/([^/]+)\/plan\/?$/)
+  return match?.[1] ?? null
+}
+
 function parseSignalDetailId(pathname: string): string | null {
   const prefix = '/signals/'
   if (!pathname.startsWith(prefix)) {
     return null
   }
   const remainder = pathname.slice(prefix.length)
-  const signalId = remainder.split('/').filter(Boolean)[0]
-  return signalId || null
+  const segments = remainder.split('/').filter(Boolean)
+  if (segments.length !== 1) {
+    return null
+  }
+  return segments[0] || null
 }
 
 function parseActionDetailId(pathname: string): string | null {
+  if (pathname === '/actions/new' || pathname === '/actions/new/') {
+    return null
+  }
   const prefix = '/actions/'
   if (!pathname.startsWith(prefix)) {
     return null
@@ -83,6 +97,15 @@ function parseAppRoute(pathname: string): AppRoute {
   const invitationToken = parseInvitationToken(pathname)
   if (invitationToken) {
     return { kind: 'invitation', token: invitationToken }
+  }
+
+  const signalPlanId = parseSignalActionCreateId(pathname)
+  if (signalPlanId) {
+    return { kind: 'signal-action-create', signalId: signalPlanId }
+  }
+
+  if (pathname === '/actions/new' || pathname === '/actions/new/') {
+    return { kind: 'action-create' }
   }
 
   const signalId = parseSignalDetailId(pathname)
@@ -176,6 +199,8 @@ function App() {
           route.path === '/profile' ||
           route.path === '/team/invite')) ||
       route.kind === 'signal-detail' ||
+      route.kind === 'signal-action-create' ||
+      route.kind === 'action-create' ||
       route.kind === 'action-detail'
 
     if (isProtectedRoute && !auth.isAuthenticated) {
@@ -213,6 +238,20 @@ function App() {
       )
     }
 
+    if (route.kind === 'signal-action-create') {
+      return (
+        <ActionCreatePage
+          mode="linked"
+          signalId={route.signalId}
+          onNavigate={navigate}
+        />
+      )
+    }
+
+    if (route.kind === 'action-create') {
+      return <ActionCreatePage mode="free" onNavigate={navigate} />
+    }
+
     if (route.kind === 'action-detail') {
       return <ActionDetailPage actionId={route.actionId} onNavigate={navigate} />
     }
@@ -234,7 +273,12 @@ function App() {
     }
 
     if (route.path === '/execution') {
-      return <ExecutionFeedPage onOpenAction={(id) => navigate(`/actions/${id}`)} />
+      return (
+        <ExecutionFeedPage
+          onOpenAction={(id) => navigate(`/actions/${id}`)}
+          onNavigate={navigate}
+        />
+      )
     }
 
     if (route.path === '/chat') {
@@ -358,6 +402,7 @@ function App() {
               pageTitle={terrainConfig.pageTitle}
               detailTitleLayout={terrainConfig.detailTitleLayout}
               showBottomBorder={
+                route.kind !== 'signal-action-create' &&
                 !(
                   route.kind === 'static' &&
                   (route.path === '/signals' || route.path === '/execution')

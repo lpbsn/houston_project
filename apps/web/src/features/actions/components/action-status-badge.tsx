@@ -34,7 +34,6 @@ export function ActionStatusBadge({
     <span
       className={cn(
         'inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium',
-        labelVariant === 'feed' && 'uppercase tracking-[0.02em]',
         STATUS_CLASS[status] ?? 'bg-[#F0EFE9] text-[#444]',
         className,
       )}

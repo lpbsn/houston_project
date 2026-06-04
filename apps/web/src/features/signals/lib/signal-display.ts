@@ -28,9 +28,9 @@ const STATUS_GROUP_META: Record<
   'open' | 'in_progress' | 'resolved',
   { label: string; dotVariant: TerrainSectionDotVariant }
 > = {
-  open: { label: 'En attente', dotVariant: 'danger' },
+  open: { label: 'En attente', dotVariant: 'warning' },
   in_progress: { label: 'En cours', dotVariant: 'primary' },
-  resolved: { label: 'Résolus', dotVariant: 'muted' },
+  resolved: { label: 'Résolus', dotVariant: 'success' },
 }
 
 /**

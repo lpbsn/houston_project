@@ -49,6 +49,21 @@ export function terrainCardClassName(className?: string) {
   return cn('rounded-[14px] border border-[#E8E6DF] bg-white', className)
 }
 
+/** Feed list tappable cards (Execution / Signal). 22px radius — distinct from terrainCardClassName (14px). */
+export function terrainFeedInteractiveCardClassName(className?: string) {
+  return cn(
+    'cursor-pointer rounded-[22px] border border-[#E8E6DF] bg-white p-4',
+    'border-l-4 transition',
+    'hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30',
+    className,
+  )
+}
+
+/** Shared radius/padding for feed cards without left-accent border (e.g. pending validation). */
+export function terrainFeedCardBaseClassName(className?: string) {
+  return cn('cursor-pointer rounded-[22px] p-4 transition', className)
+}
+
 export function terrainFieldLabelClassName(className?: string) {
   return cn(
     'text-[11px] font-medium uppercase tracking-[0.04em] text-[#7D7B75]',

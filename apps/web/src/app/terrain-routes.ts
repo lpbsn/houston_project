@@ -1,6 +1,8 @@
 export type AppRoute =
   | { kind: 'static'; path: string }
   | { kind: 'signal-detail'; signalId: string }
+  | { kind: 'signal-action-create'; signalId: string }
+  | { kind: 'action-create' }
   | { kind: 'action-detail'; actionId: string }
   | { kind: 'invitation'; token: string }
 
@@ -36,7 +38,12 @@ const TERRAIN_HUB_PATHS = new Set<string>([
 ])
 
 export function usesTerrainShell(route: AppRoute): boolean {
-  if (route.kind === 'signal-detail' || route.kind === 'action-detail') {
+  if (
+    route.kind === 'signal-detail' ||
+    route.kind === 'signal-action-create' ||
+    route.kind === 'action-create' ||
+    route.kind === 'action-detail'
+  ) {
     return true
   }
   if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
@@ -59,8 +66,27 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'action-detail') {
     return {
       topbarVariant: 'detail',
-      title: "Plan d'exécution",
-      detailTitleLayout: 'belowBack',
+      title: 'Action',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'signal-action-create') {
+    return {
+      topbarVariant: 'detail',
+      title: "Plan d'action",
+      backPath: `/signals/${route.signalId}`,
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'action-create') {
+    return {
+      topbarVariant: 'detail',
+      title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -70,7 +96,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/reporting') {
     return {
       topbarVariant: 'hub',
-      pageTitle: 'Nouveau signal',
+      pageTitle: 'Nouvelle Observation',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'auto',
@@ -128,6 +154,14 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'action-detail') {
     return `action-detail-${route.actionId}`
+  }
+
+  if (route.kind === 'signal-action-create') {
+    return `signal-action-create-${route.signalId}`
+  }
+
+  if (route.kind === 'action-create') {
+    return 'action-create'
   }
 
   if (route.kind === 'static') {

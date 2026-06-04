@@ -1,12 +1,8 @@
-import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
 import { ActionDetailCommentsDisabledSection } from '@/features/actions/components/action-detail-disabled-section'
-import { ActionCreateForm } from '@/features/actions/components/action-create-form'
-import { ActionsApiError } from '@/features/actions/api'
-import { useCreateActionMutation } from '@/features/actions/hooks'
 import { cn } from '@/lib/utils'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
@@ -57,8 +53,6 @@ function resolveMediaCount(signal: SignalDetail): number {
 export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const [showCreateAction, setShowCreateAction] = useState(false)
-  const createActionMutation = useCreateActionMutation(establishmentId)
   const role = auth.bootstrap?.active_membership?.role
   const canCreateAction =
     role === 'owner' || role === 'director' || role === 'manager'
@@ -109,7 +103,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const mediaCount = resolveMediaCount(signal)
   const showCreateActionPlan =
     canCreateAction && (signal.status === 'open' || signal.status === 'in_progress')
-  const showStickyCreateActionFooter = showCreateActionPlan && !showCreateAction
+  const showStickyCreateActionFooter = showCreateActionPlan
   const hasLifecycleSticky =
     signal.permission_hints.can_resolve || signal.permission_hints.can_cancel
   const showStickyFooter = hasLifecycleSticky || showStickyCreateActionFooter
@@ -158,32 +152,6 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
         <SignalDetailPhotoSection mediaCount={mediaCount} />
 
         <ActionDetailCommentsDisabledSection description="Les échanges autour de ce signal seront disponibles bientôt." />
-
-        {showCreateActionPlan && showCreateAction ? (
-          <TerrainCard>
-            <TerrainFieldLabel>Plan d&apos;action</TerrainFieldLabel>
-            <ActionCreateForm
-              initialSignalId={signalId}
-              suggestedModuleKey={signal.module_key}
-              suggestedDomainKey={signal.domain_key}
-              suggestedSubjectKey={signal.subject_key}
-              onCancel={() => setShowCreateAction(false)}
-              onCreated={(actionId) => {
-                setShowCreateAction(false)
-                onNavigate(`/actions/${actionId}`)
-              }}
-              onSubmit={async (body) => createActionMutation.mutateAsync(body)}
-              isSubmitting={createActionMutation.isPending}
-              errorMessage={
-                createActionMutation.error instanceof ActionsApiError
-                  ? createActionMutation.error.detail
-                  : createActionMutation.error instanceof Error
-                    ? createActionMutation.error.message
-                    : null
-              }
-            />
-          </TerrainCard>
-        ) : null}
       </div>
 
       {showStickyFooter ? (
@@ -193,7 +161,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           showCreateActionPlan={showStickyCreateActionFooter}
           onResolve={() => void resolveMutation.mutate()}
           onCancel={() => void cancelMutation.mutate()}
-          onCreateActionPlan={() => setShowCreateAction(true)}
+          onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
           lifecycleErrorMessage={
             lifecycleError ? getErrorMessage(lifecycleError) : null
           }
