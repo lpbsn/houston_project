@@ -17,7 +17,11 @@ from houston.signals.api.serializers import (
     serialize_signal_detail,
     serialize_signal_feed_item,
 )
-from houston.signals.exceptions import SignalStateError, SignalValidationError
+from houston.signals.exceptions import (
+    SignalBusinessConflictError,
+    SignalStateError,
+    SignalValidationError,
+)
 from houston.signals.feed_filters import (
     SignalFeedFilterValidationError,
     build_applied_filters_payload,
@@ -404,6 +408,11 @@ def _signal_lifecycle_command_response(
             signal = cancel_signal(signal=signal)
         else:
             signal = resolve_signal(signal=signal)
+    except SignalBusinessConflictError as exc:
+        return Response(
+            {"code": exc.error_code, "detail": "Cannot resolve signal with active linked actions."},
+            status=status.HTTP_409_CONFLICT,
+        )
     except SignalStateError as exc:
         return Response(
             {"code": exc.error_code, "detail": "Invalid signal state."},

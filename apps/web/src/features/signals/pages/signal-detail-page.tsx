@@ -1,10 +1,16 @@
+import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
+import { ActionDetailCommentsDisabledSection } from '@/features/actions/components/action-detail-disabled-section'
+import { ActionCreateForm } from '@/features/actions/components/action-create-form'
+import { ActionsApiError } from '@/features/actions/api'
+import { useCreateActionMutation } from '@/features/actions/hooks'
+import { cn } from '@/lib/utils'
 
-import { SignalDetailMediaPlaceholder } from '../components/signal-detail-media-placeholder'
-import { SignalLifecycleActions } from '../components/signal-lifecycle-actions'
+import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
+import { SignalDetailStickyFooter } from '../components/signal-detail-sticky-footer'
 import { SignalPinUrgencyActions } from '../components/signal-pin-urgency-actions'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalTaxonomyBadges } from '../components/signal-taxonomy-badges'
@@ -51,6 +57,11 @@ function resolveMediaCount(signal: SignalDetail): number {
 export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const [showCreateAction, setShowCreateAction] = useState(false)
+  const createActionMutation = useCreateActionMutation(establishmentId)
+  const role = auth.bootstrap?.active_membership?.role
+  const canCreateAction =
+    role === 'owner' || role === 'director' || role === 'manager'
 
   const lifecycleClosed = () => {
     onNavigate('/signals')
@@ -96,55 +107,97 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
   const mediaCount = resolveMediaCount(signal)
+  const showCreateActionPlan =
+    canCreateAction && (signal.status === 'open' || signal.status === 'in_progress')
+  const showStickyCreateActionFooter = showCreateActionPlan && !showCreateAction
+  const hasLifecycleSticky =
+    signal.permission_hints.can_resolve || signal.permission_hints.can_cancel
+  const showStickyFooter = hasLifecycleSticky || showStickyCreateActionFooter
 
   return (
-    <div className="flex flex-col gap-2.5 px-3 pb-4 pt-2">
-      <TerrainCard>
-        <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <SignalUrgencyBadge urgency={signal.urgency} />
-          <SignalTaxonomyBadges domainKey={signal.domain_key} subjectKey={signal.subject_key} />
-          <SignalStatusBadge status={signal.status} variant="detail" />
-        </div>
-        <p className="mt-2 text-[11px] text-[#aaa]">
-          {signal.location_text ? `📍 ${signal.location_text} · ` : ''}
-          il y a {formatSignalRelativeTime(signal.last_activity_at)}
-        </p>
-        {reporterName ? (
-          <p className="mt-1 text-[11px] text-[#aaa]">Signalé par {reporterName}</p>
+    <div className="flex min-h-full flex-col">
+      <div
+        className={cn(
+          'flex flex-1 flex-col gap-2.5 px-3 pt-2',
+          showStickyFooter ? 'pb-40' : 'pb-4',
+        )}
+      >
+        <TerrainCard>
+          <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <SignalUrgencyBadge urgency={signal.urgency} />
+            <SignalTaxonomyBadges domainKey={signal.domain_key} subjectKey={signal.subject_key} />
+            <SignalStatusBadge status={signal.status} variant="detail" />
+          </div>
+          <p className="mt-2 text-[11px] text-[#aaa]">
+            {signal.location_text ? `📍 ${signal.location_text} · ` : ''}
+            il y a {formatSignalRelativeTime(signal.last_activity_at)}
+          </p>
+          {reporterName ? (
+            <p className="mt-1 text-[11px] text-[#aaa]">Signalé par {reporterName}</p>
+          ) : null}
+        </TerrainCard>
+
+        <TerrainCard>
+          <TerrainFieldLabel>Description</TerrainFieldLabel>
+          <p className="mt-2 text-[13px] leading-relaxed text-[#444]">
+            {formatDescriptionContent(signal.structured_summary)}
+          </p>
+        </TerrainCard>
+
+        <SignalPinUrgencyActions
+          hints={signal.permission_hints}
+          isPinned={signal.is_pinned}
+          urgency={signal.urgency}
+          isPending={isPending}
+          onPin={() => void pinMutation.mutate()}
+          onUnpin={() => void unpinMutation.mutate()}
+          onSetUrgency={(urgency) => void urgencyMutation.mutate(urgency)}
+        />
+
+        <SignalDetailPhotoSection mediaCount={mediaCount} />
+
+        <ActionDetailCommentsDisabledSection description="Les échanges autour de ce signal seront disponibles bientôt." />
+
+        {showCreateActionPlan && showCreateAction ? (
+          <TerrainCard>
+            <TerrainFieldLabel>Plan d&apos;action</TerrainFieldLabel>
+            <ActionCreateForm
+              initialSignalId={signalId}
+              suggestedModuleKey={signal.module_key}
+              suggestedDomainKey={signal.domain_key}
+              suggestedSubjectKey={signal.subject_key}
+              onCancel={() => setShowCreateAction(false)}
+              onCreated={(actionId) => {
+                setShowCreateAction(false)
+                onNavigate(`/actions/${actionId}`)
+              }}
+              onSubmit={async (body) => createActionMutation.mutateAsync(body)}
+              isSubmitting={createActionMutation.isPending}
+              errorMessage={
+                createActionMutation.error instanceof ActionsApiError
+                  ? createActionMutation.error.detail
+                  : createActionMutation.error instanceof Error
+                    ? createActionMutation.error.message
+                    : null
+              }
+            />
+          </TerrainCard>
         ) : null}
-      </TerrainCard>
+      </div>
 
-      <TerrainCard>
-        <TerrainFieldLabel>Description</TerrainFieldLabel>
-        <p className="mt-2 text-[13px] leading-relaxed text-[#444]">
-          {formatDescriptionContent(signal.structured_summary)}
-        </p>
-      </TerrainCard>
-
-      <SignalDetailMediaPlaceholder mediaCount={mediaCount} />
-
-      <SignalPinUrgencyActions
-        hints={signal.permission_hints}
-        isPinned={signal.is_pinned}
-        urgency={signal.urgency}
-        isPending={isPending}
-        onPin={() => void pinMutation.mutate()}
-        onUnpin={() => void unpinMutation.mutate()}
-        onSetUrgency={(urgency) => void urgencyMutation.mutate(urgency)}
-      />
-
-      <SignalLifecycleActions
-        hints={signal.permission_hints}
-        isPending={isPending}
-        onCancel={() => void cancelMutation.mutate()}
-        onResolve={() => void resolveMutation.mutate()}
-      />
-
-      {lifecycleError ? (
-        <p className="px-1 text-sm text-destructive" role="alert">
-          {getErrorMessage(lifecycleError)}
-        </p>
+      {showStickyFooter ? (
+        <SignalDetailStickyFooter
+          hints={signal.permission_hints}
+          isPending={isPending}
+          showCreateActionPlan={showStickyCreateActionFooter}
+          onResolve={() => void resolveMutation.mutate()}
+          onCancel={() => void cancelMutation.mutate()}
+          onCreateActionPlan={() => setShowCreateAction(true)}
+          lifecycleErrorMessage={
+            lifecycleError ? getErrorMessage(lifecycleError) : null
+          }
+        />
       ) : null}
     </div>
   )

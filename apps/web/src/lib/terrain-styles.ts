@@ -35,12 +35,14 @@ export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   blue: 'bg-[#1B4FD8] text-white',
 }
 
-export type TerrainSectionDotVariant = 'danger' | 'primary' | 'muted'
+export type TerrainSectionDotVariant = 'danger' | 'primary' | 'muted' | 'warning' | 'success'
 
 export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string> = {
   danger: 'bg-[#E24B4A]',
   primary: 'bg-[#1B4FD8]',
   muted: 'bg-[#7D7B75]',
+  warning: 'bg-[#EF9F27]',
+  success: 'bg-[#1D9E75]',
 }
 
 export function terrainCardClassName(className?: string) {

@@ -77,6 +77,17 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
+  it('configures action detail with title below back', () => {
+    expect(getTerrainRouteConfig({ kind: 'action-detail', actionId: 'x' })).toEqual({
+      topbarVariant: 'detail',
+      title: "Plan d'exécution",
+      detailTitleLayout: 'belowBack',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
   it('throws for non-terrain routes', () => {
     expect(() => getTerrainRouteConfig({ kind: 'static', path: '/app' })).toThrow(
       'getTerrainRouteConfig called for a non-terrain route',

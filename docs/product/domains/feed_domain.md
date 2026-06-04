@@ -1,8 +1,8 @@
 # Feed Domain
 
 Status: authoritative
-Last reviewed: 2026-05-29
-Implementation status: not_started
+Last reviewed: 2026-06-04
+Implementation status: partial (Execution Feed Phase 5; Signal Feed Phase 4)
 
 ## 1. Purpose
 
@@ -34,9 +34,10 @@ Feed is a read/projection domain. It is not business truth.
 - Target Signal Feed behavior keeps archived Signals out of active results by default.
 
 Current truth:
-- MVP feed behavior is validated at product level.
-- No feed API is implemented in `apps/api/schema.yml` today.
-- Current backend code may include a signal-feed permission helper, but no public Feed API is implemented in `apps/api/schema.yml`.
+- `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
+- `GET execution-feed/` implemented (Phase 5, Actions only) with required `view_mode=personal|general`.
+- Response envelope: `items`, `next_cursor`, `has_more`.
+- Execution Feed **Vue globale** for Staff: created/assigned Actions only (not scope-based); **Ma vue** uses the same rule for Staff.
 
 ## 3. Out of Scope
 
@@ -123,7 +124,7 @@ Frontend display states may include:
 
 - Feed access is establishment-scoped and backend-authorized.
 - Current code proves active members can view Signal Feed through `can_view_signal_feed(...)`.
-- Current code does not prove feed object-level rules or `ExecutionFeed` rules yet.
+- `ExecutionFeed` applies `view_mode` in selectors before returning items.
 - **Ma vue** (`view_mode=personal`): active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes.
 - **Vue générale** (`view_mode=general`): all active establishment Signals.
 - `MembershipFeedSubscription` is **out of scope Phase 4** (`feed_subscription_domain.md`).
@@ -137,7 +138,7 @@ Frontend display states may include:
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
 | **Signal Feed** | Active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes. | All active establishment Signals. RBAC feed access only. |
-| **Execution Feed** | Items where the user has **operational responsibility**: assigned Actions, assigned shared checklist executions, own personal checklist work. **Not** driven by feed subscriptions. | Broader establishment execution visibility per role (see archive contract §12). **Not** subscription-based. |
+| **Execution Feed** | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **personal** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. | **Owner/Director:** all active establishment Actions. **Manager:** personal set plus Actions in **`MembershipScope`**. **Staff:** same as personal (created/assigned only). **Not** subscription-based. |
 
 Feed subscriptions personalize **Signal Feed Ma vue only**. They are not permissions and do not filter Execution Feed.
 
