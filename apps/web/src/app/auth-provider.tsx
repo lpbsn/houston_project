@@ -22,11 +22,13 @@ import {
 } from '@/features/auth/api'
 import { getAccessToken, useAccessToken } from '@/features/auth/session'
 import type { BootstrapResponse, LoginRequest } from '@/features/auth/types'
+import type { PendingOnboardingMembership } from '@/features/auth/lib/pending-onboarding'
 
 type AuthContextValue = {
   activeMembership: BootstrapResponse['active_membership']
   bootstrap: BootstrapResponse | null
   hasAccessToken: boolean
+  hasOperationalAccess: boolean
   isAuthenticated: boolean
   isBootstrapping: boolean
   isLoggingIn: boolean
@@ -36,6 +38,7 @@ type AuthContextValue = {
   loginError: AuthApiError | Error | null
   logout: () => Promise<void>
   memberships: BootstrapResponse['memberships']
+  pendingOnboardingMemberships: PendingOnboardingMembership[]
   user: BootstrapResponse['user'] | null
 }
 
@@ -85,6 +88,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     staleTime: 5 * 60_000,
   })
 
+  useEffect(() => {
+    if (!bootstrapQuery.isError) {
+      return
+    }
+
+    const error = bootstrapQuery.error
+    if (error instanceof AuthApiError && error.status === 401) {
+      clearAuthState()
+    }
+  }, [bootstrapQuery.isError, bootstrapQuery.error])
+
   const loginMutation = useMutation({
     mutationFn: async (input: LoginRequest) => {
       await login(input)
@@ -108,6 +122,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       activeMembership: bootstrap?.active_membership ?? null,
       bootstrap,
       hasAccessToken: Boolean(accessToken),
+      hasOperationalAccess: Boolean(bootstrap?.active_membership),
       isAuthenticated,
       isBootstrapping,
       isLoggingIn: loginMutation.isPending,
@@ -127,6 +142,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
       memberships: bootstrap?.memberships ?? [],
+      pendingOnboardingMemberships: bootstrap?.pending_onboarding_memberships ?? [],
       user: bootstrap?.user ?? null,
     }),
     [

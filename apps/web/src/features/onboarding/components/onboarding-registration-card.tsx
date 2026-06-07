@@ -38,19 +38,19 @@ const stepMeta: Record<
   { title: string; description: string; action: string }
 > = {
   1: {
-    title: 'Owner details',
-    description: 'Enter your invitation code and account details.',
-    action: 'Continue',
+    title: 'Compte propriétaire',
+    description: 'Saisissez votre code d’invitation et vos informations de connexion.',
+    action: 'Continuer',
   },
   2: {
-    title: 'Organization',
-    description: 'Name the organization you are setting up.',
-    action: 'Continue',
+    title: 'Organisation',
+    description: 'Nommez l’organisation que vous configurez.',
+    action: 'Continuer',
   },
   3: {
-    title: 'Establishment',
-    description: 'Name your first establishment to finish registration.',
-    action: 'Start onboarding',
+    title: 'Établissement',
+    description: 'Nommez votre premier établissement pour terminer l’inscription.',
+    action: 'Démarrer l’onboarding',
   },
 }
 

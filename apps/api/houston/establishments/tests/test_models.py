@@ -24,7 +24,6 @@ from houston.establishments.models import (
     RuntimeVocabulary,
 )
 from houston.establishments.services import (
-    ActiveOnboardingSessionExistsError,
     InvalidOnboardingSessionScopeError,
     UnsupportedOnboardingSessionSourceModeError,
     start_onboarding_session,
@@ -551,14 +550,15 @@ def test_start_onboarding_session_rejects_mismatched_scope(establishment):
         )
 
 
-def test_start_onboarding_session_converts_duplicate_non_terminal_session_error(
+def test_start_onboarding_session_returns_existing_non_terminal_session(
     organization,
     establishment,
 ):
-    start_onboarding_session(organization=organization, establishment=establishment)
+    first = start_onboarding_session(organization=organization, establishment=establishment)
+    second = start_onboarding_session(organization=organization, establishment=establishment)
 
-    with pytest.raises(ActiveOnboardingSessionExistsError):
-        start_onboarding_session(organization=organization, establishment=establishment)
+    assert second.id == first.id
+    assert OnboardingSession.objects.filter(establishment=establishment).count() == 1
 
 
 def test_activity_description_is_canonical_per_establishment(establishment):

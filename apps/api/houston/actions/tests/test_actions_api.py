@@ -4,7 +4,6 @@ import pytest
 from django.utils import timezone
 
 from houston.actions.models import Action
-from houston.signals.models import Signal
 from houston.actions.tests.conftest import (
     action_url,
     actions_url,
@@ -18,6 +17,7 @@ from houston.actions.tests.conftest import (
     login,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.models import Signal
 
 pytestmark = pytest.mark.django_db
 

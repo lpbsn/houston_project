@@ -12,23 +12,30 @@ from houston.establishments.membership_scope import (
     replace_membership_scopes,
 )
 from houston.establishments.models import (
+    BusinessUnit,
     Establishment,
     EstablishmentMembership,
-    MembershipScope,
     OperationalDomain,
     OperationalModule,
     OperationalSubject,
 )
-from houston.establishments.tests.test_membership_scope import (
+from houston.establishments.tests.taxonomy_helpers import (
+    create_business_unit,
     create_establishment,
     create_membership,
+    create_membership_with_business_unit_scope,
     create_taxonomy_tree,
 )
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
-from houston.signals.permissions import signal_matches_membership_scope
+from houston.signals.permissions import (
+    signal_actionable_by_membership,
+    signal_matches_membership_scope,
+    signal_visible_in_membership_scope,
+)
 from houston.signals.selectors import active_signals_for_establishment, signal_feed_queryset
 from houston.signals.tests.conftest import (
+    create_restaurant_business_units,
     create_restaurant_lighting_bar_stock_taxonomy,
     create_taxonomy,
 )
@@ -43,6 +50,8 @@ def _create_signal(
     domain: OperationalDomain,
     subject: OperationalSubject,
     title: str = "Test signal",
+    affected_business_unit: BusinessUnit | None = None,
+    responsible_business_unit: BusinessUnit | None = None,
 ) -> Signal:
     now = timezone.now()
     return Signal.objects.create(
@@ -50,6 +59,8 @@ def _create_signal(
         operational_module=module,
         operational_domain=domain,
         operational_subject=subject,
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible_business_unit,
         title=title,
         structured_summary="Structured summary safe.",
         last_activity_at=now,
@@ -84,30 +95,19 @@ def test_build_signal_feed_scope_q_returns_none_without_scopes():
     assert _feed_personal_ids(membership=membership) == set()
 
 
-@pytest.mark.parametrize(
-    "scope_type",
-    [
-        MembershipScopeType.MODULE,
-        MembershipScopeType.DOMAIN,
-        MembershipScopeType.SUBJECT,
-    ],
-)
-def test_personal_feed_matches_signal_matches_membership_scope_oracle(scope_type):
+def test_personal_feed_matches_signal_matches_membership_scope_oracle():
     establishment = create_establishment()
     module, domain, subject = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key=module.key)
     membership = create_membership(
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-
-    scope_id = {
-        MembershipScopeType.MODULE: module.id,
-        MembershipScopeType.DOMAIN: domain.id,
-        MembershipScopeType.SUBJECT: subject.id,
-    }[scope_type]
     replace_membership_scopes(
         membership=membership,
-        scope_inputs=[MembershipScopeInput(scope_type, scope_id)],
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, business_unit.id),
+        ],
     )
 
     _create_signal(
@@ -116,6 +116,8 @@ def test_personal_feed_matches_signal_matches_membership_scope_oracle(scope_type
         domain=domain,
         subject=subject,
         title="In scope",
+        affected_business_unit=business_unit,
+        responsible_business_unit=business_unit,
     )
     sibling_domain = OperationalDomain.objects.create(
         establishment=establishment,
@@ -131,12 +133,15 @@ def test_personal_feed_matches_signal_matches_membership_scope_oracle(scope_type
         label="Sibling subject",
         active=True,
     )
+    other_unit = create_business_unit(establishment=establishment, key="other_unit")
     _create_signal(
         establishment=establishment,
         module=module,
         domain=sibling_domain,
         subject=sibling_subject,
         title="Out of scope",
+        affected_business_unit=other_unit,
+        responsible_business_unit=other_unit,
     )
 
     assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(
@@ -144,13 +149,14 @@ def test_personal_feed_matches_signal_matches_membership_scope_oracle(scope_type
     )
 
 
-def test_domain_scope_bar_does_not_see_salle_signal():
+def test_business_unit_scope_bar_does_not_see_salle_signal():
     establishment = create_establishment(name="Restaurant isolation bar")
     taxonomy = create_restaurant_lighting_bar_stock_taxonomy(
         establishment,
         include_salle_maintenance=True,
         include_bar_stock=True,
     )
+    business_units = create_restaurant_business_units(establishment)
     assert taxonomy.salle_maintenance_subject is not None
     assert taxonomy.bar_stock_subject is not None
 
@@ -160,6 +166,8 @@ def test_domain_scope_bar_does_not_see_salle_signal():
         domain=taxonomy.bar_domain,
         subject=taxonomy.bar_stock_subject,
         title="Bar signal",
+        affected_business_unit=business_units.bar,
+        responsible_business_unit=business_units.bar,
     )
     salle_signal = _create_signal(
         establishment=establishment,
@@ -167,28 +175,31 @@ def test_domain_scope_bar_does_not_see_salle_signal():
         domain=taxonomy.salle_domain,
         subject=taxonomy.salle_maintenance_subject,
         title="Salle signal",
+        affected_business_unit=business_units.restaurant,
+        responsible_business_unit=business_units.maintenance,
     )
 
     bar_membership = create_membership(
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=bar_membership,
-        operational_domain=taxonomy.bar_domain,
+        business_unit=business_units.bar,
     )
 
     assert _feed_personal_ids(membership=bar_membership) == {bar_signal.id}
     assert salle_signal.id not in _feed_personal_ids(membership=bar_membership)
 
 
-def test_domain_scope_salle_does_not_see_bar_signal():
+def test_business_unit_scope_salle_does_not_see_bar_signal():
     establishment = create_establishment(name="Restaurant isolation salle")
     taxonomy = create_restaurant_lighting_bar_stock_taxonomy(
         establishment,
         include_salle_maintenance=True,
         include_bar_stock=True,
     )
+    business_units = create_restaurant_business_units(establishment)
     assert taxonomy.salle_maintenance_subject is not None
     assert taxonomy.bar_stock_subject is not None
 
@@ -198,6 +209,8 @@ def test_domain_scope_salle_does_not_see_bar_signal():
         domain=taxonomy.bar_domain,
         subject=taxonomy.bar_stock_subject,
         title="Bar signal",
+        affected_business_unit=business_units.bar,
+        responsible_business_unit=business_units.bar,
     )
     salle_signal = _create_signal(
         establishment=establishment,
@@ -205,15 +218,17 @@ def test_domain_scope_salle_does_not_see_bar_signal():
         domain=taxonomy.salle_domain,
         subject=taxonomy.salle_maintenance_subject,
         title="Salle signal",
+        affected_business_unit=business_units.restaurant,
+        responsible_business_unit=business_units.maintenance,
     )
 
     salle_membership = create_membership(
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=salle_membership,
-        operational_domain=taxonomy.salle_domain,
+        business_unit=business_units.restaurant,
     )
 
     assert _feed_personal_ids(membership=salle_membership) == {salle_signal.id}
@@ -226,6 +241,16 @@ def test_personal_feed_parity_with_multiple_scope_rows():
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
+    unit_a = create_business_unit(establishment=establishment, key="mod_a")
+    unit_b = create_business_unit(establishment=establishment, key="mod_b")
+    replace_membership_scopes(
+        membership=membership,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, unit_a.id),
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, unit_b.id),
+        ],
+    )
+
     module_a, domain_a, subject_a = create_taxonomy_tree(
         establishment,
         module_key="mod_a",
@@ -253,27 +278,23 @@ def test_personal_feed_parity_with_multiple_scope_rows():
         active=True,
     )
 
-    replace_membership_scopes(
-        membership=membership,
-        scope_inputs=[
-            MembershipScopeInput(MembershipScopeType.SUBJECT, subject_a.id),
-            MembershipScopeInput(MembershipScopeType.DOMAIN, domain_b.id),
-        ],
-    )
-
     _create_signal(
         establishment=establishment,
         module=module_a,
         domain=domain_a,
         subject=subject_a,
-        title="Subject A",
+        title="Unit A",
+        affected_business_unit=unit_a,
+        responsible_business_unit=unit_a,
     )
     _create_signal(
         establishment=establishment,
         module=module_b,
         domain=domain_b,
         subject=subject_b,
-        title="Domain B",
+        title="Unit B",
+        affected_business_unit=unit_b,
+        responsible_business_unit=unit_b,
     )
     other_module, other_domain, other_subject = create_taxonomy_tree(
         establishment,
@@ -281,12 +302,15 @@ def test_personal_feed_parity_with_multiple_scope_rows():
         domain_key="mod_other__dom",
         subject_key="mod_other__dom__sub",
     )
+    other_unit = create_business_unit(establishment=establishment, key="mod_other")
     _create_signal(
         establishment=establishment,
         module=other_module,
         domain=other_domain,
         subject=other_subject,
         title="Other",
+        affected_business_unit=other_unit,
+        responsible_business_unit=other_unit,
     )
 
     assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(
@@ -294,14 +318,13 @@ def test_personal_feed_parity_with_multiple_scope_rows():
     )
 
 
-def test_personal_feed_subject_scope_uses_create_taxonomy_helper():
-    """Regression: subject-level scope via shared test helper."""
+def test_personal_feed_business_unit_scope_uses_create_taxonomy_helper():
     organization = Organization.objects.create(
         name=f"Org {uuid.uuid4().hex[:6]}",
         status=Organization.Status.ACTIVE,
     )
     establishment = Establishment.objects.create(
-        name="Subject scope feed",
+        name="Business unit scope feed",
         organization=organization,
         status=Establishment.Status.ACTIVE,
     )
@@ -310,15 +333,48 @@ def test_personal_feed_subject_scope_uses_create_taxonomy_helper():
         role=EstablishmentMembership.Role.STAFF,
     )
     module, domain, subject = create_taxonomy(establishment)
-    MembershipScope.objects.create(membership=membership, operational_subject=subject)
+    business_unit = create_business_unit(establishment=establishment, key=module.key)
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_unit,
+    )
     _create_signal(
         establishment=establishment,
         module=module,
         domain=domain,
         subject=subject,
-        title="Scoped subject",
+        title="Scoped unit",
+        affected_business_unit=business_unit,
+        responsible_business_unit=business_unit,
     )
 
     assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(
         membership=membership
     )
+
+
+def test_visibility_and_actionability_are_separated_for_golden_signals():
+    establishment = create_establishment(name="Visibility actionability")
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(establishment)
+    business_units = create_restaurant_business_units(establishment)
+    assert taxonomy.salle_maintenance_subject is not None
+    salle_signal = _create_signal(
+        establishment=establishment,
+        module=taxonomy.module,
+        domain=taxonomy.salle_domain,
+        subject=taxonomy.salle_maintenance_subject,
+        title="Lighting",
+        affected_business_unit=business_units.restaurant,
+        responsible_business_unit=business_units.maintenance,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_units.restaurant,
+    )
+
+    assert signal_visible_in_membership_scope(membership, salle_signal) is True
+    assert signal_actionable_by_membership(membership, salle_signal) is False

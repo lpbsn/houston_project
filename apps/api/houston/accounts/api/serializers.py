@@ -51,6 +51,7 @@ class MembershipScopeItemSerializer(serializers.Serializer):
 
 @extend_schema_serializer(component_name="AuthMembershipScopeSummary")
 class MembershipScopeSummarySerializer(serializers.Serializer):
+    business_unit_count = serializers.IntegerField()
     module_count = serializers.IntegerField()
     domain_count = serializers.IntegerField()
     subject_count = serializers.IntegerField()
@@ -68,11 +69,22 @@ class MembershipSerializer(serializers.Serializer):
     scope_summary = MembershipScopeSummarySerializer()
 
 
+class PendingOnboardingMembershipSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    establishment_id = serializers.UUIDField()
+    establishment_name = serializers.CharField()
+    establishment_status = serializers.CharField()
+    role = serializers.CharField()
+    onboarding_session_id = serializers.UUIDField(allow_null=True)
+    can_continue_onboarding = serializers.BooleanField()
+
+
 class BootstrapResponseSerializer(serializers.Serializer):
     authenticated = serializers.BooleanField()
     user = UserPublicSerializer()
     memberships = MembershipSerializer(many=True)
     active_membership = MembershipSerializer(allow_null=True)
+    pending_onboarding_memberships = PendingOnboardingMembershipSerializer(many=True)
 
 
 class AuthResponseSerializer(BootstrapResponseSerializer):

@@ -31,3 +31,11 @@ export type RuntimeConfigResponse = components['schemas']['RuntimeConfigResponse
 export type SectionEnum = components['schemas']['SectionEnum']
 export type SubmitActivityDescriptionRequest =
   components['schemas']['PatchedActivityDescriptionRequest']
+export type CatalogBusinessUnitSuggestion = components['schemas']['CatalogBusinessUnitSuggestion']
+export type CatalogActivitySubjectSuggestion =
+  components['schemas']['CatalogActivitySubjectSuggestion']
+export type OnboardingProposalPayload = components['schemas']['OnboardingProposalPayload']
+export type OnboardingProposalCreateRequest =
+  components['schemas']['OnboardingProposalCreateRequest']
+export type OnboardingProposalUpdateRequest =
+  components['schemas']['PatchedOnboardingProposalUpdateRequest']

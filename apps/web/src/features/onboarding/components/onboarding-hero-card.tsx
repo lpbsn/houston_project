@@ -21,7 +21,7 @@ export function OnboardingHeroCard({
   session,
 }: OnboardingHeroCardProps) {
   const blockerCount = activationSummary?.blockers.length ?? 0
-  const readinessLabel = activationSummary?.readiness.is_ready ? 'Ready' : 'In progress'
+  const readinessLabel = activationSummary?.readiness.is_ready ? 'Prêt' : 'En cours'
   const readinessIcon = activationSummary?.readiness.is_ready ? (
     <CheckCircle2 className="size-4" />
   ) : (
@@ -48,7 +48,7 @@ export function OnboardingHeroCard({
             {session.establishment.name}
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            {session.organization.name} · Current step: {session.current_step}
+            {session.organization.name} · Étape actuelle : {session.current_step}
           </CardDescription>
         </div>
       </CardHeader>
@@ -56,35 +56,35 @@ export function OnboardingHeroCard({
       <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile
           icon={<Building2 className="size-4" />}
-          label="Readiness"
+          label="Activation"
           value={readinessLabel}
           supporting={
             activationSummary
               ? activationSummary.effective_can_activate
-                ? 'Backend allows mark-ready'
-                : 'Backend has not allowed mark-ready'
-              : 'Loading backend summary'
+                ? 'Activation autorisée par le backend'
+                : 'Activation non autorisée pour le moment'
+              : 'Chargement du résumé backend'
           }
           accent={activationSummary?.readiness.is_ready ? 'success' : 'default'}
           valueIcon={readinessIcon}
         />
         <SummaryTile
           icon={<Layers3 className="size-4" />}
-          label="Modules"
-          value={`${activationSummary?.active_modules.length ?? runtimeConfig?.active_modules.length ?? 0}`}
-          supporting="Active runtime modules"
+          label="Pôles"
+          value={`${activationSummary?.active_business_units?.length ?? runtimeConfig?.active_business_units?.length ?? 0}`}
+          supporting="Pôles d'activité actifs"
         />
         <SummaryTile
           icon={<Gauge className="size-4" />}
-          label="Domains"
-          value={`${activationSummary?.active_domains.length ?? runtimeConfig?.active_domains.length ?? 0}`}
-          supporting="Active operational domains"
+          label="Directeurs"
+          value={`${activationSummary?.initial_director_count ?? 0}`}
+          supporting="Directeurs actifs ou invités"
         />
         <SummaryTile
           icon={<CircleAlert className="size-4" />}
-          label="Blockers"
+          label="Blocages"
           value={`${blockerCount}`}
-          supporting={blockerCount === 1 ? 'Backend blocker' : 'Backend blockers'}
+          supporting={blockerCount === 1 ? 'Blocage backend' : 'Blocages backend'}
           accent={blockerCount > 0 ? 'danger' : 'success'}
         />
       </CardContent>

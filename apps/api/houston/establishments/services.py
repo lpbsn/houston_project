@@ -17,14 +17,16 @@ from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
     assign_membership_scopes,
-    membership_scope_covers_domain,
-    membership_scope_covers_module,
-    membership_scope_covers_subject,
+    membership_scope_covers_business_unit,
     normalize_membership_scope_inputs,
     scopes_not_allowed_for_role,
 )
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    ActivitySubject,
+    BusinessUnit,
+    CatalogActivitySubject,
+    CatalogBusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentInvitation,
@@ -53,8 +55,13 @@ from houston.establishments.proposal_catalog import (
     merge_expanded_proposal,  # noqa: F401
 )
 from houston.establishments.selectors import (
+    business_unit_has_active_membership_scopes,
     get_membership_for_management,
     get_runtime_config_for_session,
+)
+from houston.establishments.taxonomy_normalization import (
+    normalize_activity_subject_name,
+    slugify_label,
 )
 from houston.organizations.models import Organization
 
@@ -151,6 +158,17 @@ class InvalidEstablishmentInvitationError(Exception):
     pass
 
 
+class RuntimeConfigNotFoundError(Exception):
+    pass
+
+
+class RuntimeConfigConflictError(Exception):
+    def __init__(self, *, code: str, detail: str):
+        self.code = code
+        self.detail = detail
+        super().__init__(detail)
+
+
 class EstablishmentInvitationExpiredError(Exception):
     pass
 
@@ -178,7 +196,27 @@ class MembershipUpdateInput:
     scopes: list[MembershipScopeInput] | None = None
 
 
+# Legacy proposal schema (Module → Domain → Subject taxonomy).
 PROPOSAL_SCHEMA_VERSION = "onboarding_proposal_v2"
+# Product: Onboarding manuel V2 (Lot 4)
+# Technical schema: onboarding_proposal_v3 — BusinessUnit / ActivitySubject payload
+PROPOSAL_SCHEMA_VERSION_V3_BU = "onboarding_proposal_v3"
+PROPOSAL_V3_BU_REQUIRED_SECTIONS = frozenset(
+    {
+        "business_units",
+        "activity_subjects",
+    }
+)
+PROPOSAL_V3_BU_OPTIONAL_SECTIONS = frozenset(
+    {
+        "excluded_catalog_subject_keys",
+    }
+)
+PROPOSAL_V3_BU_SECTIONS = PROPOSAL_V3_BU_REQUIRED_SECTIONS | PROPOSAL_V3_BU_OPTIONAL_SECTIONS
+PROPOSAL_V3_BU_SECTION_CAPS = {
+    "business_units": 50,
+    "activity_subjects": 500,
+}
 PROPOSAL_REQUIRED_SECTIONS = frozenset(
     {
         "operational_modules",
@@ -232,10 +270,22 @@ PROPOSAL_SECTION_DECISIONS = {
 
 
 def validate_onboarding_proposal_payload(payload: dict) -> dict:
-    errors: list[dict] = []
-
     if not isinstance(payload, dict):
         raise OnboardingProposalValidationError([_proposal_error("invalid_payload_type")])
+
+    schema_version = payload.get("schema_version")
+    if schema_version == PROPOSAL_SCHEMA_VERSION_V3_BU:
+        return _validate_onboarding_proposal_payload_v3_bu(payload)
+    if schema_version == PROPOSAL_SCHEMA_VERSION:
+        return _validate_onboarding_proposal_payload_v2_legacy(payload)
+
+    raise OnboardingProposalValidationError(
+        [_proposal_error("unsupported_schema_version", field="schema_version")]
+    )
+
+
+def _validate_onboarding_proposal_payload_v2_legacy(payload: dict) -> dict:
+    errors: list[dict] = []
 
     if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION:
         errors.append(_proposal_error("unsupported_schema_version", field="schema_version"))
@@ -330,6 +380,79 @@ def validate_onboarding_proposal_payload(payload: dict) -> dict:
     return enforce_proposal_parent_child_coherence(sanitized)
 
 
+def _validate_onboarding_proposal_payload_v3_bu(payload: dict) -> dict:
+    errors: list[dict] = []
+
+    if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3_BU:
+        errors.append(_proposal_error("unsupported_schema_version", field="schema_version"))
+
+    for section in PROPOSAL_V3_BU_REQUIRED_SECTIONS:
+        if section not in payload:
+            errors.append(_proposal_error("missing_required_section", section=section))
+
+    for section in payload:
+        if section == "schema_version":
+            continue
+        if section in PROPOSAL_EXCLUDED_SECTIONS:
+            errors.append(_proposal_error("excluded_section", section=section))
+        elif section not in PROPOSAL_V3_BU_SECTIONS:
+            errors.append(_proposal_error("unknown_section", section=section))
+
+    raw_business_units = _section_items_v3_bu(payload, "business_units", errors)
+    raw_activity_subjects = _section_items_v3_bu(payload, "activity_subjects", errors)
+    catalog_keys = _active_business_unit_catalog_keys()
+
+    business_units = _validate_business_unit_section(
+        items=raw_business_units,
+        catalog_keys=catalog_keys["business_units"],
+        errors=errors,
+    )
+    business_unit_client_keys = {item["client_key"] for item in business_units}
+
+    activity_subjects = _validate_activity_subject_section(
+        items=raw_activity_subjects,
+        business_unit_client_keys=business_unit_client_keys,
+        catalog_keys=catalog_keys["activity_subjects"],
+        errors=errors,
+    )
+
+    if len(business_units) < 1:
+        errors.append(_proposal_error("insufficient_business_units"))
+
+    subjects_by_bu_client_key: dict[str, int] = {}
+    for subject in activity_subjects:
+        subjects_by_bu_client_key[subject["business_unit_client_key"]] = (
+            subjects_by_bu_client_key.get(subject["business_unit_client_key"], 0) + 1
+        )
+    for business_unit in business_units:
+        if subjects_by_bu_client_key.get(business_unit["client_key"], 0) < 1:
+            errors.append(
+                _proposal_error(
+                    "business_unit_without_subjects",
+                    key=business_unit["client_key"],
+                )
+            )
+
+    if errors:
+        raise OnboardingProposalValidationError(errors)
+
+    result = {
+        "schema_version": PROPOSAL_SCHEMA_VERSION_V3_BU,
+        "business_units": business_units,
+        "activity_subjects": activity_subjects,
+    }
+    excluded_catalog_subject_keys = _validate_excluded_catalog_subject_keys(
+        payload.get("excluded_catalog_subject_keys"),
+        business_unit_client_keys=business_unit_client_keys,
+        errors=errors,
+    )
+    if errors:
+        raise OnboardingProposalValidationError(errors)
+    if excluded_catalog_subject_keys:
+        result["excluded_catalog_subject_keys"] = excluded_catalog_subject_keys
+    return result
+
+
 @transaction.atomic
 def create_manual_onboarding_proposal(
     *,
@@ -376,6 +499,78 @@ def create_ai_onboarding_proposal(
 
 
 @transaction.atomic
+def update_onboarding_proposal_payload(
+    *,
+    proposal: OnboardingProposal,
+    actor,
+    payload: dict,
+) -> OnboardingProposal:
+    proposal = _lock_onboarding_proposal(proposal)
+    _ensure_proposal_editable(proposal)
+    _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
+
+    if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3_BU:
+        raise OnboardingProposalValidationError(
+            [_proposal_error("unsupported_schema_version", field="schema_version")]
+        )
+
+    sanitized_payload = validate_onboarding_proposal_payload(payload)
+    proposal.payload = sanitized_payload
+    proposal.section_validation = {}
+    proposal.validation_errors = []
+    proposal.status = OnboardingProposal.Status.READY
+    proposal.save(
+        update_fields=[
+            "payload",
+            "section_validation",
+            "validation_errors",
+            "status",
+            "updated_at",
+        ]
+    )
+    return proposal
+
+
+@transaction.atomic
+def submit_manual_onboarding_proposal(
+    *,
+    proposal: OnboardingProposal,
+    actor,
+) -> OnboardingProposal:
+    proposal = _lock_onboarding_proposal(proposal)
+    _ensure_proposal_reviewable(proposal)
+    _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
+
+    payload = validate_onboarding_proposal_payload(proposal.payload)
+    if payload["schema_version"] != PROPOSAL_SCHEMA_VERSION_V3_BU:
+        raise OnboardingProposalValidationError(
+            [_proposal_error("unsupported_schema_version", field="schema_version")]
+        )
+
+    proposal.payload = payload
+    proposal.section_validation = {
+        section: PROPOSAL_SECTION_ACCEPTED for section in PROPOSAL_V3_BU_REQUIRED_SECTIONS
+    }
+    proposal.validation_errors = []
+    proposal.status = OnboardingProposal.Status.VALIDATED
+    proposal.validated_by = actor
+    proposal.validated_at = timezone.now()
+    proposal.save(
+        update_fields=[
+            "payload",
+            "section_validation",
+            "validation_errors",
+            "status",
+            "validated_by",
+            "validated_at",
+            "updated_at",
+        ]
+    )
+    _set_session_status_after_proposal_validation(proposal.onboarding_session)
+    return proposal
+
+
+@transaction.atomic
 def validate_onboarding_proposal_section(
     *,
     proposal: OnboardingProposal,
@@ -387,7 +582,12 @@ def validate_onboarding_proposal_section(
     _ensure_proposal_reviewable(proposal)
     _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
 
-    if section not in PROPOSAL_SECTIONS:
+    proposal.payload = validate_onboarding_proposal_payload(proposal.payload)
+    required_sections = _proposal_required_sections_for_payload(proposal.payload)
+    optional_sections = _proposal_optional_sections_for_payload(proposal.payload)
+    allowed_sections = required_sections | optional_sections
+
+    if section not in allowed_sections:
         raise OnboardingProposalValidationError(
             [_proposal_error("unknown_section", section=section)]
         )
@@ -395,12 +595,10 @@ def validate_onboarding_proposal_section(
         raise OnboardingProposalValidationError(
             [_proposal_error("invalid_payload_type", section=section, field="decision")]
         )
-    if section in PROPOSAL_REQUIRED_SECTIONS and decision == PROPOSAL_SECTION_SKIPPED:
+    if section in required_sections and decision == PROPOSAL_SECTION_SKIPPED:
         raise OnboardingProposalValidationError(
             [_proposal_error("missing_required_section", section=section)]
         )
-
-    proposal.payload = validate_onboarding_proposal_payload(proposal.payload)
     proposal.validation_errors = []
 
     if decision == PROPOSAL_SECTION_REJECTED:
@@ -425,7 +623,7 @@ def validate_onboarding_proposal_section(
     )
     proposal.section_validation = section_validation
 
-    if _proposal_sections_are_validated(section_validation):
+    if _proposal_sections_are_validated(section_validation, proposal.payload):
         proposal.status = OnboardingProposal.Status.VALIDATED
         proposal.validated_by = actor
         proposal.validated_at = timezone.now()
@@ -531,56 +729,65 @@ def apply_onboarding_proposal(*, proposal: OnboardingProposal, actor) -> Onboard
     payload = validate_onboarding_proposal_payload(proposal.payload)
     source = proposal.source
 
-    module_keys, domains_by_key, subject_keys = _apply_hierarchical_runtime_sections(
-        establishment=establishment,
-        payload=payload,
-        source=source,
-        proposal=proposal,
-    )
-    domain_keys = set(domains_by_key.keys())
-    unit_keys, units_by_key = _apply_keyed_runtime_section_with_map(
-        model_class=OperationalUnit,
-        establishment=establishment,
-        items=payload["operational_units"],
-        source=source,
-        proposal=proposal,
-    )
-    _apply_vocabulary_section(
-        establishment=establishment,
-        items=payload["runtime_vocabulary"],
-        domains_by_key=domains_by_key,
-        units_by_key=units_by_key,
-        source=source,
-        proposal=proposal,
-    )
-    _apply_runtime_tag_section(
-        establishment=establishment,
-        items=payload["runtime_tags"],
-        domains_by_key=domains_by_key,
-        source=source,
-        proposal=proposal,
-    )
-    _apply_routing_hint_section(
-        establishment=establishment,
-        items=payload["routing_hints"],
-        domains_by_key=domains_by_key,
-        units_by_key=units_by_key,
-        source=source,
-        proposal=proposal,
-    )
-    _deactivate_omitted_vocabulary(
-        establishment=establishment,
-        terms={item["term"] for item in payload["runtime_vocabulary"]},
-    )
-    _deactivate_omitted_keyed(
-        model_class=RuntimeTag,
-        establishment=establishment,
-        keys={item["key"] for item in payload["runtime_tags"]},
-    )
-    _deactivate_omitted_routing_hints(
-        establishment=establishment,
-        patterns={item["pattern"] for item in payload["routing_hints"]},
-    )
+    if payload["schema_version"] == PROPOSAL_SCHEMA_VERSION_V3_BU:
+        bu_keys, _subject_pairs = _apply_business_unit_sections(
+            establishment=establishment,
+            payload=payload,
+            proposal=proposal,
+        )
+        assert bu_keys
+    else:
+        module_keys, domains_by_key, subject_keys = _apply_hierarchical_runtime_sections(
+            establishment=establishment,
+            payload=payload,
+            source=source,
+            proposal=proposal,
+        )
+        domain_keys = set(domains_by_key.keys())
+        unit_keys, units_by_key = _apply_keyed_runtime_section_with_map(
+            model_class=OperationalUnit,
+            establishment=establishment,
+            items=payload["operational_units"],
+            source=source,
+            proposal=proposal,
+        )
+        _apply_vocabulary_section(
+            establishment=establishment,
+            items=payload["runtime_vocabulary"],
+            domains_by_key=domains_by_key,
+            units_by_key=units_by_key,
+            source=source,
+            proposal=proposal,
+        )
+        _apply_runtime_tag_section(
+            establishment=establishment,
+            items=payload["runtime_tags"],
+            domains_by_key=domains_by_key,
+            source=source,
+            proposal=proposal,
+        )
+        _apply_routing_hint_section(
+            establishment=establishment,
+            items=payload["routing_hints"],
+            domains_by_key=domains_by_key,
+            units_by_key=units_by_key,
+            source=source,
+            proposal=proposal,
+        )
+        _deactivate_omitted_vocabulary(
+            establishment=establishment,
+            terms={item["term"] for item in payload["runtime_vocabulary"]},
+        )
+        _deactivate_omitted_keyed(
+            model_class=RuntimeTag,
+            establishment=establishment,
+            keys={item["key"] for item in payload["runtime_tags"]},
+        )
+        _deactivate_omitted_routing_hints(
+            establishment=establishment,
+            patterns={item["pattern"] for item in payload["routing_hints"]},
+        )
+        assert module_keys or domain_keys or unit_keys or subject_keys
 
     proposal.payload = payload
     proposal.status = OnboardingProposal.Status.APPLIED
@@ -602,7 +809,6 @@ def apply_onboarding_proposal(*, proposal: OnboardingProposal, actor) -> Onboard
     session.ready_for_activation_at = None
     session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
 
-    assert module_keys or domain_keys or unit_keys or subject_keys
     return proposal
 
 
@@ -619,6 +825,23 @@ def _create_onboarding_proposal(
     access = get_onboarding_access_context(actor=actor, session=session)
     if not access.can_configure_runtime:
         raise OnboardingAccessDeniedError
+
+    existing_proposal = (
+        OnboardingProposal.objects.filter(onboarding_session=session)
+        .filter(
+            Q(status__in=OnboardingProposal.NON_TERMINAL_STATUSES)
+            | Q(
+                status=OnboardingProposal.Status.APPLIED,
+                establishment__status=Establishment.Status.DRAFT,
+            )
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
+    if existing_proposal is not None:
+        raise ActiveOnboardingProposalExistsError(
+            "A non-terminal onboarding proposal already exists for this session."
+        )
 
     sanitized_payload = validate_onboarding_proposal_payload(payload)
     proposal = OnboardingProposal(
@@ -685,6 +908,358 @@ def _active_onboarding_catalog_keys() -> dict[str, set[str]]:
             )
         ),
     }
+
+
+def _active_business_unit_catalog_keys() -> dict[str, set[str]]:
+    return {
+        "business_units": set(
+            CatalogBusinessUnit.objects.filter(active=True).values_list("key", flat=True)
+        ),
+        "activity_subjects": set(
+            CatalogActivitySubject.objects.filter(active=True).values_list("key", flat=True)
+        ),
+    }
+
+
+def _section_items_v3_bu(payload: dict, section: str, errors: list[dict]) -> list:
+    items = payload.get(section, [])
+    if not isinstance(items, list):
+        errors.append(_proposal_error("section_must_be_array", section=section))
+        return []
+    if len(items) > PROPOSAL_V3_BU_SECTION_CAPS[section]:
+        errors.append(_proposal_error("section_cap_exceeded", section=section))
+        return items[: PROPOSAL_V3_BU_SECTION_CAPS[section]]
+    return items
+
+
+def _validate_business_unit_section(
+    *,
+    items: list,
+    catalog_keys: set[str],
+    errors: list[dict],
+) -> list[dict]:
+    sanitized: list[dict] = []
+    seen_client_keys: set[str] = set()
+    seen_runtime_keys: set[str] = set()
+
+    for item in items:
+        if not isinstance(item, dict):
+            errors.append(_proposal_error("invalid_payload_type", section="business_units"))
+            continue
+
+        client_key = _normalized_string(item.get("client_key"))
+        label = _normalized_string(item.get("label"))
+        unit_type = _normalized_string(item.get("unit_type"))
+        description = _normalized_string(item.get("description"))
+        catalog_key = _nullable_normalized_string(item.get("catalog_key"))
+
+        if not client_key:
+            errors.append(
+                _proposal_error("missing_client_key", section="business_units", field="client_key")
+            )
+            continue
+        if client_key in seen_client_keys:
+            errors.append(
+                _proposal_error(
+                    "duplicate_client_key",
+                    section="business_units",
+                    key=client_key,
+                )
+            )
+            continue
+        if not label:
+            errors.append(
+                _proposal_error(
+                    "missing_business_unit_label",
+                    section="business_units",
+                    key=client_key,
+                )
+            )
+            continue
+        if unit_type not in {
+            BusinessUnit.UnitType.DEDICATED,
+            BusinessUnit.UnitType.TRANSVERSAL,
+        }:
+            errors.append(
+                _proposal_error(
+                    "invalid_unit_type",
+                    section="business_units",
+                    key=client_key,
+                    field="unit_type",
+                )
+            )
+            continue
+
+        runtime_key = slugify_label(label)
+        if runtime_key in seen_runtime_keys:
+            errors.append(
+                _proposal_error(
+                    "duplicate_business_unit_key",
+                    section="business_units",
+                    key=client_key,
+                )
+            )
+            continue
+        if catalog_key is not None and catalog_key not in catalog_keys:
+            errors.append(
+                _proposal_error(
+                    "unknown_catalog_key",
+                    section="business_units",
+                    key=catalog_key,
+                )
+            )
+            continue
+
+        seen_client_keys.add(client_key)
+        seen_runtime_keys.add(runtime_key)
+        sanitized.append(
+            {
+                "client_key": client_key,
+                "label": label,
+                "description": description,
+                "unit_type": unit_type,
+                "catalog_key": catalog_key,
+            }
+        )
+
+    return sanitized
+
+
+def _validate_activity_subject_section(
+    *,
+    items: list,
+    business_unit_client_keys: set[str],
+    catalog_keys: set[str],
+    errors: list[dict],
+) -> list[dict]:
+    sanitized: list[dict] = []
+    seen_client_keys: set[str] = set()
+    seen_normalized_by_bu: dict[str, set[str]] = {}
+
+    for item in items:
+        if not isinstance(item, dict):
+            errors.append(_proposal_error("invalid_payload_type", section="activity_subjects"))
+            continue
+
+        client_key = _normalized_string(item.get("client_key"))
+        label = _normalized_string(item.get("label"))
+        description = _normalized_string(item.get("description"))
+        business_unit_client_key = _normalized_string(item.get("business_unit_client_key"))
+        catalog_key = _nullable_normalized_string(item.get("catalog_key"))
+
+        if not client_key:
+            errors.append(
+                _proposal_error(
+                    "missing_client_key",
+                    section="activity_subjects",
+                    field="client_key",
+                )
+            )
+            continue
+        if client_key in seen_client_keys:
+            errors.append(
+                _proposal_error(
+                    "duplicate_client_key",
+                    section="activity_subjects",
+                    key=client_key,
+                )
+            )
+            continue
+        if not label:
+            errors.append(
+                _proposal_error(
+                    "missing_activity_subject_label",
+                    section="activity_subjects",
+                    key=client_key,
+                )
+            )
+            continue
+        if business_unit_client_key not in business_unit_client_keys:
+            errors.append(
+                _proposal_error(
+                    "orphan_activity_subject",
+                    section="activity_subjects",
+                    key=client_key,
+                    field="business_unit_client_key",
+                )
+            )
+            continue
+        if catalog_key is not None and catalog_key not in catalog_keys:
+            errors.append(
+                _proposal_error(
+                    "unknown_catalog_key",
+                    section="activity_subjects",
+                    key=catalog_key,
+                )
+            )
+            continue
+
+        normalized_name = normalize_activity_subject_name(label)
+        bu_names = seen_normalized_by_bu.setdefault(business_unit_client_key, set())
+        if normalized_name in bu_names:
+            errors.append(
+                _proposal_error(
+                    "duplicate_activity_subject",
+                    section="activity_subjects",
+                    key=client_key,
+                )
+            )
+            continue
+
+        seen_client_keys.add(client_key)
+        bu_names.add(normalized_name)
+        sanitized.append(
+            {
+                "client_key": client_key,
+                "label": label,
+                "description": description,
+                "business_unit_client_key": business_unit_client_key,
+                "catalog_key": catalog_key,
+            }
+        )
+
+    return sanitized
+
+
+def _validate_excluded_catalog_subject_keys(
+    raw_value,
+    *,
+    business_unit_client_keys: set[str],
+    errors: list[dict],
+) -> dict[str, list[str]]:
+    if raw_value is None:
+        return {}
+
+    if not isinstance(raw_value, dict):
+        errors.append(
+            _proposal_error(
+                "invalid_payload_type",
+                section="excluded_catalog_subject_keys",
+            )
+        )
+        return {}
+
+    sanitized: dict[str, list[str]] = {}
+    for business_unit_client_key, catalog_keys in raw_value.items():
+        normalized_bu_key = _normalized_string(business_unit_client_key)
+        if not normalized_bu_key:
+            errors.append(
+                _proposal_error(
+                    "missing_client_key",
+                    section="excluded_catalog_subject_keys",
+                    field="business_unit_client_key",
+                )
+            )
+            continue
+        if normalized_bu_key not in business_unit_client_keys:
+            errors.append(
+                _proposal_error(
+                    "orphan_excluded_catalog_subject",
+                    section="excluded_catalog_subject_keys",
+                    key=normalized_bu_key,
+                )
+            )
+            continue
+
+        normalized_catalog_keys = _normalized_string_list(catalog_keys)
+        if normalized_catalog_keys:
+            sanitized[normalized_bu_key] = normalized_catalog_keys
+
+    return sanitized
+
+
+def _apply_business_unit_sections(
+    *,
+    establishment: Establishment,
+    payload: dict,
+    proposal: OnboardingProposal,
+) -> tuple[set[str], set[tuple[int, str]]]:
+    catalog_bus = {
+        row.key: row for row in CatalogBusinessUnit.objects.filter(active=True)
+    }
+    catalog_ass = {
+        row.key: row for row in CatalogActivitySubject.objects.filter(active=True)
+    }
+
+    business_units_by_client_key: dict[str, BusinessUnit] = {}
+    bu_runtime_keys: set[str] = set()
+    kept_business_unit_ids: set = set()
+    kept_activity_subject_ids: set = set()
+    subject_pairs: set[tuple[int, str]] = set()
+
+    for item in payload["business_units"]:
+        runtime_key = slugify_label(item["label"])
+        catalog_key = item.get("catalog_key")
+        catalog_bu = catalog_bus.get(catalog_key) if catalog_key else None
+        bu_source = (
+            BusinessUnit.Source.CATALOG_SUGGESTION
+            if catalog_key
+            else BusinessUnit.Source.MANUAL
+        )
+
+        business_unit, _created = BusinessUnit.objects.update_or_create(
+            establishment=establishment,
+            key=runtime_key,
+            defaults={
+                "label": item["label"],
+                "description": item.get("description", ""),
+                "unit_type": item["unit_type"],
+                "catalog_business_unit": catalog_bu,
+                "source": bu_source,
+                "active": True,
+                "managed_by_onboarding_proposal": proposal,
+            },
+        )
+        business_units_by_client_key[item["client_key"]] = business_unit
+        bu_runtime_keys.add(runtime_key)
+        kept_business_unit_ids.add(business_unit.id)
+
+    BusinessUnit.objects.filter(
+        establishment=establishment,
+        active=True,
+        managed_by_onboarding_proposal=proposal,
+    ).exclude(id__in=kept_business_unit_ids).update(
+        active=False,
+        updated_at=timezone.now(),
+    )
+
+    for item in payload["activity_subjects"]:
+        business_unit = business_units_by_client_key[item["business_unit_client_key"]]
+        normalized_name = normalize_activity_subject_name(item["label"])
+        catalog_key = item.get("catalog_key")
+        catalog_as = catalog_ass.get(catalog_key) if catalog_key else None
+        subject_source = (
+            ActivitySubject.Source.CATALOG_SUGGESTION
+            if catalog_key
+            else ActivitySubject.Source.MANUAL
+        )
+
+        activity_subject, _created = ActivitySubject.objects.update_or_create(
+            establishment=establishment,
+            business_unit=business_unit,
+            normalized_name=normalized_name,
+            defaults={
+                "label": item["label"],
+                "description": item.get("description", ""),
+                "catalog_activity_subject": catalog_as,
+                "source": subject_source,
+                "active": True,
+                "managed_by_onboarding_proposal": proposal,
+            },
+        )
+        kept_activity_subject_ids.add(activity_subject.id)
+        subject_pairs.add((business_unit.id, normalized_name))
+
+    ActivitySubject.objects.filter(
+        establishment=establishment,
+        active=True,
+        managed_by_onboarding_proposal=proposal,
+    ).exclude(id__in=kept_activity_subject_ids).update(
+        active=False,
+        updated_at=timezone.now(),
+    )
+
+    return bu_runtime_keys, subject_pairs
 
 
 def _section_items(payload: dict, section: str, errors: list[dict]) -> list:
@@ -1138,6 +1713,21 @@ def _ensure_proposal_reviewable(proposal: OnboardingProposal) -> None:
         raise OnboardingProposalStateError("Proposal cannot be reviewed.")
 
 
+def _ensure_proposal_editable(proposal: OnboardingProposal) -> None:
+    establishment = proposal.establishment
+    if (
+        proposal.status == OnboardingProposal.Status.APPLIED
+        and establishment.status == Establishment.Status.DRAFT
+    ):
+        return
+
+    if proposal.status not in {
+        OnboardingProposal.Status.READY,
+        OnboardingProposal.Status.PARTIALLY_VALIDATED,
+    }:
+        raise OnboardingProposalStateError("Only draft proposals can be updated.")
+
+
 def _ensure_can_manage_onboarding_proposal(*, proposal: OnboardingProposal, actor) -> None:
     access = get_onboarding_access_context(
         actor=actor,
@@ -1147,24 +1737,38 @@ def _ensure_can_manage_onboarding_proposal(*, proposal: OnboardingProposal, acto
         raise OnboardingAccessDeniedError
 
 
+def _proposal_required_sections_for_payload(payload: dict) -> frozenset[str]:
+    if payload.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V3_BU:
+        return PROPOSAL_V3_BU_REQUIRED_SECTIONS
+    return PROPOSAL_REQUIRED_SECTIONS
+
+
+def _proposal_optional_sections_for_payload(payload: dict) -> frozenset[str]:
+    if payload.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V3_BU:
+        return frozenset()
+    return PROPOSAL_OPTIONAL_SECTIONS
+
+
 def _normalize_empty_optional_section_decisions(
     *,
     payload: dict,
     section_validation: dict,
 ) -> dict:
-    for section in PROPOSAL_OPTIONAL_SECTIONS:
-        if section not in section_validation and not payload[section]:
+    for section in _proposal_optional_sections_for_payload(payload):
+        if section not in section_validation and not payload.get(section):
             section_validation[section] = PROPOSAL_SECTION_SKIPPED
     return section_validation
 
 
-def _proposal_sections_are_validated(section_validation: dict) -> bool:
+def _proposal_sections_are_validated(section_validation: dict, payload: dict) -> bool:
+    required_sections = _proposal_required_sections_for_payload(payload)
+    optional_sections = _proposal_optional_sections_for_payload(payload)
     return all(
         section_validation.get(section) == PROPOSAL_SECTION_ACCEPTED
-        for section in PROPOSAL_REQUIRED_SECTIONS
+        for section in required_sections
     ) and all(
         section_validation.get(section) in {PROPOSAL_SECTION_ACCEPTED, PROPOSAL_SECTION_SKIPPED}
-        for section in PROPOSAL_OPTIONAL_SECTIONS
+        for section in optional_sections
     )
 
 
@@ -1454,6 +2058,17 @@ def start_onboarding_session(
             "Organization must match the establishment organization."
         )
 
+    existing_session = (
+        OnboardingSession.objects.filter(
+            establishment=establishment,
+            status__in=OnboardingSession.NON_TERMINAL_STATUSES,
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
+    if existing_session is not None:
+        return existing_session
+
     session = OnboardingSession(
         organization=organization,
         establishment=establishment,
@@ -1523,53 +2138,20 @@ def submit_activity_description(
 
 def compute_activation_readiness(*, session: OnboardingSession) -> dict:
     session = _reload_onboarding_session(session)
-    config = get_runtime_config_for_session(session=session)
-    description = config["activity_description"]
-
     counts = _activation_counts(session)
     sections = {
-        "description": {
-            "is_ready": _is_valid_activity_description(description),
+        "business_units": {
+            "is_ready": counts["active_business_units_count"] >= 1,
             "required": True,
             "is_skippable": False,
         },
-        "modules": {
-            "is_ready": counts["active_modules_count"] >= 1,
-            "required": True,
-            "is_skippable": False,
-        },
-        "domains": {
-            "is_ready": counts["active_domains_count"] >= 3,
-            "required": True,
-            "is_skippable": False,
-        },
-        "subjects": {
+        "activity_subjects": {
             "is_ready": (
-                counts["active_subjects_count"] >= 1
-                and counts["active_domains_without_subjects_count"] == 0
+                counts["active_activity_subjects_count"] >= 1
+                and counts["active_business_units_without_subjects_count"] == 0
             ),
             "required": True,
             "is_skippable": False,
-        },
-        "units": {
-            "is_ready": True,
-            "required": False,
-            "is_skippable": True,
-        },
-        "vocabulary": {
-            "is_ready": True,
-            "required": False,
-            "is_skippable": True,
-        },
-        "runtime_tags": {
-            "is_ready": True,
-            "required": False,
-            "is_skippable": True,
-        },
-        "routing_hints": {
-            "is_ready": True,
-            "required": False,
-            "is_skippable": True,
         },
         "director": {
             "is_ready": counts["active_or_invited_director_count"] >= 1,
@@ -1577,11 +2159,7 @@ def compute_activation_readiness(*, session: OnboardingSession) -> dict:
             "is_skippable": False,
         },
     }
-    blockers = _activation_blockers(
-        session=session,
-        description=description,
-        counts=counts,
-    )
+    blockers = _activation_blockers(session=session, counts=counts)
 
     return {
         "is_ready": not blockers,
@@ -1629,6 +2207,7 @@ def build_activation_summary(*, session: OnboardingSession) -> dict:
         "optional_routing_hints": [
             _serialize_routing_hint(item) for item in config["optional_routing_hints"]
         ],
+        "active_business_units": config["active_business_units"],
         "initial_owner_director_count": counts["active_owner_or_director_count"],
         "initial_director_count": counts["active_or_invited_director_count"],
         "readiness": readiness,
@@ -1947,7 +2526,16 @@ def invite_membership_for_establishment(
         raise MembershipInvitationRoleNotAllowedError
 
     establishment = Establishment.objects.select_related("organization").get(id=establishment_id)
-    if establishment.status != Establishment.Status.ACTIVE:
+    if establishment.status == Establishment.Status.DRAFT:
+        if current_membership.role not in {
+            EstablishmentMembership.Role.OWNER,
+            EstablishmentMembership.Role.DIRECTOR,
+        }:
+            raise InvalidMembershipInvitationInputError(
+                "Membership invitations on draft establishments require owner or director "
+                "authority."
+            )
+    elif establishment.status != Establishment.Status.ACTIVE:
         raise InvalidMembershipInvitationInputError(
             "Membership invitations are only allowed for active establishments."
         )
@@ -2087,29 +2675,11 @@ def _ensure_manager_scope_covers_invited_scopes(
     resolved_invited_scopes,
 ) -> None:
     for resolved_scope in resolved_invited_scopes:
-        if resolved_scope.operational_module is not None:
-            if membership_scope_covers_module(
-                manager_membership,
-                resolved_scope.operational_module,
-            ):
-                continue
-            raise MembershipManagementForbiddenError
-
-        if resolved_scope.operational_domain is not None:
-            if membership_scope_covers_domain(
-                manager_membership,
-                resolved_scope.operational_domain,
-            ):
-                continue
-            raise MembershipManagementForbiddenError
-
-        assert resolved_scope.operational_subject is not None
-        if membership_scope_covers_subject(
+        if not membership_scope_covers_business_unit(
             manager_membership,
-            resolved_scope.operational_subject,
+            resolved_scope.business_unit,
         ):
-            continue
-        raise MembershipManagementForbiddenError
+            raise MembershipManagementForbiddenError
 
 
 _MANAGEABLE_TARGET_ROLES_BY_ACTOR = {
@@ -2439,6 +3009,21 @@ def _activation_counts(session: OnboardingSession) -> dict:
         .count()
     )
 
+    active_business_units_without_subjects_count = (
+        BusinessUnit.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        )
+        .annotate(
+            active_subject_count=Count(
+                "activity_subjects",
+                filter=Q(activity_subjects__active=True),
+            )
+        )
+        .filter(active_subject_count=0)
+        .count()
+    )
+
     return {
         "active_modules_count": session.establishment.operational_modules.filter(
             active=True,
@@ -2450,6 +3035,15 @@ def _activation_counts(session: OnboardingSession) -> dict:
             active=True,
         ).count(),
         "active_domains_without_subjects_count": active_domains_without_subjects_count,
+        "active_business_units_count": session.establishment.business_units.filter(
+            active=True,
+        ).count(),
+        "active_activity_subjects_count": session.establishment.activity_subjects.filter(
+            active=True,
+        ).count(),
+        "active_business_units_without_subjects_count": (
+            active_business_units_without_subjects_count
+        ),
         "active_owner_or_director_count": EstablishmentMembership.objects.filter(
             establishment_id=establishment_id,
             status=EstablishmentMembership.Status.ACTIVE,
@@ -2474,7 +3068,6 @@ def _activation_counts(session: OnboardingSession) -> dict:
 def _activation_blockers(
     *,
     session: OnboardingSession,
-    description: EstablishmentActivityDescription | None,
     counts: dict,
 ) -> list[dict]:
     blockers: list[dict] = []
@@ -2488,26 +3081,18 @@ def _activation_blockers(
     if session.establishment.status != Establishment.Status.DRAFT:
         blockers.append(_blocker("establishment_not_draft"))
 
-    if description is None or description.validated_at is None:
-        blockers.append(_blocker("missing_validated_description"))
-    elif len((description.description or "").strip()) < ACTIVITY_DESCRIPTION_MIN_LENGTH:
-        blockers.append(_blocker("description_too_short"))
+    if counts["active_business_units_count"] < 1:
+        blockers.append(_blocker("missing_active_business_unit"))
 
-    if counts["active_modules_count"] < 1:
-        blockers.append(_blocker("missing_active_module"))
-
-    if counts["active_domains_count"] < 3:
-        blockers.append(_blocker("insufficient_active_domains"))
-
-    if counts["active_subjects_count"] < 1:
-        blockers.append(_blocker("insufficient_active_subjects"))
-
-    domains_without_subjects = counts["active_domains_without_subjects_count"]
-    if counts["active_domains_count"] > 0 and domains_without_subjects > 0:
+    business_units_without_subjects = counts["active_business_units_without_subjects_count"]
+    if counts["active_business_units_count"] > 0 and business_units_without_subjects > 0:
         blockers.append(
             _blocker(
-                "domains_without_active_subjects",
-                message=(f"{domains_without_subjects} active domain(s) have no active subjects"),
+                "business_units_without_active_subjects",
+                message=(
+                    f"{business_units_without_subjects} active business unit(s) "
+                    "have no active activity subjects"
+                ),
             )
         )
 
@@ -2731,3 +3316,288 @@ def _create_establishment_invitation(
             continue
 
     raise RuntimeError("Unable to generate a unique establishment invitation token digest.")
+
+
+def _get_establishment_for_runtime_mutation(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> Establishment:
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        raise RuntimeConfigNotFoundError
+
+    establishment = current_membership.establishment
+    if establishment.status != Establishment.Status.ACTIVE:
+        raise RuntimeConfigNotFoundError
+
+    return establishment
+
+
+@transaction.atomic
+def create_runtime_business_unit(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    label: str,
+    description: str = "",
+    unit_type: str = BusinessUnit.UnitType.DEDICATED,
+    catalog_key: str | None = None,
+) -> BusinessUnit:
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+
+    normalized_label = label.strip()
+    if not normalized_label:
+        raise ValidationError({"label": ["Label is required."]})
+
+    runtime_key = slugify_label(normalized_label)
+    if not runtime_key:
+        raise ValidationError({"label": ["Label must produce a valid runtime key."]})
+
+    catalog_bu = None
+    if catalog_key:
+        catalog_bu = CatalogBusinessUnit.objects.filter(key=catalog_key, active=True).first()
+
+    source = (
+        BusinessUnit.Source.CATALOG_SUGGESTION
+        if catalog_key
+        else BusinessUnit.Source.MANUAL
+    )
+
+    business_unit, _created = BusinessUnit.objects.update_or_create(
+        establishment=establishment,
+        key=runtime_key,
+        defaults={
+            "label": normalized_label,
+            "description": description.strip(),
+            "unit_type": unit_type,
+            "catalog_business_unit": catalog_bu,
+            "source": source,
+            "active": True,
+            "managed_by_onboarding_proposal": None,
+        },
+    )
+    return business_unit
+
+
+@transaction.atomic
+def update_runtime_business_unit(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    business_unit_id,
+    label: str | None = None,
+    description: str | None = None,
+    unit_type: str | None = None,
+) -> BusinessUnit:
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+
+    business_unit = (
+        BusinessUnit.objects.select_for_update()
+        .filter(
+            id=business_unit_id,
+            establishment_id=establishment.id,
+            active=True,
+        )
+        .first()
+    )
+    if business_unit is None:
+        raise RuntimeConfigNotFoundError
+
+    update_fields: list[str] = []
+
+    if label is not None:
+        normalized_label = label.strip()
+        if not normalized_label:
+            raise ValidationError({"label": ["Label is required."]})
+
+        runtime_key = slugify_label(normalized_label)
+        if not runtime_key:
+            raise ValidationError({"label": ["Label must produce a valid runtime key."]})
+
+        if runtime_key != business_unit.key:
+            if (
+                BusinessUnit.objects.filter(
+                    establishment=establishment,
+                    key=runtime_key,
+                )
+                .exclude(id=business_unit.id)
+                .exists()
+            ):
+                raise RuntimeConfigConflictError(
+                    code="duplicate_business_unit_key",
+                    detail="A business unit with this label already exists.",
+                )
+            business_unit.key = runtime_key
+
+        business_unit.label = normalized_label
+        update_fields.extend(["label", "key"])
+
+    if description is not None:
+        business_unit.description = description.strip()
+        update_fields.append("description")
+
+    if unit_type is not None:
+        business_unit.unit_type = unit_type
+        update_fields.append("unit_type")
+
+    if update_fields:
+        business_unit.save(update_fields=[*update_fields, "updated_at"])
+
+    return business_unit
+
+
+@transaction.atomic
+def deactivate_runtime_business_unit(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    business_unit_id,
+) -> BusinessUnit:
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+
+    business_unit = (
+        BusinessUnit.objects.select_for_update()
+        .filter(
+            id=business_unit_id,
+            establishment_id=establishment.id,
+            active=True,
+        )
+        .first()
+    )
+    if business_unit is None:
+        raise RuntimeConfigNotFoundError
+
+    active_business_unit_count = BusinessUnit.objects.filter(
+        establishment=establishment,
+        active=True,
+    ).count()
+    if active_business_unit_count <= 1:
+        raise RuntimeConfigConflictError(
+            code="last_active_business_unit",
+            detail="At least one active business unit must remain.",
+        )
+
+    if business_unit_has_active_membership_scopes(business_unit=business_unit):
+        raise RuntimeConfigConflictError(
+            code="business_unit_has_membership_scopes",
+            detail="Remove active membership scopes before deactivating this business unit.",
+        )
+
+    now = timezone.now()
+    business_unit.active = False
+    business_unit.save(update_fields=["active", "updated_at"])
+    ActivitySubject.objects.filter(
+        establishment=establishment,
+        business_unit=business_unit,
+        active=True,
+    ).update(active=False, updated_at=now)
+    return business_unit
+
+
+@transaction.atomic
+def create_runtime_activity_subject(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    business_unit_id,
+    label: str,
+    description: str = "",
+    catalog_key: str | None = None,
+) -> ActivitySubject:
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+
+    business_unit = (
+        BusinessUnit.objects.filter(
+            id=business_unit_id,
+            establishment_id=establishment.id,
+            active=True,
+        )
+        .first()
+    )
+    if business_unit is None:
+        raise RuntimeConfigNotFoundError
+
+    normalized_label = label.strip()
+    if not normalized_label:
+        raise ValidationError({"label": ["Label is required."]})
+
+    normalized_name = normalize_activity_subject_name(normalized_label)
+    if not normalized_name:
+        raise ValidationError({"label": ["Label must produce a valid subject name."]})
+
+    catalog_as = None
+    if catalog_key:
+        catalog_as = CatalogActivitySubject.objects.filter(key=catalog_key, active=True).first()
+
+    source = (
+        ActivitySubject.Source.CATALOG_SUGGESTION
+        if catalog_key
+        else ActivitySubject.Source.MANUAL
+    )
+
+    activity_subject, _created = ActivitySubject.objects.update_or_create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name=normalized_name,
+        defaults={
+            "label": normalized_label,
+            "description": description.strip(),
+            "catalog_activity_subject": catalog_as,
+            "source": source,
+            "active": True,
+            "managed_by_onboarding_proposal": None,
+        },
+    )
+    return activity_subject
+
+
+@transaction.atomic
+def deactivate_runtime_activity_subject(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    activity_subject_id,
+) -> ActivitySubject:
+    establishment = _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+
+    activity_subject = (
+        ActivitySubject.objects.select_for_update()
+        .filter(
+            id=activity_subject_id,
+            establishment_id=establishment.id,
+            active=True,
+        )
+        .select_related("business_unit")
+        .first()
+    )
+    if activity_subject is None:
+        raise RuntimeConfigNotFoundError
+
+    active_subject_count = ActivitySubject.objects.filter(
+        business_unit=activity_subject.business_unit,
+        active=True,
+    ).count()
+    if active_subject_count <= 1:
+        raise RuntimeConfigConflictError(
+            code="last_active_activity_subject",
+            detail="Each active business unit must keep at least one active activity subject.",
+        )
+
+    activity_subject.active = False
+    activity_subject.save(update_fields=["active", "updated_at"])
+    return activity_subject

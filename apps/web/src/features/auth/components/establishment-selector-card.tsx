@@ -9,6 +9,7 @@ type EstablishmentSelectorCardProps = {
   memberships: Membership[]
   pendingEstablishmentId: string | null
   onSelect: (establishmentId: string) => void
+  variant?: 'admin' | 'post-login'
 }
 
 export function EstablishmentSelectorCard({
@@ -16,19 +17,24 @@ export function EstablishmentSelectorCard({
   memberships,
   pendingEstablishmentId,
   onSelect,
+  variant = 'admin',
 }: EstablishmentSelectorCardProps) {
+  const isPostLogin = variant === 'post-login'
+
   return (
     <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
       <CardHeader className="gap-3">
         <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
-          Workspace selection
+          {isPostLogin ? 'Sélection requise' : 'Workspace selection'}
         </Badge>
         <div className="space-y-2">
           <CardTitle className="text-[1.65rem] font-black tracking-[-0.05em]">
-            Choose your establishment
+            {isPostLogin ? 'Choisissez votre établissement' : 'Choose your establishment'}
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            You belong to several establishments. Select one to manage it in this workspace.
+            {isPostLogin
+              ? 'Vous appartenez à plusieurs établissements actifs. Sélectionnez celui que vous souhaitez utiliser pour commencer.'
+              : 'You belong to several establishments. Select one to manage it in this workspace.'}
           </CardDescription>
         </div>
       </CardHeader>

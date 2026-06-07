@@ -15,6 +15,12 @@ from houston.establishments.models import (
     OperationalDomain,
 )
 from houston.establishments.tests.conftest import TEST_PASSWORD
+from houston.establishments.tests.taxonomy_helpers import (
+    assert_business_unit_scope_response,
+    business_unit_scope_payload,
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -239,21 +245,19 @@ def test_membership_patch_updates_role_and_scopes(api_client):
         role=EstablishmentMembership.Role.STAFF,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    housekeeping = OperationalDomain.objects.create(
+    housekeeping = create_business_unit(
         establishment=actor_membership.establishment,
         key="housekeeping",
         label="Housekeeping",
-        active=True,
     )
-    maintenance = OperationalDomain.objects.create(
+    maintenance = create_business_unit(
         establishment=actor_membership.establishment,
         key="maintenance",
         label="Maintenance",
-        active=True,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=target_membership,
-        operational_domain=housekeeping,
+        business_unit=housekeeping,
     )
 
     access_token = login(api_client, identifier=actor.email)
@@ -264,9 +268,7 @@ def test_membership_patch_updates_role_and_scopes(api_client):
         ),
         {
             "role": EstablishmentMembership.Role.MANAGER,
-            "scopes": [
-                {"scope_type": "domain", "scope_id": str(maintenance.id)},
-            ],
+            "scopes": [business_unit_scope_payload(maintenance)],
         },
         format="json",
         **auth_headers(access_token),
@@ -275,10 +277,7 @@ def test_membership_patch_updates_role_and_scopes(api_client):
     assert response.status_code == 200
     body = response.json()
     assert body["role"] == EstablishmentMembership.Role.MANAGER
-    assert body["scopes"] == [
-        {"scope_type": "domain", "scope_id": str(maintenance.id)},
-    ]
-    assert body["scope_summary"]["domain_count"] == 1
+    assert_business_unit_scope_response(body, business_unit=maintenance)
 
     target_membership.refresh_from_db()
     assert target_membership.role == EstablishmentMembership.Role.MANAGER
@@ -299,32 +298,31 @@ def test_membership_patch_rejects_foreign_or_inactive_scopes(api_client):
         role=EstablishmentMembership.Role.STAFF,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    active_domain = OperationalDomain.objects.create(
+    active_unit = create_business_unit(
         establishment=actor_membership.establishment,
         key="housekeeping",
         label="Housekeeping",
-        active=True,
     )
-    inactive_domain = OperationalDomain.objects.create(
+    inactive_unit = create_business_unit(
         establishment=actor_membership.establishment,
-        key="inactive-domain",
-        label="Inactive Domain",
-        active=False,
+        key="inactive-unit",
+        label="Inactive Unit",
     )
+    inactive_unit.active = False
+    inactive_unit.save(update_fields=["active", "updated_at"])
     foreign_establishment = Establishment.objects.create(
         name="Cannes",
         organization=Organization.objects.create(name="Cannes Group"),
         status=Establishment.Status.ACTIVE,
     )
-    foreign_domain = OperationalDomain.objects.create(
+    foreign_unit = create_business_unit(
         establishment=foreign_establishment,
         key="security",
         label="Security",
-        active=True,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=target_membership,
-        operational_domain=active_domain,
+        business_unit=active_unit,
     )
 
     access_token = login(api_client, identifier=actor.email)
@@ -335,8 +333,8 @@ def test_membership_patch_rejects_foreign_or_inactive_scopes(api_client):
         ),
         {
             "scopes": [
-                {"scope_type": "domain", "scope_id": str(inactive_domain.id)},
-                {"scope_type": "domain", "scope_id": str(foreign_domain.id)},
+                business_unit_scope_payload(inactive_unit),
+                business_unit_scope_payload(foreign_unit),
             ]
         },
         format="json",
@@ -417,11 +415,10 @@ def test_membership_patch_rejects_scopes_for_owner_membership(api_client):
         role=EstablishmentMembership.Role.OWNER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    security = OperationalDomain.objects.create(
+    security = create_business_unit(
         establishment=actor_membership.establishment,
         key="security",
         label="Security",
-        active=True,
     )
 
     access_token = login(api_client, identifier=actor.email)
@@ -431,9 +428,7 @@ def test_membership_patch_rejects_scopes_for_owner_membership(api_client):
             f"{target_owner.id}/"
         ),
         {
-            "scopes": [
-                {"scope_type": "domain", "scope_id": str(security.id)},
-            ],
+            "scopes": [business_unit_scope_payload(security)],
         },
         format="json",
         **auth_headers(access_token),

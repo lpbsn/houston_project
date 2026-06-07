@@ -20,6 +20,7 @@ type ActivationSummaryCardProps = {
   activationSummary: ActivationSummaryResponse | null
   error: unknown
   isLoading: boolean
+  onNavigate?: (path: string) => void
   onRetry: () => void
   sessionId: string
 }
@@ -28,6 +29,7 @@ export function ActivationSummaryCard({
   activationSummary,
   error,
   isLoading,
+  onNavigate,
   onRetry,
   sessionId,
 }: ActivationSummaryCardProps) {
@@ -60,11 +62,9 @@ export function ActivationSummaryCard({
     }
 
     return [
-      ['Owner/director memberships', activationSummary.initial_owner_director_count],
-      ['Director memberships', activationSummary.initial_director_count],
-      ['Active modules', activationSummary.active_modules.length],
-      ['Active domains', activationSummary.active_domains.length],
-      ['Active subjects', activationSummary.active_subjects.length],
+      ['Membres owner/directeur', activationSummary.initial_owner_director_count],
+      ['Directeurs', activationSummary.initial_director_count],
+      ['Pôles actifs', activationSummary.active_business_units?.length ?? 0],
     ] as const
   }, [activationSummary])
 
@@ -201,13 +201,12 @@ export function ActivationSummaryCard({
               Activation is complete.
             </div>
             <Button
-              asChild
+              type="button"
               className="h-11 w-full rounded-[1rem] bg-emerald-700 text-white hover:bg-emerald-800 sm:w-auto"
+              onClick={() => onNavigate?.('/reporting')}
             >
-              <a href="/app">
-                Go to workspace
-                <ArrowRight className="size-4" />
-              </a>
+              Accéder au reporting
+              <ArrowRight className="size-4" />
             </Button>
           </div>
         ) : null}

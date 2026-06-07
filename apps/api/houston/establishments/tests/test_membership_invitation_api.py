@@ -10,11 +10,15 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
     MembershipScope,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
 )
 from houston.establishments.tests.conftest import TEST_PASSWORD
+from houston.establishments.tests.taxonomy_helpers import (
+    assert_business_unit_scope_response,
+    business_unit_scope_payload,
+    create_business_unit,
+    create_legacy_taxonomy_with_business_unit_mapping,
+    create_membership_with_business_unit_scope,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -66,30 +70,6 @@ def create_membership(
         role=role,
         status=membership_status,
     )
-
-
-def create_taxonomy_tree(establishment: Establishment):
-    module = OperationalModule.objects.create(
-        establishment=establishment,
-        key=f"module_{uuid.uuid4().hex[:6]}",
-        label="Hotel",
-        active=True,
-    )
-    domain = OperationalDomain.objects.create(
-        establishment=establishment,
-        operational_module=module,
-        key=f"domain_{uuid.uuid4().hex[:6]}",
-        label="Housekeeping",
-        active=True,
-    )
-    subject = OperationalSubject.objects.create(
-        establishment=establishment,
-        operational_domain=domain,
-        key=f"subject_{uuid.uuid4().hex[:6]}",
-        label="Room cleaning",
-        active=True,
-    )
-    return module, domain, subject
 
 
 def scope_item(*, scope_type: str, scope_id) -> dict:
@@ -154,43 +134,32 @@ def post_invitation_as_actor(api_client, *, establishment_id, actor, payload):
     )
 
 
-def test_owner_can_invite_staff_with_domain_scope(api_client):
+def test_owner_can_invite_staff_with_business_unit_scope(api_client):
     establishment = create_establishment(name="Invite Hotel")
     owner = create_user(username="invite_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    _, domain, _ = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
 
     response = post_invitation(
         api_client,
         establishment_id=establishment.id,
         owner=owner,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=domain.id)]),
+        payload=invite_payload(
+            scopes=[business_unit_scope_payload(business_unit)],
+        ),
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["membership"]["role"] == EstablishmentMembership.Role.STAFF
-    assert body["membership"]["scopes"] == [{"scope_type": "domain", "scope_id": str(domain.id)}]
-    assert body["membership"]["scope_summary"]["domain_count"] == 1
+    assert_business_unit_scope_response(body["membership"], business_unit=business_unit)
 
 
-@pytest.mark.parametrize(
-    ("scope_type", "node_index"),
-    [
-        ("module", 0),
-        ("domain", 1),
-        ("subject", 2),
-    ],
-)
-def test_owner_can_invite_manager_with_module_domain_or_subject_scope(
-    api_client,
-    scope_type,
-    node_index,
-):
+def test_owner_can_invite_manager_with_business_unit_scope(api_client):
     establishment = create_establishment(name="Manager Hotel")
     owner = create_user(username="manager_invite_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    nodes = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
 
     response = post_invitation(
         api_client,
@@ -199,14 +168,39 @@ def test_owner_can_invite_manager_with_module_domain_or_subject_scope(
         payload=invite_payload(
             email="manager@example.com",
             role=EstablishmentMembership.Role.MANAGER,
-            scopes=[scope_item(scope_type=scope_type, scope_id=nodes[node_index].id)],
+            scopes=[business_unit_scope_payload(business_unit)],
         ),
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["membership"]["role"] == EstablishmentMembership.Role.MANAGER
-    assert len(body["membership"]["scopes"]) == 1
+    assert_business_unit_scope_response(body["membership"], business_unit=business_unit)
+
+
+def test_legacy_domain_scope_input_normalizes_to_business_unit(api_client):
+    establishment = create_establishment(name="Legacy Invite Hotel")
+    owner = create_user(username="legacy_invite_owner")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    _, domain, _, business_unit = create_legacy_taxonomy_with_business_unit_mapping(
+        establishment,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=invite_payload(
+            scopes=[scope_item(scope_type="domain", scope_id=domain.id)],
+        ),
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert_business_unit_scope_response(body["membership"], business_unit=business_unit)
+    membership_id = body["membership"]["id"]
+    scope = MembershipScope.objects.get(membership_id=membership_id)
+    assert scope.business_unit_id == business_unit.id
 
 
 def test_staff_invitation_requires_scopes(api_client):
@@ -238,7 +232,9 @@ def test_invitation_rejects_invalid_scope_id(api_client):
         api_client,
         establishment_id=establishment.id,
         owner=owner,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=uuid.uuid4())]),
+        payload=invite_payload(
+            scopes=[scope_item(scope_type="business_unit", scope_id=uuid.uuid4())],
+        ),
     )
 
     assert response.status_code == 400
@@ -252,13 +248,15 @@ def test_invitation_rejects_cross_establishment_scope(api_client):
     establishment_b = create_establishment(name="Hotel B")
     owner = create_user(username="cross_est_owner")
     create_membership(user=owner, establishment=establishment_a, role=ROLE_OWNER)
-    _, domain_b, _ = create_taxonomy_tree(establishment_b)
+    foreign_business_unit = create_business_unit(establishment=establishment_b, key="hotel")
 
     response = post_invitation(
         api_client,
         establishment_id=establishment_a.id,
         owner=owner,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=domain_b.id)]),
+        payload=invite_payload(
+            scopes=[business_unit_scope_payload(foreign_business_unit)],
+        ),
     )
 
     assert response.status_code == 400
@@ -268,25 +266,25 @@ def test_invitation_rejects_inactive_scope(api_client):
     establishment = create_establishment(name="Inactive Scope Hotel")
     owner = create_user(username="inactive_scope_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    _, domain, _ = create_taxonomy_tree(establishment)
-    domain.active = False
-    domain.save(update_fields=["active", "updated_at"])
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
+    business_unit.active = False
+    business_unit.save(update_fields=["active", "updated_at"])
 
     response = post_invitation(
         api_client,
         establishment_id=establishment.id,
         owner=owner,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=domain.id)]),
+        payload=invite_payload(scopes=[business_unit_scope_payload(business_unit)]),
     )
 
     assert response.status_code == 400
 
 
-def test_invitation_normalizes_redundant_child_scope(api_client):
+def test_invitation_normalizes_duplicate_business_unit_scope(api_client):
     establishment = create_establishment(name="Normalize Hotel")
     owner = create_user(username="normalize_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    module, domain, _ = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
 
     response = post_invitation(
         api_client,
@@ -294,23 +292,24 @@ def test_invitation_normalizes_redundant_child_scope(api_client):
         owner=owner,
         payload=invite_payload(
             scopes=[
-                scope_item(scope_type="module", scope_id=module.id),
-                scope_item(scope_type="domain", scope_id=domain.id),
+                business_unit_scope_payload(business_unit),
+                business_unit_scope_payload(business_unit),
             ],
         ),
     )
 
     assert response.status_code == 201
-    assert response.json()["membership"]["scopes"] == [
-        {"scope_type": "module", "scope_id": str(module.id)}
-    ]
+    assert_business_unit_scope_response(
+        response.json()["membership"],
+        business_unit=business_unit,
+    )
 
 
 def test_cannot_invite_owner_or_director_roles(api_client):
     establishment = create_establishment(name="Role Guard Hotel")
     owner = create_user(username="role_guard_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    module, _, _ = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
 
     access_token = login(api_client, identifier=owner.email)
     csrf_token = ensure_csrf(api_client)
@@ -324,7 +323,7 @@ def test_cannot_invite_owner_or_director_roles(api_client):
             invite_payload(
                 email=f"{role}@example.com",
                 role=role,
-                scopes=[scope_item(scope_type="module", scope_id=module.id)],
+                scopes=[business_unit_scope_payload(business_unit)],
             ),
             format="json",
             HTTP_X_CSRFTOKEN=csrf_token,
@@ -344,13 +343,13 @@ def test_staff_cannot_invite_members(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
-    module, _, _ = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
 
     response = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="module", scope_id=module.id)]),
+        payload=invite_payload(scopes=[business_unit_scope_payload(business_unit)]),
     )
 
     assert response.status_code == 403
@@ -359,22 +358,25 @@ def test_staff_cannot_invite_members(api_client):
     assert isinstance(body["detail"], str)
 
 
-def test_manager_can_invite_staff_with_module_scope(api_client):
-    establishment = create_establishment(name="Manager Invite Module Hotel")
+def test_manager_can_invite_staff_with_business_unit_scope(api_client):
+    establishment = create_establishment(name="Manager Invite Hotel")
     actor = create_user(username="manager_invite_actor")
     manager_membership = create_membership(
         user=actor,
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    module, _, _ = create_taxonomy_tree(establishment)
-    MembershipScope.objects.create(membership=manager_membership, operational_module=module)
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=business_unit,
+    )
 
     response = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="module", scope_id=module.id)]),
+        payload=invite_payload(scopes=[business_unit_scope_payload(business_unit)]),
     )
 
     assert response.status_code == 201
@@ -397,8 +399,11 @@ def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    module, _, _ = create_taxonomy_tree(establishment)
-    MembershipScope.objects.create(membership=manager_membership, operational_module=module)
+    business_unit = create_business_unit(establishment=establishment, key="hotel")
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=business_unit,
+    )
 
     response = post_invitation_as_actor(
         api_client,
@@ -407,92 +412,57 @@ def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
         payload=invite_payload(
             email=f"{target_role}@example.com",
             role=target_role,
-            scopes=[scope_item(scope_type="module", scope_id=module.id)],
+            scopes=[business_unit_scope_payload(business_unit)],
         ),
     )
 
     assert response.status_code == 403
 
 
-def test_manager_with_domain_scope_can_invite_staff_in_same_domain(api_client):
-    establishment = create_establishment(name="Manager Domain Hotel")
-    actor = create_user(username="manager_domain_actor")
+def test_manager_with_business_unit_scope_can_invite_staff_on_same_unit(api_client):
+    establishment = create_establishment(name="Manager Same BU Hotel")
+    actor = create_user(username="manager_same_bu_actor")
     manager_membership = create_membership(
         user=actor,
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    _, domain, _ = create_taxonomy_tree(establishment)
-    MembershipScope.objects.create(membership=manager_membership, operational_domain=domain)
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=business_unit,
+    )
 
     response = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=domain.id)]),
+        payload=invite_payload(scopes=[business_unit_scope_payload(business_unit)]),
     )
 
     assert response.status_code == 201
 
 
-def test_manager_with_domain_scope_can_invite_staff_on_child_subject(api_client):
-    establishment = create_establishment(name="Manager Domain Subject Hotel")
-    actor = create_user(username="manager_domain_subject_actor")
+def test_manager_with_narrow_scope_cannot_invite_staff_on_broader_unit(api_client):
+    establishment = create_establishment(name="Manager Narrow Scope Hotel")
+    actor = create_user(username="manager_narrow_scope_actor")
     manager_membership = create_membership(
         user=actor,
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    _, domain, subject = create_taxonomy_tree(establishment)
-    MembershipScope.objects.create(membership=manager_membership, operational_domain=domain)
+    scoped_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    broader_unit = create_business_unit(establishment=establishment, key="hotel")
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=scoped_unit,
+    )
 
     response = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="subject", scope_id=subject.id)]),
-    )
-
-    assert response.status_code == 201
-
-
-def test_manager_with_subject_scope_can_invite_staff_on_same_subject(api_client):
-    establishment = create_establishment(name="Manager Subject Hotel")
-    actor = create_user(username="manager_subject_actor")
-    manager_membership = create_membership(
-        user=actor,
-        establishment=establishment,
-        role=EstablishmentMembership.Role.MANAGER,
-    )
-    _, _, subject = create_taxonomy_tree(establishment)
-    MembershipScope.objects.create(membership=manager_membership, operational_subject=subject)
-
-    response = post_invitation_as_actor(
-        api_client,
-        establishment_id=establishment.id,
-        actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="subject", scope_id=subject.id)]),
-    )
-
-    assert response.status_code == 201
-
-
-def test_manager_with_subject_scope_cannot_invite_staff_on_parent_domain(api_client):
-    establishment = create_establishment(name="Manager Subject Parent Domain Hotel")
-    actor = create_user(username="manager_subject_parent_domain_actor")
-    manager_membership = create_membership(
-        user=actor,
-        establishment=establishment,
-        role=EstablishmentMembership.Role.MANAGER,
-    )
-    _, domain, subject = create_taxonomy_tree(establishment)
-    MembershipScope.objects.create(membership=manager_membership, operational_subject=subject)
-
-    response = post_invitation_as_actor(
-        api_client,
-        establishment_id=establishment.id,
-        actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=domain.id)]),
+        payload=invite_payload(scopes=[business_unit_scope_payload(broader_unit)]),
     )
 
     assert response.status_code == 403
@@ -506,27 +476,18 @@ def test_manager_cannot_invite_staff_with_scope_outside_perimeter(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    _, domain_a, _ = create_taxonomy_tree(establishment)
-    module_b = OperationalModule.objects.create(
-        establishment=establishment,
-        key=f"module_{uuid.uuid4().hex[:6]}",
-        label="Other Module",
-        active=True,
+    scoped_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    outside_unit = create_business_unit(establishment=establishment, key="maintenance")
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=scoped_unit,
     )
-    domain_b = OperationalDomain.objects.create(
-        establishment=establishment,
-        operational_module=module_b,
-        key=f"domain_{uuid.uuid4().hex[:6]}",
-        label="Other Domain",
-        active=True,
-    )
-    MembershipScope.objects.create(membership=manager_membership, operational_domain=domain_a)
 
     response = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=invite_payload(scopes=[scope_item(scope_type="domain", scope_id=domain_b.id)]),
+        payload=invite_payload(scopes=[business_unit_scope_payload(outside_unit)]),
     )
 
     assert response.status_code == 403
@@ -540,21 +501,12 @@ def test_manager_invitation_fails_when_any_target_scope_is_outside_perimeter(api
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    _, domain_a, _ = create_taxonomy_tree(establishment)
-    module_b = OperationalModule.objects.create(
-        establishment=establishment,
-        key=f"module_{uuid.uuid4().hex[:6]}",
-        label="Other Module",
-        active=True,
+    scoped_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    outside_unit = create_business_unit(establishment=establishment, key="maintenance")
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=scoped_unit,
     )
-    domain_b = OperationalDomain.objects.create(
-        establishment=establishment,
-        operational_module=module_b,
-        key=f"domain_{uuid.uuid4().hex[:6]}",
-        label="Other Domain",
-        active=True,
-    )
-    MembershipScope.objects.create(membership=manager_membership, operational_domain=domain_a)
 
     response = post_invitation_as_actor(
         api_client,
@@ -562,8 +514,8 @@ def test_manager_invitation_fails_when_any_target_scope_is_outside_perimeter(api
         actor=actor,
         payload=invite_payload(
             scopes=[
-                scope_item(scope_type="domain", scope_id=domain_a.id),
-                scope_item(scope_type="domain", scope_id=domain_b.id),
+                business_unit_scope_payload(scoped_unit),
+                business_unit_scope_payload(outside_unit),
             ]
         ),
     )
@@ -599,7 +551,7 @@ def test_invitation_persists_membership_scopes(api_client):
     establishment = create_establishment(name="Persist Scope Hotel")
     owner = create_user(username="persist_scope_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    _, domain, _ = create_taxonomy_tree(establishment)
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
 
     response = post_invitation(
         api_client,
@@ -607,7 +559,7 @@ def test_invitation_persists_membership_scopes(api_client):
         owner=owner,
         payload=invite_payload(
             email="persist@example.com",
-            scopes=[scope_item(scope_type="domain", scope_id=domain.id)],
+            scopes=[business_unit_scope_payload(business_unit)],
         ),
     )
 
@@ -615,4 +567,4 @@ def test_invitation_persists_membership_scopes(api_client):
     membership_id = response.json()["membership"]["id"]
     scopes = MembershipScope.objects.filter(membership_id=membership_id)
     assert scopes.count() == 1
-    assert scopes.first().operational_domain_id == domain.id
+    assert scopes.first().business_unit_id == business_unit.id

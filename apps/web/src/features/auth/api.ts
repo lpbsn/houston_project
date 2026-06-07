@@ -162,6 +162,7 @@ function toBootstrapResponse(payload: AuthResponse): BootstrapResponse {
     user: payload.user,
     memberships: payload.memberships,
     active_membership: payload.active_membership,
+    pending_onboarding_memberships: payload.pending_onboarding_memberships ?? [],
   }
 }
 
@@ -552,6 +553,46 @@ export async function inviteMembership(
   }
 
   return result.data
+}
+
+export const businessUnitTreeQueryKey = (establishmentId: string) =>
+  ['workspace', 'business-units', establishmentId] as const
+
+export type BusinessUnitTreeResponse = {
+  establishment_id: string
+  establishment_name: string
+  business_units: Array<{
+    id: string
+    key: string
+    label: string
+    description: string
+    unit_type: string
+    activity_subjects: Array<{
+      id: string
+      normalized_name: string
+      label: string
+      description: string
+    }>
+  }>
+}
+
+export async function getBusinessUnitTree(establishmentId: string): Promise<BusinessUnitTreeResponse> {
+  const csrfToken = await ensureCsrfToken()
+  const accessToken = getAccessToken()
+  const response = await fetch(
+    `/api/v1/establishments/${establishmentId}/business-units/`,
+    {
+      credentials: 'include',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        'X-CSRFToken': csrfToken,
+      },
+    },
+  )
+  if (!response.ok) {
+    throw new AuthApiError('Business unit tree could not be loaded.', response.status)
+  }
+  return response.json() as Promise<BusinessUnitTreeResponse>
 }
 
 export { AuthApiError }

@@ -479,16 +479,18 @@ def test_api_access_context_is_cached_on_request(
 
 
 @pytest.mark.parametrize(
-    "role",
+    "role,can_configure,can_activate",
     [
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
+        (EstablishmentMembership.Role.OWNER, True, True),
+        (EstablishmentMembership.Role.DIRECTOR, False, False),
     ],
 )
-def test_owner_and_director_can_manage_draft_onboarding_session(
+def test_owner_and_director_draft_onboarding_access(
     organization,
     active_user,
     role,
+    can_configure,
+    can_activate,
 ):
     establishment = Establishment.objects.create(
         name="Draft",
@@ -512,8 +514,8 @@ def test_owner_and_director_can_manage_draft_onboarding_session(
     assert context.membership == membership
     assert context.can_access is True
     assert context.can_manage is True
-    assert context.can_configure_runtime is True
-    assert context.can_activate is True
+    assert context.can_configure_runtime is can_configure
+    assert context.can_activate is can_activate
 
 
 @pytest.mark.parametrize(

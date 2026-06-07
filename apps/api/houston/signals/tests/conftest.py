@@ -13,6 +13,7 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.establishments.models import (
+    BusinessUnit,
     Establishment,
     EstablishmentMembership,
     OperationalDomain,
@@ -20,9 +21,11 @@ from houston.establishments.models import (
     OperationalSubject,
 )
 from houston.establishments.tests.conftest import TEST_PASSWORD
+from houston.establishments.tests.taxonomy_helpers import create_business_unit
 from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import Observation, ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
+from houston.signals.models import Signal
 
 GOLDEN_OBSERVATION_TEXT = (
     "La lumière clignote à l'entrée de restaurant. Il n'y a plus de sirop mojito au bar."
@@ -42,6 +45,13 @@ class RestaurantLightingBarStockTaxonomy:
     bar_domain: OperationalDomain
     salle_maintenance_subject: OperationalSubject | None
     bar_stock_subject: OperationalSubject | None
+
+
+@dataclass(frozen=True)
+class RestaurantBusinessUnits:
+    restaurant: BusinessUnit
+    maintenance: BusinessUnit
+    bar: BusinessUnit
 
 
 def build_api_membership(**kwargs) -> EstablishmentMembership:
@@ -108,7 +118,7 @@ def create_restaurant_lighting_bar_stock_taxonomy(
     include_bar_stock: bool = True,
 ) -> RestaurantLightingBarStockTaxonomy:
     """
-    Catalogue keys from docs/catalogue/arborescence.csv (stable, no random suffix).
+    Stable restaurant catalogue keys seeded in OnboardingCatalog (migration 0007).
     """
     module = OperationalModule.objects.create(
         establishment=establishment,
@@ -155,6 +165,65 @@ def create_restaurant_lighting_bar_stock_taxonomy(
         salle_maintenance_subject=salle_maintenance_subject,
         bar_stock_subject=bar_stock_subject,
     )
+
+
+def create_restaurant_business_units(
+    establishment: Establishment,
+) -> RestaurantBusinessUnits:
+    return RestaurantBusinessUnits(
+        restaurant=create_business_unit(
+            establishment=establishment,
+            key=RESTAURANT_MODULE_KEY,
+            label="Restaurant",
+        ),
+        maintenance=create_business_unit(
+            establishment=establishment,
+            key="maintenance",
+            label="Maintenance",
+            unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+        ),
+        bar=create_business_unit(
+            establishment=establishment,
+            key="bar",
+            label="Bar",
+        ),
+    )
+
+
+def classify_golden_restaurant_signals(
+    *,
+    establishment: Establishment,
+    business_units: RestaurantBusinessUnits,
+) -> None:
+    lighting = Signal.objects.filter(
+        establishment=establishment,
+        operational_subject__key=RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
+    ).first()
+    if lighting is not None:
+        lighting.affected_business_unit = business_units.restaurant
+        lighting.responsible_business_unit = business_units.maintenance
+        lighting.save(
+            update_fields=[
+                "affected_business_unit",
+                "responsible_business_unit",
+                "updated_at",
+            ]
+        )
+
+    syrup = Signal.objects.filter(
+        establishment=establishment,
+        operational_subject__key=RESTAURANT_BAR_STOCK_SUBJECT_KEY,
+    ).first()
+    if syrup is not None:
+        syrup.affected_business_unit = business_units.bar
+        syrup.responsible_business_unit = business_units.bar
+        syrup.save(
+            update_fields=[
+                "affected_business_unit",
+                "responsible_business_unit",
+                "updated_at",
+            ]
+        )
 
 
 def golden_two_candidate_pipeline_output(

@@ -158,6 +158,28 @@ def resolve_current_access_context(request: Any) -> CurrentAccessContext:
     )
 
 
+_ONBOARDING_CONTINUE_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.OWNER,
+    }
+)
+
+
+def _can_configure_runtime_onboarding(
+    *,
+    can_manage: bool,
+    membership: EstablishmentMembership | None,
+    establishment: Establishment | None,
+) -> bool:
+    if not can_manage or membership is None or establishment is None:
+        return False
+
+    if establishment.status == Establishment.Status.DRAFT:
+        return membership.role in _ONBOARDING_CONTINUE_ROLES
+
+    return True
+
+
 def get_onboarding_access_context(
     *,
     actor: User | None,
@@ -171,8 +193,13 @@ def get_onboarding_access_context(
         session=session,
         membership=membership,
     )
+    can_configure_runtime = _can_configure_runtime_onboarding(
+        can_manage=can_manage,
+        membership=membership,
+        establishment=establishment,
+    )
     can_activate = (
-        can_manage
+        can_configure_runtime
         and establishment is not None
         and establishment.status == Establishment.Status.DRAFT
     )
@@ -185,7 +212,7 @@ def get_onboarding_access_context(
         membership=membership,
         can_access=can_manage,
         can_manage=can_manage,
-        can_configure_runtime=can_manage,
+        can_configure_runtime=can_configure_runtime,
         can_activate=can_activate,
     )
 

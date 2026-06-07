@@ -5,6 +5,7 @@ import { bootstrapQueryKey } from '@/features/auth/api'
 import {
   activateOnboardingSession,
   applyOnboardingProposal,
+  createManualOnboardingProposal,
   decideProposalSection,
   generateOnboardingProposal,
   getActivationSummary,
@@ -19,6 +20,10 @@ import {
   rejectOnboardingProposal,
   startOnboardingSession,
   submitActivityDescription,
+  submitManualOnboardingProposal,
+  suggestActivitySubjects,
+  suggestBusinessUnits,
+  updateManualOnboardingProposal,
 } from './api'
 import type {
   AIOnboardingGenerateRequest,
@@ -27,6 +32,8 @@ import type {
   DecisionEnum,
   DirectorInvitationRequest,
   OnboardingSessionCreateRequest,
+  OnboardingProposalCreateRequest,
+  OnboardingProposalUpdateRequest,
   ProposalCommandResponse,
   ProposalItemMutationRequest,
   SubmitActivityDescriptionRequest,
@@ -206,6 +213,75 @@ export function useActivateOnboardingSession(sessionId: string) {
   })
 }
 
+export function useBusinessUnitSuggestions(
+  query: string,
+  options?: OnboardingQueryOptions,
+) {
+  return useQuery({
+    queryKey: onboardingQueryKeys.catalogBusinessUnits(query),
+    queryFn: () => suggestBusinessUnits(query),
+    enabled: (options?.enabled ?? true) && query.length >= 2,
+    staleTime: options?.staleTime ?? 30_000,
+  })
+}
+
+export function useActivitySubjectSuggestions(
+  businessUnitKey: string,
+  query: string,
+  options?: OnboardingQueryOptions,
+) {
+  return useQuery({
+    queryKey: onboardingQueryKeys.catalogActivitySubjects(businessUnitKey, query),
+    queryFn: () => suggestActivitySubjects(businessUnitKey, query),
+    enabled:
+      (options?.enabled ?? true) && Boolean(businessUnitKey) && query.length >= 2,
+    staleTime: options?.staleTime ?? 30_000,
+  })
+}
+
+export function useCreateManualOnboardingProposal(sessionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: OnboardingProposalCreateRequest) =>
+      createManualOnboardingProposal(sessionId, input),
+    onSuccess: async (response) => {
+      setProposalCommandData(queryClient, sessionId, response)
+      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
+    },
+  })
+}
+
+export function useUpdateManualOnboardingProposal(sessionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      proposalId,
+      input,
+    }: {
+      proposalId: string
+      input: OnboardingProposalUpdateRequest
+    }) => updateManualOnboardingProposal(sessionId, proposalId, input),
+    onSuccess: async (response) => {
+      setProposalCommandData(queryClient, sessionId, response)
+      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
+    },
+  })
+}
+
+export function useSubmitManualOnboardingProposal(sessionId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (proposalId: string) => submitManualOnboardingProposal(sessionId, proposalId),
+    onSuccess: async (response) => {
+      setProposalCommandData(queryClient, sessionId, response)
+      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
+    },
+  })
+}
+
 export function useOnboardingProposals(
   sessionId: string | null | undefined,
   options?: OnboardingQueryOptions,
@@ -276,11 +352,11 @@ export function useRejectOnboardingProposal(sessionId: string, proposalId: strin
   })
 }
 
-export function useApplyOnboardingProposal(sessionId: string, proposalId: string) {
+export function useApplyOnboardingProposal(sessionId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => applyOnboardingProposal(sessionId, proposalId),
+    mutationFn: (proposalId: string) => applyOnboardingProposal(sessionId, proposalId),
     onSuccess: async (response) => {
       setProposalCommandData(queryClient, sessionId, response)
       await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id, {

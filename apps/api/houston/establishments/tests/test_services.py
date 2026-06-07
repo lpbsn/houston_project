@@ -5,14 +5,12 @@ from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    ActivitySubject,
+    BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipScope,
     OnboardingSession,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
 )
 from houston.establishments.services import (
     InvalidActivityDescriptionError,
@@ -26,10 +24,10 @@ from houston.establishments.services import (
     mark_onboarding_ready_for_activation,
     submit_activity_description,
 )
-from houston.establishments.tests.conftest import (
-    HOTEL_HEBERGEMENT_DOMAIN_KEY,
-    READINESS_DOMAIN_KEYS,
-    first_catalog_subject_for_domain,
+from houston.establishments.tests.conftest import create_ready_runtime
+from houston.establishments.tests.taxonomy_helpers import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
 )
 from houston.organizations.models import Organization
 
@@ -73,54 +71,6 @@ def onboarding_session(organization, owner):
 
 def blocker_codes(readiness):
     return {blocker["code"] for blocker in readiness["blockers"]}
-
-
-def create_ready_runtime(session, owner):
-    establishment = session.establishment
-    EstablishmentActivityDescription.objects.create(
-        establishment=establishment,
-        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
-        submitted_by=owner,
-        validated_at=timezone.now(),
-    )
-    OperationalModule.objects.create(
-        establishment=establishment,
-        key="hotel",
-        label="Hotel",
-    )
-    domains = [
-        OperationalDomain.objects.create(
-            establishment=establishment,
-            key=key,
-            label=label,
-        )
-        for key, label in [
-            (HOTEL_HEBERGEMENT_DOMAIN_KEY, "Hébergement"),
-            ("hotel__reception_hall", "Réception / Hall"),
-            ("hotel__parties_communes", "Parties communes"),
-        ]
-    ]
-    director = User.objects.create_user(
-        username="director_ready_runtime",
-        password="secret",
-        status=User.Status.ACTIVE,
-    )
-    EstablishmentMembership.objects.create(
-        user=director,
-        establishment=establishment,
-        role=EstablishmentMembership.Role.DIRECTOR,
-        status=EstablishmentMembership.Status.INVITED,
-    )
-    domains_by_key = {domain.key: domain for domain in domains}
-    for domain_key in READINESS_DOMAIN_KEYS:
-        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
-        OperationalSubject.objects.create(
-            establishment=establishment,
-            operational_domain=domains_by_key[domain_key],
-            key=subject_key,
-            label=subject_label,
-        )
-    return domains
 
 
 def test_submit_valid_activity_description_updates_canonical_description_and_status(
@@ -193,10 +143,7 @@ def test_activation_readiness_returns_blockers_when_setup_is_empty(onboarding_se
 
     assert readiness["is_ready"] is False
     assert blocker_codes(readiness) == {
-        "missing_validated_description",
-        "missing_active_module",
-        "insufficient_active_domains",
-        "insufficient_active_subjects",
+        "missing_active_business_unit",
         "missing_active_or_invited_director",
     }
     assert "required_sections_not_validated" not in blocker_codes(readiness)
@@ -212,91 +159,91 @@ def test_activation_readiness_passes_when_minimum_criteria_are_met(
 
     assert readiness["is_ready"] is True
     assert readiness["blockers"] == []
-    assert readiness["counts"]["active_modules_count"] == 1
-    assert readiness["counts"]["active_domains_count"] == 3
+    assert readiness["counts"]["active_business_units_count"] == 1
+    assert readiness["counts"]["active_activity_subjects_count"] == 1
     assert readiness["counts"]["active_owner_or_director_count"] == 1
     assert readiness["counts"]["active_or_invited_director_count"] == 1
     assert all(section["is_ready"] for section in readiness["sections"].values())
 
 
-def test_activation_readiness_blocks_when_active_domains_lack_subjects(
+def test_activation_readiness_blocks_when_active_business_units_lack_subjects(
     onboarding_session,
     owner,
 ):
     establishment = onboarding_session.establishment
-    EstablishmentActivityDescription.objects.create(
-        establishment=establishment,
-        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
-        submitted_by=owner,
-        validated_at=timezone.now(),
-    )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    for key in READINESS_DOMAIN_KEYS:
-        OperationalDomain.objects.create(
-            establishment=establishment,
-            key=key,
-            label=key.replace("__", " ").replace("_", " ").title(),
-        )
-    manager = User.objects.create_user(
-        username="manager_domains_without_subjects",
+    create_business_unit(establishment=establishment, key="coworking", label="Coworking")
+    create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    director = User.objects.create_user(
+        username="director_bu_without_subjects",
         password="secret",
         status=User.Status.ACTIVE,
     )
-    manager_membership = EstablishmentMembership.objects.create(
-        user=manager,
+    EstablishmentMembership.objects.create(
+        user=director,
         establishment=establishment,
-        role=EstablishmentMembership.Role.MANAGER,
+        role=EstablishmentMembership.Role.DIRECTOR,
         status=EstablishmentMembership.Status.INVITED,
-    )
-    MembershipScope.objects.create(
-        membership=manager_membership,
-        operational_domain=OperationalDomain.objects.get(
-            establishment=establishment,
-            key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
-        ),
     )
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
     assert readiness["is_ready"] is False
-    assert "insufficient_active_subjects" in blocker_codes(readiness)
-    assert "domains_without_active_subjects" in blocker_codes(readiness)
-    assert readiness["counts"]["active_domains_without_subjects_count"] == 3
+    assert "business_units_without_active_subjects" in blocker_codes(readiness)
+    assert readiness["counts"]["active_business_units_without_subjects_count"] == 2
 
 
-def test_activation_readiness_blocks_when_one_active_domain_lacks_subjects(
+def test_activation_readiness_blocks_when_one_active_business_unit_lacks_subjects(
     onboarding_session,
     owner,
 ):
-    create_ready_runtime(onboarding_session, owner)
     establishment = onboarding_session.establishment
-    OperationalSubject.objects.filter(establishment=establishment).filter(
-        operational_domain__key="hotel__reception_hall",
-    ).delete()
+    staffed_business_unit = create_business_unit(
+        establishment=establishment,
+        key="coworking",
+        label="Coworking",
+    )
+    create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=staffed_business_unit,
+        normalized_name="proprete",
+        label="Propreté",
+        active=True,
+    )
+    director = User.objects.create_user(
+        username="director_one_bu_without_subjects",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=director,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.INVITED,
+    )
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
     assert readiness["is_ready"] is False
-    assert "domains_without_active_subjects" in blocker_codes(readiness)
-    assert readiness["counts"]["active_subjects_count"] >= 1
-    assert readiness["counts"]["active_domains_without_subjects_count"] == 1
+    assert "business_units_without_active_subjects" in blocker_codes(readiness)
+    assert readiness["counts"]["active_activity_subjects_count"] == 1
+    assert readiness["counts"]["active_business_units_without_subjects_count"] == 1
 
 
 def test_manager_invited_does_not_satisfy_readiness(onboarding_session, owner):
     establishment = onboarding_session.establishment
-    EstablishmentActivityDescription.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
-        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
-        submitted_by=owner,
-        validated_at=timezone.now(),
+        key="coworking",
+        label="Coworking",
     )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    for key in READINESS_DOMAIN_KEYS:
-        OperationalDomain.objects.create(
-            establishment=establishment,
-            key=key,
-            label=key.replace("__", " ").replace("_", " ").title(),
-        )
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name="proprete",
+        label="Propreté",
+        active=True,
+    )
     manager = User.objects.create_user(
         username="manager_only_readiness",
         password="secret",
@@ -318,30 +265,18 @@ def test_manager_invited_does_not_satisfy_readiness(onboarding_session, owner):
 
 def test_owner_alone_does_not_satisfy_director_readiness(onboarding_session, owner):
     establishment = onboarding_session.establishment
-    EstablishmentActivityDescription.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
-        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
-        submitted_by=owner,
-        validated_at=timezone.now(),
+        key="coworking",
+        label="Coworking",
     )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    domains = [
-        OperationalDomain.objects.create(
-            establishment=establishment,
-            key=key,
-            label=key.replace("__", " ").replace("_", " ").title(),
-        )
-        for key in READINESS_DOMAIN_KEYS
-    ]
-    domains_by_key = {domain.key: domain for domain in domains}
-    for domain_key in READINESS_DOMAIN_KEYS:
-        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
-        OperationalSubject.objects.create(
-            establishment=establishment,
-            operational_domain=domains_by_key[domain_key],
-            key=subject_key,
-            label=subject_label,
-        )
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name="proprete",
+        label="Propreté",
+        active=True,
+    )
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
@@ -382,15 +317,12 @@ def test_active_director_satisfies_readiness(onboarding_session, owner):
     assert readiness["counts"]["active_or_invited_director_count"] == 1
 
 
-def test_optional_sections_do_not_block_readiness(onboarding_session, owner):
+def test_activity_description_does_not_block_readiness(onboarding_session, owner):
     create_ready_runtime(onboarding_session, owner)
 
     readiness = compute_activation_readiness(session=onboarding_session)
 
-    assert readiness["sections"]["units"]["is_skippable"] is True
-    assert readiness["sections"]["vocabulary"]["is_skippable"] is True
-    assert readiness["sections"]["runtime_tags"]["is_skippable"] is True
-    assert readiness["sections"]["routing_hints"]["is_skippable"] is True
+    assert "description" not in readiness["sections"]
     assert readiness["is_ready"] is True
 
 
@@ -431,7 +363,7 @@ def test_mark_ready_does_not_change_status_when_readiness_fails(
 
 
 def test_mark_ready_denies_manager_even_when_readiness_passes(onboarding_session, owner):
-    domains = create_ready_runtime(onboarding_session, owner)
+    business_unit = create_ready_runtime(onboarding_session, owner)
     manager = User.objects.create_user(
         username="manager_denied_ready",
         password="secret",
@@ -443,9 +375,9 @@ def test_mark_ready_denies_manager_even_when_readiness_passes(onboarding_session
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=manager_membership,
-        operational_domain=domains[0],
+        business_unit=business_unit,
     )
 
     readiness = compute_activation_readiness(session=onboarding_session)
@@ -477,7 +409,7 @@ def test_activate_onboarding_session_success_for_owner(onboarding_session, owner
     assert AIUsageLog.objects.count() == 0
 
 
-def test_activate_onboarding_session_success_for_director(onboarding_session, owner):
+def test_mark_ready_denies_director_even_when_readiness_passes(onboarding_session, owner):
     create_ready_runtime(onboarding_session, owner)
     director_membership = EstablishmentMembership.objects.get(
         establishment=onboarding_session.establishment,
@@ -488,14 +420,9 @@ def test_activate_onboarding_session_success_for_director(onboarding_session, ow
     director = director_membership.user
     director.status = User.Status.ACTIVE
     director.save(update_fields=["status", "updated_at"])
-    mark_onboarding_ready_for_activation(session=onboarding_session, actor=director)
 
-    activate_onboarding_session(session=onboarding_session, actor=director)
-    onboarding_session.refresh_from_db()
-    onboarding_session.establishment.refresh_from_db()
-
-    assert onboarding_session.status == OnboardingSession.Status.ACTIVATED
-    assert onboarding_session.establishment.status == Establishment.Status.ACTIVE
+    with pytest.raises(OnboardingAccessDeniedError):
+        mark_onboarding_ready_for_activation(session=onboarding_session, actor=director)
 
 
 def test_activate_onboarding_session_is_idempotent_for_same_activated_session(
@@ -574,7 +501,7 @@ def test_activate_onboarding_session_recomputes_readiness_before_transition(
 ):
     create_ready_runtime(onboarding_session, owner)
     mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
-    OperationalModule.objects.filter(establishment=onboarding_session.establishment).update(
+    BusinessUnit.objects.filter(establishment=onboarding_session.establishment).update(
         active=False,
     )
 
@@ -583,7 +510,7 @@ def test_activate_onboarding_session_recomputes_readiness_before_transition(
 
     onboarding_session.refresh_from_db()
     onboarding_session.establishment.refresh_from_db()
-    assert "missing_active_module" in blocker_codes(exc_info.value.readiness)
+    assert "missing_active_business_unit" in blocker_codes(exc_info.value.readiness)
     assert onboarding_session.status == OnboardingSession.Status.READY_FOR_ACTIVATION
     assert onboarding_session.establishment.status == Establishment.Status.DRAFT
 
@@ -592,7 +519,7 @@ def test_activate_onboarding_session_denies_manager_even_when_ready(
     onboarding_session,
     owner,
 ):
-    domains = create_ready_runtime(onboarding_session, owner)
+    business_unit = create_ready_runtime(onboarding_session, owner)
     manager = User.objects.create_user(
         username="manager_denied_activation",
         password="secret",
@@ -604,9 +531,9 @@ def test_activate_onboarding_session_denies_manager_even_when_ready(
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=manager_membership,
-        operational_domain=domains[0],
+        business_unit=business_unit,
     )
     mark_onboarding_ready_for_activation(session=onboarding_session, actor=owner)
 
@@ -626,7 +553,7 @@ def test_activate_onboarding_session_rejects_terminal_nonactivated_session(
         activate_onboarding_session(session=onboarding_session, actor=owner)
 
 
-def test_build_activation_summary_uses_active_module_and_domain_names(
+def test_build_activation_summary_includes_business_units_and_readiness(
     onboarding_session,
     owner,
 ):
@@ -634,11 +561,6 @@ def test_build_activation_summary_uses_active_module_and_domain_names(
 
     summary = build_activation_summary(session=onboarding_session)
 
-    assert "active_modules" in summary
-    assert "active_domains" in summary
-    assert "validated_modules" not in summary
-    assert "validated_domains" not in summary
-    assert summary["active_modules"][0]["key"] == "hotel"
-    assert len(summary["active_domains"]) == 3
+    assert summary["active_business_units"][0]["key"] == "coworking"
     assert summary["readiness"]["is_ready"] is True
     assert summary["blockers"] == []

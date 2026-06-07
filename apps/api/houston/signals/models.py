@@ -42,6 +42,27 @@ class Signal(BaseModel):
         on_delete=models.PROTECT,
         related_name="signals",
     )
+    affected_business_unit = models.ForeignKey(
+        "establishments.BusinessUnit",
+        on_delete=models.PROTECT,
+        related_name="affected_signals",
+        null=True,
+        blank=True,
+    )
+    responsible_business_unit = models.ForeignKey(
+        "establishments.BusinessUnit",
+        on_delete=models.PROTECT,
+        related_name="responsible_signals",
+        null=True,
+        blank=True,
+    )
+    activity_subject = models.ForeignKey(
+        "establishments.ActivitySubject",
+        on_delete=models.PROTECT,
+        related_name="signals",
+        null=True,
+        blank=True,
+    )
     operational_unit = models.ForeignKey(
         "establishments.OperationalUnit",
         on_delete=models.PROTECT,
@@ -93,6 +114,14 @@ class Signal(BaseModel):
                 fields=["establishment", "operational_subject"],
                 name="signal_est_subject_idx",
             ),
+            models.Index(
+                fields=["establishment", "affected_business_unit"],
+                name="signal_est_affected_bu_idx",
+            ),
+            models.Index(
+                fields=["establishment", "responsible_business_unit"],
+                name="signal_est_responsible_bu_idx",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -137,6 +166,32 @@ class CandidateSignal(BaseModel):
         related_name="candidate_signals",
         null=True,
         blank=True,
+    )
+    affected_business_unit = models.ForeignKey(
+        "establishments.BusinessUnit",
+        on_delete=models.PROTECT,
+        related_name="affected_candidate_signals",
+        null=True,
+        blank=True,
+    )
+    responsible_business_unit = models.ForeignKey(
+        "establishments.BusinessUnit",
+        on_delete=models.PROTECT,
+        related_name="responsible_candidate_signals",
+        null=True,
+        blank=True,
+    )
+    activity_subject = models.ForeignKey(
+        "establishments.ActivitySubject",
+        on_delete=models.PROTECT,
+        related_name="candidate_signals",
+        null=True,
+        blank=True,
+    )
+    location_text = models.CharField(
+        max_length=SIGNAL_LOCATION_TEXT_MAX_LENGTH,
+        blank=True,
+        default="",
     )
     operational_unit = models.ForeignKey(
         "establishments.OperationalUnit",

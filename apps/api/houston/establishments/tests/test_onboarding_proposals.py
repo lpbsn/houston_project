@@ -104,8 +104,8 @@ def test_template_proposal_uses_same_validation_boundary(onboarding_session, own
 
 
 def test_inactive_catalog_key_is_rejected_as_unknown():
-    OnboardingCatalogDomain.objects.filter(key=HOTEL_HEBERGEMENT_DOMAIN_KEY).update(active=False)
     payload = valid_v2_payload()
+    OnboardingCatalogDomain.objects.filter(key=HOTEL_HEBERGEMENT_DOMAIN_KEY).update(active=False)
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
         validate_onboarding_proposal_payload(payload)
@@ -435,14 +435,34 @@ def test_apply_deactivates_only_omitted_proposal_managed_runtime_rows(
     assert managed_tag.managed_by_onboarding_proposal == first_proposal
     assert managed_hint.managed_by_onboarding_proposal == first_proposal
 
-    payload = valid_v2_payload()
+    payload = copy.deepcopy(first_proposal.payload)
     payload["operational_units"] = []
     payload["runtime_vocabulary"] = []
     payload["runtime_tags"] = []
     payload["routing_hints"] = []
-    second_proposal = create_validated_proposal(onboarding_session, owner, payload=payload)
+    first_proposal.payload = validate_onboarding_proposal_payload(payload)
+    first_proposal.section_validation = {}
+    first_proposal.status = OnboardingProposal.Status.READY
+    first_proposal.save(
+        update_fields=["payload", "section_validation", "status", "updated_at"]
+    )
+    for section in [
+        "operational_modules",
+        "operational_domains",
+        "operational_subjects",
+        "operational_units",
+        "runtime_vocabulary",
+        "runtime_tags",
+        "routing_hints",
+    ]:
+        first_proposal = validate_onboarding_proposal_section(
+            proposal=first_proposal,
+            actor=owner,
+            section=section,
+            decision="accepted",
+        )
 
-    apply_onboarding_proposal(proposal=second_proposal, actor=owner)
+    apply_onboarding_proposal(proposal=first_proposal, actor=owner)
 
     managed_unit.refresh_from_db()
     managed_vocab.refresh_from_db()

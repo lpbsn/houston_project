@@ -11,7 +11,7 @@ import {
 
 type InvitationAcceptPageProps = {
   token: string
-  onAccepted: (result: { establishmentId: string; isDraftEstablishment: boolean }) => void
+  onAccepted: () => void
 }
 
 function getAcceptErrorMessage(error: unknown) {
@@ -51,15 +51,12 @@ export function InvitationAcceptPage({ token, onAccepted }: InvitationAcceptPage
     setIsSubmitting(true)
 
     try {
-      const result = await acceptDirectorInvitation(token, {
+      await acceptDirectorInvitation(token, {
         password,
         password_confirmation: passwordConfirmation,
       })
 
-      onAccepted({
-        establishmentId: result.establishment_id,
-        isDraftEstablishment: result.onboarding_session_id != null,
-      })
+      onAccepted()
     } catch (error) {
       setSubmitError(getAcceptErrorMessage(error))
     } finally {

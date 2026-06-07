@@ -24,6 +24,12 @@ class SignalFeedItemSerializer(serializers.Serializer):
     module_key = serializers.CharField()
     domain_key = serializers.CharField()
     subject_key = serializers.CharField()
+    affected_business_unit_key = serializers.CharField(allow_null=True, required=False)
+    affected_business_unit_label = serializers.CharField(allow_null=True, required=False)
+    responsible_business_unit_key = serializers.CharField(allow_null=True, required=False)
+    responsible_business_unit_label = serializers.CharField(allow_null=True, required=False)
+    activity_subject_normalized_name = serializers.CharField(allow_null=True, required=False)
+    activity_subject_label = serializers.CharField(allow_null=True, required=False)
     operational_unit_key = serializers.CharField(allow_null=True)
     location_text = serializers.CharField()
     media_count = serializers.IntegerField()
@@ -78,6 +84,24 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "module_key": signal.operational_module.key,
         "domain_key": signal.operational_domain.key,
         "subject_key": signal.operational_subject.key,
+        "affected_business_unit_key": (
+            signal.affected_business_unit.key if signal.affected_business_unit_id else None
+        ),
+        "affected_business_unit_label": (
+            signal.affected_business_unit.label if signal.affected_business_unit_id else None
+        ),
+        "responsible_business_unit_key": (
+            signal.responsible_business_unit.key if signal.responsible_business_unit_id else None
+        ),
+        "responsible_business_unit_label": (
+            signal.responsible_business_unit.label if signal.responsible_business_unit_id else None
+        ),
+        "activity_subject_normalized_name": (
+            signal.activity_subject.normalized_name if signal.activity_subject_id else None
+        ),
+        "activity_subject_label": (
+            signal.activity_subject.label if signal.activity_subject_id else None
+        ),
         "operational_unit_key": signal.operational_unit.key if signal.operational_unit else None,
         "location_text": signal.location_text,
         "media_count": media_count,

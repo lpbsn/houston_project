@@ -1,20 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
+import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
+  requiresActiveMembership,
   usesTerrainShell,
 } from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
+import { bootstrapQueryKey } from '@/features/auth/api'
+import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { AppPage } from '@/features/auth/pages/app-page'
+import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
+import {
+  getAuthenticatedLandingPath,
+  resolveAuthenticatedLanding,
+  routeAllowsMissingActiveMembership,
+  shouldRedirectAuthenticatedPublicRoute,
+  shouldRedirectUnauthenticatedPublicRoute,
+  shouldShowAuthRoutingLoading,
+} from '@/features/auth/lib/authenticated-landing'
+import { NoEstablishmentPage } from '@/features/auth/pages/no-establishment-page'
+import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishment-page'
+import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
+import type { BootstrapResponse } from '@/features/auth/types'
+import { queryClient } from '@/lib/query-client'
 import { ChatPage } from '@/features/chat/pages/chat-page'
 import { ActionCreatePage } from '@/features/actions/pages/action-create-page'
 import { ActionDetailPage } from '@/features/actions/pages/action-detail-page'
@@ -22,147 +40,9 @@ import { ExecutionFeedPage } from '@/features/execution/pages/execution-feed-pag
 import { SignalDetailPage } from '@/features/signals/pages/signal-detail-page'
 import { SignalFeedPage } from '@/features/signals/pages/signal-feed-page'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
-import { LandingPage } from '@/features/landing/landing-page'
+import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { ReportPage } from '@/features/observations/pages/report-page'
-
-type AppPath =
-  | '/'
-  | '/login'
-  | '/app'
-  | '/app/report'
-  | '/onboarding'
-  | '/reporting'
-  | '/signals'
-  | `/signals/${string}`
-  | `/actions/${string}`
-  | '/execution'
-  | '/chat'
-  | '/profile'
-  | '/team/invite'
-
-type AppRoute =
-  | { kind: 'static'; path: AppPath }
-  | { kind: 'signal-detail'; signalId: string }
-  | { kind: 'signal-action-create'; signalId: string }
-  | { kind: 'action-create' }
-  | { kind: 'action-detail'; actionId: string }
-  | { kind: 'invitation'; token: string }
-
-function parseInvitationToken(pathname: string): string | null {
-  const prefix = '/invitations/'
-  if (!pathname.startsWith(prefix)) {
-    return null
-  }
-
-  const remainder = pathname.slice(prefix.length)
-  const token = remainder.split('/').filter(Boolean)[0]
-
-  return token || null
-}
-
-function parseSignalActionCreateId(pathname: string): string | null {
-  const match = pathname.match(/^\/signals\/([^/]+)\/plan\/?$/)
-  return match?.[1] ?? null
-}
-
-function parseSignalDetailId(pathname: string): string | null {
-  const prefix = '/signals/'
-  if (!pathname.startsWith(prefix)) {
-    return null
-  }
-  const remainder = pathname.slice(prefix.length)
-  const segments = remainder.split('/').filter(Boolean)
-  if (segments.length !== 1) {
-    return null
-  }
-  return segments[0] || null
-}
-
-function parseActionDetailId(pathname: string): string | null {
-  if (pathname === '/actions/new' || pathname === '/actions/new/') {
-    return null
-  }
-  const prefix = '/actions/'
-  if (!pathname.startsWith(prefix)) {
-    return null
-  }
-  const remainder = pathname.slice(prefix.length)
-  const actionId = remainder.split('/').filter(Boolean)[0]
-  return actionId || null
-}
-
-function parseAppRoute(pathname: string): AppRoute {
-  const invitationToken = parseInvitationToken(pathname)
-  if (invitationToken) {
-    return { kind: 'invitation', token: invitationToken }
-  }
-
-  const signalPlanId = parseSignalActionCreateId(pathname)
-  if (signalPlanId) {
-    return { kind: 'signal-action-create', signalId: signalPlanId }
-  }
-
-  if (pathname === '/actions/new' || pathname === '/actions/new/') {
-    return { kind: 'action-create' }
-  }
-
-  const signalId = parseSignalDetailId(pathname)
-  if (signalId) {
-    return { kind: 'signal-detail', signalId }
-  }
-
-  const actionId = parseActionDetailId(pathname)
-  if (actionId) {
-    return { kind: 'action-detail', actionId }
-  }
-
-  if (
-    pathname === '/login' ||
-    pathname === '/app' ||
-    pathname === '/app/report' ||
-    pathname === '/onboarding' ||
-    pathname === '/reporting' ||
-    pathname === '/signals' ||
-    pathname === '/execution' ||
-    pathname === '/chat' ||
-    pathname === '/profile' ||
-    pathname === '/team/invite'
-  ) {
-    return { kind: 'static', path: pathname }
-  }
-
-  return { kind: 'static', path: '/' }
-}
-
-function useAppRoute() {
-  const [route, setRoute] = useState<AppRoute>(() => parseAppRoute(window.location.pathname))
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setRoute(parseAppRoute(window.location.pathname))
-    }
-
-    window.addEventListener('popstate', handlePopState)
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
-  }, [])
-
-  const navigate = (pathname: string, options?: { replace?: boolean }) => {
-    if (window.location.pathname === pathname) {
-      setRoute(parseAppRoute(pathname))
-      return
-    }
-
-    const method = options?.replace ? 'replaceState' : 'pushState'
-    window.history[method](null, '', pathname)
-    setRoute(parseAppRoute(pathname))
-  }
-
-  return { route, navigate }
-}
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -182,21 +62,27 @@ function App() {
       return
     }
 
-    if (route.kind === 'static' && route.path === '/login' && auth.isAuthenticated) {
-      navigate('/app', { replace: true })
+    if (shouldRedirectUnauthenticatedPublicRoute(route) && !auth.isAuthenticated) {
+      navigate('/login', { replace: true })
       return
     }
 
     const isProtectedRoute =
       (route.kind === 'static' &&
         (route.path === '/app' ||
+          route.path === '/app/operational-config' ||
           route.path === '/app/report' ||
           route.path === '/reporting' ||
           route.path === '/signals' ||
           route.path === '/execution' ||
           route.path === '/chat' ||
           route.path === '/profile' ||
-          route.path === '/team/invite')) ||
+          route.path === '/team/invite' ||
+          route.path === '/pending-onboarding' ||
+          route.path === '/onboarding' ||
+          route.path === '/select-establishment' ||
+          route.path === '/no-establishment')) ||
+      route.kind === 'unknown' ||
       route.kind === 'signal-detail' ||
       route.kind === 'signal-action-create' ||
       route.kind === 'action-create' ||
@@ -206,6 +92,55 @@ function App() {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, route])
+
+  useEffect(() => {
+    if (!auth.isReady || route.kind === 'invitation') {
+      return
+    }
+
+    if (!auth.isAuthenticated || !auth.bootstrap) {
+      return
+    }
+
+    const landingPath = getAuthenticatedLandingPath(auth.bootstrap)
+
+    if (shouldRedirectAuthenticatedPublicRoute(route) && landingPath) {
+      navigate(landingPath, { replace: true })
+      return
+    }
+
+    if (
+      route.kind === 'static' &&
+      route.path === '/onboarding' &&
+      !auth.hasOperationalAccess
+    ) {
+      const pendingLanding = resolvePendingLanding(auth.pendingOnboardingMemberships)
+      if (pendingLanding.kind === 'waiting' || pendingLanding.kind === 'selection') {
+        navigate('/pending-onboarding', { replace: true })
+        return
+      }
+    }
+
+    if (auth.hasOperationalAccess) {
+      return
+    }
+
+    if (route.kind === 'static' && routeAllowsMissingActiveMembership(route.path)) {
+      return
+    }
+
+    if (requiresActiveMembership(route) && landingPath) {
+      navigate(landingPath, { replace: true })
+    }
+  }, [
+    auth.bootstrap,
+    auth.hasOperationalAccess,
+    auth.isAuthenticated,
+    auth.isReady,
+    auth.pendingOnboardingMemberships,
+    navigate,
+    route,
+  ])
 
   useEffect(() => {
     if (route.kind === 'static' && route.path === '/app/report') {
@@ -220,30 +155,45 @@ function App() {
   }, [auth, navigate])
 
   const routeContent = useMemo(() => {
+    if (
+      auth.isReady &&
+      auth.isAuthenticated &&
+      !auth.hasOperationalAccess &&
+      requiresActiveMembership(route)
+    ) {
+      return (
+        <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
+          Redirection vers votre espace de configuration…
+        </div>
+      )
+    }
+
     if (route.kind === 'invitation') {
       return (
         <InvitationAcceptPage
           token={route.token}
-          onAccepted={({ isDraftEstablishment }) => {
-            navigate(isDraftEstablishment ? '/onboarding' : '/app', { replace: true })
+          onAccepted={() => {
+            const bootstrap = queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey)
+            const path = bootstrap
+              ? resolveAuthenticatedLanding(bootstrap).path
+              : '/pending-onboarding'
+            navigate(path, { replace: true })
           }}
         />
       )
     }
 
+    if (route.kind === 'unknown') {
+      return null
+    }
+
     if (route.kind === 'signal-detail') {
-      return (
-        <SignalDetailPage signalId={route.signalId} onNavigate={navigate} />
-      )
+      return <SignalDetailPage signalId={route.signalId} onNavigate={navigate} />
     }
 
     if (route.kind === 'signal-action-create') {
       return (
-        <ActionCreatePage
-          mode="linked"
-          signalId={route.signalId}
-          onNavigate={navigate}
-        />
+        <ActionCreatePage mode="linked" signalId={route.signalId} onNavigate={navigate} />
       )
     }
 
@@ -255,12 +205,16 @@ function App() {
       return <ActionDetailPage actionId={route.actionId} onNavigate={navigate} />
     }
 
-    if (route.kind !== 'static') {
+    if (route.path === '/login') {
       return <LoginPage />
     }
 
     if (route.path === '/app') {
-      return <AppPage />
+      return <AppPage onNavigate={navigate} />
+    }
+
+    if (route.path === '/app/operational-config') {
+      return <OperationalConfigPage onNavigate={navigate} />
     }
 
     if (route.path === '/app/report' || route.path === '/reporting') {
@@ -299,14 +253,42 @@ function App() {
     }
 
     if (route.path === '/onboarding') {
-      return <OnboardingPage />
+      return <OnboardingPage onNavigate={navigate} />
     }
 
-    return <LoginPage />
-  }, [auth.isLoggingOut, handleSignOut, navigate, route])
+    if (route.path === '/pending-onboarding') {
+      return (
+        <PendingOnboardingPage
+          memberships={auth.memberships}
+          pendingMemberships={auth.pendingOnboardingMemberships}
+          onNavigate={navigate}
+        />
+      )
+    }
 
-  if (route.kind === 'static' && route.path === '/') {
-    return <LandingPage />
+    if (route.path === '/select-establishment') {
+      return <SelectEstablishmentPage onNavigate={navigate} />
+    }
+
+    if (route.path === '/no-establishment') {
+      return <NoEstablishmentPage />
+    }
+
+    return null
+  }, [
+    auth.hasOperationalAccess,
+    auth.isAuthenticated,
+    auth.isReady,
+    auth.isLoggingOut,
+    auth.memberships,
+    auth.pendingOnboardingMemberships,
+    handleSignOut,
+    navigate,
+    route,
+  ])
+
+  if (route.kind !== 'invitation' && shouldShowAuthRoutingLoading(route, auth)) {
+    return <AuthRoutingLoading />
   }
 
   const signOutAction = (
@@ -355,6 +337,13 @@ function App() {
               description: 'Manage your establishment, team memberships, and invitations.',
               actions: signOutAction,
             }
+          : route.kind === 'static' && route.path === '/app/operational-config'
+            ? {
+                title: 'Modifier l’onboarding',
+                description:
+                  'Consultez et ajustez les pôles, sujets et descriptions de votre établissement actif.',
+                actions: signOutAction,
+              }
           : route.kind === 'static' && route.path === '/onboarding'
             ? {
                 headingBadge: 'Onboarding',
@@ -366,23 +355,47 @@ function App() {
                   : 'Enter your invitation code to create your organization and start onboarding.',
                 actions: auth.isAuthenticated ? signOutAction : signInAction,
               }
-            : {
-                headingBadge: 'Sign in',
-                title: 'Welcome back',
-                description: 'Sign in to access your Houston workspace.',
-                actions: (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-                    onClick={() => {
-                      navigate('/onboarding')
-                    }}
-                  >
-                    Onboarding
-                  </Button>
-                ),
-              }
+            : route.kind === 'static' && route.path === '/pending-onboarding'
+              ? {
+                  headingBadge: 'Onboarding',
+                  title: 'Configuration en cours',
+                  description:
+                    'Votre compte est prêt. Suivez l’état de configuration de votre établissement.',
+                  actions: signOutAction,
+                }
+              : route.kind === 'static' && route.path === '/select-establishment'
+                ? {
+                    headingBadge: 'Etablissement',
+                    title: 'Choisissez votre établissement',
+                    description:
+                      'Sélectionnez l’établissement actif avec lequel vous souhaitez commencer.',
+                    actions: signOutAction,
+                  }
+                : route.kind === 'static' && route.path === '/no-establishment'
+                  ? {
+                      headingBadge: 'Compte',
+                      title: 'Aucun établissement disponible',
+                      description:
+                        'Votre compte est actif, mais aucun établissement ne vous est associé.',
+                      actions: signOutAction,
+                    }
+                  : {
+                      headingBadge: 'Sign in',
+                      title: 'Welcome back',
+                      description: 'Sign in to access your Houston workspace.',
+                      actions: (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+                          onClick={() => {
+                            navigate('/onboarding')
+                          }}
+                        >
+                          Onboarding
+                        </Button>
+                      ),
+                    }
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
@@ -409,9 +422,7 @@ function App() {
               )
             }
             onBack={
-              terrainConfig.backPath
-                ? () => navigate(terrainConfig.backPath!)
-                : undefined
+              terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
             }
           />
         }

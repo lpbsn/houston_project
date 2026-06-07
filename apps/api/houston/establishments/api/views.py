@@ -20,7 +20,12 @@ from houston.establishments.api.serializers import (
     ActivationSummaryResponseSerializer,
     ActivityDescriptionRequestSerializer,
     ActivityDescriptionUpdateResponseSerializer,
+    ActivitySubjectTreeItemSerializer,
     AIOnboardingGenerateRequestSerializer,
+    BusinessUnitTreeItemSerializer,
+    BusinessUnitTreeResponseSerializer,
+    CatalogActivitySubjectSuggestionSerializer,
+    CatalogBusinessUnitSuggestionSerializer,
     DirectorInvitationErrorResponseSerializer,
     DirectorInvitationRequestSerializer,
     DirectorInvitationResponseSerializer,
@@ -29,8 +34,10 @@ from houston.establishments.api.serializers import (
     MembershipInvitationRequestSerializer,
     MembershipUpdateRequestSerializer,
     OnboardingErrorResponseSerializer,
+    OnboardingProposalCreateRequestSerializer,
     OnboardingProposalErrorResponseSerializer,
     OnboardingProposalResponseSerializer,
+    OnboardingProposalUpdateRequestSerializer,
     OnboardingSessionCreateRequestSerializer,
     OnboardingSessionCreateResponseSerializer,
     OnboardingSessionResponseSerializer,
@@ -38,25 +45,37 @@ from houston.establishments.api.serializers import (
     ProposalCommandResponseSerializer,
     ProposalItemMutationRequestSerializer,
     ProposalSectionDecisionRequestSerializer,
+    RuntimeActivitySubjectCreateRequestSerializer,
+    RuntimeBusinessUnitCreateRequestSerializer,
+    RuntimeBusinessUnitUpdateRequestSerializer,
+    RuntimeConfigErrorResponseSerializer,
     RuntimeConfigResponseSerializer,
     ScopedUserSearchRequestSerializer,
     ScopedUserSearchResultSerializer,
     WorkspaceSummaryResponseSerializer,
 )
+from houston.establishments.business_unit_catalog import (
+    suggest_activity_subjects,
+    suggest_business_units,
+)
 from houston.establishments.membership_scope import parse_membership_scope_inputs
 from houston.establishments.models import (
+    BusinessUnit,
     Establishment,
     EstablishmentMembership,
     OnboardingProposal,
     OnboardingSession,
 )
 from houston.establishments.permissions import (
-    CanInviteMemberships,
     CanManageMemberships,
+    CanManageRuntimeContext,
     HasActiveMembership,
+    can_invite_memberships,
 )
 from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
+    get_business_units_for_establishment,
+    get_membership_for_invitation,
     get_membership_for_management,
     get_onboarding_proposal_for_actor,
     get_onboarding_session_for_actor,
@@ -66,6 +85,8 @@ from houston.establishments.selectors import (
     list_memberships_for_management,
     list_onboarding_proposals_for_actor,
     search_users_for_establishment,
+    serialize_activity_subject_tree_item,
+    serialize_business_unit_tree_item,
 )
 from houston.establishments.services import (
     ActiveOnboardingProposalExistsError,
@@ -90,19 +111,29 @@ from houston.establishments.services import (
     OnboardingProposalValidationError,
     OnboardingReadinessError,
     OnboardingSessionTerminalError,
+    RuntimeConfigConflictError,
+    RuntimeConfigNotFoundError,
     UnsupportedOnboardingSessionSourceModeError,
     activate_onboarding_session,
     apply_onboarding_proposal,
     build_activation_summary,
+    create_manual_onboarding_proposal,
+    create_runtime_activity_subject,
+    create_runtime_business_unit,
     deactivate_membership_for_management,
+    deactivate_runtime_activity_subject,
+    deactivate_runtime_business_unit,
     invite_director_during_onboarding,
     invite_membership_for_establishment,
     mark_onboarding_ready_for_activation,
     reject_onboarding_proposal,
     start_onboarding_session,
     submit_activity_description,
+    submit_manual_onboarding_proposal,
     update_membership_for_management,
     update_onboarding_proposal_items,
+    update_onboarding_proposal_payload,
+    update_runtime_business_unit,
     validate_onboarding_proposal_section,
 )
 from houston.organizations.models import Organization
@@ -321,6 +352,319 @@ class EstablishmentOperationalTaxonomyView(APIView):
         return Response(serializer.data)
 
 
+class EstablishmentBusinessUnitTreeView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes_get = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageMemberships,
+    ]
+    permission_classes_post = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permission() for permission in self.permission_classes_post]
+        return [permission() for permission in self.permission_classes_get]
+
+    @extend_schema(
+        tags=["establishments"],
+        responses={
+            200: BusinessUnitTreeResponseSerializer,
+            401: OpenApiResponse(response=DetailResponseSerializer),
+            403: OpenApiResponse(response=DetailResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns the active BusinessUnit / ActivitySubject tree for the establishment.",
+    )
+    def get(self, request, establishment_id):
+        access_context = get_api_access_context(request)
+        tree = get_business_units_for_establishment(
+            current_membership=access_context.active_membership,
+            establishment_id=establishment_id,
+        )
+        if tree is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = BusinessUnitTreeResponseSerializer(tree)
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=["establishments"],
+        request=RuntimeBusinessUnitCreateRequestSerializer,
+        responses={
+            201: BusinessUnitTreeItemSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
+        },
+        description="Creates or reactivates a runtime business unit for an active establishment.",
+    )
+    def post(self, request, establishment_id):
+        serializer = RuntimeBusinessUnitCreateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        access_context = get_api_access_context(request)
+        catalog_key = serializer.validated_data.get("catalog_key")
+        normalized_catalog_key = catalog_key.strip() if isinstance(catalog_key, str) else None
+        if normalized_catalog_key == "":
+            normalized_catalog_key = None
+
+        try:
+            business_unit = create_runtime_business_unit(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                label=serializer.validated_data["label"],
+                description=serializer.validated_data.get("description", ""),
+                unit_type=serializer.validated_data.get(
+                    "unit_type",
+                    BusinessUnit.UnitType.DEDICATED,
+                ),
+                catalog_key=normalized_catalog_key,
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
+
+        response_serializer = BusinessUnitTreeItemSerializer(
+            serialize_business_unit_tree_item(business_unit=business_unit)
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class EstablishmentBusinessUnitDetailView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=RuntimeBusinessUnitUpdateRequestSerializer,
+        responses={
+            200: BusinessUnitTreeItemSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
+        },
+        description="Updates a runtime business unit for an active establishment.",
+    )
+    def patch(self, request, establishment_id, business_unit_id):
+        serializer = RuntimeBusinessUnitUpdateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        access_context = get_api_access_context(request)
+
+        try:
+            business_unit = update_runtime_business_unit(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                business_unit_id=business_unit_id,
+                label=serializer.validated_data.get("label"),
+                description=serializer.validated_data.get("description"),
+                unit_type=serializer.validated_data.get("unit_type"),
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
+
+        response_serializer = BusinessUnitTreeItemSerializer(
+            serialize_business_unit_tree_item(business_unit=business_unit)
+        )
+        return Response(response_serializer.data)
+
+
+class EstablishmentBusinessUnitDeactivateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=None,
+        responses={
+            200: BusinessUnitTreeItemSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
+        },
+        description="Soft-deactivates a runtime business unit and its activity subjects.",
+    )
+    def post(self, request, establishment_id, business_unit_id):
+        access_context = get_api_access_context(request)
+
+        try:
+            business_unit = deactivate_runtime_business_unit(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                business_unit_id=business_unit_id,
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
+
+        response_serializer = BusinessUnitTreeItemSerializer(
+            serialize_business_unit_tree_item(business_unit=business_unit)
+        )
+        return Response(response_serializer.data)
+
+
+class EstablishmentActivitySubjectCreateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=RuntimeActivitySubjectCreateRequestSerializer,
+        responses={
+            201: ActivitySubjectTreeItemSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Creates or reactivates a runtime activity subject under a business unit.",
+    )
+    def post(self, request, establishment_id, business_unit_id):
+        serializer = RuntimeActivitySubjectCreateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        access_context = get_api_access_context(request)
+        catalog_key = serializer.validated_data.get("catalog_key")
+        normalized_catalog_key = catalog_key.strip() if isinstance(catalog_key, str) else None
+        if normalized_catalog_key == "":
+            normalized_catalog_key = None
+
+        try:
+            activity_subject = create_runtime_activity_subject(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                business_unit_id=business_unit_id,
+                label=serializer.validated_data["label"],
+                description=serializer.validated_data.get("description", ""),
+                catalog_key=normalized_catalog_key,
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+
+        response_serializer = ActivitySubjectTreeItemSerializer(
+            serialize_activity_subject_tree_item(activity_subject=activity_subject)
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class EstablishmentActivitySubjectDeactivateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=None,
+        responses={
+            200: ActivitySubjectTreeItemSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
+        },
+        description="Soft-deactivates a runtime activity subject.",
+    )
+    def post(self, request, establishment_id, activity_subject_id):
+        access_context = get_api_access_context(request)
+
+        try:
+            activity_subject = deactivate_runtime_activity_subject(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                activity_subject_id=activity_subject_id,
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
+
+        response_serializer = ActivitySubjectTreeItemSerializer(
+            serialize_activity_subject_tree_item(activity_subject=activity_subject)
+        )
+        return Response(response_serializer.data)
+
+
+class CatalogBusinessUnitSuggestView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["catalog"],
+        parameters=[
+            OpenApiParameter(name="q", type=str, required=False),
+        ],
+        responses={200: CatalogBusinessUnitSuggestionSerializer(many=True)},
+        description="Autocomplete suggestions for BusinessUnit labels (catalog only).",
+    )
+    def get(self, request):
+        query = request.query_params.get("q", "")
+        try:
+            limit = int(request.query_params.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+        suggestions = suggest_business_units(query=query, limit=limit)
+        serializer = CatalogBusinessUnitSuggestionSerializer(suggestions, many=True)
+        return Response(serializer.data)
+
+
+class CatalogActivitySubjectSuggestView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["catalog"],
+        parameters=[
+            OpenApiParameter(name="q", type=str, required=False),
+            OpenApiParameter(name="business_unit_key", type=str, required=False),
+        ],
+        responses={200: CatalogActivitySubjectSuggestionSerializer(many=True)},
+        description="Autocomplete suggestions for ActivitySubject labels (catalog only).",
+    )
+    def get(self, request):
+        query = request.query_params.get("q", "")
+        business_unit_key = request.query_params.get("business_unit_key")
+        try:
+            limit = int(request.query_params.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+        suggestions = suggest_activity_subjects(
+            business_unit_key=business_unit_key or None,
+            query=query,
+            limit=limit,
+        )
+        serializer = CatalogActivitySubjectSuggestionSerializer(suggestions, many=True)
+        return Response(serializer.data)
+
+
 class WorkspaceSummaryView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
@@ -356,11 +700,7 @@ class WorkspaceSummaryView(APIView):
 
 class MembershipInvitationView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [
-        permissions.IsAuthenticated,
-        HasActiveMembership,
-        CanInviteMemberships,
-    ]
+    permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["memberships"],
@@ -381,11 +721,32 @@ class MembershipInvitationView(APIView):
         request_serializer = MembershipInvitationRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
 
-        access_context = get_api_access_context(request)
+        current_membership = get_membership_for_invitation(
+            user=request.user,
+            establishment_id=establishment_id,
+        )
+        if current_membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not can_invite_memberships(current_membership):
+            if current_membership.role == EstablishmentMembership.Role.STAFF:
+                return Response(
+                    {
+                        "code": "permission_denied",
+                        "detail": "You do not have permission to invite memberships.",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot invite members for this establishment.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         try:
             invitation_result = invite_membership_for_establishment(
-                current_membership=access_context.active_membership,
+                current_membership=current_membership,
                 establishment_id=establishment_id,
                 email=request_serializer.validated_data["email"],
                 first_name=request_serializer.validated_data["first_name"],
@@ -535,7 +896,7 @@ class OnboardingSessionCreateView(APIView):
         )
         if access.membership is None:
             return _not_found_response()
-        if not access.can_manage:
+        if not access.can_configure_runtime:
             return _forbidden_response()
 
         existing_session = get_active_onboarding_session_for_establishment(
@@ -978,6 +1339,56 @@ class OnboardingSessionProposalListView(APIView):
         serializer = OnboardingProposalResponseSerializer(proposals, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        tags=["onboarding"],
+        request=OnboardingProposalCreateRequestSerializer,
+        responses={
+            201: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description=(
+            "Creates a manual onboarding proposal for Onboarding manuel V2 "
+            "(schema onboarding_proposal_v3)."
+        ),
+    )
+    def post(self, request, session_id):
+        serializer = OnboardingProposalCreateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        session_response = _get_onboarding_command_session(
+            actor=request.user,
+            session_id=session_id,
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
+        )
+        if isinstance(session_response, Response):
+            return session_response
+
+        try:
+            proposal = create_manual_onboarding_proposal(
+                session=session_response,
+                actor=request.user,
+                payload=serializer.validated_data["payload"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalValidationError as exc:
+            return _proposal_validation_response(exc)
+        except ActiveOnboardingProposalExistsError:
+            return _proposal_conflict_response(
+                code="active_onboarding_proposal_exists",
+                detail="A non-terminal onboarding proposal already exists for this session.",
+            )
+
+        return _proposal_command_response(
+            actor=request.user,
+            proposal=proposal,
+            response_status=status.HTTP_201_CREATED,
+        )
+
 
 class OnboardingSessionProposalDetailView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
@@ -1006,6 +1417,91 @@ class OnboardingSessionProposalDetailView(APIView):
         serializer = OnboardingProposalResponseSerializer(proposal_response)
         return Response(serializer.data)
 
+    @extend_schema(
+        tags=["onboarding"],
+        request=OnboardingProposalUpdateRequestSerializer,
+        responses={
+            200: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description="Updates a draft onboarding proposal payload (onboarding_proposal_v3).",
+    )
+    def patch(self, request, session_id, proposal_id):
+        serializer = OnboardingProposalUpdateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        try:
+            proposal = update_onboarding_proposal_payload(
+                proposal=proposal_response,
+                actor=request.user,
+                payload=serializer.validated_data["payload"],
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalValidationError as exc:
+            return _proposal_validation_response(exc)
+        except OnboardingProposalStateError as exc:
+            return _proposal_state_response(str(exc))
+
+        return _proposal_command_response(actor=request.user, proposal=proposal)
+
+
+class OnboardingSessionProposalSubmitView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["onboarding"],
+        request=None,
+        responses={
+            200: ProposalCommandResponseSerializer,
+            400: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
+        },
+        description=(
+            "Validates and accepts all sections of an onboarding_proposal_v3 manual proposal."
+        ),
+    )
+    def post(self, request, session_id, proposal_id):
+        proposal_response = _get_onboarding_command_proposal(
+            actor=request.user,
+            session_id=session_id,
+            proposal_id=proposal_id,
+            capability=_ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME,
+        )
+        if isinstance(proposal_response, Response):
+            return proposal_response
+
+        try:
+            proposal = submit_manual_onboarding_proposal(
+                proposal=proposal_response,
+                actor=request.user,
+            )
+        except OnboardingAccessDeniedError:
+            return _forbidden_response()
+        except OnboardingProposalValidationError as exc:
+            return _proposal_validation_response(exc)
+        except OnboardingProposalStateError as exc:
+            return _proposal_state_response(str(exc))
+
+        return _proposal_command_response(actor=request.user, proposal=proposal)
+
 
 class OnboardingSessionProposalAIGenerateView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
@@ -1013,6 +1509,7 @@ class OnboardingSessionProposalAIGenerateView(APIView):
 
     @extend_schema(
         tags=["onboarding"],
+        deprecated=True,
         request=AIOnboardingGenerateRequestSerializer,
         responses={
             201: ProposalCommandResponseSerializer,
@@ -1298,7 +1795,7 @@ def _get_onboarding_command_session(*, actor, session_id, capability: str):
         return _forbidden_response()
 
     if capability == _ONBOARDING_CAPABILITY_CONFIGURE_RUNTIME and not access.can_configure_runtime:
-        return _not_found_response()
+        return _forbidden_response()
 
     if capability == _ONBOARDING_CAPABILITY_ACTIVATE and not access.can_activate:
         establishment = access.establishment
@@ -1396,6 +1893,16 @@ def _proposal_conflict_response(*, code: str, detail: str):
 
 def _not_found_response():
     return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+def _runtime_config_conflict_response(exc: RuntimeConfigConflictError):
+    return Response(
+        {
+            "code": exc.code,
+            "detail": exc.detail,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def _forbidden_response():

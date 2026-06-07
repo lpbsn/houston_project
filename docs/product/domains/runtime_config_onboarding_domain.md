@@ -27,7 +27,7 @@ Domain boundaries:
 - Require human validation before backend activation of runtime context.
 - Allow high-level post-activation runtime edits and AI reruns, subject to RBAC and human validation.
 
-**Catalogue authority:** [`docs/catalogue/arborescence.csv`](../../catalogue/arborescence.csv) — 6 modules, 31 domains, 154 subjects. Legacy flat domain keys (`maintenance`, `housekeeping`, …) and removed modules (`bar`, `rooftop`, `seminar_rooms`) are **obsolete** for new proposals.
+**Catalogue authority:** `OnboardingCatalogModule` / `OnboardingCatalogDomain` / `OnboardingCatalogSubject` in PostgreSQL (seeded by migration `0007`; 6 modules, 31 domains, 154 subjects). Legacy flat domain keys (`maintenance`, `housekeeping`, …) and removed modules (`bar`, `rooftop`, `seminar_rooms`) are **obsolete** for new proposals.
 
 **AI onboarding contract:** provider returns **`operational_modules` only**; backend expands domains and subjects via catalogue FK tree (`ai_onboarding_v3`). See [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md).
 
@@ -220,7 +220,7 @@ Candidate endpoint capabilities only:
 - Inspect `apps/api/schema.yml` before claiming any runtime/onboarding endpoint is implemented.
 - Inspect `identity_membership_domain.md` before changing `Organization`, `Establishment`, or membership assumptions.
 - Inspect `rbac_permissions_domain.md` before changing who can validate, activate, rerun, or edit runtime setup.
-- Inspect [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md) and [`docs/catalogue/catalogue_target.md`](../../catalogue/catalogue_target.md) before changing hierarchy or keys.
+- Inspect [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md) before changing hierarchy or keys.
 - Inspect the AI onboarding contract (`ai_onboarding_v3`, modules-only) before changing proposal or provider schemas.
 - Do not implement Signal, Feed, or Observation pipeline code in onboarding phases.
 - Do not let AI activate runtime elements directly.

@@ -162,6 +162,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/activity-subjects/suggest/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Autocomplete suggestions for ActivitySubject labels (catalog only). */
+        get: operations["v1_catalog_activity_subjects_suggest_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/business-units/suggest/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Autocomplete suggestions for BusinessUnit labels (catalog only). */
+        get: operations["v1_catalog_business_units_suggest_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/actions/": {
         parameters: {
             query?: never;
@@ -300,6 +334,92 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["v1_establishments_actions_validate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Soft-deactivates a runtime activity subject. */
+        post: operations["v1_establishments_activity_subjects_deactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/business-units/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the active BusinessUnit / ActivitySubject tree for the establishment. */
+        get: operations["v1_establishments_business_units_retrieve"];
+        put?: never;
+        /** @description Creates or reactivates a runtime business unit for an active establishment. */
+        post: operations["v1_establishments_business_units_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Updates a runtime business unit for an active establishment. */
+        patch: operations["v1_establishments_business_units_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/activity-subjects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates or reactivates a runtime activity subject under a business unit. */
+        post: operations["v1_establishments_business_units_activity_subjects_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/deactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Soft-deactivates a runtime business unit and its activity subjects. */
+        post: operations["v1_establishments_business_units_deactivate_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -801,7 +921,8 @@ export interface paths {
         /** @description Lists onboarding proposals for a path-scoped onboarding session. */
         get: operations["v1_onboarding_sessions_proposals_list"];
         put?: never;
-        post?: never;
+        /** @description Creates a manual onboarding proposal for Onboarding manuel V2 (schema onboarding_proposal_v3). */
+        post: operations["v1_onboarding_sessions_proposals_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -822,7 +943,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Updates a draft onboarding proposal payload (onboarding_proposal_v3). */
+        patch: operations["v1_onboarding_sessions_proposals_partial_update"];
         trace?: never;
     };
     "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/apply/": {
@@ -893,6 +1015,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validates and accepts all sections of an onboarding_proposal_v3 manual proposal. */
+        post: operations["v1_onboarding_sessions_proposals_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding-sessions/{session_id}/proposals/ai-generate/": {
         parameters: {
             query?: never;
@@ -902,7 +1041,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Runs AI onboarding interpretation for a session. The command creates an OnboardingProposal only and never applies runtime configuration. */
+        /**
+         * @deprecated
+         * @description Runs AI onboarding interpretation for a session. The command creates an OnboardingProposal only and never applies runtime configuration.
+         */
         post: operations["v1_onboarding_sessions_proposals_ai_generate_create"];
         delete?: never;
         options?: never;
@@ -1052,6 +1194,7 @@ export interface components {
             organization: components["schemas"]["OnboardingOrganizationSummary"];
             establishment: components["schemas"]["OnboardingEstablishmentSummary"];
             activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
+            active_business_units?: components["schemas"]["BusinessUnitTreeItem"][];
             active_modules: components["schemas"]["KeyedRuntimeItem"][];
             active_domains: components["schemas"]["KeyedRuntimeItem"][];
             active_subjects: components["schemas"]["KeyedRuntimeItem"][];
@@ -1080,6 +1223,13 @@ export interface components {
             session: components["schemas"]["OnboardingSessionResponse"];
             activity_description: components["schemas"]["ActivityDescriptionResponse"];
         };
+        ActivitySubjectTreeItem: {
+            /** Format: uuid */
+            id: string;
+            normalized_name: string;
+            label: string;
+            description: string;
+        };
         ApiErrorResponse: {
             code: string;
             detail: string;
@@ -1093,6 +1243,7 @@ export interface components {
             scope_id: string;
         };
         AuthMembershipScopeSummary: {
+            business_unit_count: number;
             module_count: number;
             domain_count: number;
             subject_count: number;
@@ -1102,6 +1253,7 @@ export interface components {
             user: components["schemas"]["UserPublic"];
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
+            pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
@@ -1111,6 +1263,32 @@ export interface components {
             user: components["schemas"]["UserPublic"];
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
+            pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
+        };
+        BusinessUnitTreeItem: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            label: string;
+            description: string;
+            unit_type: string;
+            activity_subjects: components["schemas"]["ActivitySubjectTreeItem"][];
+        };
+        BusinessUnitTreeResponse: {
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string;
+            business_units: components["schemas"]["BusinessUnitTreeItem"][];
+        };
+        CatalogActivitySubjectSuggestion: {
+            key: string;
+            label: string;
+            business_unit_key: string;
+        };
+        CatalogBusinessUnitSuggestion: {
+            key: string;
+            label: string;
+            default_unit_type: string;
         };
         CsrfResponse: {
             detail: string;
@@ -1137,6 +1315,7 @@ export interface components {
             user: components["schemas"]["UserPublic"];
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
+            pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
@@ -1183,6 +1362,7 @@ export interface components {
             scope_id: string;
         };
         EstablishmentMembershipScopeSummary: {
+            business_unit_count: number;
             module_count: number;
             domain_count: number;
             subject_count: number;
@@ -1305,6 +1485,9 @@ export interface components {
             name: string;
             status: string;
         };
+        OnboardingProposalCreateRequest: {
+            payload: components["schemas"]["OnboardingProposalPayload"];
+        };
         OnboardingProposalErrorResponse: {
             code: string;
             detail: string;
@@ -1312,13 +1495,18 @@ export interface components {
         };
         OnboardingProposalPayload: {
             schema_version: string;
-            operational_modules: components["schemas"]["ProposalCatalogItem"][];
-            operational_domains: components["schemas"]["ProposalDomainItem"][];
-            operational_subjects: components["schemas"]["ProposalSubjectItem"][];
-            operational_units: components["schemas"]["ProposalDomainOrUnitItem"][];
-            runtime_vocabulary: components["schemas"]["ProposalVocabularyItem"][];
-            runtime_tags: components["schemas"]["ProposalRuntimeTagItem"][];
-            routing_hints: components["schemas"]["ProposalRoutingHintItem"][];
+            business_units?: components["schemas"]["ProposalBusinessUnitItem"][];
+            activity_subjects?: components["schemas"]["ProposalActivitySubjectItem"][];
+            excluded_catalog_subject_keys?: {
+                [key: string]: string[];
+            };
+            operational_modules?: components["schemas"]["ProposalCatalogItem"][];
+            operational_domains?: components["schemas"]["ProposalDomainItem"][];
+            operational_subjects?: components["schemas"]["ProposalSubjectItem"][];
+            operational_units?: components["schemas"]["ProposalDomainOrUnitItem"][];
+            runtime_vocabulary?: components["schemas"]["ProposalVocabularyItem"][];
+            runtime_tags?: components["schemas"]["ProposalRuntimeTagItem"][];
+            routing_hints?: components["schemas"]["ProposalRoutingHintItem"][];
         };
         OnboardingProposalResponse: {
             /** Format: uuid */
@@ -1420,14 +1608,50 @@ export interface components {
             role?: components["schemas"]["RoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeItem"][];
         };
+        PatchedOnboardingProposalUpdateRequest: {
+            payload?: components["schemas"]["OnboardingProposalPayload"];
+        };
+        PatchedRuntimeBusinessUnitUpdateRequest: {
+            label?: string;
+            description?: string;
+            unit_type?: components["schemas"]["UnitTypeEnum"];
+        };
         PatchedSignalUrgencyRequest: {
             urgency?: components["schemas"]["UrgencyEnum"];
+        };
+        PendingOnboardingMembership: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string;
+            establishment_status: string;
+            role: string;
+            /** Format: uuid */
+            onboarding_session_id: string | null;
+            can_continue_onboarding: boolean;
         };
         PermissionHints: {
             can_pin: boolean;
             can_set_urgency: boolean;
             can_cancel: boolean;
             can_resolve: boolean;
+        };
+        ProposalActivitySubjectItem: {
+            client_key: string;
+            label: string;
+            /** @default  */
+            description: string;
+            business_unit_client_key: string;
+            catalog_key?: string | null;
+        };
+        ProposalBusinessUnitItem: {
+            client_key: string;
+            label: string;
+            /** @default  */
+            description: string;
+            unit_type: string;
+            catalog_key?: string | null;
         };
         ProposalCatalogItem: {
             key: string;
@@ -1525,6 +1749,7 @@ export interface components {
             user: components["schemas"]["UserPublic"];
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
+            pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
@@ -1550,8 +1775,27 @@ export interface components {
             active: boolean;
             readonly domain_keys: string[];
         };
+        RuntimeActivitySubjectCreateRequest: {
+            label: string;
+            /** @default  */
+            description: string;
+            catalog_key?: string | null;
+        };
+        RuntimeBusinessUnitCreateRequest: {
+            label: string;
+            /** @default  */
+            description: string;
+            /** @default dedicated */
+            unit_type: components["schemas"]["UnitTypeEnum"];
+            catalog_key?: string | null;
+        };
+        RuntimeConfigErrorResponse: {
+            code: string;
+            detail: string;
+        };
         RuntimeConfigResponse: {
             activity_description: components["schemas"]["ActivityDescriptionResponse"] | null;
+            active_business_units?: components["schemas"]["BusinessUnitTreeItem"][];
             active_modules: components["schemas"]["KeyedRuntimeItem"][];
             active_domains: components["schemas"]["KeyedRuntimeItem"][];
             active_subjects: components["schemas"]["KeyedRuntimeItem"][];
@@ -1580,12 +1824,13 @@ export interface components {
             active: boolean;
         };
         /**
-         * @description * `module` - module
+         * @description * `business_unit` - business_unit
+         *     * `module` - module
          *     * `domain` - domain
          *     * `subject` - subject
          * @enum {string}
          */
-        ScopeTypeEnum: "module" | "domain" | "subject";
+        ScopeTypeEnum: "business_unit" | "module" | "domain" | "subject";
         ScopedUserSearchResult: {
             /** Format: uuid */
             id: string;
@@ -1615,6 +1860,12 @@ export interface components {
             module_key: string;
             domain_key: string;
             subject_key: string;
+            affected_business_unit_key?: string | null;
+            affected_business_unit_label?: string | null;
+            responsible_business_unit_key?: string | null;
+            responsible_business_unit_label?: string | null;
+            activity_subject_normalized_name?: string | null;
+            activity_subject_label?: string | null;
             operational_unit_key: string | null;
             location_text: string;
             media_count: number;
@@ -1638,6 +1889,12 @@ export interface components {
             module_key: string;
             domain_key: string;
             subject_key: string;
+            affected_business_unit_key?: string | null;
+            affected_business_unit_label?: string | null;
+            responsible_business_unit_key?: string | null;
+            responsible_business_unit_label?: string | null;
+            activity_subject_normalized_name?: string | null;
+            activity_subject_label?: string | null;
             operational_unit_key: string | null;
             location_text: string;
             media_count: number;
@@ -1685,6 +1942,12 @@ export interface components {
             /** Format: uuid */
             correlation_id: string;
         };
+        /**
+         * @description * `dedicated` - Dedicated
+         *     * `transversal` - Transversal
+         * @enum {string}
+         */
+        UnitTypeEnum: "dedicated" | "transversal";
         /**
          * @description * `normal` - normal
          *     * `high` - high
@@ -2076,6 +2339,49 @@ export interface operations {
             };
         };
     };
+    v1_catalog_activity_subjects_suggest_list: {
+        parameters: {
+            query?: {
+                business_unit_key?: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogActivitySubjectSuggestion"][];
+                };
+            };
+        };
+    };
+    v1_catalog_business_units_suggest_list: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogBusinessUnitSuggestion"][];
+                };
+            };
+        };
+    };
     v1_establishments_actions_create: {
         parameters: {
             query?: never;
@@ -2335,6 +2641,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionDetail"];
+                };
+            };
+        };
+    };
+    v1_establishments_activity_subjects_deactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                activity_subject_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySubjectTreeItem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_business_units_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_business_units_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeBusinessUnitCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RuntimeBusinessUnitCreateRequest"];
+                "multipart/form-data": components["schemas"]["RuntimeBusinessUnitCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_business_units_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_unit_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedRuntimeBusinessUnitUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedRuntimeBusinessUnitUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedRuntimeBusinessUnitUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_business_units_activity_subjects_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_unit_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeActivitySubjectCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RuntimeActivitySubjectCreateRequest"];
+                "multipart/form-data": components["schemas"]["RuntimeActivitySubjectCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySubjectTreeItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_business_units_deactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_unit_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeItem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigErrorResponse"];
                 };
             };
         };
@@ -3930,6 +4584,73 @@ export interface operations {
             };
         };
     };
+    v1_onboarding_sessions_proposals_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingProposalCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OnboardingProposalCreateRequest"];
+                "multipart/form-data": components["schemas"]["OnboardingProposalCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCommandResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+        };
+    };
     v1_onboarding_sessions_proposals_retrieve: {
         parameters: {
             query?: never;
@@ -3972,6 +4693,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_onboarding_sessions_proposals_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedOnboardingProposalUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedOnboardingProposalUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedOnboardingProposalUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCommandResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
                 };
             };
         };
@@ -4178,6 +4967,68 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["ProposalSectionDecisionRequest"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalCommandResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingProposalErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_onboarding_sessions_proposals_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

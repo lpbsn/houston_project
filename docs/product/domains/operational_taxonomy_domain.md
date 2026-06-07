@@ -1,8 +1,10 @@
 # Operational Taxonomy Domain
 
-Status: authoritative  
+> **Status: OBSOLETE (v1)** — Superseded by [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md). Archived copy: [`docs/archive/taxonomy_v1/operational_taxonomy_domain.md`](../../archive/taxonomy_v1/operational_taxonomy_domain.md).
+
+Status: obsolete  
 Last reviewed: 2026-05-29  
-Implementation status: partial (catalogue + onboarding Phase B/C; Signal Phase 4)
+Implementation status: partial (legacy Module → Domain → Subject — being migrated)
 
 ## Purpose
 
@@ -49,7 +51,7 @@ Legacy `detected_domains[]` with confidence scores is **obsolete** for MVP.
 
 ## Catalogue source
 
-Authoritative tree: [`docs/catalogue/arborescence.csv`](../../catalogue/arborescence.csv)
+Authoritative tree: `OnboardingCatalogModule` → `OnboardingCatalogDomain` → `OnboardingCatalogSubject` (DB, seeded migration `0007`).
 
 ## Related contracts
 

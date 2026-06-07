@@ -45,6 +45,20 @@ class Action(BaseModel):
         on_delete=models.PROTECT,
         related_name="actions",
     )
+    responsible_business_unit = models.ForeignKey(
+        "establishments.BusinessUnit",
+        on_delete=models.PROTECT,
+        related_name="actions",
+        null=True,
+        blank=True,
+    )
+    activity_subject = models.ForeignKey(
+        "establishments.ActivitySubject",
+        on_delete=models.PROTECT,
+        related_name="actions",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=ACTION_TITLE_MAX_LENGTH)
     instruction = models.TextField(max_length=ACTION_INSTRUCTION_MAX_LENGTH)
     status = models.CharField(

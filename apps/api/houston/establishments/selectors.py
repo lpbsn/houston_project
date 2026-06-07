@@ -6,9 +6,12 @@ from django.db.models import Prefetch, Q
 from houston.accounts.models import User
 from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import (
+    ActivitySubject,
+    BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
+    MembershipScope,
     OnboardingProposal,
     OnboardingSession,
     OperationalDomain,
@@ -240,11 +243,55 @@ def get_onboarding_proposal_for_actor(
     return _onboarding_proposal_queryset(session_id=session.id).filter(id=proposal_id).first()
 
 
+def get_membership_for_invitation(
+    *,
+    user: User,
+    establishment_id,
+) -> EstablishmentMembership | None:
+    return (
+        EstablishmentMembership.objects.filter(
+            user=user,
+            establishment_id=establishment_id,
+            status=EstablishmentMembership.Status.ACTIVE,
+            establishment__organization__status=Organization.Status.ACTIVE,
+            establishment__status__in=(
+                Establishment.Status.ACTIVE,
+                Establishment.Status.DRAFT,
+            ),
+            role__in=EstablishmentMembership.Role.values,
+        )
+        .select_related("establishment", "establishment__organization")
+        .prefetch_related(membership_scope_prefetch())
+        .first()
+    )
+
+
+def get_applied_onboarding_proposal_for_establishment(
+    *,
+    establishment_id,
+) -> OnboardingProposal | None:
+    return (
+        OnboardingProposal.objects.filter(
+            establishment_id=establishment_id,
+            status=OnboardingProposal.Status.APPLIED,
+        )
+        .order_by("-applied_at", "-id")
+        .first()
+    )
+
+
 def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
     establishment_id = session.establishment_id
+    business_unit_tree = get_establishment_business_unit_tree(
+        establishment_id=establishment_id,
+        active_only=True,
+    )
 
     return {
         "activity_description": _get_activity_description(establishment_id),
+        "active_business_units": (
+            business_unit_tree["business_units"] if business_unit_tree is not None else []
+        ),
         "active_modules": list(
             OperationalModule.objects.filter(
                 establishment_id=establishment_id,
@@ -510,3 +557,139 @@ def get_operational_taxonomy_for_establishment(
         "modules": snapshot["modules"],
         "unassigned_domains": snapshot["unassigned_domains"],
     }
+
+
+def get_establishment_business_unit_tree(
+    *,
+    establishment_id,
+    active_only: bool = True,
+) -> dict | None:
+    establishment = Establishment.objects.filter(pk=establishment_id).only("id", "name").first()
+    if establishment is None:
+        return None
+
+    active_filter = {"active": True} if active_only else {}
+    business_units = list(
+        BusinessUnit.objects.filter(
+            establishment_id=establishment_id,
+            **active_filter,
+        ).order_by("label", "key", "id")
+    )
+    subjects = list(
+        ActivitySubject.objects.filter(
+            establishment_id=establishment_id,
+            **active_filter,
+        ).order_by("label", "normalized_name", "id")
+    )
+    subjects_by_bu: dict = {}
+    for subject in subjects:
+        subjects_by_bu.setdefault(subject.business_unit_id, []).append(subject)
+
+    return {
+        "establishment_id": establishment.id,
+        "establishment_name": establishment.name,
+        "business_units": [
+            {
+                "id": bu.id,
+                "key": bu.key,
+                "label": bu.label,
+                "description": bu.description,
+                "unit_type": bu.unit_type,
+                "activity_subjects": [
+                    {
+                        "id": subject.id,
+                        "normalized_name": subject.normalized_name,
+                        "label": subject.label,
+                        "description": subject.description,
+                    }
+                    for subject in subjects_by_bu.get(bu.id, [])
+                ],
+            }
+            for bu in business_units
+        ],
+    }
+
+
+def get_business_units_for_establishment(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> dict | None:
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        return None
+    if current_membership.status != EstablishmentMembership.Status.ACTIVE:
+        return None
+    return get_establishment_business_unit_tree(establishment_id=establishment_id)
+
+
+def business_unit_has_active_membership_scopes(*, business_unit: BusinessUnit) -> bool:
+    return MembershipScope.objects.filter(
+        business_unit=business_unit,
+        membership__status=EstablishmentMembership.Status.ACTIVE,
+    ).exists()
+
+
+def serialize_business_unit_tree_item(*, business_unit: BusinessUnit) -> dict:
+    subjects = list(
+        ActivitySubject.objects.filter(
+            business_unit=business_unit,
+            active=True,
+        ).order_by("label", "normalized_name", "id")
+    )
+    return {
+        "id": business_unit.id,
+        "key": business_unit.key,
+        "label": business_unit.label,
+        "description": business_unit.description,
+        "unit_type": business_unit.unit_type,
+        "activity_subjects": [
+            {
+                "id": subject.id,
+                "normalized_name": subject.normalized_name,
+                "label": subject.label,
+                "description": subject.description,
+            }
+            for subject in subjects
+        ],
+    }
+
+
+def serialize_activity_subject_tree_item(*, activity_subject: ActivitySubject) -> dict:
+    return {
+        "id": activity_subject.id,
+        "normalized_name": activity_subject.normalized_name,
+        "label": activity_subject.label,
+        "description": activity_subject.description,
+    }
+
+
+def get_active_business_unit_for_establishment(
+    *,
+    establishment_id,
+    business_unit_id,
+) -> BusinessUnit | None:
+    return (
+        BusinessUnit.objects.filter(
+            id=business_unit_id,
+            establishment_id=establishment_id,
+            active=True,
+        )
+        .select_related("establishment")
+        .first()
+    )
+
+
+def get_active_activity_subject_for_establishment(
+    *,
+    establishment_id,
+    activity_subject_id,
+) -> ActivitySubject | None:
+    return (
+        ActivitySubject.objects.filter(
+            id=activity_subject_id,
+            establishment_id=establishment_id,
+            active=True,
+        )
+        .select_related("business_unit", "establishment")
+        .first()
+    )

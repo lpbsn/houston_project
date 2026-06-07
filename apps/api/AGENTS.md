@@ -508,6 +508,12 @@ Migration check:
 cd apps/api && uv run python manage.py makemigrations --check --dry-run
 ```
 
+BusinessUnit catalogue seed (required after migrate for v2 autocomplete):
+
+```
+cd apps/api && uv run python manage.py import_business_unit_catalog
+```
+
 OpenAPI generation:
 
 ```

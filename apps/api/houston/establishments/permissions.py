@@ -52,7 +52,10 @@ def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
 
 
 def can_invite_memberships(membership: EstablishmentMembership | None) -> bool:
-    return _has_role(membership, _INVITATION_ROLES)
+    return (
+        _is_valid_invitation_membership(membership)
+        and membership.role in _INVITATION_ROLES
+    )
 
 
 def can_manage_runtime_context(membership: EstablishmentMembership | None) -> bool:
@@ -145,7 +148,7 @@ def _has_role(
     return _is_valid_membership(membership) and membership.role in allowed_roles
 
 
-def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
+def _is_valid_invitation_membership(membership: EstablishmentMembership | None) -> bool:
     if membership is None:
         return False
 
@@ -160,11 +163,25 @@ def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
         return False
 
     establishment = getattr(membership, "establishment", None)
-    if establishment is None or establishment.status != Establishment.Status.ACTIVE:
+    if establishment is None or establishment.status not in {
+        Establishment.Status.ACTIVE,
+        Establishment.Status.DRAFT,
+    }:
         return False
 
     organization = getattr(establishment, "organization", None)
     if organization is None or organization.status != Organization.Status.ACTIVE:
+        return False
+
+    return True
+
+
+def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
+    if not _is_valid_invitation_membership(membership):
+        return False
+
+    establishment = membership.establishment
+    if establishment.status != Establishment.Status.ACTIVE:
         return False
 
     return True
