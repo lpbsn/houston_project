@@ -3,40 +3,45 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
   appendSignalFeedFiltersToSearchParams,
-  formatCategoryFilterSummary,
+  formatClassificationFilterSummary,
   formatStatusFilterSummary,
   hasActiveSignalFeedFilters,
   normalizeSignalFeedFilters,
 } from './signal-feed-filters'
 
+const SAMPLE_SUBJECT_ID = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
+
 describe('normalizeSignalFeedFilters', () => {
   it('deduplicates and sorts values for stable query keys', () => {
     const a = normalizeSignalFeedFilters({
       statuses: ['in_progress', 'open', 'open'],
-      moduleKeys: ['z_mod', 'a_mod', 'a_mod'],
-      domainKeys: [],
-      subjectKeys: ['sub_b', 'sub_a'],
+      businessUnitKeys: ['z_bar', 'a_restaurant', 'a_restaurant'],
+      activitySubjectIds: [SAMPLE_SUBJECT_ID, SAMPLE_SUBJECT_ID],
     })
     const b = normalizeSignalFeedFilters({
       statuses: ['open', 'in_progress'],
-      moduleKeys: ['a_mod', 'z_mod'],
-      domainKeys: [],
-      subjectKeys: ['sub_a', 'sub_b'],
+      businessUnitKeys: ['a_restaurant', 'z_bar'],
+      activitySubjectIds: [SAMPLE_SUBJECT_ID],
     })
 
     expect(a).toEqual(b)
     expect(a.statuses).toEqual(['in_progress', 'open'])
-    expect(a.moduleKeys).toEqual(['a_mod', 'z_mod'])
-    expect(a.subjectKeys).toEqual(['sub_a', 'sub_b'])
+    expect(a.businessUnitKeys).toEqual(['a_restaurant', 'z_bar'])
+    expect(a.activitySubjectIds).toEqual([SAMPLE_SUBJECT_ID])
   })
 
-  it('drops non-feed statuses', () => {
+  it('drops non-feed statuses and invalid activity subject ids', () => {
     expect(
       normalizeSignalFeedFilters({
         ...EMPTY_SIGNAL_FEED_FILTERS,
         statuses: ['open', 'canceled' as 'open'],
-      }).statuses,
-    ).toEqual(['open'])
+        activitySubjectIds: ['not-a-uuid'],
+      }),
+    ).toEqual({
+      statuses: ['open'],
+      businessUnitKeys: [],
+      activitySubjectIds: [],
+    })
   })
 })
 
@@ -49,7 +54,7 @@ describe('hasActiveSignalFeedFilters', () => {
     expect(
       hasActiveSignalFeedFilters({
         ...EMPTY_SIGNAL_FEED_FILTERS,
-        moduleKeys: ['maintenance'],
+        businessUnitKeys: ['maintenance'],
       }),
     ).toBe(true)
   })
@@ -60,15 +65,14 @@ describe('appendSignalFeedFiltersToSearchParams', () => {
     const params = new URLSearchParams({ view_mode: 'general' })
     appendSignalFeedFiltersToSearchParams(params, {
       statuses: ['resolved', 'open'],
-      moduleKeys: ['mod_a'],
-      domainKeys: [],
-      subjectKeys: [],
+      businessUnitKeys: ['restaurant', 'bar'],
+      activitySubjectIds: [SAMPLE_SUBJECT_ID],
     })
 
     expect(params.get('view_mode')).toBe('general')
     expect(params.get('statuses')).toBe('open,resolved')
-    expect(params.get('module_keys')).toBe('mod_a')
-    expect(params.has('domain_keys')).toBe(false)
+    expect(params.get('business_unit_keys')).toBe('bar,restaurant')
+    expect(params.get('activity_subject_ids')).toBe(SAMPLE_SUBJECT_ID)
   })
 })
 
@@ -84,41 +88,49 @@ describe('formatStatusFilterSummary', () => {
   })
 })
 
-describe('formatCategoryFilterSummary', () => {
-  const labels = new Map([
-    ['mod_a', 'Maintenance'],
-    ['dom_b', 'Salle'],
-    ['sub_c', 'Propreté'],
+describe('formatClassificationFilterSummary', () => {
+  const businessUnitLabels = new Map([
+    ['restaurant', 'Restaurant'],
+    ['bar', 'Bar'],
   ])
+  const subjectLabels = new Map([[SAMPLE_SUBJECT_ID, 'Électricité']])
 
   it('formats empty, single, few, and many selections', () => {
-    expect(formatCategoryFilterSummary(EMPTY_SIGNAL_FEED_FILTERS, labels)).toBe('Toutes ▾')
     expect(
-      formatCategoryFilterSummary(
-        { ...EMPTY_SIGNAL_FEED_FILTERS, moduleKeys: ['mod_a'] },
-        labels,
+      formatClassificationFilterSummary(
+        EMPTY_SIGNAL_FEED_FILTERS,
+        businessUnitLabels,
+        subjectLabels,
       ),
-    ).toBe('Maintenance ▾')
+    ).toBe('Tous ▾')
     expect(
-      formatCategoryFilterSummary(
+      formatClassificationFilterSummary(
+        { ...EMPTY_SIGNAL_FEED_FILTERS, businessUnitKeys: ['restaurant'] },
+        businessUnitLabels,
+        subjectLabels,
+      ),
+    ).toBe('Restaurant ▾')
+    expect(
+      formatClassificationFilterSummary(
         {
           ...EMPTY_SIGNAL_FEED_FILTERS,
-          moduleKeys: ['mod_a'],
-          domainKeys: ['dom_b'],
+          businessUnitKeys: ['restaurant'],
+          activitySubjectIds: [SAMPLE_SUBJECT_ID],
         },
-        labels,
+        businessUnitLabels,
+        subjectLabels,
       ),
-    ).toBe('2 catégories ▾')
+    ).toBe('2 sélections ▾')
     expect(
-      formatCategoryFilterSummary(
+      formatClassificationFilterSummary(
         {
           ...EMPTY_SIGNAL_FEED_FILTERS,
-          moduleKeys: ['mod_a'],
-          domainKeys: ['dom_b'],
-          subjectKeys: ['sub_c', 'sub_d'],
+          businessUnitKeys: ['restaurant', 'bar'],
+          activitySubjectIds: [SAMPLE_SUBJECT_ID, 'b2c3d4e5-f6a7-4890-b123-456789abcdef'],
         },
-        new Map([...labels, ['sub_d', 'Stock']]),
+        businessUnitLabels,
+        subjectLabels,
       ),
-    ).toBe('Maintenance +3 ▾')
+    ).toBe('Bar +3 ▾')
   })
 })

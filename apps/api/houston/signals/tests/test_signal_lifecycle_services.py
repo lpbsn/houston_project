@@ -7,25 +7,14 @@ from houston.establishments.models import EstablishmentMembership
 from houston.signals.exceptions import SignalStateError
 from houston.signals.models import Signal
 from houston.signals.services import cancel_signal, resolve_signal
-from houston.signals.tests.conftest import build_api_membership, create_taxonomy
+from houston.signals.tests.conftest import build_api_membership, create_minimal_v3_signal
 
 pytestmark = pytest.mark.django_db
 
 
 def _signal(*, status: str = Signal.Status.OPEN):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    module, domain, subject = create_taxonomy(membership.establishment)
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title="Issue",
-        structured_summary="Summary",
-        status=status,
-        last_activity_at=now,
-    )
+    return create_minimal_v3_signal(membership, title="Issue", status=status)
 
 
 def test_cancel_signal_sets_canceled_and_clears_pin():

@@ -24,6 +24,10 @@ from houston.ai.observation_pipeline_provider_schema import (
     openai_strict_response_format,
 )
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
+from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
+    create_business_unit,
+)
 from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import (
@@ -37,14 +41,32 @@ from houston.signals.tests.conftest import (
     GOLDEN_OBSERVATION_TEXT,
     RESTAURANT_MODULE_KEY,
     create_observation,
-    create_restaurant_lighting_bar_stock_taxonomy,
-    create_taxonomy,
+    create_restaurant_v3_taxonomy,
 )
 
 pytestmark = pytest.mark.django_db
 
 
-def _single_candidate_openai_payload(*, module_key: str, domain_key: str, subject_key: str) -> dict:
+def _setup_hotel_pipeline_taxonomy(establishment):
+    hotel = create_business_unit(
+        establishment=establishment,
+        key="hotel",
+        label="Hotel",
+    )
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    return hotel
+
+
+def _single_candidate_openai_payload(
+    *,
+    affected_key: str = "hotel",
+    responsible_key: str = "hotel",
+    subject_key: str = "maintenance",
+) -> dict:
     return {
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "candidates": [
@@ -54,9 +76,9 @@ def _single_candidate_openai_payload(*, module_key: str, domain_key: str, subjec
                     "Éclairage instable signalé à l'entrée du restaurant, "
                     "intervention maintenance requise."
                 ),
-                "operational_module_key": module_key,
-                "operational_domain_key": domain_key,
-                "operational_subject_key": subject_key,
+                "affected_business_unit_key": affected_key,
+                "responsible_business_unit_key": responsible_key,
+                "activity_subject_key": subject_key,
                 "operational_unit_key": None,
                 "location_text": None,
                 "aggregate_into_signal_id": None,
@@ -74,7 +96,7 @@ def _openai_invalid_schema_bad_request_error():
         (
             "Invalid schema for response_format "
             f"'{AI_OBSERVATION_PIPELINE_PROVIDER_SCHEMA_NAME}': "
-            "context=('properties', 'operational_unit_key'), "
+            "context=('properties', 'activity_subject_key'), "
             "$ref cannot have keywords {'description'}."
         ),
         response=response,
@@ -122,7 +144,7 @@ def test_unknown_observation_provider_fails_clearly():
 @patch.object(FakeObservationPipelineProvider, "propose")
 def test_openai_provider_without_api_key_does_not_fallback_to_fake(mock_fake_propose):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
 
     with pytest.raises(ObservationPipelineUnavailableError):
@@ -141,7 +163,7 @@ def test_openai_provider_without_api_key_does_not_fallback_to_fake(mock_fake_pro
 @patch.object(OpenAIObservationPipelineProvider, "propose")
 def test_run_observation_pipeline_does_not_call_openai_in_standard_tests(mock_openai_propose):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
 
     run_observation_pipeline(observation.id)
@@ -168,7 +190,7 @@ def test_openai_provider_sends_json_schema_strict_response_format(mock_openai_cl
     provider.propose(
         input_payload={
             "observation_id": "00000000-0000-0000-0000-000000000001",
-            "taxonomy": {"modules": [], "domains": [], "subjects": [], "units": []},
+            "establishment_taxonomy": {"business_units": [], "operational_units": []},
             "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
             "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
         }
@@ -192,11 +214,7 @@ def test_openai_provider_sends_json_schema_strict_response_format(mock_openai_cl
 @pytest.mark.allow_openai_observation_propose
 def test_openai_provider_parses_valid_mocked_response(mock_openai_client):
     provider = OpenAIObservationPipelineProvider(api_key="test-key")
-    payload = _single_candidate_openai_payload(
-        module_key="hotel",
-        domain_key="hotel__hebergement",
-        subject_key="hotel__hebergement__maintenance",
-    )
+    payload = _single_candidate_openai_payload()
     mock_openai_client.chat.completions.create.return_value = _mock_openai_completion(
         content=json.dumps(payload)
     )
@@ -204,7 +222,7 @@ def test_openai_provider_parses_valid_mocked_response(mock_openai_client):
     response = provider.propose(
         input_payload={
             "observation_id": "00000000-0000-0000-0000-000000000001",
-            "taxonomy": {"modules": [], "domains": [], "subjects": [], "units": []},
+            "establishment_taxonomy": {"business_units": [], "operational_units": []},
         }
     )
 
@@ -216,7 +234,7 @@ def test_openai_provider_parses_valid_mocked_response(mock_openai_client):
 @pytest.mark.allow_openai_observation_propose
 def test_openai_provider_invalid_payload_writes_safe_error_context(mock_openai_client):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(
         membership=membership,
         text=GOLDEN_OBSERVATION_TEXT,
@@ -253,7 +271,7 @@ def test_invalid_openai_output_does_not_fallback_to_fake(
     mock_openai_client,
 ):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
     provider = OpenAIObservationPipelineProvider(api_key="test-key")
     invalid_payload = {
@@ -284,7 +302,7 @@ def test_openai_invalid_schema_bad_request_fails_pipeline_without_fake_fallback(
     mock_openai_client,
 ):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(
         membership=membership,
         text=GOLDEN_OBSERVATION_TEXT,
@@ -320,7 +338,7 @@ def test_openai_invalid_schema_bad_request_raises_schema_error_from_call_pipelin
     mock_openai_client,
 ):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
     provider = OpenAIObservationPipelineProvider(api_key="test-key")
     schema_error = _openai_invalid_schema_bad_request_error()
@@ -338,7 +356,7 @@ def test_celery_task_does_not_raise_on_invalid_schema_bad_request(
     mock_openai_client,
 ):
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_pipeline_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
     schema_error = _openai_invalid_schema_bad_request_error()
     mock_openai_client.chat.completions.create.side_effect = schema_error
@@ -357,8 +375,8 @@ def test_golden_observation_with_mocked_openai_creates_candidate_and_signal(
     mock_openai_client,
 ):
     membership = build_membership()
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    assert taxonomy.salle_maintenance_subject is not None
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.lighting_subject is not None
     observation = create_observation(
         membership=membership,
         text=GOLDEN_OBSERVATION_TEXT,
@@ -367,9 +385,9 @@ def test_golden_observation_with_mocked_openai_creates_candidate_and_signal(
     mock_openai_client.chat.completions.create.return_value = _mock_openai_completion(
         content=json.dumps(
             _single_candidate_openai_payload(
-                module_key=RESTAURANT_MODULE_KEY,
-                domain_key=taxonomy.salle_domain.key,
-                subject_key=taxonomy.salle_maintenance_subject.key,
+                affected_key=RESTAURANT_MODULE_KEY,
+                responsible_key="maintenance",
+                subject_key=taxonomy.lighting_subject.normalized_name,
             )
         )
     )

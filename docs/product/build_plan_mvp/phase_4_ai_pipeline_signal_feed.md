@@ -106,7 +106,7 @@ Check `AIUsageLog.provider=openai`, `status=succeeded`, empty `error_code` when 
 
 ## Diagnostic commands
 
-Dump the **active** operational taxonomy for an establishment (modules → domains → subjects, plus establishment-level `OperationalUnit` rows). Units are orthogonal to the module/domain/subject tree; see [`operational_taxonomy_domain.md`](../domains/operational_taxonomy_domain.md).
+Dump the active runtime classification for an establishment (BusinessUnit → ActivitySubject, plus establishment-level `OperationalUnit` rows). Units are orthogonal to BU/AS classification.
 
 ```bash
 cd apps/api && uv run python manage.py dump_establishment_taxonomy <establishment_uuid>

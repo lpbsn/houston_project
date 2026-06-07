@@ -6,15 +6,18 @@ from django.utils import timezone
 from houston.actions.models import Action
 from houston.actions.services import create_action
 from houston.actions.tests.conftest import (
-    assign_domain_scope,
+    assign_business_unit_scope,
     auth_headers,
     build_api_membership,
     build_api_membership_on_establishment,
     execution_feed_url,
     login,
 )
-from houston.establishments.models import EstablishmentMembership
-from houston.signals.tests.conftest import create_taxonomy
+from houston.establishments.models import BusinessUnit, EstablishmentMembership
+from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
+    create_business_unit,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -23,7 +26,33 @@ def _feed_query(view_mode: str) -> str:
     return f"?view_mode={view_mode}"
 
 
-def _create_action_for(owner, *, assigned_to, module, domain, subject, title: str):
+def _hotel_maintenance_setup(establishment):
+    hotel = create_business_unit(
+        establishment=establishment,
+        key="hotel",
+        label="Hôtel",
+    )
+    maintenance = create_business_unit(
+        establishment=establishment,
+        key="maintenance",
+        label="Maintenance",
+        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+    )
+    electricite = create_activity_subject(
+        establishment=establishment,
+        business_unit=maintenance,
+        label="Électricité",
+    )
+    return hotel, maintenance, electricite
+
+
+def _create_free_action_for(
+    owner,
+    *,
+    assigned_to,
+    responsible_business_unit,
+    title: str,
+):
     return create_action(
         establishment_id=owner.establishment_id,
         created_by=owner,
@@ -31,9 +60,7 @@ def _create_action_for(owner, *, assigned_to, module, domain, subject, title: st
         instruction="Instruction text",
         assigned_to_id=assigned_to.id,
         due_at=timezone.now() + timezone.timedelta(days=2),
-        module_key=module.key,
-        domain_key=domain.key,
-        subject_key=subject.key,
+        responsible_business_unit_id=responsible_business_unit.id,
     )
 
 
@@ -70,23 +97,19 @@ def test_staff_sees_only_assigned_actions(api_client):
         owner,
         role=EstablishmentMembership.Role.STAFF,
     )
-    module, domain, subject = create_taxonomy(owner.establishment)
-    assign_domain_scope(staff, domain)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, hotel)
 
-    assigned = _create_action_for(
+    assigned = _create_free_action_for(
         owner,
         assigned_to=staff,
-        module=module,
-        domain=domain,
-        subject=subject,
+        responsible_business_unit=hotel,
         title="Assigned to staff",
     )
-    _create_action_for(
+    _create_free_action_for(
         owner,
         assigned_to=other_staff,
-        module=module,
-        domain=domain,
-        subject=subject,
+        responsible_business_unit=hotel,
         title="Assigned to other",
     )
 
@@ -106,15 +129,13 @@ def test_staff_does_not_see_in_scope_unassigned_action(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     other = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    module, domain, subject = create_taxonomy(owner.establishment)
-    assign_domain_scope(staff, domain)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, hotel)
 
-    in_scope_unassigned = _create_action_for(
+    in_scope_unassigned = _create_free_action_for(
         owner,
         assigned_to=other,
-        module=module,
-        domain=domain,
-        subject=subject,
+        responsible_business_unit=hotel,
         title="In scope not assigned",
     )
 
@@ -129,22 +150,20 @@ def test_staff_does_not_see_in_scope_unassigned_action(api_client):
         assert str(in_scope_unassigned.id) not in ids
 
 
-def test_manager_sees_action_in_scope_only_in_general_view(api_client):
+def test_manager_sees_free_action_in_responsible_scope_only_in_general_view(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     manager = build_api_membership_on_establishment(
         owner,
         role=EstablishmentMembership.Role.MANAGER,
     )
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    module, domain, subject = create_taxonomy(owner.establishment)
-    assign_domain_scope(manager, domain)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(manager, maintenance)
 
-    scoped_action = _create_action_for(
+    scoped_action = _create_free_action_for(
         owner,
         assigned_to=staff,
-        module=module,
-        domain=domain,
-        subject=subject,
+        responsible_business_unit=maintenance,
         title="Scoped for manager",
     )
 
@@ -166,6 +185,46 @@ def test_manager_sees_action_in_scope_only_in_general_view(api_client):
     assert str(scoped_action.id) not in personal_ids
 
 
+def test_manager_sees_linked_action_via_affected_scope(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    manager_hotel = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(manager_hotel, hotel)
+
+    from houston.actions.tests.conftest import create_signal_v3_for_membership
+
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+    )
+    linked = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Linked scoped",
+        instruction="Work",
+        assigned_to_id=staff.id,
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+    )
+
+    token = login(api_client, user=manager_hotel.user)
+    response = api_client.get(
+        execution_feed_url(manager_hotel.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    item = response.json()["items"][0]["action"]
+    assert item["id"] == str(linked.id)
+    assert item["affected_business_unit_key"] == "hotel"
+    assert item["responsible_business_unit_key"] == "maintenance"
+
+
 def test_manager_sees_own_created_action_in_personal_view(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     manager = build_api_membership_on_establishment(
@@ -173,8 +232,8 @@ def test_manager_sees_own_created_action_in_personal_view(api_client):
         role=EstablishmentMembership.Role.MANAGER,
     )
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    module, domain, subject = create_taxonomy(owner.establishment)
-    assign_domain_scope(manager, domain)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(manager, maintenance)
 
     created_by_manager = create_action(
         establishment_id=owner.establishment_id,
@@ -183,9 +242,7 @@ def test_manager_sees_own_created_action_in_personal_view(api_client):
         instruction="Instruction text",
         assigned_to_id=staff.id,
         due_at=timezone.now() + timezone.timedelta(days=2),
-        module_key=module.key,
-        domain_key=domain.key,
-        subject_key=subject.key,
+        responsible_business_unit_id=maintenance.id,
     )
 
     token = login(api_client, user=manager.user)
@@ -202,14 +259,12 @@ def test_manager_sees_own_created_action_in_personal_view(api_client):
 def test_owner_personal_includes_action_they_created_even_when_assigned_to_staff(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    module, domain, subject = create_taxonomy(owner.establishment)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
 
-    third_party = _create_action_for(
+    third_party = _create_free_action_for(
         owner,
         assigned_to=staff,
-        module=module,
-        domain=domain,
-        subject=subject,
+        responsible_business_unit=hotel,
         title="Not involving owner",
     )
 
@@ -232,13 +287,11 @@ def test_owner_personal_includes_action_they_created_even_when_assigned_to_staff
 def test_detail_shows_done_action_not_in_feed(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    module, domain, subject = create_taxonomy(owner.establishment)
-    action = _create_action_for(
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    action = _create_free_action_for(
         owner,
         assigned_to=staff,
-        module=module,
-        domain=domain,
-        subject=subject,
+        responsible_business_unit=hotel,
         title="Will complete",
     )
     from houston.actions.services import accept_action, mark_action_done, validate_action

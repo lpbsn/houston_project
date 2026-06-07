@@ -10,21 +10,15 @@ from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    ActivitySubject,
+    BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
     OnboardingSession,
-    OperationalDomain,
-    OperationalModule,
     OperationalUnit,
-    RoutingHint,
-    RoutingHintDomain,
-    RuntimeTag,
-    RuntimeTagDomain,
-    RuntimeVocabulary,
 )
 from houston.establishments.tests.conftest import (
-    HOTEL_HEBERGEMENT_DOMAIN_KEY,
     create_ready_runtime,
 )
 from houston.establishments.tests.taxonomy_helpers import (
@@ -247,7 +241,6 @@ def test_retrieve_onboarding_session_success_and_excludes_runtime_config(api_cli
     assert body["id"] == str(session.id)
     assert body["organization"]["id"] == str(session.organization_id)
     assert body["establishment"]["id"] == str(session.establishment_id)
-    assert "active_modules" not in body
     assert "runtime_config" not in body
 
 
@@ -415,57 +408,33 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
         organization=session.organization,
         status=Establishment.Status.DRAFT,
     )
-    domain = OperationalDomain.objects.create(
+    business_unit = BusinessUnit.objects.create(
         establishment=establishment,
-        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
-        label="Hébergement",
+        key="hotel",
+        label="Hotel",
     )
-    OperationalDomain.objects.create(
-        establishment=establishment,
-        key="inactive-domain",
-        label="Inactive Domain",
-        active=False,
-    )
-    OperationalDomain.objects.create(
-        establishment=foreign_establishment,
-        key="foreign-domain",
-        label="Foreign Domain",
-    )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    OperationalModule.objects.create(
+    foreign_business_unit = BusinessUnit.objects.create(
         establishment=foreign_establishment,
         key="restaurant",
         label="Restaurant",
     )
-    unit = OperationalUnit.objects.create(
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name="proprete",
+        label="Proprete",
+    )
+    ActivitySubject.objects.create(
+        establishment=foreign_establishment,
+        business_unit=foreign_business_unit,
+        normalized_name="foreign",
+        label="Foreign",
+    )
+    OperationalUnit.objects.create(
         establishment=establishment,
         key="lobby",
         label="Lobby",
     )
-    RuntimeVocabulary.objects.create(
-        establishment=establishment,
-        term="VRV",
-        meaning="HVAC equipment",
-        mapped_domain=domain,
-        mapped_unit=unit,
-    )
-    RuntimeVocabulary.objects.create(
-        establishment=foreign_establishment,
-        term="foreign",
-        meaning="Foreign",
-    )
-    runtime_tag = RuntimeTag.objects.create(
-        establishment=establishment,
-        key="hvac",
-        label="HVAC",
-    )
-    RuntimeTagDomain.objects.create(runtime_tag=runtime_tag, operational_domain=domain)
-    routing_hint = RoutingHint.objects.create(
-        establishment=establishment,
-        pattern="VRV",
-        suggested_unit=unit,
-    )
-    RoutingHintDomain.objects.create(routing_hint=routing_hint, operational_domain=domain)
 
     access_token = login(api_client, user=actor)
     response = api_client.get(
@@ -475,15 +444,8 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
 
     assert response.status_code == 200
     body = response.json()
-    assert [item["key"] for item in body["active_modules"]] == ["hotel"]
-    assert [item["key"] for item in body["active_domains"]] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
+    assert [item["key"] for item in body["active_business_units"]] == ["hotel"]
     assert [item["key"] for item in body["optional_units"]] == ["lobby"]
-    assert body["optional_vocabulary"][0]["mapped_domain_key"] == HOTEL_HEBERGEMENT_DOMAIN_KEY
-    assert body["optional_vocabulary"][0]["mapped_unit_key"] == "lobby"
-    assert body["optional_runtime_tags"][0]["domain_keys"] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
-    assert body["optional_routing_hints"][0]["suggested_unit_key"] == "lobby"
-    assert body["optional_routing_hints"][0]["domain_keys"] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
-    assert "foreign-domain" not in str(body)
 
 
 def test_activation_summary_returns_readiness_blockers_and_access_flags(api_client):
@@ -501,10 +463,7 @@ def test_activation_summary_returns_readiness_blockers_and_access_flags(api_clie
     assert body["readiness"]["is_ready"] is False
     assert body["access"]["can_activate"] is True
     assert body["effective_can_activate"] is False
-    assert "active_modules" in body
-    assert "active_domains" in body
-    assert "validated_modules" not in body
-    assert "validated_domains" not in body
+    assert "active_business_units" in body
     assert {blocker["code"] for blocker in body["blockers"]} == {
         "missing_active_business_unit",
         "missing_active_or_invited_director",

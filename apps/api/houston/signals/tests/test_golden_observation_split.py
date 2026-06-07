@@ -13,11 +13,9 @@ from houston.signals.models import CandidateSignal, Signal, SignalSourceObservat
 from houston.signals.services import apply_pipeline_output
 from houston.signals.tests.conftest import (
     GOLDEN_OBSERVATION_TEXT,
-    RESTAURANT_BAR_STOCK_SUBJECT_KEY,
     RESTAURANT_MODULE_KEY,
-    RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
     create_observation,
-    create_restaurant_lighting_bar_stock_taxonomy,
+    create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,
 )
 
@@ -26,7 +24,7 @@ pytestmark = pytest.mark.django_db
 
 def test_observation_with_lighting_issue_and_bar_stock_shortage_splits_into_two_signals():
     membership = build_membership()
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
     observation = create_observation(
         membership=membership,
         text=GOLDEN_OBSERVATION_TEXT,
@@ -65,12 +63,12 @@ def test_observation_with_lighting_issue_and_bar_stock_shortage_splits_into_two_
 
 def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
     membership = build_membership()
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(
+    taxonomy = create_restaurant_v3_taxonomy(
         membership.establishment,
         include_bar_stock=False,
     )
-    assert taxonomy.bar_stock_subject is None
-    assert taxonomy.salle_maintenance_subject is not None
+    assert taxonomy.stock_subject is None
+    assert taxonomy.lighting_subject is not None
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
 
     output = ObservationPipelineOutput(
@@ -79,19 +77,21 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
             PipelineCandidateOutput(
                 title="Lumière clignote à l'entrée du restaurant",
                 structured_summary="Entrée restaurant, éclairage instable.",
-                operational_module_key=RESTAURANT_MODULE_KEY,
-                operational_domain_key=taxonomy.salle_domain.key,
-                operational_subject_key=taxonomy.salle_maintenance_subject.key,
+                affected_business_unit_key=RESTAURANT_MODULE_KEY,
+                responsible_business_unit_key="maintenance",
+                activity_subject_key=taxonomy.lighting_subject.normalized_name,
                 operational_unit_key=None,
+                location_text="Entrée restaurant",
                 aggregate_into_signal_id=None,
             ),
             PipelineCandidateOutput(
                 title="Rupture de sirop mojito au bar",
                 structured_summary="Bar, sirop mojito manquant.",
-                operational_module_key=RESTAURANT_MODULE_KEY,
-                operational_domain_key=taxonomy.bar_domain.key,
-                operational_subject_key=RESTAURANT_BAR_STOCK_SUBJECT_KEY,
+                affected_business_unit_key="bar",
+                responsible_business_unit_key="bar",
+                activity_subject_key="stock",
                 operational_unit_key=None,
+                location_text="Bar",
                 aggregate_into_signal_id=None,
             ),
         ],
@@ -101,24 +101,22 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
     signal = Signal.objects.get()
-    assert signal.operational_subject.key == RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY
+    assert signal.responsible_business_unit.key == "maintenance"
     assert CandidateSignal.objects.filter(
         observation=observation,
         outcome=CandidateSignal.Outcome.REJECTED,
     ).exists()
-    assert not Signal.objects.filter(
-        operational_subject__key=RESTAURANT_BAR_STOCK_SUBJECT_KEY,
-    ).exists()
+    assert not Signal.objects.filter(affected_business_unit__key="bar").exists()
 
 
 def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
     membership = build_membership()
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(
+    taxonomy = create_restaurant_v3_taxonomy(
         membership.establishment,
-        include_salle_maintenance=False,
+        include_lighting_subject=False,
     )
-    assert taxonomy.salle_maintenance_subject is None
-    assert taxonomy.bar_stock_subject is not None
+    assert taxonomy.lighting_subject is None
+    assert taxonomy.stock_subject is not None
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
 
     output = ObservationPipelineOutput(
@@ -127,19 +125,21 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
             PipelineCandidateOutput(
                 title="Lumière clignote à l'entrée du restaurant",
                 structured_summary="Entrée restaurant, éclairage instable.",
-                operational_module_key=RESTAURANT_MODULE_KEY,
-                operational_domain_key=taxonomy.salle_domain.key,
-                operational_subject_key=RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
+                affected_business_unit_key=RESTAURANT_MODULE_KEY,
+                responsible_business_unit_key="maintenance",
+                activity_subject_key="electricite",
                 operational_unit_key=None,
+                location_text="Entrée restaurant",
                 aggregate_into_signal_id=None,
             ),
             PipelineCandidateOutput(
                 title="Rupture de sirop mojito au bar",
                 structured_summary="Bar, sirop mojito manquant.",
-                operational_module_key=RESTAURANT_MODULE_KEY,
-                operational_domain_key=taxonomy.bar_domain.key,
-                operational_subject_key=taxonomy.bar_stock_subject.key,
+                affected_business_unit_key="bar",
+                responsible_business_unit_key="bar",
+                activity_subject_key=taxonomy.stock_subject.normalized_name,
                 operational_unit_key=None,
+                location_text="Bar",
                 aggregate_into_signal_id=None,
             ),
         ],
@@ -149,19 +149,17 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
     signal = Signal.objects.get()
-    assert signal.operational_subject.key == RESTAURANT_BAR_STOCK_SUBJECT_KEY
+    assert signal.affected_business_unit.key == "bar"
     assert CandidateSignal.objects.filter(
         observation=observation,
         outcome=CandidateSignal.Outcome.REJECTED,
     ).exists()
-    assert not Signal.objects.filter(
-        operational_subject__key=RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
-    ).exists()
+    assert not Signal.objects.filter(affected_business_unit__key=RESTAURANT_MODULE_KEY).exists()
 
 
 def test_golden_invented_taxonomy_key_does_not_create_signal():
     membership = build_membership()
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
 
     output = ObservationPipelineOutput(
@@ -170,19 +168,21 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
             PipelineCandidateOutput(
                 title="Lumière entrée",
                 structured_summary="Entrée restaurant.",
-                operational_module_key=RESTAURANT_MODULE_KEY,
-                operational_domain_key=taxonomy.salle_domain.key,
-                operational_subject_key=taxonomy.salle_maintenance_subject.key,
+                affected_business_unit_key=RESTAURANT_MODULE_KEY,
+                responsible_business_unit_key="maintenance",
+                activity_subject_key=taxonomy.lighting_subject.normalized_name,
                 operational_unit_key=None,
+                location_text=None,
                 aggregate_into_signal_id=None,
             ),
             PipelineCandidateOutput(
                 title="Stock inventé",
                 structured_summary="Bar.",
-                operational_module_key="invented_module",
-                operational_domain_key="invented__domain",
-                operational_subject_key="invented__domain__subject",
+                affected_business_unit_key="invented",
+                responsible_business_unit_key="invented",
+                activity_subject_key="invented_subject",
                 operational_unit_key=None,
+                location_text=None,
                 aggregate_into_signal_id=None,
             ),
         ],

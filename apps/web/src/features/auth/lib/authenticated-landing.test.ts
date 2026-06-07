@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseAppRoute } from '@/app/app-routes'
 import {
+  allowsUnauthenticatedAccess,
   isPublicAuthRoute,
   resolveAuthenticatedLanding,
   shouldRedirectAuthenticatedPublicRoute,
@@ -42,9 +43,6 @@ function membership(establishmentName: string) {
     status: 'active' as const,
     scopes: [],
     scope_summary: {
-      module_count: 0,
-      domain_count: 0,
-      subject_count: 0,
       business_unit_count: 0,
     },
   }
@@ -164,6 +162,31 @@ describe('isPublicAuthRoute', () => {
     expect(isPublicAuthRoute({ kind: 'static', path: '/onboarding' })).toBe(false)
     expect(isPublicAuthRoute({ kind: 'static', path: '/' })).toBe(false)
     expect(isPublicAuthRoute({ kind: 'unknown', pathname: '/login' })).toBe(false)
+  })
+})
+
+describe('allowsUnauthenticatedAccess', () => {
+  it('returns true for login and onboarding', () => {
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/login' })).toBe(true)
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/onboarding' })).toBe(true)
+  })
+
+  it('returns false for protected and unknown routes', () => {
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/reporting' })).toBe(false)
+    expect(allowsUnauthenticatedAccess({ kind: 'static', path: '/pending-onboarding' })).toBe(
+      false,
+    )
+    expect(allowsUnauthenticatedAccess({ kind: 'unknown', pathname: '/onboarding' })).toBe(false)
+  })
+
+  it('does not redirect unauthenticated onboarding to login', () => {
+    const route = { kind: 'static' as const, path: '/onboarding' as const }
+    const isProtectedRoute = true
+    const isAuthenticated = false
+
+    expect(
+      isProtectedRoute && !isAuthenticated && !allowsUnauthenticatedAccess(route),
+    ).toBe(false)
   })
 })
 

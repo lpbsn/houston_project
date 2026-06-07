@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input'
 import { useActivitySubjectSuggestions } from '@/features/onboarding/hooks'
 import {
   createDraftActivitySubject,
+  getBusinessUnitTypeDisplayValue,
   isBusinessUnitConfigured,
+  type BusinessUnitType,
   type DraftActivitySubject,
   type DraftBusinessUnit,
 } from '@/features/onboarding/lib/manual-v2-proposal'
@@ -20,6 +22,7 @@ type ManualOnboardingV2BuConfigStepProps = {
   disabled?: boolean
   isSeedingSubjects?: boolean
   onBusinessUnitDescriptionChange: (clientKey: string, description: string) => void
+  onBusinessUnitTypeChange: (clientKey: string, unitType: BusinessUnitType) => void
   onChange: (activitySubjects: DraftActivitySubject[]) => void
   onExcludeCatalogSubject: (businessUnitClientKey: string, catalogKey: string) => void
 }
@@ -37,11 +40,65 @@ function hasDuplicateSubjectLabel(
   )
 }
 
+function BusinessUnitTypeSelector({
+  businessUnit,
+  disabled,
+  onBusinessUnitTypeChange,
+}: {
+  businessUnit: DraftBusinessUnit
+  disabled?: boolean
+  onBusinessUnitTypeChange: (clientKey: string, unitType: BusinessUnitType) => void
+}) {
+  const displayValue = getBusinessUnitTypeDisplayValue(businessUnit)
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Type de pôle</p>
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { value: 'dedicated' as const, label: 'Dédié' },
+            { value: 'transversal' as const, label: 'Transversal' },
+          ] as const
+        ).map((option) => {
+          const isSelected = displayValue === option.value
+
+          return (
+            <Button
+              key={option.value}
+              type="button"
+              variant={isSelected ? 'default' : 'outline'}
+              disabled={disabled}
+              onClick={() => onBusinessUnitTypeChange(businessUnit.client_key, option.value)}
+              className={`h-10 rounded-[0.9rem] ${
+                isSelected
+                  ? ''
+                  : 'border-[#e7dfd1] bg-white text-foreground hover:bg-[#fffaf2]'
+              }`}
+              aria-pressed={isSelected}
+            >
+              {option.label}
+            </Button>
+          )
+        })}
+      </div>
+      {!businessUnit.unit_type_confirmed ? (
+        <p className="text-xs text-muted-foreground">
+          Suggestion catalogue :{' '}
+          {businessUnit.suggested_unit_type === 'transversal' ? 'Transversal' : 'Dédié'}. Choisissez
+          le type adapté à votre établissement.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function ActivitySubjectEditor({
   businessUnit,
   activitySubjects,
   disabled,
   onBusinessUnitDescriptionChange,
+  onBusinessUnitTypeChange,
   onChange,
   onExcludeCatalogSubject,
 }: {
@@ -49,6 +106,7 @@ function ActivitySubjectEditor({
   activitySubjects: DraftActivitySubject[]
   disabled?: boolean
   onBusinessUnitDescriptionChange: (clientKey: string, description: string) => void
+  onBusinessUnitTypeChange: (clientKey: string, unitType: BusinessUnitType) => void
   onChange: (activitySubjects: DraftActivitySubject[]) => void
   onExcludeCatalogSubject: (businessUnitClientKey: string, catalogKey: string) => void
 }) {
@@ -111,12 +169,19 @@ function ActivitySubjectEditor({
     <div className="space-y-3 rounded-[1.25rem] border border-[#ece5da] bg-[#fffdf9] p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="font-semibold">{businessUnit.label}</h4>
-        {isBusinessUnitConfigured(businessUnit, activitySubjects) ? (
+        {businessUnit.unit_type_confirmed &&
+        isBusinessUnitConfigured(businessUnit, activitySubjects) ? (
           <Badge className="bg-emerald-600 text-white">Configuré</Badge>
         ) : (
-          <Badge variant="outline">Sujet requis</Badge>
+          <Badge variant="outline">Configuration requise</Badge>
         )}
       </div>
+
+      <BusinessUnitTypeSelector
+        businessUnit={businessUnit}
+        disabled={disabled}
+        onBusinessUnitTypeChange={onBusinessUnitTypeChange}
+      />
 
       <div className="space-y-2">
         <label
@@ -245,16 +310,17 @@ export function ManualOnboardingV2BuConfigStep({
   disabled = false,
   isSeedingSubjects = false,
   onBusinessUnitDescriptionChange,
+  onBusinessUnitTypeChange,
   onChange,
   onExcludeCatalogSubject,
 }: ManualOnboardingV2BuConfigStepProps) {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-semibold">Étape 2 — Sujets d&apos;activité</h3>
+        <h3 className="text-lg font-semibold">Étape 2 — Vos pôles</h3>
         <p className="text-sm leading-6 text-muted-foreground">
-          Chaque pôle doit avoir au moins un sujet d&apos;activité actif avant validation. Vous
-          pouvez ajouter une description libre par pôle.
+          Pour chaque pôle, choisissez s&apos;il est dédié ou transversal, ajoutez au moins un sujet
+          d&apos;activité, et complétez la description si besoin.
         </p>
       </div>
 
@@ -273,6 +339,7 @@ export function ManualOnboardingV2BuConfigStep({
             activitySubjects={activitySubjects}
             disabled={disabled}
             onBusinessUnitDescriptionChange={onBusinessUnitDescriptionChange}
+            onBusinessUnitTypeChange={onBusinessUnitTypeChange}
             onChange={onChange}
             onExcludeCatalogSubject={onExcludeCatalogSubject}
           />

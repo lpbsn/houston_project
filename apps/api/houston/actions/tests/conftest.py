@@ -5,11 +5,19 @@ import uuid
 import pytest
 from django.utils import timezone
 
-from houston.establishments.models import EstablishmentMembership, MembershipScope
+from houston.establishments.models import (
+    ActivitySubject,
+    BusinessUnit,
+    EstablishmentMembership,
+    MembershipScope,
+)
 from houston.establishments.tests.conftest import TEST_PASSWORD
+from houston.establishments.tests.taxonomy_helpers import (
+    create_membership_with_business_unit_scope,
+)
 from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.models import Signal
-from houston.signals.tests.conftest import auth_headers, create_taxonomy, login
+from houston.signals.tests.conftest import auth_headers, login
 
 __all__ = [
     "auth_headers",
@@ -19,9 +27,10 @@ __all__ = [
     "action_url",
     "actions_url",
     "execution_feed_url",
-    "create_signal_for_membership",
-    "assign_domain_scope",
-    "create_action_payload",
+    "create_signal_v3_for_membership",
+    "assign_business_unit_scope",
+    "create_linked_action_payload",
+    "create_free_action_payload",
     "api_client",
 ]
 
@@ -66,51 +75,75 @@ def execution_feed_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/execution-feed/"
 
 
-def create_signal_for_membership(membership, *, status: str = Signal.Status.OPEN) -> Signal:
-    module, domain, subject = create_taxonomy(membership.establishment)
+def assign_business_unit_scope(
+    membership: EstablishmentMembership,
+    business_unit: BusinessUnit,
+) -> MembershipScope:
+    return create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_unit,
+    )
+
+
+def create_signal_v3_for_membership(
+    membership: EstablishmentMembership,
+    *,
+    affected_business_unit: BusinessUnit,
+    responsible_business_unit: BusinessUnit,
+    activity_subject: ActivitySubject,
+    status: str = Signal.Status.OPEN,
+    title: str = "Signal title",
+    location_text: str = "chambre 102",
+) -> Signal:
     now = timezone.now()
     return Signal.objects.create(
         establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title="Signal title",
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible_business_unit,
+        activity_subject=activity_subject,
+        title=title,
         structured_summary="Summary",
+        location_text=location_text,
         status=status,
         last_activity_at=now,
     )
 
 
-def assign_domain_scope(membership, domain) -> None:
-    MembershipScope.objects.create(
-        membership=membership,
-        operational_domain=domain,
-    )
-
-
-def create_action_payload(
+def create_linked_action_payload(
     *,
     membership: EstablishmentMembership,
+    signal: Signal,
     assigned_to: EstablishmentMembership | None = None,
-    signal: Signal | None = None,
-    module_key: str | None = None,
-    domain_key: str | None = None,
-    subject_key: str | None = None,
+    title: str = "Clean area",
+    instruction: str = "Mop the floor near the entrance.",
 ) -> dict:
-    module, domain, subject = create_taxonomy(membership.establishment)
     due = timezone.now() + timezone.timedelta(days=1)
-    payload = {
-        "title": "Clean area",
-        "instruction": "Mop the floor near the entrance.",
+    return {
+        "title": title,
+        "instruction": instruction,
         "assigned_to": str((assigned_to or membership).id),
         "due_at": due.isoformat(),
-        "module_key": module_key or module.key,
-        "domain_key": domain_key or domain.key,
-        "subject_key": subject_key or subject.key,
+        "signal": str(signal.id),
     }
-    if signal is not None:
-        payload["signal"] = str(signal.id)
-    return payload
+
+
+def create_free_action_payload(
+    *,
+    membership: EstablishmentMembership,
+    responsible_business_unit: BusinessUnit,
+    assigned_to: EstablishmentMembership | None = None,
+    title: str = "Routine check",
+    instruction: str = "Inspect the storage area.",
+) -> dict:
+    due = timezone.now() + timezone.timedelta(days=1)
+    return {
+        "title": title,
+        "instruction": instruction,
+        "assigned_to": str((assigned_to or membership).id),
+        "due_at": due.isoformat(),
+        "signal": None,
+        "responsible_business_unit_id": str(responsible_business_unit.id),
+    }
 
 
 @pytest.fixture

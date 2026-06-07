@@ -24,12 +24,12 @@ UxStatus = Literal[
 class ObservationProcessingSignalSummary:
     id: uuid.UUID
     title: str
-    operational_module_key: str
-    operational_module_label: str
-    operational_domain_key: str
-    operational_domain_label: str
-    operational_subject_key: str
-    operational_subject_label: str
+    affected_business_unit_key: str
+    affected_business_unit_label: str
+    responsible_business_unit_key: str
+    responsible_business_unit_label: str
+    activity_subject_key: str
+    activity_subject_label: str
     location_text: str
 
 
@@ -90,9 +90,9 @@ def signal_summaries_for_observation(
     signals = (
         Signal.objects.filter(id__in=signal_ids)
         .select_related(
-            "operational_module",
-            "operational_domain",
-            "operational_subject",
+            "affected_business_unit",
+            "responsible_business_unit",
+            "activity_subject",
         )
         .order_by("created_at")
     )
@@ -101,12 +101,34 @@ def signal_summaries_for_observation(
             ObservationProcessingSignalSummary(
                 id=signal.id,
                 title=signal.title,
-                operational_module_key=signal.operational_module.key,
-                operational_module_label=signal.operational_module.label,
-                operational_domain_key=signal.operational_domain.key,
-                operational_domain_label=signal.operational_domain.label,
-                operational_subject_key=signal.operational_subject.key,
-                operational_subject_label=signal.operational_subject.label,
+                affected_business_unit_key=(
+                    signal.affected_business_unit.key
+                    if signal.affected_business_unit_id
+                    else ""
+                ),
+                affected_business_unit_label=(
+                    signal.affected_business_unit.label
+                    if signal.affected_business_unit_id
+                    else ""
+                ),
+                responsible_business_unit_key=(
+                    signal.responsible_business_unit.key
+                    if signal.responsible_business_unit_id
+                    else ""
+                ),
+                responsible_business_unit_label=(
+                    signal.responsible_business_unit.label
+                    if signal.responsible_business_unit_id
+                    else ""
+                ),
+                activity_subject_key=(
+                    signal.activity_subject.normalized_name
+                    if signal.activity_subject_id
+                    else ""
+                ),
+                activity_subject_label=(
+                    signal.activity_subject.label if signal.activity_subject_id else ""
+                ),
                 location_text=signal.location_text,
             )
         )

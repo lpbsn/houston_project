@@ -16,7 +16,6 @@ from houston.establishments.tests.taxonomy_helpers import (
     assert_business_unit_scope_response,
     business_unit_scope_payload,
     create_business_unit,
-    create_legacy_taxonomy_with_business_unit_mapping,
     create_membership_with_business_unit_scope,
 )
 from houston.organizations.models import Organization
@@ -178,29 +177,21 @@ def test_owner_can_invite_manager_with_business_unit_scope(api_client):
     assert_business_unit_scope_response(body["membership"], business_unit=business_unit)
 
 
-def test_legacy_domain_scope_input_normalizes_to_business_unit(api_client):
+def test_legacy_domain_scope_input_rejected_with_400(api_client):
     establishment = create_establishment(name="Legacy Invite Hotel")
     owner = create_user(username="legacy_invite_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
-    _, domain, _, business_unit = create_legacy_taxonomy_with_business_unit_mapping(
-        establishment,
-    )
 
     response = post_invitation(
         api_client,
         establishment_id=establishment.id,
         owner=owner,
         payload=invite_payload(
-            scopes=[scope_item(scope_type="domain", scope_id=domain.id)],
+            scopes=[scope_item(scope_type="domain", scope_id=uuid.uuid4())],
         ),
     )
 
-    assert response.status_code == 201
-    body = response.json()
-    assert_business_unit_scope_response(body["membership"], business_unit=business_unit)
-    membership_id = body["membership"]["id"]
-    scope = MembershipScope.objects.get(membership_id=membership_id)
-    assert scope.business_unit_id == business_unit.id
+    assert response.status_code == 400
 
 
 def test_staff_invitation_requires_scopes(api_client):

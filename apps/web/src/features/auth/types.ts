@@ -17,5 +17,4 @@ export type RoleEnum = NonNullable<MembershipUpdateRequest['role']>
 export type SwitchEstablishmentRequest = components['schemas']['SwitchEstablishmentRequest']
 export type UserPublic = components['schemas']['UserPublic']
 export type WorkspaceSummaryResponse = components['schemas']['WorkspaceSummaryResponse']
-export type OperationalTaxonomyResponse = components['schemas']['OperationalTaxonomyResponse']
 export type MembershipScopeItem = components['schemas']['EstablishmentMembershipScopeItem']

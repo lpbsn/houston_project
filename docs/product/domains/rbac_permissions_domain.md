@@ -14,7 +14,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 
 - Backend-enforced authorization for establishment-scoped product access.
 - Membership-backed roles: `owner`, `director`, `manager`, `staff`.
-- Membership-backed operational domain scope through `MembershipScope` rows.
+- Membership-backed BusinessUnit scope through `MembershipScope` rows.
 - Establishment visibility checks, action permission checks, and domain access checks.
 - Backend permission enforcement for API reads, writes, command endpoints, feeds, realtime subscriptions, signed media access, notifications, comments, and chat access.
 - Frontend permission hints as convenience only, never as security authority.
@@ -31,14 +31,14 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 
 ## 4. Core Invariants
 
-- Default deny. If membership, role, domain scope, or resource visibility is not valid, access is denied.
+- Default deny. If membership, role, BusinessUnit scope, or resource visibility is not valid, access is denied.
 - Every establishment-scoped operation requires an active membership plus an active user, active establishment, and active organization.
 - Backend validates authorization on every request. Frontend visibility never grants access.
 - Object-level authorization is mandatory for both reads and writes.
 - Establishment isolation is mandatory. Product APIs must not expose data outside authorized establishments.
-- Role and operational domain data in responses are UI hints, not security authority.
+- Role and BusinessUnit scope data in responses are UI hints, not security authority.
 - `owner` and `director` still require valid active membership; broad authority is never global.
-- **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `module`, `domain`, or `subject`; `scope_id`: taxonomy UUID). No label-based inference. Parent scopes are explicit only (module/domain rows are not expanded into child subjects in the database).
+- **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `business_unit` only; `scope_id`: active `BusinessUnit` UUID). ActivitySubject is never an RBAC scope. No label-based inference.
 - **`MembershipDomain`** is legacy/historical and must not be used as an active RBAC model. Authorization root is `MembershipScope` rows.
 - `operational_domains` is onboarding proposal context (taxonomy selection), not the RBAC source of truth used by authorization checks.
 - **`MembershipFeedSubscription`** (future Phase 4) personalizes **Ma vue** only — see [`feed_subscription_domain.md`](feed_subscription_domain.md). It must not be used as a security boundary or mixed with RBAC checks.
@@ -61,8 +61,8 @@ Identity, organization, establishment, membership lifecycle, and membership sele
   - Carries role and membership status; access fails closed if membership is missing or inactive.
 
 - MembershipScope assignment
-  - Explicit module/domain/subject scope rows scope manager/staff action and visibility inside an establishment.
-  - `can_access_domain` / `can_access_subject` evaluate scope coverage; owner/director retain broad access without scope rows.
+  - Explicit BusinessUnit scope rows for manager/staff visibility and actionability inside an establishment.
+  - Owner/director retain broad access without scope rows.
 
 - Resource visibility
   - Backend decision about whether a resource is visible at all inside the authorized establishment scope.
@@ -101,14 +101,14 @@ Permission outcomes are:
   - Membership management is narrower than owner authority: directors may manage manager and staff memberships only; they cannot manage owner memberships.
 
 - Manager
-  - Management and action authority, mainly inside assigned operational domains.
+  - Management and action authority, mainly inside assigned BusinessUnit scopes.
   - Current implemented helpers allow action creation and validation, but not establishment settings or membership management.
-  - Domain/subject access requires matching `MembershipScope` coverage (or owner/director broad access).
+  - BusinessUnit scope coverage required for domain-specific visibility/action (or owner/director broad access).
 
 - Staff
   - Reporting and execution role, not management authority.
   - Current implemented helpers allow app access, signal-feed access, and observation creation, but not action creation or action validation.
-  - Domain/subject access requires matching `MembershipScope` coverage (or owner/director broad access).
+  - BusinessUnit scope coverage required for visibility (or owner/director broad access).
 
 - Visibility vs actionability
   - Seeing a resource does not automatically allow acting on it.
@@ -155,7 +155,7 @@ Implemented response truths:
 - Auth responses and bootstrap expose backend-approved `memberships`.
 - `active_membership` is present when `UserSession.selected_establishment` resolves to a valid active membership.
 - Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
-- Membership payloads include `role`, `scopes`, and `scope_summary` for UI context (not authoritative for security).
+- Membership payloads include `role`, `scopes`, and `scope_summary` (`business_unit_count` only) for UI context (not authoritative for security).
 - Membership-management endpoints reuse bearer-session access context and DRF permission classes backed by `UserSession.selected_establishment`.
 - Membership-management list endpoints are tenant-filtered at selector/queryset level before serialization.
 - Current implemented membership-management authority is `owner` and `director`; `manager` and `staff` are denied.
@@ -166,7 +166,7 @@ Implemented response truths:
 
 Candidate endpoints only:
 
-- Role assignment or operational-domain assignment endpoints.
+- Role assignment or BusinessUnit scope assignment endpoints.
 - Permission introspection endpoints.
 - Signal, action, checklist, comment, notification, chat, feed, and signed-media endpoints whose RBAC behavior is described in product docs but not present in `apps/api/schema.yml`.
 
@@ -182,7 +182,7 @@ Target API convention from active product docs, not yet confirmed by current pub
 - Frontend may use backend-provided role or permission context to hide or show UI affordances, but must still submit commands to the backend for validation.
 - TanStack Query owns server state and refetch behavior.
 - Frontend must handle `401` as unauthenticated and should be prepared for `403` and `404` according to the target API convention above.
-- Frontend must not infer real authorization from raw role or domain data alone.
+- Frontend must not infer real authorization from raw role or scope data alone.
 - Frontend must not rely on websocket payloads as business truth; realtime should trigger invalidation and REST refetch.
 - Frontend must not persist permission-sensitive business data outside the validated auth/session design.
 
@@ -191,7 +191,7 @@ Target API convention from active product docs, not yet confirmed by current pub
 - Inspect current permission helpers before changing RBAC behavior.
 - Inspect `apps/api/schema.yml` before listing endpoints or claiming a permission-bearing API is implemented.
 - Inspect [identity_membership_domain.md](/Users/leobsn/Desktop/houston_project/docs/product/domains/identity_membership_domain.md) before changing membership assumptions.
-- Do not move role or operational-domain scope onto `User`.
+- Do not move role or BusinessUnit scope onto `User`.
 - Do not treat the UI as the authorization authority.
 - Do not expose cross-establishment resources.
 - Do not add a giant permission matrix unless explicitly requested and separately validated.

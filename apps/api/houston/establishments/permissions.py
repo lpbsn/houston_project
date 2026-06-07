@@ -4,15 +4,9 @@ from rest_framework.permissions import BasePermission
 
 from houston.accounts.models import User
 from houston.establishments.access import get_api_access_context
-from houston.establishments.membership_scope import (
-    membership_scope_covers_domain,
-    membership_scope_covers_subject,
-)
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
-    OperationalDomain,
-    OperationalSubject,
 )
 from houston.organizations.models import Organization
 
@@ -83,64 +77,6 @@ def can_validate_action(membership: EstablishmentMembership | None) -> bool:
     return _has_role(membership, _ACTION_ROLES)
 
 
-def can_access_domain(
-    membership: EstablishmentMembership | None,
-    domain_key: str,
-) -> bool:
-    if not _is_valid_membership(membership):
-        return False
-
-    normalized_domain_key = _normalize_domain_key(domain_key)
-    if normalized_domain_key is None:
-        return False
-
-    domain = (
-        OperationalDomain.objects.filter(
-            establishment=membership.establishment,
-            key=normalized_domain_key,
-            active=True,
-        )
-        .select_related("operational_module")
-        .first()
-    )
-    if domain is None:
-        return False
-
-    if membership.role in _ADMIN_ROLES:
-        return True
-
-    return membership_scope_covers_domain(membership, domain)
-
-
-def can_access_subject(
-    membership: EstablishmentMembership | None,
-    subject_key: str,
-) -> bool:
-    if not _is_valid_membership(membership):
-        return False
-
-    normalized_subject_key = _normalize_domain_key(subject_key)
-    if normalized_subject_key is None:
-        return False
-
-    subject = (
-        OperationalSubject.objects.filter(
-            establishment=membership.establishment,
-            key=normalized_subject_key,
-            active=True,
-        )
-        .select_related("operational_domain", "operational_domain__operational_module")
-        .first()
-    )
-    if subject is None:
-        return False
-
-    if membership.role in _ADMIN_ROLES:
-        return True
-
-    return membership_scope_covers_subject(membership, subject)
-
-
 def _has_role(
     membership: EstablishmentMembership | None,
     allowed_roles: frozenset[str],
@@ -185,17 +121,6 @@ def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
         return False
 
     return True
-
-
-def _normalize_domain_key(domain_key: str | None) -> str | None:
-    if not isinstance(domain_key, str):
-        return None
-
-    normalized_domain_key = domain_key.strip()
-    if not normalized_domain_key:
-        return None
-
-    return normalized_domain_key
 
 
 class HasActiveMembership(BasePermission):

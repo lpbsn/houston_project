@@ -34,10 +34,13 @@ export function ManualOnboardingV2BuPickerStep({
   }
 
   function handleSelectSuggestion(suggestion: CatalogBusinessUnitSuggestion) {
+    const suggestedUnitType =
+      suggestion.default_unit_type === 'transversal' ? 'transversal' : 'dedicated'
+
     addBusinessUnit(
       createDraftBusinessUnit({
         label: suggestion.label,
-        unit_type: suggestion.default_unit_type,
+        suggested_unit_type: suggestedUnitType,
         catalog_key: suggestion.key,
       }),
     )
@@ -57,7 +60,8 @@ export function ManualOnboardingV2BuPickerStep({
         <h3 className="text-lg font-semibold">Étape 1 — Pôles d&apos;activité</h3>
         <p className="text-sm leading-6 text-muted-foreground">
           Ajoutez au moins un pôle d&apos;activité. Utilisez le catalogue pour des suggestions ou
-          saisissez un libellé libre.
+          saisissez un libellé libre. Vous choisirez le type (dédié ou transversal) à l&apos;étape
+          suivante.
         </p>
       </div>
 
@@ -77,7 +81,6 @@ export function ManualOnboardingV2BuPickerStep({
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{businessUnit.label}</span>
-                  <Badge variant="outline">{businessUnit.unit_type}</Badge>
                   {businessUnit.catalog_key ? (
                     <Badge variant="secondary">catalogue</Badge>
                   ) : (

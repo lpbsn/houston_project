@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  getFeedCategoryLabel,
-  getFeedDomainBadgeLabel,
-  getFeedModuleBadgeLabel,
-  getFeedSecondaryTaxonomyBadgeLabel,
-  getFeedSubjectBadgeLabel,
   getPinnedSignalCardClassName,
   getSignalCardLeftAccentClass,
   getSignalCardLeftAccentColor,
@@ -28,9 +23,6 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     status: 'open',
     urgency: 'normal',
     is_pinned: false,
-    module_key: 'm',
-    domain_key: 'd',
-    subject_key: 's',
     operational_unit_key: null,
     location_text: '',
     media_count: 0,
@@ -242,35 +234,6 @@ describe('getSignalCardLeftAccentColor', () => {
     expect(
       getSignalCardLeftAccentColor(item({ id: '3', status: 'draft' })),
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.neutral)
-  })
-})
-
-describe('feed taxonomy badge labels', () => {
-  it('returns module, domain, and subject labels from key suffixes', () => {
-    expect(getFeedModuleBadgeLabel('hotel')).toBe('hotel')
-    expect(getFeedModuleBadgeLabel('restaurant__service')).toBe('service')
-    expect(getFeedDomainBadgeLabel('hotel__rooms')).toBe('rooms')
-    expect(getFeedSubjectBadgeLabel('restaurant__salle__maintenance')).toBe('maintenance')
-  })
-
-  it('returns null for empty taxonomy keys', () => {
-    expect(getFeedModuleBadgeLabel('')).toBeNull()
-    expect(getFeedModuleBadgeLabel('   ')).toBeNull()
-    expect(getFeedDomainBadgeLabel('')).toBeNull()
-    expect(getFeedSubjectBadgeLabel('')).toBeNull()
-  })
-
-  it('uses domain as secondary fallback when subject is absent', () => {
-    expect(getFeedSecondaryTaxonomyBadgeLabel('', 'hotel__rooms')).toBe('rooms')
-    expect(getFeedSecondaryTaxonomyBadgeLabel('hotel__rooms__cleaning', 'hotel__rooms')).toBe(
-      'cleaning',
-    )
-  })
-
-  it('keeps getFeedCategoryLabel legacy priority for single-badge callers', () => {
-    expect(getFeedCategoryLabel('a__subject', 'a__domain', 'module')).toBe('subject')
-    expect(getFeedCategoryLabel('', 'a__domain', 'module')).toBe('domain')
-    expect(getFeedCategoryLabel('', '', 'module')).toBe('module')
   })
 })
 

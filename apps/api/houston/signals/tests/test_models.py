@@ -1,28 +1,17 @@
 from __future__ import annotations
 
 import pytest
-from django.utils import timezone
 
 from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
-from houston.signals.tests.conftest import create_observation, create_taxonomy
+from houston.signals.tests.conftest import create_minimal_v3_signal, create_observation
 
 pytestmark = pytest.mark.django_db
 
 
 def test_signal_defaults_to_open():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
-    now = timezone.now()
-    signal = Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title="Issue",
-        structured_summary="Summary",
-        last_activity_at=now,
-    )
+    signal = create_minimal_v3_signal(membership, title="Issue")
     assert signal.status == Signal.Status.OPEN
     assert signal.urgency == Signal.Urgency.NORMAL
     assert signal.is_pinned is False
@@ -41,18 +30,8 @@ def test_candidate_signal_outcome_choices():
 
 def test_signal_source_observation_unique_link():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
-    now = timezone.now()
-    signal = Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title="Issue",
-        structured_summary="Summary",
-        last_activity_at=now,
-    )
+    signal = create_minimal_v3_signal(membership, title="Issue")
     SignalSourceObservation.objects.create(
         signal=signal,
         observation=observation,

@@ -14,8 +14,8 @@ from houston.signals.reporter_display import format_reporter_display_name
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
+    create_minimal_v3_signal,
     create_observation,
-    create_taxonomy,
     login,
     signal_feed_url,
 )
@@ -24,17 +24,7 @@ _LEAK_MARKER = "LEAK_RAW_OBSERVATION_TEXT_DO_NOT_EXPOSE"
 
 
 def _create_signal(membership, *, title: str = "Reporter signal"):
-    module, domain, subject = create_taxonomy(membership.establishment)
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title=title,
-        structured_summary="Safe structured summary only.",
-        last_activity_at=now,
-    )
+    return create_minimal_v3_signal(membership, title=title)
 
 
 def _feed_item_for_signal(api_client, membership, signal: Signal):

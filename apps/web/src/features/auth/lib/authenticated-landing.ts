@@ -96,6 +96,14 @@ export function isPublicAuthRoute(route: AppRoute): boolean {
   return false
 }
 
+export function allowsUnauthenticatedAccess(route: AppRoute): boolean {
+  if (route.kind !== 'static') {
+    return false
+  }
+
+  return route.path === '/login' || route.path === '/onboarding'
+}
+
 export function shouldShowAuthRoutingLoading(
   route: AppRoute,
   auth: { isReady: boolean; isAuthenticated: boolean },

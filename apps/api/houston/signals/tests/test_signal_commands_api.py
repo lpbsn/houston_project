@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from django.utils import timezone
 
-from houston.establishments.models import EstablishmentMembership, MembershipScope
-from houston.signals.models import Signal
+from houston.establishments.models import EstablishmentMembership
+from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
-    create_taxonomy,
+    create_minimal_v3_signal,
+    create_restaurant_v3_taxonomy,
     login,
     signal_detail_url,
 )
@@ -17,17 +17,7 @@ pytestmark = pytest.mark.django_db
 
 
 def _signal(membership):
-    module, domain, subject = create_taxonomy(membership.establishment)
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title="Issue",
-        structured_summary="Summary",
-        last_activity_at=now,
-    )
+    return create_minimal_v3_signal(membership, title="Issue")
 
 
 def test_staff_cannot_pin(api_client):
@@ -65,7 +55,8 @@ def test_manager_pin_requires_scope(api_client):
 
     membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
     signal = _signal(membership)
-    domain = signal.operational_domain
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
 
     user2 = User.objects.create_user(
         username=f"mgr_{uuid.uuid4().hex[:6]}",
@@ -86,7 +77,10 @@ def test_manager_pin_requires_scope(api_client):
     )
     assert response.status_code == 403
 
-    MembershipScope.objects.create(membership=other, operational_domain=domain)
+    create_membership_with_business_unit_scope(
+        membership=other,
+        business_unit=taxonomy.maintenance,
+    )
     response = api_client.post(
         signal_detail_url(membership.establishment_id, signal.id) + "pin/",
         **auth_headers(token),

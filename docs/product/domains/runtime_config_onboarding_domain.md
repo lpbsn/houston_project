@@ -1,35 +1,31 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-05-30
-Implementation status: **implemented** (onboarding/runtime API — Phase 2 + taxonomy subjects extension)
+Last reviewed: 2026-06-07
+Implementation status: **implemented** — **Manual onboarding V2 only** (`onboarding_proposal_v3`, BusinessUnit / ActivitySubject). Legacy Module→Domain→Subject proposals and AI onboarding are removed from product APIs (Lot 6).
 
 ## 1. Purpose
 
 This domain initializes and later evolves the establishment-scoped runtime structure Houston uses for operational workflows.
 
-Public onboarding/runtime API is **implemented**. Authoritative contract: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (paths under `/api/v1/onboarding-sessions/`). Current code includes catalogue hierarchy (modules, domains, subjects), proposals v2, AI modules-only expansion, item-level mutations, runtime config, activation readiness, and activation.
+Public onboarding/runtime API is implemented. Authoritative contract: [`apps/api/schema.yml`](../../../apps/api/schema.yml) (paths under `/api/v1/onboarding-sessions/`). Runtime onboarding uses BusinessUnit / ActivitySubject manual flow only.
 
 Domain boundaries:
 - Identity / Membership owns `User`, `Organization`, `Establishment`, and `EstablishmentMembership` lifecycle.
 - RBAC / Permissions owns who may configure, validate, activate, or later modify runtime context.
-- AI owns provider behavior, schemas, and detailed proposal contracts.
 - Runtime Config / Onboarding owns the product workflow and invariants for creating, validating, activating, and evolving initial runtime context.
 
 ## 2. MVP Scope
 
 - Initialize the initial `Organization` and `Establishment` context required before operational use, while their core lifecycle remains owned by Identity / Membership.
 - Capture a required free-text `EstablishmentActivityDescription` rich enough to guide runtime setup.
-- Define the initial establishment runtime structure using the **Module → Domain → Subject** hierarchy, plus optional **Units** (orthogonal location), runtime vocabulary, runtime tags, and routing hints.
-- Support AI-generated **modules-only** proposals with **backend expansion** of domains and subjects from the catalogue.
-- Use proposal schema **`onboarding_proposal_v2`** with explicit `operational_subjects` section.
-- Support AI-generated proposals with manual fallback if AI is unavailable or fails.
+- Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual V2 wizard).
+- Product activation accepts **`onboarding_proposal_v3`** payloads only.
+- Legacy proposals (`onboarding_proposal_v2`) are rejected at validation/apply.
 - Require human validation before backend activation of runtime context.
-- Allow high-level post-activation runtime edits and AI reruns, subject to RBAC and human validation.
+- Allow high-level post-activation runtime edits, subject to RBAC and human validation.
 
-**Catalogue authority:** `OnboardingCatalogModule` / `OnboardingCatalogDomain` / `OnboardingCatalogSubject` in PostgreSQL (seeded by migration `0007`; 6 modules, 31 domains, 154 subjects). Legacy flat domain keys (`maintenance`, `housekeeping`, …) and removed modules (`bar`, `rooftop`, `seminar_rooms`) are **obsolete** for new proposals.
-
-**AI onboarding contract:** provider returns **`operational_modules` only**; backend expands domains and subjects via catalogue FK tree (`ai_onboarding_v3`). See [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md).
+**Taxonomy authority:** BusinessUnit / ActivitySubject taxonomy is defined by [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md). Legacy catalogue v1 references are obsolete.
 
 ## 3. Out of Scope
 
@@ -37,7 +33,7 @@ Domain boundaries:
 - Billing, subscription management, or client account administration.
 - Exhaustive room or location inventory during onboarding.
 - Checklist template setup as part of activation minimum.
-- AI-driven activation, role assignment, or permission decisions.
+- Non-human-driven activation, role assignment, or permission decisions.
 - Advanced analytics or large template/catalog marketplace behavior.
 - Detailed multi-establishment onboarding UX or native mobile onboarding flows.
 - Full vocabulary, tagging, or routing administration UI beyond MVP runtime setup needs.
@@ -45,31 +41,30 @@ Domain boundaries:
 ## 4. Core Invariants
 
 - Establishment runtime config must be human-validated before activation.
-- AI proposes only; humans validate; backend activates.
+- Proposals are human-driven; backend validates and activates.
 - Backend activates only validated runtime state.
 - Runtime config is establishment-scoped and must not leak across establishments.
-- Operational modules and operational domains are required for activation minimum.
-- **Operational subjects** are required at activation minimum: ≥1 active subject per active domain that remains after apply (see [`phase_a_closure.md`](../phase_a_closure.md)).
+- Business units are required for activation minimum.
+- **Activity subjects** are required at activation minimum: at least one active subject linked to active business units in the applied proposal.
 - Runtime vocabulary, runtime tags, and routing hints may be skipped if activation minimum is still met.
 - Skipping them must not block establishment activation if the activation minimum is met.
 - Runtime tags never grant permissions.
 - Routing hints never grant permissions.
 - Frontend cannot activate or mutate authoritative runtime state by itself.
-- Post-activation destructive runtime changes must be explicit, authorized, and never auto-applied from AI proposals.
+- Post-activation destructive runtime changes must be explicit and authorized.
 
 Activation minimum:
 - organization created
 - establishment created
 - establishment activity description validated
-- at least 1 operational module validated
-- at least 3 operational domains validated
-- at least 1 operational subject validated per active domain in applied proposal
+- at least 1 business unit validated
+- at least 1 activity subject validated in applied proposal
 - at least 1 active Owner or Director
 - exactly one active or invited Director membership on a user distinct from the initial Owner (at most one invited/active Director per establishment; deactivated Directors do not satisfy the gate)
 - Director invitation during draft onboarding via `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` (returns one-time `invitation_token` and `invitation_accept_path` for manual sharing)
 - Director accepts via `POST /api/v1/invitations/{token}/accept/` (sets password, activates user/membership, creates auth session)
 
-Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md)) applies during manual item edit and validation.
+Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 
 ## 5. Main Objects
 
@@ -83,19 +78,15 @@ Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](ope
 
 - `EstablishmentActivityDescription`
   - Required free-text onboarding input describing the establishment's operational reality.
-  - Used to guide manual setup or AI proposals.
+  - Used to guide manual setup.
 
-- `OperationalModule`
-  - High-level operational activity (catalogue module).
-  - Parent of operational domains at runtime.
+- `BusinessUnit`
+  - High-level operational scope for runtime structure and RBAC assignment.
+  - Parent taxonomy node for activity subjects.
 
-- `OperationalDomain`
-  - Stable operational scope under a module (hierarchical key, e.g. `hotel__hebergement`).
-  - Used for manager/staff RBAC (`MembershipScope`) and Signal/Action routing. `MembershipFeedSubscription` (future) is separate from RBAC.
-
-- `OperationalSubject`
-  - Finest operational problem type under a domain (hierarchical key, e.g. `hotel__hebergement__proprete_des_chambres`).
-  - Required in onboarding proposal v2 and activation minimum.
+- `ActivitySubject`
+  - Finest operational classification under a business unit.
+  - Required in onboarding proposal v3 activation minimum.
 
 - `OperationalUnit`
   - Physical or contextual **location** used to localize activity.
@@ -115,9 +106,8 @@ Proposal parent/child coherence (§3.1 in [`operational_taxonomy_domain.md`](ope
   - Must not be treated as access control.
 
 - `OnboardingProposal`
-  - Candidate runtime structure proposed manually or by AI before activation.
-  - Target payload: `schema_version: onboarding_proposal_v2` with sections `operational_modules`, `operational_domains`, `operational_subjects`, optional units/vocabulary/tags/routing_hints.
-  - AI path: modules-only from provider → backend expansion + validation.
+  - Candidate runtime structure proposed manually before activation.
+  - Target payload: `schema_version: onboarding_proposal_v3` with BU/AS runtime sections plus optional units/vocabulary/tags/routing_hints.
 
 - `OnboardingProposalItemMutation` (implemented API)
   - `POST /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/` — add/remove module, domain, or subject keys with automatic parent/child coherence.
@@ -162,11 +152,8 @@ Candidate events only:
 - `EstablishmentCreated`
 - `OnboardingStarted`
 - `EstablishmentDescriptionSubmitted`
-- `OnboardingAIInterpretationStarted`
-- `OnboardingAIInterpretationSucceeded`
-- `OnboardingAIInterpretationFailed`
-- `OperationalModulesProposed`
-- `OperationalDomainsProposed`
+- `BusinessUnitsProposed`
+- `ActivitySubjectsProposed`
 - `OperationalUnitsProposed`
 - `RuntimeVocabularyProposed`
 - `RuntimeTagsProposed`
@@ -193,22 +180,18 @@ Candidate endpoint capabilities only:
 - create organization
 - create establishment
 - submit establishment description
-- start AI interpretation
 - fetch onboarding proposal
-- mutate proposal catalog item (add/remove module, domain, subject)
+- mutate proposal catalog item (add/remove business unit, activity subject)
 - validate proposal section
 - activate establishment
 - update runtime config
-- rerun AI proposal
 - invite initial director during onboarding (`POST .../director-invitations/`)
 
 ## 10. Frontend Expectations
 
 - Onboarding should be guided and section-based rather than a raw configuration dump.
-- UI must clearly distinguish AI proposals from validated active runtime state.
 - UI should support accept, edit, reject, and **item-level add/remove** for proposal sections when those APIs exist.
-- UI must support manual fallback when AI fails or is unavailable.
-- UI must not present AI output as already active runtime configuration.
+- UI must clearly distinguish draft proposals from validated active runtime state.
 - UI must not treat activation as complete until backend confirmation is returned.
 - TanStack Query owns runtime/onboarding server state.
 - Frontend must use generated API clients only for endpoints confirmed in OpenAPI.
@@ -216,15 +199,13 @@ Candidate endpoint capabilities only:
 
 ## 11. AI Agent Notes
 
-- Inspect current code before assuming runtime objects beyond `OperationalDomain` already exist.
+- Inspect current code before assuming runtime objects beyond established BU/AS runtime objects already exist.
 - Inspect `apps/api/schema.yml` before claiming any runtime/onboarding endpoint is implemented.
 - Inspect `identity_membership_domain.md` before changing `Organization`, `Establishment`, or membership assumptions.
 - Inspect `rbac_permissions_domain.md` before changing who can validate, activate, rerun, or edit runtime setup.
-- Inspect [`operational_taxonomy_domain.md`](operational_taxonomy_domain.md) before changing hierarchy or keys.
-- Inspect the AI onboarding contract (`ai_onboarding_v3`, modules-only) before changing proposal or provider schemas.
+- Inspect [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md) before changing hierarchy or keys.
 - Do not implement Signal, Feed, or Observation pipeline code in onboarding phases.
-- Do not let AI activate runtime elements directly.
-- Do not let AI assign roles or permissions.
+- Do not let non-authorized clients activate runtime elements directly.
 - Do not use runtime tags as RBAC inputs.
 - Do not turn catalog examples into database models or seed data unless the current phase explicitly requires it.
 - Do not add exhaustive rooms or checklist templates to activation minimum.

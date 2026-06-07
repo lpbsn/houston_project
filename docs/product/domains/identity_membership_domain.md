@@ -18,7 +18,7 @@ This domain owns global user identity, organization and establishment membership
 - `Establishment` as the operational tenant context.
 - `EstablishmentMembership` as the access link between a user and an establishment.
 - Membership-scoped role and membership status.
-- Membership-scoped operational RBAC through `MembershipScope` rows (`module`, `domain`, or `subject` taxonomy IDs).
+- Membership-scoped operational RBAC through `MembershipScope` rows (`business_unit` only — active BusinessUnit UUID).
 - Backend-enforced establishment access based on active membership, active user, active establishment, and active organization.
 - Bootstrap-facing identity and membership context through the current auth API.
 - Mono-establishment default UX.

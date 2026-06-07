@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import type { FeedCategorySelectionState } from '../lib/signal-feed-category-selection'
+import type { FeedClassificationSelectionState } from '../lib/signal-feed-classification-selection'
 import { cn } from '@/lib/utils'
 
 type SignalFeedCategoryCheckboxProps = {
@@ -9,7 +9,7 @@ type SignalFeedCategoryCheckboxProps = {
   label: string
   levelLabel?: string
   onToggle: () => void
-  selectionState: FeedCategorySelectionState
+  selectionState: FeedClassificationSelectionState
 }
 
 export function SignalFeedCategoryCheckbox({

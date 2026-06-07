@@ -2,19 +2,20 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
 import { TerrainFilterSlot } from '@/components/ui/terrain'
-import { buildOperationalScopeTree } from '@/features/auth/lib/membership-scope'
-import { getOperationalTaxonomy, operationalTaxonomyQueryKey } from '@/features/auth/api'
-
-import { buildLabelByKeyFromTree } from '../lib/signal-feed-category-selection'
+import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
+import { businessUnitTreeQueryKey, getBusinessUnitTree } from '@/features/auth/api'
 
 import {
+  buildClassificationLabelsFromTree,
+} from '../lib/signal-feed-classification-selection'
+import {
   EMPTY_SIGNAL_FEED_FILTERS,
-  formatCategoryFilterSummary,
+  formatClassificationFilterSummary,
   formatStatusFilterSummary,
   normalizeSignalFeedFilters,
   type SignalFeedFilters,
 } from '../lib/signal-feed-filters'
-import { SignalFeedCategoryFilterSheet } from './signal-feed-category-filter-sheet'
+import { SignalFeedClassificationFilterSheet } from './signal-feed-classification-filter-sheet'
 import { SignalFeedStatusFilterSheet } from './signal-feed-status-filter-sheet'
 
 type SignalFeedFiltersBarProps = {
@@ -29,22 +30,25 @@ export function SignalFeedFiltersBar({
   onFiltersChange,
 }: SignalFeedFiltersBarProps) {
   const [statusSheetOpen, setStatusSheetOpen] = useState(false)
-  const [categorySheetOpen, setCategorySheetOpen] = useState(false)
+  const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
+  const normalizedFilters = normalizeSignalFeedFilters(filters)
 
-  const taxonomyQuery = useQuery({
-    queryKey: operationalTaxonomyQueryKey(establishmentId),
-    queryFn: () => getOperationalTaxonomy(establishmentId),
-    staleTime: 60_000,
+  const treeQuery = useQuery({
+    queryKey: businessUnitTreeQueryKey(establishmentId),
+    queryFn: () => getBusinessUnitTree(establishmentId),
+    enabled: Boolean(establishmentId),
   })
 
-  const labelByKey = useMemo(() => {
-    if (!taxonomyQuery.data) {
-      return new Map<string, string>()
+  const classificationLabels = useMemo(() => {
+    if (!treeQuery.data) {
+      return {
+        labelByBusinessUnitKey: new Map<string, string>(),
+        labelByActivitySubjectId: new Map<string, string>(),
+      }
     }
-    return buildLabelByKeyFromTree(buildOperationalScopeTree(taxonomyQuery.data))
-  }, [taxonomyQuery.data])
-
-  const normalizedFilters = normalizeSignalFeedFilters(filters)
+    const businessUnits = buildBusinessUnitScopeTree(treeQuery.data).businessUnits
+    return buildClassificationLabelsFromTree(businessUnits)
+  }, [treeQuery.data])
 
   return (
     <>
@@ -57,21 +61,19 @@ export function SignalFeedFiltersBar({
             label="Statut"
             value={formatStatusFilterSummary(normalizedFilters)}
             disabled={false}
-            onClick={() => {
-              setCategorySheetOpen(false)
-              setStatusSheetOpen(true)
-            }}
+            onClick={() => setStatusSheetOpen(true)}
           />
         </div>
-        <div className="flex flex-1" data-filter-kind="category">
+        <div className="flex flex-1" data-filter-kind="classification">
           <TerrainFilterSlot
-            label="Catégorie"
-            value={formatCategoryFilterSummary(normalizedFilters, labelByKey)}
+            label="Pôle / Sujet"
+            value={formatClassificationFilterSummary(
+              normalizedFilters,
+              classificationLabels.labelByBusinessUnitKey,
+              classificationLabels.labelByActivitySubjectId,
+            )}
             disabled={false}
-            onClick={() => {
-              setStatusSheetOpen(false)
-              setCategorySheetOpen(true)
-            }}
+            onClick={() => setClassificationSheetOpen(true)}
           />
         </div>
       </div>
@@ -81,20 +83,23 @@ export function SignalFeedFiltersBar({
           key={`status-${normalizedFilters.statuses.join(',')}`}
           appliedFilters={normalizedFilters}
           onClose={() => setStatusSheetOpen(false)}
-          onApply={(next) => onFiltersChange(normalizeSignalFeedFilters(next))}
+          onApply={(next) =>
+            onFiltersChange(
+              normalizeSignalFeedFilters({
+                ...normalizedFilters,
+                statuses: next.statuses,
+              }),
+            )
+          }
         />
       ) : null}
 
-      {categorySheetOpen ? (
-        <SignalFeedCategoryFilterSheet
-          key={[
-            normalizedFilters.moduleKeys.join(','),
-            normalizedFilters.domainKeys.join(','),
-            normalizedFilters.subjectKeys.join(','),
-          ].join('|')}
+      {classificationSheetOpen ? (
+        <SignalFeedClassificationFilterSheet
+          key={`classification-${normalizedFilters.businessUnitKeys.join(',')}-${normalizedFilters.activitySubjectIds.join(',')}`}
           establishmentId={establishmentId}
           appliedFilters={normalizedFilters}
-          onClose={() => setCategorySheetOpen(false)}
+          onClose={() => setClassificationSheetOpen(false)}
           onApply={(next) => onFiltersChange(normalizeSignalFeedFilters(next))}
         />
       ) : null}

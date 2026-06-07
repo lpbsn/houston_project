@@ -6,30 +6,24 @@ from typing import Any
 
 from django.db.models import Q
 
-from houston.establishments.models import (
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
-)
+from houston.establishments.models import ActivitySubject, BusinessUnit
 from houston.signals.constants import FEED_SIGNAL_STATUSES
 
 FEED_FILTERABLE_STATUSES = frozenset(FEED_SIGNAL_STATUSES)
 
 MAX_FILTER_STATUSES = 3
-MAX_FILTER_MODULE_KEYS = 20
-MAX_FILTER_DOMAIN_KEYS = 50
-MAX_FILTER_SUBJECT_KEYS = 100
+MAX_FILTER_BUSINESS_UNIT_KEYS = 20
+MAX_FILTER_ACTIVITY_SUBJECT_IDS = 50
 
 
 @dataclass(frozen=True)
 class SignalFeedFilters:
     statuses: tuple[str, ...] = ()
-    module_keys: tuple[str, ...] = ()
-    domain_keys: tuple[str, ...] = ()
-    subject_keys: tuple[str, ...] = ()
+    business_unit_keys: tuple[str, ...] = ()
+    activity_subject_ids: tuple[uuid.UUID, ...] = ()
 
     def has_any(self) -> bool:
-        return bool(self.statuses or self.module_keys or self.domain_keys or self.subject_keys)
+        return bool(self.statuses or self.business_unit_keys or self.activity_subject_ids)
 
 
 class SignalFeedFilterValidationError(Exception):
@@ -44,34 +38,28 @@ def parse_signal_feed_filters(
     establishment_id: uuid.UUID,
 ) -> SignalFeedFilters:
     statuses = _parse_statuses(query_params.get("statuses"))
-    module_keys = _parse_taxonomy_keys(
-        raw=query_params.get("module_keys"),
-        max_count=MAX_FILTER_MODULE_KEYS,
-        param_name="module_keys",
+    business_unit_keys = _parse_taxonomy_keys(
+        raw=query_params.get("business_unit_keys"),
+        max_count=MAX_FILTER_BUSINESS_UNIT_KEYS,
+        param_name="business_unit_keys",
     )
-    domain_keys = _parse_taxonomy_keys(
-        raw=query_params.get("domain_keys"),
-        max_count=MAX_FILTER_DOMAIN_KEYS,
-        param_name="domain_keys",
-    )
-    subject_keys = _parse_taxonomy_keys(
-        raw=query_params.get("subject_keys"),
-        max_count=MAX_FILTER_SUBJECT_KEYS,
-        param_name="subject_keys",
+    activity_subject_ids = _parse_activity_subject_ids(
+        raw=query_params.get("activity_subject_ids"),
     )
 
-    _validate_taxonomy_keys_exist(
+    _validate_business_unit_keys_exist(
         establishment_id=establishment_id,
-        module_keys=module_keys,
-        domain_keys=domain_keys,
-        subject_keys=subject_keys,
+        business_unit_keys=business_unit_keys,
+    )
+    _validate_activity_subject_ids_exist(
+        establishment_id=establishment_id,
+        activity_subject_ids=activity_subject_ids,
     )
 
     return SignalFeedFilters(
         statuses=statuses,
-        module_keys=module_keys,
-        domain_keys=domain_keys,
-        subject_keys=subject_keys,
+        business_unit_keys=business_unit_keys,
+        activity_subject_ids=activity_subject_ids,
     )
 
 
@@ -83,15 +71,13 @@ def build_applied_filters_payload(
     payload: dict[str, Any] = {"view_mode": view_mode}
     if filters is None:
         payload["statuses"] = []
-        payload["module_keys"] = []
-        payload["domain_keys"] = []
-        payload["subject_keys"] = []
+        payload["business_unit_keys"] = []
+        payload["activity_subject_ids"] = []
         return payload
 
     payload["statuses"] = list(filters.statuses)
-    payload["module_keys"] = list(filters.module_keys)
-    payload["domain_keys"] = list(filters.domain_keys)
-    payload["subject_keys"] = list(filters.subject_keys)
+    payload["business_unit_keys"] = list(filters.business_unit_keys)
+    payload["activity_subject_ids"] = [str(value) for value in filters.activity_subject_ids]
     return payload
 
 
@@ -102,15 +88,14 @@ def apply_feed_filters(queryset, *, filters: SignalFeedFilters | None):
     if filters.statuses:
         queryset = queryset.filter(status__in=filters.statuses)
 
-    category_q = Q()
-    if filters.module_keys:
-        category_q |= Q(operational_module__key__in=filters.module_keys)
-    if filters.domain_keys:
-        category_q |= Q(operational_domain__key__in=filters.domain_keys)
-    if filters.subject_keys:
-        category_q |= Q(operational_subject__key__in=filters.subject_keys)
-    if category_q:
-        queryset = queryset.filter(category_q)
+    if filters.business_unit_keys:
+        queryset = queryset.filter(
+            Q(affected_business_unit__key__in=filters.business_unit_keys)
+            | Q(responsible_business_unit__key__in=filters.business_unit_keys)
+        )
+
+    if filters.activity_subject_ids:
+        queryset = queryset.filter(activity_subject_id__in=filters.activity_subject_ids)
 
     return queryset
 
@@ -159,51 +144,72 @@ def _parse_taxonomy_keys(*, raw: str | None, max_count: int, param_name: str) ->
     return normalized
 
 
-def _validate_taxonomy_keys_exist(
+def _parse_activity_subject_ids(*, raw: str | None) -> tuple[uuid.UUID, ...]:
+    values = _parse_csv_values(raw=raw)
+    if not values:
+        return ()
+
+    normalized = _dedupe_sorted(values)
+    if len(normalized) > MAX_FILTER_ACTIVITY_SUBJECT_IDS:
+        raise SignalFeedFilterValidationError(
+            f"activity_subject_ids accepts at most {MAX_FILTER_ACTIVITY_SUBJECT_IDS} values.",
+        )
+
+    parsed: list[uuid.UUID] = []
+    invalid: list[str] = []
+    for value in normalized:
+        try:
+            parsed.append(uuid.UUID(value))
+        except ValueError:
+            invalid.append(value)
+
+    if invalid:
+        raise SignalFeedFilterValidationError(
+            f"Invalid activity_subject_ids: {', '.join(invalid)}.",
+        )
+
+    return tuple(parsed)
+
+
+def _validate_business_unit_keys_exist(
     *,
     establishment_id: uuid.UUID,
-    module_keys: tuple[str, ...],
-    domain_keys: tuple[str, ...],
-    subject_keys: tuple[str, ...],
+    business_unit_keys: tuple[str, ...],
 ) -> None:
-    if module_keys:
-        found = set(
-            OperationalModule.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-                key__in=module_keys,
-            ).values_list("key", flat=True),
-        )
-        unknown = [key for key in module_keys if key not in found]
-        if unknown:
-            raise SignalFeedFilterValidationError(
-                f"Unknown or inactive module_keys: {', '.join(unknown)}.",
-            )
+    if not business_unit_keys:
+        return
 
-    if domain_keys:
-        found = set(
-            OperationalDomain.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-                key__in=domain_keys,
-            ).values_list("key", flat=True),
+    found = set(
+        BusinessUnit.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+            key__in=business_unit_keys,
+        ).values_list("key", flat=True),
+    )
+    unknown = [key for key in business_unit_keys if key not in found]
+    if unknown:
+        raise SignalFeedFilterValidationError(
+            f"Unknown or inactive business_unit_keys: {', '.join(unknown)}.",
         )
-        unknown = [key for key in domain_keys if key not in found]
-        if unknown:
-            raise SignalFeedFilterValidationError(
-                f"Unknown or inactive domain_keys: {', '.join(unknown)}.",
-            )
 
-    if subject_keys:
-        found = set(
-            OperationalSubject.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-                key__in=subject_keys,
-            ).values_list("key", flat=True),
+
+def _validate_activity_subject_ids_exist(
+    *,
+    establishment_id: uuid.UUID,
+    activity_subject_ids: tuple[uuid.UUID, ...],
+) -> None:
+    if not activity_subject_ids:
+        return
+
+    found = set(
+        ActivitySubject.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+            id__in=activity_subject_ids,
+        ).values_list("id", flat=True),
+    )
+    unknown = [str(value) for value in activity_subject_ids if value not in found]
+    if unknown:
+        raise SignalFeedFilterValidationError(
+            f"Unknown or inactive activity_subject_ids: {', '.join(unknown)}.",
         )
-        unknown = [key for key in subject_keys if key not in found]
-        if unknown:
-            raise SignalFeedFilterValidationError(
-                f"Unknown or inactive subject_keys: {', '.join(unknown)}.",
-            )

@@ -6,26 +6,13 @@ from django.utils import timezone
 
 from houston.accounts.authentication import AccessTokenAuthContext
 from houston.accounts.models import AccessToken, User, UserSession
-from houston.establishments.models import (
-    Establishment,
-    EstablishmentMembership,
-    MembershipScope,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
-    RoutingHint,
-    RoutingHintDomain,
-    RuntimeTag,
-    RuntimeTagDomain,
-)
+from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import (
     CanInviteMemberships,
     CanManageMemberships,
     CanManageRuntimeContext,
     HasActiveMembership,
     can_access_app,
-    can_access_domain,
-    can_access_subject,
     can_create_action,
     can_create_observation,
     can_invite_memberships,
@@ -76,30 +63,6 @@ def build_membership(
     return membership
 
 
-def create_domain(
-    establishment,
-    *,
-    key,
-    label,
-    active=True,
-    source=OperationalDomain.Source.MANUAL,
-):
-    return OperationalDomain.objects.create(
-        establishment=establishment,
-        key=key,
-        label=label,
-        active=active,
-        source=source,
-    )
-
-
-def link_membership_to_domain(membership, operational_domain):
-    return MembershipScope.objects.create(
-        membership=membership,
-        operational_domain=operational_domain,
-    )
-
-
 def build_permission_request(
     request_factory,
     *,
@@ -134,7 +97,6 @@ def assert_all_permissions_denied(membership):
     assert can_create_observation(membership) is False
     assert can_create_action(membership) is False
     assert can_validate_action(membership) is False
-    assert can_access_domain(membership, "housekeeping") is False
 
 
 def test_owner_permissions():
@@ -268,183 +230,6 @@ def test_unknown_status_fails_closed(attribute_name, attribute_value):
     assert_all_permissions_denied(membership)
 
 
-def test_owner_and_director_can_access_any_nonblank_domain():
-    owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
-    director_membership = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
-    create_domain(
-        owner_membership.establishment,
-        key="housekeeping",
-        label="Housekeeping",
-    )
-    create_domain(
-        director_membership.establishment,
-        key="maintenance",
-        label="Maintenance",
-    )
-
-    assert can_access_domain(owner_membership, " housekeeping ") is True
-    assert can_access_domain(director_membership, "maintenance") is True
-
-
-@pytest.mark.parametrize(
-    "role",
-    [EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF],
-)
-def test_manager_and_staff_can_access_matching_linked_domain(role):
-    membership = build_membership(role=role)
-    domain = create_domain(
-        membership.establishment,
-        key="housekeeping",
-        label="Housekeeping",
-    )
-    link_membership_to_domain(membership, domain)
-
-    assert can_access_domain(membership, "housekeeping") is True
-
-
-@pytest.mark.parametrize(
-    "role",
-    [EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF],
-)
-def test_manager_and_staff_cannot_access_without_linked_domain(role):
-    membership = build_membership(role=role)
-    create_domain(
-        membership.establishment,
-        key="security",
-        label="Security",
-    )
-
-    assert can_access_domain(membership, "security") is False
-
-
-@pytest.mark.parametrize(
-    "role",
-    [
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.MANAGER,
-        EstablishmentMembership.Role.STAFF,
-    ],
-)
-def test_blank_domain_is_denied_for_every_role(role):
-    membership = build_membership(role=role)
-    domain = create_domain(
-        membership.establishment,
-        key="housekeeping",
-        label="Housekeeping",
-    )
-    if role in {EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF}:
-        link_membership_to_domain(membership, domain)
-
-    assert can_access_domain(membership, "   ") is False
-    assert can_access_domain(membership, None) is False
-
-
-@pytest.mark.parametrize(
-    "role",
-    [
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.MANAGER,
-        EstablishmentMembership.Role.STAFF,
-    ],
-)
-def test_unknown_domain_key_is_denied_for_every_role(role):
-    membership = build_membership(role=role)
-    domain = create_domain(
-        membership.establishment,
-        key="housekeeping",
-        label="Housekeeping",
-    )
-    if role in {EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF}:
-        link_membership_to_domain(membership, domain)
-
-    assert can_access_domain(membership, "unknown") is False
-
-
-@pytest.mark.parametrize(
-    "role",
-    [
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.MANAGER,
-        EstablishmentMembership.Role.STAFF,
-    ],
-)
-def test_inactive_domain_is_denied_for_every_role(role):
-    membership = build_membership(role=role)
-    inactive_domain = create_domain(
-        membership.establishment,
-        key="housekeeping",
-        label="Housekeeping",
-        active=False,
-    )
-    if role in {EstablishmentMembership.Role.MANAGER, EstablishmentMembership.Role.STAFF}:
-        link_membership_to_domain(membership, inactive_domain)
-
-    assert can_access_domain(membership, "housekeeping") is False
-
-
-def test_domain_from_another_establishment_is_denied():
-    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
-    other_membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
-    foreign_domain = create_domain(
-        other_membership.establishment,
-        key="maintenance",
-        label="Maintenance",
-    )
-    link_membership_to_domain(membership, foreign_domain)
-
-    assert can_access_domain(membership, "maintenance") is False
-
-
-def test_owner_and_director_domain_access_requires_existing_active_domain():
-    owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
-    director_membership = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
-
-    assert can_access_domain(owner_membership, "housekeeping") is False
-    assert can_access_domain(director_membership, "maintenance") is False
-
-
-def test_runtime_tag_domain_link_does_not_grant_domain_access():
-    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
-    domain = create_domain(
-        membership.establishment,
-        key="maintenance",
-        label="Maintenance",
-    )
-    runtime_tag = RuntimeTag.objects.create(
-        establishment=membership.establishment,
-        key="hvac",
-        label="HVAC",
-    )
-    RuntimeTagDomain.objects.create(
-        runtime_tag=runtime_tag,
-        operational_domain=domain,
-    )
-
-    assert can_access_domain(membership, "maintenance") is False
-
-
-def test_routing_hint_domain_link_does_not_grant_domain_access():
-    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
-    domain = create_domain(
-        membership.establishment,
-        key="maintenance",
-        label="Maintenance",
-    )
-    routing_hint = RoutingHint.objects.create(
-        establishment=membership.establishment,
-        pattern="VRV",
-    )
-    RoutingHintDomain.objects.create(
-        routing_hint=routing_hint,
-        operational_domain=domain,
-    )
-
-    assert can_access_domain(membership, "maintenance") is False
-
-
 def test_has_active_membership_allows_ready_and_selection_required_contexts(request_factory):
     owner_membership = build_membership(role=EstablishmentMembership.Role.OWNER)
     EstablishmentMembership.objects.create(
@@ -560,86 +345,3 @@ def test_manage_permissions_fail_closed_without_selected_membership(request_fact
     assert CanManageMemberships().has_permission(request, None) is False
     assert CanManageRuntimeContext().has_permission(request, None) is False
     assert CanInviteMemberships().has_permission(request, None) is False
-
-
-def test_manager_with_module_scope_can_access_child_domain():
-    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
-    module = OperationalModule.objects.create(
-        establishment=membership.establishment,
-        key="hotel",
-        label="Hotel",
-        active=True,
-    )
-    OperationalDomain.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        key="housekeeping",
-        label="Housekeeping",
-        active=True,
-    )
-    MembershipScope.objects.create(membership=membership, operational_module=module)
-
-    assert can_access_domain(membership, "housekeeping") is True
-    assert can_access_domain(membership, "security") is False
-
-
-def test_subject_only_scope_does_not_grant_domain_access():
-    membership = build_membership(role=EstablishmentMembership.Role.STAFF)
-    module = OperationalModule.objects.create(
-        establishment=membership.establishment,
-        key="hotel",
-        label="Hotel",
-        active=True,
-    )
-    proprete_domain = OperationalDomain.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        key="proprete_chambre",
-        label="Propreté chambre",
-        active=True,
-    )
-    subject = OperationalSubject.objects.create(
-        establishment=membership.establishment,
-        operational_domain=proprete_domain,
-        key="daily_cleaning",
-        label="Daily cleaning",
-        active=True,
-    )
-    MembershipScope.objects.create(membership=membership, operational_subject=subject)
-
-    assert can_access_subject(membership, "daily_cleaning") is True
-    assert can_access_domain(membership, "proprete_chambre") is False
-
-
-def test_label_collision_does_not_grant_domain_access_without_matching_scope_id():
-    membership = build_membership(role=EstablishmentMembership.Role.MANAGER)
-    module_a = OperationalModule.objects.create(
-        establishment=membership.establishment,
-        key="hotel",
-        label="Hotel",
-        active=True,
-    )
-    module_b = OperationalModule.objects.create(
-        establishment=membership.establishment,
-        key="restaurant",
-        label="Restaurant",
-        active=True,
-    )
-    domain_a = OperationalDomain.objects.create(
-        establishment=membership.establishment,
-        operational_module=module_a,
-        key="hotel_proprete",
-        label="Propreté",
-        active=True,
-    )
-    OperationalDomain.objects.create(
-        establishment=membership.establishment,
-        operational_module=module_b,
-        key="restaurant_proprete",
-        label="Propreté",
-        active=True,
-    )
-    MembershipScope.objects.create(membership=membership, operational_domain=domain_a)
-
-    assert can_access_domain(membership, "hotel_proprete") is True
-    assert can_access_domain(membership, "restaurant_proprete") is False

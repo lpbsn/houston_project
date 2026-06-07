@@ -56,21 +56,32 @@ function readOptionalUserName(user: unknown, key: 'first_name' | 'last_name') {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
-function toScopeSummaryText(scopeSummary: unknown) {
+function toScopeSummaryText(
+  scopeSummary: unknown,
+  role: RoleEnum | null,
+) {
+  if (role === 'owner' || role === 'director') {
+    return 'Périmètre complet'
+  }
+
   if (!scopeSummary || typeof scopeSummary !== 'object') {
     return null
   }
 
   const summary = scopeSummary as Record<string, unknown>
-  const moduleCount = typeof summary.module_count === 'number' ? summary.module_count : null
-  const domainCount = typeof summary.domain_count === 'number' ? summary.domain_count : null
-  const subjectCount = typeof summary.subject_count === 'number' ? summary.subject_count : null
+  const businessUnitCount =
+    typeof summary.business_unit_count === 'number' ? summary.business_unit_count : null
 
-  if (moduleCount === null || domainCount === null || subjectCount === null) {
+  if (businessUnitCount === null) {
     return null
   }
 
-  return `${moduleCount} modules, ${domainCount} domaines, ${subjectCount} sujets`
+  if (businessUnitCount > 0) {
+    const label = businessUnitCount === 1 ? 'pôle' : 'pôles'
+    return `${businessUnitCount} ${label}`
+  }
+
+  return 'Aucun périmètre'
 }
 
 function buildDisplayName(
@@ -120,7 +131,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = role ? MANAGEMENT_ROLES.has(role) : false
   const canInviteMember = canSeeInviteMemberButton(role)
-  const scopeSummary = toScopeSummaryText(activeMembership?.scope_summary)
+  const scopeSummary = toScopeSummaryText(activeMembership?.scope_summary, role)
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)
 

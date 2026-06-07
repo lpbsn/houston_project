@@ -12,7 +12,7 @@ from houston.signals.services import resolve_signal
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
-    create_taxonomy,
+    create_minimal_v3_signal,
     login,
     signal_detail_url,
     signal_feed_url,
@@ -29,25 +29,17 @@ def _create_signal(
     urgency: str = Signal.Urgency.NORMAL,
     is_pinned: bool = False,
     last_activity_at=None,
-    taxonomy: tuple | None = None,
 ):
-    if taxonomy is None:
-        taxonomy = create_taxonomy(membership.establishment)
-    module, domain, subject = taxonomy
-    now = timezone.now()
-    activity = last_activity_at if last_activity_at is not None else now
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title=title,
-        structured_summary="Structured summary safe.",
-        status=status,
-        urgency=urgency,
-        is_pinned=is_pinned,
-        last_activity_at=activity,
-    )
+    signal = create_minimal_v3_signal(membership, title=title, status=status)
+    if urgency != Signal.Urgency.NORMAL or is_pinned or last_activity_at is not None:
+        signal.urgency = urgency
+        signal.is_pinned = is_pinned
+        if last_activity_at is not None:
+            signal.last_activity_at = last_activity_at
+        signal.save(
+            update_fields=["urgency", "is_pinned", "last_activity_at", "updated_at"]
+        )
+    return signal
 
 
 def test_feed_includes_open_in_progress_and_resolved(api_client):
@@ -228,21 +220,16 @@ def test_detail_resolved_permission_hints_all_false(api_client):
 
 def test_resolve_signal_clears_pin_and_high_urgency():
     membership = build_api_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
     now = timezone.now()
-    signal = Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
+    signal = create_minimal_v3_signal(
+        membership,
         title="Pinned urgent",
-        structured_summary="Summary",
         status=Signal.Status.IN_PROGRESS,
-        urgency=Signal.Urgency.HIGH,
-        is_pinned=True,
-        pinned_at=now,
-        last_activity_at=now,
     )
+    signal.urgency = Signal.Urgency.HIGH
+    signal.is_pinned = True
+    signal.pinned_at = now
+    signal.save(update_fields=["urgency", "is_pinned", "pinned_at", "updated_at"])
 
     result = resolve_signal(signal=signal)
 

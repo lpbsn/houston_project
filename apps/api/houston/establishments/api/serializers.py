@@ -34,18 +34,19 @@ class MembershipUserSummarySerializer(serializers.Serializer):
 
 @extend_schema_serializer(component_name="EstablishmentMembershipScopeItem")
 class MembershipScopeItemSerializer(serializers.Serializer):
-    scope_type = serializers.ChoiceField(
-        choices=["business_unit", "module", "domain", "subject"],
-    )
+    scope_type = serializers.ChoiceField(choices=["business_unit"])
+    scope_id = serializers.UUIDField()
+
+
+@extend_schema_serializer(component_name="EstablishmentMembershipScopeWriteItem")
+class MembershipScopeWriteItemSerializer(serializers.Serializer):
+    scope_type = serializers.ChoiceField(choices=["business_unit"])
     scope_id = serializers.UUIDField()
 
 
 @extend_schema_serializer(component_name="EstablishmentMembershipScopeSummary")
 class MembershipScopeSummarySerializer(serializers.Serializer):
     business_unit_count = serializers.IntegerField()
-    module_count = serializers.IntegerField()
-    domain_count = serializers.IntegerField()
-    subject_count = serializers.IntegerField()
 
 
 class EstablishmentMembershipResponseSerializer(serializers.Serializer):
@@ -76,38 +77,13 @@ class MembershipUpdateRequestSerializer(serializers.Serializer):
         choices=EstablishmentMembership.Role.choices,
         required=False,
     )
-    scopes = MembershipScopeItemSerializer(many=True, required=False)
+    scopes = MembershipScopeWriteItemSerializer(many=True, required=False)
 
     def validate(self, attrs):
         if not attrs:
             raise serializers.ValidationError("At least one of role or scopes must be provided.")
 
         return attrs
-
-
-class OperationalTaxonomySubjectSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    key = serializers.CharField()
-    label = serializers.CharField()
-
-
-class OperationalTaxonomyDomainSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    key = serializers.CharField()
-    label = serializers.CharField()
-    subjects = OperationalTaxonomySubjectSerializer(many=True)
-
-
-class OperationalTaxonomyModuleSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    key = serializers.CharField()
-    label = serializers.CharField()
-    domains = OperationalTaxonomyDomainSerializer(many=True)
-
-
-class OperationalTaxonomyResponseSerializer(serializers.Serializer):
-    modules = OperationalTaxonomyModuleSerializer(many=True)
-    unassigned_domains = OperationalTaxonomyDomainSerializer(many=True)
 
 
 class ActivitySubjectTreeItemSerializer(serializers.Serializer):
@@ -220,7 +196,7 @@ class MembershipInvitationRequestSerializer(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=EstablishmentMembership.Role.choices,
     )
-    scopes = MembershipScopeItemSerializer(many=True)
+    scopes = MembershipScopeWriteItemSerializer(many=True)
 
     def validate(self, attrs):
         scopes = attrs.get("scopes")
@@ -333,79 +309,10 @@ class KeyedRuntimeItemSerializer(serializers.Serializer):
     active = serializers.BooleanField()
 
 
-class RuntimeVocabularyItemSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    term = serializers.CharField()
-    meaning = serializers.CharField()
-    mapped_domain_key = serializers.SerializerMethodField()
-    mapped_unit_key = serializers.SerializerMethodField()
-    source = serializers.CharField()
-    active = serializers.BooleanField()
-
-    @extend_schema_field(serializers.CharField(allow_null=True))
-    def get_mapped_domain_key(self, item) -> str | None:
-        if isinstance(item, dict):
-            return item.get("mapped_domain_key")
-
-        return None if item.mapped_domain_id is None else item.mapped_domain.key
-
-    @extend_schema_field(serializers.CharField(allow_null=True))
-    def get_mapped_unit_key(self, item) -> str | None:
-        if isinstance(item, dict):
-            return item.get("mapped_unit_key")
-
-        return None if item.mapped_unit_id is None else item.mapped_unit.key
-
-
-class RuntimeTagItemSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    key = serializers.CharField()
-    label = serializers.CharField()
-    source = serializers.CharField()
-    active = serializers.BooleanField()
-    domain_keys = serializers.SerializerMethodField()
-
-    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
-    def get_domain_keys(self, runtime_tag) -> list[str]:
-        if isinstance(runtime_tag, dict):
-            return runtime_tag.get("domain_keys", [])
-
-        return [link.operational_domain.key for link in runtime_tag.domain_links.all()]
-
-
-class RoutingHintItemSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    pattern = serializers.CharField()
-    suggested_unit_key = serializers.SerializerMethodField()
-    source = serializers.CharField()
-    active = serializers.BooleanField()
-    domain_keys = serializers.SerializerMethodField()
-
-    @extend_schema_field(serializers.CharField(allow_null=True))
-    def get_suggested_unit_key(self, routing_hint) -> str | None:
-        if isinstance(routing_hint, dict):
-            return routing_hint.get("suggested_unit_key")
-
-        return None if routing_hint.suggested_unit_id is None else routing_hint.suggested_unit.key
-
-    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
-    def get_domain_keys(self, routing_hint) -> list[str]:
-        if isinstance(routing_hint, dict):
-            return routing_hint.get("domain_keys", [])
-
-        return [link.operational_domain.key for link in routing_hint.domain_links.all()]
-
-
 class RuntimeConfigResponseSerializer(serializers.Serializer):
     activity_description = ActivityDescriptionResponseSerializer(allow_null=True)
     active_business_units = BusinessUnitTreeItemSerializer(many=True, required=False)
-    active_modules = KeyedRuntimeItemSerializer(many=True)
-    active_domains = KeyedRuntimeItemSerializer(many=True)
-    active_subjects = KeyedRuntimeItemSerializer(many=True)
     optional_units = KeyedRuntimeItemSerializer(many=True)
-    optional_vocabulary = RuntimeVocabularyItemSerializer(many=True)
-    optional_runtime_tags = RuntimeTagItemSerializer(many=True)
-    optional_routing_hints = RoutingHintItemSerializer(many=True)
 
 
 class ActivationBlockerSerializer(serializers.Serializer):
@@ -431,13 +338,7 @@ class ActivationSummaryResponseSerializer(serializers.Serializer):
     establishment = OnboardingEstablishmentSummarySerializer()
     activity_description = ActivityDescriptionResponseSerializer(allow_null=True)
     active_business_units = BusinessUnitTreeItemSerializer(many=True, required=False)
-    active_modules = KeyedRuntimeItemSerializer(many=True)
-    active_domains = KeyedRuntimeItemSerializer(many=True)
-    active_subjects = KeyedRuntimeItemSerializer(many=True)
     optional_units = KeyedRuntimeItemSerializer(many=True)
-    optional_vocabulary = RuntimeVocabularyItemSerializer(many=True)
-    optional_runtime_tags = RuntimeTagItemSerializer(many=True)
-    optional_routing_hints = RoutingHintItemSerializer(many=True)
     initial_owner_director_count = serializers.IntegerField()
     initial_director_count = serializers.IntegerField()
     readiness = ActivationReadinessResponseSerializer()
@@ -494,15 +395,6 @@ class ProposalCatalogItemSerializer(serializers.Serializer):
     confidence_score = serializers.FloatField(allow_null=True, required=False)
 
 
-class ProposalDomainItemSerializer(ProposalCatalogItemSerializer):
-    module_key = serializers.CharField()
-
-
-class ProposalSubjectItemSerializer(ProposalCatalogItemSerializer):
-    domain_key = serializers.CharField()
-    module_key = serializers.CharField(required=False)
-
-
 class ProposalDomainOrUnitItemSerializer(ProposalCatalogItemSerializer):
     related_modules = serializers.ListField(
         child=serializers.CharField(),
@@ -511,42 +403,11 @@ class ProposalDomainOrUnitItemSerializer(ProposalCatalogItemSerializer):
     )
 
 
-class ProposalVocabularyItemSerializer(serializers.Serializer):
-    term = serializers.CharField()
-    meaning = serializers.CharField()
-    mapped_domain_key = serializers.CharField(allow_null=True, required=False)
-    mapped_unit_key = serializers.CharField(allow_null=True, required=False)
-    reason = serializers.CharField(allow_blank=True, required=False)
-
-
-class ProposalRuntimeTagItemSerializer(serializers.Serializer):
-    key = serializers.CharField()
-    label = serializers.CharField()
-    related_domain_keys = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        default=list,
-    )
-    reason = serializers.CharField(allow_blank=True, required=False)
-
-
-class ProposalRoutingHintItemSerializer(serializers.Serializer):
-    pattern = serializers.CharField()
-    suggested_domain_keys = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        default=list,
-    )
-    suggested_unit_key = serializers.CharField(allow_null=True, required=False)
-    reason = serializers.CharField(allow_blank=True, required=False)
-    confidence_score = serializers.FloatField(allow_null=True, required=False)
-
-
 class ProposalBusinessUnitItemSerializer(serializers.Serializer):
     client_key = serializers.CharField()
     label = serializers.CharField()
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    unit_type = serializers.CharField()
+    unit_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     catalog_key = serializers.CharField(required=False, allow_null=True)
 
 
@@ -560,7 +421,6 @@ class ProposalActivitySubjectItemSerializer(serializers.Serializer):
 
 class OnboardingProposalPayloadSerializer(serializers.Serializer):
     MANUAL_V2_SCHEMA_VERSION = "onboarding_proposal_v3"
-    LEGACY_SCHEMA_VERSION = "onboarding_proposal_v2"
 
     schema_version = serializers.CharField()
     business_units = ProposalBusinessUnitItemSerializer(many=True, required=False)
@@ -569,13 +429,7 @@ class OnboardingProposalPayloadSerializer(serializers.Serializer):
         child=serializers.ListField(child=serializers.CharField()),
         required=False,
     )
-    operational_modules = ProposalCatalogItemSerializer(many=True, required=False)
-    operational_domains = ProposalDomainItemSerializer(many=True, required=False)
-    operational_subjects = ProposalSubjectItemSerializer(many=True, required=False)
     operational_units = ProposalDomainOrUnitItemSerializer(many=True, required=False)
-    runtime_vocabulary = ProposalVocabularyItemSerializer(many=True, required=False)
-    runtime_tags = ProposalRuntimeTagItemSerializer(many=True, required=False)
-    routing_hints = ProposalRoutingHintItemSerializer(many=True, required=False)
 
     def validate(self, attrs):
         schema_version = attrs.get("schema_version")
@@ -589,17 +443,6 @@ class OnboardingProposalPayloadSerializer(serializers.Serializer):
             if excluded:
                 result["excluded_catalog_subject_keys"] = excluded
             return result
-        if schema_version == self.LEGACY_SCHEMA_VERSION:
-            return {
-                "schema_version": schema_version,
-                "operational_modules": attrs.get("operational_modules", []),
-                "operational_domains": attrs.get("operational_domains", []),
-                "operational_subjects": attrs.get("operational_subjects", []),
-                "operational_units": attrs.get("operational_units", []),
-                "runtime_vocabulary": attrs.get("runtime_vocabulary", []),
-                "runtime_tags": attrs.get("runtime_tags", []),
-                "routing_hints": attrs.get("routing_hints", []),
-            }
         return attrs
 
 
@@ -628,36 +471,6 @@ class OnboardingProposalResponseSerializer(serializers.Serializer):
     last_error_code = serializers.CharField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
-
-
-class AIOnboardingGenerateRequestSerializer(serializers.Serializer):
-    locale = serializers.CharField(
-        required=False,
-        default="en-US",
-        trim_whitespace=True,
-        allow_blank=False,
-    )
-
-
-class ProposalItemMutationRequestSerializer(serializers.Serializer):
-    action = serializers.ChoiceField(choices=[("add", "Add"), ("remove", "Remove")])
-    section = serializers.ChoiceField(
-        choices=[
-            ("operational_modules", "Modules"),
-            ("operational_domains", "Domains"),
-            ("operational_subjects", "Subjects"),
-        ]
-    )
-    key = serializers.CharField()
-
-
-class ProposalSectionDecisionRequestSerializer(serializers.Serializer):
-    decision = serializers.ChoiceField(
-        choices=[
-            ("accepted", "Accepted"),
-            ("skipped", "Skipped"),
-        ],
-    )
 
 
 class ProposalCommandResponseSerializer(serializers.Serializer):

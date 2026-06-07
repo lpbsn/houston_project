@@ -5,10 +5,7 @@ from typing import Literal
 
 from django.db.models import Case, IntegerField, Prefetch, QuerySet, Value, When
 
-from houston.establishments.membership_scope import (
-    build_signal_feed_scope_q,
-    build_signal_feed_scope_q_v2,
-)
+from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
 from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
@@ -17,9 +14,6 @@ from houston.signals.models import Signal, SignalSourceObservation
 ViewMode = Literal["personal", "general"]
 
 _SIGNAL_LIST_SELECT_RELATED = (
-    "operational_module",
-    "operational_domain",
-    "operational_subject",
     "operational_unit",
     "affected_business_unit",
     "responsible_business_unit",
@@ -108,8 +102,6 @@ def signal_feed_queryset(
         return apply_feed_sorting(queryset)
 
     scope_q = build_signal_feed_scope_q_v2(membership=membership)
-    if scope_q is None:
-        scope_q = build_signal_feed_scope_q(membership=membership)
     if scope_q is None:
         return apply_feed_sorting(queryset.none())
     queryset = queryset.filter(scope_q)

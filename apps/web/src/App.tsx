@@ -21,6 +21,7 @@ import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import {
+  allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
   resolveAuthenticatedLanding,
   routeAllowsMissingActiveMembership,
@@ -88,7 +89,7 @@ function App() {
       route.kind === 'action-create' ||
       route.kind === 'action-detail'
 
-    if (isProtectedRoute && !auth.isAuthenticated) {
+    if (isProtectedRoute && !auth.isAuthenticated && !allowsUnauthenticatedAccess(route)) {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, route])

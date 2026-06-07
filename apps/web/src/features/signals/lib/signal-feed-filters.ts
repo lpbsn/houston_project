@@ -2,16 +2,14 @@ export type SignalFeedStatusFilter = 'open' | 'in_progress' | 'resolved'
 
 export type SignalFeedFilters = {
   statuses: SignalFeedStatusFilter[]
-  moduleKeys: string[]
-  domainKeys: string[]
-  subjectKeys: string[]
+  businessUnitKeys: string[]
+  activitySubjectIds: string[]
 }
 
 export const EMPTY_SIGNAL_FEED_FILTERS: SignalFeedFilters = {
   statuses: [],
-  moduleKeys: [],
-  domainKeys: [],
-  subjectKeys: [],
+  businessUnitKeys: [],
+  activitySubjectIds: [],
 }
 
 export const SIGNAL_FEED_STATUS_OPTIONS: ReadonlyArray<{
@@ -24,6 +22,8 @@ export const SIGNAL_FEED_STATUS_OPTIONS: ReadonlyArray<{
 ]
 
 const FEED_STATUS_SET = new Set<string>(SIGNAL_FEED_STATUS_OPTIONS.map((option) => option.value))
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function dedupeSorted(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort()
@@ -34,9 +34,10 @@ export function normalizeSignalFeedFilters(filters: SignalFeedFilters): SignalFe
     statuses: dedupeSorted(filters.statuses).filter((value): value is SignalFeedStatusFilter =>
       FEED_STATUS_SET.has(value),
     ),
-    moduleKeys: dedupeSorted(filters.moduleKeys),
-    domainKeys: dedupeSorted(filters.domainKeys),
-    subjectKeys: dedupeSorted(filters.subjectKeys),
+    businessUnitKeys: dedupeSorted(filters.businessUnitKeys),
+    activitySubjectIds: dedupeSorted(filters.activitySubjectIds).filter((value) =>
+      UUID_PATTERN.test(value),
+    ),
   }
 }
 
@@ -44,9 +45,8 @@ export function hasActiveSignalFeedFilters(filters: SignalFeedFilters): boolean 
   const normalized = normalizeSignalFeedFilters(filters)
   return (
     normalized.statuses.length > 0 ||
-    normalized.moduleKeys.length > 0 ||
-    normalized.domainKeys.length > 0 ||
-    normalized.subjectKeys.length > 0
+    normalized.businessUnitKeys.length > 0 ||
+    normalized.activitySubjectIds.length > 0
   )
 }
 
@@ -58,14 +58,11 @@ export function appendSignalFeedFiltersToSearchParams(
   if (normalized.statuses.length > 0) {
     params.set('statuses', normalized.statuses.join(','))
   }
-  if (normalized.moduleKeys.length > 0) {
-    params.set('module_keys', normalized.moduleKeys.join(','))
+  if (normalized.businessUnitKeys.length > 0) {
+    params.set('business_unit_keys', normalized.businessUnitKeys.join(','))
   }
-  if (normalized.domainKeys.length > 0) {
-    params.set('domain_keys', normalized.domainKeys.join(','))
-  }
-  if (normalized.subjectKeys.length > 0) {
-    params.set('subject_keys', normalized.subjectKeys.join(','))
+  if (normalized.activitySubjectIds.length > 0) {
+    params.set('activity_subject_ids', normalized.activitySubjectIds.join(','))
   }
 }
 
@@ -81,35 +78,37 @@ export function formatStatusFilterSummary(filters: SignalFeedFilters): string {
   return `${statuses.length} sélectionnés ▾`
 }
 
-export function countCategoryFilterSelections(filters: SignalFeedFilters): number {
+export function countClassificationFilterSelections(filters: SignalFeedFilters): number {
   const normalized = normalizeSignalFeedFilters(filters)
-  return (
-    normalized.moduleKeys.length + normalized.domainKeys.length + normalized.subjectKeys.length
-  )
+  return normalized.businessUnitKeys.length + normalized.activitySubjectIds.length
 }
 
-export function formatCategoryFilterSummary(
+export function formatClassificationFilterSummary(
   filters: SignalFeedFilters,
-  labelByKey: Map<string, string>,
+  labelByBusinessUnitKey: Map<string, string>,
+  labelByActivitySubjectId: Map<string, string>,
 ): string {
   const normalized = normalizeSignalFeedFilters(filters)
-  const count = countCategoryFilterSelections(normalized)
+  const count = countClassificationFilterSelections(normalized)
   if (count === 0) {
-    return 'Toutes ▾'
+    return 'Tous ▾'
   }
 
-  const orderedKeys = [
-    ...normalized.moduleKeys,
-    ...normalized.domainKeys,
-    ...normalized.subjectKeys,
+  const orderedLabels = [
+    ...normalized.businessUnitKeys.map(
+      (key) => labelByBusinessUnitKey.get(key) ?? key,
+    ),
+    ...normalized.activitySubjectIds.map(
+      (id) => labelByActivitySubjectId.get(id) ?? id,
+    ),
   ]
-  const firstLabel = labelByKey.get(orderedKeys[0] ?? '') ?? orderedKeys[0]
+  const firstLabel = orderedLabels[0]
 
   if (count === 1) {
-    return firstLabel ? `${firstLabel} ▾` : '1 catégorie ▾'
+    return firstLabel ? `${firstLabel} ▾` : '1 sélection ▾'
   }
   if (count <= 3) {
-    return `${count} catégories ▾`
+    return `${count} sélections ▾`
   }
-  return firstLabel ? `${firstLabel} +${count - 1} ▾` : `${count} catégories ▾`
+  return firstLabel ? `${firstLabel} +${count - 1} ▾` : `${count} sélections ▾`
 }

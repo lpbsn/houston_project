@@ -11,7 +11,7 @@ Gate: **Phase B/C authorized** — onboarding/runtime taxonomy only (see constra
 | A2 | Typos / labels normalisés | Done |
 | A3 | Catalogue target spec (removed; superseded by v2 BusinessUnit seed) | Done (historical) |
 | A4 | Mapping legacy → nouveau (catalogue_target §4) | Done |
-| A5 | [`operational_taxonomy_domain.md`](domains/operational_taxonomy_domain.md) | Done |
+| A5 | Legacy taxonomy domain specification | Done (historical) |
 | A6 | [`feed_subscription_domain.md`](domains/feed_subscription_domain.md) | Done — doc only (V5) |
 | A7 | Docs transverses alignées | Done — observation, action, execution feed personal, runtime onboarding, AI observation pipeline, archive feed sorting, AGENTS.md |
 | A8 | Clôture signée par humain | **Done — 2026-05-29** |

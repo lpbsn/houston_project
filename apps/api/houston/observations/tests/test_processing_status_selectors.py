@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 from houston.ai.observation_pipeline import FakeObservationPipelineProvider
+from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
+    create_business_unit,
+)
 from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.observations.selectors import (
@@ -10,7 +14,16 @@ from houston.observations.selectors import (
 )
 from houston.signals.models import CandidateSignal, Signal
 from houston.signals.services import run_observation_pipeline
-from houston.signals.tests.conftest import create_observation, create_taxonomy
+from houston.signals.tests.conftest import create_observation
+
+
+def _setup_pipeline_taxonomy(establishment):
+    hotel = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
 
 pytestmark = pytest.mark.django_db
 
@@ -31,7 +44,7 @@ def test_get_observation_processing_status_none_when_wrong_establishment():
 
 def test_get_observation_processing_status_collects_signal_ids():
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_pipeline_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
 
     run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
@@ -52,7 +65,7 @@ def test_processing_status_does_not_return_unrelated_signal():
     from django.utils import timezone
 
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
+    _setup_pipeline_taxonomy(membership.establishment)
     observation_a = create_observation(membership=membership, text="Observation A text here.")
     observation_b = create_observation(membership=membership, text="Observation B text here.")
 
@@ -63,9 +76,6 @@ def test_processing_status_does_not_return_unrelated_signal():
     now = timezone.now()
     signal_b = Signal.objects.create(
         establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
         title="Other observation signal",
         structured_summary="Linked only to observation B.",
         last_activity_at=now,
@@ -73,9 +83,6 @@ def test_processing_status_does_not_return_unrelated_signal():
     CandidateSignal.objects.create(
         observation=observation_b,
         establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
         title=signal_b.title,
         structured_summary=signal_b.structured_summary,
         outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
@@ -94,8 +101,8 @@ def test_processing_status_does_not_return_unrelated_signal():
 def test_processing_status_does_not_return_cross_establishment_signal():
     membership = build_membership()
     other = build_membership()
-    create_taxonomy(membership.establishment)
-    create_taxonomy(other.establishment)
+    _setup_pipeline_taxonomy(membership.establishment)
+    _setup_pipeline_taxonomy(other.establishment)
     observation = create_observation(membership=membership)
 
     run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())

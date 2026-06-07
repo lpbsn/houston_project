@@ -1,18 +1,38 @@
+import type { components } from '@/api/generated/types'
+import {
+  formatSignalClassification,
+  type SignalClassificationInput,
+} from '@/lib/signal-classification'
+
 import {
   shouldShowSignalFeedNavigation,
   type ObservationUxStatus,
 } from './processing-status-labels'
 
-export type ObservationProcessingSignalSummary = {
-  id: string
-  title: string
-  operational_module_key: string
-  operational_module_label: string
-  operational_domain_key: string
-  operational_domain_label: string
-  operational_subject_key: string
-  operational_subject_label: string
-  location_text: string
+export type ObservationProcessingSignalSummary =
+  components['schemas']['ObservationProcessingSignalSummary']
+
+function toClassificationInput(
+  signal: ObservationProcessingSignalSummary,
+): SignalClassificationInput {
+  return {
+    affected_business_unit_label: signal.affected_business_unit_label,
+    responsible_business_unit_label: signal.responsible_business_unit_label,
+    activity_subject_label: signal.activity_subject_label,
+  }
+}
+
+function formatTaxonomyLine(signal: ObservationProcessingSignalSummary): string | null {
+  const classification = formatSignalClassification(toClassificationInput(signal))
+
+  if (classification.primaryLine) {
+    if (classification.affectedLine) {
+      return `${classification.primaryLine} · ${classification.affectedLine}`
+    }
+    return classification.primaryLine
+  }
+
+  return null
 }
 
 export function formatProcessingSuccessHeadline(
@@ -30,12 +50,18 @@ export function formatProcessingSuccessHeadline(
 }
 
 export function formatSignalSummaryLine(signal: ObservationProcessingSignalSummary): string {
-  const taxonomy = `${signal.operational_module_label} · ${signal.operational_domain_label} · ${signal.operational_subject_label}`
+  const taxonomy = formatTaxonomyLine(signal)
   const location = signal.location_text.trim()
-  if (location) {
+  if (taxonomy && location) {
     return `${signal.title} — ${taxonomy} (${location})`
   }
-  return `${signal.title} — ${taxonomy}`
+  if (taxonomy) {
+    return `${signal.title} — ${taxonomy}`
+  }
+  if (location) {
+    return `${signal.title} (${location})`
+  }
+  return signal.title
 }
 
 export function shouldShowProcessingSignalList(

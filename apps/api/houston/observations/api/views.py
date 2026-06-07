@@ -139,12 +139,12 @@ class ObservationProcessingStatusView(EstablishmentScopedObservationMixin, APIVi
                     {
                         "id": summary.id,
                         "title": summary.title,
-                        "operational_module_key": summary.operational_module_key,
-                        "operational_module_label": summary.operational_module_label,
-                        "operational_domain_key": summary.operational_domain_key,
-                        "operational_domain_label": summary.operational_domain_label,
-                        "operational_subject_key": summary.operational_subject_key,
-                        "operational_subject_label": summary.operational_subject_label,
+                        "affected_business_unit_key": summary.affected_business_unit_key,
+                        "affected_business_unit_label": summary.affected_business_unit_label,
+                        "responsible_business_unit_key": summary.responsible_business_unit_key,
+                        "responsible_business_unit_label": summary.responsible_business_unit_label,
+                        "activity_subject_key": summary.activity_subject_key,
+                        "activity_subject_label": summary.activity_subject_label,
                         "location_text": summary.location_text,
                     }
                     for summary in projection.signals

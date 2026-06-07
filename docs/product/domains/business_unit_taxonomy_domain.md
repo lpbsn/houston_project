@@ -1,10 +1,10 @@
 # Business Unit Taxonomy Domain
 
-Status: authoritative (target model)  
-Last reviewed: 2026-06-06  
-Implementation status: **in progress** (refactor v2 — see [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md))
+Status: authoritative  
+Last reviewed: 2026-06-07  
+Implementation status: **implemented** (Lot 6 complete — see [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md))
 
-> **Legacy model:** Module → Domain → Subject is **obsolete**. See [`docs/archive/taxonomy_v1/operational_taxonomy_domain.md`](../../archive/taxonomy_v1/operational_taxonomy_domain.md).
+> **Legacy model:** Module → Domain → Subject is obsolete and removed from active product contracts.
 
 ## Purpose
 

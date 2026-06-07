@@ -28,6 +28,7 @@ from houston.establishments.services import (
 from houston.establishments.tests.conftest import (
     MANUAL_V2_PROPOSAL_SCHEMA_VERSION,
     apply_validated_manual_v2_proposal,
+    draft_manual_v2_payload_bu_only,
     valid_manual_v2_payload,
 )
 from houston.establishments.tests.taxonomy_helpers import (
@@ -35,7 +36,7 @@ from houston.establishments.tests.taxonomy_helpers import (
     business_unit_scope_payload,
     create_business_unit,
 )
-from houston.establishments.tests.test_onboarding_proposal_api import (
+from houston.establishments.tests.test_onboarding_api import (
     auth_headers,
     create_onboarding_session,
     create_user,
@@ -74,6 +75,129 @@ def _invite_director(*, session: OnboardingSession, owner: User) -> None:
         first_name="Camille",
         last_name="Directeur",
     )
+
+
+def test_validate_rejects_legacy_v2_schema():
+    with pytest.raises(OnboardingProposalValidationError):
+        validate_onboarding_proposal_payload({"schema_version": "onboarding_proposal_v2"})
+
+
+def test_draft_create_accepts_business_unit_without_subjects(
+    onboarding_session, owner, imported_catalog
+):
+    payload = draft_manual_v2_payload_bu_only()
+    proposal = create_manual_onboarding_proposal(
+        session=onboarding_session,
+        actor=owner,
+        payload=payload,
+    )
+
+    assert proposal.payload["business_units"]
+    assert proposal.payload["activity_subjects"] == []
+
+
+def test_draft_update_accepts_business_unit_without_subjects(
+    onboarding_session, owner, imported_catalog
+):
+    payload = draft_manual_v2_payload_bu_only()
+    proposal = create_manual_onboarding_proposal(
+        session=onboarding_session,
+        actor=owner,
+        payload=payload,
+    )
+
+    updated = update_onboarding_proposal_payload(
+        proposal=proposal,
+        actor=owner,
+        payload=payload,
+    )
+
+    assert updated.payload["activity_subjects"] == []
+
+
+def test_draft_accepts_business_unit_without_unit_type(
+    onboarding_session, owner, imported_catalog
+):
+    payload = draft_manual_v2_payload_bu_only()
+    sanitized = validate_onboarding_proposal_payload(
+        payload,
+        mode="draft",
+    )
+
+    assert "unit_type" not in sanitized["business_units"][0]
+
+
+def test_submit_rejects_business_unit_without_subjects(
+    onboarding_session, owner, imported_catalog
+):
+    payload = draft_manual_v2_payload_bu_only()
+    payload["business_units"][0]["unit_type"] = "dedicated"
+    proposal = create_manual_onboarding_proposal(
+        session=onboarding_session,
+        actor=owner,
+        payload=payload,
+    )
+
+    with pytest.raises(OnboardingProposalValidationError) as exc_info:
+        submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
+
+    assert any(
+        error.get("code") == "business_unit_without_subjects"
+        for error in exc_info.value.errors
+    )
+
+
+def test_submit_rejects_business_unit_without_unit_type(
+    onboarding_session, owner, imported_catalog
+):
+    business_unit_client_key = str(uuid.uuid4())
+    subject_client_key = str(uuid.uuid4())
+    payload = draft_manual_v2_payload_bu_only(
+        business_units=[
+            {
+                "client_key": business_unit_client_key,
+                "label": "Coworking",
+                "description": "",
+                "catalog_key": "coworking",
+            }
+        ],
+        activity_subjects=[
+            {
+                "client_key": subject_client_key,
+                "label": "Propreté",
+                "description": "",
+                "business_unit_client_key": business_unit_client_key,
+                "catalog_key": "coworking__proprete",
+            }
+        ],
+    )
+    proposal = create_manual_onboarding_proposal(
+        session=onboarding_session,
+        actor=owner,
+        payload=payload,
+    )
+
+    with pytest.raises(OnboardingProposalValidationError) as exc_info:
+        submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
+
+    assert any(
+        error.get("code") == "invalid_unit_type"
+        for error in exc_info.value.errors
+    )
+
+
+def test_submit_accepts_complete_manual_v2_payload(
+    onboarding_session, owner, imported_catalog
+):
+    proposal = create_manual_onboarding_proposal(
+        session=onboarding_session,
+        actor=owner,
+        payload=valid_manual_v2_payload(),
+    )
+
+    submitted = submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
+
+    assert submitted.status == OnboardingProposal.Status.VALIDATED
 
 
 def test_manual_v2_creates_business_units(onboarding_session, owner, imported_catalog):

@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { ActionsApiError } from '@/features/actions/api'
 import { ActionCreateAssigneeSection } from '@/features/actions/components/action-create-assignee-section'
+import { ActionCreateBusinessUnitSection } from '@/features/actions/components/action-create-business-unit-section'
 import { ActionCreateDeadlineSection } from '@/features/actions/components/action-create-deadline-section'
 import { ActionLinkedSignalCard } from '@/features/actions/components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '@/features/actions/components/action-linked-signal-strip'
-import { ActionCreateTaxonomySection } from '@/features/actions/components/action-create-taxonomy-section'
 import { useCreateActionMutation } from '@/features/actions/hooks'
 import {
   applyDeadlinePreset,
@@ -19,6 +19,7 @@ import {
   type DeadlinePreset,
 } from '@/features/actions/lib/action-create-deadline'
 import type { ActionCreateRequest, ScopedUserSearchResult } from '@/features/actions/types'
+import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { useSignalDetailQuery } from '@/features/signals/hooks'
 import { SignalsApiError } from '@/features/signals/api'
 import { terrain } from '@/lib/terrain-styles'
@@ -61,10 +62,7 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
   const [limitMinutes, setLimitMinutes] = useState(initialDeadline.limitMinutes)
   const [assignedTo, setAssignedTo] = useState('')
   const [selectedUser, setSelectedUser] = useState<ScopedUserSearchResult | null>(null)
-  const [moduleKey, setModuleKey] = useState('')
-  const [domainKey, setDomainKey] = useState('')
-  const [subjectKey, setSubjectKey] = useState('')
-  const [signalLinkId, setSignalLinkId] = useState('')
+  const [responsibleBusinessUnitId, setResponsibleBusinessUnitId] = useState('')
 
   const detailQuery = useSignalDetailQuery(
     establishmentId,
@@ -72,13 +70,6 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
   )
 
   const createMutation = useCreateActionMutation(establishmentId)
-
-  const resolvedModuleKey =
-    mode === 'linked' && detailQuery.data ? detailQuery.data.module_key : moduleKey
-  const resolvedDomainKey =
-    mode === 'linked' && detailQuery.data ? detailQuery.data.domain_key : domainKey
-  const resolvedSubjectKey =
-    mode === 'linked' && detailQuery.data ? detailQuery.data.subject_key : subjectKey
 
   const applyDueAtFromFields = (dateStr: string, hoursStr: string, minutesStr: string) => {
     const hours = Number.parseInt(hoursStr, 10)
@@ -125,30 +116,32 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
     title.trim().length > 0 &&
     instruction.trim().length > 0 &&
     assignedTo.length > 0 &&
-    resolvedModuleKey.length > 0 &&
-    resolvedDomainKey.length > 0 &&
-    resolvedSubjectKey.length > 0
+    (mode === 'linked'
+      ? Boolean(signalId)
+      : responsibleBusinessUnitId.trim().length > 0)
 
   const handleSubmit = async () => {
     if (!establishmentId || !canSubmit) {
       return
     }
 
-    const body: ActionCreateRequest = {
-      title: title.trim(),
-      instruction: instruction.trim(),
-      assigned_to: assignedTo,
-      due_at: dueAt.toISOString(),
-      module_key: resolvedModuleKey,
-      domain_key: resolvedDomainKey,
-      subject_key: resolvedSubjectKey,
-      signal:
-        mode === 'linked' && signalId
-          ? signalId
-          : signalLinkId.trim()
-            ? signalLinkId.trim()
-            : null,
-    }
+    const body: ActionCreateRequest =
+      mode === 'linked' && signalId
+        ? {
+            title: title.trim(),
+            instruction: instruction.trim(),
+            assigned_to: assignedTo,
+            due_at: dueAt.toISOString(),
+            signal: signalId,
+          }
+        : {
+            title: title.trim(),
+            instruction: instruction.trim(),
+            assigned_to: assignedTo,
+            due_at: dueAt.toISOString(),
+            signal: null,
+            responsible_business_unit_id: responsibleBusinessUnitId,
+          }
 
     const created = await createMutation.mutateAsync(body)
     onNavigate(`/actions/${created.id}`)
@@ -235,6 +228,23 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
         ) : null}
 
         <div className="flex flex-1 flex-col gap-3 px-3 pb-28 pt-2">
+          {mode === 'linked' && detailQuery.data ? (
+            <section className="flex flex-col gap-1.5">
+              <TerrainSectionLabel>Classification héritée du signal</TerrainSectionLabel>
+              <TerrainCard className="px-3 py-2.5">
+                <SignalClassificationBadges signal={detailQuery.data} />
+              </TerrainCard>
+            </section>
+          ) : null}
+
+          {mode === 'free' ? (
+            <ActionCreateBusinessUnitSection
+              establishmentId={establishmentId}
+              selectedBusinessUnitId={responsibleBusinessUnitId}
+              onBusinessUnitChange={setResponsibleBusinessUnitId}
+            />
+          ) : null}
+
           <ActionCreateAssigneeSection
             establishmentId={establishmentId}
             assignedTo={assignedTo}
@@ -277,31 +287,6 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
               />
             </TerrainCard>
           </section>
-
-          {mode === 'free' ? (
-            <>
-              <ActionCreateTaxonomySection
-                establishmentId={establishmentId}
-                moduleKey={moduleKey}
-                domainKey={domainKey}
-                subjectKey={subjectKey}
-                onModuleKeyChange={setModuleKey}
-                onDomainKeyChange={setDomainKey}
-                onSubjectKeyChange={setSubjectKey}
-              />
-              <section className="flex flex-col gap-1.5">
-                <TerrainSectionLabel>Lien signal (optionnel)</TerrainSectionLabel>
-                <TerrainCard>
-                  <Input
-                    value={signalLinkId}
-                    onChange={(e) => setSignalLinkId(e.target.value)}
-                    placeholder="ID signal (UUID)"
-                    className="border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-                  />
-                </TerrainCard>
-              </section>
-            </>
-          ) : null}
 
           {errorMessage ? (
             <p className="text-sm text-destructive" role="alert">

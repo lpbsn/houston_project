@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from django.utils import timezone
 
 from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
 from houston.establishments.models import BusinessUnit
-from houston.establishments.taxonomy_backfill import backfill_business_units_from_legacy_taxonomy
 from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
     create_business_unit,
     create_membership_with_business_unit_scope,
 )
@@ -23,15 +22,12 @@ from houston.signals.permissions import (
 from houston.signals.services import apply_pipeline_output
 from houston.signals.tests.conftest import (
     GOLDEN_OBSERVATION_TEXT,
-    RESTAURANT_BAR_STOCK_SUBJECT_KEY,
-    RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
+    RESTAURANT_MODULE_KEY,
     auth_headers,
     build_api_membership,
-    classify_golden_restaurant_signals,
+    create_minimal_v3_signal,
     create_observation,
-    create_restaurant_business_units,
-    create_restaurant_lighting_bar_stock_taxonomy,
-    create_taxonomy,
+    create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,
     login,
     signal_feed_url,
@@ -44,25 +40,23 @@ def _create_signal(
     membership,
     *,
     title: str = "Test signal",
-    taxonomy: tuple | None = None,
     affected_business_unit: BusinessUnit | None = None,
     responsible_business_unit: BusinessUnit | None = None,
 ):
-    if taxonomy is None:
-        taxonomy = create_taxonomy(membership.establishment)
-    module, domain, subject = taxonomy
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        affected_business_unit=affected_business_unit,
-        responsible_business_unit=responsible_business_unit,
-        title=title,
-        structured_summary="Structured summary safe.",
-        last_activity_at=now,
-    )
+    signal = create_minimal_v3_signal(membership, title=title)
+    if affected_business_unit is not None or responsible_business_unit is not None:
+        if affected_business_unit is not None:
+            signal.affected_business_unit = affected_business_unit
+        if responsible_business_unit is not None:
+            signal.responsible_business_unit = responsible_business_unit
+        signal.save(
+            update_fields=[
+                "affected_business_unit",
+                "responsible_business_unit",
+                "updated_at",
+            ]
+        )
+    return signal
 
 
 def test_general_feed_returns_active_signals(api_client):
@@ -78,6 +72,9 @@ def test_general_feed_returns_active_signals(api_client):
     assert response.status_code == 200
     body = response.json()
     assert len(body["items"]) == 1
+    assert "module_key" not in body["items"][0]
+    assert "domain_key" not in body["items"][0]
+    assert "subject_key" not in body["items"][0]
     assert "raw_text" not in response.content.decode()
 
 
@@ -101,11 +98,10 @@ def test_personal_feed_matches_scope(api_client):
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
-    taxonomy = create_taxonomy(membership.establishment)
     business_unit = create_business_unit(
         establishment=membership.establishment,
-        key=taxonomy[0].key,
-        label=taxonomy[0].label,
+        key="hotel",
+        label="Hotel",
     )
     create_membership_with_business_unit_scope(
         membership=membership,
@@ -113,7 +109,6 @@ def test_personal_feed_matches_scope(api_client):
     )
     _create_signal(
         membership,
-        taxonomy=taxonomy,
         affected_business_unit=business_unit,
         responsible_business_unit=business_unit,
     )
@@ -132,12 +127,10 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_taxonomy(membership.establishment)
-    module, domain, subject = taxonomy
     business_unit = create_business_unit(
         establishment=membership.establishment,
-        key=module.key,
-        label=module.label,
+        key="maintenance",
+        label="Maintenance",
     )
     create_membership_with_business_unit_scope(
         membership=membership,
@@ -145,32 +138,28 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
     )
     observation = create_observation(membership=membership)
 
+    create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=business_unit,
+        label="Maintenance",
+    )
     output = ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         candidates=[
             PipelineCandidateOutput(
                 title="Clim en panne chambre 104",
                 structured_summary="Eau au sol, climatisation en panne.",
-                operational_module_key=module.key,
-                operational_domain_key=domain.key,
-                operational_subject_key=subject.key,
+                affected_business_unit_key=business_unit.key,
+                responsible_business_unit_key=business_unit.key,
+                activity_subject_key="maintenance",
                 operational_unit_key=None,
+                location_text="chambre 104",
                 aggregate_into_signal_id=None,
             )
         ],
     )
     outcome = apply_pipeline_output(observation=observation, output=output)
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
-    backfill_business_units_from_legacy_taxonomy(establishment_id=membership.establishment_id)
-    created_signal = Signal.objects.get(
-        establishment=membership.establishment,
-        title="Clim en panne chambre 104",
-    )
-    created_signal.affected_business_unit = business_unit
-    created_signal.responsible_business_unit = business_unit
-    created_signal.save(
-        update_fields=["affected_business_unit", "responsible_business_unit", "updated_at"]
-    )
 
     token = login(api_client, user=membership.user)
     response = api_client.get(
@@ -207,23 +196,18 @@ def test_general_feed_shows_active_signal_same_establishment(api_client):
 
 def _apply_golden_pipeline(*, membership, taxonomy=None):
     if taxonomy is None:
-        taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    business_units = create_restaurant_business_units(membership.establishment)
+        taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
     apply_pipeline_output(
         observation=observation,
         output=golden_two_candidate_pipeline_output(taxonomy=taxonomy),
     )
-    classify_golden_restaurant_signals(
-        establishment=membership.establishment,
-        business_units=business_units,
-    )
-    return observation, taxonomy, business_units
+    return observation, taxonomy
 
 
 def test_general_feed_shows_two_golden_signals(api_client):
     membership = build_api_membership()
-    _apply_golden_pipeline(membership=membership)
+    _, taxonomy = _apply_golden_pipeline(membership=membership)
     token = login(api_client, user=membership.user)
 
     response = api_client.get(
@@ -234,9 +218,9 @@ def test_general_feed_shows_two_golden_signals(api_client):
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) == 2
-    subject_keys = {item["subject_key"] for item in items}
-    assert RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY in subject_keys
-    assert RESTAURANT_BAR_STOCK_SUBJECT_KEY in subject_keys
+    activity_subjects = {item["activity_subject_normalized_name"] for item in items}
+    assert taxonomy.lighting_subject.normalized_name in activity_subjects
+    assert taxonomy.stock_subject.normalized_name in activity_subjects
     assert "raw_text" not in response.content.decode()
 
 
@@ -244,11 +228,11 @@ def test_personal_feed_staff_salle_maintenance_sees_lighting_only(api_client):
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    _, _, business_units = _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
     create_membership_with_business_unit_scope(
         membership=membership,
-        business_unit=business_units.restaurant,
+        business_unit=taxonomy.restaurant,
     )
     token = login(api_client, user=membership.user)
 
@@ -260,18 +244,18 @@ def test_personal_feed_staff_salle_maintenance_sees_lighting_only(api_client):
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) == 1
-    assert items[0]["subject_key"] == RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY
+    assert items[0]["affected_business_unit_key"] == RESTAURANT_MODULE_KEY
 
 
 def test_personal_feed_staff_bar_stock_sees_syrup_only(api_client):
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    _, _, business_units = _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
     create_membership_with_business_unit_scope(
         membership=membership,
-        business_unit=business_units.bar,
+        business_unit=taxonomy.bar,
     )
     token = login(api_client, user=membership.user)
 
@@ -283,23 +267,25 @@ def test_personal_feed_staff_bar_stock_sees_syrup_only(api_client):
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) == 1
-    assert items[0]["subject_key"] == RESTAURANT_BAR_STOCK_SUBJECT_KEY
+    assert items[0]["activity_subject_normalized_name"] == taxonomy.stock_subject.normalized_name
 
 
 def test_staff_restaurant_scope_sees_but_cannot_act_on_maintenance_responsible_signal():
     from houston.establishments.models import EstablishmentMembership
 
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    _, _, business_units = _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    _apply_golden_pipeline(membership=membership, taxonomy=taxonomy)
     create_membership_with_business_unit_scope(
         membership=membership,
-        business_unit=business_units.restaurant,
+        business_unit=taxonomy.restaurant,
     )
     lighting_signal = Signal.objects.get(
         establishment=membership.establishment,
-        operational_subject__key=RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
     )
 
     assert signal_visible_in_membership_scope(membership, lighting_signal) is True
     assert signal_actionable_by_membership(membership, lighting_signal) is False
+

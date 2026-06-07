@@ -9,7 +9,7 @@ import { SignalDetailPhotoSection } from '../components/signal-detail-photo-sect
 import { SignalDetailStickyFooter } from '../components/signal-detail-sticky-footer'
 import { SignalPinUrgencyActions } from '../components/signal-pin-urgency-actions'
 import { SignalStatusBadge } from '../components/signal-status-badge'
-import { SignalTaxonomyBadges } from '../components/signal-taxonomy-badges'
+import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
 import { SignalUrgencyBadge } from '../components/signal-urgency-badge'
 import {
   useCancelSignalMutation,
@@ -120,21 +120,17 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <SignalUrgencyBadge urgency={signal.urgency} />
-            <SignalTaxonomyBadges
-              moduleKey={signal.module_key}
-              domainKey={signal.domain_key}
-              subjectKey={signal.subject_key}
-            />
             <SignalStatusBadge status={signal.status} variant="detail" />
           </div>
           <p className="mt-2 text-[11px] text-[#aaa]">
-            {signal.location_text ? `📍 ${signal.location_text} · ` : ''}
             il y a {formatSignalRelativeTime(signal.last_activity_at)}
           </p>
           {reporterName ? (
             <p className="mt-1 text-[11px] text-[#aaa]">Signalé par {reporterName}</p>
           ) : null}
         </TerrainCard>
+
+        <SignalDetailClassificationSection signal={signal} />
 
         <TerrainCard>
           <TerrainFieldLabel>Description</TerrainFieldLabel>

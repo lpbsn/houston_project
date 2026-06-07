@@ -43,3 +43,16 @@ export function isBusinessUnitSelected(
 ) {
   return scopes.some((s) => s.scope_id === businessUnitId)
 }
+
+export function businessUnitScopesFromApiItems(
+  items: Array<{ scope_type: string; scope_id: string }>,
+): BusinessUnitScopeSelection[] {
+  return items
+    .filter(
+      (item): item is BusinessUnitScopeSelection => item.scope_type === 'business_unit',
+    )
+    .map((item) => ({
+      scope_type: 'business_unit',
+      scope_id: item.scope_id,
+    }))
+}

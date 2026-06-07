@@ -70,7 +70,7 @@ The project currently uses a Django modular monolith as the business authority a
 - Phase 1 membership management API for owner/director users
 - Phase 1 scoped user search for the current active establishment
 - Phase 2 runtime config / onboarding minimal ✅ completed
-- **Taxonomy v2 (in progress):** BusinessUnit / ActivitySubject models, RBAC BU-only scopes, Signal affected/responsible classification, manual onboarding (AI hidden)
+- **Taxonomy v2 and Lot 6 are complete:** BusinessUnit / ActivitySubject product model is authoritative, RBAC is BU-only, manual onboarding V2 and pipeline v3 are live, and legacy Module/Domain/Subject compatibility is removed.
 - Observation submission (text + optional validated photo temporary uploads)
 - Temporary photo uploads + private media storage (authorized only)
 - Audio transcription endpoint (temporary audio deleted after each request)

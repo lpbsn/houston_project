@@ -3,19 +3,14 @@ from django.utils import timezone
 
 from houston.accounts.models import User
 from houston.establishments.models import (
+    ActivitySubject,
+    BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipScope,
     OnboardingSession,
-    OperationalDomain,
-    OperationalModule,
     OperationalUnit,
-    RoutingHint,
-    RoutingHintDomain,
-    RuntimeTag,
-    RuntimeTagDomain,
-    RuntimeVocabulary,
 )
 from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
@@ -24,7 +19,6 @@ from houston.establishments.selectors import (
     list_onboarding_sessions_for_actor,
 )
 from houston.establishments.services import build_activation_summary
-from houston.establishments.tests.conftest import HOTEL_HEBERGEMENT_DOMAIN_KEY
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -148,64 +142,41 @@ def test_runtime_config_selector_returns_only_same_establishment_data(
         organization=organization,
         status=Establishment.Status.DRAFT,
     )
-    domain = OperationalDomain.objects.create(
+    business_unit = BusinessUnit.objects.create(
         establishment=establishment,
-        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
-        label="Hébergement",
+        key="hotel",
+        label="Hotel",
     )
-    foreign_domain = OperationalDomain.objects.create(
-        establishment=foreign_establishment,
-        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
-        label="Hébergement",
-    )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    OperationalModule.objects.create(
+    foreign_business_unit = BusinessUnit.objects.create(
         establishment=foreign_establishment,
         key="restaurant",
         label="Restaurant",
     )
-    unit = OperationalUnit.objects.create(
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name="proprete",
+        label="Proprete",
+    )
+    ActivitySubject.objects.create(
+        establishment=foreign_establishment,
+        business_unit=foreign_business_unit,
+        normalized_name="foreign",
+        label="Foreign",
+    )
+    OperationalUnit.objects.create(
         establishment=establishment,
         key="lobby",
         label="Lobby",
     )
-    RuntimeVocabulary.objects.create(
-        establishment=establishment,
-        term="VRV",
-        meaning="HVAC",
-        mapped_domain=domain,
-        mapped_unit=unit,
-    )
-    RuntimeVocabulary.objects.create(
-        establishment=foreign_establishment,
-        term="foreign",
-        meaning="Foreign",
-        mapped_domain=foreign_domain,
-    )
-    tag = RuntimeTag.objects.create(
-        establishment=establishment,
-        key="hvac",
-        label="HVAC",
-    )
-    RuntimeTagDomain.objects.create(runtime_tag=tag, operational_domain=domain)
-    hint = RoutingHint.objects.create(
-        establishment=establishment,
-        pattern="VRV",
-        suggested_unit=unit,
-    )
-    RoutingHintDomain.objects.create(routing_hint=hint, operational_domain=domain)
 
     config = get_runtime_config_for_session(session=session)
 
-    assert [item.key for item in config["active_modules"]] == ["hotel"]
-    assert [item.key for item in config["active_domains"]] == [HOTEL_HEBERGEMENT_DOMAIN_KEY]
+    assert [item["key"] for item in config["active_business_units"]] == ["hotel"]
     assert [item.key for item in config["optional_units"]] == ["lobby"]
-    assert [item.term for item in config["optional_vocabulary"]] == ["VRV"]
-    assert [item.key for item in config["optional_runtime_tags"]] == ["hvac"]
-    assert [item.pattern for item in config["optional_routing_hints"]] == ["VRV"]
 
 
-def test_activation_summary_selector_uses_active_module_and_domain_names(
+def test_activation_summary_selector_exposes_active_business_units(
     organization,
     actor,
 ):
@@ -217,11 +188,16 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
         submitted_by=actor,
         validated_at=timezone.now(),
     )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    domain = OperationalDomain.objects.create(
+    business_unit = BusinessUnit.objects.create(
         establishment=establishment,
-        key=HOTEL_HEBERGEMENT_DOMAIN_KEY,
-        label="Hébergement",
+        key="hotel",
+        label="Hotel",
+    )
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name="proprete",
+        label="Proprete",
     )
     manager = User.objects.create_user(
         username="manager_selector",
@@ -236,14 +212,10 @@ def test_activation_summary_selector_uses_active_module_and_domain_names(
     )
     MembershipScope.objects.create(
         membership=manager_membership,
-        operational_domain=domain,
+        business_unit=business_unit,
     )
 
     summary = build_activation_summary(session=session)
 
-    assert "active_modules" in summary
-    assert "active_domains" in summary
-    assert "validated_modules" not in summary
-    assert "validated_domains" not in summary
-    assert summary["active_modules"][0]["key"] == "hotel"
-    assert summary["active_domains"][0]["key"] == HOTEL_HEBERGEMENT_DOMAIN_KEY
+    assert "active_business_units" in summary
+    assert summary["active_business_units"][0]["key"] == "hotel"

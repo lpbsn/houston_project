@@ -1,47 +1,49 @@
 import { Building2, LoaderCircle, ShieldCheck, UserRound } from 'lucide-react'
 
-import { OperationalScopeSelector } from '@/components/domain/operational-scope-selector'
+import { BusinessUnitScopeSelector } from '@/components/domain/business-unit-scope-selector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import type { BusinessUnitTreeResponse } from '@/features/auth/api'
 import {
   canActorManageTargetRole,
   canEditMembershipOperationalScopes,
   getEditableRoleOptions,
 } from '@/features/auth/lib/membership-rbac'
-import type { MembershipScopeSelection, OperationalScopeTree } from '@/features/auth/lib/membership-scope'
+import type { BusinessUnitScopeSelection } from '@/features/auth/lib/business-unit-scope'
 import type { EstablishmentMembershipResponse, RoleEnum } from '@/features/auth/types'
 import { cn } from '@/lib/utils'
 
 type MembershipManagementCardProps = {
   actorRole: RoleEnum
+  businessUnitTree: BusinessUnitTreeResponse | null
   errorMessage: string | null
   isDeactivating: boolean
+  isLoadingBusinessUnits: boolean
   isLoadingList: boolean
   isLoadingMembership: boolean
-  isLoadingTaxonomy: boolean
   isSaving: boolean
   memberships: EstablishmentMembershipResponse[]
   onDeactivate: () => void
   onRoleChange: (role: RoleEnum) => void
   onSave: () => void
-  onScopesChange: (scopes: MembershipScopeSelection[]) => void
+  onScopesChange: (scopes: BusinessUnitScopeSelection[]) => void
   onSelectMembership: (membershipId: string) => void
   roleDraft: RoleEnum
-  scopeTree: OperationalScopeTree | null
-  scopeTaxonomyError: string | null
+  scopeBusinessUnitError: string | null
   selectedMembership: EstablishmentMembershipResponse | null
   selectedMembershipId: string | null
-  selectedScopes: MembershipScopeSelection[]
+  selectedScopes: BusinessUnitScopeSelection[]
 }
 
 export function MembershipManagementCard({
   actorRole,
+  businessUnitTree,
   errorMessage,
   isDeactivating,
+  isLoadingBusinessUnits,
   isLoadingList,
   isLoadingMembership,
-  isLoadingTaxonomy,
   isSaving,
   memberships,
   onDeactivate,
@@ -50,8 +52,7 @@ export function MembershipManagementCard({
   onScopesChange,
   onSelectMembership,
   roleDraft,
-  scopeTree,
-  scopeTaxonomyError,
+  scopeBusinessUnitError,
   selectedMembership,
   selectedMembershipId,
   selectedScopes,
@@ -200,21 +201,21 @@ export function MembershipManagementCard({
               </div>
 
               {canEditOperationalScopes ? (
-                <OperationalScopeSelector
-                  tree={scopeTree}
+                <BusinessUnitScopeSelector
+                  tree={businessUnitTree}
                   selectedScopes={selectedScopes}
                   onChange={onScopesChange}
-                  isLoading={isLoadingTaxonomy}
-                  errorMessage={scopeTaxonomyError}
+                  isLoading={isLoadingBusinessUnits}
+                  errorMessage={scopeBusinessUnitError}
                   disabled={isSaving}
                 />
               ) : (
-                <OperationalScopeSelector
-                  tree={scopeTree}
+                <BusinessUnitScopeSelector
+                  tree={businessUnitTree}
                   selectedScopes={selectedScopes}
                   onChange={() => undefined}
-                  isLoading={isLoadingTaxonomy}
-                  errorMessage={scopeTaxonomyError}
+                  isLoading={isLoadingBusinessUnits}
+                  errorMessage={scopeBusinessUnitError}
                   readOnly
                 />
               )}
@@ -279,21 +280,17 @@ export function MembershipManagementCard({
 
 function formatScopeSummaryLabel(membership: EstablishmentMembershipResponse) {
   const summary = membership.scope_summary
-  const parts: string[] = []
 
-  if (summary.module_count > 0) {
-    parts.push(`${summary.module_count} module${summary.module_count > 1 ? 's' : ''}`)
+  if (membership.role === 'owner' || membership.role === 'director') {
+    return 'Périmètre complet'
   }
 
-  if (summary.domain_count > 0) {
-    parts.push(`${summary.domain_count} domaine${summary.domain_count > 1 ? 's' : ''}`)
+  if (summary.business_unit_count > 0) {
+    const label = summary.business_unit_count === 1 ? 'pôle' : 'pôles'
+    return `${summary.business_unit_count} ${label}`
   }
 
-  if (summary.subject_count > 0) {
-    parts.push(`${summary.subject_count} sujet${summary.subject_count > 1 ? 's' : ''}`)
-  }
-
-  return parts.length > 0 ? parts.join(' · ') : 'Aucun périmètre'
+  return 'Aucun périmètre'
 }
 
 function normalizeRole(role: string | null | undefined): RoleEnum {

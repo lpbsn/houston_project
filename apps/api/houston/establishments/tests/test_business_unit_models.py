@@ -4,7 +4,6 @@ import pytest
 from django.db import IntegrityError
 
 from houston.establishments.models import ActivitySubject, BusinessUnit, Establishment
-from houston.establishments.taxonomy_backfill import backfill_business_units_from_legacy_taxonomy
 from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
 from houston.organizations.models import Organization
 
@@ -66,18 +65,3 @@ def test_activity_subject_unique_per_business_unit_not_establishment():
         )
 
 
-@pytest.mark.django_db
-def test_backfill_is_idempotent():
-    from houston.establishments.tests.taxonomy_helpers import (
-        create_establishment,
-        create_taxonomy_tree,
-    )
-
-    establishment = create_establishment()
-    create_taxonomy_tree(establishment)
-    first = backfill_business_units_from_legacy_taxonomy(establishment_id=establishment.id)
-    second = backfill_business_units_from_legacy_taxonomy(establishment_id=establishment.id)
-    assert first["business_units"] >= 1
-    assert second["business_units"] == 0
-    assert BusinessUnit.objects.filter(establishment=establishment).exists()
-    assert ActivitySubject.objects.filter(establishment=establishment).exists()
