@@ -15,8 +15,8 @@ import {
   useUpdateManualOnboardingProposal,
 } from '@/features/onboarding/hooks'
 import {
-  allBusinessUnitsConfigured,
   buildManualV2Payload,
+  canContinueFromConfigStep,
   createEmptySubjectSeedTrackers,
   deriveWizardStepFromState,
   hydrateDraftFromProposalPayload,
@@ -25,6 +25,8 @@ import {
   recordExcludedCatalogSubject,
   removeBusinessUnitFromDraft,
   updateBusinessUnitDescription,
+  updateBusinessUnitType,
+  type BusinessUnitType,
   type DraftActivitySubject,
   type DraftBusinessUnit,
   type SubjectSeedTrackers,
@@ -54,7 +56,7 @@ const stepOrder: WizardStep[] = ['poles', 'config', 'apply', 'invitations']
 
 const stepLabels: Record<WizardStep, string> = {
   poles: 'Pôles',
-  config: 'Sujets',
+  config: 'Vos pôles',
   apply: 'Validation',
   invitations: 'Invitations',
 }
@@ -229,6 +231,10 @@ export function ManualOnboardingV2Wizard({
     setBusinessUnits((current) => updateBusinessUnitDescription(current, clientKey, description))
   }
 
+  function handleBusinessUnitTypeChange(clientKey: string, unitType: BusinessUnitType) {
+    setBusinessUnits((current) => updateBusinessUnitType(current, clientKey, unitType))
+  }
+
   const createProposalMutation = useCreateManualOnboardingProposal(sessionId)
   const updateProposalMutation = useUpdateManualOnboardingProposal(sessionId)
   const submitProposalMutation = useSubmitManualOnboardingProposal(sessionId)
@@ -236,7 +242,7 @@ export function ManualOnboardingV2Wizard({
 
   const currentStepIndex = stepOrder.indexOf(step)
   const canContinueFromPoles = businessUnits.length > 0
-  const canContinueFromConfig = allBusinessUnitsConfigured(businessUnits, activitySubjects)
+  const canContinueFromConfig = canContinueFromConfigStep(businessUnits, activitySubjects)
   const isApplyStepBusy =
     createProposalMutation.isPending ||
     updateProposalMutation.isPending ||
@@ -249,6 +255,16 @@ export function ManualOnboardingV2Wizard({
     updateProposalMutation.error ??
     submitProposalMutation.error ??
     applyProposalMutation.error
+
+  const draftSaveError =
+    step === 'poles' || step === 'config'
+      ? createProposalMutation.error ?? updateProposalMutation.error
+      : null
+
+  function resetDraftSaveErrors() {
+    createProposalMutation.reset()
+    updateProposalMutation.reset()
+  }
 
   async function persistDraftProposal() {
     const nextPayload = buildManualV2Payload(businessUnits, activitySubjects, seedTrackers)
@@ -306,9 +322,12 @@ export function ManualOnboardingV2Wizard({
   async function goToNextStep() {
     if (step === 'poles' && canContinueFromPoles) {
       setIsSavingDraft(true)
+      resetDraftSaveErrors()
       try {
         await persistDraftProposal()
         goToStep('config')
+      } catch {
+        // Mutation state renders the backend error below.
       } finally {
         setIsSavingDraft(false)
       }
@@ -317,9 +336,12 @@ export function ManualOnboardingV2Wizard({
 
     if (step === 'config' && canContinueFromConfig) {
       setIsSavingDraft(true)
+      resetDraftSaveErrors()
       try {
         await persistDraftProposal()
         goToStep('apply')
+      } catch {
+        // Mutation state renders the backend error below.
       } finally {
         setIsSavingDraft(false)
       }
@@ -403,9 +425,22 @@ export function ManualOnboardingV2Wizard({
             activitySubjects={activitySubjects}
             isSeedingSubjects={isSeedingSubjects}
             onBusinessUnitDescriptionChange={handleBusinessUnitDescriptionChange}
+            onBusinessUnitTypeChange={handleBusinessUnitTypeChange}
             onChange={setActivitySubjects}
             onExcludeCatalogSubject={handleExcludeCatalogSubject}
           />
+        ) : null}
+
+        {draftSaveError ? (
+          <div className="space-y-2 rounded-[1rem] border border-[#f2d4cf] bg-[#fff7f6] px-4 py-3 text-sm text-[#8f3f37]">
+            <p>
+              {getOnboardingErrorMessage(
+                draftSaveError,
+                'La proposition n’a pas pu être enregistrée.',
+              )}
+            </p>
+            <BlockerList blockers={getOnboardingErrorBlockers(draftSaveError)} />
+          </div>
         ) : null}
 
         {step === 'apply' ? (

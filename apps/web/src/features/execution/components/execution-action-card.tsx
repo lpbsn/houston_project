@@ -3,9 +3,10 @@ import type { KeyboardEvent } from 'react'
 
 import type { ActionFeedItem } from '@/features/actions/types'
 import { ActionStatusBadge } from '@/features/actions/components/action-status-badge'
+import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { ActionDeadlineProgressBar } from '@/components/domain/action-deadline-progress-bar'
-import { FeedTaxonomyBadges } from '@/components/domain/feed-taxonomy-badges'
 import {
+  actionClassificationInput,
   formatActionCompletedByLabel,
   formatActionCreatorFooterLabel,
   formatActionValidationRelativeTime,
@@ -72,13 +73,9 @@ function PendingValidationExecutionActionCard({
 
       <div className="my-2 border-t border-[#F0DFC8]" />
 
-      <div className="mb-2 flex flex-wrap gap-1">
+      <div className="mb-2 flex flex-wrap items-start gap-1.5">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
-        <FeedTaxonomyBadges
-          moduleKey={item.module_key}
-          subjectKey={item.subject_key}
-          domainKey={item.domain_key}
-        />
+        <SignalClassificationBadges signal={actionClassificationInput(item)} />
       </div>
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
@@ -124,13 +121,9 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
       role="button"
       tabIndex={0}
     >
-      <div className="mb-2 flex flex-wrap gap-1">
+      <div className="mb-2 flex flex-wrap items-start gap-1.5">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
-        <FeedTaxonomyBadges
-          moduleKey={item.module_key}
-          subjectKey={item.subject_key}
-          domainKey={item.domain_key}
-        />
+        <SignalClassificationBadges signal={actionClassificationInput(item)} />
       </div>
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>

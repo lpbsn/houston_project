@@ -7,18 +7,13 @@ from rest_framework.test import APIClient
 from houston.accounts.models import User
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
+    ActivitySubject,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
     OnboardingSession,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
 )
-from houston.establishments.tests.conftest import (
-    READINESS_DOMAIN_KEYS,
-    first_catalog_subject_for_domain,
-)
+from houston.establishments.tests.taxonomy_helpers import create_business_unit
 from houston.establishments.tests.test_onboarding_api import (
     auth_headers,
     create_onboarding_session,
@@ -168,24 +163,19 @@ def test_mark_ready_fails_without_director(api_client):
         submitted_by=owner,
         validated_at=timezone.now(),
     )
-    OperationalModule.objects.create(establishment=establishment, key="hotel", label="Hotel")
-    domains = [
-        OperationalDomain.objects.create(
-            establishment=establishment,
-            key=key,
-            label=key.replace("_", " ").title(),
-        )
-        for key in READINESS_DOMAIN_KEYS
-    ]
-    domains_by_key = {domain.key: domain for domain in domains}
-    for domain_key in READINESS_DOMAIN_KEYS:
-        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
-        OperationalSubject.objects.create(
-            establishment=establishment,
-            operational_domain=domains_by_key[domain_key],
-            key=subject_key,
-            label=subject_label,
-        )
+    business_unit = create_business_unit(
+        establishment=establishment,
+        key="hotel",
+        label="Hotel",
+    )
+
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name="proprete",
+        label="Proprete",
+        active=True,
+    )
     access_token = login(api_client, user=owner)
 
     response = api_client.post(

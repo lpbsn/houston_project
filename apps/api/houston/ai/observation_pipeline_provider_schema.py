@@ -33,9 +33,9 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
             "required": [
                 "title",
                 "structured_summary",
-                "operational_module_key",
-                "operational_domain_key",
-                "operational_subject_key",
+                "affected_business_unit_key",
+                "responsible_business_unit_key",
+                "activity_subject_key",
                 "operational_unit_key",
                 "location_text",
                 "aggregate_into_signal_id",
@@ -49,17 +49,25 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                     "type": "string",
                     "description": "Structured summary without raw observation text.",
                 },
-                "operational_module_key": {
+                "affected_business_unit_key": {
                     "type": "string",
-                    "description": "Module key from taxonomy.modules only.",
+                    "description": (
+                        "Business unit key where the issue is observed "
+                        "(from establishment_taxonomy)."
+                    ),
                 },
-                "operational_domain_key": {
+                "responsible_business_unit_key": {
                     "type": "string",
-                    "description": "Domain key from taxonomy.domains only.",
+                    "description": (
+                        "Business unit responsible for treatment "
+                        "(transversal when different from affected)."
+                    ),
                 },
-                "operational_subject_key": {
+                "activity_subject_key": {
                     "type": "string",
-                    "description": "Subject key from taxonomy.subjects only.",
+                    "description": (
+                        "Activity subject normalized_name under responsible_business_unit."
+                    ),
                 },
                 "operational_unit_key": {
                     "type": ["string", "null"],

@@ -1,58 +1,50 @@
 # Taxonomy v1 → v2 Migration
 
 Status: authoritative  
-Last reviewed: 2026-06-06  
-Implementation status: **in progress**
+Last reviewed: 2026-06-07  
+Implementation status: **COMPLETE** (Lot 6 closed)
 
-## Summary
+## Completion outcome
 
-| | v1 (legacy, implemented) | v2 (target) |
-| --- | --- | --- |
-| Hierarchy | Module → Domain → Subject | BusinessUnit → ActivitySubject |
-| RBAC scope | module / domain / subject | BusinessUnit only |
-| Signal taxonomy | operational_module/domain/subject triplet | affected/responsible BU + activity_subject |
-| Catalogue | OnboardingCatalogModule/Domain/Subject tree | CatalogBusinessUnit / CatalogActivitySubject suggestions |
-| Onboarding | AI-driven proposal | Manual human-accompanied flow |
+The taxonomy migration from legacy **Module → Domain → Subject** to **BusinessUnit → ActivitySubject** is complete.
 
-## Strategy: Expand → Backfill → Cutover → Contract
+- Lot 1: v2 model introduction and migration map — completed.
+- Lot 2: RBAC scope migration to BusinessUnit-only — completed.
+- Lot 3A: Signal v3 classification FKs and backfill — completed.
+- Lot 3B: Observation pipeline v3 schema alignment — completed.
+- Lot 4: Manual onboarding V2 as runtime source of truth — completed.
+- Lot 6: legacy model/FK cleanup and compat removal — completed.
 
-1. **Lot 1:** Create v2 models parallel to v1; `TaxonomyMigrationMap`; backfill command.
-2. **Lot 2:** MembershipScope → single `business_unit` FK.
-3. **Lot 3A:** Signal new FKs + backfill; keep v1 FKs until Lot 6.
-4. **Lot 4:** Manual onboarding creates v2 truth for new establishments.
-5. **Lot 3B:** Observation pipeline schema v3.
-6. **Lot 6:** Drop v1 models and FKs.
+## Current authoritative model (post-Lot 6)
 
-## Backfill heuristics (default)
+| Concern | v2 authoritative truth |
+| --- | --- |
+| Hierarchy | `BusinessUnit` → `ActivitySubject` |
+| RBAC scope | `MembershipScope(scope_type=business_unit)` only |
+| Signal classification | `affected_business_unit` + `responsible_business_unit` + `activity_subject` |
+| Action classification | BU/AS contract; no product use of legacy taxonomy keys |
+| Onboarding/runtime taxonomy | Manual onboarding V2, BU/AS only |
 
-| Legacy | Default mapping | Notes |
-| --- | --- | --- |
-| `OperationalModule` | `BusinessUnit` (`dedicated`) | Transversal modules (Maintenance, RH) → `transversal` |
-| `OperationalDomain` | `ActivitySubject` under module-as-BU | Manual review for ambiguous domains |
-| `OperationalSubject` | `ActivitySubject` under parent domain's BU | Uses `normalized_name` from legacy key |
+## Legacy compatibility status
 
-## Signal backfill (Lot 3A)
+No legacy compatibility is retained.
 
-- `affected_business_unit` ← module/domain-derived BU
-- `responsible_business_unit` ← same, unless transversal routing rule applies
-- `activity_subject` ← migrated subject
-- `operational_unit` ← unchanged if present
-
-## Rollback guards
-
-- Feature flags: `TAXONOMY_V2_READ`, `TAXONOMY_V2_WRITE`, `OBSERVATION_PIPELINE_V3`
-- Do not drop v1 tables while any Signal lacks v2 FKs
-- DB snapshot before production backfill
-
-## Obsolete after Lot 6
+Removed/retired from active product model:
 
 - `OperationalModule`, `OperationalDomain`, `OperationalSubject`
 - `OnboardingCatalogModule`, `OnboardingCatalogDomain`, `OnboardingCatalogSubject`
-- Signal FKs `operational_module`, `operational_domain`, `operational_subject`
-- `MembershipScope` module/domain/subject columns
-- `GET .../operational-taxonomy/` (replaced by `business-units/`)
+- Signal legacy FKs `operational_module`, `operational_domain`, `operational_subject`
+- `MembershipScope` module/domain/subject scope semantics
+- Legacy `membership_scope_covers_module/domain/subject` compatibility helpers
+- Deprecated operational-taxonomy API surface
 
-## Preserved
+## Preserved object
 
-- `OperationalUnit` (structured location)
-- AI onboarding endpoint until Lot 6 (deprecated, not 410)
+- `OperationalUnit` remains as structured location context, orthogonal to BU/AS classification.
+
+## Source of truth documents
+
+- [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md)
+- [`domains/rbac_permissions_domain.md`](domains/rbac_permissions_domain.md)
+- [`domains/signal_domain.md`](domains/signal_domain.md)
+- [`domains/action_domain.md`](domains/action_domain.md)

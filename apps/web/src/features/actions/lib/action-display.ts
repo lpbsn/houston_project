@@ -1,3 +1,5 @@
+import type { SignalClassificationInput } from '@/lib/signal-classification'
+
 const STATUS_LABELS: Record<string, string> = {
   open: 'À faire',
   in_progress: 'En cours',
@@ -75,6 +77,28 @@ type ActionSignalSummaryLike = {
   location_text?: string | null
   [key: string]: unknown
 } | null
+
+type ActionClassificationSource = {
+  affected_business_unit_key?: string | null
+  affected_business_unit_label?: string | null
+  responsible_business_unit_key?: string | null
+  responsible_business_unit_label?: string | null
+  activity_subject_normalized_name?: string | null
+  activity_subject_label?: string | null
+}
+
+export function actionClassificationInput(
+  action: ActionClassificationSource,
+): SignalClassificationInput {
+  return {
+    affected_business_unit_key: action.affected_business_unit_key,
+    affected_business_unit_label: action.affected_business_unit_label,
+    responsible_business_unit_key: action.responsible_business_unit_key,
+    responsible_business_unit_label: action.responsible_business_unit_label,
+    activity_subject_normalized_name: action.activity_subject_normalized_name,
+    activity_subject_label: action.activity_subject_label,
+  }
+}
 
 export function getActionLocationText(signalSummary: ActionSignalSummaryLike): string | null {
   const location = signalSummary?.location_text?.trim()

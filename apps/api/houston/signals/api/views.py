@@ -89,22 +89,19 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 description="Comma-separated feed statuses: open, in_progress, resolved (max 3).",
             ),
             OpenApiParameter(
-                name="module_keys",
+                name="business_unit_keys",
                 required=False,
                 type=str,
-                description="Comma-separated operational module keys (max 20).",
+                description=(
+                    "Comma-separated BusinessUnit keys (max 20). "
+                    "Matches affected_business_unit OR responsible_business_unit."
+                ),
             ),
             OpenApiParameter(
-                name="domain_keys",
+                name="activity_subject_ids",
                 required=False,
                 type=str,
-                description="Comma-separated operational domain keys (max 50).",
-            ),
-            OpenApiParameter(
-                name="subject_keys",
-                required=False,
-                type=str,
-                description="Comma-separated operational subject keys (max 100).",
+                description="Comma-separated ActivitySubject UUIDs (max 50).",
             ),
         ],
         responses={

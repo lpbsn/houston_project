@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
 
 from django.db import transaction
 from django.utils import timezone
 
+from houston.actions.action_classification import (
+    classification_from_signal,
+    resolve_responsible_business_unit,
+)
 from houston.actions.constants import (
     ACTION_INSTRUCTION_MAX_LENGTH,
     ACTION_TITLE_MAX_LENGTH,
@@ -15,67 +18,15 @@ from houston.actions.constants import (
 from houston.actions.exceptions import ActionStateError, ActionValidationError
 from houston.actions.models import Action
 from houston.actions.permissions import can_create_free_action, can_create_linked_action
-from houston.establishments.models import (
-    EstablishmentMembership,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
-)
+from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
 from houston.signals.services import touch_signal_activity, unpin_signal
 
 
-@dataclass(frozen=True)
-class ResolvedActionTaxonomy:
-    operational_module: OperationalModule
-    operational_domain: OperationalDomain
-    operational_subject: OperationalSubject
-
-
 def touch_action_activity(*, action: Action, at=None) -> None:
     action.last_activity_at = at or timezone.now()
     action.save(update_fields=["last_activity_at", "updated_at"])
-
-
-def resolve_action_taxonomy(
-    *,
-    establishment_id: uuid.UUID,
-    module_key: str,
-    domain_key: str,
-    subject_key: str,
-) -> ResolvedActionTaxonomy:
-    module = OperationalModule.objects.filter(
-        establishment_id=establishment_id,
-        key=module_key.strip(),
-        active=True,
-    ).first()
-    if module is None:
-        raise ActionValidationError("Invalid operational module key.")
-
-    domain = OperationalDomain.objects.filter(
-        establishment_id=establishment_id,
-        key=domain_key.strip(),
-        active=True,
-        operational_module=module,
-    ).first()
-    if domain is None:
-        raise ActionValidationError("Invalid operational domain key.")
-
-    subject = OperationalSubject.objects.filter(
-        establishment_id=establishment_id,
-        key=subject_key.strip(),
-        active=True,
-        operational_domain=domain,
-    ).first()
-    if subject is None:
-        raise ActionValidationError("Invalid operational subject key.")
-
-    return ResolvedActionTaxonomy(
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-    )
 
 
 def _validate_membership_in_establishment(
@@ -159,23 +110,24 @@ def create_action(
     instruction: str,
     assigned_to_id: uuid.UUID,
     due_at,
-    module_key: str,
-    domain_key: str,
-    subject_key: str,
     signal_id: uuid.UUID | None = None,
+    responsible_business_unit_id: uuid.UUID | None = None,
 ) -> Action:
-    resolved = resolve_action_taxonomy(
-        establishment_id=establishment_id,
-        module_key=module_key,
-        domain_key=domain_key,
-        subject_key=subject_key,
-    )
+    if signal_id is not None and responsible_business_unit_id is not None:
+        raise ActionValidationError(
+            "Cannot provide both signal and responsible_business_unit_id."
+        )
+    if signal_id is None and responsible_business_unit_id is None:
+        raise ActionValidationError(
+            "Either signal or responsible_business_unit_id is required."
+        )
+
     assigned_to = _validate_membership_in_establishment(
         establishment_id=establishment_id,
         membership_id=assigned_to_id,
     )
+    now = timezone.now()
 
-    signal = None
     if signal_id is not None:
         signal = (
             Signal.objects.filter(
@@ -183,33 +135,59 @@ def create_action(
                 establishment_id=establishment_id,
             )
             .select_related(
-                "operational_module",
-                "operational_domain",
-                "operational_subject",
+                "establishment",
+                "affected_business_unit",
+                "responsible_business_unit",
+                "activity_subject",
             )
             .first()
         )
         if signal is None:
             raise ActionValidationError("Invalid signal.")
-        if not can_create_linked_action(
-            created_by,
-            signal=signal,
-            operational_subject=resolved.operational_subject,
-        ):
+        if not can_create_linked_action(created_by, signal=signal):
             raise ActionValidationError("Not allowed to create this action.")
-    elif not can_create_free_action(
+
+        classification = classification_from_signal(signal=signal)
+        action = Action.objects.create(
+            establishment_id=establishment_id,
+            signal=signal,
+            affected_business_unit=classification.affected_business_unit,
+            responsible_business_unit=classification.responsible_business_unit,
+            activity_subject=classification.activity_subject,
+            title=_normalize_title(title),
+            instruction=_normalize_instruction(instruction),
+            status=Action.Status.OPEN,
+            created_by=created_by,
+            assigned_to=assigned_to,
+            due_at=due_at,
+            last_activity_at=now,
+        )
+
+        if signal.status == Signal.Status.OPEN:
+            signal.status = Signal.Status.IN_PROGRESS
+            touch_signal_activity(signal=signal)
+            signal.save(update_fields=["status", "last_activity_at", "updated_at"])
+        if signal.is_pinned:
+            unpin_signal(signal=signal)
+
+        return action
+
+    responsible_business_unit = resolve_responsible_business_unit(
+        establishment_id=establishment_id,
+        business_unit_id=responsible_business_unit_id,
+    )
+    if not can_create_free_action(
         created_by,
-        operational_subject=resolved.operational_subject,
+        business_unit=responsible_business_unit,
     ):
         raise ActionValidationError("Not allowed to create this action.")
 
-    now = timezone.now()
-    action = Action.objects.create(
+    return Action.objects.create(
         establishment_id=establishment_id,
-        signal=signal,
-        operational_module=resolved.operational_module,
-        operational_domain=resolved.operational_domain,
-        operational_subject=resolved.operational_subject,
+        signal=None,
+        affected_business_unit=None,
+        responsible_business_unit=responsible_business_unit,
+        activity_subject=None,
         title=_normalize_title(title),
         instruction=_normalize_instruction(instruction),
         status=Action.Status.OPEN,
@@ -218,16 +196,6 @@ def create_action(
         due_at=due_at,
         last_activity_at=now,
     )
-
-    if signal is not None:
-        if signal.status == Signal.Status.OPEN:
-            signal.status = Signal.Status.IN_PROGRESS
-            touch_signal_activity(signal=signal)
-            signal.save(update_fields=["status", "last_activity_at", "updated_at"])
-        if signal.is_pinned:
-            unpin_signal(signal=signal)
-
-    return action
 
 
 @transaction.atomic

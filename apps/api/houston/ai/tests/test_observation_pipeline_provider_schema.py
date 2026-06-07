@@ -53,6 +53,9 @@ def test_openai_response_format_uses_json_schema_strict():
 
     candidate = schema["$defs"]["pipeline_candidate"]
     assert candidate["additionalProperties"] is False
+    assert "affected_business_unit_key" in candidate["required"]
+    assert "responsible_business_unit_key" in candidate["required"]
+    assert "activity_subject_key" in candidate["required"]
     assert "operational_unit_key" in candidate["required"]
     assert "location_text" in candidate["required"]
     assert "aggregate_into_signal_id" in candidate["required"]

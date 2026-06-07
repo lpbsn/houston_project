@@ -4,66 +4,13 @@ import uuid
 
 
 def reseed_catalog_from_arborescence(apps, schema_editor):
-    from houston.establishments.legacy_onboarding_catalog_seed import (
-        catalog_domain_rows,
-        catalog_module_rows,
-        catalog_subject_rows,
-    )
-
-    OnboardingCatalogModule = apps.get_model("establishments", "OnboardingCatalogModule")
-    OnboardingCatalogDomain = apps.get_model("establishments", "OnboardingCatalogDomain")
+    # Lot 6: legacy v1 catalogue rows cleared before NOT NULL FK; tables dropped in 0016.
     OnboardingCatalogSubject = apps.get_model("establishments", "OnboardingCatalogSubject")
-
+    OnboardingCatalogDomain = apps.get_model("establishments", "OnboardingCatalogDomain")
+    OnboardingCatalogModule = apps.get_model("establishments", "OnboardingCatalogModule")
     OnboardingCatalogSubject.objects.all().delete()
     OnboardingCatalogDomain.objects.all().delete()
     OnboardingCatalogModule.objects.all().delete()
-
-    module_by_key: dict[str, object] = {}
-    sort = 10
-    for row in catalog_module_rows():
-        module, _ = OnboardingCatalogModule.objects.update_or_create(
-            key=row["key"],
-            defaults={
-                "label": row["label"],
-                "description": "",
-                "active": True,
-                "sort_order": sort,
-            },
-        )
-        module_by_key[row["key"]] = module
-        sort += 10
-
-    domain_by_key: dict[str, object] = {}
-    sort = 10
-    for row in catalog_domain_rows():
-        module = module_by_key[row["module_key"]]
-        domain, _ = OnboardingCatalogDomain.objects.update_or_create(
-            key=row["key"],
-            defaults={
-                "catalog_module": module,
-                "label": row["label"],
-                "description": "",
-                "active": True,
-                "sort_order": sort,
-            },
-        )
-        domain_by_key[row["key"]] = domain
-        sort += 10
-
-    sort = 10
-    for row in catalog_subject_rows():
-        domain = domain_by_key[row["domain_key"]]
-        OnboardingCatalogSubject.objects.update_or_create(
-            key=row["key"],
-            defaults={
-                "catalog_domain": domain,
-                "label": row["label"],
-                "description": "",
-                "active": True,
-                "sort_order": sort,
-            },
-        )
-        sort += 10
 
 
 def deactivate_legacy_runtime_domains(apps, schema_editor):

@@ -192,7 +192,7 @@ POST /signals/:id/unpin
 POST /signals/:id/set_urgency
 ```
 
-Legacy `POST /signals/:id/add_domain` and `POST /signals/:id/remove_domain` are **obsolete** for MVP (single module/domain/subject triplet per Signal).
+Legacy `POST /signals/:id/add_domain` and `POST /signals/:id/remove_domain` are **obsolete** for MVP (single BU/AS classification per Signal).
 
 Each transition must:
 
@@ -246,9 +246,8 @@ Rules (Phase 4 — not implemented in codebase yet):
 
 - created only by backend service
 - aggregated only by backend service
-- **one primary categorization per Signal**: `operational_module`, `operational_domain`, `operational_subject`; optional `operational_unit` (location only)
-- multi-problem Observation → multiple Signals after AI pipeline validation
-- **Ma vue** Signal Feed: `MembershipScope` match at module/domain/subject level (Owner/Director: all active) — not `detected_domains[]` (obsolete). `MembershipFeedSubscription` is out of scope Phase 4.
+- **one primary v3 classification per Signal**: `affected_business_unit`, `responsible_business_unit`, `activity_subject`; optional `operational_unit` (location only)
+- **Ma vue** Signal Feed: `MembershipScope` BusinessUnit match (Owner/Director: all active)
 - feed visibility and sorting are backend-owned
 - `last_activity_at` is maintained by backend
 

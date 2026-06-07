@@ -12,7 +12,6 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
     MembershipScope,
-    OperationalDomain,
 )
 from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.establishments.tests.taxonomy_helpers import (
@@ -53,7 +52,6 @@ def create_membership(
     establishment_status: str = Establishment.Status.ACTIVE,
     organization_status: str = Organization.Status.ACTIVE,
     name: str = "Demo Hotel",
-    domain_keys: list[str] | None = None,
 ) -> EstablishmentMembership:
     organization = Organization.objects.create(
         name=f"{name} Group {uuid.uuid4().hex[:6]}",
@@ -70,17 +68,6 @@ def create_membership(
         role=role,
         status=membership_status,
     )
-    for domain_key in domain_keys or []:
-        domain = OperationalDomain.objects.create(
-            establishment=establishment,
-            key=domain_key,
-            label=domain_key.title(),
-            active=True,
-        )
-        MembershipScope.objects.create(
-            membership=membership,
-            operational_domain=domain,
-        )
     return membership
 
 
@@ -436,6 +423,36 @@ def test_membership_patch_rejects_scopes_for_owner_membership(api_client):
 
     assert response.status_code == 400
     assert "owner or director" in response.json()["detail"].lower()
+
+
+def test_membership_patch_rejects_legacy_scope_types(api_client):
+    actor = create_user(username="owner_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Legacy Patch Hotel",
+    )
+    target_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="staff_target"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/"
+        ),
+        {
+            "scopes": [{"scope_type": "domain", "scope_id": str(uuid.uuid4())}],
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
 
 
 def test_membership_deactivate_blocks_last_active_owner(api_client):

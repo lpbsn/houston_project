@@ -7,6 +7,10 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.establishments.models import OperationalUnit
+from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
+    create_business_unit,
+)
 from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.constants import (
     AI_LOCATION_TEXT_MAX_LENGTH,
@@ -19,19 +23,28 @@ from houston.signals.services import (
     resolve_signal_location_text,
     resolve_taxonomy_from_candidate,
 )
-from houston.signals.tests.conftest import create_observation, create_taxonomy
+from houston.signals.tests.conftest import create_observation
 
 pytestmark = pytest.mark.django_db
 
 
+def _setup_hotel(establishment):
+    hotel = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    return hotel
+
+
 def _candidate(**overrides) -> PipelineCandidateOutput:
-    module, domain, subject = overrides.pop("_taxonomy")
     base = {
         "title": "Issue",
         "structured_summary": "Structured summary for tests.",
-        "operational_module_key": module.key,
-        "operational_domain_key": domain.key,
-        "operational_subject_key": subject.key,
+        "affected_business_unit_key": "hotel",
+        "responsible_business_unit_key": "hotel",
+        "activity_subject_key": "maintenance",
         "operational_unit_key": None,
         "location_text": None,
         "aggregate_into_signal_id": None,
@@ -49,7 +62,7 @@ def test_normalize_location_text_strips_and_truncates():
 
 def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
+    _setup_hotel(membership.establishment)
     unit = OperationalUnit.objects.create(
         establishment=membership.establishment,
         key="rooms",
@@ -58,7 +71,6 @@ def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
     )
     observation = create_observation(membership=membership, text="Chambre 312 sale.")
     candidate = _candidate(
-        _taxonomy=(module, domain, subject),
         operational_unit_key=unit.key,
         location_text="chambre 312",
     )
@@ -75,29 +87,29 @@ def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
 
 def test_resolve_signal_location_text_uses_candidate_when_no_unit():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
+    _setup_hotel(membership.establishment)
     observation = create_observation(membership=membership, text="Problème à l'entrée.")
-    candidate = _candidate(
-        _taxonomy=(module, domain, subject),
-        location_text="Entrée restaurant",
-    )
+    candidate = _candidate(location_text="Entrée")
     resolved = resolve_taxonomy_from_candidate(
         establishment_id=membership.establishment_id,
         candidate=candidate,
     )
-    assert resolve_signal_location_text(
-        candidate=candidate,
-        resolved=resolved,
-        observation=observation,
-    ) == "Entrée restaurant"
+    assert (
+        resolve_signal_location_text(
+            candidate=candidate,
+            resolved=resolved,
+            observation=observation,
+        )
+        == "Entrée"
+    )
 
 
-def test_resolve_signal_location_text_clears_exact_raw_text_match():
+def test_resolve_signal_location_text_clears_when_equals_raw_observation():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
-    raw = "La lumière clignote à l'entrée."
+    _setup_hotel(membership.establishment)
+    raw = "Problème à l'entrée du restaurant."
     observation = create_observation(membership=membership, text=raw)
-    candidate = _candidate(_taxonomy=(module, domain, subject), location_text=raw)
+    candidate = _candidate(location_text=raw)
     resolved = resolve_taxonomy_from_candidate(
         establishment_id=membership.establishment_id,
         candidate=candidate,
@@ -112,41 +124,24 @@ def test_resolve_signal_location_text_clears_exact_raw_text_match():
     )
 
 
-def test_apply_pipeline_output_stores_unit_label_when_unit_key_valid():
+def test_apply_pipeline_output_persists_location_text():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
-    unit = OperationalUnit.objects.create(
-        establishment=membership.establishment,
-        key="rooms",
-        label="Chambres",
-        active=True,
+    _setup_hotel(membership.establishment)
+    observation = create_observation(membership=membership, text="Fuite bar.")
+
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[
+                _candidate(
+                    title="Fuite",
+                    structured_summary="Fuite au bar.",
+                    location_text="Bar",
+                )
+            ],
+        ),
     )
-    observation = create_observation(membership=membership, text="Chambre 312.")
-    output = ObservationPipelineOutput(
-        schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        candidates=[
-            _candidate(
-                _taxonomy=(module, domain, subject),
-                operational_unit_key=unit.key,
-                location_text="chambre 312",
-            )
-        ],
-    )
-    apply_pipeline_output(observation=observation, output=output)
+
     signal = Signal.objects.get()
-    assert signal.operational_unit_id == unit.id
-    assert signal.location_text == "Chambres"
-
-
-def test_apply_pipeline_output_stores_candidate_location_when_no_unit():
-    membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
-    observation = create_observation(membership=membership, text="Problème bar.")
-    output = ObservationPipelineOutput(
-        schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        candidates=[
-            _candidate(_taxonomy=(module, domain, subject), location_text="Bar")
-        ],
-    )
-    apply_pipeline_output(observation=observation, output=output)
-    assert Signal.objects.get().location_text == "Bar"
+    assert signal.location_text == "Bar"

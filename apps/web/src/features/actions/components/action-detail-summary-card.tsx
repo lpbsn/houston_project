@@ -1,9 +1,10 @@
-import { FeedTaxonomyBadges } from '@/components/domain/feed-taxonomy-badges'
 import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
+import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 
 import type { ActionDetail } from '../types'
 import { ActionStatusBadge } from './action-status-badge'
 import {
+  actionClassificationInput,
   formatActionCreatorFooterLabel,
   formatCompactDisplayName,
   getActionLocationText,
@@ -45,13 +46,9 @@ export function ActionDetailSummaryCard({ action }: ActionDetailSummaryCardProps
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap items-start gap-1.5">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
-        <FeedTaxonomyBadges
-          moduleKey={action.module_key}
-          domainKey={action.domain_key}
-          subjectKey={action.subject_key}
-        />
+        <SignalClassificationBadges signal={actionClassificationInput(action)} />
         <ActionStatusBadge status={action.status} labelVariant="feed" />
       </div>
 

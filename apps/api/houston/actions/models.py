@@ -30,25 +30,17 @@ class Action(BaseModel):
         null=True,
         blank=True,
     )
-    operational_module = models.ForeignKey(
-        "establishments.OperationalModule",
+    affected_business_unit = models.ForeignKey(
+        "establishments.BusinessUnit",
         on_delete=models.PROTECT,
-        related_name="actions",
-    )
-    operational_domain = models.ForeignKey(
-        "establishments.OperationalDomain",
-        on_delete=models.PROTECT,
-        related_name="actions",
-    )
-    operational_subject = models.ForeignKey(
-        "establishments.OperationalSubject",
-        on_delete=models.PROTECT,
-        related_name="actions",
+        related_name="affected_actions",
+        null=True,
+        blank=True,
     )
     responsible_business_unit = models.ForeignKey(
         "establishments.BusinessUnit",
         on_delete=models.PROTECT,
-        related_name="actions",
+        related_name="responsible_actions",
         null=True,
         blank=True,
     )

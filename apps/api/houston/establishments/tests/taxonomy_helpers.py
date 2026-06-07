@@ -4,15 +4,13 @@ import uuid
 
 from houston.accounts.models import User
 from houston.establishments.models import (
+    ActivitySubject,
     BusinessUnit,
     Establishment,
     EstablishmentMembership,
     MembershipScope,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
 )
-from houston.establishments.taxonomy_backfill import backfill_business_units_from_legacy_taxonomy
+from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
 from houston.organizations.models import Organization
 
 
@@ -47,51 +45,39 @@ def create_membership(
     )
 
 
-def create_taxonomy_tree(
-    establishment: Establishment,
-    *,
-    module_key: str = "hotel",
-    domain_key: str = "proprete_chambre",
-    domain_label: str = "Propreté chambre",
-    subject_key: str = "proprete_chambre_daily",
-    subject_label: str = "Propreté quotidienne chambre",
-):
-    module = OperationalModule.objects.create(
-        establishment=establishment,
-        key=module_key,
-        label=module_key.title(),
-        active=True,
-    )
-    domain = OperationalDomain.objects.create(
-        establishment=establishment,
-        operational_module=module,
-        key=domain_key,
-        label=domain_label,
-        active=True,
-    )
-    subject = OperationalSubject.objects.create(
-        establishment=establishment,
-        operational_domain=domain,
-        key=subject_key,
-        label=subject_label,
-        active=True,
-    )
-    return module, domain, subject
-
-
 def create_business_unit(
     *,
     establishment: Establishment,
     key: str,
     label: str | None = None,
+    description: str = "",
     unit_type: str = BusinessUnit.UnitType.DEDICATED,
 ) -> BusinessUnit:
     return BusinessUnit.objects.create(
         establishment=establishment,
         key=key,
         label=label or key.replace("_", " ").title(),
+        description=description,
         unit_type=unit_type,
         source=BusinessUnit.Source.MANUAL,
+        active=True,
+    )
+
+
+def create_activity_subject(
+    *,
+    establishment: Establishment,
+    business_unit: BusinessUnit,
+    label: str,
+    description: str = "",
+) -> ActivitySubject:
+    return ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name=normalize_activity_subject_name(label),
+        label=label,
+        description=description,
+        source=ActivitySubject.Source.MANUAL,
         active=True,
     )
 
@@ -113,21 +99,4 @@ def business_unit_scope_payload(business_unit: BusinessUnit) -> dict[str, str]:
 
 def assert_business_unit_scope_response(body: dict, *, business_unit: BusinessUnit) -> None:
     assert body["scopes"] == [business_unit_scope_payload(business_unit)]
-    assert body["scope_summary"]["business_unit_count"] == 1
-    assert body["scope_summary"]["domain_count"] == 0
-    assert body["scope_summary"]["module_count"] == 0
-    assert body["scope_summary"]["subject_count"] == 0
-
-
-def create_legacy_taxonomy_with_business_unit_mapping(
-    establishment: Establishment,
-    **kwargs,
-):
-    """Legacy expand-contract helper: v1 taxonomy + TaxonomyMigrationMap backfill."""
-    module, domain, subject = create_taxonomy_tree(establishment, **kwargs)
-    backfill_business_units_from_legacy_taxonomy(establishment_id=establishment.id)
-    business_unit = BusinessUnit.objects.get(
-        establishment=establishment,
-        key=module.key,
-    )
-    return module, domain, subject, business_unit
+    assert body["scope_summary"] == {"business_unit_count": 1}

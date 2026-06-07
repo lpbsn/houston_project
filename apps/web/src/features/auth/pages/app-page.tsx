@@ -7,14 +7,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  businessUnitTreeQueryKey,
   deactivateMembership,
+  getBusinessUnitTree,
   getMembership,
-  getOperationalTaxonomy,
   getWorkspaceSummary,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
-  operationalTaxonomyQueryKey,
   switchEstablishment,
   updateMembership,
   workspaceSummaryQueryKey,
@@ -24,11 +24,9 @@ import { EstablishmentSummaryCard } from '@/features/auth/components/establishme
 import { MembershipInviteCard } from '@/features/auth/components/membership-invite-card'
 import { MembershipManagementCard } from '@/features/auth/components/membership-management-card'
 import {
-  buildOperationalScopeTree,
-  normalizeScopesForSubmit,
-  scopesFromApiItems,
-  type MembershipScopeSelection,
-} from '@/features/auth/lib/membership-scope'
+  businessUnitScopesFromApiItems,
+  type BusinessUnitScopeSelection,
+} from '@/features/auth/lib/business-unit-scope'
 import { canEditMembershipOperationalScopes } from '@/features/auth/lib/membership-rbac'
 import type {
   EstablishmentMembershipResponse,
@@ -61,7 +59,7 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
   const [editorState, setEditorState] = useState<{
     membershipId: string | null
     roleDraft: RoleEnum
-    selectedScopes: MembershipScopeSelection[]
+    selectedScopes: BusinessUnitScopeSelection[]
   }>({
     membershipId: null,
     roleDraft: 'staff',
@@ -96,19 +94,14 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
     staleTime: 30_000,
   })
 
-  const taxonomyQuery = useQuery({
+  const businessUnitQuery = useQuery({
     queryKey: activeEstablishmentId
-      ? operationalTaxonomyQueryKey(activeEstablishmentId)
-      : ['workspace', 'operational-taxonomy', 'idle'],
-    queryFn: () => getOperationalTaxonomy(activeEstablishmentId!),
+      ? businessUnitTreeQueryKey(activeEstablishmentId)
+      : ['workspace', 'business-units', 'idle'],
+    queryFn: () => getBusinessUnitTree(activeEstablishmentId!),
     enabled: Boolean(activeEstablishmentId && canManageMemberships),
     staleTime: 60_000,
   })
-
-  const scopeTree = useMemo(
-    () => (taxonomyQuery.data ? buildOperationalScopeTree(taxonomyQuery.data) : null),
-    [taxonomyQuery.data],
-  )
 
   const membershipList = membershipsQuery.data ?? EMPTY_MEMBERSHIPS
   const effectiveSelectedMembershipId = useMemo(() => {
@@ -157,7 +150,7 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
       setEditorState({
         membershipId: membership.id,
         roleDraft: normalizeRole(membership.role),
-        selectedScopes: scopesFromApiItems(membership.scopes),
+        selectedScopes: businessUnitScopesFromApiItems(membership.scopes),
       })
       setMembershipMutationError(null)
     },
@@ -202,13 +195,8 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
       return editorState.selectedScopes
     }
 
-    return selectedMembership ? scopesFromApiItems(selectedMembership.scopes) : []
+    return selectedMembership ? businessUnitScopesFromApiItems(selectedMembership.scopes) : []
   }, [editorState.membershipId, editorState.selectedScopes, selectedMembership])
-
-  const normalizedScopes = useMemo(
-    () => (scopeTree ? normalizeScopesForSubmit(selectedScopes, scopeTree) : []),
-    [scopeTree, selectedScopes],
-  )
 
   async function handleSelectEstablishment(establishmentId: string) {
     setSelectorError(null)
@@ -233,8 +221,8 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
   }
 
   async function handleSaveMembership() {
-    if (canEditMembershipOperationalScopes(roleDraft) && normalizedScopes.length === 0) {
-      setMembershipMutationError('Sélectionnez au moins une zone de responsabilité.')
+    if (canEditMembershipOperationalScopes(roleDraft) && selectedScopes.length === 0) {
+      setMembershipMutationError('Sélectionnez au moins un pôle d’activité.')
       return
     }
 
@@ -243,7 +231,7 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
     }
 
     if (canEditMembershipOperationalScopes(roleDraft)) {
-      nextInput.scopes = normalizedScopes
+      nextInput.scopes = selectedScopes
     }
 
     try {
@@ -271,7 +259,7 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
     })
   }
 
-  function handleScopesChange(scopes: MembershipScopeSelection[]) {
+  function handleScopesChange(scopes: BusinessUnitScopeSelection[]) {
     setEditorState({
       membershipId: selectedMembership?.id ?? effectiveSelectedMembershipId,
       roleDraft,
@@ -289,8 +277,8 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
     setMembershipMutationError(null)
   }
 
-  const scopeTaxonomyError = taxonomyQuery.error
-    ? toErrorMessage(taxonomyQuery.error, 'La taxonomie opérationnelle est indisponible.')
+  const scopeBusinessUnitError = businessUnitQuery.error
+    ? toErrorMessage(businessUnitQuery.error, 'Les pôles d’activité sont indisponibles.')
     : null
 
   return (
@@ -376,11 +364,12 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
           <>
             <MembershipManagementCard
               actorRole={actorRole}
+              businessUnitTree={businessUnitQuery.data ?? null}
               errorMessage={membershipMutationError}
               isDeactivating={deactivateMutation.isPending}
+              isLoadingBusinessUnits={businessUnitQuery.isPending}
               isLoadingList={membershipsQuery.isPending}
               isLoadingMembership={membershipDetailQuery.isPending}
-              isLoadingTaxonomy={taxonomyQuery.isPending}
               isSaving={updateMutation.isPending}
               memberships={membershipList}
               onDeactivate={handleDeactivateMembership}
@@ -389,8 +378,7 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
               onScopesChange={handleScopesChange}
               onSelectMembership={handleSelectMembership}
               roleDraft={roleDraft}
-              scopeTree={scopeTree}
-              scopeTaxonomyError={scopeTaxonomyError}
+              scopeBusinessUnitError={scopeBusinessUnitError}
               selectedMembership={selectedMembership}
               selectedMembershipId={effectiveSelectedMembershipId}
               selectedScopes={selectedScopes}

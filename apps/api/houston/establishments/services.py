@@ -31,28 +31,8 @@ from houston.establishments.models import (
     EstablishmentActivityDescription,
     EstablishmentInvitation,
     EstablishmentMembership,
-    OnboardingCatalogDomain,
-    OnboardingCatalogModule,
-    OnboardingCatalogSubject,
-    OnboardingCatalogUnit,
     OnboardingProposal,
     OnboardingSession,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
-    OperationalUnit,
-    RoutingHint,
-    RoutingHintDomain,
-    RuntimeTag,
-    RuntimeTagDomain,
-    RuntimeVocabulary,
-)
-from houston.establishments.proposal_catalog import (
-    apply_proposal_item_addition,
-    apply_proposal_item_removal,
-    build_expanded_proposal_sections,  # noqa: F401
-    enforce_proposal_parent_child_coherence,
-    merge_expanded_proposal,  # noqa: F401
 )
 from houston.establishments.selectors import (
     business_unit_has_active_membership_scopes,
@@ -196,8 +176,6 @@ class MembershipUpdateInput:
     scopes: list[MembershipScopeInput] | None = None
 
 
-# Legacy proposal schema (Module → Domain → Subject taxonomy).
-PROPOSAL_SCHEMA_VERSION = "onboarding_proposal_v2"
 # Product: Onboarding manuel V2 (Lot 4)
 # Technical schema: onboarding_proposal_v3 — BusinessUnit / ActivitySubject payload
 PROPOSAL_SCHEMA_VERSION_V3_BU = "onboarding_proposal_v3"
@@ -217,23 +195,7 @@ PROPOSAL_V3_BU_SECTION_CAPS = {
     "business_units": 50,
     "activity_subjects": 500,
 }
-PROPOSAL_REQUIRED_SECTIONS = frozenset(
-    {
-        "operational_modules",
-        "operational_domains",
-        "operational_subjects",
-    }
-)
-PROPOSAL_OPTIONAL_SECTIONS = frozenset(
-    {
-        "operational_units",
-        "runtime_vocabulary",
-        "runtime_tags",
-        "routing_hints",
-    }
-)
-PROPOSAL_SECTIONS = PROPOSAL_REQUIRED_SECTIONS | PROPOSAL_OPTIONAL_SECTIONS
-PROPOSAL_EXCLUDED_SECTIONS = frozenset(
+PROPOSAL_V3_BU_EXCLUDED_SECTIONS = frozenset(
     {
         "roles",
         "memberships",
@@ -249,138 +211,32 @@ PROPOSAL_EXCLUDED_SECTIONS = frozenset(
         "permissions",
     }
 )
-PROPOSAL_SECTION_CAPS = {
-    "operational_modules": 10,
-    "operational_domains": 40,
-    "operational_subjects": 200,
-    "operational_units": 15,
-    "runtime_vocabulary": 30,
-    "runtime_tags": 30,
-    "routing_hints": 30,
-}
-PROPOSAL_MAX_ROUTING_HINT_DOMAINS = 4
 PROPOSAL_SECTION_ACCEPTED = "accepted"
-PROPOSAL_SECTION_SKIPPED = "skipped"
-PROPOSAL_SECTION_REJECTED = "rejected"
-PROPOSAL_SECTION_DECISIONS = {
-    PROPOSAL_SECTION_ACCEPTED,
-    PROPOSAL_SECTION_SKIPPED,
-    PROPOSAL_SECTION_REJECTED,
-}
+PROPOSAL_VALIDATION_MODE_DRAFT = "draft"
+PROPOSAL_VALIDATION_MODE_FINAL = "final"
 
 
-def validate_onboarding_proposal_payload(payload: dict) -> dict:
+def validate_onboarding_proposal_payload(
+    payload: dict,
+    *,
+    mode: str = PROPOSAL_VALIDATION_MODE_FINAL,
+) -> dict:
     if not isinstance(payload, dict):
+        raise OnboardingProposalValidationError([_proposal_error("invalid_payload_type")])
+
+    if mode not in {PROPOSAL_VALIDATION_MODE_DRAFT, PROPOSAL_VALIDATION_MODE_FINAL}:
         raise OnboardingProposalValidationError([_proposal_error("invalid_payload_type")])
 
     schema_version = payload.get("schema_version")
     if schema_version == PROPOSAL_SCHEMA_VERSION_V3_BU:
-        return _validate_onboarding_proposal_payload_v3_bu(payload)
-    if schema_version == PROPOSAL_SCHEMA_VERSION:
-        return _validate_onboarding_proposal_payload_v2_legacy(payload)
+        return _validate_onboarding_proposal_payload_v3_bu(payload, mode=mode)
 
     raise OnboardingProposalValidationError(
         [_proposal_error("unsupported_schema_version", field="schema_version")]
     )
 
 
-def _validate_onboarding_proposal_payload_v2_legacy(payload: dict) -> dict:
-    errors: list[dict] = []
-
-    if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION:
-        errors.append(_proposal_error("unsupported_schema_version", field="schema_version"))
-
-    for section in PROPOSAL_REQUIRED_SECTIONS:
-        if section not in payload:
-            errors.append(_proposal_error("missing_required_section", section=section))
-
-    for section in payload:
-        if section == "schema_version":
-            continue
-        if section in PROPOSAL_EXCLUDED_SECTIONS:
-            errors.append(_proposal_error("excluded_section", section=section))
-        elif section not in PROPOSAL_SECTIONS:
-            errors.append(_proposal_error("unknown_section", section=section))
-
-    sanitized = _empty_proposal_payload()
-    catalogs = _active_onboarding_catalog_keys()
-
-    raw_modules = _section_items(payload, "operational_modules", errors)
-    raw_domains = _section_items(payload, "operational_domains", errors)
-    raw_subjects = _section_items(payload, "operational_subjects", errors)
-    raw_units = _section_items(payload, "operational_units", errors)
-    raw_vocabulary = _section_items(payload, "runtime_vocabulary", errors)
-    raw_tags = _section_items(payload, "runtime_tags", errors)
-    raw_hints = _section_items(payload, "routing_hints", errors)
-
-    modules = _validate_catalog_keyed_section(
-        section="operational_modules",
-        items=raw_modules,
-        allowed_keys=catalogs["modules"],
-        errors=errors,
-    )
-    module_keys = {item["key"] for item in modules}
-
-    domains = _validate_domain_section(
-        items=raw_domains,
-        allowed_keys=catalogs["domains"],
-        module_keys=module_keys,
-        errors=errors,
-    )
-    domain_keys = {item["key"] for item in domains}
-
-    subjects = _validate_subject_section(
-        items=raw_subjects,
-        allowed_keys=catalogs["subjects"],
-        domain_keys=domain_keys,
-        errors=errors,
-    )
-
-    units = _validate_catalog_keyed_section(
-        section="operational_units",
-        items=raw_units,
-        allowed_keys=catalogs["units"],
-        errors=errors,
-        related_module_keys=module_keys,
-    )
-    unit_keys = {item["key"] for item in units}
-
-    sanitized["operational_modules"] = modules
-    sanitized["operational_domains"] = domains
-    sanitized["operational_subjects"] = subjects
-    sanitized["operational_units"] = units
-    sanitized["runtime_vocabulary"] = _validate_vocabulary_section(
-        raw_vocabulary,
-        domain_keys=domain_keys,
-        unit_keys=unit_keys,
-        errors=errors,
-    )
-    sanitized["runtime_tags"] = _validate_runtime_tag_section(
-        raw_tags,
-        domain_keys=domain_keys,
-        errors=errors,
-    )
-    sanitized["routing_hints"] = _validate_routing_hint_section(
-        raw_hints,
-        domain_keys=domain_keys,
-        unit_keys=unit_keys,
-        errors=errors,
-    )
-
-    if len(modules) < 1:
-        errors.append(_proposal_error("insufficient_required_modules"))
-    if len(domains) < 3:
-        errors.append(_proposal_error("insufficient_required_domains"))
-    if len(subjects) < 1:
-        errors.append(_proposal_error("insufficient_required_subjects"))
-
-    if errors:
-        raise OnboardingProposalValidationError(errors)
-
-    return enforce_proposal_parent_child_coherence(sanitized)
-
-
-def _validate_onboarding_proposal_payload_v3_bu(payload: dict) -> dict:
+def _validate_onboarding_proposal_payload_v3_bu(payload: dict, *, mode: str) -> dict:
     errors: list[dict] = []
 
     if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3_BU:
@@ -393,7 +249,7 @@ def _validate_onboarding_proposal_payload_v3_bu(payload: dict) -> dict:
     for section in payload:
         if section == "schema_version":
             continue
-        if section in PROPOSAL_EXCLUDED_SECTIONS:
+        if section in PROPOSAL_V3_BU_EXCLUDED_SECTIONS:
             errors.append(_proposal_error("excluded_section", section=section))
         elif section not in PROPOSAL_V3_BU_SECTIONS:
             errors.append(_proposal_error("unknown_section", section=section))
@@ -402,10 +258,12 @@ def _validate_onboarding_proposal_payload_v3_bu(payload: dict) -> dict:
     raw_activity_subjects = _section_items_v3_bu(payload, "activity_subjects", errors)
     catalog_keys = _active_business_unit_catalog_keys()
 
+    require_unit_type = mode == PROPOSAL_VALIDATION_MODE_FINAL
     business_units = _validate_business_unit_section(
         items=raw_business_units,
         catalog_keys=catalog_keys["business_units"],
         errors=errors,
+        require_unit_type=require_unit_type,
     )
     business_unit_client_keys = {item["client_key"] for item in business_units}
 
@@ -424,14 +282,15 @@ def _validate_onboarding_proposal_payload_v3_bu(payload: dict) -> dict:
         subjects_by_bu_client_key[subject["business_unit_client_key"]] = (
             subjects_by_bu_client_key.get(subject["business_unit_client_key"], 0) + 1
         )
-    for business_unit in business_units:
-        if subjects_by_bu_client_key.get(business_unit["client_key"], 0) < 1:
-            errors.append(
-                _proposal_error(
-                    "business_unit_without_subjects",
-                    key=business_unit["client_key"],
+    if mode == PROPOSAL_VALIDATION_MODE_FINAL:
+        for business_unit in business_units:
+            if subjects_by_bu_client_key.get(business_unit["client_key"], 0) < 1:
+                errors.append(
+                    _proposal_error(
+                        "business_unit_without_subjects",
+                        key=business_unit["client_key"],
+                    )
                 )
-            )
 
     if errors:
         raise OnboardingProposalValidationError(errors)
@@ -469,36 +328,6 @@ def create_manual_onboarding_proposal(
 
 
 @transaction.atomic
-def create_template_onboarding_proposal(
-    *,
-    session: OnboardingSession,
-    actor,
-    payload: dict,
-) -> OnboardingProposal:
-    return _create_onboarding_proposal(
-        session=session,
-        actor=actor,
-        payload=payload,
-        source=OnboardingProposal.Source.TEMPLATE,
-    )
-
-
-@transaction.atomic
-def create_ai_onboarding_proposal(
-    *,
-    session: OnboardingSession,
-    actor,
-    payload: dict,
-) -> OnboardingProposal:
-    return _create_onboarding_proposal(
-        session=session,
-        actor=actor,
-        payload=payload,
-        source=OnboardingProposal.Source.AI_PROPOSED,
-    )
-
-
-@transaction.atomic
 def update_onboarding_proposal_payload(
     *,
     proposal: OnboardingProposal,
@@ -514,7 +343,10 @@ def update_onboarding_proposal_payload(
             [_proposal_error("unsupported_schema_version", field="schema_version")]
         )
 
-    sanitized_payload = validate_onboarding_proposal_payload(payload)
+    sanitized_payload = validate_onboarding_proposal_payload(
+        payload,
+        mode=PROPOSAL_VALIDATION_MODE_DRAFT,
+    )
     proposal.payload = sanitized_payload
     proposal.section_validation = {}
     proposal.validation_errors = []
@@ -541,7 +373,10 @@ def submit_manual_onboarding_proposal(
     _ensure_proposal_reviewable(proposal)
     _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
 
-    payload = validate_onboarding_proposal_payload(proposal.payload)
+    payload = validate_onboarding_proposal_payload(
+        proposal.payload,
+        mode=PROPOSAL_VALIDATION_MODE_FINAL,
+    )
     if payload["schema_version"] != PROPOSAL_SCHEMA_VERSION_V3_BU:
         raise OnboardingProposalValidationError(
             [_proposal_error("unsupported_schema_version", field="schema_version")]
@@ -567,134 +402,6 @@ def submit_manual_onboarding_proposal(
         ]
     )
     _set_session_status_after_proposal_validation(proposal.onboarding_session)
-    return proposal
-
-
-@transaction.atomic
-def validate_onboarding_proposal_section(
-    *,
-    proposal: OnboardingProposal,
-    actor,
-    section: str,
-    decision: str,
-) -> OnboardingProposal:
-    proposal = _lock_onboarding_proposal(proposal)
-    _ensure_proposal_reviewable(proposal)
-    _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
-
-    proposal.payload = validate_onboarding_proposal_payload(proposal.payload)
-    required_sections = _proposal_required_sections_for_payload(proposal.payload)
-    optional_sections = _proposal_optional_sections_for_payload(proposal.payload)
-    allowed_sections = required_sections | optional_sections
-
-    if section not in allowed_sections:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("unknown_section", section=section)]
-        )
-    if decision not in PROPOSAL_SECTION_DECISIONS:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("invalid_payload_type", section=section, field="decision")]
-        )
-    if section in required_sections and decision == PROPOSAL_SECTION_SKIPPED:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("missing_required_section", section=section)]
-        )
-    proposal.validation_errors = []
-
-    if decision == PROPOSAL_SECTION_REJECTED:
-        proposal.section_validation[section] = PROPOSAL_SECTION_REJECTED
-        proposal.status = OnboardingProposal.Status.REJECTED
-        proposal.save(
-            update_fields=[
-                "payload",
-                "section_validation",
-                "validation_errors",
-                "status",
-                "updated_at",
-            ]
-        )
-        return proposal
-
-    section_validation = dict(proposal.section_validation or {})
-    section_validation[section] = decision
-    section_validation = _normalize_empty_optional_section_decisions(
-        payload=proposal.payload,
-        section_validation=section_validation,
-    )
-    proposal.section_validation = section_validation
-
-    if _proposal_sections_are_validated(section_validation, proposal.payload):
-        proposal.status = OnboardingProposal.Status.VALIDATED
-        proposal.validated_by = actor
-        proposal.validated_at = timezone.now()
-        update_fields = [
-            "payload",
-            "section_validation",
-            "validation_errors",
-            "status",
-            "validated_by",
-            "validated_at",
-            "updated_at",
-        ]
-    else:
-        proposal.status = OnboardingProposal.Status.PARTIALLY_VALIDATED
-        update_fields = [
-            "payload",
-            "section_validation",
-            "validation_errors",
-            "status",
-            "updated_at",
-        ]
-
-    proposal.save(update_fields=update_fields)
-    _set_session_status_after_proposal_validation(proposal.onboarding_session)
-    return proposal
-
-
-@transaction.atomic
-def update_onboarding_proposal_items(
-    *,
-    proposal: OnboardingProposal,
-    actor,
-    section: str,
-    key: str,
-    action: str,
-) -> OnboardingProposal:
-    proposal = _lock_onboarding_proposal(proposal)
-    _ensure_proposal_reviewable(proposal)
-    _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
-
-    if section not in {
-        "operational_modules",
-        "operational_domains",
-        "operational_subjects",
-    }:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("unknown_section", section=section)]
-        )
-    if action not in {"add", "remove"}:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("invalid_payload_type", section=section, field="action")]
-        )
-
-    payload = dict(proposal.payload)
-    try:
-        if action == "add":
-            payload = apply_proposal_item_addition(payload=payload, section=section, key=key)
-        else:
-            payload = apply_proposal_item_removal(payload=payload, section=section, key=key)
-    except KeyError as exc:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("unknown_catalog_key", section=section, key=key)]
-        ) from exc
-    except ValueError as exc:
-        raise OnboardingProposalValidationError(
-            [_proposal_error("unknown_section", section=section)]
-        ) from exc
-
-    proposal.payload = validate_onboarding_proposal_payload(payload)
-    proposal.validation_errors = []
-    proposal.save(update_fields=["payload", "validation_errors", "updated_at"])
     return proposal
 
 
@@ -726,68 +433,17 @@ def apply_onboarding_proposal(*, proposal: OnboardingProposal, actor) -> Onboard
     if proposal.status != OnboardingProposal.Status.VALIDATED:
         raise OnboardingProposalStateError("Only validated proposals can be applied.")
 
-    payload = validate_onboarding_proposal_payload(proposal.payload)
-    source = proposal.source
+    payload = validate_onboarding_proposal_payload(
+        proposal.payload,
+        mode=PROPOSAL_VALIDATION_MODE_FINAL,
+    )
 
-    if payload["schema_version"] == PROPOSAL_SCHEMA_VERSION_V3_BU:
-        bu_keys, _subject_pairs = _apply_business_unit_sections(
-            establishment=establishment,
-            payload=payload,
-            proposal=proposal,
-        )
-        assert bu_keys
-    else:
-        module_keys, domains_by_key, subject_keys = _apply_hierarchical_runtime_sections(
-            establishment=establishment,
-            payload=payload,
-            source=source,
-            proposal=proposal,
-        )
-        domain_keys = set(domains_by_key.keys())
-        unit_keys, units_by_key = _apply_keyed_runtime_section_with_map(
-            model_class=OperationalUnit,
-            establishment=establishment,
-            items=payload["operational_units"],
-            source=source,
-            proposal=proposal,
-        )
-        _apply_vocabulary_section(
-            establishment=establishment,
-            items=payload["runtime_vocabulary"],
-            domains_by_key=domains_by_key,
-            units_by_key=units_by_key,
-            source=source,
-            proposal=proposal,
-        )
-        _apply_runtime_tag_section(
-            establishment=establishment,
-            items=payload["runtime_tags"],
-            domains_by_key=domains_by_key,
-            source=source,
-            proposal=proposal,
-        )
-        _apply_routing_hint_section(
-            establishment=establishment,
-            items=payload["routing_hints"],
-            domains_by_key=domains_by_key,
-            units_by_key=units_by_key,
-            source=source,
-            proposal=proposal,
-        )
-        _deactivate_omitted_vocabulary(
-            establishment=establishment,
-            terms={item["term"] for item in payload["runtime_vocabulary"]},
-        )
-        _deactivate_omitted_keyed(
-            model_class=RuntimeTag,
-            establishment=establishment,
-            keys={item["key"] for item in payload["runtime_tags"]},
-        )
-        _deactivate_omitted_routing_hints(
-            establishment=establishment,
-            patterns={item["pattern"] for item in payload["routing_hints"]},
-        )
-        assert module_keys or domain_keys or unit_keys or subject_keys
+    bu_keys, _subject_pairs = _apply_business_unit_sections(
+        establishment=establishment,
+        payload=payload,
+        proposal=proposal,
+    )
+    assert bu_keys
 
     proposal.payload = payload
     proposal.status = OnboardingProposal.Status.APPLIED
@@ -843,7 +499,10 @@ def _create_onboarding_proposal(
             "A non-terminal onboarding proposal already exists for this session."
         )
 
-    sanitized_payload = validate_onboarding_proposal_payload(payload)
+    sanitized_payload = validate_onboarding_proposal_payload(
+        payload,
+        mode=PROPOSAL_VALIDATION_MODE_DRAFT,
+    )
     proposal = OnboardingProposal(
         onboarding_session=session,
         establishment=session.establishment,
@@ -870,43 +529,9 @@ def _create_onboarding_proposal(
 
 def _empty_proposal_payload() -> dict:
     return {
-        "schema_version": PROPOSAL_SCHEMA_VERSION,
-        "operational_modules": [],
-        "operational_domains": [],
-        "operational_subjects": [],
-        "operational_units": [],
-        "runtime_vocabulary": [],
-        "runtime_tags": [],
-        "routing_hints": [],
-    }
-
-
-def _active_onboarding_catalog_keys() -> dict[str, set[str]]:
-    return {
-        "modules": set(
-            OnboardingCatalogModule.objects.filter(active=True).values_list(
-                "key",
-                flat=True,
-            )
-        ),
-        "domains": set(
-            OnboardingCatalogDomain.objects.filter(active=True).values_list(
-                "key",
-                flat=True,
-            )
-        ),
-        "units": set(
-            OnboardingCatalogUnit.objects.filter(active=True).values_list(
-                "key",
-                flat=True,
-            )
-        ),
-        "subjects": set(
-            OnboardingCatalogSubject.objects.filter(active=True).values_list(
-                "key",
-                flat=True,
-            )
-        ),
+        "schema_version": PROPOSAL_SCHEMA_VERSION_V3_BU,
+        "business_units": [],
+        "activity_subjects": [],
     }
 
 
@@ -937,6 +562,7 @@ def _validate_business_unit_section(
     items: list,
     catalog_keys: set[str],
     errors: list[dict],
+    require_unit_type: bool = True,
 ) -> list[dict]:
     sanitized: list[dict] = []
     seen_client_keys: set[str] = set()
@@ -976,7 +602,21 @@ def _validate_business_unit_section(
                 )
             )
             continue
-        if unit_type not in {
+        if require_unit_type:
+            if unit_type not in {
+                BusinessUnit.UnitType.DEDICATED,
+                BusinessUnit.UnitType.TRANSVERSAL,
+            }:
+                errors.append(
+                    _proposal_error(
+                        "invalid_unit_type",
+                        section="business_units",
+                        key=client_key,
+                        field="unit_type",
+                    )
+                )
+                continue
+        elif unit_type and unit_type not in {
             BusinessUnit.UnitType.DEDICATED,
             BusinessUnit.UnitType.TRANSVERSAL,
         }:
@@ -1012,15 +652,18 @@ def _validate_business_unit_section(
 
         seen_client_keys.add(client_key)
         seen_runtime_keys.add(runtime_key)
-        sanitized.append(
-            {
-                "client_key": client_key,
-                "label": label,
-                "description": description,
-                "unit_type": unit_type,
-                "catalog_key": catalog_key,
-            }
-        )
+        sanitized_item = {
+            "client_key": client_key,
+            "label": label,
+            "description": description,
+            "catalog_key": catalog_key,
+        }
+        if unit_type in {
+            BusinessUnit.UnitType.DEDICATED,
+            BusinessUnit.UnitType.TRANSVERSAL,
+        }:
+            sanitized_item["unit_type"] = unit_type
+        sanitized.append(sanitized_item)
 
     return sanitized
 
@@ -1262,403 +905,6 @@ def _apply_business_unit_sections(
     return bu_runtime_keys, subject_pairs
 
 
-def _section_items(payload: dict, section: str, errors: list[dict]) -> list:
-    items = payload.get(section, [])
-    if not isinstance(items, list):
-        errors.append(_proposal_error("section_must_be_array", section=section))
-        return []
-    if len(items) > PROPOSAL_SECTION_CAPS[section]:
-        errors.append(_proposal_error("section_cap_exceeded", section=section))
-        return items[: PROPOSAL_SECTION_CAPS[section]]
-    return items
-
-
-def _validate_catalog_keyed_section(
-    *,
-    section: str,
-    items: list,
-    allowed_keys: set[str],
-    errors: list[dict],
-    related_module_keys: set[str] | None = None,
-) -> list[dict]:
-    sanitized: list[dict] = []
-    seen_keys: set[str] = set()
-
-    for item in items:
-        if not isinstance(item, dict):
-            errors.append(_proposal_error("invalid_payload_type", section=section))
-            continue
-
-        key = _normalized_string(item.get("key"))
-        label = _normalized_string(item.get("label"))
-
-        if not key:
-            errors.append(_proposal_error("blank_key", section=section, field="key"))
-            continue
-        if not label:
-            errors.append(_proposal_error("blank_label", section=section, key=key, field="label"))
-            continue
-        if key in seen_keys:
-            errors.append(_proposal_error("duplicate_key", section=section, key=key))
-            continue
-        if key not in allowed_keys:
-            errors.append(_proposal_error("unknown_catalog_key", section=section, key=key))
-            continue
-
-        related_modules = _normalized_string_list(item.get("related_modules", []))
-        if related_module_keys is not None:
-            invalid_related_modules = [
-                related_key
-                for related_key in related_modules
-                if related_key not in related_module_keys
-            ]
-            if invalid_related_modules:
-                errors.append(
-                    _proposal_error(
-                        "invalid_related_module_key",
-                        section=section,
-                        key=key,
-                        field="related_modules",
-                    )
-                )
-                continue
-
-        seen_keys.add(key)
-        sanitized_item = {
-            "key": key,
-            "label": label,
-            "reason": _normalized_string(item.get("reason")),
-            "confidence_score": item.get("confidence_score"),
-        }
-        if section == "operational_units":
-            sanitized_item["related_modules"] = related_modules
-        sanitized.append(sanitized_item)
-
-    return sanitized
-
-
-def _validate_domain_section(
-    *,
-    items: list,
-    allowed_keys: set[str],
-    module_keys: set[str],
-    errors: list[dict],
-) -> list[dict]:
-    section = "operational_domains"
-    sanitized: list[dict] = []
-    seen_keys: set[str] = set()
-
-    for item in items:
-        if not isinstance(item, dict):
-            errors.append(_proposal_error("invalid_payload_type", section=section))
-            continue
-
-        key = _normalized_string(item.get("key"))
-        label = _normalized_string(item.get("label"))
-        module_key = _normalized_string(item.get("module_key"))
-
-        if not key:
-            errors.append(_proposal_error("blank_key", section=section, field="key"))
-            continue
-        if not label:
-            errors.append(_proposal_error("blank_label", section=section, key=key, field="label"))
-            continue
-        if key in seen_keys:
-            errors.append(_proposal_error("duplicate_key", section=section, key=key))
-            continue
-        if key not in allowed_keys:
-            errors.append(_proposal_error("unknown_catalog_key", section=section, key=key))
-            continue
-        if not module_key:
-            errors.append(
-                _proposal_error("blank_key", section=section, key=key, field="module_key")
-            )
-            continue
-        if module_key not in module_keys:
-            errors.append(
-                _proposal_error(
-                    "invalid_module_key",
-                    section=section,
-                    key=key,
-                    field="module_key",
-                )
-            )
-            continue
-
-        seen_keys.add(key)
-        sanitized.append(
-            {
-                "key": key,
-                "label": label,
-                "module_key": module_key,
-                "reason": _normalized_string(item.get("reason")),
-                "confidence_score": item.get("confidence_score"),
-            }
-        )
-
-    return sanitized
-
-
-def _validate_subject_section(
-    *,
-    items: list,
-    allowed_keys: set[str],
-    domain_keys: set[str],
-    errors: list[dict],
-) -> list[dict]:
-    section = "operational_subjects"
-    sanitized: list[dict] = []
-    seen_keys: set[str] = set()
-
-    for item in items:
-        if not isinstance(item, dict):
-            errors.append(_proposal_error("invalid_payload_type", section=section))
-            continue
-
-        key = _normalized_string(item.get("key"))
-        label = _normalized_string(item.get("label"))
-        domain_key = _normalized_string(item.get("domain_key"))
-
-        if not key:
-            errors.append(_proposal_error("blank_key", section=section, field="key"))
-            continue
-        if not label:
-            errors.append(_proposal_error("blank_label", section=section, key=key, field="label"))
-            continue
-        if key in seen_keys:
-            errors.append(_proposal_error("duplicate_key", section=section, key=key))
-            continue
-        if key not in allowed_keys:
-            errors.append(_proposal_error("unknown_catalog_key", section=section, key=key))
-            continue
-        if not domain_key:
-            errors.append(
-                _proposal_error("blank_key", section=section, key=key, field="domain_key")
-            )
-            continue
-        if domain_key not in domain_keys:
-            errors.append(
-                _proposal_error(
-                    "invalid_domain_key",
-                    section=section,
-                    key=key,
-                    field="domain_key",
-                )
-            )
-            continue
-
-        seen_keys.add(key)
-        sanitized_item = {
-            "key": key,
-            "label": label,
-            "domain_key": domain_key,
-            "reason": _normalized_string(item.get("reason")),
-            "confidence_score": item.get("confidence_score"),
-        }
-        module_key = _normalized_string(item.get("module_key"))
-        if module_key:
-            sanitized_item["module_key"] = module_key
-        sanitized.append(sanitized_item)
-
-    return sanitized
-
-
-def _validate_vocabulary_section(
-    items: list,
-    *,
-    domain_keys: set[str],
-    unit_keys: set[str],
-    errors: list[dict],
-) -> list[dict]:
-    sanitized: list[dict] = []
-    seen_terms: set[str] = set()
-    section = "runtime_vocabulary"
-
-    for item in items:
-        if not isinstance(item, dict):
-            errors.append(_proposal_error("invalid_payload_type", section=section))
-            continue
-
-        term = _normalized_string(item.get("term"))
-        meaning = _normalized_string(item.get("meaning"))
-        mapped_domain_key = _nullable_normalized_string(item.get("mapped_domain_key"))
-        mapped_unit_key = _nullable_normalized_string(item.get("mapped_unit_key"))
-
-        if not term:
-            errors.append(_proposal_error("blank_term", section=section, field="term"))
-            continue
-        if not meaning:
-            errors.append(
-                _proposal_error("blank_meaning", section=section, key=term, field="meaning")
-            )
-            continue
-        if term in seen_terms:
-            errors.append(_proposal_error("duplicate_term", section=section, key=term))
-            continue
-        invalid_mapping = False
-        if mapped_domain_key is not None and mapped_domain_key not in domain_keys:
-            errors.append(
-                _proposal_error(
-                    "invalid_mapped_domain_key",
-                    section=section,
-                    key=term,
-                    field="mapped_domain_key",
-                )
-            )
-            invalid_mapping = True
-        if mapped_unit_key is not None and mapped_unit_key not in unit_keys:
-            errors.append(
-                _proposal_error(
-                    "invalid_mapped_unit_key",
-                    section=section,
-                    key=term,
-                    field="mapped_unit_key",
-                )
-            )
-            invalid_mapping = True
-        if invalid_mapping:
-            continue
-
-        seen_terms.add(term)
-        sanitized.append(
-            {
-                "term": term,
-                "meaning": meaning,
-                "mapped_domain_key": mapped_domain_key,
-                "mapped_unit_key": mapped_unit_key,
-                "reason": _normalized_string(item.get("reason")),
-            }
-        )
-
-    return sanitized
-
-
-def _validate_runtime_tag_section(
-    items: list,
-    *,
-    domain_keys: set[str],
-    errors: list[dict],
-) -> list[dict]:
-    sanitized: list[dict] = []
-    seen_keys: set[str] = set()
-    section = "runtime_tags"
-
-    for item in items:
-        if not isinstance(item, dict):
-            errors.append(_proposal_error("invalid_payload_type", section=section))
-            continue
-
-        key = _normalized_string(item.get("key"))
-        label = _normalized_string(item.get("label"))
-        related_domain_keys = _normalized_string_list(item.get("related_domain_keys", []))
-
-        if not key:
-            errors.append(_proposal_error("blank_key", section=section, field="key"))
-            continue
-        if not label:
-            errors.append(_proposal_error("blank_label", section=section, key=key, field="label"))
-            continue
-        if key in seen_keys:
-            errors.append(_proposal_error("duplicate_key", section=section, key=key))
-            continue
-        if any(domain_key not in domain_keys for domain_key in related_domain_keys):
-            errors.append(
-                _proposal_error(
-                    "invalid_mapped_domain_key",
-                    section=section,
-                    key=key,
-                    field="related_domain_keys",
-                )
-            )
-            continue
-
-        seen_keys.add(key)
-        sanitized.append(
-            {
-                "key": key,
-                "label": label,
-                "related_domain_keys": related_domain_keys,
-                "reason": _normalized_string(item.get("reason")),
-            }
-        )
-
-    return sanitized
-
-
-def _validate_routing_hint_section(
-    items: list,
-    *,
-    domain_keys: set[str],
-    unit_keys: set[str],
-    errors: list[dict],
-) -> list[dict]:
-    sanitized: list[dict] = []
-    seen_patterns: set[str] = set()
-    section = "routing_hints"
-
-    for item in items:
-        if not isinstance(item, dict):
-            errors.append(_proposal_error("invalid_payload_type", section=section))
-            continue
-
-        pattern = _normalized_string(item.get("pattern"))
-        suggested_domain_keys = _normalized_string_list(item.get("suggested_domain_keys", []))
-        suggested_unit_key = _nullable_normalized_string(item.get("suggested_unit_key"))
-
-        if not pattern:
-            errors.append(_proposal_error("blank_pattern", section=section, field="pattern"))
-            continue
-        if pattern in seen_patterns:
-            errors.append(_proposal_error("duplicate_pattern", section=section, key=pattern))
-            continue
-        if len(suggested_domain_keys) > PROPOSAL_MAX_ROUTING_HINT_DOMAINS:
-            errors.append(
-                _proposal_error(
-                    "too_many_suggested_domains",
-                    section=section,
-                    key=pattern,
-                    field="suggested_domain_keys",
-                )
-            )
-            continue
-        invalid_mapping = False
-        if any(domain_key not in domain_keys for domain_key in suggested_domain_keys):
-            errors.append(
-                _proposal_error(
-                    "invalid_suggested_domain_key",
-                    section=section,
-                    key=pattern,
-                    field="suggested_domain_keys",
-                )
-            )
-            invalid_mapping = True
-        if suggested_unit_key is not None and suggested_unit_key not in unit_keys:
-            errors.append(
-                _proposal_error(
-                    "invalid_suggested_unit_key",
-                    section=section,
-                    key=pattern,
-                    field="suggested_unit_key",
-                )
-            )
-            invalid_mapping = True
-        if invalid_mapping:
-            continue
-
-        seen_patterns.add(pattern)
-        sanitized.append(
-            {
-                "pattern": pattern,
-                "suggested_domain_keys": suggested_domain_keys,
-                "suggested_unit_key": suggested_unit_key,
-                "reason": _normalized_string(item.get("reason")),
-                "confidence_score": item.get("confidence_score"),
-            }
-        )
-
-    return sanitized
-
-
 def _proposal_error(
     code: str,
     *,
@@ -1737,303 +983,12 @@ def _ensure_can_manage_onboarding_proposal(*, proposal: OnboardingProposal, acto
         raise OnboardingAccessDeniedError
 
 
-def _proposal_required_sections_for_payload(payload: dict) -> frozenset[str]:
-    if payload.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V3_BU:
-        return PROPOSAL_V3_BU_REQUIRED_SECTIONS
-    return PROPOSAL_REQUIRED_SECTIONS
-
-
-def _proposal_optional_sections_for_payload(payload: dict) -> frozenset[str]:
-    if payload.get("schema_version") == PROPOSAL_SCHEMA_VERSION_V3_BU:
-        return frozenset()
-    return PROPOSAL_OPTIONAL_SECTIONS
-
-
-def _normalize_empty_optional_section_decisions(
-    *,
-    payload: dict,
-    section_validation: dict,
-) -> dict:
-    for section in _proposal_optional_sections_for_payload(payload):
-        if section not in section_validation and not payload.get(section):
-            section_validation[section] = PROPOSAL_SECTION_SKIPPED
-    return section_validation
-
-
-def _proposal_sections_are_validated(section_validation: dict, payload: dict) -> bool:
-    required_sections = _proposal_required_sections_for_payload(payload)
-    optional_sections = _proposal_optional_sections_for_payload(payload)
-    return all(
-        section_validation.get(section) == PROPOSAL_SECTION_ACCEPTED
-        for section in required_sections
-    ) and all(
-        section_validation.get(section) in {PROPOSAL_SECTION_ACCEPTED, PROPOSAL_SECTION_SKIPPED}
-        for section in optional_sections
-    )
-
-
 def _set_session_status_after_proposal_validation(session: OnboardingSession) -> None:
     session = _lock_onboarding_session(session)
     if session.status != OnboardingSession.Status.VALIDATING_SECTIONS:
         session.status = OnboardingSession.Status.VALIDATING_SECTIONS
         session.ready_for_activation_at = None
         session.save(update_fields=["status", "ready_for_activation_at", "updated_at"])
-
-
-def _apply_keyed_runtime_section(
-    *,
-    model_class,
-    establishment: Establishment,
-    items: list[dict],
-    source: str,
-    proposal: OnboardingProposal,
-) -> set[str]:
-    keys, _items_by_key = _apply_keyed_runtime_section_with_map(
-        model_class=model_class,
-        establishment=establishment,
-        items=items,
-        source=source,
-        proposal=proposal,
-    )
-    return keys
-
-
-def _apply_keyed_runtime_section_with_map(
-    *,
-    model_class,
-    establishment: Establishment,
-    items: list[dict],
-    source: str,
-    proposal: OnboardingProposal,
-) -> tuple[set[str], dict[str, object]]:
-    keys: set[str] = set()
-    items_by_key: dict[str, object] = {}
-
-    for item in items:
-        runtime_item, _created = model_class.objects.update_or_create(
-            establishment=establishment,
-            key=item["key"],
-            defaults={
-                "label": item["label"],
-                "source": source,
-                "active": True,
-                "managed_by_onboarding_proposal": proposal,
-            },
-        )
-        keys.add(item["key"])
-        items_by_key[item["key"]] = runtime_item
-
-    _deactivate_omitted_keyed(
-        model_class=model_class,
-        establishment=establishment,
-        keys=keys,
-    )
-    return keys, items_by_key
-
-
-def _apply_hierarchical_runtime_sections(
-    *,
-    establishment: Establishment,
-    payload: dict,
-    source: str,
-    proposal: OnboardingProposal,
-) -> tuple[set[str], dict[str, OperationalDomain], set[str]]:
-    module_keys = _apply_keyed_runtime_section(
-        model_class=OperationalModule,
-        establishment=establishment,
-        items=payload["operational_modules"],
-        source=source,
-        proposal=proposal,
-    )
-    modules_by_key = {
-        module.key: module
-        for module in OperationalModule.objects.filter(
-            establishment=establishment,
-            key__in=module_keys,
-            active=True,
-        )
-    }
-
-    domain_keys: set[str] = set()
-    domains_by_key: dict[str, OperationalDomain] = {}
-    for item in payload["operational_domains"]:
-        runtime_domain, _created = OperationalDomain.objects.update_or_create(
-            establishment=establishment,
-            key=item["key"],
-            defaults={
-                "label": item["label"],
-                "operational_module": modules_by_key[item["module_key"]],
-                "source": source,
-                "active": True,
-                "managed_by_onboarding_proposal": proposal,
-            },
-        )
-        domain_keys.add(item["key"])
-        domains_by_key[item["key"]] = runtime_domain
-
-    _deactivate_omitted_keyed(
-        model_class=OperationalDomain,
-        establishment=establishment,
-        keys=domain_keys,
-    )
-
-    subject_keys: set[str] = set()
-    for item in payload["operational_subjects"]:
-        OperationalSubject.objects.update_or_create(
-            establishment=establishment,
-            key=item["key"],
-            defaults={
-                "label": item["label"],
-                "operational_domain": domains_by_key[item["domain_key"]],
-                "source": source,
-                "active": True,
-                "managed_by_onboarding_proposal": proposal,
-            },
-        )
-        subject_keys.add(item["key"])
-
-    _deactivate_omitted_keyed(
-        model_class=OperationalSubject,
-        establishment=establishment,
-        keys=subject_keys,
-    )
-
-    return module_keys, domains_by_key, subject_keys
-
-
-def _deactivate_omitted_keyed(*, model_class, establishment: Establishment, keys: set[str]):
-    queryset = model_class.objects.filter(
-        establishment=establishment,
-        active=True,
-        managed_by_onboarding_proposal__isnull=False,
-    )
-    if keys:
-        queryset = queryset.exclude(key__in=keys)
-    queryset.update(active=False, updated_at=timezone.now())
-
-
-def _apply_vocabulary_section(
-    *,
-    establishment: Establishment,
-    items: list[dict],
-    domains_by_key: dict[str, OperationalDomain],
-    units_by_key: dict[str, OperationalUnit],
-    source: str,
-    proposal: OnboardingProposal,
-) -> None:
-    for item in items:
-        mapped_domain_key = item["mapped_domain_key"]
-        mapped_unit_key = item["mapped_unit_key"]
-        RuntimeVocabulary.objects.update_or_create(
-            establishment=establishment,
-            term=item["term"],
-            defaults={
-                "meaning": item["meaning"],
-                "mapped_domain": (
-                    None if mapped_domain_key is None else domains_by_key[mapped_domain_key]
-                ),
-                "mapped_unit": None if mapped_unit_key is None else units_by_key[mapped_unit_key],
-                "source": source,
-                "active": True,
-                "managed_by_onboarding_proposal": proposal,
-            },
-        )
-
-
-def _deactivate_omitted_vocabulary(
-    *,
-    establishment: Establishment,
-    terms: set[str],
-) -> None:
-    queryset = RuntimeVocabulary.objects.filter(
-        establishment=establishment,
-        active=True,
-        managed_by_onboarding_proposal__isnull=False,
-    )
-    if terms:
-        queryset = queryset.exclude(term__in=terms)
-    queryset.update(active=False, updated_at=timezone.now())
-
-
-def _apply_runtime_tag_section(
-    *,
-    establishment: Establishment,
-    items: list[dict],
-    domains_by_key: dict[str, OperationalDomain],
-    source: str,
-    proposal: OnboardingProposal,
-) -> None:
-    for item in items:
-        runtime_tag, _created = RuntimeTag.objects.update_or_create(
-            establishment=establishment,
-            key=item["key"],
-            defaults={
-                "label": item["label"],
-                "source": source,
-                "active": True,
-                "managed_by_onboarding_proposal": proposal,
-            },
-        )
-        RuntimeTagDomain.objects.filter(runtime_tag=runtime_tag).delete()
-        links = [
-            RuntimeTagDomain(
-                runtime_tag=runtime_tag,
-                operational_domain=domains_by_key[domain_key],
-            )
-            for domain_key in item["related_domain_keys"]
-        ]
-        if links:
-            RuntimeTagDomain.objects.bulk_create(links)
-
-
-def _apply_routing_hint_section(
-    *,
-    establishment: Establishment,
-    items: list[dict],
-    domains_by_key: dict[str, OperationalDomain],
-    units_by_key: dict[str, OperationalUnit],
-    source: str,
-    proposal: OnboardingProposal,
-) -> None:
-    for item in items:
-        suggested_unit_key = item["suggested_unit_key"]
-        routing_hint, _created = RoutingHint.objects.update_or_create(
-            establishment=establishment,
-            pattern=item["pattern"],
-            defaults={
-                "suggested_unit": (
-                    None if suggested_unit_key is None else units_by_key[suggested_unit_key]
-                ),
-                "source": source,
-                "active": True,
-                "managed_by_onboarding_proposal": proposal,
-            },
-        )
-        RoutingHintDomain.objects.filter(routing_hint=routing_hint).delete()
-        links = [
-            RoutingHintDomain(
-                routing_hint=routing_hint,
-                operational_domain=domains_by_key[domain_key],
-            )
-            for domain_key in item["suggested_domain_keys"]
-        ]
-        if links:
-            RoutingHintDomain.objects.bulk_create(links)
-
-
-def _deactivate_omitted_routing_hints(
-    *,
-    establishment: Establishment,
-    patterns: set[str],
-) -> None:
-    queryset = RoutingHint.objects.filter(
-        establishment=establishment,
-        active=True,
-        managed_by_onboarding_proposal__isnull=False,
-    )
-    if patterns:
-        queryset = queryset.exclude(pattern__in=patterns)
-    queryset.update(active=False, updated_at=timezone.now())
 
 
 @transaction.atomic
@@ -2183,31 +1138,10 @@ def build_activation_summary(*, session: OnboardingSession) -> dict:
         "activity_description": _serialize_activity_description(
             config["activity_description"],
         ),
-        "active_modules": [
-            _serialize_keyed_runtime_item(item) for item in config["active_modules"]
-        ],
-        "active_domains": [
-            _serialize_keyed_runtime_item(item) for item in config["active_domains"]
-        ],
-        "active_subjects": [
-            _serialize_keyed_runtime_item(item)
-            for item in session.establishment.operational_subjects.filter(active=True).order_by(
-                "key", "id"
-            )
-        ],
+        "active_business_units": config["active_business_units"],
         "optional_units": [
             _serialize_keyed_runtime_item(item) for item in config["optional_units"]
         ],
-        "optional_vocabulary": [
-            _serialize_vocabulary_item(item) for item in config["optional_vocabulary"]
-        ],
-        "optional_runtime_tags": [
-            _serialize_runtime_tag(item) for item in config["optional_runtime_tags"]
-        ],
-        "optional_routing_hints": [
-            _serialize_routing_hint(item) for item in config["optional_routing_hints"]
-        ],
-        "active_business_units": config["active_business_units"],
         "initial_owner_director_count": counts["active_owner_or_director_count"],
         "initial_director_count": counts["active_or_invited_director_count"],
         "readiness": readiness,
@@ -2994,21 +1928,6 @@ def _activation_counts(session: OnboardingSession) -> dict:
     establishment_id = session.establishment_id
     owner_user_ids = _active_owner_user_ids(establishment_id=establishment_id)
 
-    active_domains_without_subjects_count = (
-        OperationalDomain.objects.filter(
-            establishment_id=establishment_id,
-            active=True,
-        )
-        .annotate(
-            active_subject_count=Count(
-                "operational_subjects",
-                filter=Q(operational_subjects__active=True),
-            )
-        )
-        .filter(active_subject_count=0)
-        .count()
-    )
-
     active_business_units_without_subjects_count = (
         BusinessUnit.objects.filter(
             establishment_id=establishment_id,
@@ -3025,16 +1944,6 @@ def _activation_counts(session: OnboardingSession) -> dict:
     )
 
     return {
-        "active_modules_count": session.establishment.operational_modules.filter(
-            active=True,
-        ).count(),
-        "active_domains_count": session.establishment.operational_domains.filter(
-            active=True,
-        ).count(),
-        "active_subjects_count": session.establishment.operational_subjects.filter(
-            active=True,
-        ).count(),
-        "active_domains_without_subjects_count": active_domains_without_subjects_count,
         "active_business_units_count": session.establishment.business_units.filter(
             active=True,
         ).count(),
@@ -3162,42 +2071,6 @@ def _serialize_keyed_runtime_item(item) -> dict:
     }
 
 
-def _serialize_vocabulary_item(item) -> dict:
-    return {
-        "id": str(item.id),
-        "term": item.term,
-        "meaning": item.meaning,
-        "mapped_domain_key": (None if item.mapped_domain_id is None else item.mapped_domain.key),
-        "mapped_unit_key": None if item.mapped_unit_id is None else item.mapped_unit.key,
-        "source": item.source,
-        "active": item.active,
-    }
-
-
-def _serialize_runtime_tag(runtime_tag) -> dict:
-    return {
-        "id": str(runtime_tag.id),
-        "key": runtime_tag.key,
-        "label": runtime_tag.label,
-        "source": runtime_tag.source,
-        "active": runtime_tag.active,
-        "domain_keys": [link.operational_domain.key for link in runtime_tag.domain_links.all()],
-    }
-
-
-def _serialize_routing_hint(routing_hint) -> dict:
-    return {
-        "id": str(routing_hint.id),
-        "pattern": routing_hint.pattern,
-        "suggested_unit_key": (
-            None if routing_hint.suggested_unit_id is None else routing_hint.suggested_unit.key
-        ),
-        "source": routing_hint.source,
-        "active": routing_hint.active,
-        "domain_keys": [link.operational_domain.key for link in routing_hint.domain_links.all()],
-    }
-
-
 def _is_last_active_owner(membership: EstablishmentMembership) -> bool:
     return (
         EstablishmentMembership.objects.filter(
@@ -3275,11 +2148,7 @@ def _reload_membership_for_response(membership_id) -> EstablishmentMembership:
             "establishment",
             "establishment__organization",
         )
-        .prefetch_related(
-            "scope_links__operational_module",
-            "scope_links__operational_domain",
-            "scope_links__operational_subject",
-        )
+        .prefetch_related("scope_links__business_unit")
         .get(id=membership_id)
     )
 

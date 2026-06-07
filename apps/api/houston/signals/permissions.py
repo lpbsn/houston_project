@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from houston.establishments.membership_scope import (
-    membership_scope_covers_business_unit,
-    membership_scope_covers_domain,
-    membership_scope_covers_module,
-    membership_scope_covers_subject,
-)
+from houston.establishments.membership_scope import membership_scope_covers_business_unit
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import (
     can_view_signal_feed as establishment_can_view_signal_feed,
@@ -39,8 +34,6 @@ def signal_visible_in_membership_scope(
         if membership_scope_covers_business_unit(membership, signal.responsible_business_unit):
             return True
 
-    if signal.operational_subject_id is not None:
-        return signal_matches_membership_scope_legacy(membership, signal)
     return False
 
 
@@ -54,7 +47,7 @@ def signal_actionable_by_membership(
     if signal.responsible_business_unit_id is not None:
         return membership_scope_covers_business_unit(membership, signal.responsible_business_unit)
 
-    return signal_matches_membership_scope_legacy(membership, signal)
+    return False
 
 
 def signal_matches_membership_scope(
@@ -62,17 +55,6 @@ def signal_matches_membership_scope(
     signal: Signal,
 ) -> bool:
     return signal_visible_in_membership_scope(membership, signal)
-
-
-def signal_matches_membership_scope_legacy(
-    membership: EstablishmentMembership,
-    signal: Signal,
-) -> bool:
-    if membership_scope_covers_subject(membership, signal.operational_subject):
-        return True
-    if membership_scope_covers_domain(membership, signal.operational_domain):
-        return True
-    return membership_scope_covers_module(membership, signal.operational_module)
 
 
 def can_view_signal(

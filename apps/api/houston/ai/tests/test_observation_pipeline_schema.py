@@ -11,9 +11,9 @@ def _valid_candidate(**overrides):
     base = {
         "title": "Clim en panne",
         "structured_summary": "La climatisation ne fonctionne plus.",
-        "operational_module_key": "hotel",
-        "operational_domain_key": "hotel__hebergement",
-        "operational_subject_key": "hotel__hebergement__maintenance",
+        "affected_business_unit_key": "hotel",
+        "responsible_business_unit_key": "maintenance",
+        "activity_subject_key": "climatisation",
         "operational_unit_key": None,
         "location_text": None,
         "aggregate_into_signal_id": None,
@@ -32,7 +32,7 @@ def test_accepts_valid_payload():
 
     assert output.schema_version == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert len(output.candidates) == 1
-    assert output.candidates[0].operational_subject_key.endswith("maintenance")
+    assert output.candidates[0].activity_subject_key == "climatisation"
 
 
 def test_rejects_wrong_top_level_shape():
@@ -41,6 +41,21 @@ def test_rejects_wrong_top_level_shape():
             {
                 "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
                 "signals": [],
+            }
+        )
+
+
+def test_rejects_legacy_operational_keys():
+    with pytest.raises(ValidationError):
+        ObservationPipelineOutput.model_validate(
+            {
+                "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                "candidates": [
+                    {
+                        **_valid_candidate(),
+                        "operational_module_key": "hotel",
+                    }
+                ],
             }
         )
 

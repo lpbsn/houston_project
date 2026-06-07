@@ -581,6 +581,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActionDetail'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/actions/{action_id}/cancel/:
     post:
       operationId: v1_establishments_actions_cancel_create
@@ -607,6 +625,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/actions/{action_id}/due-at/:
     patch:
@@ -672,6 +708,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/actions/{action_id}/reassign/:
     post:
@@ -739,6 +793,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActionDetail'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/actions/{action_id}/validate/:
     post:
       operationId: v1_establishments_actions_validate_create
@@ -765,6 +837,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/:
     post:
@@ -1530,67 +1620,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/operational-taxonomy/:
-    get:
-      operationId: v1_establishments_operational_taxonomy_retrieve
-      description: Returns the active operational taxonomy tree for membership scope
-        assignment.
-      parameters:
-      - in: path
-        name: establishment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - establishments
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperationalTaxonomyResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
   /api/v1/establishments/{establishment_id}/signal-feed/:
     get:
       operationId: v1_establishments_signal_feed_retrieve
       parameters:
       - in: query
-        name: domain_keys
+        name: activity_subject_ids
         schema:
           type: string
-        description: Comma-separated operational domain keys (max 50).
+        description: Comma-separated ActivitySubject UUIDs (max 50).
+      - in: query
+        name: business_unit_keys
+        schema:
+          type: string
+        description: Comma-separated BusinessUnit keys (max 20). Matches affected_business_unit
+          OR responsible_business_unit.
       - in: path
         name: establishment_id
         schema:
           type: string
           format: uuid
         required: true
-      - in: query
-        name: module_keys
-        schema:
-          type: string
-        description: Comma-separated operational module keys (max 20).
       - in: query
         name: page_size
         schema:
@@ -1601,11 +1651,6 @@ paths:
           type: string
         description: 'Comma-separated feed statuses: open, in_progress, resolved (max
           3).'
-      - in: query
-        name: subject_keys
-        schema:
-          type: string
-        description: Comma-separated operational subject keys (max 100).
       - in: query
         name: view_mode
         schema:
@@ -2889,76 +2934,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingProposalErrorResponse'
           description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/:
-    post:
-      operationId: v1_onboarding_sessions_proposals_items_create
-      description: Adds or removes one catalog item from an onboarding proposal payload.
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProposalItemMutationRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProposalItemMutationRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProposalItemMutationRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
   /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/reject/:
     post:
       operationId: v1_onboarding_sessions_proposals_reject_create
@@ -2998,81 +2973,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/sections/{section}/decision/:
-    post:
-      operationId: v1_onboarding_sessions_proposals_sections_decision_create
-      description: Accepts or skips one section of an onboarding proposal.
-      parameters:
-      - in: path
-        name: proposal_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      - in: path
-        name: section
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProposalSectionDecisionRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProposalSectionDecisionRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ProposalSectionDecisionRequest'
-        required: true
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
           content:
@@ -3145,77 +3045,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/OnboardingProposalErrorResponse'
           description: ''
-  /api/v1/onboarding-sessions/{session_id}/proposals/ai-generate/:
-    post:
-      operationId: v1_onboarding_sessions_proposals_ai_generate_create
-      description: Runs AI onboarding interpretation for a session. The command creates
-        an OnboardingProposal only and never applies runtime configuration.
-      parameters:
-      - in: path
-        name: session_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - onboarding
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AIOnboardingGenerateRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AIOnboardingGenerateRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AIOnboardingGenerateRequest'
-      security:
-      - BearerAccessToken: []
-      deprecated: true
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProposalCommandResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
-        '503':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OnboardingProposalErrorResponse'
-          description: ''
   /api/v1/onboarding-sessions/{session_id}/runtime-config/:
     get:
       operationId: v1_onboarding_sessions_runtime_config_retrieve
@@ -3252,12 +3081,6 @@ paths:
           description: ''
 components:
   schemas:
-    AIOnboardingGenerateRequest:
-      type: object
-      properties:
-        locale:
-          type: string
-          default: en-US
     ActionCreateRequest:
       type: object
       properties:
@@ -3273,23 +3096,18 @@ components:
         due_at:
           type: string
           format: date-time
-        module_key:
-          type: string
-        domain_key:
-          type: string
-        subject_key:
-          type: string
         signal:
+          type: string
+          format: uuid
+          nullable: true
+        responsible_business_unit_id:
           type: string
           format: uuid
           nullable: true
       required:
       - assigned_to
-      - domain_key
       - due_at
       - instruction
-      - module_key
-      - subject_key
       - title
     ActionDetail:
       type: object
@@ -3308,12 +3126,24 @@ components:
           format: date-time
         is_overdue:
           type: boolean
-        module_key:
+        affected_business_unit_key:
           type: string
-        domain_key:
+          nullable: true
+        affected_business_unit_label:
           type: string
-        subject_key:
+          nullable: true
+        responsible_business_unit_key:
           type: string
+          nullable: true
+        responsible_business_unit_label:
+          type: string
+          nullable: true
+        activity_subject_normalized_name:
+          type: string
+          nullable: true
+        activity_subject_label:
+          type: string
+          nullable: true
         signal_summary:
           allOf:
           - $ref: '#/components/schemas/ActionSignalSummary'
@@ -3346,10 +3176,13 @@ components:
           nullable: true
       required:
       - accepted_at
+      - activity_subject_label
+      - activity_subject_normalized_name
+      - affected_business_unit_key
+      - affected_business_unit_label
       - assigned_to_display_name
       - created_at
       - created_by_display_name
-      - domain_key
       - due_at
       - id
       - instruction
@@ -3357,21 +3190,13 @@ components:
       - is_overdue
       - last_activity_at
       - marked_done_at
-      - module_key
       - permission_hints
+      - responsible_business_unit_key
+      - responsible_business_unit_label
       - signal_summary
       - status
-      - subject_key
       - title
       - validated_at
-    ActionEnum:
-      enum:
-      - add
-      - remove
-      type: string
-      description: |-
-        * `add` - Add
-        * `remove` - Remove
     ActionFeedItem:
       type: object
       properties:
@@ -3389,12 +3214,24 @@ components:
           format: date-time
         is_overdue:
           type: boolean
-        module_key:
+        affected_business_unit_key:
           type: string
-        domain_key:
+          nullable: true
+        affected_business_unit_label:
           type: string
-        subject_key:
+          nullable: true
+        responsible_business_unit_key:
           type: string
+          nullable: true
+        responsible_business_unit_label:
+          type: string
+          nullable: true
+        activity_subject_normalized_name:
+          type: string
+          nullable: true
+        activity_subject_label:
+          type: string
+          nullable: true
         signal_summary:
           allOf:
           - $ref: '#/components/schemas/ActionSignalSummary'
@@ -3412,20 +3249,23 @@ components:
         permission_hints:
           $ref: '#/components/schemas/ActionPermissionHints'
       required:
+      - activity_subject_label
+      - activity_subject_normalized_name
+      - affected_business_unit_key
+      - affected_business_unit_label
       - assigned_to_display_name
       - created_at
       - created_by_display_name
-      - domain_key
       - due_at
       - id
       - instruction_short
       - is_overdue
       - last_activity_at
-      - module_key
       - permission_hints
+      - responsible_business_unit_key
+      - responsible_business_unit_label
       - signal_summary
       - status
-      - subject_key
       - title
     ActionPermissionHints:
       type: object
@@ -3472,18 +3312,36 @@ components:
           type: string
         urgency:
           type: string
-        module_key:
+        affected_business_unit_key:
           type: string
-        domain_key:
+          nullable: true
+        affected_business_unit_label:
           type: string
-        subject_key:
+          nullable: true
+        responsible_business_unit_key:
+          type: string
+          nullable: true
+        responsible_business_unit_label:
+          type: string
+          nullable: true
+        activity_subject_normalized_name:
+          type: string
+          nullable: true
+        activity_subject_label:
+          type: string
+          nullable: true
+        location_text:
           type: string
       required:
-      - domain_key
+      - activity_subject_label
+      - activity_subject_normalized_name
+      - affected_business_unit_key
+      - affected_business_unit_label
       - id
-      - module_key
+      - location_text
+      - responsible_business_unit_key
+      - responsible_business_unit_label
       - status
-      - subject_key
       - title
       - urgency
     ActivationBlocker:
@@ -3550,34 +3408,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BusinessUnitTreeItem'
-        active_modules:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
-        active_domains:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
-        active_subjects:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
         optional_units:
           type: array
           items:
             $ref: '#/components/schemas/KeyedRuntimeItem'
-        optional_vocabulary:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuntimeVocabularyItem'
-        optional_runtime_tags:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuntimeTagItem'
-        optional_routing_hints:
-          type: array
-          items:
-            $ref: '#/components/schemas/RoutingHintItem'
         initial_owner_director_count:
           type: integer
         initial_director_count:
@@ -3594,19 +3428,13 @@ components:
           type: boolean
       required:
       - access
-      - active_domains
-      - active_modules
-      - active_subjects
       - activity_description
       - blockers
       - effective_can_activate
       - establishment
       - initial_director_count
       - initial_owner_director_count
-      - optional_routing_hints
-      - optional_runtime_tags
       - optional_units
-      - optional_vocabulary
       - organization
       - readiness
     ActivityDescriptionResponse:
@@ -3689,17 +3517,8 @@ components:
       properties:
         business_unit_count:
           type: integer
-        module_count:
-          type: integer
-        domain_count:
-          type: integer
-        subject_count:
-          type: integer
       required:
       - business_unit_count
-      - domain_count
-      - module_count
-      - subject_count
     AuthResponse:
       type: object
       properties:
@@ -3831,14 +3650,6 @@ components:
           type: string
       required:
       - detail
-    DecisionEnum:
-      enum:
-      - accepted
-      - skipped
-      type: string
-      description: |-
-        * `accepted` - Accepted
-        * `skipped` - Skipped
     DetailResponse:
       type: object
       properties:
@@ -4004,17 +3815,19 @@ components:
       properties:
         business_unit_count:
           type: integer
-        module_count:
-          type: integer
-        domain_count:
-          type: integer
-        subject_count:
-          type: integer
       required:
       - business_unit_count
-      - domain_count
-      - module_count
-      - subject_count
+    EstablishmentMembershipScopeWriteItem:
+      type: object
+      properties:
+        scope_type:
+          $ref: '#/components/schemas/ScopeTypeEnum'
+        scope_id:
+          type: string
+          format: uuid
+      required:
+      - scope_id
+      - scope_type
     ExecutionFeedItem:
       type: object
       properties:
@@ -4139,7 +3952,7 @@ components:
         scopes:
           type: array
           items:
-            $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
+            $ref: '#/components/schemas/EstablishmentMembershipScopeWriteItem'
       required:
       - email
       - first_name
@@ -4174,29 +3987,29 @@ components:
           format: uuid
         title:
           type: string
-        operational_module_key:
+        affected_business_unit_key:
           type: string
-        operational_module_label:
+        affected_business_unit_label:
           type: string
-        operational_domain_key:
+        responsible_business_unit_key:
           type: string
-        operational_domain_label:
+        responsible_business_unit_label:
           type: string
-        operational_subject_key:
+        activity_subject_key:
           type: string
-        operational_subject_label:
+        activity_subject_label:
           type: string
         location_text:
           type: string
       required:
+      - activity_subject_key
+      - activity_subject_label
+      - affected_business_unit_key
+      - affected_business_unit_label
       - id
       - location_text
-      - operational_domain_key
-      - operational_domain_label
-      - operational_module_key
-      - operational_module_label
-      - operational_subject_key
-      - operational_subject_label
+      - responsible_business_unit_key
+      - responsible_business_unit_label
       - title
     ObservationProcessingStatusResponse:
       type: object
@@ -4364,34 +4177,10 @@ components:
             type: array
             items:
               type: string
-        operational_modules:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalCatalogItem'
-        operational_domains:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalDomainItem'
-        operational_subjects:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalSubjectItem'
         operational_units:
           type: array
           items:
             $ref: '#/components/schemas/ProposalDomainOrUnitItem'
-        runtime_vocabulary:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalVocabularyItem'
-        runtime_tags:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalRuntimeTagItem'
-        routing_hints:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProposalRoutingHintItem'
       required:
       - schema_version
     OnboardingProposalResponse:
@@ -4547,72 +4336,6 @@ components:
       - started_by_id
       - status
       - updated_at
-    OperationalTaxonomyDomain:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        key:
-          type: string
-        label:
-          type: string
-        subjects:
-          type: array
-          items:
-            $ref: '#/components/schemas/OperationalTaxonomySubject'
-      required:
-      - id
-      - key
-      - label
-      - subjects
-    OperationalTaxonomyModule:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        key:
-          type: string
-        label:
-          type: string
-        domains:
-          type: array
-          items:
-            $ref: '#/components/schemas/OperationalTaxonomyDomain'
-      required:
-      - domains
-      - id
-      - key
-      - label
-    OperationalTaxonomyResponse:
-      type: object
-      properties:
-        modules:
-          type: array
-          items:
-            $ref: '#/components/schemas/OperationalTaxonomyModule'
-        unassigned_domains:
-          type: array
-          items:
-            $ref: '#/components/schemas/OperationalTaxonomyDomain'
-      required:
-      - modules
-      - unassigned_domains
-    OperationalTaxonomySubject:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        key:
-          type: string
-        label:
-          type: string
-      required:
-      - id
-      - key
-      - label
     PatchedActionDueAtRequest:
       type: object
       properties:
@@ -4633,7 +4356,7 @@ components:
         scopes:
           type: array
           items:
-            $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
+            $ref: '#/components/schemas/EstablishmentMembershipScopeWriteItem'
     PatchedOnboardingProposalUpdateRequest:
       type: object
       properties:
@@ -4730,28 +4453,12 @@ components:
           default: ''
         unit_type:
           type: string
+          nullable: true
         catalog_key:
           type: string
           nullable: true
       required:
       - client_key
-      - label
-      - unit_type
-    ProposalCatalogItem:
-      type: object
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        reason:
-          type: string
-        confidence_score:
-          type: number
-          format: double
-          nullable: true
-      required:
-      - key
       - label
     ProposalCommandResponse:
       type: object
@@ -4763,25 +4470,6 @@ components:
       required:
       - proposal
       - session
-    ProposalDomainItem:
-      type: object
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        reason:
-          type: string
-        confidence_score:
-          type: number
-          format: double
-          nullable: true
-        module_key:
-          type: string
-      required:
-      - key
-      - label
-      - module_key
     ProposalDomainOrUnitItem:
       type: object
       properties:
@@ -4802,83 +4490,6 @@ components:
       required:
       - key
       - label
-    ProposalItemMutationRequest:
-      type: object
-      properties:
-        action:
-          $ref: '#/components/schemas/ActionEnum'
-        section:
-          $ref: '#/components/schemas/SectionEnum'
-        key:
-          type: string
-      required:
-      - action
-      - key
-      - section
-    ProposalRoutingHintItem:
-      type: object
-      properties:
-        pattern:
-          type: string
-        suggested_domain_keys:
-          type: array
-          items:
-            type: string
-        suggested_unit_key:
-          type: string
-          nullable: true
-        reason:
-          type: string
-        confidence_score:
-          type: number
-          format: double
-          nullable: true
-      required:
-      - pattern
-    ProposalRuntimeTagItem:
-      type: object
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        related_domain_keys:
-          type: array
-          items:
-            type: string
-        reason:
-          type: string
-      required:
-      - key
-      - label
-    ProposalSectionDecisionRequest:
-      type: object
-      properties:
-        decision:
-          $ref: '#/components/schemas/DecisionEnum'
-      required:
-      - decision
-    ProposalSubjectItem:
-      type: object
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        reason:
-          type: string
-        confidence_score:
-          type: number
-          format: double
-          nullable: true
-        domain_key:
-          type: string
-        module_key:
-          type: string
-      required:
-      - domain_key
-      - key
-      - label
     ProposalValidationErrorItem:
       type: object
       properties:
@@ -4892,24 +4503,6 @@ components:
           type: string
       required:
       - code
-    ProposalVocabularyItem:
-      type: object
-      properties:
-        term:
-          type: string
-        meaning:
-          type: string
-        mapped_domain_key:
-          type: string
-          nullable: true
-        mapped_unit_key:
-          type: string
-          nullable: true
-        reason:
-          type: string
-      required:
-      - meaning
-      - term
     RegistrationOwnerValidateRequest:
       type: object
       properties:
@@ -5014,34 +4607,6 @@ components:
         * `director` - Director
         * `manager` - Manager
         * `staff` - Staff
-    RoutingHintItem:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        pattern:
-          type: string
-        suggested_unit_key:
-          type: string
-          nullable: true
-          readOnly: true
-        source:
-          type: string
-        active:
-          type: boolean
-        domain_keys:
-          type: array
-          items:
-            type: string
-          readOnly: true
-      required:
-      - active
-      - domain_keys
-      - id
-      - pattern
-      - source
-      - suggested_unit_key
     RuntimeActivitySubjectCreateRequest:
       type: object
       properties:
@@ -5095,111 +4660,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BusinessUnitTreeItem'
-        active_modules:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
-        active_domains:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
-        active_subjects:
-          type: array
-          items:
-            $ref: '#/components/schemas/KeyedRuntimeItem'
         optional_units:
           type: array
           items:
             $ref: '#/components/schemas/KeyedRuntimeItem'
-        optional_vocabulary:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuntimeVocabularyItem'
-        optional_runtime_tags:
-          type: array
-          items:
-            $ref: '#/components/schemas/RuntimeTagItem'
-        optional_routing_hints:
-          type: array
-          items:
-            $ref: '#/components/schemas/RoutingHintItem'
       required:
-      - active_domains
-      - active_modules
-      - active_subjects
       - activity_description
-      - optional_routing_hints
-      - optional_runtime_tags
       - optional_units
-      - optional_vocabulary
-    RuntimeTagItem:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        key:
-          type: string
-        label:
-          type: string
-        source:
-          type: string
-        active:
-          type: boolean
-        domain_keys:
-          type: array
-          items:
-            type: string
-          readOnly: true
-      required:
-      - active
-      - domain_keys
-      - id
-      - key
-      - label
-      - source
-    RuntimeVocabularyItem:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        term:
-          type: string
-        meaning:
-          type: string
-        mapped_domain_key:
-          type: string
-          nullable: true
-          readOnly: true
-        mapped_unit_key:
-          type: string
-          nullable: true
-          readOnly: true
-        source:
-          type: string
-        active:
-          type: boolean
-      required:
-      - active
-      - id
-      - mapped_domain_key
-      - mapped_unit_key
-      - meaning
-      - source
-      - term
     ScopeTypeEnum:
       enum:
       - business_unit
-      - module
-      - domain
-      - subject
       type: string
-      description: |-
-        * `business_unit` - business_unit
-        * `module` - module
-        * `domain` - domain
-        * `subject` - subject
+      description: '* `business_unit` - business_unit'
     ScopedUserSearchResult:
       type: object
       properties:
@@ -5227,16 +4699,6 @@ components:
       - membership_id
       - role
       - username
-    SectionEnum:
-      enum:
-      - operational_modules
-      - operational_domains
-      - operational_subjects
-      type: string
-      description: |-
-        * `operational_modules` - Modules
-        * `operational_domains` - Domains
-        * `operational_subjects` - Subjects
     SignalDetail:
       type: object
       properties:
@@ -5253,12 +4715,6 @@ components:
           type: string
         is_pinned:
           type: boolean
-        module_key:
-          type: string
-        domain_key:
-          type: string
-        subject_key:
-          type: string
         affected_business_unit_key:
           type: string
           nullable: true
@@ -5301,20 +4757,17 @@ components:
           $ref: '#/components/schemas/SourceContext'
       required:
       - created_at
-      - domain_key
       - id
       - is_pinned
       - last_activity_at
       - location_text
       - media_count
-      - module_key
       - operational_unit_key
       - permission_hints
       - source_context
       - status
       - structured_summary
       - structured_summary_short
-      - subject_key
       - title
       - urgency
     SignalFeedItem:
@@ -5333,12 +4786,6 @@ components:
           type: string
         is_pinned:
           type: boolean
-        module_key:
-          type: string
-        domain_key:
-          type: string
-        subject_key:
-          type: string
         affected_business_unit_key:
           type: string
           nullable: true
@@ -5377,18 +4824,15 @@ components:
           $ref: '#/components/schemas/PermissionHints'
       required:
       - created_at
-      - domain_key
       - id
       - is_pinned
       - last_activity_at
       - location_text
       - media_count
-      - module_key
       - operational_unit_key
       - permission_hints
       - status
       - structured_summary_short
-      - subject_key
       - title
       - urgency
     SignalFeedResponse:

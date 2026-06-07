@@ -6,11 +6,15 @@ export type OnboardingProposalPayload = components['schemas']['OnboardingProposa
 export type ProposalBusinessUnitItem = components['schemas']['ProposalBusinessUnitItem']
 export type ProposalActivitySubjectItem = components['schemas']['ProposalActivitySubjectItem']
 
+export type BusinessUnitType = 'dedicated' | 'transversal'
+
 export type DraftBusinessUnit = {
   client_key: string
   label: string
   description: string
-  unit_type: string
+  unit_type: BusinessUnitType | null
+  unit_type_confirmed: boolean
+  suggested_unit_type: BusinessUnitType
   catalog_key: string | null
 }
 
@@ -28,7 +32,7 @@ export function createClientKey() {
 
 export function createDraftBusinessUnit(input: {
   label: string
-  unit_type?: string
+  suggested_unit_type?: BusinessUnitType
   catalog_key?: string | null
   description?: string
 }): DraftBusinessUnit {
@@ -36,7 +40,9 @@ export function createDraftBusinessUnit(input: {
     client_key: createClientKey(),
     label: input.label.trim(),
     description: input.description?.trim() ?? '',
-    unit_type: input.unit_type ?? 'dedicated',
+    unit_type: null,
+    unit_type_confirmed: false,
+    suggested_unit_type: input.suggested_unit_type ?? 'dedicated',
     catalog_key: input.catalog_key ?? null,
   }
 }
@@ -63,13 +69,20 @@ export function buildManualV2Payload(
 ): OnboardingProposalPayload {
   const payload: OnboardingProposalPayload = {
     schema_version: MANUAL_V2_SCHEMA_VERSION,
-    business_units: businessUnits.map((item) => ({
-      client_key: item.client_key,
-      label: item.label,
-      description: item.description.trim(),
-      unit_type: item.unit_type,
-      catalog_key: item.catalog_key,
-    })),
+    business_units: businessUnits.map((item) => {
+      const businessUnit: ProposalBusinessUnitItem = {
+        client_key: item.client_key,
+        label: item.label,
+        description: item.description.trim(),
+        catalog_key: item.catalog_key,
+      }
+
+      if (item.unit_type_confirmed && item.unit_type) {
+        businessUnit.unit_type = item.unit_type
+      }
+
+      return businessUnit
+    }),
     activity_subjects: activitySubjects.map((item) => ({
       client_key: item.client_key,
       label: item.label,
@@ -136,6 +149,14 @@ export function hydrateSeedTrackersFromPayload(
   return trackers
 }
 
+function parseBusinessUnitType(value: unknown): BusinessUnitType | null {
+  if (value === 'dedicated' || value === 'transversal') {
+    return value
+  }
+
+  return null
+}
+
 export function hydrateDraftFromProposalPayload(
   payload: OnboardingProposalPayload | Record<string, unknown>,
 ): {
@@ -150,16 +171,22 @@ export function hydrateDraftFromProposalPayload(
 
   const businessUnits: DraftBusinessUnit[] = rawBusinessUnits
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
-    .map((item) => ({
-      client_key: String(item.client_key ?? createClientKey()),
-      label: String(item.label ?? ''),
-      description: String(item.description ?? ''),
-      unit_type: String(item.unit_type ?? 'dedicated'),
-      catalog_key:
-        item.catalog_key === null || item.catalog_key === undefined
-          ? null
-          : String(item.catalog_key),
-    }))
+    .map((item) => {
+      const unitType = parseBusinessUnitType(item.unit_type)
+
+      return {
+        client_key: String(item.client_key ?? createClientKey()),
+        label: String(item.label ?? ''),
+        description: String(item.description ?? ''),
+        unit_type: unitType,
+        unit_type_confirmed: unitType !== null,
+        suggested_unit_type: unitType ?? 'dedicated',
+        catalog_key:
+          item.catalog_key === null || item.catalog_key === undefined
+            ? null
+            : String(item.catalog_key),
+      }
+    })
 
   const activitySubjects: DraftActivitySubject[] = rawActivitySubjects
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
@@ -195,7 +222,7 @@ export function deriveWizardStepFromState(input: {
 
   if (
     input.businessUnits.length > 0 &&
-    allBusinessUnitsConfigured(input.businessUnits, input.activitySubjects)
+    allBusinessUnitsReadyForApplyStep(input.businessUnits, input.activitySubjects)
   ) {
     return 'apply'
   }
@@ -364,6 +391,26 @@ export function updateBusinessUnitDescription(
   )
 }
 
+export function updateBusinessUnitType(
+  businessUnits: DraftBusinessUnit[],
+  clientKey: string,
+  unitType: BusinessUnitType,
+): DraftBusinessUnit[] {
+  return businessUnits.map((item) =>
+    item.client_key === clientKey
+      ? { ...item, unit_type: unitType, unit_type_confirmed: true }
+      : item,
+  )
+}
+
+export function getBusinessUnitTypeDisplayValue(businessUnit: DraftBusinessUnit): BusinessUnitType {
+  return businessUnit.unit_type ?? businessUnit.suggested_unit_type
+}
+
+export function hasValidBusinessUnitLabel(businessUnit: DraftBusinessUnit) {
+  return businessUnit.label.trim().length > 0
+}
+
 export function isBusinessUnitConfigured(
   businessUnit: DraftBusinessUnit,
   activitySubjects: DraftActivitySubject[],
@@ -381,4 +428,33 @@ export function allBusinessUnitsConfigured(
     businessUnits.length > 0 &&
     businessUnits.every((businessUnit) => isBusinessUnitConfigured(businessUnit, activitySubjects))
   )
+}
+
+export function allBusinessUnitsHaveConfirmedUnitType(businessUnits: DraftBusinessUnit[]) {
+  return (
+    businessUnits.length > 0 &&
+    businessUnits.every((businessUnit) => businessUnit.unit_type_confirmed && businessUnit.unit_type)
+  )
+}
+
+export function allBusinessUnitsHaveValidLabels(businessUnits: DraftBusinessUnit[]) {
+  return businessUnits.length > 0 && businessUnits.every(hasValidBusinessUnitLabel)
+}
+
+export function allBusinessUnitsReadyForApplyStep(
+  businessUnits: DraftBusinessUnit[],
+  activitySubjects: DraftActivitySubject[],
+) {
+  return (
+    allBusinessUnitsHaveValidLabels(businessUnits) &&
+    allBusinessUnitsHaveConfirmedUnitType(businessUnits) &&
+    allBusinessUnitsConfigured(businessUnits, activitySubjects)
+  )
+}
+
+export function canContinueFromConfigStep(
+  businessUnits: DraftBusinessUnit[],
+  activitySubjects: DraftActivitySubject[],
+) {
+  return allBusinessUnitsReadyForApplyStep(businessUnits, activitySubjects)
 }

@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import pytest
-from django.utils import timezone
 
-from houston.establishments.models import EstablishmentMembership, MembershipScope
+from houston.establishments.models import (
+    ActivitySubject,
+    BusinessUnit,
+    EstablishmentMembership,
+)
+from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
 from houston.signals.models import Signal
 from houston.signals.tests.conftest import (
-    RESTAURANT_BAR_STOCK_SUBJECT_KEY,
     RESTAURANT_MODULE_KEY,
-    RESTAURANT_SALLE_DOMAIN_KEY,
-    RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY,
     auth_headers,
     build_api_membership,
-    create_restaurant_lighting_bar_stock_taxonomy,
-    create_taxonomy,
+    create_minimal_v3_signal,
+    create_restaurant_v3_taxonomy,
+    create_v3_signal,
     login,
     signal_feed_url,
 )
@@ -26,22 +28,8 @@ def _create_signal(
     *,
     title: str,
     status: str = Signal.Status.OPEN,
-    taxonomy: tuple | None = None,
 ):
-    if taxonomy is None:
-        taxonomy = create_taxonomy(membership.establishment)
-    module, domain, subject = taxonomy
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title=title,
-        structured_summary="Structured summary safe.",
-        status=status,
-        last_activity_at=now,
-    )
+    return create_minimal_v3_signal(membership, title=title, status=status)
 
 
 def _feed_get(api_client, membership, query: str):
@@ -49,6 +37,25 @@ def _feed_get(api_client, membership, query: str):
     return api_client.get(
         signal_feed_url(membership.establishment_id) + query,
         **auth_headers(token),
+    )
+
+
+def _create_v3_signal(
+    membership,
+    *,
+    title: str,
+    affected_business_unit: BusinessUnit,
+    responsible_business_unit: BusinessUnit,
+    activity_subject: ActivitySubject,
+    status: str = Signal.Status.OPEN,
+) -> Signal:
+    return create_v3_signal(
+        membership.establishment,
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible_business_unit,
+        activity_subject=activity_subject,
+        title=title,
+        status=status,
     )
 
 
@@ -64,7 +71,7 @@ def test_feed_without_filters_unchanged(api_client):
     assert body["items"][0]["id"] == str(signal.id)
     assert body["applied_filters"]["view_mode"] == "general"
     assert body["applied_filters"]["statuses"] == []
-    assert body["applied_filters"]["module_keys"] == []
+    assert body["applied_filters"]["business_unit_keys"] == []
 
 
 def test_feed_filters_by_single_status(api_client):
@@ -127,76 +134,63 @@ def test_feed_deduplicates_statuses_in_applied_filters(api_client):
     assert response.json()["applied_filters"]["statuses"] == ["open"]
 
 
-def test_feed_filters_by_module_key(api_client):
+def test_feed_filters_v3_by_responsible_business_unit(api_client):
     membership = build_api_membership()
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    hotel = create_taxonomy(membership.establishment)
-    restaurant_signal = _create_signal(
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    signal = _create_v3_signal(
         membership,
-        title="Restaurant signal",
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
+        title="Lighting",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
     )
-    _create_signal(membership, title="Hotel signal", taxonomy=hotel)
-
-    response = _feed_get(
-        api_client,
-        membership,
-        f"?view_mode=general&module_keys={RESTAURANT_MODULE_KEY}",
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(restaurant_signal.id)
-    assert body["applied_filters"]["module_keys"] == [RESTAURANT_MODULE_KEY]
-
-
-def test_feed_filters_by_domain_key(api_client):
-    membership = build_api_membership()
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    signal = _create_signal(
-        membership,
-        title="Salle",
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
-    )
-
-    response = _feed_get(
-        api_client,
-        membership,
-        f"?view_mode=general&domain_keys={RESTAURANT_SALLE_DOMAIN_KEY}",
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(signal.id)
-
-
-def test_feed_filters_by_subject_key(api_client):
-    membership = build_api_membership()
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    signal = _create_signal(
+    _create_v3_signal(
         membership,
         title="Bar stock",
-        taxonomy=(
-            restaurant.module,
-            restaurant.bar_domain,
-            restaurant.bar_stock_subject,
-        ),
+        affected_business_unit=taxonomy.bar,
+        responsible_business_unit=taxonomy.bar,
+        activity_subject=taxonomy.stock_subject,
     )
 
     response = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&subject_keys={RESTAURANT_BAR_STOCK_SUBJECT_KEY}",
+        "?view_mode=general&business_unit_keys=maintenance",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == str(signal.id)
+    assert body["applied_filters"]["business_unit_keys"] == ["maintenance"]
+
+
+def test_feed_filters_v3_by_affected_business_unit(api_client):
+    membership = build_api_membership()
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    signal = _create_v3_signal(
+        membership,
+        title="Lighting",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
+    )
+    _create_v3_signal(
+        membership,
+        title="Bar stock",
+        affected_business_unit=taxonomy.bar,
+        responsible_business_unit=taxonomy.bar,
+        activity_subject=taxonomy.stock_subject,
+    )
+
+    response = _feed_get(
+        api_client,
+        membership,
+        f"?view_mode=general&business_unit_keys={RESTAURANT_MODULE_KEY}",
     )
 
     assert response.status_code == 200
@@ -205,69 +199,67 @@ def test_feed_filters_by_subject_key(api_client):
     assert body["items"][0]["id"] == str(signal.id)
 
 
-def test_feed_category_filter_or_across_module_and_subject(api_client):
+def test_feed_filters_v3_by_activity_subject_id(api_client):
     membership = build_api_membership()
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    hotel = create_taxonomy(membership.establishment)
-    restaurant_signal = _create_signal(
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assert taxonomy.stock_subject is not None
+    lighting = _create_v3_signal(
         membership,
-        title="Restaurant",
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
+        title="Lighting",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
     )
-    hotel_signal = _create_signal(membership, title="Hotel", taxonomy=hotel)
+    _create_v3_signal(
+        membership,
+        title="Bar stock",
+        affected_business_unit=taxonomy.bar,
+        responsible_business_unit=taxonomy.bar,
+        activity_subject=taxonomy.stock_subject,
+    )
+
+    response = _feed_get(
+        api_client,
+        membership,
+        f"?view_mode=general&activity_subject_ids={taxonomy.lighting_subject.id}",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == str(lighting.id)
+    assert body["applied_filters"]["activity_subject_ids"] == [str(taxonomy.lighting_subject.id)]
+
+
+def test_feed_combines_bu_and_activity_subject(api_client):
+    membership = build_api_membership()
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assert taxonomy.stock_subject is not None
+    match = _create_v3_signal(
+        membership,
+        title="Lighting",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
+    )
+    _create_v3_signal(
+        membership,
+        title="Bar stock",
+        affected_business_unit=taxonomy.bar,
+        responsible_business_unit=taxonomy.bar,
+        activity_subject=taxonomy.stock_subject,
+    )
 
     response = _feed_get(
         api_client,
         membership,
         "?view_mode=general"
-        f"&module_keys={RESTAURANT_MODULE_KEY}"
-        f"&subject_keys={hotel[2].key}",
-    )
-
-    assert response.status_code == 200
-    ids = {item["id"] for item in response.json()["items"]}
-    assert ids == {str(restaurant_signal.id), str(hotel_signal.id)}
-
-
-def test_feed_combines_status_and_category_with_and(api_client):
-    membership = build_api_membership()
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    hotel = create_taxonomy(membership.establishment)
-    match = _create_signal(
-        membership,
-        title="Match",
-        status=Signal.Status.RESOLVED,
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
-    )
-    _create_signal(
-        membership,
-        title="Wrong status",
-        status=Signal.Status.OPEN,
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
-    )
-    _create_signal(
-        membership,
-        title="Wrong module",
-        status=Signal.Status.RESOLVED,
-        taxonomy=hotel,
-    )
-
-    response = _feed_get(
-        api_client,
-        membership,
-        f"?view_mode=general&statuses=resolved&module_keys={RESTAURANT_MODULE_KEY}",
+        f"&business_unit_keys={RESTAURANT_MODULE_KEY}"
+        f"&activity_subject_ids={taxonomy.lighting_subject.id}",
     )
 
     assert response.status_code == 200
@@ -276,102 +268,115 @@ def test_feed_combines_status_and_category_with_and(api_client):
     assert body["items"][0]["id"] == str(match.id)
 
 
-def test_feed_rejects_unknown_module_key(api_client):
-    membership = build_api_membership()
-    _create_signal(membership, title="Open")
-
-    response = _feed_get(
-        api_client,
-        membership,
-        "?view_mode=general&module_keys=nonexistent_module",
-    )
-
-    assert response.status_code == 400
-    assert response.json()["code"] == "validation_error"
-
-
-def test_feed_rejects_too_many_module_keys(api_client):
-    membership = build_api_membership()
-    keys = ",".join(f"mod_{index}" for index in range(21))
-
-    response = _feed_get(api_client, membership, f"?view_mode=general&module_keys={keys}")
-
-    assert response.status_code == 400
-
-
-def test_feed_rejects_too_many_domain_keys(api_client):
-    membership = build_api_membership()
-    keys = ",".join(f"dom_{index}" for index in range(51))
-
-    response = _feed_get(api_client, membership, f"?view_mode=general&domain_keys={keys}")
-
-    assert response.status_code == 400
-
-
-def test_feed_rejects_too_many_subject_keys(api_client):
-    membership = build_api_membership()
-    keys = ",".join(f"sub_{index}" for index in range(101))
-
-    response = _feed_get(api_client, membership, f"?view_mode=general&subject_keys={keys}")
-
-    assert response.status_code == 400
-
-
-def test_personal_feed_scope_intersects_with_filters(api_client):
+def test_personal_feed_bu_filter_within_scope(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    hotel = create_taxonomy(membership.establishment)
-    _create_signal(
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assert taxonomy.stock_subject is not None
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=taxonomy.restaurant,
+    )
+    _create_v3_signal(
         membership,
         title="In scope",
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
     )
-    _create_signal(membership, title="Out of scope", taxonomy=hotel)
-
-    MembershipScope.objects.create(
-        membership=membership,
-        operational_subject=restaurant.salle_maintenance_subject,
+    _create_v3_signal(
+        membership,
+        title="Out of scope",
+        affected_business_unit=taxonomy.bar,
+        responsible_business_unit=taxonomy.bar,
+        activity_subject=taxonomy.stock_subject,
     )
 
     response = _feed_get(
         api_client,
         membership,
-        f"?view_mode=personal&module_keys={hotel[0].key}",
+        f"?view_mode=personal&business_unit_keys={taxonomy.bar.key}",
     )
 
     assert response.status_code == 200
     assert response.json()["items"] == []
 
 
-def test_personal_feed_filter_within_scope_returns_signal(api_client):
-    membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
-    restaurant = create_restaurant_lighting_bar_stock_taxonomy(membership.establishment)
-    visible = _create_signal(
+def test_owner_sees_filtered_v3_signals(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    assert taxonomy.stock_subject is not None
+    lighting = _create_v3_signal(
         membership,
-        title="In scope",
-        taxonomy=(
-            restaurant.module,
-            restaurant.salle_domain,
-            restaurant.salle_maintenance_subject,
-        ),
+        title="Lighting",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.maintenance,
+        activity_subject=taxonomy.lighting_subject,
     )
-
-    MembershipScope.objects.create(
-        membership=membership,
-        operational_subject=restaurant.salle_maintenance_subject,
+    _create_v3_signal(
+        membership,
+        title="Bar stock",
+        affected_business_unit=taxonomy.bar,
+        responsible_business_unit=taxonomy.bar,
+        activity_subject=taxonomy.stock_subject,
     )
 
     response = _feed_get(
         api_client,
         membership,
-        f"?view_mode=personal&subject_keys={RESTAURANT_SALLE_MAINTENANCE_SUBJECT_KEY}",
+        f"?view_mode=personal&business_unit_keys={taxonomy.maintenance.key}",
     )
 
     assert response.status_code == 200
     body = response.json()
     assert len(body["items"]) == 1
-    assert body["items"][0]["id"] == str(visible.id)
+    assert body["items"][0]["id"] == str(lighting.id)
+
+
+def test_applied_filters_echoes_bu_as(api_client):
+    membership = build_api_membership()
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.lighting_subject is not None
+
+    response = _feed_get(
+        api_client,
+        membership,
+        "?view_mode=general"
+        f"&business_unit_keys=bar,{RESTAURANT_MODULE_KEY}"
+        f"&activity_subject_ids={taxonomy.lighting_subject.id}",
+    )
+
+    assert response.status_code == 200
+    applied = response.json()["applied_filters"]
+    assert applied["business_unit_keys"] == ["bar", RESTAURANT_MODULE_KEY]
+    assert applied["activity_subject_ids"] == [str(taxonomy.lighting_subject.id)]
+
+
+def test_pagination_unchanged_with_bu_filter(api_client):
+    membership = build_api_membership()
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
+    for index in range(3):
+        _create_v3_signal(
+            membership,
+            title=f"Lighting {index}",
+            affected_business_unit=taxonomy.restaurant,
+            responsible_business_unit=taxonomy.maintenance,
+            activity_subject=taxonomy.lighting_subject,
+        )
+
+    response = _feed_get(
+        api_client,
+        membership,
+        "?view_mode=general&business_unit_keys=maintenance&page_size=2",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 2
+    assert body["has_more"] is True
+    assert body["next_cursor"] is None

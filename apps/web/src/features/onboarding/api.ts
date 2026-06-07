@@ -1,7 +1,6 @@
 import { apiClient, withAuthRetry } from '@/api/client'
 
 import type {
-  AIOnboardingGenerateRequest,
   ActivationBlocker,
   ActivationResponse,
   ActivationSummaryResponse,
@@ -17,8 +16,6 @@ import type {
   OnboardingSessionCreateResponse,
   OnboardingSessionResponse,
   ProposalCommandResponse,
-  ProposalItemMutationRequest,
-  ProposalSectionDecisionRequest,
   ProposalValidationErrorItem,
   RuntimeConfigResponse,
   SubmitActivityDescriptionRequest,
@@ -515,71 +512,6 @@ export async function getOnboardingProposal(sessionId: string, proposalId: strin
   return result.data as OnboardingProposalResponse
 }
 
-export async function generateOnboardingProposal(
-  sessionId: string,
-  input: AIOnboardingGenerateRequest,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/ai-generate/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'AI onboarding proposal could not be generated.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}
-
-export async function decideProposalSection(
-  sessionId: string,
-  proposalId: string,
-  section: string,
-  input: ProposalSectionDecisionRequest,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/sections/{section}/decision/',
-        {
-          params: {
-            path: { session_id: sessionId, proposal_id: proposalId, section },
-          },
-          body: input,
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'Proposal section decision could not be saved.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}
-
 export async function rejectOnboardingProposal(sessionId: string, proposalId: string) {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -632,33 +564,3 @@ export async function applyOnboardingProposal(sessionId: string, proposalId: str
   return result.data as ProposalCommandResponse
 }
 
-export async function mutateOnboardingProposalItem(
-  sessionId: string,
-  proposalId: string,
-  input: ProposalItemMutationRequest,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/', {
-        params: {
-          path: { session_id: sessionId, proposal_id: proposalId },
-        },
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error as
-        | DetailResponse
-        | OnboardingProposalErrorResponse
-        | undefined,
-      'Proposal item could not be updated.',
-    )
-  }
-
-  return result.data as ProposalCommandResponse
-}

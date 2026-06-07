@@ -22,19 +22,20 @@ describe('processing-status-popup', () => {
     expect(formatProcessingSuccessHeadline(2, 'analysis_failed')).toBeNull()
   })
 
-  it('formats signal summary with taxonomy and location', () => {
+  it('formats signal summary with business unit taxonomy and location', () => {
     const line = formatSignalSummaryLine({
       id: '00000000-0000-0000-0000-000000000001',
       title: "Lumière clignote à l'entrée",
-      operational_module_key: 'restaurant',
-      operational_module_label: 'Restaurant',
-      operational_domain_key: 'restaurant__salle',
-      operational_domain_label: 'Salle',
-      operational_subject_key: 'restaurant__salle__maintenance',
-      operational_subject_label: 'Maintenance',
+      affected_business_unit_key: 'restaurant',
+      affected_business_unit_label: 'Restaurant',
+      responsible_business_unit_key: 'maintenance',
+      responsible_business_unit_label: 'Maintenance',
+      activity_subject_key: 'electricite',
+      activity_subject_label: 'Électricité',
       location_text: 'Entrée restaurant',
     })
-    expect(line).toContain('Restaurant')
+    expect(line).toContain('Maintenance')
+    expect(line).toContain('Électricité')
     expect(line).toContain('Entrée restaurant')
     expect(line).not.toContain('mojito')
   })

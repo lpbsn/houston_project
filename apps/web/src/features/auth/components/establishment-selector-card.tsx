@@ -92,26 +92,14 @@ export function EstablishmentSelectorCard({
 
 function formatMembershipScopeLabel(membership: Membership) {
   const summary = membership.scope_summary
-  const parts: string[] = []
-
-  if (summary.module_count > 0) {
-    parts.push(`${summary.module_count} module${summary.module_count > 1 ? 's' : ''}`)
-  }
-
-  if (summary.domain_count > 0) {
-    parts.push(`${summary.domain_count} domaine${summary.domain_count > 1 ? 's' : ''}`)
-  }
-
-  if (summary.subject_count > 0) {
-    parts.push(`${summary.subject_count} sujet${summary.subject_count > 1 ? 's' : ''}`)
-  }
-
-  if (parts.length > 0) {
-    return parts.join(' · ')
-  }
 
   if (membership.role === 'owner' || membership.role === 'director') {
     return 'Périmètre complet'
+  }
+
+  if (summary.business_unit_count > 0) {
+    const label = summary.business_unit_count === 1 ? 'pôle' : 'pôles'
+    return `${summary.business_unit_count} ${label}`
   }
 
   return 'Aucun périmètre'

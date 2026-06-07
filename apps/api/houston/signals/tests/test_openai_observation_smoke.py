@@ -17,7 +17,7 @@ from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.signals.models import Signal
 from houston.signals.services import run_observation_pipeline
-from houston.signals.tests.conftest import create_observation, create_taxonomy
+from houston.signals.tests.conftest import create_observation, create_restaurant_v3_taxonomy
 
 pytestmark = [
     pytest.mark.django_db,
@@ -43,7 +43,7 @@ def test_live_openai_observation_pipeline_smoke():
     _skip_if_smoke_not_enabled()
 
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    create_restaurant_v3_taxonomy(membership.establishment)
     observation = create_observation(
         membership=membership,
         text="La climatisation du couloir nord ne refroidit plus depuis ce matin.",

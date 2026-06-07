@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import pytest
-from django.utils import timezone
 
-from houston.establishments.models import EstablishmentMembership, MembershipScope
-from houston.signals.models import Signal, SignalSourceObservation
+from houston.establishments.models import EstablishmentMembership
+from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
+from houston.signals.models import SignalSourceObservation
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
+    create_minimal_v3_signal,
     create_observation,
-    create_taxonomy,
+    create_restaurant_v3_taxonomy,
     login,
     signal_detail_url,
     signal_feed_url,
@@ -21,18 +22,8 @@ _LEAK_MARKER = "LEAK_RAW_OBSERVATION_TEXT_DO_NOT_EXPOSE"
 
 
 def _signal_with_linked_observation(membership, *, raw_text: str = _LEAK_MARKER):
-    module, domain, subject = create_taxonomy(membership.establishment)
     observation = create_observation(membership=membership, text=raw_text)
-    now = timezone.now()
-    signal = Signal.objects.create(
-        establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        title="Linked signal",
-        structured_summary="Safe structured summary only.",
-        last_activity_at=now,
-    )
+    signal = create_minimal_v3_signal(membership, title="Linked signal")
     SignalSourceObservation.objects.create(
         signal=signal,
         observation=observation,
@@ -162,7 +153,8 @@ def test_manager_urgency_requires_membership_scope(api_client):
 
     membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
     signal = _signal_with_linked_observation(membership)
-    domain = signal.operational_domain
+    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
 
     manager = User.objects.create_user(
         username=f"mgr_{uuid.uuid4().hex[:6]}",
@@ -188,7 +180,10 @@ def test_manager_urgency_requires_membership_scope(api_client):
     )
     assert denied.status_code == 403
 
-    MembershipScope.objects.create(membership=other_membership, operational_domain=domain)
+    create_membership_with_business_unit_scope(
+        membership=other_membership,
+        business_unit=taxonomy.maintenance,
+    )
     allowed = api_client.patch(
         base + "urgency/",
         {"urgency": "high"},

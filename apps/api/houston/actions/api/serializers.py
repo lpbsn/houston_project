@@ -35,9 +35,13 @@ class ActionSignalSummarySerializer(serializers.Serializer):
     title = serializers.CharField()
     status = serializers.CharField()
     urgency = serializers.CharField()
-    module_key = serializers.CharField()
-    domain_key = serializers.CharField()
-    subject_key = serializers.CharField()
+    affected_business_unit_key = serializers.CharField(allow_null=True)
+    affected_business_unit_label = serializers.CharField(allow_null=True)
+    responsible_business_unit_key = serializers.CharField(allow_null=True)
+    responsible_business_unit_label = serializers.CharField(allow_null=True)
+    activity_subject_normalized_name = serializers.CharField(allow_null=True)
+    activity_subject_label = serializers.CharField(allow_null=True)
+    location_text = serializers.CharField(allow_blank=True)
 
 
 class ActionFeedItemSerializer(serializers.Serializer):
@@ -47,9 +51,12 @@ class ActionFeedItemSerializer(serializers.Serializer):
     status = serializers.CharField()
     due_at = serializers.DateTimeField()
     is_overdue = serializers.BooleanField()
-    module_key = serializers.CharField()
-    domain_key = serializers.CharField()
-    subject_key = serializers.CharField()
+    affected_business_unit_key = serializers.CharField(allow_null=True)
+    affected_business_unit_label = serializers.CharField(allow_null=True)
+    responsible_business_unit_key = serializers.CharField(allow_null=True)
+    responsible_business_unit_label = serializers.CharField(allow_null=True)
+    activity_subject_normalized_name = serializers.CharField(allow_null=True)
+    activity_subject_label = serializers.CharField(allow_null=True)
     signal_summary = ActionSignalSummarySerializer(allow_null=True)
     assigned_to_display_name = serializers.CharField()
     created_by_display_name = serializers.CharField()
@@ -81,10 +88,29 @@ class ActionCreateRequestSerializer(serializers.Serializer):
     instruction = serializers.CharField(max_length=ACTION_INSTRUCTION_MAX_LENGTH)
     assigned_to = serializers.UUIDField()
     due_at = serializers.DateTimeField()
-    module_key = serializers.CharField()
-    domain_key = serializers.CharField()
-    subject_key = serializers.CharField()
-    signal = serializers.UUIDField(required=False, allow_null=True)
+    signal = serializers.UUIDField(required=False, allow_null=True, default=None)
+    responsible_business_unit_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+
+    def validate(self, attrs):
+        signal = attrs.get("signal")
+        responsible_business_unit_id = attrs.get("responsible_business_unit_id")
+
+        if signal is not None:
+            if responsible_business_unit_id is not None:
+                raise serializers.ValidationError(
+                    "Cannot provide responsible_business_unit_id when signal is set."
+                )
+            return attrs
+
+        if responsible_business_unit_id is None:
+            raise serializers.ValidationError(
+                "Either signal or responsible_business_unit_id is required."
+            )
+        return attrs
 
 
 class ActionReassignRequestSerializer(serializers.Serializer):
@@ -117,22 +143,59 @@ def serialize_action_permission_hints(*, action: Action, membership) -> dict:
     }
 
 
+def _serialize_business_unit_fields(business_unit) -> dict[str, str | None]:
+    if business_unit is None:
+        return {"key": None, "label": None}
+    return {"key": business_unit.key, "label": business_unit.label}
+
+
+def _serialize_activity_subject_fields(activity_subject) -> dict[str, str | None]:
+    if activity_subject is None:
+        return {"normalized_name": None, "label": None}
+    return {
+        "normalized_name": activity_subject.normalized_name,
+        "label": activity_subject.label,
+    }
+
+
+def serialize_action_classification(*, action: Action) -> dict:
+    affected = _serialize_business_unit_fields(action.affected_business_unit)
+    responsible = _serialize_business_unit_fields(action.responsible_business_unit)
+    subject = _serialize_activity_subject_fields(action.activity_subject)
+    return {
+        "affected_business_unit_key": affected["key"],
+        "affected_business_unit_label": affected["label"],
+        "responsible_business_unit_key": responsible["key"],
+        "responsible_business_unit_label": responsible["label"],
+        "activity_subject_normalized_name": subject["normalized_name"],
+        "activity_subject_label": subject["label"],
+    }
+
+
 def serialize_signal_summary(action: Action) -> dict | None:
     signal = action.signal
     if signal is None:
         return None
+    affected = _serialize_business_unit_fields(signal.affected_business_unit)
+    responsible = _serialize_business_unit_fields(signal.responsible_business_unit)
+    subject = _serialize_activity_subject_fields(signal.activity_subject)
     return {
         "id": signal.id,
         "title": signal.title,
         "status": signal.status,
         "urgency": signal.urgency,
-        "module_key": signal.operational_module.key,
-        "domain_key": signal.operational_domain.key,
-        "subject_key": signal.operational_subject.key,
+        "affected_business_unit_key": affected["key"],
+        "affected_business_unit_label": affected["label"],
+        "responsible_business_unit_key": responsible["key"],
+        "responsible_business_unit_label": responsible["label"],
+        "activity_subject_normalized_name": subject["normalized_name"],
+        "activity_subject_label": subject["label"],
+        "location_text": signal.location_text,
     }
 
 
 def serialize_action_feed_item(*, action: Action, membership, is_overdue: bool = False) -> dict:
+    classification = serialize_action_classification(action=action)
     return {
         "id": action.id,
         "title": action.title,
@@ -140,9 +203,7 @@ def serialize_action_feed_item(*, action: Action, membership, is_overdue: bool =
         "status": action.status,
         "due_at": action.due_at,
         "is_overdue": is_overdue,
-        "module_key": action.operational_module.key,
-        "domain_key": action.operational_domain.key,
-        "subject_key": action.operational_subject.key,
+        **classification,
         "signal_summary": serialize_signal_summary(action),
         "assigned_to_display_name": _membership_display_name(action.assigned_to),
         "created_by_display_name": _membership_display_name(action.created_by),

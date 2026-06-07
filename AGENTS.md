@@ -107,7 +107,7 @@ When working on **legacy** Module → Domain → Subject code during migration:
 
 Authoritative closure gate (v1): [`docs/product/phase_a_closure.md`](docs/product/phase_a_closure.md).
 
-Key contracts (v1, obsolete for new work): [`operational_taxonomy_domain.md`](docs/product/domains/operational_taxonomy_domain.md), [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
+Key contracts (v1, obsolete for new work): [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
 
 Auth + API error contracts: use [`authentication_charter.md`](docs/architecture/authentication_charter.md) (incl. auth throttling) and [`api_error_contract.md`](docs/architecture/api_error_contract.md).
 

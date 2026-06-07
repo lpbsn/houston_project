@@ -217,8 +217,8 @@ Do **not** implement these tests before Signal model, feed selectors, and feed A
 
 | Scenario | Expected behavior |
 | --- | --- |
-| Active member requests `view_mode=personal` with subscriptions | Returns only active Signals (`open`, `in_progress`) whose module/domain/subject matches at least one subscription |
-| Active member requests `view_mode=personal` without subscriptions | Returns empty list (not an error) |
+| Active member requests `view_mode=personal` with BusinessUnit scopes | Returns active Signals where affected or responsible BusinessUnit matches scope |
+| Active member requests `view_mode=personal` without BusinessUnit scopes | Returns empty list (not an error) for Manager/Staff |
 | Active member requests `view_mode=general` | Returns all active establishment Signals; **no** subscription filter |
 | Resolved / canceled / archived Signals | Excluded from active feed results |
 | Cross-establishment access | 404 when establishment does not match session membership |

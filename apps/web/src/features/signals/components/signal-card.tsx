@@ -15,7 +15,7 @@ import {
 } from '../lib/signal-display'
 import type { SignalFeedItem } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
-import { SignalTaxonomyBadges } from './signal-taxonomy-badges'
+import { SignalClassificationBadges } from './signal-classification-badges'
 import { SignalUrgencyBadge } from './signal-urgency-badge'
 
 type SignalCardProps = {
@@ -55,11 +55,7 @@ function FeedSignalCard({ item, onSelect }: SignalCardProps) {
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex flex-wrap gap-1">
           <SignalUrgencyBadge urgency={item.urgency} />
-          <SignalTaxonomyBadges
-            domainKey={item.domain_key}
-            subjectKey={item.subject_key}
-            moduleKey={item.module_key}
-          />
+          <SignalClassificationBadges signal={item} />
         </div>
         <span className="shrink-0 text-[11px] text-[#888]">
           {formatSignalRelativeTime(item.last_activity_at)}
@@ -122,11 +118,7 @@ function PinnedSignalCard({ item, onSelect }: SignalCardProps) {
 
       <div className="mb-2 flex flex-wrap gap-1">
         <SignalUrgencyBadge urgency={item.urgency} />
-        <SignalTaxonomyBadges
-          domainKey={item.domain_key}
-          subjectKey={item.subject_key}
-          moduleKey={item.module_key}
-        />
+        <SignalClassificationBadges signal={item} />
       </div>
 
       <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-[#1a1a1a]">

@@ -9,21 +9,21 @@ from django.utils import timezone
 from houston.actions.constants import EXECUTION_FEED_STATUSES
 from houston.actions.models import Action
 from houston.actions.permissions import action_visible_to_membership
-from houston.establishments.membership_scope import build_signal_feed_scope_q
+from houston.establishments.membership_scope import build_action_visibility_scope_q
 from houston.establishments.models import EstablishmentMembership
 
 ExecutionFeedViewMode = Literal["personal", "general"]
 
 _ACTION_LIST_SELECT_RELATED = (
-    "operational_module",
-    "operational_domain",
-    "operational_subject",
+    "affected_business_unit",
+    "responsible_business_unit",
+    "activity_subject",
     "created_by__user",
     "assigned_to__user",
     "signal",
-    "signal__operational_module",
-    "signal__operational_domain",
-    "signal__operational_subject",
+    "signal__affected_business_unit",
+    "signal__responsible_business_unit",
+    "signal__activity_subject",
 )
 
 
@@ -51,7 +51,7 @@ def action_general_feed_visibility_q(*, membership: EstablishmentMembership) -> 
     if membership.role == EstablishmentMembership.Role.STAFF:
         return personal_q & Q(establishment_id=membership.establishment_id)
 
-    scope_q = build_signal_feed_scope_q(membership=membership)
+    scope_q = build_action_visibility_scope_q(membership=membership)
     if scope_q is None:
         return personal_q & Q(establishment_id=membership.establishment_id)
     return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)

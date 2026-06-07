@@ -21,9 +21,6 @@ class SignalFeedItemSerializer(serializers.Serializer):
     status = serializers.CharField()
     urgency = serializers.CharField()
     is_pinned = serializers.BooleanField()
-    module_key = serializers.CharField()
-    domain_key = serializers.CharField()
-    subject_key = serializers.CharField()
     affected_business_unit_key = serializers.CharField(allow_null=True, required=False)
     affected_business_unit_label = serializers.CharField(allow_null=True, required=False)
     responsible_business_unit_key = serializers.CharField(allow_null=True, required=False)
@@ -81,9 +78,6 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "status": signal.status,
         "urgency": signal.urgency,
         "is_pinned": signal.is_pinned,
-        "module_key": signal.operational_module.key,
-        "domain_key": signal.operational_domain.key,
-        "subject_key": signal.operational_subject.key,
         "affected_business_unit_key": (
             signal.affected_business_unit.key if signal.affected_business_unit_id else None
         ),

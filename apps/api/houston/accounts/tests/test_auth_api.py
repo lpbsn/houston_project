@@ -167,6 +167,8 @@ def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
             "scope_id": str(housekeeping_business_unit.id),
         }
     ]
+    assert body["memberships"][0]["scope_summary"] == {"business_unit_count": 1}
+    assert "module_count" not in body["memberships"][0]["scope_summary"]
     assert body["active_membership"]["establishment_name"] == "Demo Hotel"
     assert "access_token" in body
     assert settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME in response.cookies

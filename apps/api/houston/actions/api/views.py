@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
+from houston.actions.action_classification import reject_legacy_classification_keys
 from houston.actions.api.serializers import (
     ActionCreateRequestSerializer,
     ActionDetailSerializer,
@@ -204,6 +205,11 @@ class ActionCreateView(EstablishmentScopedActionMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        try:
+            reject_legacy_classification_keys(payload=request.data)
+        except ActionValidationError as exc:
+            return _action_command_error_response(exc)
+
         body = ActionCreateRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         data = body.validated_data
@@ -216,10 +222,8 @@ class ActionCreateView(EstablishmentScopedActionMixin, APIView):
                 instruction=data["instruction"],
                 assigned_to_id=data["assigned_to"],
                 due_at=data["due_at"],
-                module_key=data["module_key"],
-                domain_key=data["domain_key"],
-                subject_key=data["subject_key"],
                 signal_id=data.get("signal"),
+                responsible_business_unit_id=data.get("responsible_business_unit_id"),
             )
         except ActionValidationError as exc:
             return _action_command_error_response(exc)
@@ -275,7 +279,16 @@ class ActionAcceptView(EstablishmentScopedActionMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
-    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    @extend_schema(
+        tags=["actions"],
+        request=None,
+        responses={
+            200: ActionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
     def post(self, request, establishment_id, action_id):
         return _action_transition_response(
             request=request,
@@ -290,7 +303,16 @@ class ActionMarkDoneView(EstablishmentScopedActionMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
-    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    @extend_schema(
+        tags=["actions"],
+        request=None,
+        responses={
+            200: ActionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
     def post(self, request, establishment_id, action_id):
         return _action_transition_response(
             request=request,
@@ -305,7 +327,16 @@ class ActionValidateView(EstablishmentScopedActionMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
-    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    @extend_schema(
+        tags=["actions"],
+        request=None,
+        responses={
+            200: ActionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
     def post(self, request, establishment_id, action_id):
         return _action_transition_response(
             request=request,
@@ -320,7 +351,16 @@ class ActionReopenView(EstablishmentScopedActionMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
-    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    @extend_schema(
+        tags=["actions"],
+        request=None,
+        responses={
+            200: ActionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
     def post(self, request, establishment_id, action_id):
         return _action_transition_response(
             request=request,
@@ -335,7 +375,16 @@ class ActionCancelView(EstablishmentScopedActionMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
-    @extend_schema(tags=["actions"], responses={200: ActionDetailSerializer})
+    @extend_schema(
+        tags=["actions"],
+        request=None,
+        responses={
+            200: ActionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
     def post(self, request, establishment_id, action_id):
         return _action_transition_response(
             request=request,

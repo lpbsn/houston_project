@@ -8,27 +8,51 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
+from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
+    create_business_unit,
+)
 from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
 from houston.signals.services import apply_pipeline_output, run_observation_pipeline
-from houston.signals.tests.conftest import create_observation, create_taxonomy
+from houston.signals.tests.conftest import create_observation
 
 pytestmark = pytest.mark.django_db
 
 
-def _output_with_candidate(*, module_key: str, domain_key: str, subject_key: str):
+def _setup_hotel_taxonomy(establishment):
+    hotel = create_business_unit(
+        establishment=establishment,
+        key="hotel",
+        label="Hotel",
+    )
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    return hotel
+
+
+def _output_with_candidate(
+    *,
+    affected_key: str = "hotel",
+    responsible_key: str = "hotel",
+    subject_key: str = "maintenance",
+):
     return ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         candidates=[
             PipelineCandidateOutput(
                 title="Clim en panne",
                 structured_summary="La climatisation ne fonctionne plus.",
-                operational_module_key=module_key,
-                operational_domain_key=domain_key,
-                operational_subject_key=subject_key,
+                affected_business_unit_key=affected_key,
+                responsible_business_unit_key=responsible_key,
+                activity_subject_key=subject_key,
                 operational_unit_key=None,
+                location_text=None,
                 aggregate_into_signal_id=None,
             )
         ],
@@ -37,37 +61,30 @@ def _output_with_candidate(*, module_key: str, domain_key: str, subject_key: str
 
 def test_apply_pipeline_creates_open_signal():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
+    _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
 
     outcome = apply_pipeline_output(
         observation=observation,
-        output=_output_with_candidate(
-            module_key=module.key,
-            domain_key=domain.key,
-            subject_key=subject.key,
-        ),
+        output=_output_with_candidate(),
     )
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
     signal = Signal.objects.get()
     assert signal.status == Signal.Status.OPEN
+    assert signal.affected_business_unit.key == "hotel"
     assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.CREATED_SIGNAL).exists()
 
 
 def test_invalid_taxonomy_key_rejects_candidate():
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
 
     outcome = apply_pipeline_output(
         observation=observation,
-        output=_output_with_candidate(
-            module_key="unknown",
-            domain_key="hotel__hebergement",
-            subject_key="hotel__hebergement__maintenance",
-        ),
+        output=_output_with_candidate(affected_key="unknown"),
     )
 
     assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
@@ -77,16 +94,12 @@ def test_invalid_taxonomy_key_rejects_candidate():
 
 def test_observation_pipeline_links_created_signal_to_source_observation():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
+    _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
 
     apply_pipeline_output(
         observation=observation,
-        output=_output_with_candidate(
-            module_key=module.key,
-            domain_key=domain.key,
-            subject_key=subject.key,
-        ),
+        output=_output_with_candidate(),
     )
 
     signal = Signal.objects.get()
@@ -96,13 +109,14 @@ def test_observation_pipeline_links_created_signal_to_source_observation():
 
 def test_apply_pipeline_persists_aggregate_hint_signal_id():
     membership = build_membership()
-    module, domain, subject = create_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
     existing = Signal.objects.create(
         establishment=membership.establishment,
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
         title="Signal actif",
         structured_summary="Situation en cours.",
         last_activity_at=timezone.now(),
@@ -116,10 +130,11 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
                 PipelineCandidateOutput(
                     title="Prolongation",
                     structured_summary="Même sujet, aggravation.",
-                    operational_module_key=module.key,
-                    operational_domain_key=domain.key,
-                    operational_subject_key=subject.key,
+                    affected_business_unit_key="hotel",
+                    responsible_business_unit_key="hotel",
+                    activity_subject_key="maintenance",
                     operational_unit_key=None,
+                    location_text=None,
                     aggregate_into_signal_id=str(existing.id),
                 )
             ],
@@ -135,7 +150,7 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
 
 def test_run_pipeline_with_fake_provider():
     membership = build_membership()
-    create_taxonomy(membership.establishment)
+    _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
     provider = FakeObservationPipelineProvider()
 

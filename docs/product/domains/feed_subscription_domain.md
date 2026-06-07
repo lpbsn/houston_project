@@ -4,15 +4,17 @@ Status: authoritative (contract)
 Last reviewed: 2026-05-29  
 Implementation status: **deferred** — doc Phase A only (V5). **Out of scope for Phase 4 MVP**; Ma vue uses `MembershipScope` instead.
 
+> **Deferred / v1 obsolete:** When implemented, subscriptions will target **BusinessUnit** (not Module/Domain/Subject). See [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
+
 ## Purpose
 
 Feed subscriptions personalize **Ma vue** (`view_mode=personal`). They are **not** security permissions.
 
 ## Scope
 
-- User may subscribe at **Module**, **Domain**, or **Subject** level.
+- User may subscribe at **BusinessUnit** level (future).
 - Unit subscriptions are **out of scope** for MVP.
-- Subscriptions do not grant action rights; RBAC remains on `MembershipScope` and role rules.
+- Subscriptions do not grant action rights; RBAC remains on BusinessUnit `MembershipScope` and role rules.
 
 ## Main object (future)
 

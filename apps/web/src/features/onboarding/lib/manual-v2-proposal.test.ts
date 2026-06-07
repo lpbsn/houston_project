@@ -2,13 +2,36 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildManualV2Payload,
+  canContinueFromConfigStep,
   createDraftActivitySubject,
   createDraftBusinessUnit,
   createEmptySubjectSeedTrackers,
   mergeCatalogSubjectSuggestions,
   recordExcludedCatalogSubject,
   removeBusinessUnitFromDraft,
+  updateBusinessUnitType,
 } from '@/features/onboarding/lib/manual-v2-proposal'
+
+describe('createDraftBusinessUnit', () => {
+  it('stores catalogue default as suggestion only', () => {
+    const businessUnit = createDraftBusinessUnit({
+      label: 'Maintenance',
+      suggested_unit_type: 'transversal',
+      catalog_key: 'maintenance',
+    })
+
+    expect(businessUnit.unit_type).toBeNull()
+    expect(businessUnit.unit_type_confirmed).toBe(false)
+    expect(businessUnit.suggested_unit_type).toBe('transversal')
+  })
+
+  it('defaults free-text suggestion to dedicated', () => {
+    const businessUnit = createDraftBusinessUnit({ label: 'Mon pôle' })
+
+    expect(businessUnit.suggested_unit_type).toBe('dedicated')
+    expect(businessUnit.unit_type).toBeNull()
+  })
+})
 
 describe('mergeCatalogSubjectSuggestions', () => {
   it('seeds catalog subjects without duplicates', () => {
@@ -106,6 +129,31 @@ describe('buildManualV2Payload', () => {
     expect(payload.business_units[0]?.description).toBe('Chambres et étages')
   })
 
+  it('omits unit_type until user confirms', () => {
+    const businessUnit = createDraftBusinessUnit({
+      label: 'Coworking',
+      suggested_unit_type: 'transversal',
+      catalog_key: 'coworking',
+    })
+
+    const payload = buildManualV2Payload([businessUnit], [])
+
+    expect(payload.business_units[0]?.unit_type).toBeUndefined()
+  })
+
+  it('includes confirmed unit_type', () => {
+    const businessUnit = createDraftBusinessUnit({
+      label: 'Coworking',
+      suggested_unit_type: 'transversal',
+      catalog_key: 'coworking',
+    })
+    const confirmed = updateBusinessUnitType([businessUnit], businessUnit.client_key, 'dedicated')[0]!
+
+    const payload = buildManualV2Payload([confirmed], [])
+
+    expect(payload.business_units[0]?.unit_type).toBe('dedicated')
+  })
+
   it('serializes excluded catalog subject keys', () => {
     const businessUnit = createDraftBusinessUnit({
       label: 'Coworking',
@@ -122,5 +170,24 @@ describe('buildManualV2Payload', () => {
     expect(payload.excluded_catalog_subject_keys).toEqual({
       [businessUnit.client_key]: ['wifi'],
     })
+  })
+})
+
+describe('canContinueFromConfigStep', () => {
+  it('requires confirmed unit type and at least one subject per pole', () => {
+    const businessUnit = createDraftBusinessUnit({
+      label: 'Coworking',
+      catalog_key: 'coworking',
+    })
+
+    expect(canContinueFromConfigStep([businessUnit], [])).toBe(false)
+
+    const withType = updateBusinessUnitType([businessUnit], businessUnit.client_key, 'dedicated')[0]!
+    const subject = createDraftActivitySubject({
+      label: 'Wi-Fi',
+      business_unit_client_key: businessUnit.client_key,
+    })
+
+    expect(canContinueFromConfigStep([withType], [subject])).toBe(true)
   })
 })

@@ -12,7 +12,7 @@ Signal owns:
 - the structured operational situation created or enriched from backend-validated Observation pipeline output
 - the business identity of the supervised situation shown in Signal Feed
 - the Signal lifecycle and high-level state meaning
-- routing and operational scope through validated Signal domains
+- routing and operational scope through validated BU/AS classification
 
 Signal does not own:
 - raw Observation input or Observation persistence
@@ -30,7 +30,7 @@ Signal is the operational object between Observation and Action. It is not the r
 - Signal creation from backend-validated candidate Signals proposed from Observation pipeline output.
 - Aggregation of a candidate Signal into an existing active Signal when backend validation decides it matches an ongoing situation.
 - Signal lifecycle statuses: `open`, `in_progress`, `resolved`, `canceled`, `archived`.
-- Routing through **one primary categorization** per Signal: `operational_module`, `operational_domain`, `operational_subject` (optional `operational_unit` for location).
+- Routing through **BusinessUnit / ActivitySubject classification** per Signal: `affected_business_unit`, `responsible_business_unit`, `activity_subject` (optional `operational_unit` for structured location; `location_text` for free text).
 - Human-controlled urgency.
 - Candidate pinned-open behavior for important visible Signals.
 - Safe Signal summaries for feed and detail surfaces.
@@ -67,9 +67,9 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - Frontend cannot treat local state as Signal status authority.
 - AI does not decide urgency in MVP.
 - AI does not create Actions in MVP.
-- **One primary categorization per Signal** (`operational_module`, `operational_domain`, `operational_subject`). Legacy `detected_domains[]` is obsolete.
+- **One primary v3 classification per Signal** (`affected_business_unit`, `responsible_business_unit`, `activity_subject`). Legacy Module/Domain/Subject FKs are removed (Lot 6).
 - An Observation describing **multiple distinct problems** produces **multiple CandidateSignals** and, after validation, **multiple Signals** — never multiple categorizations on one Signal.
-- Ma vue feed visibility uses **`MembershipScope`** matching in Phase 4 (Owner/Director: all active). RBAC action uses `MembershipScope` and role rules. `MembershipFeedSubscription` is out of scope Phase 4.
+- Ma vue feed visibility uses **BusinessUnit `MembershipScope`** matching (Owner/Director: all active). RBAC action uses affected/responsible BusinessUnit scopes and role rules. `MembershipFeedSubscription` is out of scope Phase 4.
 - Visibility does not imply actionability.
 - Realtime and notifications may help refresh attention, but they do not grant access and do not become business truth.
 
@@ -88,10 +88,10 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Controls whether the Signal remains part of active operational supervision.
 
 - `SignalCategorization`
-  - Single primary triplet: operational module, domain, and subject FKs on the Signal row.
+  - v3 classification: affected/responsible BusinessUnit + ActivitySubject FKs on the Signal row.
   - Optional operational unit for physical location only.
 
-- ~~`SignalDomain` / `detected_domains`~~ — **removed from MVP**; see `operational_taxonomy_domain.md`.
+- ~~`SignalDomain` / `detected_domains`~~ — removed from MVP; classification is BU/AS only.
 - `SignalUrgency`
   - Human-controlled urgency state for the supervised situation.
   - Separate from status.
@@ -151,19 +151,19 @@ Not validated yet:
 - exact automatic transition from active states to `resolved` via Action completion
 - exact reopen behavior
 - exact archival timing
-- exact stored representation of multi-domain confidence scores
+- exact stored representation of confidence scores
 - exact recurrence/count field name
 
 ## 7. Permissions
 
 - Signal visibility is establishment-scoped and backend-authorized.
-- RBAC baseline defines establishment membership, role, and operational-domain authority. Signal command helpers exist for implemented APIs.
+- RBAC baseline defines establishment membership, role, and BusinessUnit scope authority. Signal command helpers exist for implemented APIs.
 - Owner and Director target behavior: broad establishment-level Signal visibility and actionability, subject to RBAC.
-- Manager target behavior: actionability requires RBAC (`MembershipScope` domain coverage) and Signal's `operational_domain`.
+- Manager target behavior: actionability requires RBAC (`MembershipScope` BusinessUnit coverage) and Signal BU classification.
 - Ma vue (`view_mode=personal`) filters by **`MembershipScope`** (Owner/Director: all feed-visible establishment Signals).
 - Vue générale (`view_mode=general`) shows all feed-visible establishment Signals without subscription filter.
 - Visibility does not imply actionability.
-- Resolving Signals, canceling Signals, changing urgency, and pinning require backend command authorization (implemented). Creating Actions from Signals and editing Signal domains remain future workflows.
+- Resolving Signals, canceling Signals, changing urgency, and pinning require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
 - **Cancel and resolve** (implemented): Owner and Director may act on any active Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy; **Staff are denied** cancel and resolve.
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
@@ -184,8 +184,6 @@ Candidate events only:
 - `SignalUrgencyChanged`
 - `SignalPinned`
 - `SignalUnpinned`
-- `SignalDomainAdded`
-- `SignalDomainRemoved`
 - `SignalActionCreated`
 - `SignalCommentAdded`
 
@@ -194,7 +192,7 @@ Candidate events only:
 Current API truth is `apps/api/schema.yml`.
 
 Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establishments/{establishment_id}/`):
-- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `module_keys`, `domain_keys`, `subject_keys` (comma-separated, OR within category, AND with status); response includes `applied_filters`
+- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `business_unit_keys`, `activity_subject_ids` (comma-separated); response includes `applied_filters`
 - `GET signals/{signal_id}/` — active Signal detail
 - `POST signals/{signal_id}/pin/`
 - `POST signals/{signal_id}/unpin/`
@@ -204,7 +202,6 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 
 Not implemented in current schema:
 - archive Signal
-- add/remove Signal domain
 - fetch Signal timeline or events
 
 Action creation is via `POST .../actions/` with optional `signal` (Phase 5), not a nested Signal sub-resource.
@@ -218,7 +215,7 @@ Do not treat any Signal route as implemented until it exists in `apps/api/schema
 - Frontend must not display raw Observation text in Signal feed, detail, notifications, or realtime-triggered UI.
 - Frontend may render backend-provided permission hints, but backend responses remain the authority for allowed commands.
 - Frontend must treat Signal lifecycle changes as backend commands, not local UI rules.
-- Frontend must not collapse multi-domain Signals into a single primary domain unless a backend-provided display rule later validates that behavior.
+- Frontend must render backend BU/AS classification as provided and must not infer alternate primary categorization.
 - Realtime remains invalidation and refetch only; it does not carry business truth.
 - Notifications and realtime payloads must not be treated as complete Signal state.
 - Urgency and pinned UI must respect backend rules.
@@ -237,7 +234,7 @@ Do not treat any Signal route as implemented until it exists in `apps/api/schema
 - Inspect `security_rgpd_domain.md` before changing raw-text visibility, logging, notification, or realtime boundaries.
 - Inspect `upload_media_domain.md` before changing linked media assumptions.
 - Do not make Signal a raw Observation, an Action, or a generic ticket.
-- Do not introduce a single authoritative `primary_domain` for Signal routing, visibility, or actionability in MVP.
+- Do not introduce a single authoritative `primary_domain`-style fallback for Signal routing, visibility, or actionability in MVP.
 - Do not add direct manual Signal creation unless it is separately validated.
 - Do not expose raw Observation text in Signal detail, feed, notifications, realtime payloads, or normal technical logs.
 - Do not let AI decide urgency or create Actions.
@@ -252,17 +249,17 @@ Do **not** implement Signal model, services, fixtures, or tests before Phase 4. 
 
 | Scenario | Expected behavior |
 | --- | --- |
-| Valid triplet (module, domain, subject) same establishment | Signal persisted with FKs |
-| Module/domain/subject from another establishment | Rejected |
+| Valid BU/AS classification same establishment | Signal persisted with FKs |
+| BU/AS classification from another establishment | Rejected |
 | Optional unit from same establishment | Allowed; orthogonal to categorization |
 | Observation with one problem | One CandidateSignal → one Signal after validation |
-| Observation with N distinct problems | N CandidateSignals → N Signals (never multi-triplet on one row) |
+| Observation with N distinct problems | N CandidateSignals → N Signals (never multi-classification on one row) |
 
 ### Categorization invariants
 
 | Scenario | Expected behavior |
 | --- | --- |
-| Signal row | Exactly one primary triplet via FKs |
+| Signal row | Exactly one primary BU/AS classification via FKs |
 | Legacy `detected_domains[]` shape | Not accepted in MVP |
 
 ### Lifecycle (active feed eligibility)
@@ -280,4 +277,4 @@ Do **not** implement Signal model, services, fixtures, or tests before Phase 4. 
 | Candidate matches resolved Signal | Create new Signal |
 | Aggregation target closed/archived | Rejected |
 
-Tests must use runtime taxonomy keys from onboarding (e.g. `hotel__hebergement__proprete_des_chambres`), not legacy flat domain keys.
+Tests must use BU/AS runtime taxonomy keys from onboarding, not legacy flat domain keys.

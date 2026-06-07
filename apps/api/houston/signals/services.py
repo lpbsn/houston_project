@@ -10,6 +10,7 @@ from django.utils import timezone
 from houston.ai.observation_pipeline import (
     ObservationPipelineError,
     ObservationPipelineInvalidOutputError,
+    ObservationPipelineSkippedError,
     ObservationPipelineTimeoutError,
     ObservationPipelineUnavailableError,
     call_observation_pipeline,
@@ -21,15 +22,11 @@ from houston.ai.observation_pipeline_schema import (
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
-    Establishment,
     EstablishmentMembership,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
     OperationalUnit,
 )
-from houston.establishments.taxonomy_backfill import backfill_business_units_from_legacy_taxonomy
 from houston.observations.models import Observation, ObservationProcessing
+from houston.signals.classification_fallback import try_apply_responsible_affected_fallback
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     AI_LOCATION_TEXT_MAX_LENGTH,
@@ -43,7 +40,6 @@ from houston.signals.exceptions import (
     SignalValidationError,
 )
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
-from houston.signals.signal_backfill import _derive_classification_from_legacy
 from houston.signals.signal_classification import (
     InvalidSignalClassificationError,
     validate_signal_classification,
@@ -55,9 +51,6 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ResolvedTaxonomy:
-    operational_module: OperationalModule
-    operational_domain: OperationalDomain
-    operational_subject: OperationalSubject
     operational_unit: OperationalUnit | None
     affected_business_unit: BusinessUnit | None = None
     responsible_business_unit: BusinessUnit | None = None
@@ -136,9 +129,6 @@ def create_signal_from_candidate(
 
     signal = Signal.objects.create(
         establishment=observation.establishment,
-        operational_module=resolved.operational_module,
-        operational_domain=resolved.operational_domain,
-        operational_subject=resolved.operational_subject,
         operational_unit=resolved.operational_unit,
         affected_business_unit=resolved.affected_business_unit,
         responsible_business_unit=resolved.responsible_business_unit,
@@ -175,12 +165,41 @@ def aggregate_candidate_into_signal(
 
 def _candidate_dedupe_key(
     *,
-    module_id: uuid.UUID,
-    domain_id: uuid.UUID,
-    subject_id: uuid.UUID,
+    affected_business_unit_id: uuid.UUID,
+    responsible_business_unit_id: uuid.UUID,
+    activity_subject_id: uuid.UUID,
     unit_id: uuid.UUID | None,
 ) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]:
-    return (module_id, domain_id, subject_id, unit_id)
+    return (
+        affected_business_unit_id,
+        responsible_business_unit_id,
+        activity_subject_id,
+        unit_id,
+    )
+
+
+def _resolve_activity_subject(
+    *,
+    establishment_id: uuid.UUID,
+    business_unit: BusinessUnit | None,
+    activity_subject_key: str,
+) -> ActivitySubject | None:
+    if business_unit is None:
+        return None
+    subject = ActivitySubject.objects.filter(
+        establishment_id=establishment_id,
+        normalized_name=activity_subject_key,
+        active=True,
+        business_unit=business_unit,
+    ).first()
+    if subject is not None:
+        return subject
+    return ActivitySubject.objects.filter(
+        establishment_id=establishment_id,
+        business_unit=business_unit,
+        active=True,
+        label__iexact=activity_subject_key,
+    ).first()
 
 
 def resolve_taxonomy_from_candidate(
@@ -188,61 +207,7 @@ def resolve_taxonomy_from_candidate(
     establishment_id: uuid.UUID,
     candidate: PipelineCandidateOutput,
 ) -> ResolvedTaxonomy:
-    if candidate.uses_v3_classification():
-        return _resolve_v3_candidate(establishment_id=establishment_id, candidate=candidate)
-    if not candidate.uses_legacy_classification():
-        raise SignalValidationError("Candidate must include v3 or legacy taxonomy keys.")
-    return _resolve_legacy_candidate(establishment_id=establishment_id, candidate=candidate)
-
-
-def _resolve_legacy_candidate(
-    *,
-    establishment_id: uuid.UUID,
-    candidate: PipelineCandidateOutput,
-) -> ResolvedTaxonomy:
-    module = OperationalModule.objects.filter(
-        establishment_id=establishment_id,
-        key=candidate.operational_module_key,
-        active=True,
-    ).first()
-    if module is None:
-        raise SignalValidationError("Invalid operational module key.")
-
-    domain = OperationalDomain.objects.filter(
-        establishment_id=establishment_id,
-        key=candidate.operational_domain_key,
-        active=True,
-        operational_module=module,
-    ).first()
-    if domain is None:
-        raise SignalValidationError("Invalid operational domain key.")
-
-    subject = OperationalSubject.objects.filter(
-        establishment_id=establishment_id,
-        key=candidate.operational_subject_key,
-        active=True,
-        operational_domain=domain,
-    ).first()
-    if subject is None:
-        raise SignalValidationError("Invalid operational subject key.")
-
-    unit = None
-    if candidate.operational_unit_key:
-        unit = OperationalUnit.objects.filter(
-            establishment_id=establishment_id,
-            key=candidate.operational_unit_key,
-            active=True,
-        ).first()
-        if unit is None:
-            raise SignalValidationError("Invalid operational unit key.")
-
-    legacy = ResolvedTaxonomy(
-        operational_module=module,
-        operational_domain=domain,
-        operational_subject=subject,
-        operational_unit=unit,
-    )
-    return _attach_v2_classification_from_legacy(establishment_id=establishment_id, resolved=legacy)
+    return _resolve_v3_candidate(establishment_id=establishment_id, candidate=candidate)
 
 
 def _resolve_v3_candidate(
@@ -255,37 +220,61 @@ def _resolve_v3_candidate(
         key=candidate.affected_business_unit_key,
         active=True,
     ).first()
+    if affected is None:
+        raise SignalValidationError("Invalid affected business unit key.")
+
     responsible = BusinessUnit.objects.filter(
         establishment_id=establishment_id,
         key=candidate.responsible_business_unit_key,
         active=True,
     ).first()
-    activity_subject = ActivitySubject.objects.filter(
+    activity_subject = _resolve_activity_subject(
         establishment_id=establishment_id,
-        normalized_name=candidate.activity_subject_key,
-        active=True,
         business_unit=responsible,
-    ).first()
-    if activity_subject is None:
-        activity_subject = ActivitySubject.objects.filter(
-            establishment_id=establishment_id,
-            business_unit=responsible,
-            active=True,
-            label__iexact=candidate.activity_subject_key or "",
-        ).first()
-    if affected is None or responsible is None or activity_subject is None:
-        raise SignalValidationError("Invalid v3 business unit or activity subject keys.")
+        activity_subject_key=candidate.activity_subject_key,
+    )
+    subject_under_affected = _resolve_activity_subject(
+        establishment_id=establishment_id,
+        business_unit=affected,
+        activity_subject_key=candidate.activity_subject_key,
+    )
 
     establishment = affected.establishment
-    try:
-        validate_signal_classification(
+
+    if responsible is None:
+        fallback = try_apply_responsible_affected_fallback(
             establishment=establishment,
-            affected_business_unit=affected,
-            responsible_business_unit=responsible,
-            activity_subject=activity_subject,
+            affected=affected,
+            responsible=None,
+            activity_subject=None,
+            subject_under_affected=subject_under_affected,
         )
-    except InvalidSignalClassificationError as exc:
-        raise SignalValidationError(str(exc)) from exc
+        if fallback is None:
+            raise SignalValidationError("Invalid responsible business unit key.")
+        resolved_affected = fallback.affected_business_unit
+        resolved_responsible = fallback.responsible_business_unit
+        resolved_subject = fallback.activity_subject
+    elif activity_subject is None:
+        raise SignalValidationError(
+            "activity_subject must belong to responsible_business_unit."
+        )
+    else:
+        if activity_subject.business_unit_id != responsible.id:
+            raise SignalValidationError(
+                "activity_subject must belong to responsible_business_unit."
+            )
+        try:
+            validate_signal_classification(
+                establishment=establishment,
+                affected_business_unit=affected,
+                responsible_business_unit=responsible,
+                activity_subject=activity_subject,
+            )
+        except InvalidSignalClassificationError as exc:
+            raise SignalValidationError(str(exc)) from exc
+        resolved_affected = affected
+        resolved_responsible = responsible
+        resolved_subject = activity_subject
 
     unit = None
     if candidate.operational_unit_key:
@@ -295,72 +284,11 @@ def _resolve_v3_candidate(
             active=True,
         ).first()
 
-    legacy_module = OperationalModule.objects.filter(
-        establishment_id=establishment_id,
-        key=affected.key,
-        active=True,
-    ).first()
-    if legacy_module is None:
-        raise SignalValidationError("Legacy operational taxonomy not available for v3 signal.")
-
-    legacy_domain = OperationalDomain.objects.filter(
-        establishment_id=establishment_id,
-        operational_module=legacy_module,
-        active=True,
-    ).first()
-    legacy_subject = OperationalSubject.objects.filter(
-        establishment_id=establishment_id,
-        operational_domain=legacy_domain,
-        active=True,
-    ).first() if legacy_domain else None
-    if legacy_domain is None or legacy_subject is None:
-        legacy_domain = OperationalDomain.objects.filter(
-            establishment_id=establishment_id,
-            active=True,
-        ).first()
-        legacy_subject = OperationalSubject.objects.filter(
-            establishment_id=establishment_id,
-            active=True,
-        ).first()
-    if legacy_domain is None or legacy_subject is None:
-        raise SignalValidationError("Legacy operational taxonomy not available for v3 signal.")
-
     return ResolvedTaxonomy(
-        operational_module=legacy_module,
-        operational_domain=legacy_domain,
-        operational_subject=legacy_subject,
         operational_unit=unit,
-        affected_business_unit=affected,
-        responsible_business_unit=responsible,
-        activity_subject=activity_subject,
-    )
-
-
-def _attach_v2_classification_from_legacy(
-    *,
-    establishment_id: uuid.UUID,
-    resolved: ResolvedTaxonomy,
-) -> ResolvedTaxonomy:
-    establishment = Establishment.objects.get(id=establishment_id)
-    temp_signal = Signal(
-        establishment=establishment,
-        operational_module=resolved.operational_module,
-        operational_domain=resolved.operational_domain,
-        operational_subject=resolved.operational_subject,
-    )
-
-    backfill_business_units_from_legacy_taxonomy(establishment_id=establishment_id)
-    classification = _derive_classification_from_legacy(temp_signal)
-    if classification is None:
-        return resolved
-    return ResolvedTaxonomy(
-        operational_module=resolved.operational_module,
-        operational_domain=resolved.operational_domain,
-        operational_subject=resolved.operational_subject,
-        operational_unit=resolved.operational_unit,
-        affected_business_unit=classification["affected"],
-        responsible_business_unit=classification["responsible"],
-        activity_subject=classification["activity_subject"],
+        affected_business_unit=resolved_affected,
+        responsible_business_unit=resolved_responsible,
+        activity_subject=resolved_subject,
     )
 
 
@@ -370,11 +298,18 @@ def find_active_signal_for_aggregation(
     resolved: ResolvedTaxonomy,
     for_update: bool = False,
 ) -> Signal | None:
+    if (
+        resolved.affected_business_unit is None
+        or resolved.responsible_business_unit is None
+        or resolved.activity_subject is None
+    ):
+        return None
+
     queryset = Signal.objects.filter(
         establishment_id=establishment_id,
-        operational_module=resolved.operational_module,
-        operational_domain=resolved.operational_domain,
-        operational_subject=resolved.operational_subject,
+        affected_business_unit=resolved.affected_business_unit,
+        responsible_business_unit=resolved.responsible_business_unit,
+        activity_subject=resolved.activity_subject,
         status__in=ACTIVE_SIGNAL_STATUSES,
     )
     if resolved.operational_unit is None:
@@ -404,9 +339,6 @@ def _persist_pending_candidate(
     return CandidateSignal.objects.create(
         observation=observation,
         establishment=observation.establishment,
-        operational_module=resolved.operational_module if resolved else None,
-        operational_domain=resolved.operational_domain if resolved else None,
-        operational_subject=resolved.operational_subject if resolved else None,
         operational_unit=resolved.operational_unit if resolved else None,
         affected_business_unit=resolved.affected_business_unit if resolved else None,
         responsible_business_unit=resolved.responsible_business_unit if resolved else None,
@@ -430,7 +362,9 @@ def apply_pipeline_output(
     if not candidates:
         return ObservationProcessing.Outcome.NO_SIGNAL_CREATED
 
-    seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]] = set()
+    seen_keys: set[
+        tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]
+    ] = set()
     created_count = 0
     aggregated_count = 0
     rejected_count = 0
@@ -453,10 +387,13 @@ def apply_pipeline_output(
             rejected_count += 1
             continue
 
+        assert resolved.affected_business_unit is not None
+        assert resolved.responsible_business_unit is not None
+        assert resolved.activity_subject is not None
         dedupe_key = _candidate_dedupe_key(
-            module_id=resolved.operational_module.id,
-            domain_id=resolved.operational_domain.id,
-            subject_id=resolved.operational_subject.id,
+            affected_business_unit_id=resolved.affected_business_unit.id,
+            responsible_business_unit_id=resolved.responsible_business_unit.id,
+            activity_subject_id=resolved.activity_subject.id,
             unit_id=resolved.operational_unit.id if resolved.operational_unit else None,
         )
         if dedupe_key in seen_keys:
@@ -553,6 +490,30 @@ def run_observation_pipeline(
             observation=observation,
             provider=provider,
         )
+    except ObservationPipelineSkippedError:
+        with transaction.atomic():
+            processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
+            outcome = apply_pipeline_output(
+                observation=observation,
+                output=ObservationPipelineOutput(
+                    schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                    candidates=[],
+                ),
+            )
+            processing.status = ObservationProcessing.Status.PROCESSED
+            processing.processed_at = timezone.now()
+            processing.outcome = outcome
+            processing.last_error_code = ""
+            processing.save(
+                update_fields=[
+                    "status",
+                    "processed_at",
+                    "outcome",
+                    "last_error_code",
+                    "updated_at",
+                ]
+            )
+        return
     except (
         ObservationPipelineUnavailableError,
         ObservationPipelineTimeoutError,

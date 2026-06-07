@@ -27,21 +27,6 @@ class Signal(BaseModel):
         on_delete=models.CASCADE,
         related_name="signals",
     )
-    operational_module = models.ForeignKey(
-        "establishments.OperationalModule",
-        on_delete=models.PROTECT,
-        related_name="signals",
-    )
-    operational_domain = models.ForeignKey(
-        "establishments.OperationalDomain",
-        on_delete=models.PROTECT,
-        related_name="signals",
-    )
-    operational_subject = models.ForeignKey(
-        "establishments.OperationalSubject",
-        on_delete=models.PROTECT,
-        related_name="signals",
-    )
     affected_business_unit = models.ForeignKey(
         "establishments.BusinessUnit",
         on_delete=models.PROTECT,
@@ -111,16 +96,16 @@ class Signal(BaseModel):
                 name="signal_feed_sort_idx",
             ),
             models.Index(
-                fields=["establishment", "operational_subject"],
-                name="signal_est_subject_idx",
-            ),
-            models.Index(
                 fields=["establishment", "affected_business_unit"],
                 name="signal_est_affected_bu_idx",
             ),
             models.Index(
                 fields=["establishment", "responsible_business_unit"],
                 name="signal_est_responsible_bu_idx",
+            ),
+            models.Index(
+                fields=["establishment", "activity_subject"],
+                name="signal_est_act_subject_idx",
             ),
         ]
 
@@ -145,27 +130,6 @@ class CandidateSignal(BaseModel):
         "establishments.Establishment",
         on_delete=models.CASCADE,
         related_name="candidate_signals",
-    )
-    operational_module = models.ForeignKey(
-        "establishments.OperationalModule",
-        on_delete=models.PROTECT,
-        related_name="candidate_signals",
-        null=True,
-        blank=True,
-    )
-    operational_domain = models.ForeignKey(
-        "establishments.OperationalDomain",
-        on_delete=models.PROTECT,
-        related_name="candidate_signals",
-        null=True,
-        blank=True,
-    )
-    operational_subject = models.ForeignKey(
-        "establishments.OperationalSubject",
-        on_delete=models.PROTECT,
-        related_name="candidate_signals",
-        null=True,
-        blank=True,
     )
     affected_business_unit = models.ForeignKey(
         "establishments.BusinessUnit",

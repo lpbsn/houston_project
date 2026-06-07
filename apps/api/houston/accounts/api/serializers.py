@@ -52,9 +52,6 @@ class MembershipScopeItemSerializer(serializers.Serializer):
 @extend_schema_serializer(component_name="AuthMembershipScopeSummary")
 class MembershipScopeSummarySerializer(serializers.Serializer):
     business_unit_count = serializers.IntegerField()
-    module_count = serializers.IntegerField()
-    domain_count = serializers.IntegerField()
-    subject_count = serializers.IntegerField()
 
 
 class MembershipSerializer(serializers.Serializer):

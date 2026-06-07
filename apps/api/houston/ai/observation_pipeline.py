@@ -17,6 +17,10 @@ from houston.ai.observation_pipeline_diagnostics import (
 )
 from houston.ai.observation_pipeline_provider_schema import openai_strict_response_format
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
+from houston.establishments.taxonomy_snapshot import (
+    build_establishment_taxonomy_snapshot,
+    establishment_has_active_business_units,
+)
 from houston.observations.models import Observation
 from houston.signals.constants import (
     AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
@@ -60,6 +64,12 @@ class ObservationPipelineProviderBadRequestError(ObservationPipelineError):
     error_code = "provider_bad_request"
 
 
+class ObservationPipelineSkippedError(ObservationPipelineError):
+    """Establishment has no active business units — pipeline skips AI call."""
+
+    error_code = "no_active_business_units"
+
+
 @dataclass(frozen=True)
 class ObservationPipelineProviderResponse:
     payload: dict[str, Any]
@@ -78,23 +88,8 @@ class ObservationPipelineProvider(Protocol):
 
 def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
     establishment = observation.establishment
-    modules = list(
-        establishment.operational_modules.filter(active=True).values("key", "label").order_by("key")
-    )
-    domains = list(
-        establishment.operational_domains.filter(active=True)
-        .select_related("operational_module")
-        .values("key", "label", "operational_module__key")
-        .order_by("key")
-    )
-    subjects = list(
-        establishment.operational_subjects.filter(active=True)
-        .select_related("operational_domain")
-        .values("key", "label", "operational_domain__key")
-        .order_by("key")
-    )
-    units = list(
-        establishment.operational_units.filter(active=True).values("key", "label").order_by("key")
+    establishment_taxonomy = build_establishment_taxonomy_snapshot(
+        establishment_id=establishment.id,
     )
     media_count = observation.media_items.count()
     active_signals_context = _build_active_signals_context(establishment_id=establishment.id)
@@ -105,16 +100,15 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
         "validated_text": observation.raw_text,
         "submitted_at": observation.submitted_at.isoformat(),
         "media_count": media_count,
-        "taxonomy": {
-            "modules": modules,
-            "domains": domains,
-            "subjects": subjects,
-            "units": units,
-        },
+        "establishment_taxonomy": establishment_taxonomy,
         "active_signals_context": active_signals_context,
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     }
+
+
+def establishment_can_run_observation_pipeline(*, establishment_id: uuid.UUID) -> bool:
+    return establishment_has_active_business_units(establishment_id=establishment_id)
 
 
 def _build_active_signals_context(*, establishment_id: uuid.UUID) -> list[dict[str, Any]]:
@@ -122,21 +116,30 @@ def _build_active_signals_context(*, establishment_id: uuid.UUID) -> list[dict[s
         "-last_activity_at",
         "-created_at",
     )[:MAX_ACTIVE_SIGNALS_CONTEXT]
-    return [
-        {
-            "signal_id": str(signal.id),
-            "status": signal.status,
-            "title": signal.title,
-            "structured_summary": signal.structured_summary,
-            "operational_module_key": signal.operational_module.key,
-            "operational_domain_key": signal.operational_domain.key,
-            "operational_subject_key": signal.operational_subject.key,
-            "operational_unit_key": (
-                signal.operational_unit.key if signal.operational_unit_id else None
-            ),
-        }
-        for signal in signals
-    ]
+    entries: list[dict[str, Any]] = []
+    for signal in signals:
+        if (
+            signal.affected_business_unit_id is None
+            or signal.responsible_business_unit_id is None
+            or signal.activity_subject_id is None
+        ):
+            continue
+        entries.append(
+            {
+                "signal_id": str(signal.id),
+                "status": signal.status,
+                "title": signal.title,
+                "structured_summary": signal.structured_summary,
+                "affected_business_unit_key": signal.affected_business_unit.key,
+                "responsible_business_unit_key": signal.responsible_business_unit.key,
+                "activity_subject_key": signal.activity_subject.normalized_name,
+                "operational_unit_key": (
+                    signal.operational_unit.key if signal.operational_unit_id else None
+                ),
+                "location_text": signal.location_text or None,
+            }
+        )
+    return entries
 
 
 def parse_pipeline_output(payload: dict[str, Any]) -> ObservationPipelineOutput:
@@ -273,6 +276,13 @@ def call_observation_pipeline(
     correlation_id: uuid.UUID | None = None,
 ) -> ObservationPipelineOutput:
     correlation_id = correlation_id or uuid.uuid4()
+    if not establishment_can_run_observation_pipeline(
+        establishment_id=observation.establishment_id,
+    ):
+        raise ObservationPipelineSkippedError(
+            "Establishment has no active business units for pipeline routing."
+        )
+
     provider = provider or get_observation_pipeline_provider()
     input_payload = build_pipeline_input(observation=observation)
     started_at = time.monotonic()
@@ -411,67 +421,55 @@ Tu structures des remontées terrain en propositions CandidateSignal pour Housto
 
 CONTEXTE
 - Le message utilisateur est un JSON. Le texte à analyser est dans "validated_text".
-- La taxonomie autorisée est dans "taxonomy" (modules, domains, subjects, units).
+- La taxonomie autorisée est dans "establishment_taxonomy.business_units" avec :
+  key, label, unit_type (dedicated ou transversal), description, activity_subjects[].
+- Chaque activity_subject a key (= normalized_name), label, description.
+- Les unités de lieu structurées sont dans establishment_taxonomy.operational_units.
 - Les signaux actifs éligibles à l'agrégation sont dans "active_signals_context"
-  (max {MAX_ACTIVE_SIGNALS_CONTEXT}).
-- Chaque clé opérationnelle doit exister dans ce snapshot.
-  N'invente jamais de clé ni de libellé hors liste.
+  (max {MAX_ACTIVE_SIGNALS_CONTEXT}) avec affected/responsible/activity_subject keys.
+- Chaque clé doit exister dans ce snapshot runtime. N'invente jamais de clé.
+- Les descriptions des pôles aident à distinguer périmètres et responsabilités.
 - Les images ne sont pas fournies ; "media_count" est informatif uniquement.
 
+ROUTAGE — LIEU VS NATURE DU PROBLÈME
+- affected_business_unit_key : où le problème est observé (lieu, espace, pôle impacté).
+- responsible_business_unit_key : qui doit traiter (nature opérationnelle du problème).
+- activity_subject_key : sujet sous responsible_business_unit (normalized_name exact).
+- location_text : contexte libre ou localisation précise (chambre 104, restaurant, bar).
+- Ne route pas vers un pôle dedicated uniquement parce que son nom apparaît dans le texte
+  si la nature du problème relève d'un pôle transversal du snapshot.
+
+PRIORITÉ TRANSVERSALE
+- Si un BusinessUnit unit_type=transversal possède un activity_subject correspondant
+  au problème, responsible = ce transversal (même si le lieu mentionne un dedicated).
+- Exemple : "Lumière HS au restaurant" → affected=restaurant, responsible=maintenance
+  (transversal) si maintenance possède électricité/éclairage dans le snapshot.
+
+FALLBACK DEDICATED
+- Si aucun pôle transversal pertinent n'existe pour la nature du problème,
+  responsible = affected et activity_subject sous affected.
+
 MISSION
-Pour chaque problème opérationnel DISTINCT dans validated_text, produire un candidat.
-Un même constat = un candidat. Plusieurs sujets distincts = plusieurs candidats
+Pour chaque problème opérationnel DISTINCT, produire un candidat
 (max {MAX_CANDIDATES_PER_OBSERVATION}).
 Ne fusionne jamais plusieurs problèmes différents en un seul candidat.
 
 SEGMENTATION
-Séparer les candidats si : lieux différents, domaines métiers différents, sujets différents,
-ou problèmes indépendants (ex. "chambre 204 sale" ET "clim lobby en panne" → 2 candidats).
-
-SPLITTING RULES
-- Un candidat = une responsabilité opérationnelle distincte ou une cible de routage distincte.
-- Séparer lorsque des équipes, domaines, sujets, lieux ou responsabilités opérationnelles diffèrent.
-- Ne fusionne pas des problèmes distincts parce qu'ils apparaissent dans la même phrase ou le même
-  rapport.
-- Problèmes d'équipement/éclairage et ruptures de stock au bar sont des responsabilités séparées.
-- Conserve les lieux partagés ou spécifiques dans title et structured_summary.
-- operational_unit_key uniquement si l'unité existe dans le snapshot taxonomy fourni.
-- Utilise uniquement les clés module/domain/subject du snapshot ; choisis la clé fournie la plus
-  proche ; n'invente jamais de clé.
-- Si une clé requise manque dans le snapshot, omets ou rejette ce candidat ; ne la fabrique pas.
-
-EXEMPLE CONCEPTUEL (format uniquement — clés depuis le payload utilisateur)
-Input: "The light is flickering at the restaurant entrance.
-There is no mojito syrup left at the bar."
-Expected: deux candidats — (1) lumière clignotante / entrée → clé maintenance/équipement la plus
-proche fournie ; (2) sirop mojito en rupture / bar → clé stock/réassort bar la plus proche fournie.
-
-CATÉGORISATION (obligatoire par candidat)
-- operational_module_key : clé module dans taxonomy.modules
-- operational_domain_key : clé domaine dans taxonomy.domains (cohérent avec le module)
-- operational_subject_key : clé sujet dans taxonomy.subjects (cohérent avec le domaine)
-- operational_unit_key : clé unit dans taxonomy.units si un lieu/unité métier connu s'applique ;
-  sinon null. Pour "chambre 204", "table 12", "étage 3" : résumer dans structured_summary
-  et n'utiliser operational_unit_key que si une unité catalogue correspond.
+Séparer si lieux, pôles impactés, responsables, sujets ou problèmes diffèrent.
 
 TEXTE DE SORTIE
-- title : titre court orienté action (≤ 80 caractères), sans copier validated_text mot pour mot.
-- structured_summary : 1–3 phrases factuelles, opérationnelles, sans citation longue du terrain ;
-  inclure lieu précis si mentionné.
-- location_text : lieu court libre pour l'affichage (ex. entrée restaurant, bar, chambre 104),
-  ≤ 120 caractères, null si aucun lieu distinct ; jamais le texte complet de validated_text.
-  Si operational_unit_key est renseigné, location_text est secondaire (affichage catalogue).
+- title : titre court orienté action (≤ 80 caractères).
+- structured_summary : 1–3 phrases factuelles ; inclure lieu précis si mentionné.
+- location_text : lieu court libre (≤ 120 caractères), null si aucun lieu distinct ;
+  jamais le texte complet de validated_text.
 
 AGRÉGATION (optionnel)
-- aggregate_into_signal_id : UUID d'un signal listé dans active_signals_context si le problème
-  prolonge clairement une situation déjà ouverte ; sinon null.
-- Ne jamais inventer d'UUID ni cibler un signal absent de active_signals_context.
-- Ne jamais cibler un signal résolu, annulé ou archivé.
+- aggregate_into_signal_id : UUID d'un signal dans active_signals_context si le problème
+  prolonge clairement une situation ouverte ; sinon null.
 
-HORS PÉRIMÈTRE — NE PAS PRODUIRE
-- urgence, priorité, sentiment, mots-clés, action corrective, type incident/idée
-- tableaux detected_domains, scores de confiance, catégories en texte libre
-- texte brut de l'observation recopié intégralement
+HORS PÉRIMÈTRE
+- urgence, priorité, detected_domains[], scores de confiance
+- clés operational_module/domain/subject (legacy)
 
 SI RIEN N'EST ACTIONNABLE
 - Retourner "candidates": [].
@@ -479,11 +477,9 @@ SI RIEN N'EST ACTIONNABLE
 FORMAT DE RÉPONSE
 Un seul objet JSON strict :
 schema_version = "{AI_OBSERVATION_PIPELINE_SCHEMA_VERSION}"
-candidates = tableau 0..{MAX_CANDIDATES_PER_OBSERVATION} avec title, structured_summary,
-operational_module_key, operational_domain_key, operational_subject_key,
-operational_unit_key, location_text, aggregate_into_signal_id.
-Clés de premier niveau autorisées : schema_version, candidates uniquement.
-Pas de markdown, pas de commentaire hors JSON.
+candidates[] avec title, structured_summary, affected_business_unit_key,
+responsible_business_unit_key, activity_subject_key, operational_unit_key,
+location_text, aggregate_into_signal_id.
 """
 
 
@@ -492,32 +488,33 @@ def _system_prompt() -> str:
 
 
 def _default_fake_payload(input_payload: dict[str, Any]) -> dict[str, Any]:
-    taxonomy = input_payload.get("taxonomy") or {}
-    subjects = taxonomy.get("subjects") or []
-    modules = taxonomy.get("modules") or []
-    if subjects:
-        subject = subjects[0]
-        domain_key = subject.get("operational_domain__key") or ""
-        module_key = next(
-            (module["key"] for module in modules if module.get("key")),
-            "hotel",
-        )
+    taxonomy = input_payload.get("establishment_taxonomy") or {}
+    business_units = taxonomy.get("business_units") or []
+    if not business_units:
         return {
             "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            "candidates": [
-                {
-                    "title": "Structured issue",
-                    "structured_summary": "Validated structured summary for tests.",
-                    "operational_module_key": module_key,
-                    "operational_domain_key": domain_key or "hotel__hebergement",
-                    "operational_subject_key": subject["key"],
-                    "operational_unit_key": None,
-                    "location_text": None,
-                    "aggregate_into_signal_id": None,
-                }
-            ],
+            "candidates": [],
         }
+    unit = business_units[0]
+    subjects = unit.get("activity_subjects") or []
+    if not subjects:
+        return {
+            "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            "candidates": [],
+        }
+    subject = subjects[0]
     return {
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        "candidates": [],
+        "candidates": [
+            {
+                "title": "Structured issue",
+                "structured_summary": "Validated structured summary for tests.",
+                "affected_business_unit_key": unit["key"],
+                "responsible_business_unit_key": unit["key"],
+                "activity_subject_key": subject["key"],
+                "operational_unit_key": None,
+                "location_text": None,
+                "aggregate_into_signal_id": None,
+            }
+        ],
     }

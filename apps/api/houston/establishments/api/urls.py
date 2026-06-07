@@ -9,7 +9,6 @@ from houston.establishments.api.views import (
     EstablishmentBusinessUnitDeactivateView,
     EstablishmentBusinessUnitDetailView,
     EstablishmentBusinessUnitTreeView,
-    EstablishmentOperationalTaxonomyView,
     MembershipDeactivateView,
     MembershipDetailView,
     MembershipInvitationView,
@@ -21,13 +20,10 @@ from houston.establishments.api.views import (
     OnboardingSessionDetailView,
     OnboardingSessionDirectorInvitationView,
     OnboardingSessionMarkReadyView,
-    OnboardingSessionProposalAIGenerateView,
     OnboardingSessionProposalApplyView,
     OnboardingSessionProposalDetailView,
-    OnboardingSessionProposalItemMutationView,
     OnboardingSessionProposalListView,
     OnboardingSessionProposalRejectView,
-    OnboardingSessionProposalSectionDecisionView,
     OnboardingSessionProposalSubmitView,
     OnboardingSessionRuntimeConfigView,
     ScopedUserSearchView,
@@ -86,27 +82,9 @@ urlpatterns = [
         name="onboarding-session-proposal-list",
     ),
     path(
-        "onboarding-sessions/<uuid:session_id>/proposals/ai-generate/",
-        OnboardingSessionProposalAIGenerateView.as_view(),
-        name="onboarding-session-proposal-ai-generate",
-    ),
-    path(
         "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/",
         OnboardingSessionProposalDetailView.as_view(),
         name="onboarding-session-proposal-detail",
-    ),
-    path(
-        (
-            "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/"
-            "sections/<str:section>/decision/"
-        ),
-        OnboardingSessionProposalSectionDecisionView.as_view(),
-        name="onboarding-session-proposal-section-decision",
-    ),
-    path(
-        "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/items/",
-        OnboardingSessionProposalItemMutationView.as_view(),
-        name="onboarding-session-proposal-item-mutation",
     ),
     path(
         "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/reject/",
@@ -157,11 +135,6 @@ urlpatterns = [
         "catalog/activity-subjects/suggest/",
         CatalogActivitySubjectSuggestView.as_view(),
         name="catalog-activity-subjects-suggest",
-    ),
-    path(
-        "establishments/<uuid:establishment_id>/operational-taxonomy/",
-        EstablishmentOperationalTaxonomyView.as_view(),
-        name="establishment-operational-taxonomy",
     ),
     path(
         "establishments/<uuid:establishment_id>/workspace-summary/",

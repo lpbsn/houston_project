@@ -14,7 +14,6 @@ import type {
   RegistrationRequest,
   RegistrationResponse,
   SwitchEstablishmentRequest,
-  OperationalTaxonomyResponse,
   WorkspaceSummaryResponse,
 } from './types'
 
@@ -25,8 +24,6 @@ export const membershipDetailQueryKey = (establishmentId: string, membershipId: 
   ['workspace', 'memberships', establishmentId, membershipId] as const
 export const workspaceSummaryQueryKey = (establishmentId: string) =>
   ['workspace', 'summary', establishmentId] as const
-export const operationalTaxonomyQueryKey = (establishmentId: string) =>
-  ['workspace', 'operational-taxonomy', establishmentId] as const
 
 class AuthApiError extends Error {
   status: number
@@ -475,33 +472,6 @@ export async function deactivateMembership(establishmentId: string, membershipId
 
   await queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
   return result.data as EstablishmentMembershipResponse
-}
-
-export async function getOperationalTaxonomy(establishmentId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/establishments/{establishment_id}/operational-taxonomy/', {
-        params: {
-          path: { establishment_id: establishmentId },
-        },
-        headers: accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : undefined,
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildAuthError(
-      result.response,
-      result.error,
-      'Operational taxonomy could not be loaded.',
-    )
-  }
-
-  return result.data as OperationalTaxonomyResponse
 }
 
 export async function getWorkspaceSummary(establishmentId: string) {

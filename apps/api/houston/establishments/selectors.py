@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.db import models
-from django.db.models import Prefetch, Q
+from django.db.models import Q
 
 from houston.accounts.models import User
 from houston.establishments.membership_scope import membership_scope_prefetch
@@ -14,15 +14,7 @@ from houston.establishments.models import (
     MembershipScope,
     OnboardingProposal,
     OnboardingSession,
-    OperationalDomain,
-    OperationalModule,
-    OperationalSubject,
     OperationalUnit,
-    RoutingHint,
-    RoutingHintDomain,
-    RuntimeTag,
-    RuntimeTagDomain,
-    RuntimeVocabulary,
 )
 from houston.organizations.models import Organization
 
@@ -292,76 +284,11 @@ def get_runtime_config_for_session(*, session: OnboardingSession) -> dict:
         "active_business_units": (
             business_unit_tree["business_units"] if business_unit_tree is not None else []
         ),
-        "active_modules": list(
-            OperationalModule.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-            ).order_by("key", "id")
-        ),
-        "active_domains": list(
-            OperationalDomain.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-            )
-            .select_related("operational_module")
-            .order_by("key", "id")
-        ),
-        "active_subjects": list(
-            OperationalSubject.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-            )
-            .select_related("operational_domain", "operational_domain__operational_module")
-            .order_by("key", "id")
-        ),
         "optional_units": list(
             OperationalUnit.objects.filter(
                 establishment_id=establishment_id,
                 active=True,
             ).order_by("key", "id")
-        ),
-        "optional_vocabulary": list(
-            RuntimeVocabulary.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-            )
-            .select_related("mapped_domain", "mapped_unit")
-            .order_by("term", "id")
-        ),
-        "optional_runtime_tags": list(
-            RuntimeTag.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-            )
-            .prefetch_related(
-                Prefetch(
-                    "domain_links",
-                    queryset=RuntimeTagDomain.objects.select_related(
-                        "operational_domain",
-                    )
-                    .filter(operational_domain__active=True)
-                    .order_by("operational_domain__key"),
-                )
-            )
-            .order_by("key", "id")
-        ),
-        "optional_routing_hints": list(
-            RoutingHint.objects.filter(
-                establishment_id=establishment_id,
-                active=True,
-            )
-            .select_related("suggested_unit")
-            .prefetch_related(
-                Prefetch(
-                    "domain_links",
-                    queryset=RoutingHintDomain.objects.select_related(
-                        "operational_domain",
-                    )
-                    .filter(operational_domain__active=True)
-                    .order_by("operational_domain__key"),
-                )
-            )
-            .order_by("pattern", "id")
         ),
     }
 
@@ -423,140 +350,6 @@ def _management_membership_queryset(*, establishment_id):
         .prefetch_related(membership_scope_prefetch())
         .order_by("user__username", "user__email", "id")
     )
-
-
-def _operational_taxonomy_active_filter(*, active_only: bool) -> dict:
-    if active_only:
-        return {"active": True}
-    return {}
-
-
-def _build_operational_taxonomy_tree(
-    *,
-    establishment_id,
-    active_only: bool = True,
-) -> dict:
-    active_filter = _operational_taxonomy_active_filter(active_only=active_only)
-
-    modules = list(
-        OperationalModule.objects.filter(
-            establishment_id=establishment_id,
-            **active_filter,
-        ).order_by("label", "key", "id")
-    )
-    domains = list(
-        OperationalDomain.objects.filter(
-            establishment_id=establishment_id,
-            **active_filter,
-        ).order_by("label", "key", "id")
-    )
-    subjects = list(
-        OperationalSubject.objects.filter(
-            establishment_id=establishment_id,
-            **active_filter,
-        ).order_by("label", "key", "id")
-    )
-
-    domains_by_module: dict = {}
-    for domain in domains:
-        domains_by_module.setdefault(domain.operational_module_id, []).append(domain)
-
-    subjects_by_domain: dict = {}
-    for subject in subjects:
-        subjects_by_domain.setdefault(subject.operational_domain_id, []).append(subject)
-
-    def _domain_payload(domain: OperationalDomain) -> dict:
-        return {
-            "id": domain.id,
-            "key": domain.key,
-            "label": domain.label,
-            "subjects": [
-                {
-                    "id": subject.id,
-                    "key": subject.key,
-                    "label": subject.label,
-                }
-                for subject in subjects_by_domain.get(domain.id, [])
-            ],
-        }
-
-    module_payload = []
-    for module in modules:
-        module_payload.append(
-            {
-                "id": module.id,
-                "key": module.key,
-                "label": module.label,
-                "domains": [
-                    _domain_payload(domain)
-                    for domain in domains_by_module.get(module.id, [])
-                ],
-            }
-        )
-
-    unassigned_domains = [_domain_payload(domain) for domain in domains_by_module.get(None, [])]
-
-    units = [
-        {
-            "id": unit.id,
-            "key": unit.key,
-            "label": unit.label,
-        }
-        for unit in OperationalUnit.objects.filter(
-            establishment_id=establishment_id,
-            **active_filter,
-        ).order_by("label", "key", "id")
-    ]
-
-    return {
-        "modules": module_payload,
-        "unassigned_domains": unassigned_domains,
-        "units": units,
-    }
-
-
-def get_establishment_operational_taxonomy_snapshot(
-    *,
-    establishment_id,
-    active_only: bool = True,
-) -> dict | None:
-    establishment = Establishment.objects.filter(pk=establishment_id).only("id", "name").first()
-    if establishment is None:
-        return None
-
-    tree = _build_operational_taxonomy_tree(
-        establishment_id=establishment_id,
-        active_only=active_only,
-    )
-    return {
-        "establishment_id": establishment.id,
-        "establishment_name": establishment.name,
-        **tree,
-    }
-
-
-def get_operational_taxonomy_for_establishment(
-    *,
-    current_membership: EstablishmentMembership | None,
-    establishment_id,
-) -> dict | None:
-    if current_membership is None or current_membership.establishment_id != establishment_id:
-        return None
-
-    if current_membership.status != EstablishmentMembership.Status.ACTIVE:
-        return None
-
-    snapshot = get_establishment_operational_taxonomy_snapshot(
-        establishment_id=establishment_id,
-        active_only=True,
-    )
-    if snapshot is None:
-        return None
-
-    return {
-        "modules": snapshot["modules"],
-        "unassigned_domains": snapshot["unassigned_domains"],
-    }
 
 
 def get_establishment_business_unit_tree(

@@ -6,8 +6,6 @@ import {
   activateOnboardingSession,
   applyOnboardingProposal,
   createManualOnboardingProposal,
-  decideProposalSection,
-  generateOnboardingProposal,
   getActivationSummary,
   getOnboardingSession,
   getOnboardingProposal,
@@ -15,7 +13,6 @@ import {
   inviteDirector,
   listOnboardingProposals,
   markReady,
-  mutateOnboardingProposalItem,
   onboardingQueryKeys,
   rejectOnboardingProposal,
   startOnboardingSession,
@@ -26,16 +23,13 @@ import {
   updateManualOnboardingProposal,
 } from './api'
 import type {
-  AIOnboardingGenerateRequest,
   ActivationResponse,
   ActivationSummaryResponse,
-  DecisionEnum,
   DirectorInvitationRequest,
   OnboardingSessionCreateRequest,
   OnboardingProposalCreateRequest,
   OnboardingProposalUpdateRequest,
   ProposalCommandResponse,
-  ProposalItemMutationRequest,
   SubmitActivityDescriptionRequest,
 } from './types'
 
@@ -46,10 +40,6 @@ type OnboardingQueryOptions = {
 
 function isQueryEnabled(sessionId: string | null | undefined, options?: OnboardingQueryOptions) {
   return Boolean(sessionId) && (options?.enabled ?? true)
-}
-
-function getDefaultLocale() {
-  return navigator.language || 'en-US'
 }
 
 function setProposalCommandData(
@@ -314,32 +304,6 @@ export function useOnboardingProposal(
   })
 }
 
-export function useGenerateOnboardingProposal(sessionId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (input?: AIOnboardingGenerateRequest) =>
-      generateOnboardingProposal(sessionId, input ?? { locale: getDefaultLocale() }),
-    onSuccess: async (response) => {
-      setProposalCommandData(queryClient, sessionId, response)
-      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
-    },
-  })
-}
-
-export function useProposalSectionDecision(sessionId: string, proposalId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ decision, section }: { decision: DecisionEnum; section: string }) =>
-      decideProposalSection(sessionId, proposalId, section, { decision }),
-    onSuccess: async (response) => {
-      setProposalCommandData(queryClient, sessionId, response)
-      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
-    },
-  })
-}
-
 export function useRejectOnboardingProposal(sessionId: string, proposalId: string) {
   const queryClient = useQueryClient()
 
@@ -367,15 +331,3 @@ export function useApplyOnboardingProposal(sessionId: string) {
   })
 }
 
-export function useProposalItemMutation(sessionId: string, proposalId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (input: ProposalItemMutationRequest) =>
-      mutateOnboardingProposalItem(sessionId, proposalId, input),
-    onSuccess: async (response) => {
-      setProposalCommandData(queryClient, sessionId, response)
-      await invalidateProposalCommandQueries(queryClient, sessionId, response.proposal.id)
-    },
-  })
-}

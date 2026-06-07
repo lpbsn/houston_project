@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from houston.actions.constants import ACTIVE_ACTION_STATUSES
 from houston.actions.models import Action
-from houston.establishments.membership_scope import (
-    membership_scope_covers_domain,
-    membership_scope_covers_subject,
-)
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.membership_scope import membership_scope_covers_business_unit
+from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.permissions import (
     can_create_action as establishment_can_create_action,
 )
@@ -15,7 +12,10 @@ from houston.establishments.permissions import (
 )
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
-from houston.signals.permissions import signal_matches_membership_scope
+from houston.signals.permissions import (
+    signal_actionable_by_membership,
+    signal_matches_membership_scope,
+)
 
 _ADMIN_ROLES = frozenset(
     {
@@ -40,19 +40,52 @@ def can_access_signal_for_linked_action(
     return signal_matches_membership_scope(membership, signal)
 
 
-def action_matches_membership_scope(
+def action_visible_in_membership_scope(
     membership: EstablishmentMembership,
     action: Action,
 ) -> bool:
     if membership.role in _ADMIN_ROLES:
         return True
-    if membership_scope_covers_subject(membership, action.operational_subject):
-        return True
-    if membership_scope_covers_domain(membership, action.operational_domain):
-        return True
-    from houston.establishments.membership_scope import membership_scope_covers_module
 
-    return membership_scope_covers_module(membership, action.operational_module)
+    if action.signal_id is not None:
+        if (
+            action.affected_business_unit_id is not None
+            and membership_scope_covers_business_unit(
+                membership,
+                action.affected_business_unit,
+            )
+        ):
+            return True
+        if (
+            action.responsible_business_unit_id is not None
+            and membership_scope_covers_business_unit(
+                membership,
+                action.responsible_business_unit,
+            )
+        ):
+            return True
+        return False
+
+    if action.responsible_business_unit_id is None:
+        return False
+    return membership_scope_covers_business_unit(
+        membership,
+        action.responsible_business_unit,
+    )
+
+
+def action_actionable_by_membership(
+    membership: EstablishmentMembership,
+    action: Action,
+) -> bool:
+    if membership.role in _ADMIN_ROLES:
+        return True
+    if action.responsible_business_unit_id is None:
+        return False
+    return membership_scope_covers_business_unit(
+        membership,
+        action.responsible_business_unit,
+    )
 
 
 def action_visible_to_membership(
@@ -72,14 +105,14 @@ def action_visible_to_membership(
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
     if membership.role == EstablishmentMembership.Role.MANAGER:
-        return action_matches_membership_scope(membership, action)
+        return action_visible_in_membership_scope(membership, action)
     return False
 
 
 def can_create_free_action(
     membership: EstablishmentMembership | None,
     *,
-    operational_subject,
+    business_unit: BusinessUnit,
 ) -> bool:
     if not establishment_can_create_action(membership):
         return False
@@ -88,7 +121,7 @@ def can_create_free_action(
     if membership.role in _ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
-        return membership_scope_covers_subject(membership, operational_subject)
+        return membership_scope_covers_business_unit(membership, business_unit)
     return False
 
 
@@ -96,14 +129,16 @@ def can_create_linked_action(
     membership: EstablishmentMembership | None,
     *,
     signal: Signal,
-    operational_subject,
 ) -> bool:
-    if not can_create_free_action(
-        membership,
-        operational_subject=operational_subject,
-    ):
+    if not establishment_can_create_action(membership):
         return False
-    return can_access_signal_for_linked_action(membership, signal)
+    if membership is None:
+        return False
+    if membership.role in _ADMIN_ROLES:
+        return can_access_signal_for_linked_action(membership, signal)
+    if not can_access_signal_for_linked_action(membership, signal):
+        return False
+    return signal_actionable_by_membership(membership, signal)
 
 
 def can_accept_action(
@@ -204,7 +239,7 @@ def can_reassign_action(
     if membership.role in _ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
-        return action_matches_membership_scope(membership, action)
+        return action_actionable_by_membership(membership, action)
     return False
 
 

@@ -23,12 +23,12 @@ class ObservationSubmitResponseSerializer(serializers.Serializer):
 class ObservationProcessingSignalSummarySerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
-    operational_module_key = serializers.CharField()
-    operational_module_label = serializers.CharField()
-    operational_domain_key = serializers.CharField()
-    operational_domain_label = serializers.CharField()
-    operational_subject_key = serializers.CharField()
-    operational_subject_label = serializers.CharField()
+    affected_business_unit_key = serializers.CharField(allow_blank=True)
+    affected_business_unit_label = serializers.CharField(allow_blank=True)
+    responsible_business_unit_key = serializers.CharField(allow_blank=True)
+    responsible_business_unit_label = serializers.CharField(allow_blank=True)
+    activity_subject_key = serializers.CharField(allow_blank=True)
+    activity_subject_label = serializers.CharField(allow_blank=True)
     location_text = serializers.CharField(allow_blank=True)
 
 
