@@ -6,12 +6,18 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { BusinessUnitScopeSelector } from '@/components/domain/business-unit-scope-selector'
 import { OperationalScopeSelector } from '@/components/domain/operational-scope-selector'
 import {
+  getBusinessUnitTree,
   getOperationalTaxonomy,
   inviteMembership,
+  businessUnitTreeQueryKey,
   operationalTaxonomyQueryKey,
 } from '@/features/auth/api'
+import {
+  type BusinessUnitScopeSelection,
+} from '@/features/auth/lib/business-unit-scope'
 import {
   buildOperationalScopeTree,
   normalizeScopesForSubmit,
@@ -54,10 +60,19 @@ export function MembershipInviteCard({
 }: MembershipInviteCardProps) {
   const [form, setForm] = useState<InviteForm>(emptyForm)
   const [selectedScopes, setSelectedScopes] = useState<MembershipScopeSelection[]>([])
+  const [selectedBusinessUnitScopes, setSelectedBusinessUnitScopes] = useState<
+    BusinessUnitScopeSelection[]
+  >([])
   const [invitationLink, setInvitationLink] = useState<string | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const businessUnitQuery = useQuery({
+    queryKey: businessUnitTreeQueryKey(establishmentId),
+    queryFn: () => getBusinessUnitTree(establishmentId),
+    staleTime: 60_000,
+  })
 
   const taxonomyQuery = useQuery({
     queryKey: operationalTaxonomyQueryKey(establishmentId),
@@ -70,10 +85,12 @@ export function MembershipInviteCard({
     [taxonomyQuery.data],
   )
 
-  const normalizedScopes = useMemo(
-    () => (scopeTree ? normalizeScopesForSubmit(selectedScopes, scopeTree) : []),
-    [scopeTree, selectedScopes],
-  )
+  const submitScopes = useMemo(() => {
+    if (selectedBusinessUnitScopes.length > 0) {
+      return selectedBusinessUnitScopes
+    }
+    return scopeTree ? normalizeScopesForSubmit(selectedScopes, scopeTree) : []
+  }, [scopeTree, selectedBusinessUnitScopes, selectedScopes])
 
   const roleOptions = useMemo(() => {
     if (allowedTargetRoles) {
@@ -99,7 +116,9 @@ export function MembershipInviteCard({
       : roleOptions[0]
     : null
   const isRoleAllowed = selectedRole ? roleOptions.includes(selectedRole) : false
-  const isManagerRestrictedToStaff = hasRoleOptions && roleOptions.length === 1 && roleOptions[0] === 'staff'
+  const isManagerRestrictedToStaff =
+    hasRoleOptions && roleOptions.length === 1 && roleOptions[0] === 'staff'
+  const useBusinessUnitScopes = (businessUnitQuery.data?.business_units.length ?? 0) > 0
 
   const canSubmit = useMemo(() => {
     if (!hasRoleOptions || !isRoleAllowed) {
@@ -110,8 +129,8 @@ export function MembershipInviteCard({
       return false
     }
 
-    return normalizedScopes.length > 0
-  }, [form, hasRoleOptions, isRoleAllowed, normalizedScopes.length])
+    return submitScopes.length > 0
+  }, [form, hasRoleOptions, isRoleAllowed, submitScopes.length])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -128,8 +147,8 @@ export function MembershipInviteCard({
         throw new Error('Le rôle sélectionné n’est pas autorisé pour votre profil.')
       }
 
-      if (!scopeTree || normalizedScopes.length === 0) {
-        throw new Error('Sélectionnez au moins une zone de responsabilité.')
+      if (submitScopes.length === 0) {
+        throw new Error('Sélectionnez au moins un pôle d’activité.')
       }
 
       const result = await inviteMembership(establishmentId, {
@@ -137,12 +156,13 @@ export function MembershipInviteCard({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         role: selectedRole as MembershipInvitationRequestRoleEnum,
-        scopes: normalizedScopes,
+        scopes: submitScopes,
       })
 
       setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
       setForm(emptyForm)
       setSelectedScopes([])
+      setSelectedBusinessUnitScopes([])
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Invitation could not be created.')
     } finally {
@@ -238,20 +258,37 @@ export function MembershipInviteCard({
             )}
           </div>
 
-          <OperationalScopeSelector
-            tree={scopeTree}
-            selectedScopes={selectedScopes}
-            onChange={setSelectedScopes}
-            isLoading={taxonomyQuery.isPending}
-            errorMessage={
-              taxonomyQuery.error
-                ? taxonomyQuery.error instanceof Error
-                  ? taxonomyQuery.error.message
-                  : 'La taxonomie opérationnelle est indisponible.'
-                : null
-            }
-            disabled={isSubmitting}
-          />
+          {useBusinessUnitScopes ? (
+            <BusinessUnitScopeSelector
+              tree={businessUnitQuery.data ?? null}
+              selectedScopes={selectedBusinessUnitScopes}
+              onChange={setSelectedBusinessUnitScopes}
+              isLoading={businessUnitQuery.isPending}
+              errorMessage={
+                businessUnitQuery.error
+                  ? businessUnitQuery.error instanceof Error
+                    ? businessUnitQuery.error.message
+                    : 'Les pôles d’activité sont indisponibles.'
+                  : null
+              }
+              disabled={isSubmitting}
+            />
+          ) : (
+            <OperationalScopeSelector
+              tree={scopeTree}
+              selectedScopes={selectedScopes}
+              onChange={setSelectedScopes}
+              isLoading={taxonomyQuery.isPending}
+              errorMessage={
+                taxonomyQuery.error
+                  ? taxonomyQuery.error instanceof Error
+                    ? taxonomyQuery.error.message
+                    : 'La taxonomie opérationnelle est indisponible.'
+                  : null
+              }
+              disabled={isSubmitting}
+            />
+          )}
 
           {errorMessage ? (
             <div className="rounded-[1rem] border border-[#f4d5d5] bg-[#fff3f2] px-4 py-3 text-sm text-[#9d3b33]">

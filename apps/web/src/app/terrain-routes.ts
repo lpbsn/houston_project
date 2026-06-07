@@ -1,10 +1,6 @@
-export type AppRoute =
-  | { kind: 'static'; path: string }
-  | { kind: 'signal-detail'; signalId: string }
-  | { kind: 'signal-action-create'; signalId: string }
-  | { kind: 'action-create' }
-  | { kind: 'action-detail'; actionId: string }
-  | { kind: 'invitation'; token: string }
+import type { AppRoute } from '@/app/app-routes'
+
+export type { AppRoute } from '@/app/app-routes'
 
 export type TerrainNavPath =
   | '/reporting'
@@ -29,6 +25,18 @@ export type TerrainRouteConfig = {
   mainScroll?: TerrainMainScroll
 }
 
+const OPERATIONAL_STATIC_PATHS = new Set<string>([
+  '/app',
+  '/app/operational-config',
+  '/app/report',
+  '/reporting',
+  '/signals',
+  '/execution',
+  '/chat',
+  '/profile',
+  '/team/invite',
+])
+
 const TERRAIN_HUB_PATHS = new Set<string>([
   '/reporting',
   '/signals',
@@ -37,7 +45,28 @@ const TERRAIN_HUB_PATHS = new Set<string>([
   '/profile',
 ])
 
+export function requiresActiveMembership(route: AppRoute): boolean {
+  if (route.kind === 'unknown' || route.kind === 'invitation') {
+    return false
+  }
+
+  if (
+    route.kind === 'signal-detail' ||
+    route.kind === 'signal-action-create' ||
+    route.kind === 'action-create' ||
+    route.kind === 'action-detail'
+  ) {
+    return true
+  }
+
+  return route.kind === 'static' && OPERATIONAL_STATIC_PATHS.has(route.path)
+}
+
 export function usesTerrainShell(route: AppRoute): boolean {
+  if (route.kind === 'unknown' || route.kind === 'invitation') {
+    return false
+  }
+
   if (
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||

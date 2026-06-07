@@ -1,25 +1,18 @@
 from __future__ import annotations
 
-from houston.establishments.catalog import expand_module_keys, load_arborescence_rows
-from houston.establishments.models import OnboardingCatalogDomain, OnboardingCatalogSubject
+from houston.establishments.onboarding_catalog_selectors import (
+    expand_module_keys,
+    get_onboarding_catalog_domain_item,
+    get_onboarding_catalog_module_item,
+    get_onboarding_catalog_subject_item,
+    list_onboarding_catalog_module_items,
+    list_onboarding_catalog_subject_items_for_domain,
+)
 
 
 def build_expanded_proposal_sections(*, module_keys: list[str]) -> dict[str, list[dict]]:
     expanded = expand_module_keys(module_keys)
-    modules = []
-    seen_modules: set[str] = set()
-    for row in load_arborescence_rows():
-        if row.module_key not in module_keys or row.module_key in seen_modules:
-            continue
-        seen_modules.add(row.module_key)
-        modules.append(
-            {
-                "key": row.module_key,
-                "label": row.module_label,
-                "reason": "Selected from activity description.",
-                "confidence_score": None,
-            }
-        )
+    modules = list_onboarding_catalog_module_items(module_keys=module_keys)
 
     domains = []
     for item in expanded["operational_domains"]:
@@ -97,16 +90,19 @@ def enforce_proposal_parent_child_coherence(payload: dict) -> dict:
     for subject_item in subject_by_key.values():
         domain_by_key.setdefault(
             subject_item["domain_key"],
-            _catalog_domain_item(subject_item["domain_key"]),
+            get_onboarding_catalog_domain_item(subject_item["domain_key"]),
         )
         modules.setdefault(
             domain_by_key[subject_item["domain_key"]]["module_key"],
-            _catalog_module_item(domain_by_key[subject_item["domain_key"]]["module_key"]),
+            get_onboarding_catalog_module_item(
+                domain_by_key[subject_item["domain_key"]]["module_key"]
+            ),
         )
 
     for domain_item in domain_by_key.values():
         modules.setdefault(
-            domain_item["module_key"], _catalog_module_item(domain_item["module_key"])
+            domain_item["module_key"],
+            get_onboarding_catalog_module_item(domain_item["module_key"]),
         )
 
     updated = dict(payload)
@@ -153,26 +149,34 @@ def apply_proposal_item_removal(*, payload: dict, section: str, key: str) -> dic
 def apply_proposal_item_addition(*, payload: dict, section: str, key: str) -> dict:
     updated = dict(payload)
     if section == "operational_modules":
-        updated.setdefault("operational_modules", []).append(_catalog_module_item(key))
+        updated.setdefault("operational_modules", []).append(
+            get_onboarding_catalog_module_item(key)
+        )
         expanded = build_expanded_proposal_sections(module_keys=[key])
         _merge_unique(updated, "operational_domains", expanded["operational_domains"])
         _merge_unique(updated, "operational_subjects", expanded["operational_subjects"])
     elif section == "operational_domains":
-        updated.setdefault("operational_domains", []).append(_catalog_domain_item(key))
+        updated.setdefault("operational_domains", []).append(
+            get_onboarding_catalog_domain_item(key)
+        )
         module_key = _module_key_from_domain_key(key)
-        updated.setdefault("operational_modules", []).append(_catalog_module_item(module_key))
-        subjects = [
-            _catalog_subject_item(row.subject_key)
-            for row in load_arborescence_rows()
-            if row.domain_key == key
-        ]
+        updated.setdefault("operational_modules", []).append(
+            get_onboarding_catalog_module_item(module_key)
+        )
+        subjects = list_onboarding_catalog_subject_items_for_domain(domain_key=key)
         _merge_unique(updated, "operational_subjects", subjects)
     elif section == "operational_subjects":
-        updated.setdefault("operational_subjects", []).append(_catalog_subject_item(key))
+        updated.setdefault("operational_subjects", []).append(
+            get_onboarding_catalog_subject_item(key)
+        )
         domain_key = _domain_key_from_subject_key(key)
         module_key = _module_key_from_domain_key(domain_key)
-        updated.setdefault("operational_domains", []).append(_catalog_domain_item(domain_key))
-        updated.setdefault("operational_modules", []).append(_catalog_module_item(module_key))
+        updated.setdefault("operational_domains", []).append(
+            get_onboarding_catalog_domain_item(domain_key)
+        )
+        updated.setdefault("operational_modules", []).append(
+            get_onboarding_catalog_module_item(module_key)
+        )
     else:
         raise ValueError(f"Unsupported proposal section for addition: {section}")
     return enforce_proposal_parent_child_coherence(updated)
@@ -197,70 +201,3 @@ def _domain_key_from_subject_key(subject_key: str) -> str:
     if len(parts) < 3:
         return subject_key
     return "__".join(parts[:2])
-
-
-def _catalog_module_item(key: str) -> dict:
-    for row in load_arborescence_rows():
-        if row.module_key == key:
-            return {
-                "key": row.module_key,
-                "label": row.module_label,
-                "reason": "Added from catalog.",
-                "confidence_score": None,
-            }
-    raise KeyError(key)
-
-
-def _catalog_domain_item(key: str) -> dict:
-    row = next((item for item in load_arborescence_rows() if item.domain_key == key), None)
-    if row is None:
-        catalog = (
-            OnboardingCatalogDomain.objects.select_related("catalog_module").filter(key=key).first()
-        )
-        if catalog is None:
-            raise KeyError(key)
-        return {
-            "key": catalog.key,
-            "label": catalog.label,
-            "module_key": catalog.catalog_module.key,
-            "reason": "Added from catalog.",
-            "confidence_score": None,
-        }
-    return {
-        "key": row.domain_key,
-        "label": row.domain_label,
-        "module_key": row.module_key,
-        "reason": "Added from catalog.",
-        "confidence_score": None,
-    }
-
-
-def _catalog_subject_item(key: str) -> dict:
-    row = next((item for item in load_arborescence_rows() if item.subject_key == key), None)
-    if row is None:
-        catalog = (
-            OnboardingCatalogSubject.objects.select_related(
-                "catalog_domain",
-                "catalog_domain__catalog_module",
-            )
-            .filter(key=key)
-            .first()
-        )
-        if catalog is None:
-            raise KeyError(key)
-        return {
-            "key": catalog.key,
-            "label": catalog.label,
-            "domain_key": catalog.catalog_domain.key,
-            "module_key": catalog.catalog_domain.catalog_module.key,
-            "reason": "Added from catalog.",
-            "confidence_score": None,
-        }
-    return {
-        "key": row.subject_key,
-        "label": row.subject_label,
-        "domain_key": row.domain_key,
-        "module_key": row.module_key,
-        "reason": "Added from catalog.",
-        "confidence_score": None,
-    }

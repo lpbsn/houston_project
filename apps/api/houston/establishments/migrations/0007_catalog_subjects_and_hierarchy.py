@@ -4,7 +4,7 @@ import uuid
 
 
 def reseed_catalog_from_arborescence(apps, schema_editor):
-    from houston.establishments.catalog import (
+    from houston.establishments.legacy_onboarding_catalog_seed import (
         catalog_domain_rows,
         catalog_module_rows,
         catalog_subject_rows,

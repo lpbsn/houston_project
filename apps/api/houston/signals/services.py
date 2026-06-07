@@ -19,12 +19,16 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.establishments.models import (
+    ActivitySubject,
+    BusinessUnit,
+    Establishment,
     EstablishmentMembership,
     OperationalDomain,
     OperationalModule,
     OperationalSubject,
     OperationalUnit,
 )
+from houston.establishments.taxonomy_backfill import backfill_business_units_from_legacy_taxonomy
 from houston.observations.models import Observation, ObservationProcessing
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
@@ -39,6 +43,11 @@ from houston.signals.exceptions import (
     SignalValidationError,
 )
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
+from houston.signals.signal_backfill import _derive_classification_from_legacy
+from houston.signals.signal_classification import (
+    InvalidSignalClassificationError,
+    validate_signal_classification,
+)
 
 if TYPE_CHECKING:
     from houston.ai.observation_pipeline import ObservationPipelineProvider
@@ -50,6 +59,9 @@ class ResolvedTaxonomy:
     operational_domain: OperationalDomain
     operational_subject: OperationalSubject
     operational_unit: OperationalUnit | None
+    affected_business_unit: BusinessUnit | None = None
+    responsible_business_unit: BusinessUnit | None = None
+    activity_subject: ActivitySubject | None = None
 
 
 def normalize_location_text(value: str | None) -> str:
@@ -128,6 +140,9 @@ def create_signal_from_candidate(
         operational_domain=resolved.operational_domain,
         operational_subject=resolved.operational_subject,
         operational_unit=resolved.operational_unit,
+        affected_business_unit=resolved.affected_business_unit,
+        responsible_business_unit=resolved.responsible_business_unit,
+        activity_subject=resolved.activity_subject,
         status=Signal.Status.OPEN,
         urgency=Signal.Urgency.NORMAL,
         title=title.strip(),
@@ -173,6 +188,18 @@ def resolve_taxonomy_from_candidate(
     establishment_id: uuid.UUID,
     candidate: PipelineCandidateOutput,
 ) -> ResolvedTaxonomy:
+    if candidate.uses_v3_classification():
+        return _resolve_v3_candidate(establishment_id=establishment_id, candidate=candidate)
+    if not candidate.uses_legacy_classification():
+        raise SignalValidationError("Candidate must include v3 or legacy taxonomy keys.")
+    return _resolve_legacy_candidate(establishment_id=establishment_id, candidate=candidate)
+
+
+def _resolve_legacy_candidate(
+    *,
+    establishment_id: uuid.UUID,
+    candidate: PipelineCandidateOutput,
+) -> ResolvedTaxonomy:
     module = OperationalModule.objects.filter(
         establishment_id=establishment_id,
         key=candidate.operational_module_key,
@@ -209,11 +236,131 @@ def resolve_taxonomy_from_candidate(
         if unit is None:
             raise SignalValidationError("Invalid operational unit key.")
 
-    return ResolvedTaxonomy(
+    legacy = ResolvedTaxonomy(
         operational_module=module,
         operational_domain=domain,
         operational_subject=subject,
         operational_unit=unit,
+    )
+    return _attach_v2_classification_from_legacy(establishment_id=establishment_id, resolved=legacy)
+
+
+def _resolve_v3_candidate(
+    *,
+    establishment_id: uuid.UUID,
+    candidate: PipelineCandidateOutput,
+) -> ResolvedTaxonomy:
+    affected = BusinessUnit.objects.filter(
+        establishment_id=establishment_id,
+        key=candidate.affected_business_unit_key,
+        active=True,
+    ).first()
+    responsible = BusinessUnit.objects.filter(
+        establishment_id=establishment_id,
+        key=candidate.responsible_business_unit_key,
+        active=True,
+    ).first()
+    activity_subject = ActivitySubject.objects.filter(
+        establishment_id=establishment_id,
+        normalized_name=candidate.activity_subject_key,
+        active=True,
+        business_unit=responsible,
+    ).first()
+    if activity_subject is None:
+        activity_subject = ActivitySubject.objects.filter(
+            establishment_id=establishment_id,
+            business_unit=responsible,
+            active=True,
+            label__iexact=candidate.activity_subject_key or "",
+        ).first()
+    if affected is None or responsible is None or activity_subject is None:
+        raise SignalValidationError("Invalid v3 business unit or activity subject keys.")
+
+    establishment = affected.establishment
+    try:
+        validate_signal_classification(
+            establishment=establishment,
+            affected_business_unit=affected,
+            responsible_business_unit=responsible,
+            activity_subject=activity_subject,
+        )
+    except InvalidSignalClassificationError as exc:
+        raise SignalValidationError(str(exc)) from exc
+
+    unit = None
+    if candidate.operational_unit_key:
+        unit = OperationalUnit.objects.filter(
+            establishment_id=establishment_id,
+            key=candidate.operational_unit_key,
+            active=True,
+        ).first()
+
+    legacy_module = OperationalModule.objects.filter(
+        establishment_id=establishment_id,
+        key=affected.key,
+        active=True,
+    ).first()
+    if legacy_module is None:
+        raise SignalValidationError("Legacy operational taxonomy not available for v3 signal.")
+
+    legacy_domain = OperationalDomain.objects.filter(
+        establishment_id=establishment_id,
+        operational_module=legacy_module,
+        active=True,
+    ).first()
+    legacy_subject = OperationalSubject.objects.filter(
+        establishment_id=establishment_id,
+        operational_domain=legacy_domain,
+        active=True,
+    ).first() if legacy_domain else None
+    if legacy_domain is None or legacy_subject is None:
+        legacy_domain = OperationalDomain.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        ).first()
+        legacy_subject = OperationalSubject.objects.filter(
+            establishment_id=establishment_id,
+            active=True,
+        ).first()
+    if legacy_domain is None or legacy_subject is None:
+        raise SignalValidationError("Legacy operational taxonomy not available for v3 signal.")
+
+    return ResolvedTaxonomy(
+        operational_module=legacy_module,
+        operational_domain=legacy_domain,
+        operational_subject=legacy_subject,
+        operational_unit=unit,
+        affected_business_unit=affected,
+        responsible_business_unit=responsible,
+        activity_subject=activity_subject,
+    )
+
+
+def _attach_v2_classification_from_legacy(
+    *,
+    establishment_id: uuid.UUID,
+    resolved: ResolvedTaxonomy,
+) -> ResolvedTaxonomy:
+    establishment = Establishment.objects.get(id=establishment_id)
+    temp_signal = Signal(
+        establishment=establishment,
+        operational_module=resolved.operational_module,
+        operational_domain=resolved.operational_domain,
+        operational_subject=resolved.operational_subject,
+    )
+
+    backfill_business_units_from_legacy_taxonomy(establishment_id=establishment_id)
+    classification = _derive_classification_from_legacy(temp_signal)
+    if classification is None:
+        return resolved
+    return ResolvedTaxonomy(
+        operational_module=resolved.operational_module,
+        operational_domain=resolved.operational_domain,
+        operational_subject=resolved.operational_subject,
+        operational_unit=resolved.operational_unit,
+        affected_business_unit=classification["affected"],
+        responsible_business_unit=classification["responsible"],
+        activity_subject=classification["activity_subject"],
     )
 
 
@@ -261,6 +408,10 @@ def _persist_pending_candidate(
         operational_domain=resolved.operational_domain if resolved else None,
         operational_subject=resolved.operational_subject if resolved else None,
         operational_unit=resolved.operational_unit if resolved else None,
+        affected_business_unit=resolved.affected_business_unit if resolved else None,
+        responsible_business_unit=resolved.responsible_business_unit if resolved else None,
+        activity_subject=resolved.activity_subject if resolved else None,
+        location_text=normalize_location_text(candidate.location_text),
         title=candidate.title.strip(),
         structured_summary=candidate.structured_summary.strip(),
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,

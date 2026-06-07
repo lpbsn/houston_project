@@ -13,11 +13,9 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
-    MembershipScope,
     OnboardingSession,
     OperationalDomain,
     OperationalModule,
-    OperationalSubject,
     OperationalUnit,
     RoutingHint,
     RoutingHintDomain,
@@ -27,8 +25,10 @@ from houston.establishments.models import (
 )
 from houston.establishments.tests.conftest import (
     HOTEL_HEBERGEMENT_DOMAIN_KEY,
-    READINESS_DOMAIN_KEYS,
-    first_catalog_subject_for_domain,
+    create_ready_runtime,
+)
+from houston.establishments.tests.taxonomy_helpers import (
+    create_membership_with_business_unit_scope,
 )
 from houston.organizations.models import Organization
 
@@ -104,46 +104,6 @@ def auth_headers(access_token: str) -> dict:
     return {"HTTP_AUTHORIZATION": f"Bearer {access_token}"}
 
 
-def create_ready_runtime(session: OnboardingSession, actor: User) -> list[OperationalDomain]:
-    establishment = session.establishment
-    EstablishmentActivityDescription.objects.create(
-        establishment=establishment,
-        description="A" * ACTIVITY_DESCRIPTION_MIN_LENGTH,
-        submitted_by=actor,
-        validated_at=timezone.now(),
-    )
-    OperationalModule.objects.create(
-        establishment=establishment,
-        key="hotel",
-        label="Hotel",
-    )
-    domains = [
-        OperationalDomain.objects.create(
-            establishment=establishment,
-            key=key,
-            label=key.replace("_", " ").title(),
-        )
-        for key in READINESS_DOMAIN_KEYS
-    ]
-    director = create_user(username=f"director_ready_{uuid.uuid4().hex[:6]}")
-    EstablishmentMembership.objects.create(
-        user=director,
-        establishment=establishment,
-        role=EstablishmentMembership.Role.DIRECTOR,
-        status=EstablishmentMembership.Status.INVITED,
-    )
-    domains_by_key = {domain.key: domain for domain in domains}
-    for domain_key in READINESS_DOMAIN_KEYS:
-        subject_key, subject_label = first_catalog_subject_for_domain(domain_key)
-        OperationalSubject.objects.create(
-            establishment=establishment,
-            operational_domain=domains_by_key[domain_key],
-            key=subject_key,
-            label=subject_label,
-        )
-    return domains
-
-
 def test_create_onboarding_session_success_for_owner(api_client):
     actor = create_user(username="onboarding_owner")
     organization = Organization.objects.create(name="Nice Group")
@@ -175,6 +135,33 @@ def test_create_onboarding_session_success_for_owner(api_client):
     assert OnboardingSession.objects.filter(establishment=establishment).count() == 1
 
 
+def test_director_cannot_start_onboarding_session_on_draft_establishment(api_client):
+    actor = create_user(username="onboarding_director_blocked")
+    organization = Organization.objects.create(name="Nice Group")
+    establishment = Establishment.objects.create(
+        name="Draft Site",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    EstablishmentMembership.objects.create(
+        user=actor,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, user=actor)
+    response = api_client.post(
+        "/api/v1/onboarding-sessions/",
+        {"establishment_id": str(establishment.id)},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert OnboardingSession.objects.filter(establishment=establishment).count() == 0
+
+
 def test_create_onboarding_session_allows_template_and_returns_existing_session(
     api_client,
 ):
@@ -188,7 +175,7 @@ def test_create_onboarding_session_allows_template_and_returns_existing_session(
     EstablishmentMembership.objects.create(
         user=actor,
         establishment=establishment,
-        role=EstablishmentMembership.Role.DIRECTOR,
+        role=EstablishmentMembership.Role.OWNER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
 
@@ -324,7 +311,7 @@ def test_invalid_onboarding_access_state_is_denied_safely(
 
 def test_draft_onboarding_membership_remains_excluded_from_bootstrap(api_client):
     actor = create_user(username="draft_bootstrap_owner")
-    create_onboarding_session(actor=actor)
+    session = create_onboarding_session(actor=actor)
 
     access_token = login(api_client, user=actor)
     response = api_client.get(
@@ -333,8 +320,15 @@ def test_draft_onboarding_membership_remains_excluded_from_bootstrap(api_client)
     )
 
     assert response.status_code == 200
-    assert response.json()["memberships"] == []
-    assert response.json()["active_membership"] is None
+    body = response.json()
+    assert body["memberships"] == []
+    assert body["active_membership"] is None
+    assert len(body["pending_onboarding_memberships"]) == 1
+    pending = body["pending_onboarding_memberships"][0]
+    assert pending["establishment_id"] == str(session.establishment_id)
+    assert pending["role"] == EstablishmentMembership.Role.OWNER
+    assert pending["can_continue_onboarding"] is True
+    assert pending["onboarding_session_id"] == str(session.id)
 
 
 def test_description_patch_accepts_valid_description(api_client):
@@ -512,10 +506,7 @@ def test_activation_summary_returns_readiness_blockers_and_access_flags(api_clie
     assert "validated_modules" not in body
     assert "validated_domains" not in body
     assert {blocker["code"] for blocker in body["blockers"]} == {
-        "missing_validated_description",
-        "missing_active_module",
-        "insufficient_active_domains",
-        "insufficient_active_subjects",
+        "missing_active_business_unit",
         "missing_active_or_invited_director",
     }
 
@@ -536,8 +527,8 @@ def test_activation_summary_returns_effective_can_activate_when_ready(api_client
     assert body["readiness"]["is_ready"] is True
     assert body["access"]["can_activate"] is True
     assert body["effective_can_activate"] is True
-    assert len(body["active_modules"]) == 1
-    assert len(body["active_domains"]) == 3
+    assert len(body["active_business_units"]) == 1
+    assert body["active_business_units"][0]["key"] == "coworking"
 
 
 def test_mark_ready_success_does_not_activate_establishment(api_client):
@@ -586,7 +577,7 @@ def test_mark_ready_blocked_when_readiness_fails(api_client):
 def test_manager_cannot_mark_ready_even_when_readiness_passes(api_client):
     owner = create_user(username="mark_ready_owner_for_manager_case")
     session = create_onboarding_session(actor=owner)
-    domains = create_ready_runtime(session, owner)
+    business_unit = create_ready_runtime(session, owner)
     manager = create_user(username="mark_ready_manager")
     manager_membership = EstablishmentMembership.objects.create(
         user=manager,
@@ -594,9 +585,9 @@ def test_manager_cannot_mark_ready_even_when_readiness_passes(api_client):
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=manager_membership,
-        operational_domain=domains[0],
+        business_unit=business_unit,
     )
 
     access_token = login(api_client, user=manager)
@@ -769,7 +760,7 @@ def test_activate_conflicts_when_establishment_is_already_active(api_client):
 def test_manager_cannot_activate_even_when_readiness_passes(api_client):
     owner = create_user(username="activate_owner_for_manager_case")
     session = create_onboarding_session(actor=owner)
-    domains = create_ready_runtime(session, owner)
+    business_unit = create_ready_runtime(session, owner)
     manager = create_user(username="activate_manager")
     manager_membership = EstablishmentMembership.objects.create(
         user=manager,
@@ -777,9 +768,9 @@ def test_manager_cannot_activate_even_when_readiness_passes(api_client):
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    MembershipScope.objects.create(
+    create_membership_with_business_unit_scope(
         membership=manager_membership,
-        operational_domain=domains[0],
+        business_unit=business_unit,
     )
     session.status = OnboardingSession.Status.READY_FOR_ACTIVATION
     session.ready_for_activation_at = timezone.now()

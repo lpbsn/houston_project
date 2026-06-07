@@ -2,6 +2,13 @@ from django.urls import path
 
 from houston.accounts.api.views import DirectorInvitationAcceptView
 from houston.establishments.api.views import (
+    CatalogActivitySubjectSuggestView,
+    CatalogBusinessUnitSuggestView,
+    EstablishmentActivitySubjectCreateView,
+    EstablishmentActivitySubjectDeactivateView,
+    EstablishmentBusinessUnitDeactivateView,
+    EstablishmentBusinessUnitDetailView,
+    EstablishmentBusinessUnitTreeView,
     EstablishmentOperationalTaxonomyView,
     MembershipDeactivateView,
     MembershipDetailView,
@@ -21,6 +28,7 @@ from houston.establishments.api.views import (
     OnboardingSessionProposalListView,
     OnboardingSessionProposalRejectView,
     OnboardingSessionProposalSectionDecisionView,
+    OnboardingSessionProposalSubmitView,
     OnboardingSessionRuntimeConfigView,
     ScopedUserSearchView,
     WorkspaceSummaryView,
@@ -106,9 +114,49 @@ urlpatterns = [
         name="onboarding-session-proposal-reject",
     ),
     path(
+        "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/submit/",
+        OnboardingSessionProposalSubmitView.as_view(),
+        name="onboarding-session-proposal-submit",
+    ),
+    path(
         "onboarding-sessions/<uuid:session_id>/proposals/<uuid:proposal_id>/apply/",
         OnboardingSessionProposalApplyView.as_view(),
         name="onboarding-session-proposal-apply",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/business-units/",
+        EstablishmentBusinessUnitTreeView.as_view(),
+        name="establishment-business-units",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/business-units/<uuid:business_unit_id>/",
+        EstablishmentBusinessUnitDetailView.as_view(),
+        name="establishment-business-unit-detail",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/business-units/<uuid:business_unit_id>/deactivate/",
+        EstablishmentBusinessUnitDeactivateView.as_view(),
+        name="establishment-business-unit-deactivate",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/business-units/<uuid:business_unit_id>/activity-subjects/",
+        EstablishmentActivitySubjectCreateView.as_view(),
+        name="establishment-activity-subject-create",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/activity-subjects/<uuid:activity_subject_id>/deactivate/",
+        EstablishmentActivitySubjectDeactivateView.as_view(),
+        name="establishment-activity-subject-deactivate",
+    ),
+    path(
+        "catalog/business-units/suggest/",
+        CatalogBusinessUnitSuggestView.as_view(),
+        name="catalog-business-units-suggest",
+    ),
+    path(
+        "catalog/activity-subjects/suggest/",
+        CatalogActivitySubjectSuggestView.as_view(),
+        name="catalog-activity-subjects-suggest",
     ),
     path(
         "establishments/<uuid:establishment_id>/operational-taxonomy/",

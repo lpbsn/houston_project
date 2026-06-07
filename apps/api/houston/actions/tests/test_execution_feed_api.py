@@ -199,7 +199,7 @@ def test_manager_sees_own_created_action_in_personal_view(api_client):
         assert str(created_by_manager.id) in ids
 
 
-def test_owner_general_includes_unassigned_third_party_action(api_client):
+def test_owner_personal_includes_action_they_created_even_when_assigned_to_staff(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     module, domain, subject = create_taxonomy(owner.establishment)
@@ -226,7 +226,7 @@ def test_owner_general_includes_unassigned_third_party_action(api_client):
         **auth_headers(token),
     )
     assert personal.status_code == 200
-    assert str(third_party.id) not in {item["action"]["id"] for item in personal.json()["items"]}
+    assert str(third_party.id) in {item["action"]["id"] for item in personal.json()["items"]}
 
 
 def test_detail_shows_done_action_not_in_feed(api_client):

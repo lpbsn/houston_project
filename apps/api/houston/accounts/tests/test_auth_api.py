@@ -10,11 +10,12 @@ from rest_framework.test import APIClient
 
 from houston.accounts.models import SessionRefreshToken, User, UserSession
 from houston.establishments.models import (
+    BusinessUnit,
     Establishment,
     EstablishmentMembership,
     MembershipScope,
-    OperationalDomain,
 )
+from houston.establishments.tests.taxonomy_helpers import create_business_unit
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -43,7 +44,7 @@ def create_membership(
     membership_status=EstablishmentMembership.Status.ACTIVE,
     role=EstablishmentMembership.Role.OWNER,
     name="Demo Hotel",
-    domains=None,
+    business_unit_keys=None,
 ):
     organization = Organization.objects.create(name=f"{name} Group", status=organization_status)
     establishment = Establishment.objects.create(
@@ -58,13 +59,9 @@ def create_membership(
         role=role,
     )
 
-    for domain_key in domains or []:
-        domain = OperationalDomain.objects.create(
-            establishment=establishment,
-            key=domain_key,
-            label=domain_key.replace("_", " ").title(),
-        )
-        MembershipScope.objects.create(membership=membership, operational_domain=domain)
+    for key in business_unit_keys or []:
+        business_unit = create_business_unit(establishment=establishment, key=key)
+        MembershipScope.objects.create(membership=membership, business_unit=business_unit)
 
     return membership
 
@@ -145,7 +142,7 @@ def test_login_without_csrf_is_forbidden(api_client, active_user):
 
 
 def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
-    membership = create_membership(user=active_user, domains=["housekeeping"])
+    membership = create_membership(user=active_user, business_unit_keys=["housekeeping"])
     csrf_token = ensure_csrf(api_client)
 
     response = login(
@@ -160,12 +157,15 @@ def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
     assert body["authenticated"] is True
     assert body["user"]["email"] == "manager@example.com"
     assert len(body["memberships"]) == 1
-    housekeeping_domain = OperationalDomain.objects.get(
+    housekeeping_business_unit = BusinessUnit.objects.get(
         establishment=membership.establishment,
         key="housekeeping",
     )
     assert body["memberships"][0]["scopes"] == [
-        {"scope_type": "domain", "scope_id": str(housekeeping_domain.id)}
+        {
+            "scope_type": "business_unit",
+            "scope_id": str(housekeeping_business_unit.id),
+        }
     ]
     assert body["active_membership"]["establishment_name"] == "Demo Hotel"
     assert "access_token" in body
@@ -254,7 +254,7 @@ def test_inactive_user_login_returns_same_generic_error(api_client):
 
 
 def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, active_user):
-    membership = create_membership(user=active_user, domains=["housekeeping"])
+    membership = create_membership(user=active_user, business_unit_keys=["housekeeping"])
     csrf_token = ensure_csrf(api_client)
     login_response = login(
         api_client,
@@ -274,12 +274,15 @@ def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, a
     assert body["authenticated"] is True
     assert "memberships" in body
     assert "active_memberships" not in body
-    housekeeping_domain = OperationalDomain.objects.get(
+    housekeeping_business_unit = BusinessUnit.objects.get(
         establishment=membership.establishment,
         key="housekeeping",
     )
     assert body["memberships"][0]["scopes"] == [
-        {"scope_type": "domain", "scope_id": str(housekeeping_domain.id)}
+        {
+            "scope_type": "business_unit",
+            "scope_id": str(housekeeping_business_unit.id),
+        }
     ]
 
 

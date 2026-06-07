@@ -7,6 +7,10 @@ import type { OnboardingProposalResponse } from '@/features/onboarding/types'
 
 type ProposalPayload = OnboardingProposalResponse['payload']
 type ProposalSectionKey = Exclude<keyof ProposalPayload, 'schema_version'>
+type ProposalArraySectionKey = Exclude<
+  ProposalSectionKey,
+  'excluded_catalog_subject_keys'
+>
 
 export function formatProposalConfidence(value: number | null | undefined) {
   if (typeof value !== 'number') {
@@ -17,7 +21,7 @@ export function formatProposalConfidence(value: number | null | undefined) {
 }
 
 export function getProposalSuggestionKey(
-  item: ProposalPayload[ProposalSectionKey][number],
+  item: ProposalPayload[ProposalArraySectionKey][number],
   index: number,
 ) {
   if ('key' in item && typeof item.key === 'string') {
@@ -37,11 +41,11 @@ export function getProposalSuggestionKey(
 
 type ProposalSuggestionItemProps = {
   displayMode?: 'default' | 'nested-domain' | 'nested-subject' | 'nested-module'
-  item: ProposalPayload[ProposalSectionKey][number]
+  item: ProposalPayload[ProposalArraySectionKey][number]
   onRemove?: () => void
   removePending?: boolean
   removable?: boolean
-  sectionKey: ProposalSectionKey
+  sectionKey: ProposalArraySectionKey
 }
 
 export function ProposalSuggestionItem({

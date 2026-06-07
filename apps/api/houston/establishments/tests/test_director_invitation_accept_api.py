@@ -101,6 +101,13 @@ def test_accept_valid_token_activates_user_and_membership(api_client):
     assert response.data["access_token"]
     assert str(response.data["establishment_id"]) == str(session.establishment_id)
     assert "csrftoken" in api_client.cookies
+    assert response.data["active_membership"] is None
+    assert response.data["memberships"] == []
+    assert len(response.data["pending_onboarding_memberships"]) == 1
+    pending = response.data["pending_onboarding_memberships"][0]
+    assert pending["role"] == EstablishmentMembership.Role.DIRECTOR
+    assert pending["can_continue_onboarding"] is False
+    assert pending["onboarding_session_id"] == str(session.id)
 
     membership = invitation_result.membership
     membership.refresh_from_db()
@@ -268,13 +275,9 @@ def test_accept_staff_invitation_keeps_membership_scopes(api_client):
     import uuid
 
     from houston.establishments.membership_scope import MembershipScopeInput, MembershipScopeType
-    from houston.establishments.models import (
-        Establishment,
-        MembershipScope,
-        OperationalDomain,
-        OperationalModule,
-    )
+    from houston.establishments.models import Establishment, MembershipScope
     from houston.establishments.services import invite_membership_for_establishment
+    from houston.establishments.tests.taxonomy_helpers import create_business_unit
     from houston.organizations.models import Organization
 
     organization = Organization.objects.create(
@@ -293,18 +296,10 @@ def test_accept_staff_invitation_keeps_membership_scopes(api_client):
         role=EstablishmentMembership.Role.OWNER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
-    module = OperationalModule.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
-        key="hotel",
-        label="Hotel",
-        active=True,
-    )
-    domain = OperationalDomain.objects.create(
-        establishment=establishment,
-        operational_module=module,
         key="housekeeping",
         label="Housekeeping",
-        active=True,
     )
 
     invitation = invite_membership_for_establishment(
@@ -316,13 +311,17 @@ def test_accept_staff_invitation_keeps_membership_scopes(api_client):
         role=EstablishmentMembership.Role.STAFF,
         scopes=[
             MembershipScopeInput(
-                scope_type=MembershipScopeType.DOMAIN,
-                scope_id=domain.id,
+                scope_type=MembershipScopeType.BUSINESS_UNIT,
+                scope_id=business_unit.id,
             )
         ],
     )
     membership_id = invitation.membership.id
     assert MembershipScope.objects.filter(membership_id=membership_id).count() == 1
+    assert (
+        MembershipScope.objects.get(membership_id=membership_id).business_unit_id
+        == business_unit.id
+    )
 
     csrf_token = ensure_csrf(api_client)
     response = post_accept(

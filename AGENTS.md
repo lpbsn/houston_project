@@ -80,7 +80,24 @@ For any authentication/session/security-related work, read and follow docs/archi
 
 ## Phase execution gates (taxonomy / onboarding programme)
 
-When working on **Module → Domain → Subject** taxonomy or onboarding runtime:
+### Taxonomy v2 refactor (BusinessUnit / ActivitySubject)
+
+When working on the **BusinessUnit → ActivitySubject** refactor:
+
+| Phase | Allowed | Forbidden |
+| --- | --- | --- |
+| **Phase BU-A** | Documentation in `docs/` only | Application code, migrations, tests, `schema.yml`, generated TS clients |
+| **Phase BU-B** | Models, catalogue, backfill, read APIs in `establishments/` | Signal cutover, pipeline v3, dropping v1 models |
+| **Phase BU-C** | RBAC, onboarding manual, Signal 3A, frontend | Big-bang removal of v1; ActivitySubject RBAC scopes |
+| **Phase BU-D** | Pipeline v3, frontend propagation, Lot 6 cleanup | `MembershipFeedSubscription`; subject-level subscriptions |
+
+Authoritative target: [`business_unit_taxonomy_domain.md`](docs/product/domains/business_unit_taxonomy_domain.md). Migration: [`taxonomy_v1_to_v2_migration.md`](docs/product/taxonomy_v1_to_v2_migration.md).
+
+RBAC source of truth: `MembershipScope` on **BusinessUnit only** (see [`rbac_permissions_domain.md`](docs/product/domains/rbac_permissions_domain.md)).
+
+### Legacy gates (Module → Domain → Subject — obsolete, v1 only)
+
+When working on **legacy** Module → Domain → Subject code during migration:
 
 | Phase | Allowed | Forbidden |
 | --- | --- | --- |
@@ -88,11 +105,9 @@ When working on **Module → Domain → Subject** taxonomy or onboarding runtime
 | **Phase B/C** | Onboarding/runtime taxonomy code in `establishments/` (after human Phase A sign-off) | Signal, Signal Feed, `MembershipFeedSubscription`, Execution Feed, Observation pipeline runtime, Action taxonomy independent of Signal |
 | **Phase 4/5** | Signal, Signal Feed, subscriptions, Observation pipeline (when explicitly opened) | Premature feed/subscription code before Signal model |
 
-Authoritative closure gate: [`docs/product/phase_a_closure.md`](docs/product/phase_a_closure.md). **Do not restore B/C stashes or regenerate OpenAPI until Phase A is human-validated.**
+Authoritative closure gate (v1): [`docs/product/phase_a_closure.md`](docs/product/phase_a_closure.md).
 
-Key contracts: [`operational_taxonomy_domain.md`](docs/product/domains/operational_taxonomy_domain.md), [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md), [`ai_observation_pipeline_contract.md`](docs/product/domains/ai_observation_pipeline_contract.md), [`feed_subscription_domain.md`](docs/product/domains/feed_subscription_domain.md).
-
-RBAC source of truth: `MembershipScope` (see [`rbac_permissions_domain.md`](docs/product/domains/rbac_permissions_domain.md)). `MembershipDomain` is legacy/historical and must not be reintroduced in active documentation.
+Key contracts (v1, obsolete for new work): [`operational_taxonomy_domain.md`](docs/product/domains/operational_taxonomy_domain.md), [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
 
 Auth + API error contracts: use [`authentication_charter.md`](docs/architecture/authentication_charter.md) (incl. auth throttling) and [`api_error_contract.md`](docs/architecture/api_error_contract.md).
 

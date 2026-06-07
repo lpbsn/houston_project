@@ -7,9 +7,9 @@ Gate: **Phase B/C authorized** — onboarding/runtime taxonomy only (see constra
 
 | # | Livrable | Status |
 | --- | --- | --- |
-| A1 | [`docs/catalogue/arborescence.csv`](../catalogue/arborescence.csv) | Done — 6 modules, 31 domaines, 154 sujets |
+| A1 | v1 onboarding catalogue seed (6 modules, 31 domaines, 154 sujets) | Done — migrated to DB (`0007`) |
 | A2 | Typos / labels normalisés | Done |
-| A3 | [`docs/catalogue/catalogue_target.md`](../catalogue/catalogue_target.md) | Done |
+| A3 | Catalogue target spec (removed; superseded by v2 BusinessUnit seed) | Done (historical) |
 | A4 | Mapping legacy → nouveau (catalogue_target §4) | Done |
 | A5 | [`operational_taxonomy_domain.md`](domains/operational_taxonomy_domain.md) | Done |
 | A6 | [`feed_subscription_domain.md`](domains/feed_subscription_domain.md) | Done — doc only (V5) |

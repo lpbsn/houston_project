@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
+  requiresActiveMembership,
   usesTerrainShell,
 } from '@/app/terrain-routes'
 
@@ -147,5 +148,37 @@ describe('getTerrainContentKey', () => {
     expect(() => getTerrainContentKey({ kind: 'static', path: '/app' })).toThrow(
       'getTerrainContentKey called for a non-terrain route',
     )
+  })
+})
+
+describe('requiresActiveMembership', () => {
+  it('returns true for operational static routes', () => {
+    for (const path of [
+      '/app',
+      '/app/operational-config',
+      '/app/report',
+      '/reporting',
+      '/signals',
+      '/execution',
+      '/chat',
+      '/profile',
+      '/team/invite',
+    ] as const) {
+      expect(requiresActiveMembership({ kind: 'static', path })).toBe(true)
+    }
+  })
+
+  it('returns true for operational detail routes', () => {
+    expect(requiresActiveMembership({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
+    expect(requiresActiveMembership({ kind: 'action-detail', actionId: 'abc' })).toBe(true)
+    expect(requiresActiveMembership({ kind: 'action-create' })).toBe(true)
+  })
+
+  it('returns false for onboarding and auth routes', () => {
+    expect(requiresActiveMembership({ kind: 'static', path: '/login' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/onboarding' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/pending-onboarding' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/select-establishment' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/no-establishment' })).toBe(false)
   })
 })

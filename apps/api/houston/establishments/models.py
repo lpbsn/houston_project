@@ -619,12 +619,20 @@ class OperationalSubject(BaseModel):
 
 
 class MembershipScope(BaseModel):
-    """Operational RBAC scope for manager/staff memberships (module, domain, or subject)."""
+    """Operational RBAC scope for manager/staff memberships (BusinessUnit only)."""
 
     membership = models.ForeignKey(
         EstablishmentMembership,
         on_delete=models.CASCADE,
         related_name="scope_links",
+        db_index=False,
+    )
+    business_unit = models.ForeignKey(
+        "BusinessUnit",
+        on_delete=models.CASCADE,
+        related_name="membership_scopes",
+        null=True,
+        blank=True,
         db_index=False,
     )
     operational_module = models.ForeignKey(
@@ -657,22 +665,36 @@ class MembershipScope(BaseModel):
             models.CheckConstraint(
                 condition=(
                     Q(
+                        business_unit__isnull=False,
+                        operational_module__isnull=True,
+                        operational_domain__isnull=True,
+                        operational_subject__isnull=True,
+                    )
+                    | Q(
+                        business_unit__isnull=True,
                         operational_module__isnull=False,
                         operational_domain__isnull=True,
                         operational_subject__isnull=True,
                     )
                     | Q(
+                        business_unit__isnull=True,
                         operational_module__isnull=True,
                         operational_domain__isnull=False,
                         operational_subject__isnull=True,
                     )
                     | Q(
+                        business_unit__isnull=True,
                         operational_module__isnull=True,
                         operational_domain__isnull=True,
                         operational_subject__isnull=False,
                     )
                 ),
                 name="membership_scope_exactly_one_target",
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "business_unit"],
+                condition=Q(business_unit__isnull=False),
+                name="membership_scope_business_unit_uniq",
             ),
             models.UniqueConstraint(
                 fields=["membership", "operational_module"],
@@ -692,6 +714,7 @@ class MembershipScope(BaseModel):
         ]
         indexes = [
             models.Index(fields=["membership"], name="mship_scope_mship_idx"),
+            models.Index(fields=["business_unit"], name="mship_scope_bu_idx"),
             models.Index(fields=["operational_module"], name="mship_scope_module_idx"),
             models.Index(fields=["operational_domain"], name="mship_scope_domain_idx"),
             models.Index(fields=["operational_subject"], name="mship_scope_subject_idx"),
@@ -702,6 +725,7 @@ class MembershipScope(BaseModel):
         set_count = sum(
             1
             for value in (
+                self.business_unit_id,
                 self.operational_module_id,
                 self.operational_domain_id,
                 self.operational_subject_id,
@@ -710,12 +734,13 @@ class MembershipScope(BaseModel):
         )
         if set_count != 1:
             raise ValidationError(
-                "Exactly one of operational_module, operational_domain, or "
-                "operational_subject must be set."
+                "Exactly one scope target (business_unit or legacy operational_*) must be set."
             )
 
     @property
     def scope_type(self) -> str:
+        if self.business_unit_id is not None:
+            return "business_unit"
         if self.operational_module_id is not None:
             return "module"
         if self.operational_domain_id is not None:
@@ -724,6 +749,8 @@ class MembershipScope(BaseModel):
 
     @property
     def scope_id(self):
+        if self.business_unit_id is not None:
+            return self.business_unit_id
         if self.operational_module_id is not None:
             return self.operational_module_id
         if self.operational_domain_id is not None:
@@ -912,6 +939,14 @@ class RuntimeVocabulary(BaseModel):
     meaning = models.TextField()
     mapped_domain = models.ForeignKey(
         OperationalDomain,
+        on_delete=models.SET_NULL,
+        related_name="runtime_vocabulary",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    mapped_business_unit = models.ForeignKey(
+        "BusinessUnit",
         on_delete=models.SET_NULL,
         related_name="runtime_vocabulary",
         null=True,
@@ -1213,3 +1248,238 @@ class RoutingHintDomain(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.routing_hint} -> {self.operational_domain.key}"
+
+
+class CatalogBusinessUnit(BaseModel):
+    class DefaultUnitType(models.TextChoices):
+        DEDICATED = "dedicated", "Dedicated"
+        TRANSVERSAL = "transversal", "Transversal"
+
+    key = models.CharField(max_length=100, unique=True)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    default_unit_type = models.CharField(
+        max_length=20,
+        choices=DefaultUnitType.choices,
+        default=DefaultUnitType.DEDICATED,
+    )
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "key"]
+        indexes = [
+            models.Index(fields=["active"], name="cat_bu_active_idx"),
+            models.Index(
+                fields=["active", "sort_order", "key"],
+                name="cat_bu_order_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.label} [{self.key}]"
+
+
+class CatalogActivitySubject(BaseModel):
+    catalog_business_unit = models.ForeignKey(
+        CatalogBusinessUnit,
+        on_delete=models.SET_NULL,
+        related_name="catalog_activity_subjects",
+        null=True,
+        blank=True,
+    )
+    key = models.CharField(max_length=150, unique=True)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "key"]
+        indexes = [
+            models.Index(fields=["active"], name="cat_as_active_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.label} [{self.key}]"
+
+
+class BusinessUnit(BaseModel):
+    class UnitType(models.TextChoices):
+        DEDICATED = "dedicated", "Dedicated"
+        TRANSVERSAL = "transversal", "Transversal"
+
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        CATALOG_SUGGESTION = "catalog_suggestion", "Catalog suggestion"
+        MIGRATED = "migrated", "Migrated"
+        TEMPLATE = "template", "Template"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="business_units",
+        db_index=False,
+    )
+    key = models.CharField(max_length=100)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    unit_type = models.CharField(
+        max_length=20,
+        choices=UnitType.choices,
+        default=UnitType.DEDICATED,
+    )
+    catalog_business_unit = models.ForeignKey(
+        CatalogBusinessUnit,
+        on_delete=models.SET_NULL,
+        related_name="establishment_business_units",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+    managed_by_onboarding_proposal = models.ForeignKey(
+        OnboardingProposal,
+        on_delete=models.SET_NULL,
+        related_name="managed_business_units",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "key"],
+                name="bu_est_key_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["establishment"], name="bu_est_idx"),
+            models.Index(fields=["establishment", "active"], name="bu_est_active_idx"),
+            models.Index(fields=["establishment", "unit_type"], name="bu_est_type_idx"),
+            models.Index(fields=["key"], name="bu_key_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.establishment} :: {self.label} [{self.key}]"
+
+
+class ActivitySubject(BaseModel):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        CATALOG_SUGGESTION = "catalog_suggestion", "Catalog suggestion"
+        MIGRATED = "migrated", "Migrated"
+        TEMPLATE = "template", "Template"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="activity_subjects",
+        db_index=False,
+    )
+    business_unit = models.ForeignKey(
+        BusinessUnit,
+        on_delete=models.CASCADE,
+        related_name="activity_subjects",
+        db_index=False,
+    )
+    normalized_name = models.CharField(max_length=150)
+    label = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    catalog_activity_subject = models.ForeignKey(
+        CatalogActivitySubject,
+        on_delete=models.SET_NULL,
+        related_name="establishment_activity_subjects",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=Source.choices,
+        default=Source.MANUAL,
+    )
+    active = models.BooleanField(default=True)
+    managed_by_onboarding_proposal = models.ForeignKey(
+        OnboardingProposal,
+        on_delete=models.SET_NULL,
+        related_name="managed_activity_subjects",
+        null=True,
+        blank=True,
+        db_index=False,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business_unit", "normalized_name"],
+                name="as_bu_normalized_name_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["business_unit", "active"], name="as_bu_active_idx"),
+            models.Index(fields=["establishment", "active"], name="as_est_active_idx"),
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if (
+            self.business_unit_id is not None
+            and self.establishment_id is not None
+            and self.business_unit.establishment_id != self.establishment_id
+        ):
+            raise ValidationError(
+                {"business_unit": "Business unit must belong to the same establishment."}
+            )
+
+    def __str__(self) -> str:
+        return f"{self.business_unit.key} :: {self.label} [{self.normalized_name}]"
+
+
+class TaxonomyMigrationMap(BaseModel):
+    class LegacyType(models.TextChoices):
+        OPERATIONAL_MODULE = "operational_module", "Operational module"
+        OPERATIONAL_DOMAIN = "operational_domain", "Operational domain"
+        OPERATIONAL_SUBJECT = "operational_subject", "Operational subject"
+
+    class NewType(models.TextChoices):
+        BUSINESS_UNIT = "business_unit", "Business unit"
+        ACTIVITY_SUBJECT = "activity_subject", "Activity subject"
+
+    establishment = models.ForeignKey(
+        Establishment,
+        on_delete=models.CASCADE,
+        related_name="taxonomy_migration_maps",
+    )
+    legacy_type = models.CharField(max_length=40, choices=LegacyType.choices)
+    legacy_id = models.UUIDField()
+    new_type = models.CharField(max_length=40, choices=NewType.choices)
+    new_id = models.UUIDField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "legacy_type", "legacy_id"],
+                name="tax_mig_legacy_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "new_type", "new_id"],
+                name="tax_mig_new_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["establishment", "legacy_type", "legacy_id"],
+                name="tax_mig_legacy_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.legacy_type}:{self.legacy_id} -> {self.new_type}:{self.new_id}"
+

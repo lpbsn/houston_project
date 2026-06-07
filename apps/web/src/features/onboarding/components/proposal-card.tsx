@@ -43,6 +43,8 @@ import {
   getOnboardingErrorMessage,
 } from './onboarding-state'
 
+const SHOW_AI_ONBOARDING = false
+
 type ProposalCardProps = {
   canGenerateProposal: boolean
   sessionId: string
@@ -50,6 +52,10 @@ type ProposalCardProps = {
 
 type ProposalPayload = OnboardingProposalResponse['payload']
 type ProposalSectionKey = Exclude<keyof ProposalPayload, 'schema_version'>
+type ProposalArraySectionKey = Exclude<
+  ProposalSectionKey,
+  'excluded_catalog_subject_keys'
+>
 
 type RemovableTaxonomySection = Extract<
   SectionEnum,
@@ -64,7 +70,7 @@ function canMutateProposalItems(proposal: OnboardingProposalResponse) {
 
 const OPTIONAL_PROPOSAL_SECTIONS: {
   emptyMessage: string
-  key: ProposalSectionKey
+  key: ProposalArraySectionKey
   title: string
 }[] = [
   {
@@ -127,7 +133,7 @@ export function ProposalCard({ canGenerateProposal, sessionId }: ProposalCardPro
   const generateMutation = useGenerateOnboardingProposal(sessionId)
   const sectionDecisionMutation = useProposalSectionDecision(sessionId, selectedProposal?.id ?? '')
   const rejectMutation = useRejectOnboardingProposal(sessionId, selectedProposal?.id ?? '')
-  const applyMutation = useApplyOnboardingProposal(sessionId, selectedProposal?.id ?? '')
+  const applyMutation = useApplyOnboardingProposal(sessionId)
   const itemMutation = useProposalItemMutation(sessionId, selectedProposal?.id ?? '')
   const activeMutationError =
     generateMutation.error ??
@@ -197,7 +203,7 @@ export function ProposalCard({ canGenerateProposal, sessionId }: ProposalCardPro
     setSuccessMessage(null)
 
     try {
-      await applyMutation.mutateAsync()
+      await applyMutation.mutateAsync(selectedProposal.id)
       setSuccessMessage('Proposal applied. Runtime configuration was refreshed from the backend.')
     } catch {
       setSuccessMessage(null)
@@ -270,32 +276,42 @@ export function ProposalCard({ canGenerateProposal, sessionId }: ProposalCardPro
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <Button
-          type="button"
-          className="h-11 w-full rounded-[1rem]"
-          disabled={!canGenerateProposal || generateMutation.isPending}
-          onClick={handleGenerateProposal}
-        >
-          {generateMutation.isPending ? (
-            <>
-              <LoaderCircle className="size-4 animate-spin" />
-              Generating proposal...
-            </>
-          ) : (
-            <>
-              <Sparkles className="size-4" />
-              Generate AI proposal
-            </>
-          )}
-        </Button>
+        {SHOW_AI_ONBOARDING ? (
+          <Button
+            type="button"
+            className="h-11 w-full rounded-[1rem]"
+            disabled={!canGenerateProposal || generateMutation.isPending}
+            onClick={handleGenerateProposal}
+          >
+            {generateMutation.isPending ? (
+              <>
+                <LoaderCircle className="size-4 animate-spin" />
+                Generating proposal...
+              </>
+            ) : (
+              <>
+                <Sparkles className="size-4" />
+                Generate AI proposal
+              </>
+            )}
+          </Button>
+        ) : null}
 
-        {!canGenerateProposal ? (
+        {!SHOW_AI_ONBOARDING ? (
+          <OnboardingNotice
+            tone="muted"
+            title="Manual onboarding"
+            message="Configure business units and activity subjects manually. AI proposal generation is deprecated and hidden from the main flow."
+          />
+        ) : null}
+
+        {SHOW_AI_ONBOARDING && !canGenerateProposal ? (
           <p className="text-sm leading-6 text-muted-foreground">
             Save your activity description above before generating an AI proposal.
           </p>
         ) : null}
 
-        {proposals.length === 0 ? (
+        {SHOW_AI_ONBOARDING && proposals.length === 0 ? (
           <OnboardingNotice
             tone="muted"
             title="No proposal yet."
@@ -487,12 +503,12 @@ function ProposalSuggestionSection({
   disabled: boolean
   emptyMessage: string
   errors: ProposalValidationErrorItem[]
-  items: ProposalPayload[ProposalSectionKey]
+  items: ProposalPayload[ProposalArraySectionKey]
   onDecision: (section: string, decision: DecisionEnum) => void
   onRemoveItem?: (key: string) => void
   pendingRemoveItem: string | null
   pendingSection: string | null
-  sectionKey: ProposalSectionKey
+  sectionKey: ProposalArraySectionKey
   title: string
 }) {
   return (

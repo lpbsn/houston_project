@@ -52,7 +52,7 @@ function toErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export function AppPage() {
+export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void }) {
   const queryClient = useQueryClient()
   const { activeMembership, memberships } = useAuth()
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
@@ -336,19 +336,19 @@ export function AppPage() {
         </Card>
       ) : null}
 
-      {activeMembership ? (
+      {activeMembership && canManageMemberships ? (
         <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
           <CardHeader className="gap-3">
             <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
-              Establishment
+              Configuration
             </Badge>
             <div className="space-y-2">
               <CardTitle className="text-[1.55rem] font-black tracking-[-0.05em]">
-                Operational setup
+                Configuration opérationnelle
               </CardTitle>
               <CardDescription className="text-sm leading-6">
-                Continue onboarding or runtime setup when this establishment still needs
-                configuration.
+                Consultez et modifiez les pôles, sujets et descriptions de votre établissement
+                actif.
               </CardDescription>
             </div>
           </CardHeader>
@@ -359,11 +359,13 @@ export function AppPage() {
               </span>
               <span>{activeMembership.establishment_name}</span>
             </div>
-            <Button asChild className="h-11 rounded-[1rem]">
-              <a href={`/onboarding?establishmentId=${activeMembership.establishment_id}`}>
-                Open onboarding
-                <ArrowRight className="size-4" />
-              </a>
+            <Button
+              type="button"
+              className="h-11 rounded-[1rem]"
+              onClick={() => onNavigate?.('/app/operational-config')}
+            >
+              Modifier l’onboarding
+              <ArrowRight className="size-4" />
             </Button>
           </CardContent>
         </Card>

@@ -22,6 +22,10 @@ import type {
   ProposalValidationErrorItem,
   RuntimeConfigResponse,
   SubmitActivityDescriptionRequest,
+  CatalogActivitySubjectSuggestion,
+  CatalogBusinessUnitSuggestion,
+  OnboardingProposalCreateRequest,
+  OnboardingProposalUpdateRequest,
 } from './types'
 
 export const onboardingQueryKeys = {
@@ -36,6 +40,10 @@ export const onboardingQueryKeys = {
     ['onboarding', 'sessions', sessionId, 'runtime-config'] as const,
   activationSummary: (sessionId: string) =>
     ['onboarding', 'sessions', sessionId, 'activation-summary'] as const,
+  catalogBusinessUnits: (query: string) =>
+    ['onboarding', 'catalog', 'business-units', query] as const,
+  catalogActivitySubjects: (businessUnitKey: string, query: string) =>
+    ['onboarding', 'catalog', 'activity-subjects', businessUnitKey, query] as const,
 }
 
 export class OnboardingApiError extends Error {
@@ -313,6 +321,152 @@ export async function activateOnboardingSession(sessionId: string) {
   }
 
   return result.data as ActivationResponse
+}
+
+export async function suggestBusinessUnits(query: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/catalog/business-units/suggest/', {
+        params: {
+          query: {
+            q: query,
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'Les suggestions de pôles n’ont pas pu être chargées.',
+    )
+  }
+
+  return result.data as CatalogBusinessUnitSuggestion[]
+}
+
+export async function suggestActivitySubjects(
+  businessUnitKey: string,
+  query: string,
+  options?: { limit?: number },
+) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/catalog/activity-subjects/suggest/', {
+        params: {
+          query: {
+            business_unit_key: businessUnitKey,
+            q: query,
+            limit: options?.limit ?? 20,
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error,
+      'Les suggestions de sujets n’ont pas pu être chargées.',
+    )
+  }
+
+  return result.data as CatalogActivitySubjectSuggestion[]
+}
+
+export async function createManualOnboardingProposal(
+  sessionId: string,
+  input: OnboardingProposalCreateRequest,
+) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/onboarding-sessions/{session_id}/proposals/', {
+        params: {
+          path: { session_id: sessionId },
+        },
+        body: input,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error as
+        | DetailResponse
+        | OnboardingProposalErrorResponse
+        | undefined,
+      'La proposition d’onboarding n’a pas pu être créée.',
+    )
+  }
+
+  return result.data as ProposalCommandResponse
+}
+
+export async function updateManualOnboardingProposal(
+  sessionId: string,
+  proposalId: string,
+  input: OnboardingProposalUpdateRequest,
+) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/', {
+        params: {
+          path: { session_id: sessionId, proposal_id: proposalId },
+        },
+        body: input,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error as
+        | DetailResponse
+        | OnboardingProposalErrorResponse
+        | undefined,
+      'La proposition d’onboarding n’a pas pu être mise à jour.',
+    )
+  }
+
+  return result.data as ProposalCommandResponse
+}
+
+export async function submitManualOnboardingProposal(sessionId: string, proposalId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/',
+        {
+          params: {
+            path: { session_id: sessionId, proposal_id: proposalId },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOnboardingError(
+      result.response,
+      result.error as
+        | DetailResponse
+        | OnboardingProposalErrorResponse
+        | undefined,
+      'La proposition d’onboarding n’a pas pu être validée.',
+    )
+  }
+
+  return result.data as ProposalCommandResponse
 }
 
 export async function listOnboardingProposals(sessionId: string) {
