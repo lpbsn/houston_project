@@ -1,7 +1,7 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-05-29
+Last reviewed: 2026-06-08
 Implementation status: implemented for Phase 1
 
 ## 1. Purpose
@@ -15,7 +15,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Backend-enforced authorization for establishment-scoped product access.
 - Membership-backed roles: `owner`, `director`, `manager`, `staff`.
 - Membership-backed BusinessUnit scope through `MembershipScope` rows.
-- Establishment visibility checks, action permission checks, and domain access checks.
+- Establishment visibility checks, action permission checks, and BusinessUnit scope access checks.
 - Backend permission enforcement for API reads, writes, command endpoints, feeds, realtime subscriptions, signed media access, notifications, comments, and chat access.
 - Frontend permission hints as convenience only, never as security authority.
 
@@ -39,9 +39,8 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Role and BusinessUnit scope data in responses are UI hints, not security authority.
 - `owner` and `director` still require valid active membership; broad authority is never global.
 - **`MembershipScope`** is the source of truth for manager/staff operational RBAC (`scope_type`: `business_unit` only; `scope_id`: active `BusinessUnit` UUID). ActivitySubject is never an RBAC scope. No label-based inference.
-- **`MembershipDomain`** is legacy/historical and must not be used as an active RBAC model. Authorization root is `MembershipScope` rows.
-- `operational_domains` is onboarding proposal context (taxonomy selection), not the RBAC source of truth used by authorization checks.
-- **`MembershipFeedSubscription`** (future Phase 4) personalizes **Ma vue** only — see [`feed_subscription_domain.md`](feed_subscription_domain.md). It must not be used as a security boundary or mixed with RBAC checks.
+- **`MembershipDomain`** and `operational_domains` are **legacy v1** (removed with taxonomy v2, Lot 6). They are not RBAC authority and must not be referenced in new authorization logic. Authorization root for manager/staff is `MembershipScope` rows on **BusinessUnit** only.
+- **`MembershipFeedSubscription` is deferred** (not implemented). When implemented, it will personalize Signal Feed **Ma vue** only (BU-only first, then ActivitySubject subscribe/unsubscribe — see [`feed_subscription_domain.md`](feed_subscription_domain.md)). **Today:** Ma vue uses `MembershipScope`. Never a security boundary.
 - Notifications and realtime events do not grant access.
 - Signed media URLs require backend authorization before generation.
 - Raw Observation text must not leak through feeds, notifications, realtime payloads, signed media flows, or unauthorized detail views.
@@ -103,7 +102,7 @@ Permission outcomes are:
 - Manager
   - Management and action authority, mainly inside assigned BusinessUnit scopes.
   - Current implemented helpers allow action creation and validation, but not establishment settings or membership management.
-  - BusinessUnit scope coverage required for domain-specific visibility/action (or owner/director broad access).
+  - BusinessUnit scope coverage required for BusinessUnit-scoped visibility/action (or owner/director broad access).
 
 - Staff
   - Reporting and execution role, not management authority.
@@ -112,8 +111,8 @@ Permission outcomes are:
 
 - Visibility vs actionability
   - Seeing a resource does not automatically allow acting on it.
-  - Adjacent product docs validate that some cross-domain visibility may be broader than action rights. Treat exact per-resource behavior as candidate unless confirmed by current code and `apps/api/schema.yml`.
-  - When adjacent product rules allow a manager outside the matching domain to see or comment on a visible resource, action rights still remain denied unless domain-compatible or explicitly authorized.
+  - Adjacent product docs validate that visibility may be broader than action rights across BusinessUnit scope boundaries. Treat exact per-resource behavior as candidate unless confirmed by current code and `apps/api/schema.yml`.
+  - When adjacent product rules allow a manager outside their assigned BusinessUnit scope to see or comment on a visible resource, action rights remain denied unless scope-compatible or explicitly authorized.
 
 - Boundary rules
   - Feed visibility is backend-owned.
