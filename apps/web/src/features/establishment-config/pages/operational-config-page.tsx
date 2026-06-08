@@ -5,11 +5,12 @@ import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { OperationalConfigBusinessUnitCard } from '@/features/establishment-config/components/operational-config-business-unit-card'
-import { RuntimeConfigApiError } from '@/features/establishment-config/api'
 import {
   useCreateRuntimeBusinessUnit,
   useOperationalConfigTree,
 } from '@/features/establishment-config/hooks'
+import { canAccessOperationalConfig } from '@/features/establishment-config/lib/operational-config-access'
+import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
 import { BusinessUnitAutocomplete } from '@/features/onboarding/components/business-unit-autocomplete'
 import type { CatalogBusinessUnitSuggestion } from '@/features/onboarding/types'
 
@@ -49,11 +50,7 @@ function OperationalConfigContent({
       })
       setPageFeedback('Pôle ajouté.')
     } catch (error) {
-      setPageError(
-        error instanceof RuntimeConfigApiError
-          ? error.message
-          : 'Le pôle n’a pas pu être ajouté.',
-      )
+      setPageError(resolveRuntimeConfigErrorMessage(error, 'Le pôle n’a pas pu être ajouté.'))
     }
   }
 
@@ -84,9 +81,10 @@ function OperationalConfigContent({
         <CardHeader>
           <CardTitle>Erreur de chargement</CardTitle>
           <CardDescription>
-            {treeQuery.error instanceof RuntimeConfigApiError
-              ? treeQuery.error.message
-              : 'La configuration opérationnelle n’a pas pu être chargée.'}
+            {resolveRuntimeConfigErrorMessage(
+              treeQuery.error,
+              'La configuration opérationnelle n’a pas pu être chargée.',
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -167,6 +165,34 @@ function OperationalConfigContent({
   )
 }
 
+function OperationalConfigAccessDenied({
+  onNavigate,
+}: {
+  onNavigate?: (path: string) => void
+}) {
+  return (
+    <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9]">
+      <CardHeader>
+        <CardTitle>Accès refusé</CardTitle>
+        <CardDescription>
+          Seuls le propriétaire et le directeur peuvent modifier la configuration opérationnelle.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+          onClick={() => onNavigate?.('/app')}
+        >
+          <ArrowLeft className="size-4" />
+          Retour à la gestion
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps) {
   const { activeMembership } = useAuth()
   const establishmentId = activeMembership?.establishment_id
@@ -182,6 +208,10 @@ export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps
         </CardHeader>
       </Card>
     )
+  }
+
+  if (!canAccessOperationalConfig(activeMembership.role)) {
+    return <OperationalConfigAccessDenied onNavigate={onNavigate} />
   }
 
   return (

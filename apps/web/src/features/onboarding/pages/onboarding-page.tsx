@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
+import { shouldRedirectOnboardingToOperationalConfig } from '@/features/onboarding/lib/onboarding-route'
 import { ActivationSummaryCard } from '@/features/onboarding/components/activation-summary-card'
 import { ManualOnboardingV2Wizard } from '@/features/onboarding/components/manual-onboarding-v2-wizard'
 import { OnboardingHeroCard } from '@/features/onboarding/components/onboarding-hero-card'
@@ -123,28 +124,19 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
     writeRouteParams(effectiveRouteParams)
   }, [effectiveRouteParams, routeParams.establishmentId, routeParams.sessionId])
 
+  const shouldRedirectToOperationalConfig = shouldRedirectOnboardingToOperationalConfig({
+    hasOperationalAccess,
+    activeEstablishmentId: activeMembership?.establishment_id,
+    routeEstablishmentId: effectiveRouteParams.establishmentId,
+  })
+
   useEffect(() => {
-    if (
-      !isReady ||
-      !isAuthenticated ||
-      !hasOperationalAccess ||
-      !onNavigate ||
-      !effectiveRouteParams.establishmentId
-    ) {
+    if (!isReady || !isAuthenticated || !onNavigate || !shouldRedirectToOperationalConfig) {
       return
     }
 
-    if (activeMembership?.establishment_id === effectiveRouteParams.establishmentId) {
-      onNavigate('/app/operational-config')
-    }
-  }, [
-    activeMembership?.establishment_id,
-    effectiveRouteParams.establishmentId,
-    hasOperationalAccess,
-    isAuthenticated,
-    isReady,
-    onNavigate,
-  ])
+    onNavigate('/app/operational-config')
+  }, [isAuthenticated, isReady, onNavigate, shouldRedirectToOperationalConfig])
 
   const sessionQuery = useOnboardingSession(effectiveRouteParams.sessionId, {
     enabled: Boolean(effectiveRouteParams.sessionId) && isAuthenticated,
@@ -201,11 +193,7 @@ export function OnboardingPage({ onNavigate }: { onNavigate?: (path: string) => 
     isAuthenticated,
   ])
 
-  if (
-    hasOperationalAccess &&
-    effectiveRouteParams.establishmentId &&
-    activeMembership?.establishment_id === effectiveRouteParams.establishmentId
-  ) {
+  if (shouldRedirectToOperationalConfig) {
     return <OnboardingLoadingState label="Redirection vers la configuration opérationnelle…" />
   }
 

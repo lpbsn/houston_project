@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { BusinessUnitTreeItem } from '@/features/establishment-config/api'
-import { RuntimeConfigApiError } from '@/features/establishment-config/api'
 import {
   useCreateRuntimeActivitySubject,
   useDeactivateRuntimeActivitySubject,
   useDeactivateRuntimeBusinessUnit,
   useUpdateRuntimeBusinessUnit,
 } from '@/features/establishment-config/hooks'
+import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
 
 const DESCRIPTION_MAX_LENGTH = 500
 
@@ -20,14 +20,6 @@ type OperationalConfigBusinessUnitCardProps = {
   businessUnit: BusinessUnitTreeItem
   establishmentId: string
   canRemoveBusinessUnit: boolean
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof RuntimeConfigApiError) {
-    return error.message
-  }
-
-  return fallback
 }
 
 export function OperationalConfigBusinessUnitCard({
@@ -62,7 +54,9 @@ export function OperationalConfigBusinessUnitCard({
       })
       setFeedback('Description enregistrée.')
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, 'La description n’a pas pu être enregistrée.'))
+      setErrorMessage(
+        resolveRuntimeConfigErrorMessage(error, 'La description n’a pas pu être enregistrée.'),
+      )
     }
   }
 
@@ -83,7 +77,7 @@ export function OperationalConfigBusinessUnitCard({
       setSubjectLabel('')
       setFeedback('Sujet ajouté.')
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, 'Le sujet n’a pas pu être ajouté.'))
+      setErrorMessage(resolveRuntimeConfigErrorMessage(error, 'Le sujet n’a pas pu être ajouté.'))
     }
   }
 
@@ -95,7 +89,7 @@ export function OperationalConfigBusinessUnitCard({
       await deactivateSubjectMutation.mutateAsync(subjectId)
       setFeedback('Sujet retiré.')
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, 'Le sujet n’a pas pu être retiré.'))
+      setErrorMessage(resolveRuntimeConfigErrorMessage(error, 'Le sujet n’a pas pu être retiré.'))
     }
   }
 
@@ -107,7 +101,7 @@ export function OperationalConfigBusinessUnitCard({
       await deactivateBuMutation.mutateAsync(businessUnit.id)
       setFeedback('Pôle retiré.')
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, 'Le pôle n’a pas pu être retiré.'))
+      setErrorMessage(resolveRuntimeConfigErrorMessage(error, 'Le pôle n’a pas pu être retiré.'))
     }
   }
 
