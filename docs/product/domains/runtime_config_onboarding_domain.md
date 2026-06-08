@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-07
-Implementation status: **implemented** — **Manual onboarding V2 only** (`onboarding_proposal_v3`, BusinessUnit / ActivitySubject). Legacy Module→Domain→Subject proposals and AI onboarding are removed from product APIs (Lot 6).
+Implementation status: **implemented** — **Manual onboarding V2 only** (`onboarding_proposal_v3`, BusinessUnit / ActivitySubject). Legacy Module→Domain→Subject proposals are rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
 
 ## 1. Purpose
 
@@ -33,6 +33,7 @@ Domain boundaries:
 - Billing, subscription management, or client account administration.
 - Exhaustive room or location inventory during onboarding.
 - Checklist template setup as part of activation minimum.
+- AI-assisted onboarding (removed permanently from Houston scope).
 - Non-human-driven activation, role assignment, or permission decisions.
 - Advanced analytics or large template/catalog marketplace behavior.
 - Detailed multi-establishment onboarding UX or native mobile onboarding flows.
@@ -90,7 +91,7 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 - `OperationalUnit`
   - Physical or contextual **location** used to localize activity.
-  - **Orthogonal** to Module/Domain/Subject; optional on Signals.
+  - **Orthogonal** to BusinessUnit / ActivitySubject classification; optional on Signals.
   - **Not** used for feed subscriptions in MVP.
 
 - `RuntimeVocabulary`
@@ -110,7 +111,7 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
   - Target payload: `schema_version: onboarding_proposal_v3` with BU/AS runtime sections plus optional units/vocabulary/tags/routing_hints.
 
 - `OnboardingProposalItemMutation` (implemented API)
-  - `POST /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/items/` — add/remove module, domain, or subject keys with automatic parent/child coherence.
+  - Proposal create/update/apply via `/api/v1/onboarding-sessions/{session_id}/proposals/` — add/remove BusinessUnit and ActivitySubject entries with parent/child coherence per [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 
 - `OnboardingValidation`
   - Human approval step for sections of proposed runtime context before backend activation.
@@ -145,58 +146,45 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 ## 8. Events
 
-No onboarding event contract is confirmed as implemented in current code or in `apps/api/schema.yml`.
+No onboarding domain event contract is implemented in current code or `apps/api/schema.yml`.
 
-Candidate events only:
-- `OrganizationCreated`
-- `EstablishmentCreated`
-- `OnboardingStarted`
-- `EstablishmentDescriptionSubmitted`
-- `BusinessUnitsProposed`
-- `ActivitySubjectsProposed`
-- `OperationalUnitsProposed`
-- `RuntimeVocabularyProposed`
-- `RuntimeTagsProposed`
-- `RoutingHintsProposed`
-- `OnboardingProposalValidated`
-- `OperationalModuleActivated`
-- `OperationalDomainActivated`
-- `OperationalUnitActivated`
-- `RuntimeVocabularyActivated`
-- `EstablishmentActivated`
-- `InitialUserInvited candidate, cross-domain with Identity / Membership`
-- `MembershipActivated candidate, cross-domain with Identity / Membership`
+Future runtime/onboarding events (candidate only — not implemented; validate in a separate product ticket before documenting as active):
+
+- onboarding lifecycle notifications
+- BusinessUnit or ActivitySubject activation events
+
+Do not use legacy v1 taxonomy event names (`OperationalModuleActivated`, etc.) in new work.
 
 ## 9. API Surface
 
 Current API truth is `apps/api/schema.yml`.
 
-Implemented runtime/onboarding endpoints confirmed in `apps/api/schema.yml`:
-- None.
+Implemented runtime/onboarding endpoints (under `/api/v1/onboarding-sessions/`):
 
-Current public schema exposes auth endpoints plus schema/health endpoints, but no public runtime/onboarding API.
+- `POST /` — create onboarding session
+- `GET/PATCH /{session_id}/` — session detail and updates
+- `POST /{session_id}/description/` — submit establishment activity description
+- `GET/POST /{session_id}/proposals/` — list/create proposals (`onboarding_proposal_v3`)
+- `GET/PATCH /{session_id}/proposals/{proposal_id}/` — draft proposal payload
+- `POST .../proposals/{proposal_id}/submit/` — validate proposal sections
+- `POST .../proposals/{proposal_id}/apply/` — apply validated proposal to runtime
+- `POST .../proposals/{proposal_id}/reject/` — reject proposal
+- `POST /{session_id}/mark-ready/` — mark session ready for activation
+- `POST /{session_id}/activate/` — activate establishment
+- `GET /{session_id}/activation-summary/` — activation summary
+- `GET /{session_id}/runtime-config/` — read runtime config snapshot
+- `POST /{session_id}/director-invitations/` — invite Director during onboarding
 
-Candidate endpoint capabilities only:
-- create organization
-- create establishment
-- submit establishment description
-- fetch onboarding proposal
-- mutate proposal catalog item (add/remove business unit, activity subject)
-- validate proposal section
-- activate establishment
-- update runtime config
-- invite initial director during onboarding (`POST .../director-invitations/`)
+Post-activation establishment runtime mutations (active establishments) also exist under `/api/v1/establishments/{establishment_id}/` — BusinessUnit and ActivitySubject CRUD, `runtime-config/`, catalogue suggest endpoints. See `schema.yml` for the current list.
 
 ## 10. Frontend Expectations
 
 - Onboarding should be guided and section-based rather than a raw configuration dump.
-- UI should support accept, edit, reject, and **item-level add/remove** for proposal sections when those APIs exist.
+- UI should support accept, edit, reject, and **item-level add/remove** for BusinessUnit / ActivitySubject proposal sections.
 - UI must clearly distinguish draft proposals from validated active runtime state.
 - UI must not treat activation as complete until backend confirmation is returned.
 - TanStack Query owns runtime/onboarding server state.
 - Frontend must use generated API clients only for endpoints confirmed in OpenAPI.
-- Candidate runtime/onboarding endpoints remain future targets only and must not be assumed available.
-
 ## 11. AI Agent Notes
 
 - Inspect current code before assuming runtime objects beyond established BU/AS runtime objects already exist.

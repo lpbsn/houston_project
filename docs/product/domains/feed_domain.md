@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-04
-Implementation status: partial (Execution Feed Phase 5; Signal Feed Phase 4)
+Implementation status: partial (Signal Feed Phase 4 + Execution Feed Phase 5 core implemented; advanced filters/search/checklists candidate)
 
 ## 1. Purpose
 
@@ -127,8 +127,8 @@ Frontend display states may include:
 - `ExecutionFeed` applies `view_mode` in selectors before returning items.
 - **Ma vue** (`view_mode=personal`): active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes.
 - **Vue générale** (`view_mode=general`): all active establishment Signals.
-- `MembershipFeedSubscription` is **out of scope Phase 4** (`feed_subscription_domain.md`).
-- RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering in Phase 4.
+- Feed subscription is **deferred** (future: BU-only first, then ActivitySubject subscribe/unsubscribe) — see [`feed_subscription_domain.md`](feed_subscription_domain.md). **Today:** Ma vue uses `MembershipScope` only.
+- RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering.
 - Visibility does not imply actionability.
 - Notifications and realtime events do not grant access.
 - Permission hints do not grant access.
@@ -140,7 +140,7 @@ Frontend display states may include:
 | **Signal Feed** | Active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes. | All active establishment Signals. RBAC feed access only. |
 | **Execution Feed** | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **personal** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. | **Owner/Director:** all active establishment Actions. **Manager:** personal set plus Actions in **`MembershipScope`**. **Staff:** same as personal (created/assigned only). **Not** subscription-based. |
 
-Feed subscriptions personalize **Signal Feed Ma vue only**. They are not permissions and do not filter Execution Feed.
+**Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
 ## 8. Events
 
@@ -155,22 +155,16 @@ Candidate events only:
 
 Current API truth is `apps/api/schema.yml`.
 
-Implemented endpoints confirmed today:
-- none
+Implemented endpoints (establishment-scoped):
 
-Candidate endpoints only:
-- `GET /api/v1/establishments/:id/signal_feed`
-- `GET /api/v1/establishments/:id/execution_feed`
+- `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `statuses`, `business_unit_keys`, `activity_subject_ids`
+- `GET /api/v1/establishments/{establishment_id}/execution-feed/?view_mode=personal|general` — required `view_mode`
 
-Candidate API expectations:
-- Signal Feed target filters: `view_mode`, `domains`, `statuses`, `urgency`, candidate `search`.
-- Execution Feed target filters: `view_mode`, `item_types`, `statuses`, `domains`, `requires_my_action`, candidate `search`.
-- Cursor pagination is preferred for feeds, but remains candidate until implemented.
-- Candidate response-shape elements include `next_cursor`, `has_more`, `applied_filters`, and counts.
-- Candidate Signal Feed ordering includes active-status prioritization, urgency emphasis, and pinned visibility rules.
-- Candidate Execution Feed ordering includes grouping by execution state or required action.
-- Candidate feed item fields may include permission hints, related Signal summaries, `media_count`, and `thumbnail_media_id`.
-- Detail routes belong to owning domains, not Feed.
+Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
+
+Candidate / not implemented: advanced search, feed counts, checklist items in Execution Feed, saved views.
+
+Detail routes belong to owning domains, not Feed.
 
 ## 10. Frontend Expectations
 
@@ -206,12 +200,10 @@ Candidate API expectations:
 - Do not expose raw Observation text.
 - Do not perform frontend-only authorization.
 - Do not include signed media URLs directly in feed items unless separately validated.
-- Do not claim candidate APIs are implemented.
-- When feed APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
+- Do not claim candidate APIs are implemented beyond what exists in `schema.yml`.
+- When feed APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.
 
-## 12. Future test scenarios (Phase 4 — documentation only)
-
-Do **not** implement these tests before Signal model, feed selectors, and feed API exist. They define the acceptance matrix for Phase 4 implementation.
+## 12. Acceptance test matrix (implemented feeds)
 
 ### Signal Feed API
 
@@ -219,33 +211,24 @@ Do **not** implement these tests before Signal model, feed selectors, and feed A
 | --- | --- |
 | Active member requests `view_mode=personal` with BusinessUnit scopes | Returns active Signals where affected or responsible BusinessUnit matches scope |
 | Active member requests `view_mode=personal` without BusinessUnit scopes | Returns empty list (not an error) for Manager/Staff |
-| Active member requests `view_mode=general` | Returns all active establishment Signals; **no** subscription filter |
-| Resolved / canceled / archived Signals | Excluded from active feed results |
+| Owner/Director requests `view_mode=personal` | All active establishment Signals |
+| Active member requests `view_mode=general` | Returns all active establishment Signals |
+| Resolved / canceled Signals | Excluded from default active feed results |
 | Cross-establishment access | 404 when establishment does not match session membership |
 | Inactive membership | 403 / no feed access |
 
-### Feed selector matching
+### Ma vue scope matching (current — `MembershipScope`)
 
-| Subscription kind | Signal triplet | Match |
+| Role | Scopes | Expected Ma vue |
 | --- | --- | --- |
-| Module `hotel` | `operational_module=hotel` | Yes |
-| Domain `hotel__hebergement` | `operational_domain=hotel__hebergement` | Yes |
-| Subject `hotel__hebergement__proprete_des_chambres` | `operational_subject=…` | Yes only at subject level |
-| Domain subscription | Signal in same module but different domain | No |
+| Owner/Director | N/A (broad) | All active establishment Signals |
+| Manager | BusinessUnit `restaurant` | Signals where affected or responsible BU is `restaurant` |
+| Staff | BusinessUnit `maintenance` | Signals where affected or responsible BU is `maintenance` |
 
-### Role scenarios (Ma vue)
-
-| Role | Subscriptions | Expected Ma vue |
-| --- | --- | --- |
-| Directeur | Module `hotel` | All hotel Signals |
-| Gouvernante | Domain `hotel__hebergement` | Hebergement Signals only |
-| Femme de chambre | Subject `hotel__hebergement__proprete_des_chambres` | That subject only |
-| Technicien | Domain maintenance-related subject | Matching domain/subject Signals only |
-
-Vue générale for each role above must still return **all** active establishment Signals (RBAC access only).
+Vue générale for each role above must still return **all** active establishment Signals (RBAC feed access only).
 
 ### Response contract
 
 - Feed items expose safe structured summaries only (no raw Observation text).
-- Items include module/domain/subject keys for UI badges.
-- OpenAPI, generated TypeScript client, selector unit tests, and API integration tests must be added together when implemented.
+- Signal Feed items expose BusinessUnit / ActivitySubject labels and keys for UI badges.
+- Execution Feed items expose Action BU/AS fields per `action_domain.md`.

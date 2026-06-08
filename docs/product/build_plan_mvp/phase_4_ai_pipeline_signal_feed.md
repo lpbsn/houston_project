@@ -1,19 +1,19 @@
 # Phase 4 — AI Observation Pipeline + Signal Feed + Signal Detail
 
-Status: implementation reference  
-Last reviewed: 2026-06-02
+Status: **implemented** (reference)  
+Last reviewed: 2026-06-08
 
 ## Scope
 
-- Observation → AI pipeline → persisted `CandidateSignal` → validated `Signal` (create or aggregate).
+- Observation → AI pipeline v3 → persisted `CandidateSignal` → validated `Signal` (create or aggregate).
 - Signal Feed (`view_mode=personal|general`) and Signal Detail.
-- Commands: pin, unpin, set urgency.
-- **No** manual Signal CRUD; **no** `MembershipFeedSubscription` in Phase 4.
+- Commands: pin, unpin, set urgency, resolve, cancel.
+- **No** manual Signal CRUD; **no** feed subscription model in Phase 4 (deferred — future BU-only, then ActivitySubject subscribe/unsubscribe).
 
 ## Ma vue feed filter
 
 - **Owner/Director** (`personal`): all active establishment Signals.
-- **Manager/Staff** (`personal`): active Signals matching `MembershipScope`.
+- **Manager/Staff** (`personal`): active Signals matching `MembershipScope` (BusinessUnit).
 - **General**: all active establishment Signals for any active member.
 - Empty personal list when manager/staff has no scopes (not an error).
 
@@ -26,8 +26,10 @@ Last reviewed: 2026-06-02
 | POST | `/api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/` |
 | POST | `/api/v1/establishments/{establishment_id}/signals/{signal_id}/unpin/` |
 | PATCH | `/api/v1/establishments/{establishment_id}/signals/{signal_id}/urgency/` |
+| POST | `/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/` |
+| POST | `/api/v1/establishments/{establishment_id}/signals/{signal_id}/cancel/` |
 
-Forbidden in Phase 4: create/update/delete Signal, resolve/cancel/archive, comments, actions, realtime, notifications, advanced feed filters.
+Still out of scope / candidate: manual Signal CRUD, archive, comments, actions (Phase 5), realtime, notifications, advanced feed filters.
 
 ## Transaction rules
 
@@ -89,10 +91,10 @@ cd apps/web && npm run api:generate
 
 ## Manual Signaler validation (golden scenario)
 
-Establishment runtime taxonomy must include catalogue keys at minimum:
+Establishment runtime taxonomy must include at minimum (BusinessUnit / ActivitySubject):
 
-- `restaurant` / `restaurant__salle` / `restaurant__salle__maintenance`
-- `restaurant` / `restaurant__bar` / `restaurant__bar__stocks_approvisionnement`
+- `restaurant` (dedicated) + transversal `maintenance` with activity subject for lighting/electrical work
+- `bar` (dedicated) with `stock` (or equivalent) activity subject under `bar`
 
 Observation text:
 
@@ -100,7 +102,7 @@ Observation text:
 La lumière clignote à l'entrée de restaurant. Il n'y a plus de sirop mojito au bar.
 ```
 
-Expected: 2 CandidateSignals → 2 Signals (distinct responsibilities), 2 `SignalSourceObservation`, general feed shows 2 cards, personal feed filtered by `MembershipScope`, post-submit popup lists count + module/domain/subject per Signal (CTA to `/signals` only, no detail redirect).
+Expected: 2 CandidateSignals → 2 Signals (distinct BU/AS classifications), 2 `SignalSourceObservation`, general feed shows 2 cards, personal feed filtered by `MembershipScope`, post-submit popup lists count + BusinessUnit/ActivitySubject per Signal (CTA to `/signals` only, no detail redirect).
 
 Check `AIUsageLog.provider=openai`, `status=succeeded`, empty `error_code` when using OpenAI in manual runs.
 
@@ -113,6 +115,6 @@ cd apps/api && uv run python manage.py dump_establishment_taxonomy <establishmen
 cd apps/api && uv run python manage.py dump_establishment_taxonomy <establishment_uuid> --json
 ```
 
-- Default filter: `active=True` on modules, domains, subjects, and units.
+- Default filter: `active=True` on business units, activity subjects, and operational units.
 - Exit code `1` if the establishment UUID is invalid or not found.
-- Use before manual Signaler validation to confirm runtime keys match the golden scenario catalogue above.
+- Use before manual Signaler validation to confirm runtime keys match the golden scenario above.

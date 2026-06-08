@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-01
-Implementation status: partial (onboarding + Phase 3 transcription; observation pipeline Phase 4)
+Implementation status: partial (transcription + observation pipeline v3 implemented; AI onboarding permanently removed from product)
 
 ## 1. Purpose
 
@@ -11,7 +11,6 @@ This domain defines Houston's AI boundary as a proposal, transcription, structur
 It owns:
 - product-level AI provider abstraction requirements
 - the high-level transcription boundary
-- the high-level onboarding proposal boundary
 - the high-level Observation pipeline proposal boundary
 - structured AI output requirements for business-affecting responses
 - backend validation requirements for every AI proposal
@@ -25,7 +24,6 @@ It does not own:
 - Observation submission validity
 - Signal lifecycle or Action lifecycle
 - Upload / Media lifecycle
-- runtime activation during onboarding
 - Chat behavior
 - full provider implementation details
 - full prompt text libraries
@@ -34,18 +32,19 @@ It does not own:
 ## 2. MVP Scope
 
 - Audio-to-editable-text transcription support before Observation submit.
-- AI onboarding proposals for runtime structure that still require human validation before activation (**modules-only** provider output; backend expands domains and subjects — see [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md)).
 - AI Observation pipeline proposals from validated Observation text only (contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
+- Onboarding runtime setup is **Manual V2 only** — AI onboarding is **permanently removed** from Houston (see [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md)).
 - Structured outputs for business-affecting AI responses, with strict backend-side validation before any business persistence.
 - Product-level expectation that provider/model choices remain abstracted and replaceable, even though current code does not validate a concrete implementation yet.
 - Metadata-oriented AI usage tracking and safe failure handling principles.
-- Fallback expectations: manual text entry for transcription, manual or template-based onboarding continuation, and safe retry or failure handling for the Observation pipeline.
-- Candidate MVP target: the Observation pipeline may propose zero, one, or multiple **CandidateSignals**, each with **one** module/domain/subject triplet; a multi-problem Observation yields multiple candidates (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
+- Fallback expectations: manual text entry for transcription and safe retry or failure handling for the Observation pipeline.
+- Observation pipeline may propose zero, one, or multiple **CandidateSignals**, each with **one** BusinessUnit / ActivitySubject classification; a multi-problem Observation yields multiple candidates (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)).
 - AI must not receive image input in MVP.
 - AI does not analyze Chat in MVP.
 
 ## 3. Out of Scope
 
+- AI-assisted onboarding (removed permanently from Houston).
 - AI direct writes to business tables.
 - AI-created Actions.
 - AI-decided permissions.
@@ -89,7 +88,7 @@ It does not own:
   - A concrete provider interface is not validated as implemented yet.
 
 - `AIRequest`
-  - One AI operation in a domain such as `transcription`, `onboarding`, or `observation_pipeline`.
+  - One AI operation in a domain such as `transcription` or `observation_pipeline`.
   - Exact persisted request models are not validated yet.
 
 - `AIUsageLog`
@@ -100,24 +99,20 @@ It does not own:
   - Temporary transcription result returned as editable text before Observation submit.
   - It is not validated as a persisted standalone business object.
 
-- `AIOnboardingProposal`
-  - Candidate runtime-setup proposal that requires human validation before backend activation.
-  - Provider output: **`operational_modules` only** (`ai_onboarding_v3`); exact expanded shape in [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md).
-
 - `AIObservationPipelineResult`
-  - Candidate structured output with 0..N **CandidateSignals**, each one triplet.
+  - Structured output with 0..N **CandidateSignals**, each one BU/AS classification.
   - Contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
 
 - `PromptVersion`
   - Version identifier for control text used by an AI flow.
   - Full prompt text storage does not belong in this domain reference.
-  - Observation pipeline: `prompt_version` (e.g. `ai_observation_pipeline_v2`) is independent of response `schema_version` (e.g. `ai_observation_pipeline_v1`); both are recorded on `AIUsageLog`.
+  - Observation pipeline: `prompt_version` and `schema_version` are both `ai_observation_pipeline_v3`; recorded on `AIUsageLog`.
 
 - `AIError`
   - Safe technical failure state with normalized error metadata.
   - Raw provider error payloads must not become normal-user product output.
 
-`AIRequest`, `AIUsageLog`, `AITranscript`, `AIOnboardingProposal`, `AIObservationPipelineResult`, `PromptVersion`, and `AIError` are product concepts, not required database model names until implemented.
+`AIRequest`, `AIUsageLog`, `AITranscript`, `AIObservationPipelineResult`, `PromptVersion`, and `AIError` are product concepts, not required database model names until implemented.
 
 ## 6. Lifecycle / Statuses
 
@@ -126,8 +121,7 @@ Not validated as implemented yet. Candidate lifecycles only:
 - General AI request: `requested`, `processing`, `succeeded`, `failed`, `retried`, `abandoned` or `canceled` if later needed.
 - Transcription UI states: `recording`, `uploading`, `transcribing`, `transcription_ready`, `transcription_failed`.
 - Observation pipeline states: `queued`, `processing`, `retrying`, `processed`, `failed`.
-- Onboarding AI states: `requested`, `processing`, `proposal_ready`, `failed`, `manual_fallback`.
-- Candidate timeout targets only: transcription 10s, Observation pipeline 20s, onboarding 60s, until enforced by code/tests.
+- Candidate timeout targets only: transcription 10s, Observation pipeline 20s, until enforced by code/tests.
 
 ## 7. Permissions
 
@@ -155,9 +149,6 @@ Candidate events only:
 - `TranscriptionSucceeded`
 - `TranscriptionFailed`
 - `TranscriptionAudioDeleted`
-- `OnboardingAIProposalRequested`
-- `OnboardingAIProposalSucceeded`
-- `OnboardingAIProposalFailed`
 - `ObservationPipelineStarted`
 - `ObservationPipelineSucceeded`
 - `ObservationPipelineFailed`
@@ -167,14 +158,14 @@ Candidate events only:
 
 Current API truth is `apps/api/schema.yml`.
 
-Confirmed in `apps/api/schema.yml` (Phase 3 subset):
-- Onboarding AI: `POST /api/v1/onboarding-sessions/{session_id}/proposals/ai-generate/` (see establishments/onboarding docs).
-- Transcription: `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio, `AIUsageLog` domain `transcription`, model configurable (`HOUSTON_AI_TRANSCRIPTION_MODEL`, default `gpt-4o-transcribe`).
+Confirmed in `apps/api/schema.yml`:
 
-Candidate capabilities only (Phase 4+):
-- Observation submit followed by backend-triggered AI pipeline processing
-- dedicated AI processing status fetch beyond submit's `processing_status`
-- metadata-only admin or support failure detail
+- Transcription: `POST /api/v1/establishments/{establishment_id}/transcriptions/` — multipart audio, `AIUsageLog` domain `transcription`, model configurable (`HOUSTON_AI_TRANSCRIPTION_MODEL`, default `gpt-4o-transcribe`).
+- Observation pipeline: submit Observation → Celery processing → Signals (see [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)); processing status via observation processing-status endpoint.
+
+Candidate capabilities only:
+
+- metadata-only admin or support failure detail beyond current surfaces
 
 ## 10. Frontend Expectations
 
@@ -183,7 +174,6 @@ Candidate capabilities only (Phase 4+):
 - If transcription fails, the user must be able to retry or type text manually.
 - UI must not present confidence as operational authority in MVP.
 - UI must not expose raw technical AI errors to normal users.
-- UI must not present onboarding AI proposals as active runtime configuration before human validation and backend activation.
 - UI should simplify AI pipeline technical states when business-safe summary states are enough.
 - Frontend must not route AI input from Chat content in MVP.
 - Frontend must not send image input to AI in MVP.
@@ -199,8 +189,8 @@ Candidate capabilities only (Phase 4+):
 - Inspect `observation_domain.md` before changing pipeline input or submit-time validation assumptions.
 - Inspect the Signal domain source of truth before changing Signal creation or aggregation assumptions.
 - Inspect [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing Observation pipeline outputs or segmentation.
-- Inspect [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md) before changing onboarding proposal scope or activation boundaries.
-- Do not conflate onboarding AI (modules-only) with Observation pipeline AI (CandidateSignals).
+- Inspect [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md) for onboarding boundaries (Manual V2 only — no AI onboarding).
+- Do not reintroduce AI onboarding APIs or product flows.
 - Do not invent provider privacy guarantees, zero-retention claims, or training guarantees without validated evidence.
 - Do not treat schema-valid AI output as business-valid output.
 - Do not let AI write business tables directly.

@@ -9,15 +9,19 @@ Before coding any phase:
 6. Keep scope strict. Do not implement future phases.
 7. Run required checks and report changed files + commands + results.
 
-### Taxonomy programme gates
+### Taxonomy (BusinessUnit / ActivitySubject)
 
-| Phase | Backend allowed | Backend forbidden |
-| --- | --- | --- |
-| **A** | `docs/` updates only | Models, migrations, services, APIs, tests, `schema.yml` |
-| **B/C** | `establishments/` onboarding/runtime taxonomy after [`phase_a_closure.md`](../../docs/product/phase_a_closure.md) human sign-off | Signal, feeds, `MembershipFeedSubscription`, Observation pipeline code |
-| **4+** | Signal, feeds, Observation pipeline when build plan phase opens | Orphan subscription/feed code before Signal |
+Migration v1 → v2 is **COMPLETE** (Lot 6 closed). See [`taxonomy_v1_to_v2_migration.md`](../../docs/product/taxonomy_v1_to_v2_migration.md).
 
-Do not pop B/C or provisioning stashes during Phase A. Regenerate OpenAPI only after B/C API stabilizes.
+Active product docs (do not use v1 Module/Domain/Subject as truth):
+
+- [`business_unit_taxonomy_domain.md`](../../docs/product/domains/business_unit_taxonomy_domain.md)
+- [`runtime_config_onboarding_domain.md`](../../docs/product/domains/runtime_config_onboarding_domain.md) — Manual Onboarding V2 only (AI onboarding removed from product)
+- [`ai_observation_pipeline_contract.md`](../../docs/product/domains/ai_observation_pipeline_contract.md) — pipeline v3
+
+RBAC: `MembershipScope` on **BusinessUnit only**. Ma vue Signal Feed today uses `MembershipScope` (not feed subscriptions). Future feed subscription is deferred (BU-only first, then ActivitySubject subscribe/unsubscribe) — do not implement `MembershipFeedSubscription` v1.
+
+[`phase_a_closure.md`](../../docs/product/phase_a_closure.md) is **historical v1 only** — not an active implementation gate.
 
 ## Clarification Gate
 
@@ -176,7 +180,7 @@ Forbidden:
 - status changes from Django signals
 - hidden transition side effects
 
-Future transition endpoints (Phase 4/5 — **not in codebase yet**; do not implement prematurely):
+Implemented transition endpoints (confirm in `apps/api/schema.yml` before use):
 
 ```
 POST /actions/:id/accept
@@ -189,8 +193,10 @@ POST /signals/:id/resolve
 POST /signals/:id/cancel
 POST /signals/:id/pin
 POST /signals/:id/unpin
-POST /signals/:id/set_urgency
+PATCH /signals/:id/urgency/
 ```
+
+Do not add new transition endpoints without updating OpenAPI and tests.
 
 Legacy `POST /signals/:id/add_domain` and `POST /signals/:id/remove_domain` are **obsolete** for MVP (single BU/AS classification per Signal).
 
@@ -242,7 +248,7 @@ Workers must reload sensitive content server-side.
 
 ### Signal
 
-Rules (Phase 4 — not implemented in codebase yet):
+Rules (Phase 4 — **implemented** in codebase; archive Signal and timeline remain candidate):
 
 - created only by backend service
 - aggregated only by backend service
@@ -252,6 +258,8 @@ Rules (Phase 4 — not implemented in codebase yet):
 - `last_activity_at` is maintained by backend
 
 ### Action
+
+Phase 5 — **core implemented** (lifecycle + Execution Feed; notifications, comments, checklists in feed remain out of scope).
 
 Allowed transitions:
 
@@ -269,18 +277,20 @@ Generic status mutation endpoints are forbidden.
 
 ### Feeds
 
-Phase 4/5 — not implemented in codebase yet.
+Phase 4 Signal Feed and Phase 5 Execution Feed — **core implemented** in codebase.
 
-Backend will apply:
+Backend applies:
 
 - RBAC
 - establishment scope
 - `view_mode=personal|general` (Signal Feed: personal uses `MembershipScope`; Execution Feed personal uses assigned responsibilities)
-- filters
+- filters (Signal Feed: partial — see `schema.yml`)
 - sorting
-- pagination
+- pagination (cursor envelope)
 
 Never return unauthorized data and rely on frontend hiding.
+
+Future feed subscription (deferred): personalize Ma vue by BusinessUnit first, then ActivitySubject subscribe/unsubscribe — not implemented.
 
 ### AI pipeline
 

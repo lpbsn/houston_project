@@ -1,14 +1,14 @@
 # AI Observation Pipeline Contract
 
 Status: authoritative (contract)  
-Last reviewed: 2026-06-07  
-Implementation status: **in_progress** — Lot 3B (`houston.ai.observation_pipeline`, `houston.signals.services`)
+Last reviewed: 2026-06-08  
+Implementation status: **implemented** (pipeline v3 — Lot 3B + Lot 6 complete)
 
 ## Purpose
 
 Defines the structured AI output contract between a **persisted Observation** and backend-validated **CandidateSignals**, before any Signal is created or aggregated.
 
-Target taxonomy: **BusinessUnit → ActivitySubject** ([`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md)). Legacy Module/Domain/Subject is **obsolete for product routing** (DB shim only until Lot 6).
+Target taxonomy: **BusinessUnit → ActivitySubject** ([`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md)). Legacy Module/Domain/Subject routing is **removed** (Lot 6).
 
 ## Input boundary
 
@@ -60,8 +60,6 @@ Rejected shapes: legacy `operational_*_key`, `detected_domains[]`, confidence sc
 5. `location_text` resolved backend-side (unit label wins; clear if equals raw observation text).
 6. Aggregation matches `(affected_bu, responsible_bu, activity_subject, operational_unit)` — not legacy triplet.
 
-Legacy `operational_module/domain/subject` FKs on `Signal` are **DB shim only** until Lot 6 — not product truth.
-
 ## Outcomes
 
 | Outcome | Meaning |
@@ -81,7 +79,7 @@ Legacy `operational_module/domain/subject` FKs on `Signal` are **DB shim only** 
 ## Related documents
 
 - [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md)
-- [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md) — Lot 3B
+- [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md)
 - [`observation_domain.md`](observation_domain.md)
 - [`signal_domain.md`](signal_domain.md)
 - [`ai_domain.md`](ai_domain.md)

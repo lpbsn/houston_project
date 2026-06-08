@@ -1,6 +1,12 @@
+> **DOCUMENT HISTORIQUE (v1 — Module/Domain/Subject)**  
+> Ne pas utiliser comme source produit active.  
+> Modèle v1 obsolète. Vérité actuelle : BusinessUnit / ActivitySubject.  
+> Onboarding : Manual V2 uniquement (AI onboarding retiré du produit).  
+> Voir : [`taxonomy_v1_to_v2_migration.md`](taxonomy_v1_to_v2_migration.md), [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md), [`domains/runtime_config_onboarding_domain.md`](domains/runtime_config_onboarding_domain.md).
+
 # Phase A Closure — Sujet / Taxonomie opérationnelle
 
-Status: **closed — A8 signed (2026-05-29)**  
+Status: **historical — closed A8 (2026-05-29)**  
 Gate: **Phase B/C authorized** — onboarding/runtime taxonomy only (see constraints below)
 
 ## Checklist

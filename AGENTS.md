@@ -78,36 +78,23 @@ For any authentication/session/security-related work, read and follow docs/archi
 
 ---
 
-## Phase execution gates (taxonomy / onboarding programme)
+## Taxonomy and onboarding (BusinessUnit / ActivitySubject)
 
-### Taxonomy v2 refactor (BusinessUnit / ActivitySubject)
+Migration v1 → v2 is **COMPLETE** (Lot 6 closed). See [`taxonomy_v1_to_v2_migration.md`](docs/product/taxonomy_v1_to_v2_migration.md).
 
-When working on the **BusinessUnit → ActivitySubject** refactor:
+**Current product truth:** BusinessUnit → ActivitySubject. Onboarding is **Manual V2 only** — AI onboarding is **permanently removed** from Houston scope (current and future).
 
-| Phase | Allowed | Forbidden |
-| --- | --- | --- |
-| **Phase BU-A** | Documentation in `docs/` only | Application code, migrations, tests, `schema.yml`, generated TS clients |
-| **Phase BU-B** | Models, catalogue, backfill, read APIs in `establishments/` | Signal cutover, pipeline v3, dropping v1 models |
-| **Phase BU-C** | RBAC, onboarding manual, Signal 3A, frontend | Big-bang removal of v1; ActivitySubject RBAC scopes |
-| **Phase BU-D** | Pipeline v3, frontend propagation, Lot 6 cleanup | `MembershipFeedSubscription`; subject-level subscriptions |
+Active docs:
 
-Authoritative target: [`business_unit_taxonomy_domain.md`](docs/product/domains/business_unit_taxonomy_domain.md). Migration: [`taxonomy_v1_to_v2_migration.md`](docs/product/taxonomy_v1_to_v2_migration.md).
+- [`business_unit_taxonomy_domain.md`](docs/product/domains/business_unit_taxonomy_domain.md)
+- [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md)
+- [`ai_observation_pipeline_contract.md`](docs/product/domains/ai_observation_pipeline_contract.md)
 
 RBAC source of truth: `MembershipScope` on **BusinessUnit only** (see [`rbac_permissions_domain.md`](docs/product/domains/rbac_permissions_domain.md)).
 
-### Legacy gates (Module → Domain → Subject — obsolete, v1 only)
+Ma vue Signal Feed today: `MembershipScope` (not feed subscriptions). Future feed subscription is deferred (BU-only first, then ActivitySubject subscribe/unsubscribe).
 
-When working on **legacy** Module → Domain → Subject code during migration:
-
-| Phase | Allowed | Forbidden |
-| --- | --- | --- |
-| **Phase A** | Documentation in `docs/` only | Application code, migrations, tests, fixtures, `schema.yml`, generated TS clients |
-| **Phase B/C** | Onboarding/runtime taxonomy code in `establishments/` (after human Phase A sign-off) | Signal, Signal Feed, `MembershipFeedSubscription`, Execution Feed, Observation pipeline runtime, Action taxonomy independent of Signal |
-| **Phase 4/5** | Signal, Signal Feed, subscriptions, Observation pipeline (when explicitly opened) | Premature feed/subscription code before Signal model |
-
-Authoritative closure gate (v1): [`docs/product/phase_a_closure.md`](docs/product/phase_a_closure.md).
-
-Key contracts (v1, obsolete for new work): [`runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
+**Historical only (do not use as active gates):** [`phase_a_closure.md`](docs/product/phase_a_closure.md) and legacy Module → Domain → Subject phase tables — migration archive, not current implementation authority.
 
 Auth + API error contracts: use [`authentication_charter.md`](docs/architecture/authentication_charter.md) (incl. auth throttling) and [`api_error_contract.md`](docs/architecture/api_error_contract.md).
 

@@ -75,10 +75,10 @@ The project currently uses a Django modular monolith as the business authority a
 - Temporary photo uploads + private media storage (authorized only)
 - Audio transcription endpoint (temporary audio deleted after each request)
 - Phase 4 AI observation pipeline → Signal feed/detail (Celery + fake/OpenAI providers)
-- Signal feed (`/signals`) and detail with pin/unpin/urgency commands (no manual Signal CRUD)
+- Signal feed (`/signals`) and detail with pin/unpin/urgency/resolve/cancel commands (no manual Signal CRUD)
+- Phase 5 core implemented: Action lifecycle + Execution Feed (`/actions/`, `/execution-feed/`)
 
 ## What Is Not Implemented Yet
-- Action lifecycle + Execution Feed (Phase 5)
 - Checklists runtime (if not yet exposed via API)
 - Notifications
 - Realtime business workflows + advanced feed surface

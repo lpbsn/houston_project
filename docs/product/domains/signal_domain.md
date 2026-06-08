@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-03
-Implementation status: partial (feed, detail, pin, urgency, cancel, resolve; Action side effects via Phase 5; archive, timeline not implemented)
+Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; Phase 5 core Action side effects implemented; archive, timeline not implemented)
 
 ## 1. Purpose
 
@@ -69,7 +69,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - AI does not create Actions in MVP.
 - **One primary v3 classification per Signal** (`affected_business_unit`, `responsible_business_unit`, `activity_subject`). Legacy Module/Domain/Subject FKs are removed (Lot 6).
 - An Observation describing **multiple distinct problems** produces **multiple CandidateSignals** and, after validation, **multiple Signals** — never multiple categorizations on one Signal.
-- Ma vue feed visibility uses **BusinessUnit `MembershipScope`** matching (Owner/Director: all active). RBAC action uses affected/responsible BusinessUnit scopes and role rules. `MembershipFeedSubscription` is out of scope Phase 4.
+- Ma vue feed visibility uses **BusinessUnit `MembershipScope`** matching (Owner/Director: all active). RBAC action uses affected/responsible BusinessUnit scopes and role rules. Feed subscription is deferred (future BU-only, then ActivitySubject subscribe/unsubscribe) — not used today.
 - Visibility does not imply actionability.
 - Realtime and notifications may help refresh attention, but they do not grant access and do not become business truth.
 
@@ -204,7 +204,7 @@ Not implemented in current schema:
 - archive Signal
 - fetch Signal timeline or events
 
-Action creation is via `POST .../actions/` with optional `signal` (Phase 5), not a nested Signal sub-resource.
+Action creation is via `POST .../actions/` with optional `signal` (Phase 5 core implemented), not a nested Signal sub-resource.
 
 Do not treat any Signal route as implemented until it exists in `apps/api/schema.yml`.
 
@@ -241,9 +241,7 @@ Do not treat any Signal route as implemented until it exists in `apps/api/schema
 - Do not implement frontend-only Signal lifecycle transitions.
 - When Signal APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.
 
-## 12. Future test scenarios (Phase 4 — documentation only)
-
-Do **not** implement Signal model, services, fixtures, or tests before Phase 4. These scenarios guide implementation and acceptance.
+## 12. Acceptance test matrix (implemented Signal surface)
 
 ### Signal creation / validation
 

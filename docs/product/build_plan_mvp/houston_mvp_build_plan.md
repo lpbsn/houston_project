@@ -28,7 +28,7 @@ Houston remains a backend-authoritative operational workflow app.
 3. Phase 2 — Runtime config / Onboarding ✅ completed
 4. Phase 3 — Observation / Media / Transcription ✅ completed
 5. Phase 4 — AI Pipeline / Signal Feed ✅ completed
-6. Phase 5 — Actions / Execution Feed ✅ completed
+6. Phase 5 — Actions / Execution Feed ✅ core implemented
 7. Phase 6 — Notifications
 8. Phase 7 — Checklists
 9. Phase 8A — Realtime invalidation foundation
@@ -61,47 +61,33 @@ Establish authenticated identity, establishment membership, backend authorizatio
 
 Add minimal establishment setup and onboarding inputs required before operational use.
 
-See [phase_2_runtime_config_onboarding.md](phase_2_runtime_config_onboarding.md) (closure
-section) for deferred items and Phase 3 entry assumptions.
+See [`runtime_config_onboarding_domain.md`](../domains/runtime_config_onboarding_domain.md) for onboarding scope (Manual V2, BU/AS).
 
 ### Phase 3 — Observation / Media / Transcription
 
 Add Observation submission, optional media handling, audio transcription, and cleanup lifecycle.
 
-Current API truth implements this Phase 3 subset: Observation submit, temporary photo uploads (temporary-uploads), and audio transcription (transcriptions). Observation processing starts with `processing_status=queued`, while Signal/Action/Feed APIs remain outside the current schema.
+Current API truth implements Phase 3: Observation submit, temporary photo uploads, audio transcription, and observation processing enqueue. Phases 4–5 surfaces are in `schema.yml` (see below).
 
-### Phase 4 — AI Pipeline / Signal Feed
+### Phase 4 — AI Pipeline / Signal Feed ✅ completed
 
-Add AI-assisted Observation interpretation, Signal creation or aggregation, and Signal Feed behavior.
+Implemented in `apps/api/schema.yml`:
 
-Not yet implemented in the current API contract (`apps/api/schema.yml`): Signal Feed and related Signal/Aggregation endpoints are Phase 4 candidate surface.
+- Signal with **BusinessUnit / ActivitySubject** classification (`affected_business_unit`, `responsible_business_unit`, `activity_subject`)
+- Observation → CandidateSignal → validated Signal pipeline v3 (Celery + OpenAI/fake providers)
+- `signal-feed/` with `view_mode=personal|general` (**Ma vue** = `MembershipScope`; Owner/Director personal = all active)
+- Signal detail + pin/unpin/urgency/resolve/cancel (no manual Signal CRUD)
+- Feed subscription (`MembershipFeedSubscription`) **deferred** — future BU-only, then ActivitySubject subscribe/unsubscribe
 
-**Implementation gate:** Phase 4 code starts only after Phase B/C taxonomy and onboarding runtime (modules, domains, subjects) are live.
+See [phase_4_ai_pipeline_signal_feed.md](phase_4_ai_pipeline_signal_feed.md). Acceptance matrices: `signal_domain.md` §12, `feed_domain.md` §12.
 
-**Deliverables (code, when Phase 4 starts):**
+### Phase 5 — Actions / Execution Feed ✅ core implemented
 
-- Signal model with single categorization triplet (module/domain/subject FKs)
-- Observation → CandidateSignal → validated Signal pipeline (Celery + OpenAI provider + fake provider for tests)
-- Signal Feed endpoint `signal-feed` with `view_mode=personal|general` (**Ma vue** filters by `MembershipScope`; Owner/Director personal = all active)
-- Signal Detail + pin/unpin/urgency commands (no manual Signal CRUD)
-- OpenAPI + generated clients + backend tests
-- **`MembershipFeedSubscription` is out of scope for Phase 4** (see `feed_subscription_domain.md`)
+Core delivered in `schema.yml`: Action lifecycle commands, `execution-feed/`, Signal-linked and free Actions with BU/AS classification.
 
-**Future test scenarios (documentation only until Phase 4 code):**
+**Not in Phase 5 core:** notifications, comments, checklists in Execution Feed, Signal archive, advanced feed pagination/filters, realtime avancé.
 
-| Area | Scenarios to cover when implementing |
-| --- | --- |
-| Signal service | Establishment scope on all FKs; one triplet per Signal; multi-problem Observation → N Signals |
-| Feed selectors | `signal_matches_membership_scope`; personal vs general; empty personal without scopes |
-| Feed API | `view_mode` query param; active statuses only; cross-tenant 404 |
-| Roles | Directeur / Gouvernante / Femme de chambre / Technicien Ma vue vs Vue générale (see `feed_domain.md`) |
-| Regression | No raw Observation text in feed items; OpenAPI drift check in CI |
-
-Detailed scenario tables: `signal_domain.md` §12, `feed_domain.md` §12. See [phase_4_ai_pipeline_signal_feed.md](phase_4_ai_pipeline_signal_feed.md).
-
-### Phase 5 — Actions / Execution Feed
-
-Add Action lifecycle, assignment, execution, validation, and Execution Feed updates.
+See [phase_5_actions_execution_feed.md](phase_5_actions_execution_feed.md).
 
 ### Phase 6 — Notifications
 
