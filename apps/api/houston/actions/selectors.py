@@ -57,14 +57,6 @@ def action_general_feed_visibility_q(*, membership: EstablishmentMembership) -> 
     return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
 
 
-def visible_actions_queryset(*, membership: EstablishmentMembership) -> QuerySet[Action]:
-    return (
-        actions_for_establishment(establishment_id=membership.establishment_id)
-        .filter(action_general_feed_visibility_q(membership=membership))
-        .order_by("-last_activity_at", "-created_at")
-    )
-
-
 def execution_feed_queryset(
     *,
     membership: EstablishmentMembership,

@@ -29,10 +29,10 @@ Houston remains a backend-authoritative operational workflow app.
 4. Phase 3 — Observation / Media / Transcription ✅ completed
 5. Phase 4 — AI Pipeline / Signal Feed ✅ completed
 6. Phase 5 — Actions / Execution Feed ✅ core implemented
-7. Phase 6 — Notifications
-8. Phase 7 — Checklists
-9. Phase 8A — Realtime invalidation foundation
-10. Phase 8B — Establishment Chat
+7. Phase 7 — Checklists
+8. Phase 8A — Realtime invalidation foundation
+9. Phase 8B — Establishment Chat
+10. Phase 6 — Notifications
 11. Phase 9 — Hardening
 12. Phase 10 — Pilot readiness
 

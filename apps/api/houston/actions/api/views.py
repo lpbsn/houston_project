@@ -58,17 +58,6 @@ class EstablishmentScopedActionMixin(EstablishmentScopedObservationMixin):
     pass
 
 
-class CanAccessActions(permissions.BasePermission):
-    message = "You do not have permission to access actions."
-
-    def has_permission(self, request, view) -> bool:
-        membership = resolve_observation_actor_membership(
-            request,
-            establishment_id=view.establishment_id,
-        )
-        return can_create_action(membership) or membership is not None
-
-
 def _parse_page_size(raw: str | None) -> int:
     if raw is None or raw == "":
         return DEFAULT_PAGE_SIZE
