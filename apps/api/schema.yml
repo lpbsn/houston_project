@@ -4417,8 +4417,11 @@ components:
           type: boolean
         can_resolve:
           type: boolean
+        can_create_action:
+          type: boolean
       required:
       - can_cancel
+      - can_create_action
       - can_pin
       - can_resolve
       - can_set_urgency

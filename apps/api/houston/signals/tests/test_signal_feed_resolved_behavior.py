@@ -216,6 +216,7 @@ def test_detail_resolved_permission_hints_all_false(api_client):
     assert hints["can_set_urgency"] is False
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
+    assert hints["can_create_action"] is False
 
 
 def test_resolve_signal_clears_pin_and_high_urgency():

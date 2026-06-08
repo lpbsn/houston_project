@@ -22,6 +22,7 @@ import type { ActionCreateRequest, ScopedUserSearchResult } from '@/features/act
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { useSignalDetailQuery } from '@/features/signals/hooks'
 import { SignalsApiError } from '@/features/signals/api'
+import { shouldShowSignalCreateActionPlan } from '@/features/signals/lib/signal-create-action'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -153,16 +154,6 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
     )
   }
 
-  if (!canCreateActionRole(role)) {
-    return (
-      <TerrainErrorState
-        className="mx-3 mt-3"
-        message="Vous n'avez pas la permission de créer un plan d'action."
-        onRetry={() => onNavigate(mode === 'linked' && signalId ? `/signals/${signalId}` : '/execution')}
-      />
-    )
-  }
-
   if (mode === 'linked') {
     if (!signalId) {
       return (
@@ -192,19 +183,23 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
       )
     }
 
-    const signal = detailQuery.data
-    const canPlan =
-      signal.status === 'open' || signal.status === 'in_progress'
-
-    if (!canPlan) {
+    if (!shouldShowSignalCreateActionPlan(detailQuery.data.permission_hints)) {
       return (
         <TerrainErrorState
           className="mx-3 mt-3"
-          message="Ce signal ne permet plus la création d'un plan d'action."
+          message="Vous n'avez pas la permission de créer un plan d'action."
           onRetry={() => onNavigate(`/signals/${signalId}`)}
         />
       )
     }
+  } else if (!canCreateActionRole(role)) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Vous n'avez pas la permission de créer un plan d'action."
+        onRetry={() => onNavigate('/execution')}
+      />
+    )
   }
 
   const errorMessage = createMutation.error ? getErrorMessage(createMutation.error) : null

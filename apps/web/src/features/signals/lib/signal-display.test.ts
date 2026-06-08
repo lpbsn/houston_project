@@ -33,6 +33,7 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
       can_set_urgency: false,
       can_cancel: false,
       can_resolve: false,
+      can_create_action: false,
     },
     ...overrides,
   }

@@ -168,7 +168,7 @@ Not validated yet:
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
 
-API responses expose `permission_hints` (`can_pin`, `can_set_urgency`, `can_cancel`, `can_resolve`) for UI display; backend permission checks on command endpoints remain authoritative.
+API responses expose `permission_hints` (`can_pin`, `can_set_urgency`, `can_cancel`, `can_resolve`, `can_create_action`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_action` is signal-scoped: it indicates whether the current membership may create a linked Action from this Signal (aligned with `can_create_linked_action`). `POST /actions/` enforcement remains the final authority.
 
 ## 8. Events
 

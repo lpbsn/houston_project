@@ -20,6 +20,7 @@ import {
   useUnpinSignalMutation,
 } from '../hooks'
 import { SignalsApiError } from '../api'
+import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
 import { formatSignalRelativeTime } from '../lib/signal-display'
 import type { SignalDetail } from '../types'
 
@@ -53,9 +54,6 @@ function resolveMediaCount(signal: SignalDetail): number {
 export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const role = auth.bootstrap?.active_membership?.role
-  const canCreateAction =
-    role === 'owner' || role === 'director' || role === 'manager'
 
   const lifecycleClosed = () => {
     onNavigate('/signals')
@@ -101,9 +99,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
   const mediaCount = resolveMediaCount(signal)
-  const showCreateActionPlan =
-    canCreateAction && (signal.status === 'open' || signal.status === 'in_progress')
-  const showStickyCreateActionFooter = showCreateActionPlan
+  const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
   const hasLifecycleSticky =
     signal.permission_hints.can_resolve || signal.permission_hints.can_cancel
   const showStickyFooter = hasLifecycleSticky || showStickyCreateActionFooter

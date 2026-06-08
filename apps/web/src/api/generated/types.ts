@@ -1521,6 +1521,7 @@ export interface components {
             can_set_urgency: boolean;
             can_cancel: boolean;
             can_resolve: boolean;
+            can_create_action: boolean;
         };
         ProposalActivitySubjectItem: {
             client_key: string;
