@@ -69,18 +69,10 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
 }
 
 export function shouldRedirectAuthenticatedPublicRoute(route: AppRoute): boolean {
-  if (route.kind === 'unknown') {
-    return true
-  }
-
   return route.kind === 'static' && (route.path === '/' || route.path === '/login')
 }
 
 export function shouldRedirectUnauthenticatedPublicRoute(route: AppRoute): boolean {
-  if (route.kind === 'unknown') {
-    return true
-  }
-
   return route.kind === 'static' && route.path === '/'
 }
 

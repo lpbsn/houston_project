@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { useAppRoute } from '@/app/app-routes'
+import { NotFoundPage } from '@/app/not-found-page'
 import { useAuth } from '@/app/auth-provider'
 import {
   getTerrainContentKey,
@@ -83,7 +84,6 @@ function App() {
           route.path === '/onboarding' ||
           route.path === '/select-establishment' ||
           route.path === '/no-establishment')) ||
-      route.kind === 'unknown' ||
       route.kind === 'signal-detail' ||
       route.kind === 'signal-action-create' ||
       route.kind === 'action-create' ||
@@ -185,7 +185,21 @@ function App() {
     }
 
     if (route.kind === 'unknown') {
-      return null
+      const fallbackPath = !auth.isAuthenticated
+        ? '/login'
+        : auth.hasOperationalAccess
+          ? '/reporting'
+          : (getAuthenticatedLandingPath(auth.bootstrap) ?? '/login')
+      const backLabel = !auth.isAuthenticated ? 'Retour à la connexion' : "Retour à l'accueil"
+
+      return (
+        <NotFoundPage
+          fallbackPath={fallbackPath}
+          backLabel={backLabel}
+          onNavigate={navigate}
+          className={auth.hasOperationalAccess ? 'mx-3 mt-6' : undefined}
+        />
+      )
     }
 
     if (route.kind === 'signal-detail') {
@@ -277,6 +291,7 @@ function App() {
 
     return null
   }, [
+    auth.bootstrap,
     auth.hasOperationalAccess,
     auth.isAuthenticated,
     auth.isReady,
@@ -380,7 +395,15 @@ function App() {
                         'Votre compte est actif, mais aucun établissement ne vous est associé.',
                       actions: signOutAction,
                     }
-                  : {
+                  : route.kind === 'unknown'
+                    ? {
+                        headingBadge: 'Navigation',
+                        title: 'Page introuvable',
+                        description:
+                          'Cette adresse ne correspond à aucune page Houston.',
+                        actions: auth.isAuthenticated ? signOutAction : signInAction,
+                      }
+                    : {
                       headingBadge: 'Sign in',
                       title: 'Welcome back',
                       description: 'Sign in to access your Houston workspace.',
@@ -397,6 +420,23 @@ function App() {
                         </Button>
                       ),
                     }
+
+  if (route.kind === 'unknown' && auth.hasOperationalAccess) {
+    return (
+      <TerrainShell
+        contentKey="not-found"
+        showBottomNav={true}
+        activeNavPath="/reporting"
+        mainScroll="auto"
+        navigate={navigate}
+        topbar={
+          <TerrainTopbar variant="hub" pageTitle="Page introuvable" showBottomBorder={true} />
+        }
+      >
+        {routeContent}
+      </TerrainShell>
+    )
+  }
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)

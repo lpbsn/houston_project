@@ -5,8 +5,7 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
-import { TerrainComingSoonState } from '@/components/layout/terrain-empty-state'
-import { TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { ActionsApiError } from '@/features/actions/api'
 import { useExecutionFeedQuery } from '@/features/actions/hooks'
 import type { ExecutionViewMode } from '@/features/actions/types'
@@ -16,6 +15,10 @@ import { ExecutionActionCard } from '../components/execution-action-card'
 import { ExecutionChecklistsPlaceholderSection } from '../components/execution-checklists-placeholder-section'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { groupExecutionActionsBySection } from '../lib/execution-action-sections'
+import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
+
+/** Dev/preview only — mock checklist UI for upcoming feature work. */
+const SHOW_EXECUTION_CHECKLIST_PREVIEW = true
 
 type ExecutionFeedPageProps = {
   onOpenAction?: (actionId: string) => void
@@ -30,13 +33,6 @@ function getErrorMessage(error: unknown): string {
     return error.message
   }
   return 'Une erreur est survenue.'
-}
-
-function getEmptyFeedDescription(viewMode: ExecutionViewMode): string {
-  if (viewMode === 'personal') {
-    return 'Aucune action ne vous est assignée pour le moment.'
-  }
-  return 'Aucune action visible dans votre périmètre pour le moment.'
 }
 
 export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPageProps) {
@@ -95,9 +91,10 @@ export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPag
         ) : null}
         {feedQuery.isSuccess ? (
           <div className="flex flex-col gap-3 pt-5">
-            <ExecutionChecklistsPlaceholderSection />
+            {SHOW_EXECUTION_CHECKLIST_PREVIEW ? <ExecutionChecklistsPlaceholderSection /> : null}
             {feedQuery.data.items.length === 0 ? (
-              <TerrainComingSoonState
+              <TerrainEmptyState
+                className="mx-3 mt-3"
                 title="Aucune action"
                 description={getEmptyFeedDescription(viewMode)}
               />

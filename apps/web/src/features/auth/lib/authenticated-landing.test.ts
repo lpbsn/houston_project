@@ -123,11 +123,11 @@ describe('resolveAuthenticatedLanding', () => {
 })
 
 describe('shouldRedirectAuthenticatedPublicRoute', () => {
-  it('returns true for root, login, and unknown routes', () => {
+  it('returns true for root and login only', () => {
     expect(shouldRedirectAuthenticatedPublicRoute({ kind: 'static', path: '/' })).toBe(true)
     expect(shouldRedirectAuthenticatedPublicRoute({ kind: 'static', path: '/login' })).toBe(true)
     expect(shouldRedirectAuthenticatedPublicRoute({ kind: 'unknown', pathname: '/foo' })).toBe(
-      true,
+      false,
     )
   })
 
@@ -142,10 +142,10 @@ describe('shouldRedirectAuthenticatedPublicRoute', () => {
 })
 
 describe('shouldRedirectUnauthenticatedPublicRoute', () => {
-  it('returns true for root and unknown routes', () => {
+  it('returns true for root only', () => {
     expect(shouldRedirectUnauthenticatedPublicRoute({ kind: 'static', path: '/' })).toBe(true)
     expect(shouldRedirectUnauthenticatedPublicRoute({ kind: 'unknown', pathname: '/foo' })).toBe(
-      true,
+      false,
     )
   })
 
@@ -226,10 +226,10 @@ describe('shouldShowAuthRoutingLoading', () => {
     )
   })
 
-  it('shows loading for unknown when unauthenticated and ready', () => {
+  it('does not show loading for unknown when unauthenticated and ready', () => {
     expect(
       shouldShowAuthRoutingLoading(unknownRoute, { isReady: true, isAuthenticated: false }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('treats parseAppRoute login with query as login for loading policy', () => {
