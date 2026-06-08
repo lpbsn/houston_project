@@ -10,6 +10,18 @@ xcode-select --install
 
 Remplacez `<URL_DU_REPO>` par l’URL SSH réelle fournie par votre équipe (ex. `git@github.com:mon-org/houston_project.git`).
 
+### Machine neuve vs reset destructif
+
+| Parcours | Quand l’utiliser | Commandes clés |
+|----------|------------------|----------------|
+| **Machine neuve** | Premier clone, jamais lancé sur ce Mac | `cp .env.example .env` → `mkdir -p apps/api/private_media` → `make build` → **`make bootstrap-dev`** → `make web-install` → `make web-dev` |
+| **Reset destructif** | Repartir d’une base vide (données locales perdues) | **`make reset-dev-db`** (lire le warning) → éventuellement `make web-install` → `make web-dev` |
+| **Quotidien / après `git pull`** | Stack déjà configurée, pas de wipe | **`make bootstrap-dev`** (non destructif, safe à relancer) ou `make up-backend` |
+
+- **`make bootstrap-dev`** ne remplace pas **`make build`** (première install) ni **`make web-install`** (frontend local).
+- **`make reset-dev-db`** efface la DB Postgres locale et **tous les volumes Docker du projet** (dont `web_node_modules` si vous utilisez le conteneur `web`). Il ne modifie ni le code ni le `.env`. Relancez **`make web-install`** si le frontend Docker (`make up`) était utilisé.
+- Validation E2E documentée : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
+
 ---
 
 ### Étape 1 — Aller dans un dossier de travail
@@ -85,33 +97,35 @@ make build
 
 ---
 
-### Étape 8 — Lancer la base de données, l’API et le worker en arrière-plan
+### Étape 8 — Initialiser le backend (recommandé)
+
+Une seule commande démarre les services, applique les migrations, importe le catalogue global et vérifie Django + catalogue :
+
+```bash
+make bootstrap-dev
+```
+
+Équivalent granulaire (si vous préférez étape par étape) :
 
 ```bash
 make up-backend
+make migrate
+make import-catalog
+make check
+make catalog-check
 ```
 
-Attendez ~30 secondes, puis vérifiez :
+Vérifiez que les services tournent :
 
 ```bash
 docker compose ps
 ```
 
-Les services `postgres`, `redis`, `api` et `celery` doivent être **Up**.
+Les services `postgres`, `redis`, `api` et `celery` doivent être **Up**. `make catalog-check` doit afficher **14** `CatalogBusinessUnit` et **134** `CatalogActivitySubject`.
 
 ---
 
-### Étape 9 — Créer les tables dans la base (migrations)
-
-```bash
-make migrate
-```
-
-Message attendu : migrations appliquées sans erreur.
-
----
-
-### Étape 10 — Vérifier que l’API répond
+### Étape 9 — Vérifier que l’API répond
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/health/
@@ -121,7 +135,7 @@ Vous devez voir `200`. Sinon : `docker compose logs api --tail=50`
 
 ---
 
-### Étape 11 — Installer les dépendances du frontend (première fois)
+### Étape 10 — Installer les dépendances du frontend (première fois)
 
 ```bash
 make web-install
@@ -129,7 +143,7 @@ make web-install
 
 ---
 
-### Étape 12 — Lancer le site web en local
+### Étape 11 — Lancer le site web en local
 
 Ouvrez un **deuxième terminal**, retournez à la racine du projet :
 
@@ -142,7 +156,7 @@ Laissez ce terminal ouvert. Le serveur affiche une URL du type `http://localhost
 
 ---
 
-### Étape 13 — Ouvrir l’application dans le navigateur
+### Étape 12 — Ouvrir l’application dans le navigateur
 
 | Quoi ouvrir | Adresse |
 |-------------|---------|
@@ -154,7 +168,7 @@ Sur `/onboarding`, utilisez le **même code** que dans `HOUSTON_REGISTRATION_INV
 
 ---
 
-### Étape 14 — Arrêter tout quand vous avez fini
+### Étape 13 — Arrêter tout quand vous avez fini
 
 Terminal frontend : `Ctrl+C` pour arrêter `make web-dev`.
 
@@ -182,11 +196,19 @@ cd ~/Projects/houston_project
 make web-dev
 ```
 
-Après un `git pull` qui change la base ou l’API :
+Après un `git pull` qui change la base, le catalogue ou l’API :
 
 ```bash
 cd ~/Projects/houston_project
-make migrate
+make bootstrap-dev
+```
+
+Pour repartir d’une base vide (destructif — voir warning affiché) :
+
+```bash
+make reset-dev-db
+make web-install   # si vous utilisez le conteneur web (make up)
+make web-dev
 ```
 
 ---
@@ -197,7 +219,9 @@ make migrate
 |----------|-------------------|
 | Docker pas démarré | Ouvrir OrbStack ou Docker Desktop |
 | Port 5173 déjà pris | Ne pas lancer `make up` en même temps que `make web-dev` ; utiliser seulement `make up-backend` |
-| `make migrate` échoue | `make up-backend` puis réessayer `make migrate` |
+| `make migrate` ou `make bootstrap-dev` échoue | `make up-backend` puis réessayer `make bootstrap-dev` |
+| Catalogue vide / autocomplete vide | `make import-catalog` puis `make catalog-check` |
+| Repartir de zéro (DB locale) | `make reset-dev-db` puis `make web-install` si besoin |
 | Inscription refusée | Vérifier `HOUSTON_REGISTRATION_INVITE_CODES` dans `.env`, puis `docker compose up -d --force-recreate api` |
 
 Détails et dépannage : sections 2 à 14 ci-dessous.
@@ -434,17 +458,39 @@ docker compose down
 
 ## 7. Initialisation base de données
 
-Avec les conteneurs **api** et **postgres** démarrés (dans un **second terminal** si vous utilisez `docker compose up` au premier plan) :
+### Parcours recommandé (non destructif)
+
+```bash
+make bootstrap-dev
+```
+
+Enchaîne : `up-backend` → `migrate` → `import-catalog` → `check` → `catalog-check`.
+
+### Étapes granulaires
+
+Avec les conteneurs **api** et **postgres** démarrés :
 
 ```bash
 make migrate
+make import-catalog
+make catalog-check
 ```
 
-Équivalent : `docker compose exec api python manage.py migrate`.
+- `make migrate` — équivalent : `docker compose exec api python manage.py migrate`.
+- `make import-catalog` — charge les CSV versionnés (`docs/catalogue/business_units.csv`, `activity_subjects.csv`) dans **`CatalogBusinessUnit`** et **`CatalogActivitySubject`** (catalogue global v2, autocomplete onboarding). Idempotent : safe à relancer.
+- `make catalog-check` — vérifie **14** `CatalogBusinessUnit` et **134** `CatalogActivitySubject` en base (pas les modèles runtime `BusinessUnit` / `ActivitySubject` d’établissement).
 
-**Données initiales** : pas de commande `seed` ou `loaddata` documentée dans le README/Makefile. Les catalogues onboarding sont alimentés par des **migrations Django** (ex. `0005_seed_onboarding_catalogs`).
+### Reset destructif
 
-**Premier utilisateur** : pas de `createsuperuser` ni d’admin Django (module admin non installé). Créez un compte via l’interface **http://localhost:5173/onboarding** avec un code défini dans `HOUSTON_REGISTRATION_INVITE_CODES`.
+Pour repartir d’une base Postgres vide sur une machine déjà configurée :
+
+```bash
+make reset-dev-db
+```
+
+Affiche un warning : suppression DB locale, volumes Docker (dont `web_node_modules`), perte de toutes les données locales. Ne modifie pas le `.env`. Puis `make web-install` si le conteneur `web` était utilisé.
+
+**Premier utilisateur** : pas de `createsuperuser` ni d’admin Django (module admin non installé). Créez un compte via **http://localhost:5173/onboarding** avec un code défini dans `HOUSTON_REGISTRATION_INVITE_CODES`.
 
 ---
 
@@ -569,6 +615,10 @@ make docker-verify-security
 | Logs API | `docker compose logs -f api` |
 | Shell dans le conteneur API | `make shell` |
 | Migrations | `make migrate` |
+| Import catalogue global v2 | `make import-catalog` |
+| Vérifier catalogue seed (14 BU / 134 AS) | `make catalog-check` |
+| Init backend complète (non destructif) | `make bootstrap-dev` |
+| Reset DB locale (destructif) | `make reset-dev-db` |
 | Tests backend | `make test` |
 | Lint backend | `make lint` |
 | Frontend dev (local) | `make web-dev` |
@@ -577,6 +627,7 @@ make docker-verify-security
 
 Commandes Django custom repérées :
 
+- `python manage.py import_business_unit_catalog` (app `establishments` — aussi `make import-catalog`)
 - `python manage.py cleanup_expired_uploads` (app `uploads`)
 - `python manage.py dump_establishment_taxonomy` (app `establishments`)
 
@@ -588,12 +639,11 @@ Exécution via Docker : `docker compose exec api python manage.py <commande>`.
 
 1. Récupérer le code : `git pull`
 2. Reconstruire si Dockerfiles/dépendances changent : `docker compose build`
-3. Redémarrer : `make up-backend`
-4. Migrations : `make migrate`
-5. Si contrat API modifié : `make schema` puis `make web-api-generate`
-6. Frontend : `make web-install` si `package-lock.json` a changé
-7. Si `.env` modifié : `docker compose up -d --force-recreate api celery`
-8. Si nouveau besoin médias : vérifier `apps/api/private_media` existe toujours
+3. Redémarrer + migrations + catalogue : `make bootstrap-dev` (ou `make up-backend` puis `make migrate` + `make import-catalog`)
+4. Si contrat API modifié : `make schema` puis `make web-api-generate`
+5. Frontend : `make web-install` si `package-lock.json` a changé
+6. Si `.env` modifié : `docker compose up -d --force-recreate api celery`
+7. Si nouveau besoin médias : vérifier `apps/api/private_media` existe toujours
 
 ---
 
@@ -615,9 +665,16 @@ Exécution via Docker : `docker compose exec api python manage.py <commande>`.
 - Vous avez lancé **`make up`** (conteneur `web`) **et** **`make web-dev`** : un seul des deux sur 5173.
 - Profil npm local : `make up-backend` (sans service `web`).
 
-### `make migrate` échoue : conteneur api arrêté
+### `make migrate` ou `make bootstrap-dev` échoue : conteneur api arrêté
 
-- `docker compose up -d postgres redis api` puis `make migrate`.
+- `make up-backend` puis `make bootstrap-dev`.
+
+### Repartir d’une base vide (destructif)
+
+- `make reset-dev-db` — lit le warning avant exécution.
+- Supprime la DB Postgres locale et les volumes Docker du projet (dont `web_node_modules`).
+- Relancez `make web-install` si vous utilisez le conteneur frontend Docker (`make up`).
+- Le frontend npm local (`make web-dev`) n’est en général pas impacté.
 
 ### Permission / uploads / `uploads.E001`
 
@@ -658,7 +715,8 @@ Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ;
 - [ ] `HOUSTON_REGISTRATION_INVITE_CODES` défini si besoin de `/onboarding`
 - [ ] `apps/api/private_media` créé
 - [ ] `docker compose ps` : `postgres`, `redis`, `api`, `celery` **Up**
-- [ ] `make migrate` terminé sans erreur
+- [ ] `make bootstrap-dev` terminé sans erreur (ou `make migrate` + `make import-catalog` + `make catalog-check`)
+- [ ] `make catalog-check` → 14 `CatalogBusinessUnit`, 134 `CatalogActivitySubject`
 - [ ] http://localhost:8000/api/v1/health/ → 200
 - [ ] http://localhost:8000/api/docs/ accessible
 - [ ] `make web-install` OK

@@ -104,6 +104,16 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 **macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Chaque machine a sa propre base Postgres (volume Docker local).
 
+**Fresh install backend** (après `cp .env.example .env`, `mkdir -p apps/api/private_media`, et `make build` sur une machine neuve) :
+
+```bash
+make bootstrap-dev
+```
+
+Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `CatalogActivitySubject`), `manage.py check` et `catalog-check`. Non destructif — safe après un `git pull`.
+
+**Reset local destructif** (DB + volumes Docker effacés) : `make reset-dev-db` — détails et parcours machine neuve vs reset dans [`INSTALL_MAC.md`](INSTALL_MAC.md). Validation E2E : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
+
 **Frontend local vs conteneur `web`** : `make up` démarre aussi le service Docker `web` sur le port 5173 ; pour le frontend en npm sur l’hôte, utilisez `make up-backend` puis `make web-dev` (ne pas lancer les deux frontends en parallèle).
 
 1. Copy `.env.example` to `.env`.

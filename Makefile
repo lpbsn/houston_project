@@ -1,6 +1,6 @@
 .PHONY: build up up-backend down check test lint schema shell migrate migrations-check \
 	web-install web-dev web-build web-typecheck web-api-generate verify \
-	docker-verify-security
+	docker-verify-security import-catalog catalog-check bootstrap-dev reset-dev-db
 
 build:
 	docker compose build
@@ -39,6 +39,23 @@ migrate:
 
 migrations-check:
 	docker compose exec api python manage.py makemigrations --check --dry-run
+
+import-catalog:
+	docker compose exec api python manage.py import_business_unit_catalog
+
+catalog-check:
+	docker compose exec api python manage.py shell -c "import sys; from houston.establishments.models import CatalogBusinessUnit, CatalogActivitySubject; bu = CatalogBusinessUnit.objects.count(); n = CatalogActivitySubject.objects.count(); (print('catalog-check FAILED: CatalogBusinessUnit=%d (expected 14), CatalogActivitySubject=%d (expected 134)' % (bu, n)), print('Run: make import-catalog'), sys.exit(1)) if bu != 14 or n != 134 else print('catalog-check OK: %d CatalogBusinessUnit, %d CatalogActivitySubject' % (bu, n))"
+
+bootstrap-dev: up-backend migrate import-catalog check catalog-check
+
+reset-dev-db:
+	@echo "WARNING: reset-dev-db is destructive."
+	@echo "  - Supprime la base PostgreSQL locale (volume postgres_data)."
+	@echo "  - Supprime tous les volumes Docker du projet (dont web_node_modules)."
+	@echo "  - Toutes les données locales (comptes, établissements, signaux…) seront perdues."
+	@echo "  - Après reset, make web-install peut être nécessaire si vous utilisez le conteneur web."
+	docker compose down -v --remove-orphans
+	$(MAKE) bootstrap-dev
 
 web-install:
 	cd apps/web && npm install
