@@ -1,7 +1,7 @@
 # Observation Domain
 
 Status: authoritative
-Last reviewed: 2026-06-01
+Last reviewed: 2026-06-08
 Implementation status: implemented (Phase 3 MVP — submit + processing queued; pipeline Phase 4)
 
 ## 1. Purpose
@@ -34,7 +34,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - Processing enqueue after persistence.
 - Local-only frontend draft before submit.
 - Simplified post-submit feedback for analysis progress and outcome.
-- Candidate: checklist-origin Observation flow and checklist context linkage, including fields such as `checklist_execution_id` and `checklist_task_execution_id`, when validated in the Checklist and API layers.
+- Checklist MVP target (not implemented): checklist-origin Observation via `POST .../checklist-task-executions/{id}/create-observation/` (not a public extension of `POST observations/`), with context linkage (`checklist_execution_id`, `checklist_task_execution_id`, extended `origin`). Same 10–1,000 character validation as direct report — no shorter-text exception. See [`checklist_domain.md`](checklist_domain.md) §3.8.
 
 ## 3. Out of Scope
 
@@ -56,7 +56,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - Observation is not a Signal, Action, or ChecklistTask.
 - Observation is persisted on submit and remains unique even if later processing creates or aggregates Signals.
 - Text is required as typed input or validated transcription text; photo-only Observation is forbidden.
-- Target validation is 10 to 1,000 characters; a shorter checklist-origin text is candidate only when validated checklist context supports it.
+- Validation is 10 to 1,000 characters for all origins, including checklist-origin (Checklist MVP). No shorter-text exception in MVP.
 - Photos are optional and follow Upload / Media rules.
 - Audio is temporary; only validated transcription text persists in MVP.
 - Images are not sent to AI in MVP.
@@ -134,7 +134,7 @@ See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)
 - Resulting Signals, not raw Observations, are the normal supervised product surface.
 - Any exceptional raw Observation access must remain backend-authorized and follow Security / RGPD constraints.
 - No anonymous Observation submission is allowed.
-- Candidate: checklist-origin Observation requires authorized access to the originating checklist context.
+- Checklist MVP: checklist-origin Observation requires authorized access to the originating checklist task execution (see [`checklist_domain.md`](checklist_domain.md) §3.8).
 
 ## 8. Events
 
@@ -160,8 +160,8 @@ Current API truth is `apps/api/schema.yml`.
 Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/establishments/{establishment_id}/observations/` — submit with `text` (maps to internal `raw_text`) and optional `temporary_upload_ids`; response includes `id`, `submitted_at`, `media_count`, `processing_status` only (no raw text).
 
-Candidate API capabilities only:
-- submit checklist-origin Observation
+Candidate API capabilities only (Checklist MVP — not in `schema.yml` today):
+- submit checklist-origin Observation via `POST .../checklist-task-executions/{id}/create-observation/` only (task command; do not extend public `POST observations/`)
 - `GET` processing status (deferred; submit returns `processing_status=queued` in Phase 3)
 - internal or admin retry processing command (Phase 4+)
 
