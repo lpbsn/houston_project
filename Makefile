@@ -1,5 +1,5 @@
 .PHONY: build up up-backend down check test lint schema shell migrate migrations-check \
-	web-install web-dev web-build web-typecheck web-api-generate verify \
+	web-install web-dev web-build web-typecheck web-test web-api-generate verify \
 	docker-verify-security import-catalog catalog-check bootstrap-dev reset-dev-db
 
 build:
@@ -68,6 +68,9 @@ web-build:
 
 web-typecheck:
 	cd apps/web && npm run typecheck
+
+web-test:
+	cd apps/web && npm test
 
 web-api-generate:
 	cd apps/web && npm run api:generate

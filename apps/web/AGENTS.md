@@ -366,6 +366,13 @@ Build:
 cd apps/web && npm run build
 ```
 
+Test:
+
+```
+cd apps/web && npm test
+cd apps/web && npm run test:watch
+```
+
 Generate API client:
 
 ```
