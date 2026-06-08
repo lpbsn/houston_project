@@ -12,6 +12,8 @@ import {
   markActionDone,
   reopenAction,
   reassignAction,
+  searchEstablishmentUsers,
+  establishmentUserSearchQueryKey,
   updateActionDueAt,
   validateAction,
 } from './api'
@@ -143,5 +145,15 @@ export function useUpdateActionDueAtMutation(
     onSuccess: () => {
       invalidateActionSurfaces(queryClient)
     },
+  })
+}
+
+export function useEstablishmentUserSearchQuery(establishmentId: string, query: string) {
+  const trimmedQuery = query.trim()
+
+  return useQuery({
+    queryKey: establishmentUserSearchQueryKey(establishmentId, trimmedQuery),
+    queryFn: () => searchEstablishmentUsers(establishmentId, trimmedQuery),
+    enabled: Boolean(establishmentId) && trimmedQuery.length >= 2,
   })
 }

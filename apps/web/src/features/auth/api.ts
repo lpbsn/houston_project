@@ -15,6 +15,7 @@ import type {
   RegistrationResponse,
   SwitchEstablishmentRequest,
   WorkspaceSummaryResponse,
+  BusinessUnitTreeResponse,
 } from './types'
 
 export const bootstrapQueryKey = ['auth', 'bootstrap'] as const
@@ -528,41 +529,32 @@ export async function inviteMembership(
 export const businessUnitTreeQueryKey = (establishmentId: string) =>
   ['workspace', 'business-units', establishmentId] as const
 
-export type BusinessUnitTreeResponse = {
-  establishment_id: string
-  establishment_name: string
-  business_units: Array<{
-    id: string
-    key: string
-    label: string
-    description: string
-    unit_type: string
-    activity_subjects: Array<{
-      id: string
-      normalized_name: string
-      label: string
-      description: string
-    }>
-  }>
-}
+export type { BusinessUnitTreeResponse }
 
-export async function getBusinessUnitTree(establishmentId: string): Promise<BusinessUnitTreeResponse> {
+export async function fetchBusinessUnitTree(
+  establishmentId: string,
+): Promise<BusinessUnitTreeResponse> {
   const csrfToken = await ensureCsrfToken()
-  const accessToken = getAccessToken()
-  const response = await fetch(
-    `/api/v1/establishments/${establishmentId}/business-units/`,
-    {
-      credentials: 'include',
-      headers: {
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        'X-CSRFToken': csrfToken,
-      },
-    },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      fetch(`/api/v1/establishments/${establishmentId}/business-units/`, {
+        credentials: 'include',
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          'X-CSRFToken': csrfToken,
+        },
+      }).then(async (response) => ({
+        response,
+        data: response.ok ? ((await response.json()) as BusinessUnitTreeResponse) : null,
+      })),
+    { refreshable: true },
   )
-  if (!response.ok) {
-    throw new AuthApiError('Business unit tree could not be loaded.', response.status)
+
+  if (!result.response.ok || !result.data) {
+    throw new AuthApiError('Business unit tree could not be loaded.', result.response.status)
   }
-  return response.json() as Promise<BusinessUnitTreeResponse>
+
+  return result.data
 }
 
 export { AuthApiError }

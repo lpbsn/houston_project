@@ -53,3 +53,20 @@ export async function withAuthRetry<TResult extends { response: Response }>(
 
   return retriedResult
 }
+
+export async function fetchWithAuthRetry(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  const result = await withAuthRetry(async (token) => {
+    const headers = new Headers(init.headers)
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    } else {
+      headers.delete('Authorization')
+    }
+    const response = await fetch(input, { ...init, headers })
+    return { response }
+  })
+  return result.response
+}

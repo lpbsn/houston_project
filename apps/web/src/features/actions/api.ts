@@ -1,4 +1,6 @@
-import { withAuthRetry } from '@/api/client'
+import { apiClient, withAuthRetry } from '@/api/client'
+
+import { parseStandardApiError } from '@/lib/api-errors'
 
 import type {
   ActionCreateRequest,
@@ -16,6 +18,9 @@ export const actionsQueryKeys = {
     ['actions', 'detail', establishmentId, actionId] as const,
 }
 
+export const establishmentUserSearchQueryKey = (establishmentId: string, query: string) =>
+  ['users', 'search', establishmentId, query] as const
+
 export class ActionsApiError extends Error {
   status: number
   detail: string
@@ -30,97 +35,117 @@ export class ActionsApiError extends Error {
   }
 }
 
-async function fetchWithAuthRetry(
-  input: RequestInfo | URL,
-  init: RequestInit,
-): Promise<Response> {
-  const result = await withAuthRetry(async (token) => {
-    const headers = new Headers(init.headers)
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
-    } else {
-      headers.delete('Authorization')
-    }
-    const response = await fetch(input, { ...init, headers })
-    return { response }
-  })
-  return result.response
+function getAuthHeaders(accessToken: string | null) {
+  return accessToken
+    ? {
+        Authorization: `Bearer ${accessToken}`,
+      }
+    : undefined
 }
 
 function parseError(response: Response, payload: unknown): ActionsApiError {
-  const body = typeof payload === 'object' && payload !== null ? payload : {}
-  const detail =
-    'detail' in body && typeof body.detail === 'string'
-      ? body.detail
-      : 'Une erreur est survenue.'
-  const code = 'code' in body && typeof body.code === 'string' ? body.code : null
-  return new ActionsApiError({ status: response.status, detail, code })
+  const { status, detail, code } = parseStandardApiError(response, payload)
+  return new ActionsApiError({ status, detail, code })
+}
+
+function assertActionData<T>(result: {
+  response: Response
+  data?: T
+  error?: unknown
+}): T {
+  if (result.response.ok && result.data) {
+    return result.data
+  }
+
+  throw parseError(result.response, result.error)
+}
+
+function actionPathParams(establishmentId: string, actionId: string) {
+  return {
+    path: {
+      establishment_id: establishmentId,
+      action_id: actionId,
+    },
+  }
 }
 
 export async function fetchExecutionFeed(
   establishmentId: string,
   viewMode: ExecutionViewMode,
 ): Promise<ExecutionFeedResponse> {
-  const params = new URLSearchParams({ view_mode: viewMode })
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/execution-feed/?${params.toString()}`,
-    { method: 'GET' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/execution-feed/', {
+        params: {
+          path: { establishment_id: establishmentId },
+          query: { view_mode: viewMode },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ExecutionFeedResponse
+
+  return assertActionData<ExecutionFeedResponse>(result)
 }
 
 export async function fetchActionDetail(
   establishmentId: string,
   actionId: string,
 ): Promise<ActionDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/actions/${actionId}/`,
-    { method: 'GET' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/actions/{action_id}/', {
+        params: actionPathParams(establishmentId, actionId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ActionDetail
+
+  return assertActionData<ActionDetail>(result)
 }
 
 export async function createAction(
   establishmentId: string,
   body: ActionCreateRequest,
 ): Promise<ActionDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/actions/`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/actions/', {
+        params: {
+          path: { establishment_id: establishmentId },
+        },
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ActionDetail
+
+  return assertActionData<ActionDetail>(result)
 }
 
 async function postActionCommand(
   establishmentId: string,
   actionId: string,
-  command: string,
+  command:
+    | 'accept'
+    | 'cancel'
+    | 'mark-done'
+    | 'reopen'
+    | 'validate',
 ): Promise<ActionDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/actions/${actionId}/${command}/`,
-    { method: 'POST' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        `/api/v1/establishments/{establishment_id}/actions/{action_id}/${command}/` as '/api/v1/establishments/{establishment_id}/actions/{action_id}/accept/',
+        {
+          params: actionPathParams(establishmentId, actionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ActionDetail
+
+  return assertActionData<ActionDetail>(result)
 }
 
 export const acceptAction = (establishmentId: string, actionId: string) =>
@@ -143,19 +168,17 @@ export async function reassignAction(
   actionId: string,
   assignedTo: string,
 ): Promise<ActionDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/actions/${actionId}/reassign/`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assigned_to: assignedTo }),
-    },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/actions/{action_id}/reassign/', {
+        params: actionPathParams(establishmentId, actionId),
+        body: { assigned_to: assignedTo },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ActionDetail
+
+  return assertActionData<ActionDetail>(result)
 }
 
 export async function updateActionDueAt(
@@ -163,33 +186,34 @@ export async function updateActionDueAt(
   actionId: string,
   dueAt: string,
 ): Promise<ActionDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/actions/${actionId}/due-at/`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ due_at: dueAt }),
-    },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/establishments/{establishment_id}/actions/{action_id}/due-at/', {
+        params: actionPathParams(establishmentId, actionId),
+        body: { due_at: dueAt },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ActionDetail
+
+  return assertActionData<ActionDetail>(result)
 }
 
 export async function searchEstablishmentUsers(
   establishmentId: string,
   query: string,
 ): Promise<ScopedUserSearchResult[]> {
-  const params = new URLSearchParams({ q: query })
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/users/search/?${params.toString()}`,
-    { method: 'GET' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/users/search/', {
+        params: {
+          path: { establishment_id: establishmentId },
+          query: { q: query },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as ScopedUserSearchResult[]
+
+  return assertActionData<ScopedUserSearchResult[]>(result)
 }

@@ -1,9 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
 import { TerrainFilterSlot } from '@/components/ui/terrain'
 import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
-import { businessUnitTreeQueryKey, getBusinessUnitTree } from '@/features/auth/api'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 
 import {
   buildClassificationLabelsFromTree,
@@ -33,11 +32,7 @@ export function SignalFeedFiltersBar({
   const [classificationSheetOpen, setClassificationSheetOpen] = useState(false)
   const normalizedFilters = normalizeSignalFeedFilters(filters)
 
-  const treeQuery = useQuery({
-    queryKey: businessUnitTreeQueryKey(establishmentId),
-    queryFn: () => getBusinessUnitTree(establishmentId),
-    enabled: Boolean(establishmentId),
-  })
+  const treeQuery = useBusinessUnitTreeQuery(establishmentId)
 
   const classificationLabels = useMemo(() => {
     if (!treeQuery.data) {

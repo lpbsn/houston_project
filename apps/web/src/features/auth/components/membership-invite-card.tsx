@@ -1,17 +1,13 @@
 import { CheckCircle2, Copy, LoaderCircle, UserPlus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { BusinessUnitScopeSelector } from '@/components/domain/business-unit-scope-selector'
-import {
-  getBusinessUnitTree,
-  inviteMembership,
-  businessUnitTreeQueryKey,
-} from '@/features/auth/api'
+import { inviteMembership } from '@/features/auth/api'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import {
   type BusinessUnitScopeSelection,
 } from '@/features/auth/lib/business-unit-scope'
@@ -59,11 +55,7 @@ export function MembershipInviteCard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const businessUnitQuery = useQuery({
-    queryKey: businessUnitTreeQueryKey(establishmentId),
-    queryFn: () => getBusinessUnitTree(establishmentId),
-    staleTime: 60_000,
-  })
+  const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
 
   const roleOptions = useMemo(() => {
     if (allowedTargetRoles) {

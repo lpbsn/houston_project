@@ -7,9 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  businessUnitTreeQueryKey,
   deactivateMembership,
-  getBusinessUnitTree,
   getMembership,
   getWorkspaceSummary,
   listMemberships,
@@ -19,6 +17,7 @@ import {
   updateMembership,
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { EstablishmentSelectorCard } from '@/features/auth/components/establishment-selector-card'
 import { EstablishmentSummaryCard } from '@/features/auth/components/establishment-summary-card'
 import { MembershipInviteCard } from '@/features/auth/components/membership-invite-card'
@@ -94,11 +93,7 @@ export function AppPage({ onNavigate }: { onNavigate?: (path: string) => void })
     staleTime: 30_000,
   })
 
-  const businessUnitQuery = useQuery({
-    queryKey: activeEstablishmentId
-      ? businessUnitTreeQueryKey(activeEstablishmentId)
-      : ['workspace', 'business-units', 'idle'],
-    queryFn: () => getBusinessUnitTree(activeEstablishmentId!),
+  const businessUnitQuery = useBusinessUnitTreeQuery(activeEstablishmentId, {
     enabled: Boolean(activeEstablishmentId && canManageMemberships),
     staleTime: 60_000,
   })

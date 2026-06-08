@@ -1,12 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+import { businessUnitTreeQueryKey } from '@/features/auth/api'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 
 import {
-  businessUnitTreeQueryKey,
   createRuntimeActivitySubject,
   createRuntimeBusinessUnit,
   deactivateRuntimeActivitySubject,
   deactivateRuntimeBusinessUnit,
-  fetchBusinessUnitTreeWithAuth,
   updateRuntimeBusinessUnit,
 } from './api'
 
@@ -18,11 +19,7 @@ export function useOperationalConfigTree(
   establishmentId: string | null | undefined,
   options?: QueryOptions,
 ) {
-  return useQuery({
-    queryKey: businessUnitTreeQueryKey(establishmentId ?? ''),
-    queryFn: () => fetchBusinessUnitTreeWithAuth(establishmentId!),
-    enabled: Boolean(establishmentId) && (options?.enabled ?? true),
-  })
+  return useBusinessUnitTreeQuery(establishmentId, options)
 }
 
 function useInvalidateOperationalConfigTree(establishmentId: string) {

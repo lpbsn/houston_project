@@ -1,4 +1,5 @@
-import { apiClient, withAuthRetry } from '@/api/client'
+import { apiClient, fetchWithAuthRetry, withAuthRetry } from '@/api/client'
+import { parseStandardApiError } from '@/lib/api-errors'
 
 import type {
   ObservationProcessingStatusResponse,
@@ -36,37 +37,9 @@ function getAuthHeaders(accessToken: string | null) {
     : undefined
 }
 
-async function fetchWithAuthRetry(
-  input: RequestInfo | URL,
-  init: RequestInit,
-): Promise<Response> {
-  const result = await withAuthRetry(async (token) => {
-    const headers = new Headers(init.headers)
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
-    } else {
-      headers.delete('Authorization')
-    }
-
-    const response = await fetch(input, {
-      ...init,
-      headers,
-    })
-
-    return { response }
-  })
-
-  return result.response
-}
-
 function parseError(response: Response, payload: unknown): ObservationsApiError {
-  const body = typeof payload === 'object' && payload !== null ? payload : {}
-  const detail =
-    'detail' in body && typeof body.detail === 'string'
-      ? body.detail
-      : 'Une erreur est survenue.'
-  const code = 'code' in body && typeof body.code === 'string' ? body.code : null
-  return new ObservationsApiError({ status: response.status, detail, code })
+  const { status, detail, code } = parseStandardApiError(response, payload)
+  return new ObservationsApiError({ status, detail, code })
 }
 
 export async function uploadTemporaryPhoto(

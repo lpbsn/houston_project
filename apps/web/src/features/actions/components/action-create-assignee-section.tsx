@@ -1,10 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
 import { Check, Search } from 'lucide-react'
 import { useState } from 'react'
 
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Input } from '@/components/ui/input'
-import { searchEstablishmentUsers } from '@/features/actions/api'
+import { useEstablishmentUserSearchQuery } from '@/features/actions/hooks'
 import {
   formatMembershipRoleDisplay,
   getDisplayNameInitials,
@@ -39,11 +38,7 @@ export function ActionCreateAssigneeSection({
 }: ActionCreateAssigneeSectionProps) {
   const [query, setQuery] = useState(selectedUser?.display_name ?? '')
 
-  const usersQuery = useQuery({
-    queryKey: ['users', 'search', establishmentId, query],
-    queryFn: () => searchEstablishmentUsers(establishmentId, query.trim()),
-    enabled: Boolean(establishmentId) && query.trim().length >= 2,
-  })
+  const usersQuery = useEstablishmentUserSearchQuery(establishmentId, query)
 
   const results = usersQuery.data ?? []
   const showHint = query.trim().length > 0 && query.trim().length < 2

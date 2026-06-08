@@ -1,13 +1,23 @@
-import { withAuthRetry } from '@/api/client'
+import { apiClient, withAuthRetry } from '@/api/client'
+import type { components } from '@/api/generated/types'
 import { ensureCsrfToken } from '@/features/auth/csrf'
-import { businessUnitTreeQueryKey, type BusinessUnitTreeResponse } from '@/features/auth/api'
-import { getAccessToken } from '@/features/auth/session'
+import {
+  businessUnitTreeQueryKey,
+  fetchBusinessUnitTree,
+  type BusinessUnitTreeResponse,
+} from '@/features/auth/api'
 
-export { businessUnitTreeQueryKey }
+export { businessUnitTreeQueryKey, fetchBusinessUnitTree }
 export type { BusinessUnitTreeResponse }
 
 export type BusinessUnitTreeItem = BusinessUnitTreeResponse['business_units'][number]
 export type ActivitySubjectTreeItem = BusinessUnitTreeItem['activity_subjects'][number]
+
+type RuntimeBusinessUnitCreateRequest = components['schemas']['RuntimeBusinessUnitCreateRequest']
+type RuntimeBusinessUnitUpdateRequest =
+  components['schemas']['PatchedRuntimeBusinessUnitUpdateRequest']
+type RuntimeActivitySubjectCreateRequest =
+  components['schemas']['RuntimeActivitySubjectCreateRequest']
 
 export type RuntimeConfigApiErrorPayload = {
   code?: string
@@ -26,50 +36,54 @@ export class RuntimeConfigApiError extends Error {
   }
 }
 
-async function parseRuntimeConfigError(response: Response, fallback: string): Promise<never> {
-  try {
-    const payload = (await response.json()) as RuntimeConfigApiErrorPayload
-    throw new RuntimeConfigApiError(
-      payload?.detail ?? fallback,
-      response.status,
-      payload?.code ?? null,
-    )
-  } catch (error) {
-    if (error instanceof RuntimeConfigApiError) {
-      throw error
-    }
-
-    throw new RuntimeConfigApiError(fallback, response.status)
+function getRuntimeConfigHeaders(accessToken: string | null, csrfToken: string) {
+  return {
+    'X-CSRFToken': csrfToken,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   }
 }
 
-async function runtimeConfigRequest<T>(
-  path: string,
-  init: RequestInit,
+function throwRuntimeConfigError(
+  response: Response,
+  error: unknown,
+  fallback: string,
+): never {
+  const body = typeof error === 'object' && error !== null ? error : {}
+  const detail =
+    'detail' in body && typeof body.detail === 'string' ? body.detail : fallback
+  const code = 'code' in body && typeof body.code === 'string' ? body.code : null
+  throw new RuntimeConfigApiError(detail, response.status, code)
+}
+
+function assertRuntimeConfigData<T>(
+  result: {
+    response: Response
+    data?: T
+    error?: unknown
+  },
+  fallback: string,
+): T {
+  if (result.response.ok && result.data) {
+    return result.data
+  }
+
+  throwRuntimeConfigError(result.response, result.error, fallback)
+}
+
+async function withRuntimeConfigMutation<T>(
   fallbackError: string,
+  execute: (
+    accessToken: string | null,
+    csrfToken: string,
+  ) => Promise<{ response: Response; data?: T; error?: unknown }>,
 ): Promise<T> {
   const csrfToken = await ensureCsrfToken()
+  const result = await withAuthRetry(
+    (accessToken) => execute(accessToken, csrfToken),
+    { refreshable: true },
+  )
 
-  const response = await fetch(path, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
-      'X-CSRFToken': csrfToken,
-      ...(init.headers ?? {}),
-    },
-  })
-
-  if (!response.ok) {
-    await parseRuntimeConfigError(response, fallbackError)
-  }
-
-  if (response.status === 204) {
-    return undefined as T
-  }
-
-  return response.json() as Promise<T>
+  return assertRuntimeConfigData(result, fallbackError)
 }
 
 export async function createRuntimeBusinessUnit(
@@ -81,13 +95,15 @@ export async function createRuntimeBusinessUnit(
     catalog_key?: string | null
   },
 ): Promise<BusinessUnitTreeItem> {
-  return runtimeConfigRequest(
-    `/api/v1/establishments/${establishmentId}/business-units/`,
-    {
-      method: 'POST',
-      body: JSON.stringify(input),
-    },
-    'Le pôle n’a pas pu être créé.',
+  return withRuntimeConfigMutation('Le pôle n’a pas pu être créé.', (accessToken, csrfToken) =>
+    apiClient.POST('/api/v1/establishments/{establishment_id}/business-units/', {
+      params: {
+        path: { establishment_id: establishmentId },
+      },
+      body: input as RuntimeBusinessUnitCreateRequest,
+      credentials: 'include',
+      headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+    }),
   )
 }
 
@@ -100,13 +116,23 @@ export async function updateRuntimeBusinessUnit(
     unit_type?: string
   },
 ): Promise<BusinessUnitTreeItem> {
-  return runtimeConfigRequest(
-    `/api/v1/establishments/${establishmentId}/business-units/${businessUnitId}/`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(input),
-    },
+  return withRuntimeConfigMutation(
     'Le pôle n’a pas pu être mis à jour.',
+    (accessToken, csrfToken) =>
+      apiClient.PATCH(
+        '/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              business_unit_id: businessUnitId,
+            },
+          },
+          body: input as RuntimeBusinessUnitUpdateRequest,
+          credentials: 'include',
+          headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+        },
+      ),
   )
 }
 
@@ -114,13 +140,20 @@ export async function deactivateRuntimeBusinessUnit(
   establishmentId: string,
   businessUnitId: string,
 ): Promise<BusinessUnitTreeItem> {
-  return runtimeConfigRequest(
-    `/api/v1/establishments/${establishmentId}/business-units/${businessUnitId}/deactivate/`,
-    {
-      method: 'POST',
-      body: JSON.stringify({}),
-    },
-    'Le pôle n’a pas pu être retiré.',
+  return withRuntimeConfigMutation('Le pôle n’a pas pu être retiré.', (accessToken, csrfToken) =>
+    apiClient.POST(
+      '/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/deactivate/',
+      {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            business_unit_id: businessUnitId,
+          },
+        },
+        credentials: 'include',
+        headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+      },
+    ),
   )
 }
 
@@ -133,13 +166,21 @@ export async function createRuntimeActivitySubject(
     catalog_key?: string | null
   },
 ): Promise<ActivitySubjectTreeItem> {
-  return runtimeConfigRequest(
-    `/api/v1/establishments/${establishmentId}/business-units/${businessUnitId}/activity-subjects/`,
-    {
-      method: 'POST',
-      body: JSON.stringify(input),
-    },
-    'Le sujet n’a pas pu être créé.',
+  return withRuntimeConfigMutation('Le sujet n’a pas pu être créé.', (accessToken, csrfToken) =>
+    apiClient.POST(
+      '/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/activity-subjects/',
+      {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            business_unit_id: businessUnitId,
+          },
+        },
+        body: input as RuntimeActivitySubjectCreateRequest,
+        credentials: 'include',
+        headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+      },
+    ),
   )
 }
 
@@ -147,36 +188,19 @@ export async function deactivateRuntimeActivitySubject(
   establishmentId: string,
   activitySubjectId: string,
 ): Promise<ActivitySubjectTreeItem> {
-  return runtimeConfigRequest(
-    `/api/v1/establishments/${establishmentId}/activity-subjects/${activitySubjectId}/deactivate/`,
-    {
-      method: 'POST',
-      body: JSON.stringify({}),
-    },
-    'Le sujet n’a pas pu être retiré.',
-  )
-}
-
-export async function fetchBusinessUnitTreeWithAuth(establishmentId: string) {
-  const csrfToken = await ensureCsrfToken()
-  const result = await withAuthRetry(
-    (accessToken) =>
-      fetch(`/api/v1/establishments/${establishmentId}/business-units/`, {
-        credentials: 'include',
-        headers: {
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          'X-CSRFToken': csrfToken,
+  return withRuntimeConfigMutation('Le sujet n’a pas pu être retiré.', (accessToken, csrfToken) =>
+    apiClient.POST(
+      '/api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/deactivate/',
+      {
+        params: {
+          path: {
+            establishment_id: establishmentId,
+            activity_subject_id: activitySubjectId,
+          },
         },
-      }).then(async (response) => ({ response, data: response.ok ? await response.json() : null })),
-    { refreshable: true },
+        credentials: 'include',
+        headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+      },
+    ),
   )
-
-  if (!result.response.ok || !result.data) {
-    throw new RuntimeConfigApiError(
-      'La configuration opérationnelle n’a pas pu être chargée.',
-      result.response.status,
-    )
-  }
-
-  return result.data as BusinessUnitTreeResponse
 }

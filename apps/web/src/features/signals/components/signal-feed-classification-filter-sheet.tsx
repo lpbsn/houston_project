@@ -1,11 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 
 import { Input } from '@/components/ui/input'
 import { TerrainErrorState } from '@/components/ui/terrain'
 import { buildBusinessUnitScopeTree } from '@/features/auth/lib/business-unit-scope'
-import { businessUnitTreeQueryKey, getBusinessUnitTree } from '@/features/auth/api'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 
 import {
   collectClassificationKeysFromTree,
@@ -37,11 +36,7 @@ export function SignalFeedClassificationFilterSheet({
     activitySubjectIds: [...appliedFilters.activitySubjectIds],
   }))
 
-  const treeQuery = useQuery({
-    queryKey: businessUnitTreeQueryKey(establishmentId),
-    queryFn: () => getBusinessUnitTree(establishmentId),
-    enabled: Boolean(establishmentId),
-  })
+  const treeQuery = useBusinessUnitTreeQuery(establishmentId)
 
   const businessUnits = useMemo(() => {
     if (!treeQuery.data) {

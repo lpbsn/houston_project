@@ -18,3 +18,4 @@ export type SwitchEstablishmentRequest = components['schemas']['SwitchEstablishm
 export type UserPublic = components['schemas']['UserPublic']
 export type WorkspaceSummaryResponse = components['schemas']['WorkspaceSummaryResponse']
 export type MembershipScopeItem = components['schemas']['EstablishmentMembershipScopeItem']
+export type BusinessUnitTreeResponse = components['schemas']['BusinessUnitTreeResponse']

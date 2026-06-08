@@ -1,8 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
-import { businessUnitTreeQueryKey, getBusinessUnitTree } from '@/features/auth/api'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { cn } from '@/lib/utils'
 
 type ActionCreateBusinessUnitSectionProps = {
@@ -16,11 +15,7 @@ export function ActionCreateBusinessUnitSection({
   selectedBusinessUnitId,
   onBusinessUnitChange,
 }: ActionCreateBusinessUnitSectionProps) {
-  const businessUnitQuery = useQuery({
-    queryKey: businessUnitTreeQueryKey(establishmentId),
-    queryFn: () => getBusinessUnitTree(establishmentId),
-    staleTime: 60_000,
-  })
+  const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
 
   if (businessUnitQuery.isLoading) {
     return (

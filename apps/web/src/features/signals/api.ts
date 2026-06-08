@@ -1,6 +1,8 @@
-import { withAuthRetry } from '@/api/client'
+import { apiClient, withAuthRetry } from '@/api/client'
 
-import { appendSignalFeedFiltersToSearchParams, normalizeSignalFeedFilters } from './lib/signal-feed-filters'
+import { parseStandardApiError } from '@/lib/api-errors'
+
+import { normalizeSignalFeedFilters } from './lib/signal-feed-filters'
 import type { SignalDetail, SignalFeedFilters, SignalFeedResponse, SignalViewMode } from './types'
 
 export type { SignalFeedFilters } from './lib/signal-feed-filters'
@@ -27,31 +29,53 @@ export class SignalsApiError extends Error {
   }
 }
 
-async function fetchWithAuthRetry(
-  input: RequestInfo | URL,
-  init: RequestInit,
-): Promise<Response> {
-  const result = await withAuthRetry(async (token) => {
-    const headers = new Headers(init.headers)
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
-    } else {
-      headers.delete('Authorization')
-    }
-    const response = await fetch(input, { ...init, headers })
-    return { response }
-  })
-  return result.response
+function getAuthHeaders(accessToken: string | null) {
+  return accessToken
+    ? {
+        Authorization: `Bearer ${accessToken}`,
+      }
+    : undefined
 }
 
 function parseError(response: Response, payload: unknown): SignalsApiError {
-  const body = typeof payload === 'object' && payload !== null ? payload : {}
-  const detail =
-    'detail' in body && typeof body.detail === 'string'
-      ? body.detail
-      : 'Une erreur est survenue.'
-  const code = 'code' in body && typeof body.code === 'string' ? body.code : null
-  return new SignalsApiError({ status: response.status, detail, code })
+  const { status, detail, code } = parseStandardApiError(response, payload)
+  return new SignalsApiError({ status, detail, code })
+}
+
+function assertSignalData<T>(result: {
+  response: Response
+  data?: T
+  error?: unknown
+}): T {
+  if (result.response.ok && result.data) {
+    return result.data
+  }
+
+  throw parseError(result.response, result.error)
+}
+
+function buildSignalFeedQuery(viewMode: SignalViewMode, filters: SignalFeedFilters) {
+  const normalized = normalizeSignalFeedFilters(filters)
+
+  return {
+    view_mode: viewMode,
+    ...(normalized.statuses.length > 0 ? { statuses: normalized.statuses.join(',') } : {}),
+    ...(normalized.businessUnitKeys.length > 0
+      ? { business_unit_keys: normalized.businessUnitKeys.join(',') }
+      : {}),
+    ...(normalized.activitySubjectIds.length > 0
+      ? { activity_subject_ids: normalized.activitySubjectIds.join(',') }
+      : {}),
+  }
+}
+
+function signalPathParams(establishmentId: string, signalId: string) {
+  return {
+    path: {
+      establishment_id: establishmentId,
+      signal_id: signalId,
+    },
+  }
 }
 
 export async function fetchSignalFeed(
@@ -59,59 +83,64 @@ export async function fetchSignalFeed(
   viewMode: SignalViewMode,
   filters: SignalFeedFilters,
 ): Promise<SignalFeedResponse> {
-  const params = new URLSearchParams({ view_mode: viewMode })
-  appendSignalFeedFiltersToSearchParams(params, filters)
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signal-feed/?${params.toString()}`,
-    { method: 'GET' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/signal-feed/', {
+        params: {
+          path: { establishment_id: establishmentId },
+          query: buildSignalFeedQuery(viewMode, filters),
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalFeedResponse
+
+  return assertSignalData<SignalFeedResponse>(result)
 }
 
 export async function fetchSignalDetail(
   establishmentId: string,
   signalId: string,
 ): Promise<SignalDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signals/${signalId}/`,
-    { method: 'GET' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/signals/{signal_id}/', {
+        params: signalPathParams(establishmentId, signalId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalDetail
+
+  return assertSignalData<SignalDetail>(result)
 }
 
 export async function pinSignal(establishmentId: string, signalId: string): Promise<SignalDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signals/${signalId}/pin/`,
-    { method: 'POST' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/', {
+        params: signalPathParams(establishmentId, signalId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalDetail
+
+  return assertSignalData<SignalDetail>(result)
 }
 
 export async function unpinSignal(
   establishmentId: string,
   signalId: string,
 ): Promise<SignalDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signals/${signalId}/unpin/`,
-    { method: 'POST' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/signals/{signal_id}/unpin/', {
+        params: signalPathParams(establishmentId, signalId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalDetail
+
+  return assertSignalData<SignalDetail>(result)
 }
 
 export async function setSignalUrgency(
@@ -119,47 +148,47 @@ export async function setSignalUrgency(
   signalId: string,
   urgency: 'normal' | 'high',
 ): Promise<SignalDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signals/${signalId}/urgency/`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urgency }),
-    },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/establishments/{establishment_id}/signals/{signal_id}/urgency/', {
+        params: signalPathParams(establishmentId, signalId),
+        body: { urgency },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalDetail
+
+  return assertSignalData<SignalDetail>(result)
 }
 
 export async function cancelSignal(
   establishmentId: string,
   signalId: string,
 ): Promise<SignalDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signals/${signalId}/cancel/`,
-    { method: 'POST' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/signals/{signal_id}/cancel/', {
+        params: signalPathParams(establishmentId, signalId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalDetail
+
+  return assertSignalData<SignalDetail>(result)
 }
 
 export async function resolveSignal(
   establishmentId: string,
   signalId: string,
 ): Promise<SignalDetail> {
-  const response = await fetchWithAuthRetry(
-    `/api/v1/establishments/${establishmentId}/signals/${signalId}/resolve/`,
-    { method: 'POST' },
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/signals/{signal_id}/resolve/', {
+        params: signalPathParams(establishmentId, signalId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
   )
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    throw parseError(response, payload)
-  }
-  return payload as SignalDetail
+
+  return assertSignalData<SignalDetail>(result)
 }
