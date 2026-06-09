@@ -4,20 +4,25 @@ from django.db import models
 from django.db.models import Q
 
 from houston.checklists.constants import (
+    CHECKLIST_BADGE_DEFAULT,
+    CHECKLIST_BADGE_PROCESS,
+    CHECKLIST_BADGE_TODO,
     CHECKLIST_DESCRIPTION_MAX_LENGTH,
     CHECKLIST_SKIPPED_REASON_MAX_LENGTH,
     CHECKLIST_TASK_MAX_LENGTH,
     CHECKLIST_TITLE_MAX_LENGTH,
-    CHECKLIST_TYPE_PERSONAL,
-    CHECKLIST_TYPE_SHARED,
+    EXECUTION_SOURCE_ASSIGNMENT,
+    EXECUTION_SOURCE_FLASH_TODO,
+    EXECUTION_SOURCE_TEMPLATE,
+    TERMINAL_EXECUTION_STATUSES,
 )
 from houston.core.models import BaseModel
 
 
 class ChecklistTemplate(BaseModel):
-    class ChecklistType(models.TextChoices):
-        SHARED = CHECKLIST_TYPE_SHARED, "Shared"
-        PERSONAL = CHECKLIST_TYPE_PERSONAL, "Personal"
+    class Badge(models.TextChoices):
+        PROCESS = CHECKLIST_BADGE_PROCESS, "Process"
+        TODO = CHECKLIST_BADGE_TODO, "To-do"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -28,7 +33,6 @@ class ChecklistTemplate(BaseModel):
         on_delete=models.CASCADE,
         related_name="checklist_templates",
     )
-    checklist_type = models.CharField(max_length=16, choices=ChecklistType.choices)
     created_by = models.ForeignKey(
         "establishments.EstablishmentMembership",
         on_delete=models.PROTECT,
@@ -38,8 +42,6 @@ class ChecklistTemplate(BaseModel):
         "establishments.BusinessUnit",
         on_delete=models.PROTECT,
         related_name="checklist_templates",
-        null=True,
-        blank=True,
     )
     title = models.CharField(max_length=CHECKLIST_TITLE_MAX_LENGTH)
     description = models.TextField(
@@ -52,19 +54,21 @@ class ChecklistTemplate(BaseModel):
         choices=Status.choices,
         default=Status.INACTIVE,
     )
+    badge = models.CharField(
+        max_length=16,
+        choices=Badge.choices,
+        default=CHECKLIST_BADGE_DEFAULT,
+    )
 
     class Meta:
         indexes = [
-            models.Index(fields=["establishment", "checklist_type", "status"]),
-            models.Index(fields=["establishment", "created_by", "checklist_type"]),
+            models.Index(fields=["establishment", "created_by"]),
+            models.Index(fields=["establishment", "badge", "status"]),
         ]
         constraints = [
             models.CheckConstraint(
-                condition=(
-                    Q(checklist_type=CHECKLIST_TYPE_SHARED, business_unit__isnull=False)
-                    | Q(checklist_type=CHECKLIST_TYPE_PERSONAL, business_unit__isnull=True)
-                ),
-                name="checklist_template_business_unit_by_type",
+                condition=Q(business_unit__isnull=False),
+                name="checklist_template_business_unit_required",
             ),
         ]
 
@@ -153,9 +157,10 @@ class ChecklistAssignment(BaseModel):
 
 
 class ChecklistExecution(BaseModel):
-    class ChecklistType(models.TextChoices):
-        SHARED = CHECKLIST_TYPE_SHARED, "Shared"
-        PERSONAL = CHECKLIST_TYPE_PERSONAL, "Personal"
+    class ExecutionSource(models.TextChoices):
+        FLASH_TODO = EXECUTION_SOURCE_FLASH_TODO, "Flash to-do"
+        TEMPLATE = EXECUTION_SOURCE_TEMPLATE, "Template"
+        ASSIGNMENT = EXECUTION_SOURCE_ASSIGNMENT, "Assignment"
 
     class Status(models.TextChoices):
         ASSIGNED = "assigned", "Assigned"
@@ -177,7 +182,11 @@ class ChecklistExecution(BaseModel):
         null=True,
         blank=True,
     )
-    checklist_type = models.CharField(max_length=16, choices=ChecklistType.choices)
+    execution_source = models.CharField(
+        max_length=16,
+        choices=ExecutionSource.choices,
+        default=EXECUTION_SOURCE_TEMPLATE,
+    )
     establishment = models.ForeignKey(
         "establishments.Establishment",
         on_delete=models.CASCADE,
@@ -199,8 +208,6 @@ class ChecklistExecution(BaseModel):
         "establishments.BusinessUnit",
         on_delete=models.PROTECT,
         related_name="checklist_executions",
-        null=True,
-        blank=True,
     )
     template_title = models.CharField(max_length=CHECKLIST_TITLE_MAX_LENGTH)
     template_description = models.TextField(
@@ -234,37 +241,36 @@ class ChecklistExecution(BaseModel):
             models.CheckConstraint(
                 condition=(
                     Q(
-                        checklist_type=CHECKLIST_TYPE_SHARED,
+                        execution_source=EXECUTION_SOURCE_ASSIGNMENT,
                         business_unit__isnull=False,
                         checklist_assignment__isnull=False,
                     )
                     | Q(
-                        checklist_type=CHECKLIST_TYPE_PERSONAL,
-                        business_unit__isnull=True,
+                        execution_source=EXECUTION_SOURCE_TEMPLATE,
+                        business_unit__isnull=False,
+                        checklist_template__isnull=False,
+                        checklist_assignment__isnull=True,
+                    )
+                    | Q(
+                        execution_source=EXECUTION_SOURCE_TEMPLATE,
+                        business_unit__isnull=False,
+                        checklist_template__isnull=True,
+                        checklist_assignment__isnull=True,
+                        status__in=TERMINAL_EXECUTION_STATUSES,
+                    )
+                    | Q(
+                        execution_source=EXECUTION_SOURCE_FLASH_TODO,
+                        business_unit__isnull=False,
+                        checklist_template__isnull=True,
                         checklist_assignment__isnull=True,
                     )
                 ),
-                name="checklist_execution_type_shape",
-            ),
-            models.CheckConstraint(
-                condition=(
-                    Q(checklist_type=CHECKLIST_TYPE_PERSONAL, end_at__isnull=True)
-                    | Q(checklist_type=CHECKLIST_TYPE_SHARED)
-                ),
-                name="checklist_execution_personal_no_end_at",
+                name="checklist_execution_source_shape",
             ),
             models.UniqueConstraint(
                 fields=["checklist_assignment", "occurrence_date"],
                 condition=Q(checklist_assignment__isnull=False),
                 name="uniq_checklist_execution_assignment_occurrence",
-            ),
-            models.UniqueConstraint(
-                fields=["checklist_template"],
-                condition=Q(
-                    checklist_type=CHECKLIST_TYPE_PERSONAL,
-                    status__in=["assigned", "in_progress"],
-                ),
-                name="uniq_active_personal_execution_per_template",
             ),
         ]
 

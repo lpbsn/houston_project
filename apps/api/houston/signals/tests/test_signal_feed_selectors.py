@@ -64,11 +64,7 @@ def _create_signal(
 
 def _oracle_matching_ids(*, membership: EstablishmentMembership) -> set[uuid.UUID]:
     queryset = active_signals_for_establishment(establishment_id=membership.establishment_id)
-    return {
-        signal.id
-        for signal in queryset
-        if signal_matches_membership_scope(membership, signal)
-    }
+    return {signal.id for signal in queryset if signal_matches_membership_scope(membership, signal)}
 
 
 def _feed_personal_ids(*, membership: EstablishmentMembership) -> set[uuid.UUID]:
@@ -118,9 +114,7 @@ def test_personal_feed_matches_signal_matches_membership_scope_oracle():
         responsible_business_unit=other_unit,
     )
 
-    assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(
-        membership=membership
-    )
+    assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(membership=membership)
 
 
 def test_business_unit_scope_bar_does_not_see_salle_signal():
@@ -225,9 +219,7 @@ def test_personal_feed_parity_with_multiple_scope_rows():
         responsible_business_unit=other_unit,
     )
 
-    assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(
-        membership=membership
-    )
+    assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(membership=membership)
 
 
 def test_personal_feed_business_unit_scope_matches_scope_oracle():
@@ -256,9 +248,7 @@ def test_personal_feed_business_unit_scope_matches_scope_oracle():
         responsible_business_unit=business_unit,
     )
 
-    assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(
-        membership=membership
-    )
+    assert _feed_personal_ids(membership=membership) == _oracle_matching_ids(membership=membership)
 
 
 def test_visibility_and_actionability_are_separated_for_golden_signals():

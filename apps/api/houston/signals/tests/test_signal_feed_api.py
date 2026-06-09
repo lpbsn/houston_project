@@ -288,4 +288,3 @@ def test_staff_restaurant_scope_sees_but_cannot_act_on_maintenance_responsible_s
 
     assert signal_visible_in_membership_scope(membership, lighting_signal) is True
     assert signal_actionable_by_membership(membership, lighting_signal) is False
-

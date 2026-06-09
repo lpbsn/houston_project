@@ -18,33 +18,24 @@ describe('checklist-hub-page delete 409 flow', () => {
     expect(source).toContain('resolveChecklistDeleteErrorMessage')
   })
 
-  it('stores active execution links for shared and personal delete conflicts', () => {
-    expect(source).toContain('setSharedActiveExecutionId')
-    expect(source).toContain('setPersonalActiveExecutionId')
-    expect(source).toContain('sharedActiveExecutionId')
-    expect(source).toContain('personalActiveExecutionId')
+  it('stores active execution links for delete conflicts', () => {
+    expect(source).toContain('setActiveExecutionId')
+    expect(source).toContain('activeExecutionId')
   })
 
   it('offers navigation to the in-progress execution after a 409 delete', () => {
     expect(source).toContain('Ouvrir l&apos;exécution en cours')
-    expect(source).toContain('`/checklists/executions/${sharedActiveExecutionId}`')
-    expect(source).toContain('`/checklists/executions/${personalActiveExecutionId}`')
+    expect(source).toContain('`/checklists/executions/${activeExecutionId}`')
   })
 
   it('clears prior delete error state before retrying delete', () => {
-    const sharedHandler = source.slice(
-      source.indexOf('async function handleDeleteShared'),
-      source.indexOf('async function handleDeletePersonal'),
-    )
-    const personalHandler = source.slice(
-      source.indexOf('async function handleDeletePersonal'),
+    const deleteHandler = source.slice(
+      source.indexOf('async function handleDelete'),
       source.indexOf('const createAction'),
     )
 
-    expect(sharedHandler).toContain('setSharedDeleteError(null)')
-    expect(sharedHandler).toContain('setSharedActiveExecutionId(null)')
-    expect(personalHandler).toContain('setPersonalDeleteError(null)')
-    expect(personalHandler).toContain('setPersonalActiveExecutionId(null)')
+    expect(deleteHandler).toContain('setDeleteError(null)')
+    expect(deleteHandler).toContain('setActiveExecutionId(null)')
   })
 
   it('gates delete affordance through template permission hints in the list section', () => {
@@ -55,5 +46,12 @@ describe('checklist-hub-page delete 409 flow', () => {
 
     expect(templateSection).toContain('canShowChecklistTemplateDelete')
     expect(templateSection).toContain('template.permission_hints')
+  })
+
+  it('uses a single unified checklist library list', () => {
+    expect(source).toContain('Bibliothèque de checklists')
+    expect(source).not.toContain('Checklists partagées')
+    expect(source).not.toContain('Checklists personnelles')
+    expect(source).toContain("navigateTo(`/checklists/${templateId}`)")
   })
 })

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  canShowChecklistTemplateCreatePersonalExecution,
   canShowChecklistTemplateDelete,
+  canShowChecklistTemplateLaunchExecution,
   canShowChecklistTemplateManageTasks,
   canShowChecklistTemplateUpdate,
 } from './checklist-template-permission-hints'
@@ -14,7 +14,8 @@ const fullHints = {
   can_deactivate: true,
   can_delete: true,
   can_create_assignment: true,
-  can_create_personal_execution: false,
+  can_launch_execution: false,
+  can_use_template: true,
 }
 
 describe('checklist-template-permission-hints', () => {
@@ -28,7 +29,7 @@ describe('checklist-template-permission-hints', () => {
     expect(canShowChecklistTemplateUpdate(fullHints)).toBe(true)
     expect(canShowChecklistTemplateManageTasks(fullHints)).toBe(true)
     expect(canShowChecklistTemplateDelete(fullHints)).toBe(true)
-    expect(canShowChecklistTemplateCreatePersonalExecution(fullHints)).toBe(false)
+    expect(canShowChecklistTemplateLaunchExecution(fullHints)).toBe(false)
   })
 
   it('hides actions when hints are false', () => {

@@ -2172,7 +2172,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChecklistPersonalExecutionConflict'
+                $ref: '#/components/schemas/ChecklistActiveExecutionConflict'
           description: ''
   /api/v1/establishments/{establishment_id}/checklist-executions/{execution_id}/:
     get:
@@ -2235,6 +2235,63 @@ paths:
       - BearerAccessToken: []
       responses:
         '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-executions/flash-todo/:
+    post:
+      operationId: v1_establishments_checklist_executions_flash_todo_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistFlashTodoCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistFlashTodoCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistFlashTodoCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
           content:
             application/json:
               schema:
@@ -2546,19 +2603,26 @@ paths:
     get:
       operationId: v1_establishments_checklist_templates_list
       parameters:
+      - in: query
+        name: badge
+        schema:
+          type: string
+          enum:
+          - process
+          - todo
+      - in: query
+        name: business_unit_id
+        schema:
+          type: string
+      - in: query
+        name: created_by_me
+        schema:
+          type: boolean
       - in: path
         name: establishment_id
         schema:
           type: string
           format: uuid
-        required: true
-      - in: query
-        name: type
-        schema:
-          type: string
-          enum:
-          - personal
-          - shared
         required: true
       tags:
       - checklists
@@ -2791,7 +2855,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChecklistPersonalExecutionConflict'
+                $ref: '#/components/schemas/ChecklistActiveExecutionConflict'
           description: ''
   /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/activate/:
     post:
@@ -2958,9 +3022,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/personal-executions/:
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/executions/:
     post:
-      operationId: v1_establishments_checklist_templates_personal_executions_create
+      operationId: v1_establishments_checklist_templates_executions_create
       parameters:
       - in: path
         name: establishment_id
@@ -2976,6 +3040,17 @@ paths:
         required: true
       tags:
       - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateExecutionCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateExecutionCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateExecutionCreateRequest'
       security:
       - BearerAccessToken: []
       responses:
@@ -3008,12 +3083,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
-          description: ''
-        '409':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChecklistPersonalExecutionConflict'
           description: ''
   /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/tasks/:
     post:
@@ -5502,6 +5571,14 @@ components:
       - memberships
       - pending_onboarding_memberships
       - user
+    BadgeEnum:
+      enum:
+      - process
+      - todo
+      type: string
+      description: |-
+        * `process` - process
+        * `todo` - todo
     BootstrapResponse:
       type: object
       properties:
@@ -5855,6 +5932,20 @@ components:
       required:
       - expires_in
       - ticket
+    ChecklistActiveExecutionConflict:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        active_execution_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - code
+      - detail
     ChecklistAssignment:
       type: object
       properties:
@@ -5979,7 +6070,7 @@ components:
         id:
           type: string
           format: uuid
-        checklist_type:
+        execution_source:
           type: string
         checklist_template_id:
           type: string
@@ -5996,9 +6087,7 @@ components:
         template_description:
           type: string
         business_unit:
-          allOf:
-          - $ref: '#/components/schemas/ChecklistBusinessUnit'
-          nullable: true
+          $ref: '#/components/schemas/ChecklistBusinessUnit'
         assigned_to_id:
           type: string
           format: uuid
@@ -6063,10 +6152,10 @@ components:
       - canceled_at
       - checklist_assignment_id
       - checklist_template_id
-      - checklist_type
       - created_at
       - done_at
       - end_at
+      - execution_source
       - id
       - last_activity_at
       - occurrence_date
@@ -6097,8 +6186,11 @@ components:
           format: uuid
         title:
           type: string
-        checklist_type:
+        execution_source:
           type: string
+        badge:
+          type: string
+          nullable: true
         status:
           type: string
         end_at:
@@ -6127,11 +6219,12 @@ components:
           type: integer
       required:
       - assigned_to_display_name
+      - badge
       - business_unit_key
       - business_unit_label
-      - checklist_type
       - created_at
       - end_at
+      - execution_source
       - id
       - is_overdue
       - last_activity_at
@@ -6139,20 +6232,35 @@ components:
       - progress_treated_count
       - status
       - title
-    ChecklistPersonalExecutionConflict:
+    ChecklistFlashTodoCreateRequest:
       type: object
       properties:
-        code:
+        title:
           type: string
-        detail:
+          maxLength: 200
+        description:
           type: string
-        active_execution_id:
+          default: ''
+          maxLength: 2000
+        business_unit_id:
           type: string
           format: uuid
+        assigned_to:
+          type: string
+          format: uuid
+        end_at:
+          type: string
+          format: date-time
           nullable: true
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistTaskInput'
       required:
-      - code
-      - detail
+      - assigned_to
+      - business_unit_id
+      - tasks
+      - title
     ChecklistTaskCreateObservationRequest:
       type: object
       properties:
@@ -6227,6 +6335,15 @@ components:
       - skipped_reason
       - status
       - task
+    ChecklistTaskInput:
+      type: object
+      properties:
+        task:
+          type: string
+          maxLength: 500
+        title:
+          type: string
+          maxLength: 500
     ChecklistTaskReorderRequest:
       type: object
       properties:
@@ -6273,8 +6390,6 @@ components:
     ChecklistTemplateCreateRequest:
       type: object
       properties:
-        checklist_type:
-          $ref: '#/components/schemas/ChecklistTypeEnum'
         title:
           type: string
           maxLength: 200
@@ -6285,9 +6400,27 @@ components:
         business_unit_id:
           type: string
           format: uuid
+        badge:
+          allOf:
+          - $ref: '#/components/schemas/BadgeEnum'
+          default: todo
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistTaskInput'
+        assign_now:
+          type: boolean
+          default: false
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
           nullable: true
       required:
-      - checklist_type
+      - business_unit_id
       - title
     ChecklistTemplateDetail:
       type: object
@@ -6295,7 +6428,7 @@ components:
         id:
           type: string
           format: uuid
-        checklist_type:
+        badge:
           type: string
         title:
           type: string
@@ -6304,9 +6437,7 @@ components:
         status:
           type: string
         business_unit:
-          allOf:
-          - $ref: '#/components/schemas/ChecklistBusinessUnit'
-          nullable: true
+          $ref: '#/components/schemas/ChecklistBusinessUnit'
         task_count:
           type: integer
         created_at:
@@ -6322,8 +6453,8 @@ components:
           items:
             $ref: '#/components/schemas/ChecklistTaskTemplate'
       required:
+      - badge
       - business_unit
-      - checklist_type
       - created_at
       - description
       - id
@@ -6333,13 +6464,24 @@ components:
       - tasks
       - title
       - updated_at
+    ChecklistTemplateExecutionCreateRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
     ChecklistTemplateListItem:
       type: object
       properties:
         id:
           type: string
           format: uuid
-        checklist_type:
+        badge:
           type: string
         title:
           type: string
@@ -6348,9 +6490,7 @@ components:
         status:
           type: string
         business_unit:
-          allOf:
-          - $ref: '#/components/schemas/ChecklistBusinessUnit'
-          nullable: true
+          $ref: '#/components/schemas/ChecklistBusinessUnit'
         task_count:
           type: integer
         created_at:
@@ -6362,8 +6502,8 @@ components:
         permission_hints:
           $ref: '#/components/schemas/ChecklistTemplatePermissionHints'
       required:
+      - badge
       - business_unit
-      - checklist_type
       - created_at
       - description
       - id
@@ -6387,24 +6527,19 @@ components:
           type: boolean
         can_create_assignment:
           type: boolean
-        can_create_personal_execution:
+        can_launch_execution:
+          type: boolean
+        can_use_template:
           type: boolean
       required:
       - can_activate
       - can_create_assignment
-      - can_create_personal_execution
       - can_deactivate
       - can_delete
+      - can_launch_execution
       - can_manage_tasks
       - can_update
-    ChecklistTypeEnum:
-      enum:
-      - personal
-      - shared
-      type: string
-      description: |-
-        * `personal` - personal
-        * `shared` - shared
+      - can_use_template
     CsrfResponse:
       type: object
       properties:

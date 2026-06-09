@@ -14,13 +14,12 @@ import {
   useChecklistAssignmentForm,
 } from '@/features/checklists/lib/checklist-assignment-form'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
-import type { ChecklistAssignment, ChecklistType } from '@/features/checklists/types'
+import type { ChecklistAssignment } from '@/features/checklists/types'
 
 type ChecklistAssignmentEditSheetProps = {
   open: boolean
   establishmentId: string
   templateId: string
-  checklistType: ChecklistType
   businessUnitId: string
   assignment: ChecklistAssignment
   onClose: () => void
@@ -31,18 +30,13 @@ export function ChecklistAssignmentEditSheet({
   open,
   establishmentId,
   templateId,
-  checklistType,
   businessUnitId,
   assignment,
   onClose,
   onSuccess,
 }: ChecklistAssignmentEditSheetProps) {
   const initialValues = assignmentToFormValues(assignment)
-  const updateMutation = useUpdateChecklistAssignmentMutation(
-    establishmentId,
-    templateId,
-    checklistType,
-  )
+  const updateMutation = useUpdateChecklistAssignmentMutation(establishmentId, templateId)
 
   const initialSelectedUser = buildInitialSelectedUser(assignment)
   const {

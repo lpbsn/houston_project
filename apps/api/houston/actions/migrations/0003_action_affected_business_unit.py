@@ -5,21 +5,32 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('actions', '0002_signal_business_unit_classification'),
-        ('establishments', '0015_runtime_vocabulary_business_unit'),
+        ("actions", "0002_signal_business_unit_classification"),
+        ("establishments", "0015_runtime_vocabulary_business_unit"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='action',
-            name='affected_business_unit',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='affected_actions', to='establishments.businessunit'),
+            model_name="action",
+            name="affected_business_unit",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="affected_actions",
+                to="establishments.businessunit",
+            ),
         ),
         migrations.AlterField(
-            model_name='action',
-            name='responsible_business_unit',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='responsible_actions', to='establishments.businessunit'),
+            model_name="action",
+            name="responsible_business_unit",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="responsible_actions",
+                to="establishments.businessunit",
+            ),
         ),
     ]

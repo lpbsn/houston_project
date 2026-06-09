@@ -255,9 +255,7 @@ def _resolve_v3_candidate(
         resolved_responsible = fallback.responsible_business_unit
         resolved_subject = fallback.activity_subject
     elif activity_subject is None:
-        raise SignalValidationError(
-            "activity_subject must belong to responsible_business_unit."
-        )
+        raise SignalValidationError("activity_subject must belong to responsible_business_unit.")
     else:
         if activity_subject.business_unit_id != responsible.id:
             raise SignalValidationError(
@@ -362,9 +360,7 @@ def apply_pipeline_output(
     if not candidates:
         return ObservationProcessing.Outcome.NO_SIGNAL_CREATED
 
-    seen_keys: set[
-        tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]
-    ] = set()
+    seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]] = set()
     created_count = 0
     aggregated_count = 0
     rejected_count = 0

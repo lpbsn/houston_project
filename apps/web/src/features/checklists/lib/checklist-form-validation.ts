@@ -57,22 +57,45 @@ export function hasAssignmentFormErrors(errors: AssignmentFormErrors): boolean {
   return Object.keys(errors).length > 0
 }
 
-export function validateSharedTemplateCreate(values: {
+export function validateRegisteredTemplateCreate(values: {
   title: string
   businessUnitId: string
+  taskCount: number
+  assignNow: boolean
+  assignedTo: string
 }): string | null {
   if (!values.title.trim()) {
     return 'Le titre est obligatoire.'
   }
   if (!values.businessUnitId.trim()) {
-    return 'Le pôle est obligatoire pour une checklist partagée.'
+    return 'Le pôle est obligatoire.'
+  }
+  if (values.taskCount === 0) {
+    return 'Ajoutez au moins une tâche.'
+  }
+  if (values.assignNow && !values.assignedTo.trim()) {
+    return 'Sélectionnez un membre assigné.'
   }
   return null
 }
 
-export function validatePersonalTemplateCreate(values: { title: string }): string | null {
+export function validateFlashTodoCreate(values: {
+  title: string
+  businessUnitId: string
+  assignedTo: string
+  taskCount: number
+}): string | null {
   if (!values.title.trim()) {
     return 'Le titre est obligatoire.'
+  }
+  if (!values.businessUnitId.trim()) {
+    return 'Le pôle est obligatoire.'
+  }
+  if (!values.assignedTo.trim()) {
+    return 'Sélectionnez un membre assigné.'
+  }
+  if (values.taskCount === 0) {
+    return 'Ajoutez au moins une tâche.'
   }
   return null
 }

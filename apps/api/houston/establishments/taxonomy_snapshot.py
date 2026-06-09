@@ -32,9 +32,7 @@ def build_establishment_taxonomy_snapshot(
                 "label": subject.label,
                 "description": subject.description or "",
             }
-            for subject in unit.activity_subjects.filter(active=True).order_by(
-                "normalized_name"
-            )
+            for subject in unit.activity_subjects.filter(active=True).order_by("normalized_name")
         ]
         business_units.append(
             {

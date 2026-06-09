@@ -63,5 +63,3 @@ def test_activity_subject_unique_per_business_unit_not_establishment():
             normalized_name=normalized,
             label="Climatisation duplicate",
         )
-
-

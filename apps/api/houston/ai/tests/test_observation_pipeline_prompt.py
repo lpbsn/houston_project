@@ -130,20 +130,36 @@ def test_build_pipeline_input_includes_active_signals_context_v3():
 def test_build_pipeline_input_includes_checklist_context_for_checklist_task_origin():
     from django.utils import timezone
 
-    from houston.checklists.models import ChecklistExecution, ChecklistTaskExecution, ChecklistTemplate
+    from houston.checklists.constants import EXECUTION_SOURCE_TEMPLATE
+    from houston.checklists.models import (
+        ChecklistExecution,
+        ChecklistTaskExecution,
+        ChecklistTemplate,
+    )
     from houston.checklists.services import create_checklist_template
     from houston.checklists.tests.conftest import add_task_template
     from houston.establishments.models import EstablishmentMembership
-    from houston.establishments.tests.taxonomy_helpers import create_membership
+    from houston.establishments.tests.taxonomy_helpers import (
+        create_membership_with_business_unit_scope,
+    )
     from houston.observations.models import Observation
     from houston.observations.services import submit_observation
 
     staff_membership = build_membership(role=EstablishmentMembership.Role.STAFF)
+    business_unit = create_business_unit(
+        establishment=staff_membership.establishment,
+        key="kitchen",
+        label="Kitchen",
+    )
+    create_membership_with_business_unit_scope(
+        membership=staff_membership,
+        business_unit=business_unit,
+    )
 
     template = create_checklist_template(
         establishment_id=staff_membership.establishment_id,
         actor=staff_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.PERSONAL,
+        business_unit_id=business_unit.id,
         title="Morning routine",
     )
     add_task_template(template=template, task="Check fridge", position=1)
@@ -152,11 +168,11 @@ def test_build_pipeline_input_includes_checklist_context_for_checklist_task_orig
 
     execution = ChecklistExecution.objects.create(
         checklist_template=template,
-        checklist_type=ChecklistTemplate.ChecklistType.PERSONAL,
+        execution_source=EXECUTION_SOURCE_TEMPLATE,
         establishment_id=staff_membership.establishment_id,
         assigned_to=staff_membership,
         assigned_by=None,
-        business_unit=None,
+        business_unit=business_unit,
         template_title=template.title,
         template_description=template.description,
         last_activity_at=timezone.now(),
@@ -184,5 +200,5 @@ def test_build_pipeline_input_includes_checklist_context_for_checklist_task_orig
         "checklist_task_execution_id": str(task_execution.id),
         "template_title": "Morning routine",
         "task": "Check fridge",
-        "business_unit_key": None,
+        "business_unit_key": "kitchen",
     }

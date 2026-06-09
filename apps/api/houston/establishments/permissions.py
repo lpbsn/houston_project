@@ -46,10 +46,7 @@ def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
 
 
 def can_invite_memberships(membership: EstablishmentMembership | None) -> bool:
-    return (
-        _is_valid_invitation_membership(membership)
-        and membership.role in _INVITATION_ROLES
-    )
+    return _is_valid_invitation_membership(membership) and membership.role in _INVITATION_ROLES
 
 
 def can_manage_runtime_context(membership: EstablishmentMembership | None) -> bool:

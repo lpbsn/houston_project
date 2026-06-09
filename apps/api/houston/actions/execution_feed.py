@@ -64,7 +64,5 @@ def build_execution_feed_page(
         ExecutionFeedPageItem(item_type="checklist", checklist=checklist)
         for checklist in checklists
     ]
-    items.extend(
-        ExecutionFeedPageItem(item_type="action", action=action) for action in actions
-    )
+    items.extend(ExecutionFeedPageItem(item_type="action", action=action) for action in actions)
     return items, total_count, total_count > page_size

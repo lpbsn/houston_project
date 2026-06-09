@@ -15,11 +15,14 @@ from houston.establishments.models import EstablishmentMembership
 pytestmark = pytest.mark.django_db
 
 
-def _personal_template_with_task(api_client, staff):
+def _staff_owned_template_with_task(api_client, staff, business_unit):
     token = login(api_client, user=staff.user)
     template = api_client.post(
         checklist_templates_url(staff.establishment_id),
-        {"checklist_type": "personal", "title": "Mine"},
+        {
+            "title": "Mine",
+            "business_unit_id": str(business_unit.id),
+        },
         format="json",
         **auth_headers(token),
     )
@@ -39,13 +42,17 @@ def _personal_template_with_task(api_client, staff):
     return template.json(), token
 
 
-def test_personal_execution_create_and_one_active_max(api_client, staff_membership):
-    template, token = _personal_template_with_task(api_client, staff_membership)
+def test_template_execution_create_allows_multiple_active(
+    api_client,
+    staff_membership,
+    business_unit,
+):
+    template, token = _staff_owned_template_with_task(api_client, staff_membership, business_unit)
     first = api_client.post(
         checklist_template_url(
             staff_membership.establishment_id,
             template["id"],
-            "personal-executions/",
+            "executions/",
         ),
         **auth_headers(token),
     )
@@ -55,19 +62,18 @@ def test_personal_execution_create_and_one_active_max(api_client, staff_membersh
         checklist_template_url(
             staff_membership.establishment_id,
             template["id"],
-            "personal-executions/",
+            "executions/",
         ),
         **auth_headers(token),
     )
-    assert second.status_code == 409
-    assert second.json()["code"] == "conflict"
-    assert second.json()["active_execution_id"] == first.json()["id"]
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
 
 
 def test_execution_detail_rbac(api_client, owner_membership, staff_membership, business_unit):
-    from houston.checklists.tests.test_assignment_api import _active_shared_template
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     assignment = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
         assignment_api_payload(staff_membership.id),
@@ -98,15 +104,15 @@ def test_execution_detail_rbac(api_client, owner_membership, staff_membership, b
     assert denied.status_code == 404
 
 
-def test_cancel_shared_execution_owner_allowed_staff_denied(
+def test_cancel_assignment_execution_assignee_and_owner_allowed(
     api_client,
     owner_membership,
     staff_membership,
     business_unit,
 ):
-    from houston.checklists.tests.test_assignment_api import _active_shared_template
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     assignment = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
         assignment_api_payload(staff_membership.id),
@@ -120,26 +126,20 @@ def test_cancel_shared_execution_owner_allowed_staff_denied(
         checklist_execution_url(staff_membership.establishment_id, execution.id, "cancel/"),
         **auth_headers(staff_token),
     )
-    assert staff_cancel.status_code == 403
-
-    owner_cancel = api_client.post(
-        checklist_execution_url(owner_membership.establishment_id, execution.id, "cancel/"),
-        **auth_headers(owner_token),
-    )
-    assert owner_cancel.status_code == 200
-    assert owner_cancel.json()["status"] == ChecklistExecution.Status.CANCELED
+    assert staff_cancel.status_code == 200
+    assert staff_cancel.json()["status"] == ChecklistExecution.Status.CANCELED
 
 
-def test_cancel_shared_execution_manager_in_scope(
+def test_cancel_assignment_execution_manager_in_scope(
     api_client,
     owner_membership,
     manager_membership,
     staff_membership,
     business_unit,
 ):
-    from houston.checklists.tests.test_assignment_api import _active_shared_template
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     assignment = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
         assignment_api_payload(staff_membership.id),

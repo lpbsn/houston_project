@@ -4,15 +4,16 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0015_runtime_vocabulary_business_unit'),
-        ('signals', '0002_signal_business_unit_classification'),
+        ("establishments", "0015_runtime_vocabulary_business_unit"),
+        ("signals", "0002_signal_business_unit_classification"),
     ]
 
     operations = [
         migrations.AddIndex(
-            model_name='signal',
-            index=models.Index(fields=['establishment', 'activity_subject'], name='signal_est_act_subject_idx'),
+            model_name="signal",
+            index=models.Index(
+                fields=["establishment", "activity_subject"], name="signal_est_act_subject_idx"
+            ),
         ),
     ]

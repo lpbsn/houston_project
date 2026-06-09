@@ -25,8 +25,9 @@ export function ChecklistBusinessUnitSelect({
 
   const allBusinessUnits = businessUnitQuery.data?.business_units ?? []
   const managerScopes = activeMembership?.scopes ?? []
+  const hasScopedRole = role === 'manager' || role === 'staff'
   const businessUnits =
-    role === 'manager' && managerScopes.length > 0
+    hasScopedRole && managerScopes.length > 0
       ? allBusinessUnits.filter((unit) =>
           managerScopes.some(
             (scope) => scope.scope_type === 'business_unit' && scope.scope_id === unit.id,

@@ -34,9 +34,9 @@ def actions_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[Action
 
 
 def action_personal_feed_q(*, membership: EstablishmentMembership) -> Q:
-    return (
-        Q(created_by_id=membership.id) | Q(assigned_to_id=membership.id)
-    ) & Q(establishment_id=membership.establishment_id)
+    return (Q(created_by_id=membership.id) | Q(assigned_to_id=membership.id)) & Q(
+        establishment_id=membership.establishment_id
+    )
 
 
 def action_general_feed_visibility_q(*, membership: EstablishmentMembership) -> Q:

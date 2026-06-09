@@ -6,6 +6,7 @@ import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
 import {
   formatChecklistEndBeforeTimeLabel,
   formatChecklistExecutionStatusLabel,
+  formatChecklistFeedBadgeLabel,
   formatChecklistProgressLabel,
 } from '@/features/checklists/lib/checklist-display'
 import type { ChecklistFeedItem } from '@/features/checklists/types'
@@ -42,7 +43,7 @@ export function ExecutionChecklistCard({ item, onSelect }: ExecutionChecklistCar
     item.progress_treated_count,
     item.progress_total_count,
   )
-  const typeLabel = item.checklist_type === 'shared' ? 'Partagée' : 'Personnelle'
+  const badgeLabel = formatChecklistFeedBadgeLabel(item.execution_source, item.badge)
   const borderColor = item.is_overdue ? '#E24B4A' : '#E69138'
   const progressBarColor = item.is_overdue ? '#E24B4A' : '#E69138'
 
@@ -73,7 +74,7 @@ export function ExecutionChecklistCard({ item, onSelect }: ExecutionChecklistCar
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="truncate text-[15px] font-bold text-[#1a1a1a]">{item.title}</h3>
               <HoustonBadge variant="amber" className="shrink-0 text-[8px]">
-                {typeLabel}
+                {badgeLabel}
               </HoustonBadge>
               {item.is_overdue ? (
                 <HoustonBadge variant="red" className="shrink-0 text-[8px]">

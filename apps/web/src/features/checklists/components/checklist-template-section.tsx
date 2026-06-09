@@ -1,6 +1,8 @@
 import { LoaderCircle, Trash2 } from 'lucide-react'
 
 import { TerrainCard } from '@/components/layout/terrain-card'
+import { HoustonBadge } from '@/components/ui/terrain'
+import { formatChecklistBadgeLabel } from '@/features/checklists/lib/checklist-display'
 import { canShowChecklistTemplateDelete } from '@/features/checklists/lib/checklist-template-permission-hints'
 import type { ChecklistTemplateListItem } from '@/features/checklists/types'
 import { terrain } from '@/lib/terrain-styles'
@@ -82,7 +84,12 @@ export function ChecklistTemplateSection({
               onClick={() => onOpenTemplate(template.id)}
               className="min-w-0 flex-1 px-4 py-3.5 text-left transition-colors hover:bg-[#FAFAF8]"
             >
-              <p className="text-sm font-semibold text-[#1a1a1a]">{template.title}</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-sm font-semibold text-[#1a1a1a]">{template.title}</p>
+                <HoustonBadge variant="amber" className="shrink-0 text-[8px]">
+                  {formatChecklistBadgeLabel(template.badge)}
+                </HoustonBadge>
+              </div>
               {template.description ? (
                 <p className={cn('mt-0.5 line-clamp-2 text-xs leading-5', terrain.muted)}>
                   {template.description}

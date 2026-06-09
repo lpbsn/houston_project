@@ -5,26 +5,41 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('checklists', '0001_initial'),
-        ('observations', '0003_observationprocessing_attempt_count_and_more'),
+        ("checklists", "0001_initial"),
+        ("observations", "0003_observationprocessing_attempt_count_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='observation',
-            name='checklist_execution',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='observations', to='checklists.checklistexecution'),
+            model_name="observation",
+            name="checklist_execution",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="observations",
+                to="checklists.checklistexecution",
+            ),
         ),
         migrations.AddField(
-            model_name='observation',
-            name='checklist_task_execution',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='origin_observations', to='checklists.checklisttaskexecution'),
+            model_name="observation",
+            name="checklist_task_execution",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="origin_observations",
+                to="checklists.checklisttaskexecution",
+            ),
         ),
         migrations.AlterField(
-            model_name='observation',
-            name='origin',
-            field=models.CharField(choices=[('direct_report', 'Direct report'), ('checklist_task', 'Checklist task')], default='direct_report', max_length=40),
+            model_name="observation",
+            name="origin",
+            field=models.CharField(
+                choices=[("direct_report", "Direct report"), ("checklist_task", "Checklist task")],
+                default="direct_report",
+                max_length=40,
+            ),
         ),
     ]

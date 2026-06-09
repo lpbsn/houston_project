@@ -5,21 +5,32 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('actions', '0001_initial'),
-        ('establishments', '0014_membership_scope_business_unit'),
+        ("actions", "0001_initial"),
+        ("establishments", "0014_membership_scope_business_unit"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='action',
-            name='activity_subject',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='actions', to='establishments.activitysubject'),
+            model_name="action",
+            name="activity_subject",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="actions",
+                to="establishments.activitysubject",
+            ),
         ),
         migrations.AddField(
-            model_name='action',
-            name='responsible_business_unit',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='actions', to='establishments.businessunit'),
+            model_name="action",
+            name="responsible_business_unit",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="actions",
+                to="establishments.businessunit",
+            ),
         ),
     ]

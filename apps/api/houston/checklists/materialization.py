@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from houston.checklists.constants import (
     ASSIGNMENT_STATUS_ACTIVE,
-    CHECKLIST_TYPE_SHARED,
+    EXECUTION_SOURCE_ASSIGNMENT,
     EXECUTION_STATUS_ASSIGNED,
     RECURRENCE_DAY_FRIDAY,
     RECURRENCE_DAY_MONDAY,
@@ -145,7 +145,7 @@ def materialize_execution_from_assignment(
     occurrence_date: date,
 ) -> ChecklistExecution:
     if occurrence_date is None:
-        raise ChecklistValidationError("occurrence_date is required for shared executions.")
+        raise ChecklistValidationError("occurrence_date is required for assignment executions.")
 
     existing = ChecklistExecution.objects.filter(
         checklist_assignment=assignment,
@@ -187,7 +187,7 @@ def materialize_execution_from_assignment(
         execution = ChecklistExecution.objects.create(
             checklist_template=template,
             checklist_assignment=assignment,
-            checklist_type=CHECKLIST_TYPE_SHARED,
+            execution_source=EXECUTION_SOURCE_ASSIGNMENT,
             establishment_id=assignment.establishment_id,
             assigned_to=assignment.assigned_to,
             assigned_by=assignment.assigned_by,

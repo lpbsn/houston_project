@@ -485,9 +485,13 @@ def _load_action_for_command(*, request, establishment_id, action_id):
         action_id=uuid.UUID(str(action_id)),
     )
     if action is None:
-        return membership, None, Response(
-            {"detail": "Not found."},
-            status=status.HTTP_404_NOT_FOUND,
+        return (
+            membership,
+            None,
+            Response(
+                {"detail": "Not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            ),
         )
     return membership, action, None
 

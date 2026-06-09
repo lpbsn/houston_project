@@ -47,11 +47,10 @@ def _aware(dt: datetime) -> datetime:
     return timezone.make_aware(dt, timezone.get_current_timezone())
 
 
-def _active_shared_template(owner_membership, business_unit):
+def _active_registered_template(owner_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Routine",
         business_unit_id=business_unit.id,
     )
@@ -74,7 +73,7 @@ def _scoped_staff(owner, business_unit):
 
 
 def _create_product_assignment(owner, staff, business_unit):
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     return create_checklist_assignment(
         template=template,
         actor=owner,
@@ -100,7 +99,7 @@ def test_create_assignment_persists_schedule_fields(
 
 
 def test_rejects_overnight_slot(owner_membership, staff_membership, business_unit):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     with pytest.raises(ChecklistValidationError, match="overnight"):
         create_checklist_assignment(
             template=template,
@@ -115,7 +114,7 @@ def test_rejects_overnight_slot(owner_membership, staff_membership, business_uni
 
 
 def test_rejects_end_date_before_start_date(owner_membership, staff_membership, business_unit):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     with pytest.raises(ChecklistValidationError, match="end_date"):
         create_checklist_assignment(
             template=template,

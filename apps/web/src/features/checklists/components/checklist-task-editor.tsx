@@ -13,31 +13,25 @@ import {
 } from '@/features/checklists/hooks'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
 import { validateTask } from '@/features/checklists/lib/checklist-form-validation'
-import type { ChecklistTaskTemplate, ChecklistType } from '@/features/checklists/types'
+import type { ChecklistTaskTemplate } from '@/features/checklists/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ChecklistTaskEditorProps = {
   establishmentId: string
   templateId: string
-  checklistType: ChecklistType
   tasks: ChecklistTaskTemplate[]
 }
 
 export function ChecklistTaskEditor({
   establishmentId,
   templateId,
-  checklistType,
   tasks,
 }: ChecklistTaskEditorProps) {
-  const createMutation = useCreateChecklistTaskMutation(establishmentId, templateId, checklistType)
-  const updateMutation = useUpdateChecklistTaskMutation(establishmentId, templateId, checklistType)
-  const deleteMutation = useDeleteChecklistTaskMutation(establishmentId, templateId, checklistType)
-  const reorderMutation = useReorderChecklistTasksMutation(
-    establishmentId,
-    templateId,
-    checklistType,
-  )
+  const createMutation = useCreateChecklistTaskMutation(establishmentId, templateId)
+  const updateMutation = useUpdateChecklistTaskMutation(establishmentId, templateId)
+  const deleteMutation = useDeleteChecklistTaskMutation(establishmentId, templateId)
+  const reorderMutation = useReorderChecklistTasksMutation(establishmentId, templateId)
 
   const [newTask, setNewTask] = useState('')
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)

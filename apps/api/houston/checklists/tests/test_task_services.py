@@ -9,13 +9,13 @@ from houston.checklists.services import (
     cancel_checklist_execution,
     create_checklist_assignment,
     create_checklist_template,
+    create_execution_from_template,
     create_observation_from_task,
-    create_personal_execution,
     mark_task_done,
     record_task_observation_created,
     skip_task,
 )
-from houston.checklists.tests.conftest import add_task_template
+from houston.checklists.tests.conftest import add_task_template, stable_assignment_times
 from houston.observations.models import Observation
 
 pytestmark = pytest.mark.django_db
@@ -25,7 +25,6 @@ def _execution_with_tasks(owner_membership, staff_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Routine",
         business_unit_id=business_unit.id,
     )
@@ -39,12 +38,9 @@ def _execution_with_tasks(owner_membership, staff_membership, business_unit):
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     return ChecklistExecution.objects.prefetch_related("task_executions").get(
         checklist_assignment=assignment,
@@ -98,7 +94,7 @@ def test_skip_task_with_optional_reason(
     assert task.skipped_reason == "Not needed"
 
 
-def test_staff_cannot_execute_unassigned_shared_task(
+def test_staff_cannot_execute_unassigned_assignment_task(
     owner_membership,
     staff_membership,
     other_staff_membership,
@@ -159,7 +155,7 @@ def test_create_observation_from_task_delegates_to_submit_observation(
     submit_mock.assert_called_once()
 
 
-def test_cancel_shared_execution_by_owner(
+def test_cancel_assignment_execution_by_owner(
     owner_membership,
     staff_membership,
     business_unit,
@@ -170,18 +166,21 @@ def test_cancel_shared_execution_by_owner(
     assert canceled.canceled_at is not None
 
 
-def test_staff_cannot_cancel_shared_execution(
+def test_staff_assignee_can_cancel_assignment_execution(
     owner_membership,
     staff_membership,
     business_unit,
 ):
     execution = _execution_with_tasks(owner_membership, staff_membership, business_unit)
-    with pytest.raises(ChecklistPermissionError):
-        cancel_checklist_execution(execution=execution, actor=staff_membership)
+    canceled = cancel_checklist_execution(execution=execution, actor=staff_membership)
+    assert canceled.status == ChecklistExecution.Status.CANCELED
 
 
-def test_cancel_personal_execution_by_assignee(staff_membership, personal_template):
-    add_task_template(template=personal_template, task="Task")
-    execution = create_personal_execution(template=personal_template, actor=staff_membership)
+def test_cancel_staff_template_execution_by_assignee(staff_membership, staff_owned_template):
+    add_task_template(template=staff_owned_template, task="Task")
+    execution = create_execution_from_template(
+        template=staff_owned_template,
+        actor=staff_membership,
+    )
     canceled = cancel_checklist_execution(execution=execution, actor=staff_membership)
     assert canceled.status == ChecklistExecution.Status.CANCELED

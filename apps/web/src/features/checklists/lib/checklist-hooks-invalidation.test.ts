@@ -13,15 +13,15 @@ function readHooks(): string {
 describe('checklist hooks invalidation', () => {
   const source = readHooks()
 
-  it('invalidates both shared and personal templates when checklistType is omitted', () => {
+  it('invalidates all template list queries for an establishment', () => {
     const invalidateSurfaces = source.slice(
       source.indexOf('function invalidateChecklistSurfaces'),
       source.indexOf('function invalidateChecklistExecutionSurfaces'),
     )
 
-    expect(invalidateSurfaces).toContain("checklistsQueryKeys.templates(establishmentId, 'shared')")
-    expect(invalidateSurfaces).toContain("checklistsQueryKeys.templates(establishmentId, 'personal')")
-    expect(invalidateSurfaces).toContain('if (checklistType)')
+    expect(invalidateSurfaces).toContain("['checklists', 'templates', establishmentId]")
+    expect(invalidateSurfaces).not.toContain("'shared'")
+    expect(invalidateSurfaces).not.toContain("'personal'")
   })
 
   it('invalidates execution detail, checklist surfaces, and execution feed on execution mutations', () => {
@@ -33,7 +33,7 @@ describe('checklist hooks invalidation', () => {
     expect(invalidateExecution).toContain(
       'checklistsQueryKeys.executionDetail(establishmentId, executionId)',
     )
-    expect(invalidateExecution).toContain('invalidateChecklistSurfaces(queryClient, establishmentId, checklistType)')
+    expect(invalidateExecution).toContain('invalidateChecklistSurfaces(queryClient, establishmentId)')
     expect(invalidateExecution).toContain('actionsQueryKeys.all')
   })
 
@@ -42,45 +42,6 @@ describe('checklist hooks invalidation', () => {
     expect(source).toContain('useMarkChecklistTaskDoneMutation')
     expect(source).toContain('useSkipChecklistTaskMutation')
     expect(source).toContain('useCreateChecklistTaskObservationMutation')
-
-    const cancelMutation = source.slice(
-      source.indexOf('export function useCancelChecklistExecutionMutation'),
-      source.indexOf('export function useMarkChecklistTaskDoneMutation'),
-    )
-    const markDoneMutation = source.slice(
-      source.indexOf('export function useMarkChecklistTaskDoneMutation'),
-      source.indexOf('export function useSkipChecklistTaskMutation'),
-    )
-    const skipMutation = source.slice(
-      source.indexOf('export function useSkipChecklistTaskMutation'),
-      source.indexOf('export function useCreateChecklistTaskObservationMutation'),
-    )
-    const observationMutation = source.slice(
-      source.indexOf('export function useCreateChecklistTaskObservationMutation'),
-      source.length,
-    )
-
-    for (const block of [cancelMutation, markDoneMutation, skipMutation, observationMutation]) {
-      expect(block).toContain('invalidateChecklistExecutionSurfaces')
-    }
-  })
-
-  it('invalidates execution feed through shared checklist surface invalidation', () => {
-    const invalidateSurfaces = source.slice(
-      source.indexOf('function invalidateChecklistSurfaces'),
-      source.indexOf('function invalidateChecklistExecutionSurfaces'),
-    )
-    const createTemplate = source.slice(
-      source.indexOf('export function useCreateChecklistTemplateMutation'),
-      source.indexOf('export function useUpdateChecklistTemplateMutation'),
-    )
-    const createAssignment = source.slice(
-      source.indexOf('export function useCreateChecklistAssignmentMutation'),
-      source.indexOf('export function useUpdateChecklistAssignmentMutation'),
-    )
-
-    expect(invalidateSurfaces).toContain('actionsQueryKeys.all')
-    expect(createTemplate).toContain('invalidateChecklistSurfaces')
-    expect(createAssignment).toContain('invalidateChecklistSurfaces')
+    expect(source).toContain('useCreateTemplateExecutionMutation')
   })
 })

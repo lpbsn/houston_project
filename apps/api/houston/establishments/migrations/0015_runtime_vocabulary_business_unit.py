@@ -5,15 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0014_membership_scope_business_unit'),
+        ("establishments", "0014_membership_scope_business_unit"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='runtimevocabulary',
-            name='mapped_business_unit',
-            field=models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='runtime_vocabulary', to='establishments.businessunit'),
+            model_name="runtimevocabulary",
+            name="mapped_business_unit",
+            field=models.ForeignKey(
+                blank=True,
+                db_index=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="runtime_vocabulary",
+                to="establishments.businessunit",
+            ),
         ),
     ]

@@ -11,11 +11,12 @@ from rest_framework.views import APIView
 from houston.accounts.api.serializers import ApiErrorResponseSerializer
 from houston.accounts.authentication import BearerAccessTokenAuthentication
 from houston.checklists.api.serializers import (
+    ChecklistActiveExecutionConflictSerializer,
     ChecklistAssignmentCreateRequestSerializer,
     ChecklistAssignmentSerializer,
     ChecklistAssignmentUpdateRequestSerializer,
     ChecklistExecutionDetailSerializer,
-    ChecklistPersonalExecutionConflictSerializer,
+    ChecklistFlashTodoCreateRequestSerializer,
     ChecklistTaskCreateObservationRequestSerializer,
     ChecklistTaskCreateObservationResponseSerializer,
     ChecklistTaskExecutionSerializer,
@@ -26,6 +27,7 @@ from houston.checklists.api.serializers import (
     ChecklistTaskTemplateUpdateRequestSerializer,
     ChecklistTemplateCreateRequestSerializer,
     ChecklistTemplateDetailSerializer,
+    ChecklistTemplateExecutionCreateRequestSerializer,
     ChecklistTemplateListItemSerializer,
     ChecklistTemplateUpdateRequestSerializer,
     serialize_assignment,
@@ -35,7 +37,7 @@ from houston.checklists.api.serializers import (
     serialize_template_detail,
     serialize_template_list_item,
 )
-from houston.checklists.constants import CHECKLIST_TYPE_PERSONAL, CHECKLIST_TYPE_SHARED
+from houston.checklists.constants import CHECKLIST_BADGE_DEFAULT, CHECKLIST_BADGES
 from houston.checklists.exceptions import (
     ChecklistConflictError,
     ChecklistPermissionError,
@@ -44,20 +46,17 @@ from houston.checklists.exceptions import (
 from houston.checklists.models import ChecklistTemplate
 from houston.checklists.permissions import (
     can_access_checklist_management,
-    can_create_personal_template,
-    can_create_shared_assignment,
-    can_create_shared_template,
+    can_create_checklist_assignment,
+    can_create_registered_template,
 )
 from houston.checklists.selectors import (
     active_assignments_for_management,
-    get_active_personal_execution_for_template,
     get_checklist_assignment_for_detail,
     get_checklist_execution_for_detail,
     get_checklist_task_execution_for_commands,
     get_checklist_task_template_for_management,
     get_checklist_template_for_detail,
-    personal_templates_for_membership,
-    shared_templates_for_catalogue,
+    registered_templates_for_catalogue,
 )
 from houston.checklists.services import (
     activate_checklist_template,
@@ -65,8 +64,10 @@ from houston.checklists.services import (
     cancel_checklist_execution,
     create_checklist_assignment,
     create_checklist_template,
+    create_execution_from_template,
+    create_flash_todo_execution,
     create_observation_from_task,
-    create_personal_execution,
+    create_registered_checklist_template,
     deactivate_checklist_assignment,
     deactivate_checklist_template,
     delete_checklist_template,
@@ -127,12 +128,14 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
     @extend_schema(
         tags=["checklists"],
         parameters=[
+            OpenApiParameter(name="created_by_me", required=False, type=bool),
             OpenApiParameter(
-                name="type",
-                required=True,
+                name="badge",
+                required=False,
                 type=str,
-                enum=["shared", "personal"],
+                enum=sorted(CHECKLIST_BADGES),
             ),
+            OpenApiParameter(name="business_unit_id", required=False, type=str),
         ],
         responses={
             200: ChecklistTemplateListItemSerializer(many=True),
@@ -148,28 +151,40 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
         if not can_access_checklist_management(membership):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        checklist_type = request.query_params.get("type", "").strip().lower()
-        if checklist_type not in {CHECKLIST_TYPE_SHARED, CHECKLIST_TYPE_PERSONAL}:
-            return Response(
-                {
-                    "code": "validation_error",
-                    "detail": "type must be shared or personal.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if checklist_type == CHECKLIST_TYPE_SHARED:
-            queryset = shared_templates_for_catalogue(membership=membership)
-        else:
-            queryset = personal_templates_for_membership(membership=membership)
+        created_by_me = request.query_params.get("created_by_me", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        badge = request.query_params.get("badge", "").strip().lower() or None
+        if badge == "":
+            badge = None
+        business_unit_id = None
+        business_unit_raw = request.query_params.get("business_unit_id", "").strip()
+        if business_unit_raw:
+            try:
+                business_unit_id = uuid.UUID(business_unit_raw)
+            except ValueError:
+                return Response(
+                    {
+                        "code": "validation_error",
+                        "detail": "business_unit_id must be a valid UUID.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        queryset = registered_templates_for_catalogue(
+            membership=membership,
+            created_by_me=created_by_me,
+            badge=badge,
+            business_unit_id=business_unit_id,
+        )
 
         queryset = queryset.annotate(task_count=Count("task_templates")).order_by(
             "-updated_at",
             "-created_at",
         )
         payload = [
-            serialize_template_list_item(template, membership=membership)
-            for template in queryset
+            serialize_template_list_item(template, membership=membership) for template in queryset
         ]
         return Response(ChecklistTemplateListItemSerializer(payload, many=True).data)
 
@@ -192,30 +207,35 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
         body = ChecklistTemplateCreateRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         data = body.validated_data
-        checklist_type = data["checklist_type"]
-
-        if checklist_type == CHECKLIST_TYPE_SHARED and not can_create_shared_template(membership):
-            return Response(
-                {"code": "permission_denied", "detail": "Permission denied."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if checklist_type == CHECKLIST_TYPE_PERSONAL and not can_create_personal_template(
-            membership,
-        ):
+        if not can_create_registered_template(membership):
             return Response(
                 {"code": "permission_denied", "detail": "Permission denied."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         try:
-            template = create_checklist_template(
-                establishment_id=self.establishment_id,
-                actor=membership,
-                checklist_type=checklist_type,
-                title=data["title"],
-                description=data.get("description", ""),
-                business_unit_id=data.get("business_unit_id"),
-            )
+            if data.get("tasks"):
+                template, _execution = create_registered_checklist_template(
+                    establishment_id=self.establishment_id,
+                    actor=membership,
+                    title=data["title"],
+                    description=data.get("description", ""),
+                    business_unit_id=data["business_unit_id"],
+                    badge=data.get("badge", CHECKLIST_BADGE_DEFAULT),
+                    tasks=data["tasks"],
+                    assign_now=data.get("assign_now", False),
+                    assigned_to_id=data.get("assigned_to"),
+                    end_at=data.get("end_at"),
+                )
+            else:
+                template = create_checklist_template(
+                    establishment_id=self.establishment_id,
+                    actor=membership,
+                    title=data["title"],
+                    description=data.get("description", ""),
+                    business_unit_id=data["business_unit_id"],
+                    badge=data.get("badge", CHECKLIST_BADGE_DEFAULT),
+                )
         except (ChecklistPermissionError, ChecklistValidationError) as exc:
             return _checklist_error_response(exc)
 
@@ -306,7 +326,7 @@ class ChecklistTemplateDetailView(EstablishmentScopedChecklistMixin, APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
-            409: OpenApiResponse(response=ChecklistPersonalExecutionConflictSerializer),
+            409: OpenApiResponse(response=ChecklistActiveExecutionConflictSerializer),
         },
     )
     def delete(self, request, establishment_id, template_id):
@@ -328,7 +348,7 @@ class ChecklistTemplateDetailView(EstablishmentScopedChecklistMixin, APIView):
         except ChecklistConflictError as exc:
             if exc.active_execution_id is not None:
                 return Response(
-                    ChecklistPersonalExecutionConflictSerializer(
+                    ChecklistActiveExecutionConflictSerializer(
                         {
                             "code": "conflict",
                             "detail": str(exc) or "Conflict.",
@@ -600,8 +620,7 @@ class ChecklistAssignmentListView(EstablishmentScopedChecklistMixin, APIView):
             "-created_at",
         )
         payload = [
-            serialize_assignment(assignment, membership=membership)
-            for assignment in queryset
+            serialize_assignment(assignment, membership=membership) for assignment in queryset
         ]
         return Response(ChecklistAssignmentSerializer(payload, many=True).data)
 
@@ -636,15 +655,7 @@ class ChecklistAssignmentCreateView(EstablishmentScopedChecklistMixin, APIView):
         )
         if template is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if template.checklist_type != CHECKLIST_TYPE_SHARED:
-            return Response(
-                {
-                    "code": "validation_error",
-                    "detail": "Assignments are only allowed for shared templates.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not can_create_shared_assignment(membership, template):
+        if not can_create_checklist_assignment(membership, template):
             return Response(
                 {"code": "permission_denied", "detail": "Permission denied."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -767,7 +778,7 @@ class ChecklistAssignmentDeactivateView(EstablishmentScopedChecklistMixin, APIVi
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
-            409: OpenApiResponse(response=ChecklistPersonalExecutionConflictSerializer),
+            409: OpenApiResponse(response=ChecklistActiveExecutionConflictSerializer),
         },
     )
     def post(self, request, establishment_id, assignment_id):
@@ -792,7 +803,7 @@ class ChecklistAssignmentDeactivateView(EstablishmentScopedChecklistMixin, APIVi
         except ChecklistConflictError as exc:
             if exc.active_execution_id is not None:
                 return Response(
-                    ChecklistPersonalExecutionConflictSerializer(
+                    ChecklistActiveExecutionConflictSerializer(
                         {
                             "code": "conflict",
                             "detail": str(exc) or "Conflict.",
@@ -812,20 +823,68 @@ class ChecklistAssignmentDeactivateView(EstablishmentScopedChecklistMixin, APIVi
         return Response(ChecklistAssignmentSerializer(payload).data)
 
 
-class ChecklistPersonalExecutionCreateView(EstablishmentScopedChecklistMixin, APIView):
+class ChecklistFlashTodoCreateView(EstablishmentScopedChecklistMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
     @extend_schema(
         tags=["checklists"],
-        request=None,
+        request=ChecklistFlashTodoCreateRequestSerializer,
         responses={
             201: ChecklistExecutionDetailSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
-            409: OpenApiResponse(response=ChecklistPersonalExecutionConflictSerializer),
+        },
+    )
+    def post(self, request, establishment_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        body = ChecklistFlashTodoCreateRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+
+        try:
+            execution = create_flash_todo_execution(
+                establishment_id=self.establishment_id,
+                actor=membership,
+                title=data["title"],
+                description=data.get("description", ""),
+                business_unit_id=data["business_unit_id"],
+                assigned_to_id=data["assigned_to"],
+                tasks=data["tasks"],
+                end_at=data.get("end_at"),
+            )
+        except (ChecklistPermissionError, ChecklistValidationError) as exc:
+            return _checklist_error_response(exc)
+
+        execution = get_checklist_execution_for_detail(
+            membership=membership,
+            execution_id=execution.id,
+        )
+        payload = serialize_execution_detail(execution, membership=membership)
+        return Response(
+            ChecklistExecutionDetailSerializer(payload).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ChecklistTemplateExecutionCreateView(EstablishmentScopedChecklistMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["checklists"],
+        request=ChecklistTemplateExecutionCreateRequestSerializer,
+        responses={
+            201: ChecklistExecutionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
     )
     def post(self, request, establishment_id, template_id):
@@ -839,30 +898,17 @@ class ChecklistPersonalExecutionCreateView(EstablishmentScopedChecklistMixin, AP
         )
         if template is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if template.checklist_type != CHECKLIST_TYPE_PERSONAL:
-            return Response(
-                {
-                    "code": "validation_error",
-                    "detail": "Personal executions require a personal template.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+
+        body = ChecklistTemplateExecutionCreateRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
 
         try:
-            execution = create_personal_execution(template=template, actor=membership)
-        except ChecklistConflictError as exc:
-            active_execution = get_active_personal_execution_for_template(template=template)
-            return Response(
-                ChecklistPersonalExecutionConflictSerializer(
-                    {
-                        "code": "conflict",
-                        "detail": str(exc) or "Conflict.",
-                        "active_execution_id": (
-                            active_execution.id if active_execution is not None else None
-                        ),
-                    }
-                ).data,
-                status=status.HTTP_409_CONFLICT,
+            execution = create_execution_from_template(
+                template=template,
+                actor=membership,
+                assigned_to_id=data.get("assigned_to"),
+                end_at=data.get("end_at"),
             )
         except (ChecklistPermissionError, ChecklistValidationError) as exc:
             return _checklist_error_response(exc)

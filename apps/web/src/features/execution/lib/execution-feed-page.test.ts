@@ -43,4 +43,13 @@ describe('execution-feed-page', () => {
     expect(source).toContain('onOpenChecklist?.(id)')
     expect(source).toContain('onOpenAction?.(id)')
   })
+
+  it('routes feed create menu to flash to-do and checklist flows', () => {
+    expect(source).toContain('onSelectFlashTodo')
+    expect(source).toContain("onNavigate?.('/checklists/executions/new')")
+    expect(source).toContain("onNavigate?.('/checklists/new')")
+    expect(source).toContain("onNavigate?.('/checklists')")
+    expect(source).not.toContain('onSelectPersonalChecklist')
+    expect(source).not.toContain('quickCreatePersonalChecklistExecution')
+  })
 })

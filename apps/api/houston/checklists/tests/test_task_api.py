@@ -23,7 +23,6 @@ def _assigned_execution_with_tasks(api_client, owner, staff, business_unit):
     template = api_client.post(
         checklist_templates_url(owner.establishment_id),
         {
-            "checklist_type": "shared",
             "title": "Routine",
             "business_unit_id": str(business_unit.id),
         },

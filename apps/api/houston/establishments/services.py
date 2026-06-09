@@ -817,12 +817,8 @@ def _apply_business_unit_sections(
     payload: dict,
     proposal: OnboardingProposal,
 ) -> tuple[set[str], set[tuple[int, str]]]:
-    catalog_bus = {
-        row.key: row for row in CatalogBusinessUnit.objects.filter(active=True)
-    }
-    catalog_ass = {
-        row.key: row for row in CatalogActivitySubject.objects.filter(active=True)
-    }
+    catalog_bus = {row.key: row for row in CatalogBusinessUnit.objects.filter(active=True)}
+    catalog_ass = {row.key: row for row in CatalogActivitySubject.objects.filter(active=True)}
 
     business_units_by_client_key: dict[str, BusinessUnit] = {}
     bu_runtime_keys: set[str] = set()
@@ -835,9 +831,7 @@ def _apply_business_unit_sections(
         catalog_key = item.get("catalog_key")
         catalog_bu = catalog_bus.get(catalog_key) if catalog_key else None
         bu_source = (
-            BusinessUnit.Source.CATALOG_SUGGESTION
-            if catalog_key
-            else BusinessUnit.Source.MANUAL
+            BusinessUnit.Source.CATALOG_SUGGESTION if catalog_key else BusinessUnit.Source.MANUAL
         )
 
         business_unit, _created = BusinessUnit.objects.update_or_create(
@@ -2234,11 +2228,7 @@ def create_runtime_business_unit(
     if catalog_key:
         catalog_bu = CatalogBusinessUnit.objects.filter(key=catalog_key, active=True).first()
 
-    source = (
-        BusinessUnit.Source.CATALOG_SUGGESTION
-        if catalog_key
-        else BusinessUnit.Source.MANUAL
-    )
+    source = BusinessUnit.Source.CATALOG_SUGGESTION if catalog_key else BusinessUnit.Source.MANUAL
 
     business_unit, _created = BusinessUnit.objects.update_or_create(
         establishment=establishment,
@@ -2392,14 +2382,11 @@ def create_runtime_activity_subject(
         establishment_id=establishment_id,
     )
 
-    business_unit = (
-        BusinessUnit.objects.filter(
-            id=business_unit_id,
-            establishment_id=establishment.id,
-            active=True,
-        )
-        .first()
-    )
+    business_unit = BusinessUnit.objects.filter(
+        id=business_unit_id,
+        establishment_id=establishment.id,
+        active=True,
+    ).first()
     if business_unit is None:
         raise RuntimeConfigNotFoundError
 
@@ -2416,9 +2403,7 @@ def create_runtime_activity_subject(
         catalog_as = CatalogActivitySubject.objects.filter(key=catalog_key, active=True).first()
 
     source = (
-        ActivitySubject.Source.CATALOG_SUGGESTION
-        if catalog_key
-        else ActivitySubject.Source.MANUAL
+        ActivitySubject.Source.CATALOG_SUGGESTION if catalog_key else ActivitySubject.Source.MANUAL
     )
 
     activity_subject, _created = ActivitySubject.objects.update_or_create(

@@ -7,7 +7,7 @@ from houston.checklists.api.views import (
     ChecklistAssignmentListView,
     ChecklistExecutionCancelView,
     ChecklistExecutionDetailView,
-    ChecklistPersonalExecutionCreateView,
+    ChecklistFlashTodoCreateView,
     ChecklistTaskExecutionCreateObservationView,
     ChecklistTaskExecutionMarkDoneView,
     ChecklistTaskExecutionSkipView,
@@ -17,6 +17,7 @@ from houston.checklists.api.views import (
     ChecklistTemplateActivateView,
     ChecklistTemplateDeactivateView,
     ChecklistTemplateDetailView,
+    ChecklistTemplateExecutionCreateView,
     ChecklistTemplateListCreateView,
 )
 
@@ -77,9 +78,14 @@ urlpatterns = [
         name="checklist-assignment-deactivate",
     ),
     path(
-        "establishments/<uuid:establishment_id>/checklist-templates/<uuid:template_id>/personal-executions/",
-        ChecklistPersonalExecutionCreateView.as_view(),
-        name="checklist-personal-execution-create",
+        "establishments/<uuid:establishment_id>/checklist-executions/flash-todo/",
+        ChecklistFlashTodoCreateView.as_view(),
+        name="checklist-flash-todo-create",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/checklist-templates/<uuid:template_id>/executions/",
+        ChecklistTemplateExecutionCreateView.as_view(),
+        name="checklist-template-execution-create",
     ),
     path(
         "establishments/<uuid:establishment_id>/checklist-executions/<uuid:execution_id>/",

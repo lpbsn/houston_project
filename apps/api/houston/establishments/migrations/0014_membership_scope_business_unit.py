@@ -5,31 +5,70 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0013_business_unit_taxonomy_v2'),
+        ("establishments", "0013_business_unit_taxonomy_v2"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='membershipscope',
-            name='membership_scope_exactly_one_target',
+            model_name="membershipscope",
+            name="membership_scope_exactly_one_target",
         ),
         migrations.AddField(
-            model_name='membershipscope',
-            name='business_unit',
-            field=models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='membership_scopes', to='establishments.businessunit'),
+            model_name="membershipscope",
+            name="business_unit",
+            field=models.ForeignKey(
+                blank=True,
+                db_index=False,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="membership_scopes",
+                to="establishments.businessunit",
+            ),
         ),
         migrations.AddIndex(
-            model_name='membershipscope',
-            index=models.Index(fields=['business_unit'], name='mship_scope_bu_idx'),
+            model_name="membershipscope",
+            index=models.Index(fields=["business_unit"], name="mship_scope_bu_idx"),
         ),
         migrations.AddConstraint(
-            model_name='membershipscope',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('business_unit__isnull', False), ('operational_domain__isnull', True), ('operational_module__isnull', True), ('operational_subject__isnull', True)), models.Q(('business_unit__isnull', True), ('operational_domain__isnull', True), ('operational_module__isnull', False), ('operational_subject__isnull', True)), models.Q(('business_unit__isnull', True), ('operational_domain__isnull', False), ('operational_module__isnull', True), ('operational_subject__isnull', True)), models.Q(('business_unit__isnull', True), ('operational_domain__isnull', True), ('operational_module__isnull', True), ('operational_subject__isnull', False)), _connector='OR'), name='membership_scope_exactly_one_target'),
+            model_name="membershipscope",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    models.Q(
+                        ("business_unit__isnull", False),
+                        ("operational_domain__isnull", True),
+                        ("operational_module__isnull", True),
+                        ("operational_subject__isnull", True),
+                    ),
+                    models.Q(
+                        ("business_unit__isnull", True),
+                        ("operational_domain__isnull", True),
+                        ("operational_module__isnull", False),
+                        ("operational_subject__isnull", True),
+                    ),
+                    models.Q(
+                        ("business_unit__isnull", True),
+                        ("operational_domain__isnull", False),
+                        ("operational_module__isnull", True),
+                        ("operational_subject__isnull", True),
+                    ),
+                    models.Q(
+                        ("business_unit__isnull", True),
+                        ("operational_domain__isnull", True),
+                        ("operational_module__isnull", True),
+                        ("operational_subject__isnull", False),
+                    ),
+                    _connector="OR",
+                ),
+                name="membership_scope_exactly_one_target",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='membershipscope',
-            constraint=models.UniqueConstraint(condition=models.Q(('business_unit__isnull', False)), fields=('membership', 'business_unit'), name='membership_scope_business_unit_uniq'),
+            model_name="membershipscope",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("business_unit__isnull", False)),
+                fields=("membership", "business_unit"),
+                name="membership_scope_business_unit_uniq",
+            ),
         ),
     ]

@@ -22,7 +22,7 @@ def check_private_media_root_writable(app_configs, **kwargs):
                 hint=(
                     "Create the directory on the host (mkdir -p apps/api/private_media), "
                     "fix permissions (chmod), or on Linux use a docker-compose.override.yml "
-                    "with user: \"${UID}:${GID}\" for api/celery. "
+                    'with user: "${UID}:${GID}" for api/celery. '
                     "A named volume for private_media is a last resort — see README."
                 ),
                 id="uploads.E001",

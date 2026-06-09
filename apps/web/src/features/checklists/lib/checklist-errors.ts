@@ -6,7 +6,7 @@ export function resolveChecklistErrorMessage(error: unknown, fallback: string): 
       return error.detail
     }
     if (error.status === 409) {
-      return 'Une exécution personnelle est déjà en cours pour cette checklist.'
+      return 'Une exécution est déjà en cours pour cette checklist.'
     }
     if (error.status === 403) {
       return 'Vous n’avez pas l’autorisation pour cette action.'

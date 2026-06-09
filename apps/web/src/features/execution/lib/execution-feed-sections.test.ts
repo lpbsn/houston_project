@@ -38,7 +38,8 @@ function makeChecklist(id: string, status: string) {
   return {
     id,
     title: 'Checklist',
-    checklist_type: 'personal' as const,
+    execution_source: 'flash_todo',
+    badge: null,
     status,
     end_at: null,
     is_overdue: false,

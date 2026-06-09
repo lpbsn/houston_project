@@ -112,15 +112,12 @@ def _build_checklist_context(*, observation: Observation) -> dict[str, Any] | No
 
 
 def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
-    observation = (
-        Observation.objects.select_related(
-            "establishment",
-            "checklist_execution",
-            "checklist_execution__business_unit",
-            "checklist_task_execution",
-        )
-        .get(pk=observation.pk)
-    )
+    observation = Observation.objects.select_related(
+        "establishment",
+        "checklist_execution",
+        "checklist_execution__business_unit",
+        "checklist_task_execution",
+    ).get(pk=observation.pk)
     establishment = observation.establishment
     establishment_taxonomy = build_establishment_taxonomy_snapshot(
         establishment_id=establishment.id,

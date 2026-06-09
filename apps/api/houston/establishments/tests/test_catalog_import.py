@@ -59,6 +59,5 @@ def test_import_reads_versioned_seed_csvs():
     assert len(bu_rows) == 14
     assert len(as_rows) == 134
     assert any(
-        row.key == "maintenance" and row.default_unit_type == "transversal"
-        for row in bu_rows
+        row.key == "maintenance" and row.default_unit_type == "transversal" for row in bu_rows
     )

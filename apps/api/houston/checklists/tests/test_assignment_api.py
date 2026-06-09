@@ -24,12 +24,11 @@ from houston.establishments.tests.taxonomy_helpers import create_business_unit
 pytestmark = pytest.mark.django_db
 
 
-def _active_shared_template(api_client, owner, business_unit):
+def _active_registered_template(api_client, owner, business_unit):
     token = login(api_client, user=owner.user)
     template = api_client.post(
         checklist_templates_url(owner.establishment_id),
         {
-            "checklist_type": "shared",
             "title": "Routine",
             "business_unit_id": str(business_unit.id),
         },
@@ -58,7 +57,7 @@ def test_assignment_create_with_schedule(
     staff_membership,
     business_unit,
 ):
-    template, token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, token = _active_registered_template(api_client, owner_membership, business_unit)
     response = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
         assignment_api_payload(
@@ -80,7 +79,7 @@ def test_assignment_rejects_end_at_before_start_at(
     staff_membership,
     business_unit,
 ):
-    template, token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, token = _active_registered_template(api_client, owner_membership, business_unit)
     schedule = default_assignment_schedule()
     response = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
@@ -105,7 +104,7 @@ def test_assignment_create_rejects_assignee_outside_business_unit(
 ):
     from houston.establishments.tests.taxonomy_helpers import create_membership
 
-    template, token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, token = _active_registered_template(api_client, owner_membership, business_unit)
     unscoped_staff = create_membership(
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
@@ -163,7 +162,7 @@ def test_assignment_create_denied_for_staff(
 ):
     from houston.actions.tests.conftest import build_api_membership_on_establishment
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     staff = build_api_membership_on_establishment(
         owner_membership,
         role=EstablishmentMembership.Role.STAFF,
@@ -186,7 +185,7 @@ def test_assignment_list_for_manager_is_scoped(
     business_unit,
     establishment,
 ):
-    template, token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, token = _active_registered_template(api_client, owner_membership, business_unit)
     in_scope = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
         assignment_api_payload(staff_membership.id),
@@ -196,7 +195,7 @@ def test_assignment_list_for_manager_is_scoped(
     assert in_scope.status_code == 201
 
     other_bu = create_business_unit(establishment=establishment, key="bar")
-    out_template, _ = _active_shared_template(api_client, owner_membership, other_bu)
+    out_template, _ = _active_registered_template(api_client, owner_membership, other_bu)
     out_scope = api_client.post(
         checklist_template_url(
             owner_membership.establishment_id,
@@ -324,7 +323,7 @@ def _create_assignment_via_api(
     assignee_membership=None,
 ):
     assignee = assignee_membership or staff_membership
-    template, token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, token = _active_registered_template(api_client, owner_membership, business_unit)
     for index in range(extra_tasks):
         task = api_client.post(
             checklist_template_url(owner_membership.establishment_id, template["id"], "tasks/"),
@@ -352,7 +351,7 @@ def test_assignment_patch_updates_assignment_and_assigned_execution(
 ):
     from datetime import datetime, timedelta
 
-    template, token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, token = _active_registered_template(api_client, owner_membership, business_unit)
     now = timezone.now()
     days_ahead = (0 - now.weekday()) % 7
     monday_start = datetime.combine(

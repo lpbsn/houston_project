@@ -52,11 +52,10 @@ def _scoped_staff(owner, business_unit):
     return staff
 
 
-def _active_shared_template(owner, business_unit):
+def _active_registered_template(owner, business_unit):
     template = create_checklist_template(
         establishment_id=owner.establishment_id,
         actor=owner,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Opening routine",
         business_unit_id=business_unit.id,
     )
@@ -74,7 +73,7 @@ def _create_paris_context():
     )
     business_unit = create_business_unit(establishment=establishment, key="restaurant")
     staff = _scoped_staff(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     return owner, staff, template
 
 
@@ -177,8 +176,7 @@ def test_yesterday_assignment_visible_and_overdue(api_client):
         overdue_entry = next(
             item["checklist"]
             for item in response.json()["items"]
-            if item["item_type"] == "checklist"
-            and item["checklist"]["id"] == str(execution.id)
+            if item["item_type"] == "checklist" and item["checklist"]["id"] == str(execution.id)
         )
         assert overdue_entry["is_overdue"] is True
 

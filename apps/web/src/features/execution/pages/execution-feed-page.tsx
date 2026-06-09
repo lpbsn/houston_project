@@ -79,7 +79,9 @@ export function ExecutionFeedPage({
         role={role}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectAction={() => onNavigate?.('/actions/new')}
-        onSelectPersonalChecklist={() => onNavigate?.('/checklists/executions/new')}
+        onSelectFlashTodo={() => onNavigate?.('/checklists/executions/new')}
+        onSelectChecklistCreate={() => onNavigate?.('/checklists/new')}
+        onSelectChecklistUse={() => onNavigate?.('/checklists')}
       />
       <TerrainHubSubheader>
         <TerrainHubViewToolbar trailing={createAction}>

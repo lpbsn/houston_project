@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { getChecklistCreateMenuOptions } from './checklist-create-menu'
+import { canCreateRegisteredChecklist } from './checklist-create-menu'
 
 describe('checklist-create-menu', () => {
-  it('offers shared and personal for manager roles', () => {
-    expect(getChecklistCreateMenuOptions('manager').map((option) => option.id)).toEqual([
-      'shared',
-      'personal',
-    ])
-    expect(getChecklistCreateMenuOptions('owner').map((option) => option.id)).toEqual([
-      'shared',
-      'personal',
-    ])
-  })
-
-  it('offers personal only for staff', () => {
-    expect(getChecklistCreateMenuOptions('staff').map((option) => option.id)).toEqual(['personal'])
+  it('allows all active roles to create registered checklists', () => {
+    for (const role of ['owner', 'director', 'manager', 'staff'] as const) {
+      expect(canCreateRegisteredChecklist(role)).toBe(true)
+    }
+    expect(canCreateRegisteredChecklist(null)).toBe(false)
   })
 })

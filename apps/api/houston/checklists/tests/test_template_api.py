@@ -17,8 +17,8 @@ from houston.establishments.tests.taxonomy_helpers import create_business_unit
 pytestmark = pytest.mark.django_db
 
 
-def _type_query(checklist_type: str) -> str:
-    return f"?type={checklist_type}"
+def _created_by_me_query() -> str:
+    return "?created_by_me=true"
 
 
 _PERSONAL_DELETE_ACTIVE_MESSAGE = (
@@ -27,11 +27,11 @@ _PERSONAL_DELETE_ACTIVE_MESSAGE = (
 )
 
 
-def _personal_template_with_tasks(api_client, staff, *, task_count: int = 1):
+def _staff_owned_template_with_tasks(api_client, staff, business_unit, *, task_count: int = 1):
     token = login(api_client, user=staff.user)
     template = api_client.post(
         checklist_templates_url(staff.establishment_id),
-        {"checklist_type": "personal", "title": "Mine"},
+        {"title": "Mine", "business_unit_id": str(business_unit.id)},
         format="json",
         **auth_headers(token),
     )
@@ -53,21 +53,22 @@ def _personal_template_with_tasks(api_client, staff, *, task_count: int = 1):
     return template.json(), token
 
 
-def _start_personal_execution(api_client, staff, template_id, token):
+def _start_template_execution(api_client, staff, template_id, token):
     response = api_client.post(
-        checklist_template_url(staff.establishment_id, template_id, "personal-executions/"),
+        checklist_template_url(staff.establishment_id, template_id, "executions/"),
+        {},
+        format="json",
         **auth_headers(token),
     )
     assert response.status_code == 201
     return response.json()
 
 
-def _create_shared_template_via_api(api_client, owner, business_unit, *, title="Shared"):
+def _create_registered_template_via_api(api_client, owner, business_unit, *, title="Shared"):
     token = login(api_client, user=owner.user)
     response = api_client.post(
         checklist_templates_url(owner.establishment_id),
         {
-            "checklist_type": "shared",
             "title": title,
             "business_unit_id": str(business_unit.id),
         },
@@ -78,19 +79,19 @@ def _create_shared_template_via_api(api_client, owner, business_unit, *, title="
     return response.json(), token
 
 
-def test_shared_template_list_owner_sees_templates(api_client, owner_membership, business_unit):
-    _create_shared_template_via_api(api_client, owner_membership, business_unit)
+def test_registered_template_list_owner_sees_templates(api_client, owner_membership, business_unit):
+    _create_registered_template_via_api(api_client, owner_membership, business_unit)
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
-        checklist_templates_url(owner_membership.establishment_id) + _type_query("shared"),
+        checklist_templates_url(owner_membership.establishment_id),
         **auth_headers(token),
     )
     assert response.status_code == 200
     assert len(response.json()) == 1
 
 
-def test_shared_template_list_staff_returns_empty(api_client, owner_membership, business_unit):
-    _create_shared_template_via_api(api_client, owner_membership, business_unit)
+def test_registered_template_list_staff_returns_empty(api_client, owner_membership, business_unit):
+    _create_registered_template_via_api(api_client, owner_membership, business_unit)
     from houston.actions.tests.conftest import build_api_membership_on_establishment
 
     staff = build_api_membership_on_establishment(
@@ -99,27 +100,29 @@ def test_shared_template_list_staff_returns_empty(api_client, owner_membership, 
     )
     token = login(api_client, user=staff.user)
     response = api_client.get(
-        checklist_templates_url(staff.establishment_id) + _type_query("shared"),
+        checklist_templates_url(staff.establishment_id),
         **auth_headers(token),
     )
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_manager_shared_template_list_is_scoped(
+def test_manager_registered_template_list_is_scoped(
     api_client,
     owner_membership,
     manager_membership,
     business_unit,
     establishment,
 ):
-    _create_shared_template_via_api(api_client, owner_membership, business_unit, title="In scope")
+    _create_registered_template_via_api(
+        api_client, owner_membership, business_unit, title="In scope"
+    )
     other_bu = create_business_unit(establishment=establishment, key="spa")
-    _create_shared_template_via_api(api_client, owner_membership, other_bu, title="Out scope")
+    _create_registered_template_via_api(api_client, owner_membership, other_bu, title="Out scope")
 
     token = login(api_client, user=manager_membership.user)
     response = api_client.get(
-        checklist_templates_url(manager_membership.establishment_id) + _type_query("shared"),
+        checklist_templates_url(manager_membership.establishment_id),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -127,31 +130,36 @@ def test_manager_shared_template_list_is_scoped(
     assert titles == {"In scope"}
 
 
-def test_personal_template_list_is_own_only(api_client, staff_membership, other_staff_membership):
+def test_staff_owned_template_list_is_own_only(
+    api_client,
+    staff_membership,
+    other_staff_membership,
+    business_unit,
+):
     token = login(api_client, user=staff_membership.user)
     create = api_client.post(
         checklist_templates_url(staff_membership.establishment_id),
-        {"checklist_type": "personal", "title": "Mine"},
+        {"title": "Mine", "business_unit_id": str(business_unit.id)},
         format="json",
         **auth_headers(token),
     )
     assert create.status_code == 201
 
     own_list = api_client.get(
-        checklist_templates_url(staff_membership.establishment_id) + _type_query("personal"),
+        checklist_templates_url(staff_membership.establishment_id) + _created_by_me_query(),
         **auth_headers(token),
     )
     assert len(own_list.json()) == 1
 
     other_token = login(api_client, user=other_staff_membership.user)
     other_list = api_client.get(
-        checklist_templates_url(other_staff_membership.establishment_id) + _type_query("personal"),
+        checklist_templates_url(other_staff_membership.establishment_id) + _created_by_me_query(),
         **auth_headers(other_token),
     )
     assert other_list.json() == []
 
 
-def test_create_shared_template_denied_for_staff(api_client, owner_membership, business_unit):
+def test_create_template_denied_for_unscoped_staff(api_client, owner_membership, business_unit):
     from houston.actions.tests.conftest import build_api_membership_on_establishment
 
     staff = build_api_membership_on_establishment(
@@ -162,7 +170,6 @@ def test_create_shared_template_denied_for_staff(api_client, owner_membership, b
     response = api_client.post(
         checklist_templates_url(staff.establishment_id),
         {
-            "checklist_type": "shared",
             "title": "Denied",
             "business_unit_id": str(business_unit.id),
         },
@@ -172,17 +179,15 @@ def test_create_shared_template_denied_for_staff(api_client, owner_membership, b
     assert response.status_code == 403
 
 
-def test_create_personal_template_allowed_for_staff(api_client, owner_membership):
-    from houston.actions.tests.conftest import build_api_membership_on_establishment
-
-    staff = build_api_membership_on_establishment(
-        owner_membership,
-        role=EstablishmentMembership.Role.STAFF,
-    )
-    token = login(api_client, user=staff.user)
+def test_create_registered_template_allowed_for_scoped_staff(
+    api_client,
+    staff_membership,
+    business_unit,
+):
+    token = login(api_client, user=staff_membership.user)
     response = api_client.post(
-        checklist_templates_url(staff.establishment_id),
-        {"checklist_type": "personal", "title": "Staff personal"},
+        checklist_templates_url(staff_membership.establishment_id),
+        {"title": "Staff checklist", "business_unit_id": str(business_unit.id)},
         format="json",
         **auth_headers(token),
     )
@@ -190,7 +195,9 @@ def test_create_personal_template_allowed_for_staff(api_client, owner_membership
 
 
 def test_activate_template_requires_task(api_client, owner_membership, business_unit):
-    payload, token = _create_shared_template_via_api(api_client, owner_membership, business_unit)
+    payload, token = _create_registered_template_via_api(
+        api_client, owner_membership, business_unit
+    )
     response = api_client.post(
         checklist_template_url(owner_membership.establishment_id, payload["id"], "activate/"),
         **auth_headers(token),
@@ -199,7 +206,9 @@ def test_activate_template_requires_task(api_client, owner_membership, business_
 
 
 def test_delete_last_task_auto_deactivates_template(api_client, owner_membership, business_unit):
-    payload, token = _create_shared_template_via_api(api_client, owner_membership, business_unit)
+    payload, token = _create_registered_template_via_api(
+        api_client, owner_membership, business_unit
+    )
     task = api_client.post(
         checklist_template_url(owner_membership.establishment_id, payload["id"], "tasks/"),
         {"task": "Only task"},
@@ -224,12 +233,14 @@ def test_delete_last_task_auto_deactivates_template(api_client, owner_membership
     assert detail.json()["status"] == ChecklistTemplate.Status.INACTIVE
 
 
-def test_delete_shared_template_succeeds_without_history(
+def test_delete_registered_template_succeeds_without_history(
     api_client,
     owner_membership,
     business_unit,
 ):
-    payload, token = _create_shared_template_via_api(api_client, owner_membership, business_unit)
+    payload, token = _create_registered_template_via_api(
+        api_client, owner_membership, business_unit
+    )
     response = api_client.delete(
         checklist_template_url(owner_membership.establishment_id, payload["id"]),
         **auth_headers(token),
@@ -238,14 +249,14 @@ def test_delete_shared_template_succeeds_without_history(
     assert not ChecklistTemplate.objects.filter(id=payload["id"]).exists()
 
 
-def test_delete_shared_template_denied_for_staff(
+def test_delete_registered_template_denied_for_staff(
     api_client,
     owner_membership,
     business_unit,
 ):
     from houston.actions.tests.conftest import build_api_membership_on_establishment
 
-    payload, owner_token = _create_shared_template_via_api(
+    payload, owner_token = _create_registered_template_via_api(
         api_client,
         owner_membership,
         business_unit,
@@ -263,11 +274,15 @@ def test_delete_shared_template_denied_for_staff(
     assert ChecklistTemplate.objects.filter(id=payload["id"]).exists()
 
 
-def test_delete_personal_template_allowed_for_creator(api_client, staff_membership):
+def test_delete_staff_owned_template_allowed_for_creator(
+    api_client,
+    staff_membership,
+    business_unit,
+):
     token = login(api_client, user=staff_membership.user)
     create = api_client.post(
         checklist_templates_url(staff_membership.establishment_id),
-        {"checklist_type": "personal", "title": "Mine"},
+        {"title": "Mine", "business_unit_id": str(business_unit.id)},
         format="json",
         **auth_headers(token),
     )
@@ -282,15 +297,16 @@ def test_delete_personal_template_allowed_for_creator(api_client, staff_membersh
     assert not ChecklistTemplate.objects.filter(id=template_id).exists()
 
 
-def test_delete_personal_template_denied_for_other_member(
+def test_delete_staff_owned_template_denied_for_other_member(
     api_client,
     staff_membership,
     other_staff_membership,
+    business_unit,
 ):
     token = login(api_client, user=staff_membership.user)
     create = api_client.post(
         checklist_templates_url(staff_membership.establishment_id),
-        {"checklist_type": "personal", "title": "Mine"},
+        {"title": "Mine", "business_unit_id": str(business_unit.id)},
         format="json",
         **auth_headers(token),
     )
@@ -302,17 +318,17 @@ def test_delete_personal_template_denied_for_other_member(
         checklist_template_url(other_staff_membership.establishment_id, template_id),
         **auth_headers(other_token),
     )
-    assert response.status_code == 404
+    assert response.status_code == 403
     assert ChecklistTemplate.objects.filter(id=template_id).exists()
 
 
-def test_delete_shared_template_denied_for_manager(
+def test_delete_registered_template_allowed_for_manager_in_scope(
     api_client,
     owner_membership,
     manager_membership,
     business_unit,
 ):
-    payload, _owner_token = _create_shared_template_via_api(
+    payload, _owner_token = _create_registered_template_via_api(
         api_client,
         owner_membership,
         business_unit,
@@ -322,17 +338,17 @@ def test_delete_shared_template_denied_for_manager(
         checklist_template_url(manager_membership.establishment_id, payload["id"]),
         **auth_headers(manager_token),
     )
-    assert response.status_code == 403
-    assert ChecklistTemplate.objects.filter(id=payload["id"]).exists()
+    assert response.status_code == 204
+    assert not ChecklistTemplate.objects.filter(id=payload["id"]).exists()
 
 
-def test_delete_shared_template_allowed_for_director(
+def test_delete_registered_template_allowed_for_director(
     api_client,
     owner_membership,
     director_membership,
     business_unit,
 ):
-    payload, _owner_token = _create_shared_template_via_api(
+    payload, _owner_token = _create_registered_template_via_api(
         api_client,
         owner_membership,
         business_unit,
@@ -355,7 +371,9 @@ def test_delete_template_with_assignment_no_active_execution_succeeds(
 
     from houston.checklists.models import ChecklistAssignment
 
-    template, token = _create_shared_template_via_api(api_client, owner_membership, business_unit)
+    template, token = _create_registered_template_via_api(
+        api_client, owner_membership, business_unit
+    )
     task = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "tasks/"),
         {"task": "Task"},
@@ -393,12 +411,17 @@ def test_delete_template_with_assignment_no_active_execution_succeeds(
     assert not ChecklistTemplate.objects.filter(id=template["id"]).exists()
 
 
-def test_delete_personal_template_with_active_execution_returns_conflict(
+def test_delete_staff_owned_template_with_active_execution_returns_conflict(
     api_client,
     staff_membership,
+    business_unit,
 ):
-    template, token = _personal_template_with_tasks(api_client, staff_membership)
-    execution = _start_personal_execution(
+    template, token = _staff_owned_template_with_tasks(
+        api_client,
+        staff_membership,
+        business_unit,
+    )
+    execution = _start_template_execution(
         api_client,
         staff_membership,
         template["id"],
@@ -417,12 +440,18 @@ def test_delete_personal_template_with_active_execution_returns_conflict(
     assert ChecklistTemplate.objects.filter(id=template["id"]).exists()
 
 
-def test_delete_personal_template_with_in_progress_execution_returns_conflict(
+def test_delete_staff_owned_template_with_in_progress_execution_returns_conflict(
     api_client,
     staff_membership,
+    business_unit,
 ):
-    template, token = _personal_template_with_tasks(api_client, staff_membership, task_count=2)
-    execution_payload = _start_personal_execution(
+    template, token = _staff_owned_template_with_tasks(
+        api_client,
+        staff_membership,
+        business_unit,
+        task_count=2,
+    )
+    execution_payload = _start_template_execution(
         api_client,
         staff_membership,
         template["id"],
@@ -454,12 +483,17 @@ def test_delete_personal_template_with_in_progress_execution_returns_conflict(
     assert ChecklistTemplate.objects.filter(id=template["id"]).exists()
 
 
-def test_delete_personal_template_with_done_execution_succeeds(
+def test_delete_staff_owned_template_with_done_execution_succeeds(
     api_client,
     staff_membership,
+    business_unit,
 ):
-    template, token = _personal_template_with_tasks(api_client, staff_membership)
-    execution_payload = _start_personal_execution(
+    template, token = _staff_owned_template_with_tasks(
+        api_client,
+        staff_membership,
+        business_unit,
+    )
+    execution_payload = _start_template_execution(
         api_client,
         staff_membership,
         template["id"],
@@ -490,12 +524,17 @@ def test_delete_personal_template_with_done_execution_succeeds(
     assert execution.template_title == template["title"]
 
 
-def test_delete_personal_template_with_canceled_execution_succeeds(
+def test_delete_staff_owned_template_with_canceled_execution_succeeds(
     api_client,
     staff_membership,
+    business_unit,
 ):
-    template, token = _personal_template_with_tasks(api_client, staff_membership)
-    execution_payload = _start_personal_execution(
+    template, token = _staff_owned_template_with_tasks(
+        api_client,
+        staff_membership,
+        business_unit,
+    )
+    execution_payload = _start_template_execution(
         api_client,
         staff_membership,
         template["id"],
@@ -522,16 +561,16 @@ def test_delete_personal_template_with_canceled_execution_succeeds(
     assert execution.status == ChecklistExecution.Status.CANCELED
 
 
-def test_delete_shared_template_with_historical_execution_succeeds(
+def test_delete_registered_template_with_historical_execution_succeeds(
     api_client,
     owner_membership,
     staff_membership,
     business_unit,
 ):
 
-    from houston.checklists.tests.test_assignment_api import _active_shared_template
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     from houston.checklists.tests.conftest import assignment_api_payload
 
     assignment = api_client.post(
@@ -567,16 +606,16 @@ def test_delete_shared_template_with_historical_execution_succeeds(
     assert execution.template_title == template["title"]
 
 
-def test_delete_shared_template_with_active_execution_returns_conflict(
+def test_delete_registered_template_with_active_execution_returns_conflict(
     api_client,
     owner_membership,
     staff_membership,
     business_unit,
 ):
 
-    from houston.checklists.tests.test_assignment_api import _active_shared_template
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     from houston.checklists.tests.conftest import assignment_api_payload
 
     assignment = api_client.post(
@@ -601,16 +640,16 @@ def test_delete_shared_template_with_active_execution_returns_conflict(
     assert ChecklistTemplate.objects.filter(id=template["id"]).exists()
 
 
-def test_delete_shared_template_with_in_progress_execution_returns_conflict(
+def test_delete_registered_template_with_in_progress_execution_returns_conflict(
     api_client,
     owner_membership,
     staff_membership,
     business_unit,
 ):
 
-    from houston.checklists.tests.test_assignment_api import _active_shared_template
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
 
-    template, owner_token = _active_shared_template(api_client, owner_membership, business_unit)
+    template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
     second_task = api_client.post(
         checklist_template_url(owner_membership.establishment_id, template["id"], "tasks/"),
         {"task": "Task 2"},

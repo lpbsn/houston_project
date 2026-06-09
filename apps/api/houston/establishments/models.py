@@ -752,6 +752,3 @@ class ActivitySubject(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.business_unit.key} :: {self.label} [{self.normalized_name}]"
-
-
-

@@ -14,7 +14,8 @@ def _membership_display_name(membership) -> str:
 class ChecklistFeedItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
-    checklist_type = serializers.CharField()
+    execution_source = serializers.CharField()
+    badge = serializers.CharField(allow_null=True)
     status = serializers.CharField()
     end_at = serializers.DateTimeField(allow_null=True)
     is_overdue = serializers.BooleanField()
@@ -34,9 +35,7 @@ def serialize_checklist_feed_item(
 ) -> dict:
     business_unit = execution.business_unit
     overdue = (
-        is_overdue
-        if is_overdue is not None
-        else checklist_execution_overdue(execution=execution)
+        is_overdue if is_overdue is not None else checklist_execution_overdue(execution=execution)
     )
     treated_count = getattr(execution, "progress_treated_count", None)
     total_count = getattr(execution, "progress_total_count", None)
@@ -54,7 +53,12 @@ def serialize_checklist_feed_item(
     return {
         "id": execution.id,
         "title": execution.template_title,
-        "checklist_type": execution.checklist_type,
+        "execution_source": execution.execution_source,
+        "badge": (
+            execution.checklist_template.badge
+            if execution.checklist_template_id is not None
+            else None
+        ),
         "status": execution.status,
         "end_at": execution.end_at,
         "is_overdue": overdue,

@@ -30,7 +30,11 @@ from houston.checklists.services import (
     normalize_recurrence_days,
     update_checklist_assignment,
 )
-from houston.checklists.tests.conftest import add_task_template, assignment_schedule_from_datetime
+from houston.checklists.tests.conftest import (
+    add_task_template,
+    assignment_schedule_from_datetime,
+    stable_assignment_times,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import (
     create_business_unit,
@@ -41,11 +45,10 @@ from houston.establishments.tests.taxonomy_helpers import (
 pytestmark = pytest.mark.django_db
 
 
-def _active_shared_template(owner_membership, business_unit):
+def _active_registered_template(owner_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Opening",
         business_unit_id=business_unit.id,
     )
@@ -74,7 +77,7 @@ def _create_assignment(
     task_count: int = 1,
     **kwargs,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     for position in range(2, task_count + 1):
         add_task_template(template=template, task=f"Task {position}", position=position)
     legacy_start = kwargs.pop("start_at", None)
@@ -128,7 +131,7 @@ def test_create_assignment_rejects_end_at_before_start_at(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     with pytest.raises(ChecklistValidationError):
         create_checklist_assignment(
@@ -136,11 +139,8 @@ def test_create_assignment_rejects_end_at_before_start_at(
             actor=owner_membership,
             assigned_to_id=staff_membership.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
             start_at=time(10, 0),
-
             end_at=time(9, 0),
         )
 
@@ -150,19 +150,16 @@ def test_create_one_shot_assignment_materializes_first_execution(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
         recurrence_days=None,
     )
 
@@ -177,7 +174,7 @@ def test_create_assignment_rejects_cross_establishment_assignee(
     owner_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     other_establishment = create_establishment(name="Other")
     other_staff = create_membership(establishment=other_establishment)
     now = timezone.now()
@@ -187,21 +184,18 @@ def test_create_assignment_rejects_cross_establishment_assignee(
             actor=owner_membership,
             assigned_to_id=other_staff.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
-            start_at=now.time().replace(microsecond=0),
-
-            end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+            start_at=stable_assignment_times(duration_hours=1)[0],
+            end_at=stable_assignment_times(duration_hours=1)[1],
         )
 
 
-def test_staff_cannot_create_shared_assignment(
+def test_staff_cannot_create_checklist_assignment(
     owner_membership,
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     with pytest.raises(ChecklistPermissionError):
         create_checklist_assignment(
@@ -209,12 +203,9 @@ def test_staff_cannot_create_shared_assignment(
             actor=staff_membership,
             assigned_to_id=staff_membership.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
-            start_at=now.time().replace(microsecond=0),
-
-            end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+            start_at=stable_assignment_times(duration_hours=1)[0],
+            end_at=stable_assignment_times(duration_hours=1)[1],
         )
 
 
@@ -388,7 +379,6 @@ def test_manager_out_of_scope_cannot_update_assignment(
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Spa routine",
         business_unit_id=other_business_unit.id,
     )
@@ -401,12 +391,9 @@ def test_manager_out_of_scope_cannot_update_assignment(
         actor=owner_membership,
         assigned_to_id=owner_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
 
     with pytest.raises(ChecklistPermissionError):
@@ -433,22 +420,19 @@ def test_staff_cannot_update_assignment(
 
 def test_deactivate_assignment_without_executions_deletes_row(
     establishment,
-    shared_template,
+    registered_template,
     owner_membership,
     staff_membership,
 ):
     assignment = ChecklistAssignment.objects.create(
-        checklist_template=shared_template,
+        checklist_template=registered_template,
         establishment=establishment,
         assigned_to=staff_membership,
         assigned_by=owner_membership,
-        business_unit=shared_template.business_unit,
+        business_unit=registered_template.business_unit,
         start_date=timezone.now().date(),
-
         end_date=timezone.now().date(),
-
         start_at=time(8, 0),
-
         end_at=time(10, 0),
     )
     assignment_id = assignment.id
@@ -750,7 +734,7 @@ def test_create_assignment_rejects_assignee_outside_business_unit(
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     with pytest.raises(ChecklistValidationError, match=_ASSIGNEE_OUT_OF_SCOPE_MESSAGE):
         create_checklist_assignment(
@@ -758,12 +742,9 @@ def test_create_assignment_rejects_assignee_outside_business_unit(
             actor=owner_membership,
             assigned_to_id=unscoped_staff.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
-            start_at=now.time().replace(microsecond=0),
-
-            end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+            start_at=stable_assignment_times(duration_hours=1)[0],
+            end_at=stable_assignment_times(duration_hours=1)[1],
         )
 
 
@@ -782,7 +763,7 @@ def test_create_assignment_rejects_manager_assignee_outside_business_unit(
     establishment,
 ):
     other_business_unit = create_business_unit(establishment=establishment, key="spa")
-    template = _active_shared_template(owner_membership, other_business_unit)
+    template = _active_registered_template(owner_membership, other_business_unit)
     now = timezone.now()
     with pytest.raises(ChecklistValidationError, match=_ASSIGNEE_OUT_OF_SCOPE_MESSAGE):
         create_checklist_assignment(
@@ -790,12 +771,9 @@ def test_create_assignment_rejects_manager_assignee_outside_business_unit(
             actor=owner_membership,
             assigned_to_id=manager_membership.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
-            start_at=now.time().replace(microsecond=0),
-
-            end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+            start_at=stable_assignment_times(duration_hours=1)[0],
+            end_at=stable_assignment_times(duration_hours=1)[1],
         )
 
 
@@ -860,7 +838,7 @@ def test_update_assignment_schedule_without_changing_legacy_out_of_scope_assigne
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = ChecklistAssignment.objects.create(
         checklist_template=template,
@@ -869,11 +847,8 @@ def test_update_assignment_schedule_without_changing_legacy_out_of_scope_assigne
         assigned_by=owner_membership,
         business_unit=business_unit,
         start_date=now.date(),
-
         end_date=now.date(),
-
         start_at=time(8, 0),
-
         end_at=time(10, 0),
         recurrence_days=[],
         status=ChecklistAssignment.Status.ACTIVE,
@@ -897,7 +872,7 @@ def test_create_assignment_rejects_inactive_assignee(
     )
     inactive_staff.status = EstablishmentMembership.Status.DEACTIVATED
     inactive_staff.save(update_fields=["status", "updated_at"])
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     with pytest.raises(ChecklistValidationError, match="Invalid establishment membership."):
         create_checklist_assignment(
@@ -905,12 +880,9 @@ def test_create_assignment_rejects_inactive_assignee(
             actor=owner_membership,
             assigned_to_id=inactive_staff.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
-            start_at=now.time().replace(microsecond=0),
-
-            end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+            start_at=stable_assignment_times(duration_hours=1)[0],
+            end_at=stable_assignment_times(duration_hours=1)[1],
         )
 
 
@@ -922,19 +894,16 @@ def test_manager_in_scope_can_create_assignment(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(manager_membership, business_unit)
+    template = _active_registered_template(manager_membership, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=manager_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     assert assignment.assigned_by_id == manager_membership.id
 
@@ -949,7 +918,6 @@ def test_manager_out_of_scope_cannot_create_assignment(
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Spa routine",
         business_unit_id=other_business_unit.id,
     )
@@ -963,10 +931,7 @@ def test_manager_out_of_scope_cannot_create_assignment(
             actor=manager_membership,
             assigned_to_id=staff_membership.id,
             start_date=now.date(),
-
             end_date=now.date(),
-
-            start_at=now.time().replace(microsecond=0),
-
-            end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+            start_at=stable_assignment_times(duration_hours=1)[0],
+            end_at=stable_assignment_times(duration_hours=1)[1],
         )

@@ -15,11 +15,10 @@ from houston.checklists.tests.conftest import add_task_template, assignment_sche
 pytestmark = pytest.mark.django_db
 
 
-def _active_shared_template(owner_membership, business_unit):
+def _active_registered_template(owner_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Routine",
         business_unit_id=business_unit.id,
     )
@@ -34,7 +33,7 @@ def test_horizon_task_materializes_recurring_occurrences(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(
         template=template,
@@ -47,13 +46,11 @@ def test_horizon_task_materializes_recurring_occurrences(
 
     created = materialize_checklist_assignments_horizon_task.run()
     assert created > 0
-    assert (
-        ChecklistExecution.objects.filter(checklist_assignment=assignment).count() == created
-    )
+    assert ChecklistExecution.objects.filter(checklist_assignment=assignment).count() == created
 
 
 def test_horizon_task_is_idempotent(owner_membership, staff_membership, business_unit):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(
         template=template,
@@ -82,7 +79,7 @@ def test_horizon_does_not_materialize_after_end_date(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(
         template=template,
@@ -108,9 +105,5 @@ def test_horizon_does_not_materialize_after_end_date(
         )
     )
     assert occurrence_dates
-    assert all(
-        occurrence_date <= assignment.end_date for occurrence_date in occurrence_dates
-    )
-    assert all(
-        occurrence_date >= assignment.start_date for occurrence_date in occurrence_dates
-    )
+    assert all(occurrence_date <= assignment.end_date for occurrence_date in occurrence_dates)
+    assert all(occurrence_date >= assignment.start_date for occurrence_date in occurrence_dates)

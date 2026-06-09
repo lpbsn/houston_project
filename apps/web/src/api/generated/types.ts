@@ -730,6 +730,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/checklist-executions/flash-todo/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_checklist_executions_flash_todo_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/create-observation/": {
         parameters: {
             query?: never;
@@ -874,7 +890,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/personal-executions/": {
+    "/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/executions/": {
         parameters: {
             query?: never;
             header?: never;
@@ -883,7 +899,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["v1_establishments_checklist_templates_personal_executions_create"];
+        post: operations["v1_establishments_checklist_templates_executions_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1673,6 +1689,12 @@ export interface components {
             /** Format: date-time */
             access_token_expires_at: string;
         };
+        /**
+         * @description * `process` - process
+         *     * `todo` - todo
+         * @enum {string}
+         */
+        BadgeEnum: "process" | "todo";
         BootstrapResponse: {
             authenticated: boolean;
             user: components["schemas"]["UserPublic"];
@@ -1809,6 +1831,12 @@ export interface components {
             ticket: string;
             expires_in: number;
         };
+        ChecklistActiveExecutionConflict: {
+            code: string;
+            detail: string;
+            /** Format: uuid */
+            active_execution_id?: string | null;
+        };
         ChecklistAssignment: {
             /** Format: uuid */
             id: string;
@@ -1863,7 +1891,7 @@ export interface components {
         ChecklistExecutionDetail: {
             /** Format: uuid */
             id: string;
-            checklist_type: string;
+            execution_source: string;
             /** Format: uuid */
             checklist_template_id: string | null;
             /** Format: uuid */
@@ -1871,7 +1899,7 @@ export interface components {
             status: string;
             template_title: string;
             template_description: string;
-            business_unit: components["schemas"]["ChecklistBusinessUnit"] | null;
+            business_unit: components["schemas"]["ChecklistBusinessUnit"];
             /** Format: uuid */
             assigned_to_id: string;
             assigned_to_display_name: string;
@@ -1909,7 +1937,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             title: string;
-            checklist_type: string;
+            execution_source: string;
+            badge: string | null;
             status: string;
             /** Format: date-time */
             end_at: string | null;
@@ -1924,11 +1953,17 @@ export interface components {
             progress_treated_count: number;
             progress_total_count: number;
         };
-        ChecklistPersonalExecutionConflict: {
-            code: string;
-            detail: string;
+        ChecklistFlashTodoCreateRequest: {
+            title: string;
+            /** @default  */
+            description: string;
             /** Format: uuid */
-            active_execution_id?: string | null;
+            business_unit_id: string;
+            /** Format: uuid */
+            assigned_to: string;
+            /** Format: date-time */
+            end_at?: string | null;
+            tasks: components["schemas"]["ChecklistTaskInput"][];
         };
         ChecklistTaskCreateObservationRequest: {
             text: string;
@@ -1958,6 +1993,10 @@ export interface components {
             /** Format: date-time */
             observation_created_at: string | null;
         };
+        ChecklistTaskInput: {
+            task?: string;
+            title?: string;
+        };
         ChecklistTaskReorderRequest: {
             ordered_task_template_ids: string[];
         };
@@ -1975,21 +2014,29 @@ export interface components {
             position?: number;
         };
         ChecklistTemplateCreateRequest: {
-            checklist_type: components["schemas"]["ChecklistTypeEnum"];
             title: string;
             /** @default  */
             description: string;
             /** Format: uuid */
-            business_unit_id?: string | null;
+            business_unit_id: string;
+            /** @default todo */
+            badge: components["schemas"]["BadgeEnum"];
+            tasks?: components["schemas"]["ChecklistTaskInput"][];
+            /** @default false */
+            assign_now: boolean;
+            /** Format: uuid */
+            assigned_to?: string | null;
+            /** Format: date-time */
+            end_at?: string | null;
         };
         ChecklistTemplateDetail: {
             /** Format: uuid */
             id: string;
-            checklist_type: string;
+            badge: string;
             title: string;
             description: string;
             status: string;
-            business_unit: components["schemas"]["ChecklistBusinessUnit"] | null;
+            business_unit: components["schemas"]["ChecklistBusinessUnit"];
             task_count: number;
             /** Format: date-time */
             created_at: string;
@@ -1998,14 +2045,20 @@ export interface components {
             permission_hints: components["schemas"]["ChecklistTemplatePermissionHints"];
             tasks: components["schemas"]["ChecklistTaskTemplate"][];
         };
+        ChecklistTemplateExecutionCreateRequest: {
+            /** Format: uuid */
+            assigned_to?: string | null;
+            /** Format: date-time */
+            end_at?: string | null;
+        };
         ChecklistTemplateListItem: {
             /** Format: uuid */
             id: string;
-            checklist_type: string;
+            badge: string;
             title: string;
             description: string;
             status: string;
-            business_unit: components["schemas"]["ChecklistBusinessUnit"] | null;
+            business_unit: components["schemas"]["ChecklistBusinessUnit"];
             task_count: number;
             /** Format: date-time */
             created_at: string;
@@ -2020,14 +2073,9 @@ export interface components {
             can_deactivate: boolean;
             can_delete: boolean;
             can_create_assignment: boolean;
-            can_create_personal_execution: boolean;
+            can_launch_execution: boolean;
+            can_use_template: boolean;
         };
-        /**
-         * @description * `personal` - personal
-         *     * `shared` - shared
-         * @enum {string}
-         */
-        ChecklistTypeEnum: "personal" | "shared";
         CsrfResponse: {
             detail: string;
         };
@@ -4766,7 +4814,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChecklistPersonalExecutionConflict"];
+                    "application/json": components["schemas"]["ChecklistActiveExecutionConflict"];
                 };
             };
         };
@@ -4822,6 +4870,65 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistExecutionDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_checklist_executions_flash_todo_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChecklistFlashTodoCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChecklistFlashTodoCreateRequest"];
+                "multipart/form-data": components["schemas"]["ChecklistFlashTodoCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5144,8 +5251,10 @@ export interface operations {
     };
     v1_establishments_checklist_templates_list: {
         parameters: {
-            query: {
-                type: "personal" | "shared";
+            query?: {
+                badge?: "process" | "todo";
+                business_unit_id?: string;
+                created_by_me?: boolean;
             };
             header?: never;
             path: {
@@ -5334,7 +5443,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChecklistPersonalExecutionConflict"];
+                    "application/json": components["schemas"]["ChecklistActiveExecutionConflict"];
                 };
             };
         };
@@ -5567,7 +5676,7 @@ export interface operations {
             };
         };
     };
-    v1_establishments_checklist_templates_personal_executions_create: {
+    v1_establishments_checklist_templates_executions_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -5577,7 +5686,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ChecklistTemplateExecutionCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChecklistTemplateExecutionCreateRequest"];
+                "multipart/form-data": components["schemas"]["ChecklistTemplateExecutionCreateRequest"];
+            };
+        };
         responses: {
             201: {
                 headers: {
@@ -5617,14 +5732,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChecklistPersonalExecutionConflict"];
                 };
             };
         };

@@ -3,11 +3,12 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.checklists.constants import (
+    CHECKLIST_BADGE_DEFAULT,
+    CHECKLIST_BADGES,
     CHECKLIST_DESCRIPTION_MAX_LENGTH,
     CHECKLIST_SKIPPED_REASON_MAX_LENGTH,
     CHECKLIST_TASK_MAX_LENGTH,
     CHECKLIST_TITLE_MAX_LENGTH,
-    CHECKLIST_TYPES,
 )
 from houston.checklists.models import (
     ChecklistAssignment,
@@ -57,7 +58,8 @@ class ChecklistTemplatePermissionHintsSerializer(serializers.Serializer):
     can_deactivate = serializers.BooleanField()
     can_delete = serializers.BooleanField()
     can_create_assignment = serializers.BooleanField()
-    can_create_personal_execution = serializers.BooleanField()
+    can_launch_execution = serializers.BooleanField()
+    can_use_template = serializers.BooleanField()
 
 
 class ChecklistAssignmentPermissionHintsSerializer(serializers.Serializer):
@@ -67,11 +69,11 @@ class ChecklistAssignmentPermissionHintsSerializer(serializers.Serializer):
 
 class ChecklistTemplateListItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    checklist_type = serializers.CharField()
+    badge = serializers.CharField()
     title = serializers.CharField()
     description = serializers.CharField()
     status = serializers.CharField()
-    business_unit = ChecklistBusinessUnitSerializer(allow_null=True)
+    business_unit = ChecklistBusinessUnitSerializer()
     task_count = serializers.IntegerField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
@@ -82,8 +84,21 @@ class ChecklistTemplateDetailSerializer(ChecklistTemplateListItemSerializer):
     tasks = ChecklistTaskTemplateSerializer(many=True)
 
 
+class ChecklistTaskInputSerializer(serializers.Serializer):
+    task = serializers.CharField(max_length=CHECKLIST_TASK_MAX_LENGTH, required=False)
+    title = serializers.CharField(max_length=CHECKLIST_TASK_MAX_LENGTH, required=False)
+
+    def validate(self, attrs):
+        task = (attrs.get("task") or attrs.get("title") or "").strip()
+        if not task:
+            raise serializers.ValidationError("task or title is required.")
+        if len(task) > CHECKLIST_TASK_MAX_LENGTH:
+            raise serializers.ValidationError("Task is too long.")
+        attrs["task"] = task
+        return attrs
+
+
 class ChecklistTemplateCreateRequestSerializer(serializers.Serializer):
-    checklist_type = serializers.ChoiceField(choices=sorted(CHECKLIST_TYPES))
     title = serializers.CharField(max_length=CHECKLIST_TITLE_MAX_LENGTH)
     description = serializers.CharField(
         max_length=CHECKLIST_DESCRIPTION_MAX_LENGTH,
@@ -91,7 +106,35 @@ class ChecklistTemplateCreateRequestSerializer(serializers.Serializer):
         allow_blank=True,
         default="",
     )
-    business_unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    business_unit_id = serializers.UUIDField()
+    badge = serializers.ChoiceField(
+        choices=sorted(CHECKLIST_BADGES),
+        required=False,
+        default=CHECKLIST_BADGE_DEFAULT,
+    )
+    tasks = ChecklistTaskInputSerializer(many=True, required=False)
+    assign_now = serializers.BooleanField(required=False, default=False)
+    assigned_to = serializers.UUIDField(required=False, allow_null=True)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class ChecklistFlashTodoCreateRequestSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=CHECKLIST_TITLE_MAX_LENGTH)
+    description = serializers.CharField(
+        max_length=CHECKLIST_DESCRIPTION_MAX_LENGTH,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    business_unit_id = serializers.UUIDField()
+    assigned_to = serializers.UUIDField()
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+    tasks = ChecklistTaskInputSerializer(many=True)
+
+
+class ChecklistTemplateExecutionCreateRequestSerializer(serializers.Serializer):
+    assigned_to = serializers.UUIDField(required=False, allow_null=True)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
 class ChecklistTemplateUpdateRequestSerializer(serializers.Serializer):
@@ -185,13 +228,13 @@ class ChecklistTaskExecutionSerializer(serializers.Serializer):
 
 class ChecklistExecutionDetailSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    checklist_type = serializers.CharField()
+    execution_source = serializers.CharField()
     checklist_template_id = serializers.UUIDField(allow_null=True)
     checklist_assignment_id = serializers.UUIDField(allow_null=True)
     status = serializers.CharField()
     template_title = serializers.CharField()
     template_description = serializers.CharField()
-    business_unit = ChecklistBusinessUnitSerializer(allow_null=True)
+    business_unit = ChecklistBusinessUnitSerializer()
     assigned_to_id = serializers.UUIDField()
     assigned_to_display_name = serializers.CharField()
     assigned_by_id = serializers.UUIDField(allow_null=True)
@@ -239,7 +282,7 @@ class ChecklistTaskCreateObservationResponseSerializer(serializers.Serializer):
     processing_status = serializers.CharField()
 
 
-class ChecklistPersonalExecutionConflictSerializer(serializers.Serializer):
+class ChecklistActiveExecutionConflictSerializer(serializers.Serializer):
     code = serializers.CharField()
     detail = serializers.CharField()
     active_execution_id = serializers.UUIDField(required=False, allow_null=True)
@@ -267,7 +310,7 @@ def serialize_template_list_item(
         task_count = template.task_templates.count()
     return {
         "id": template.id,
-        "checklist_type": template.checklist_type,
+        "badge": template.badge,
         "title": template.title,
         "description": template.description,
         "status": template.status,
@@ -361,7 +404,7 @@ def serialize_execution_detail(
     assigned_by = execution.assigned_by
     return {
         "id": execution.id,
-        "checklist_type": execution.checklist_type,
+        "execution_source": execution.execution_source,
         "checklist_template_id": execution.checklist_template_id,
         "checklist_assignment_id": execution.checklist_assignment_id,
         "status": execution.status,

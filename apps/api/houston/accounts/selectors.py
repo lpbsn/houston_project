@@ -123,13 +123,10 @@ def _latest_non_terminal_onboarding_sessions_by_establishment(
     if not establishment_ids:
         return {}
 
-    sessions = (
-        OnboardingSession.objects.filter(
-            establishment_id__in=establishment_ids,
-            status__in=OnboardingSession.NON_TERMINAL_STATUSES,
-        )
-        .order_by("establishment_id", "-created_at")
-    )
+    sessions = OnboardingSession.objects.filter(
+        establishment_id__in=establishment_ids,
+        status__in=OnboardingSession.NON_TERMINAL_STATUSES,
+    ).order_by("establishment_id", "-created_at")
 
     sessions_by_establishment_id: dict = {}
     for session in sessions:

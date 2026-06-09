@@ -6,132 +6,312 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('establishments', '0012_remove_membership_domain'),
+        ("establishments", "0012_remove_membership_domain"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='CatalogBusinessUnit',
+            name="CatalogBusinessUnit",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('key', models.CharField(max_length=100, unique=True)),
-                ('label', models.CharField(max_length=255)),
-                ('description', models.TextField(blank=True, default='')),
-                ('default_unit_type', models.CharField(choices=[('dedicated', 'Dedicated'), ('transversal', 'Transversal')], default='dedicated', max_length=20)),
-                ('active', models.BooleanField(default=True)),
-                ('sort_order', models.PositiveSmallIntegerField(default=0)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("key", models.CharField(max_length=100, unique=True)),
+                ("label", models.CharField(max_length=255)),
+                ("description", models.TextField(blank=True, default="")),
+                (
+                    "default_unit_type",
+                    models.CharField(
+                        choices=[("dedicated", "Dedicated"), ("transversal", "Transversal")],
+                        default="dedicated",
+                        max_length=20,
+                    ),
+                ),
+                ("active", models.BooleanField(default=True)),
+                ("sort_order", models.PositiveSmallIntegerField(default=0)),
             ],
             options={
-                'ordering': ['sort_order', 'key'],
-                'indexes': [models.Index(fields=['active'], name='cat_bu_active_idx'), models.Index(fields=['active', 'sort_order', 'key'], name='cat_bu_order_idx')],
+                "ordering": ["sort_order", "key"],
+                "indexes": [
+                    models.Index(fields=["active"], name="cat_bu_active_idx"),
+                    models.Index(fields=["active", "sort_order", "key"], name="cat_bu_order_idx"),
+                ],
             },
         ),
         migrations.CreateModel(
-            name='CatalogActivitySubject',
+            name="CatalogActivitySubject",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('key', models.CharField(max_length=150, unique=True)),
-                ('label', models.CharField(max_length=255)),
-                ('description', models.TextField(blank=True, default='')),
-                ('active', models.BooleanField(default=True)),
-                ('sort_order', models.PositiveSmallIntegerField(default=0)),
-                ('catalog_business_unit', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='catalog_activity_subjects', to='establishments.catalogbusinessunit')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("key", models.CharField(max_length=150, unique=True)),
+                ("label", models.CharField(max_length=255)),
+                ("description", models.TextField(blank=True, default="")),
+                ("active", models.BooleanField(default=True)),
+                ("sort_order", models.PositiveSmallIntegerField(default=0)),
+                (
+                    "catalog_business_unit",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="catalog_activity_subjects",
+                        to="establishments.catalogbusinessunit",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['sort_order', 'key'],
+                "ordering": ["sort_order", "key"],
             },
         ),
         migrations.CreateModel(
-            name='BusinessUnit',
+            name="BusinessUnit",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('key', models.CharField(max_length=100)),
-                ('label', models.CharField(max_length=255)),
-                ('description', models.TextField(blank=True, default='')),
-                ('unit_type', models.CharField(choices=[('dedicated', 'Dedicated'), ('transversal', 'Transversal')], default='dedicated', max_length=20)),
-                ('source', models.CharField(choices=[('manual', 'Manual'), ('catalog_suggestion', 'Catalog suggestion'), ('migrated', 'Migrated'), ('template', 'Template')], default='manual', max_length=20)),
-                ('active', models.BooleanField(default=True)),
-                ('establishment', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='business_units', to='establishments.establishment')),
-                ('managed_by_onboarding_proposal', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='managed_business_units', to='establishments.onboardingproposal')),
-                ('catalog_business_unit', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='establishment_business_units', to='establishments.catalogbusinessunit')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("key", models.CharField(max_length=100)),
+                ("label", models.CharField(max_length=255)),
+                ("description", models.TextField(blank=True, default="")),
+                (
+                    "unit_type",
+                    models.CharField(
+                        choices=[("dedicated", "Dedicated"), ("transversal", "Transversal")],
+                        default="dedicated",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "source",
+                    models.CharField(
+                        choices=[
+                            ("manual", "Manual"),
+                            ("catalog_suggestion", "Catalog suggestion"),
+                            ("migrated", "Migrated"),
+                            ("template", "Template"),
+                        ],
+                        default="manual",
+                        max_length=20,
+                    ),
+                ),
+                ("active", models.BooleanField(default=True)),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="business_units",
+                        to="establishments.establishment",
+                    ),
+                ),
+                (
+                    "managed_by_onboarding_proposal",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="managed_business_units",
+                        to="establishments.onboardingproposal",
+                    ),
+                ),
+                (
+                    "catalog_business_unit",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="establishment_business_units",
+                        to="establishments.catalogbusinessunit",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='TaxonomyMigrationMap',
+            name="TaxonomyMigrationMap",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('legacy_type', models.CharField(choices=[('operational_module', 'Operational module'), ('operational_domain', 'Operational domain'), ('operational_subject', 'Operational subject')], max_length=40)),
-                ('legacy_id', models.UUIDField()),
-                ('new_type', models.CharField(choices=[('business_unit', 'Business unit'), ('activity_subject', 'Activity subject')], max_length=40)),
-                ('new_id', models.UUIDField()),
-                ('establishment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='taxonomy_migration_maps', to='establishments.establishment')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "legacy_type",
+                    models.CharField(
+                        choices=[
+                            ("operational_module", "Operational module"),
+                            ("operational_domain", "Operational domain"),
+                            ("operational_subject", "Operational subject"),
+                        ],
+                        max_length=40,
+                    ),
+                ),
+                ("legacy_id", models.UUIDField()),
+                (
+                    "new_type",
+                    models.CharField(
+                        choices=[
+                            ("business_unit", "Business unit"),
+                            ("activity_subject", "Activity subject"),
+                        ],
+                        max_length=40,
+                    ),
+                ),
+                ("new_id", models.UUIDField()),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="taxonomy_migration_maps",
+                        to="establishments.establishment",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='ActivitySubject',
+            name="ActivitySubject",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('normalized_name', models.CharField(max_length=150)),
-                ('label', models.CharField(max_length=255)),
-                ('description', models.TextField(blank=True, default='')),
-                ('source', models.CharField(choices=[('manual', 'Manual'), ('catalog_suggestion', 'Catalog suggestion'), ('migrated', 'Migrated'), ('template', 'Template')], default='manual', max_length=20)),
-                ('active', models.BooleanField(default=True)),
-                ('establishment', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='activity_subjects', to='establishments.establishment')),
-                ('managed_by_onboarding_proposal', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='managed_activity_subjects', to='establishments.onboardingproposal')),
-                ('business_unit', models.ForeignKey(db_index=False, on_delete=django.db.models.deletion.CASCADE, related_name='activity_subjects', to='establishments.businessunit')),
-                ('catalog_activity_subject', models.ForeignKey(blank=True, db_index=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='establishment_activity_subjects', to='establishments.catalogactivitysubject')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, editable=False, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("normalized_name", models.CharField(max_length=150)),
+                ("label", models.CharField(max_length=255)),
+                ("description", models.TextField(blank=True, default="")),
+                (
+                    "source",
+                    models.CharField(
+                        choices=[
+                            ("manual", "Manual"),
+                            ("catalog_suggestion", "Catalog suggestion"),
+                            ("migrated", "Migrated"),
+                            ("template", "Template"),
+                        ],
+                        default="manual",
+                        max_length=20,
+                    ),
+                ),
+                ("active", models.BooleanField(default=True)),
+                (
+                    "establishment",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="activity_subjects",
+                        to="establishments.establishment",
+                    ),
+                ),
+                (
+                    "managed_by_onboarding_proposal",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="managed_activity_subjects",
+                        to="establishments.onboardingproposal",
+                    ),
+                ),
+                (
+                    "business_unit",
+                    models.ForeignKey(
+                        db_index=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="activity_subjects",
+                        to="establishments.businessunit",
+                    ),
+                ),
+                (
+                    "catalog_activity_subject",
+                    models.ForeignKey(
+                        blank=True,
+                        db_index=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="establishment_activity_subjects",
+                        to="establishments.catalogactivitysubject",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['business_unit', 'active'], name='as_bu_active_idx'), models.Index(fields=['establishment', 'active'], name='as_est_active_idx')],
-                'constraints': [models.UniqueConstraint(fields=('business_unit', 'normalized_name'), name='as_bu_normalized_name_uniq')],
+                "indexes": [
+                    models.Index(fields=["business_unit", "active"], name="as_bu_active_idx"),
+                    models.Index(fields=["establishment", "active"], name="as_est_active_idx"),
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("business_unit", "normalized_name"),
+                        name="as_bu_normalized_name_uniq",
+                    )
+                ],
             },
         ),
         migrations.AddIndex(
-            model_name='catalogactivitysubject',
-            index=models.Index(fields=['active'], name='cat_as_active_idx'),
+            model_name="catalogactivitysubject",
+            index=models.Index(fields=["active"], name="cat_as_active_idx"),
         ),
         migrations.AddIndex(
-            model_name='businessunit',
-            index=models.Index(fields=['establishment'], name='bu_est_idx'),
+            model_name="businessunit",
+            index=models.Index(fields=["establishment"], name="bu_est_idx"),
         ),
         migrations.AddIndex(
-            model_name='businessunit',
-            index=models.Index(fields=['establishment', 'active'], name='bu_est_active_idx'),
+            model_name="businessunit",
+            index=models.Index(fields=["establishment", "active"], name="bu_est_active_idx"),
         ),
         migrations.AddIndex(
-            model_name='businessunit',
-            index=models.Index(fields=['establishment', 'unit_type'], name='bu_est_type_idx'),
+            model_name="businessunit",
+            index=models.Index(fields=["establishment", "unit_type"], name="bu_est_type_idx"),
         ),
         migrations.AddIndex(
-            model_name='businessunit',
-            index=models.Index(fields=['key'], name='bu_key_idx'),
+            model_name="businessunit",
+            index=models.Index(fields=["key"], name="bu_key_idx"),
         ),
         migrations.AddConstraint(
-            model_name='businessunit',
-            constraint=models.UniqueConstraint(fields=('establishment', 'key'), name='bu_est_key_uniq'),
+            model_name="businessunit",
+            constraint=models.UniqueConstraint(
+                fields=("establishment", "key"), name="bu_est_key_uniq"
+            ),
         ),
         migrations.AddIndex(
-            model_name='taxonomymigrationmap',
-            index=models.Index(fields=['establishment', 'legacy_type', 'legacy_id'], name='tax_mig_legacy_idx'),
+            model_name="taxonomymigrationmap",
+            index=models.Index(
+                fields=["establishment", "legacy_type", "legacy_id"], name="tax_mig_legacy_idx"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='taxonomymigrationmap',
-            constraint=models.UniqueConstraint(fields=('establishment', 'legacy_type', 'legacy_id'), name='tax_mig_legacy_uniq'),
+            model_name="taxonomymigrationmap",
+            constraint=models.UniqueConstraint(
+                fields=("establishment", "legacy_type", "legacy_id"), name="tax_mig_legacy_uniq"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='taxonomymigrationmap',
-            constraint=models.UniqueConstraint(fields=('establishment', 'new_type', 'new_id'), name='tax_mig_new_uniq'),
+            model_name="taxonomymigrationmap",
+            constraint=models.UniqueConstraint(
+                fields=("establishment", "new_type", "new_id"), name="tax_mig_new_uniq"
+            ),
         ),
     ]
