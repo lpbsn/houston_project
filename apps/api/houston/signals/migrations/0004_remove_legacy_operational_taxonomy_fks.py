@@ -4,38 +4,37 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('signals', '0003_signal_activity_subject_feed_index'),
+        ("signals", "0003_signal_activity_subject_feed_index"),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='signal',
-            name='signal_est_subject_idx',
+            model_name="signal",
+            name="signal_est_subject_idx",
         ),
         migrations.RemoveField(
-            model_name='candidatesignal',
-            name='operational_domain',
+            model_name="candidatesignal",
+            name="operational_domain",
         ),
         migrations.RemoveField(
-            model_name='candidatesignal',
-            name='operational_module',
+            model_name="candidatesignal",
+            name="operational_module",
         ),
         migrations.RemoveField(
-            model_name='candidatesignal',
-            name='operational_subject',
+            model_name="candidatesignal",
+            name="operational_subject",
         ),
         migrations.RemoveField(
-            model_name='signal',
-            name='operational_domain',
+            model_name="signal",
+            name="operational_domain",
         ),
         migrations.RemoveField(
-            model_name='signal',
-            name='operational_module',
+            model_name="signal",
+            name="operational_module",
         ),
         migrations.RemoveField(
-            model_name='signal',
-            name='operational_subject',
+            model_name="signal",
+            name="operational_subject",
         ),
     ]

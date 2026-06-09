@@ -1,7 +1,16 @@
 import type { components } from '@/api/generated/types'
 
-export type ChecklistType = components['schemas']['ChecklistTypeEnum']
+export type ChecklistBadge = components['schemas']['BadgeEnum']
+export type ChecklistTemplateListFilters = {
+  badge?: ChecklistBadge
+  business_unit_id?: string
+  created_by_me?: boolean
+}
 export type ChecklistFeedItem = components['schemas']['ChecklistFeedItem']
+export type ChecklistFlashTodoCreateRequest =
+  components['schemas']['ChecklistFlashTodoCreateRequest']
+export type ChecklistTemplateExecutionCreateRequest =
+  components['schemas']['ChecklistTemplateExecutionCreateRequest']
 
 export type ChecklistTemplateListItem = components['schemas']['ChecklistTemplateListItem']
 export type ChecklistTemplateDetail = components['schemas']['ChecklistTemplateDetail']

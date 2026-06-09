@@ -34,10 +34,13 @@ describe('execution-checklist-card', () => {
     expect(source).toContain('role="button"')
   })
 
-  it('displays primary checklist feed data', () => {
-    expect(source).toContain('item.title')
-    expect(source).toContain("'Partagée'")
-    expect(source).toContain("'Personnelle'")
+  it('displays execution_source and badge labels instead of personal/shared', () => {
+    expect(source).toContain('formatChecklistFeedBadgeLabel')
+    expect(source).toContain('item.execution_source')
+    expect(source).toContain('item.badge')
+    expect(source).not.toContain('checklist_type')
+    expect(source).not.toContain('Partagée')
+    expect(source).not.toContain('Personnelle')
     expect(source).toContain('item.business_unit_label')
     expect(source).toContain('item.assigned_to_display_name')
     expect(source).toContain('formatChecklistExecutionStatusLabel')

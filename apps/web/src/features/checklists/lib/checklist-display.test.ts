@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   formatChecklistEndBeforeTimeLabel,
   formatChecklistExecutionStatusLabel,
+  formatChecklistFeedBadgeLabel,
   formatChecklistProgressLabel,
   getChecklistFeedSection,
   isChecklistExecutionOverdue,
@@ -14,7 +15,8 @@ describe('checklist-display', () => {
       getChecklistFeedSection({
         id: '1',
         title: 'Routine',
-        checklist_type: 'personal',
+        execution_source: 'flash_todo',
+        badge: null,
         status: 'assigned',
         end_at: null,
         is_overdue: false,
@@ -32,7 +34,8 @@ describe('checklist-display', () => {
       getChecklistFeedSection({
         id: '2',
         title: 'Routine',
-        checklist_type: 'shared',
+        execution_source: 'template',
+        badge: 'process',
         status: 'in_progress',
         end_at: null,
         is_overdue: false,
@@ -45,6 +48,13 @@ describe('checklist-display', () => {
         progress_total_count: 3,
       }),
     ).toBe('in_progress')
+  })
+
+  it('maps execution_source and badge to feed badge labels', () => {
+    expect(formatChecklistFeedBadgeLabel('flash_todo', null)).toBe('Flash To-do')
+    expect(formatChecklistFeedBadgeLabel('template', 'process')).toBe('Process')
+    expect(formatChecklistFeedBadgeLabel('template', 'todo')).toBe('To-do')
+    expect(formatChecklistFeedBadgeLabel('assignment', 'process')).toBe('Process')
   })
 
   it('formats status and progress labels in French', () => {

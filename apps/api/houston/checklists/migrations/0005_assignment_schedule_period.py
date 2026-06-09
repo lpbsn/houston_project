@@ -11,7 +11,6 @@ def _purge_shared_checklist_runtime_data(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     atomic = False
 
     dependencies = [

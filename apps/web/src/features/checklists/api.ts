@@ -7,6 +7,7 @@ import type {
   ChecklistAssignmentCreateRequest,
   PatchedChecklistAssignmentUpdateRequest,
   ChecklistExecutionDetail,
+  ChecklistFlashTodoCreateRequest,
   ChecklistTaskCreateObservationRequest,
   ChecklistTaskCreateObservationResponse,
   ChecklistTaskExecution,
@@ -16,16 +17,17 @@ import type {
   ChecklistTaskTemplateCreateRequest,
   ChecklistTemplateCreateRequest,
   ChecklistTemplateDetail,
+  ChecklistTemplateExecutionCreateRequest,
+  ChecklistTemplateListFilters,
   ChecklistTemplateListItem,
-  ChecklistType,
   PatchedChecklistTaskTemplateUpdateRequest,
   PatchedChecklistTemplateUpdateRequest,
 } from './types'
 
 export const checklistsQueryKeys = {
   all: ['checklists'] as const,
-  templates: (establishmentId: string, checklistType: ChecklistType) =>
-    ['checklists', 'templates', establishmentId, checklistType] as const,
+  templates: (establishmentId: string, filters: ChecklistTemplateListFilters = {}) =>
+    ['checklists', 'templates', establishmentId, filters] as const,
   templateDetail: (establishmentId: string, templateId: string) =>
     ['checklists', 'template-detail', establishmentId, templateId] as const,
   assignments: (establishmentId: string) =>
@@ -102,14 +104,20 @@ function templatePath(establishmentId: string, templateId: string) {
 
 export async function fetchChecklistTemplates(
   establishmentId: string,
-  checklistType: ChecklistType,
+  filters: ChecklistTemplateListFilters = {},
 ): Promise<ChecklistTemplateListItem[]> {
+  const query = {
+    ...(filters.badge ? { badge: filters.badge } : {}),
+    ...(filters.business_unit_id ? { business_unit_id: filters.business_unit_id } : {}),
+    ...(filters.created_by_me ? { created_by_me: true } : {}),
+  }
+
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/checklist-templates/', {
         params: {
           ...establishmentPath(establishmentId),
-          query: { type: checklistType },
+          query: Object.keys(query).length > 0 ? query : undefined,
         },
         headers: getAuthHeaders(accessToken),
       }),
@@ -416,16 +424,38 @@ export async function deactivateChecklistAssignment(
   return assertChecklistData<ChecklistAssignment>(result)
 }
 
-export async function createPersonalChecklistExecution(
+export async function createFlashTodoExecution(
   establishmentId: string,
-  templateId: string,
+  body: ChecklistFlashTodoCreateRequest,
 ): Promise<ChecklistExecutionDetail> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/personal-executions/',
+        '/api/v1/establishments/{establishment_id}/checklist-executions/flash-todo/',
+        {
+          params: establishmentPath(establishmentId),
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertChecklistData<ChecklistExecutionDetail>(result)
+}
+
+export async function createExecutionFromTemplate(
+  establishmentId: string,
+  templateId: string,
+  body: ChecklistTemplateExecutionCreateRequest,
+): Promise<ChecklistExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/executions/',
         {
           params: templatePath(establishmentId, templateId),
+          body,
           headers: getAuthHeaders(accessToken),
         },
       ),
@@ -549,58 +579,39 @@ export async function createChecklistTaskObservation(
   return assertChecklistData<ChecklistTaskCreateObservationResponse>(result)
 }
 
-export type ChecklistTemplateWithTasksInput = {
-  checklist_type: ChecklistType
+export type RegisteredChecklistTemplateInput = {
   title: string
   description: string
-  business_unit_id?: string | null
+  business_unit_id: string
+  badge: 'process' | 'todo'
   tasks: Array<{ task: string }>
+  assign_now?: boolean
+  assigned_to?: string | null
+  end_at?: string | null
 }
 
-export async function createChecklistTemplateWithTasks(
+export async function createRegisteredChecklistTemplate(
   establishmentId: string,
-  input: ChecklistTemplateWithTasksInput,
+  input: RegisteredChecklistTemplateInput,
 ): Promise<ChecklistTemplateDetail> {
-  const template = await createChecklistTemplate(establishmentId, {
-    checklist_type: input.checklist_type,
-    title: input.title.trim(),
-    description: input.description.trim(),
-    business_unit_id:
-      input.checklist_type === 'shared' ? (input.business_unit_id ?? null) : null,
-  })
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/checklist-templates/', {
+        params: establishmentPath(establishmentId),
+        body: {
+          title: input.title.trim(),
+          description: input.description.trim(),
+          business_unit_id: input.business_unit_id,
+          badge: input.badge,
+          tasks: input.tasks.map((task) => ({ task: task.task.trim() })),
+          assign_now: input.assign_now ?? false,
+          assigned_to: input.assign_now ? (input.assigned_to ?? null) : undefined,
+          end_at: input.assign_now ? (input.end_at ?? null) : undefined,
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
 
-  for (const task of input.tasks) {
-    await createChecklistTask(establishmentId, template.id, {
-      task: task.task.trim(),
-    })
-  }
-
-  return activateChecklistTemplate(establishmentId, template.id)
-}
-
-export type QuickPersonalChecklistInput = {
-  title: string
-  description: string
-  tasks: Array<{ task: string }>
-}
-
-export async function quickCreatePersonalChecklistExecution(
-  establishmentId: string,
-  input: QuickPersonalChecklistInput,
-): Promise<ChecklistExecutionDetail> {
-  const template = await createChecklistTemplate(establishmentId, {
-    checklist_type: 'personal',
-    title: input.title.trim(),
-    description: input.description.trim(),
-    business_unit_id: null,
-  })
-
-  for (const task of input.tasks) {
-    await createChecklistTask(establishmentId, template.id, {
-      task: task.task.trim(),
-    })
-  }
-
-  await activateChecklistTemplate(establishmentId, template.id)
-  return createPersonalChecklistExecution(establishmentId, template.id)
+  return assertChecklistData<ChecklistTemplateDetail>(result)
 }

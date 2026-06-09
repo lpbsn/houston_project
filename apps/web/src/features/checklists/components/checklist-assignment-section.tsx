@@ -22,14 +22,13 @@ import {
   canShowChecklistAssignmentUpdate,
 } from '@/features/checklists/lib/checklist-assignment-permission-hints'
 import { formatRecurrenceDaysLabel } from '@/features/checklists/lib/checklist-recurrence'
-import type { ChecklistAssignment, ChecklistType } from '@/features/checklists/types'
+import type { ChecklistAssignment } from '@/features/checklists/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ChecklistAssignmentSectionProps = {
   establishmentId: string
   templateId: string
-  checklistType: ChecklistType
   canCreateAssignment: boolean
   businessUnitId: string
   createButtonPlacement?: 'inline' | 'sticky'
@@ -52,7 +51,6 @@ function formatTimeLabel(value: string): string {
 export function ChecklistAssignmentSection({
   establishmentId,
   templateId,
-  checklistType,
   canCreateAssignment,
   businessUnitId,
   createButtonPlacement = 'inline',
@@ -61,11 +59,7 @@ export function ChecklistAssignmentSection({
 }: ChecklistAssignmentSectionProps) {
   const { navigate } = useAppRoute()
   const assignmentsQuery = useChecklistAssignmentsQuery(establishmentId)
-  const deactivateMutation = useDeactivateChecklistAssignmentMutation(
-    establishmentId,
-    templateId,
-    checklistType,
-  )
+  const deactivateMutation = useDeactivateChecklistAssignmentMutation(establishmentId, templateId)
 
   const [isCreateSheetOpenInternal, setIsCreateSheetOpenInternal] = useState(false)
   const isCreateSheetOpen = isCreateSheetOpenProp ?? isCreateSheetOpenInternal
@@ -206,7 +200,6 @@ export function ChecklistAssignmentSection({
           open
           establishmentId={establishmentId}
           templateId={templateId}
-          checklistType={checklistType}
           businessUnitId={businessUnitId}
           onClose={() => setIsCreateSheetOpen(false)}
           onSuccess={() => setFeedback({ variant: 'success', message: 'Affectation créée.' })}
@@ -218,7 +211,6 @@ export function ChecklistAssignmentSection({
           open
           establishmentId={establishmentId}
           templateId={templateId}
-          checklistType={checklistType}
           businessUnitId={businessUnitId}
           assignment={editingAssignment}
           onClose={() => setEditingAssignment(null)}

@@ -15,18 +15,17 @@ from houston.checklists.services import (
     mark_task_done,
     skip_task,
 )
-from houston.checklists.tests.conftest import add_task_template
+from houston.checklists.tests.conftest import add_task_template, stable_assignment_times
 from houston.observations.models import Observation
 from houston.signals.models import Signal
 
 pytestmark = pytest.mark.django_db
 
 
-def _shared_execution_with_tasks(owner_membership, staff_membership, business_unit):
+def _assignment_execution_with_tasks(owner_membership, staff_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Routine",
         business_unit_id=business_unit.id,
     )
@@ -40,12 +39,9 @@ def _shared_execution_with_tasks(owner_membership, staff_membership, business_un
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     return ChecklistExecution.objects.prefetch_related("task_executions").get(
         checklist_assignment=assignment,
@@ -59,7 +55,7 @@ def test_observation_handoff_happy_path(
     staff_membership,
     business_unit,
 ):
-    execution = _shared_execution_with_tasks(
+    execution = _assignment_execution_with_tasks(
         owner_membership,
         staff_membership,
         business_unit,
@@ -91,7 +87,7 @@ def test_observation_handoff_rejects_short_text(
     staff_membership,
     business_unit,
 ):
-    execution = _shared_execution_with_tasks(
+    execution = _assignment_execution_with_tasks(
         owner_membership,
         staff_membership,
         business_unit,
@@ -114,7 +110,7 @@ def test_observation_handoff_completes_execution_when_all_tasks_treated(
     staff_membership,
     business_unit,
 ):
-    execution = _shared_execution_with_tasks(
+    execution = _assignment_execution_with_tasks(
         owner_membership,
         staff_membership,
         business_unit,
@@ -138,7 +134,7 @@ def test_observation_handoff_does_not_create_signal_or_action_sync(
     staff_membership,
     business_unit,
 ):
-    execution = _shared_execution_with_tasks(
+    execution = _assignment_execution_with_tasks(
         owner_membership,
         staff_membership,
         business_unit,

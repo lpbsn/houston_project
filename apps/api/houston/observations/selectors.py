@@ -102,14 +102,10 @@ def signal_summaries_for_observation(
                 id=signal.id,
                 title=signal.title,
                 affected_business_unit_key=(
-                    signal.affected_business_unit.key
-                    if signal.affected_business_unit_id
-                    else ""
+                    signal.affected_business_unit.key if signal.affected_business_unit_id else ""
                 ),
                 affected_business_unit_label=(
-                    signal.affected_business_unit.label
-                    if signal.affected_business_unit_id
-                    else ""
+                    signal.affected_business_unit.label if signal.affected_business_unit_id else ""
                 ),
                 responsible_business_unit_key=(
                     signal.responsible_business_unit.key
@@ -122,9 +118,7 @@ def signal_summaries_for_observation(
                     else ""
                 ),
                 activity_subject_key=(
-                    signal.activity_subject.normalized_name
-                    if signal.activity_subject_id
-                    else ""
+                    signal.activity_subject.normalized_name if signal.activity_subject_id else ""
                 ),
                 activity_subject_label=(
                     signal.activity_subject.label if signal.activity_subject_id else ""

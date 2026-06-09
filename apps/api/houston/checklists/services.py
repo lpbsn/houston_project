@@ -10,12 +10,14 @@ from houston.checklists.constants import (
     ACTIVE_EXECUTION_STATUSES,
     ASSIGNMENT_STATUS_ACTIVE,
     ASSIGNMENT_STATUS_INACTIVE,
+    CHECKLIST_BADGE_DEFAULT,
+    CHECKLIST_BADGES,
     CHECKLIST_DESCRIPTION_MAX_LENGTH,
     CHECKLIST_SKIPPED_REASON_MAX_LENGTH,
     CHECKLIST_TASK_MAX_LENGTH,
     CHECKLIST_TITLE_MAX_LENGTH,
-    CHECKLIST_TYPE_PERSONAL,
-    CHECKLIST_TYPE_SHARED,
+    EXECUTION_SOURCE_FLASH_TODO,
+    EXECUTION_SOURCE_TEMPLATE,
     EXECUTION_STATUS_ASSIGNED,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
@@ -52,15 +54,14 @@ from houston.checklists.models import (
 )
 from houston.checklists.permissions import (
     can_cancel_checklist_execution,
-    can_create_personal_execution,
-    can_create_personal_template,
-    can_create_shared_assignment,
-    can_create_shared_template,
-    can_delete_shared_checklist_template,
+    can_create_checklist_assignment,
+    can_create_flash_todo,
+    can_create_registered_template,
+    can_delete_registered_template,
     can_execute_checklist_tasks,
-    can_manage_personal_template,
-    can_manage_shared_assignment,
-    can_manage_shared_template,
+    can_launch_template_execution,
+    can_manage_checklist_assignment,
+    can_manage_registered_template,
     membership_covers_checklist_business_unit,
 )
 from houston.checklists.selectors import (
@@ -74,6 +75,16 @@ from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.observations.exceptions import ObservationValidationError
 from houston.observations.models import Observation
 from houston.observations.services import submit_observation
+
+
+def _require_manage_template(
+    *,
+    actor: EstablishmentMembership,
+    template: ChecklistTemplate,
+    action: str = "manage this checklist template",
+) -> None:
+    if not can_manage_registered_template(actor, template):
+        raise ChecklistPermissionError(f"Not allowed to {action}.")
 
 
 def touch_checklist_execution_activity(*, execution: ChecklistExecution, at=None) -> None:
@@ -221,6 +232,43 @@ def _maybe_deactivate_template_without_tasks(template: ChecklistTemplate) -> Che
     return template
 
 
+def _normalize_badge(badge: str) -> str:
+    normalized = (badge or CHECKLIST_BADGE_DEFAULT).strip().lower()
+    if normalized not in CHECKLIST_BADGES:
+        raise ChecklistValidationError("Invalid badge.")
+    return normalized
+
+
+def _normalize_task_input(task_item: dict, *, index: int) -> str:
+    if not isinstance(task_item, dict):
+        raise ChecklistValidationError("Each task must be an object.")
+    task_text = task_item.get("task") or task_item.get("title")
+    if task_text is None:
+        raise ChecklistValidationError(f"Task at index {index} requires task or title.")
+    return _normalize_task(str(task_text))
+
+
+def _create_ad_hoc_task_executions(
+    *,
+    execution: ChecklistExecution,
+    tasks: list[dict],
+) -> list[ChecklistTaskExecution]:
+    if not tasks:
+        raise ChecklistValidationError("At least one task is required.")
+    return ChecklistTaskExecution.objects.bulk_create(
+        [
+            ChecklistTaskExecution(
+                checklist_execution=execution,
+                checklist_task_template=None,
+                task=_normalize_task_input(task_item, index=index),
+                position=index,
+                status=ChecklistTaskExecution.Status.PENDING,
+            )
+            for index, task_item in enumerate(tasks, start=1)
+        ]
+    )
+
+
 def _activate_template_if_has_tasks(template: ChecklistTemplate) -> ChecklistTemplate:
     if template.status != TEMPLATE_STATUS_ACTIVE and _template_has_tasks(template):
         template.status = TEMPLATE_STATUS_ACTIVE
@@ -233,42 +281,33 @@ def create_checklist_template(
     *,
     establishment_id: uuid.UUID,
     actor: EstablishmentMembership,
-    checklist_type: str,
     title: str,
     description: str = "",
-    business_unit_id: uuid.UUID | None = None,
+    business_unit_id: uuid.UUID,
+    badge: str = CHECKLIST_BADGE_DEFAULT,
 ) -> ChecklistTemplate:
-    if checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_create_shared_template(actor):
-            raise ChecklistPermissionError("Not allowed to create a shared checklist template.")
-        if business_unit_id is None:
-            raise ChecklistValidationError("business_unit is required for shared templates.")
-        business_unit = _validate_business_unit_in_establishment(
-            establishment_id=establishment_id,
-            business_unit_id=business_unit_id,
-        )
-        if (
-            actor.role == EstablishmentMembership.Role.MANAGER
-            and not membership_covers_checklist_business_unit(actor, business_unit)
-        ):
-            raise ChecklistPermissionError("Not allowed to create a shared checklist template.")
-    elif checklist_type == CHECKLIST_TYPE_PERSONAL:
-        if not can_create_personal_template(actor):
-            raise ChecklistPermissionError("Not allowed to create a personal checklist template.")
-        if business_unit_id is not None:
-            raise ChecklistValidationError("business_unit must be null for personal templates.")
-        business_unit = None
-    else:
-        raise ChecklistValidationError("Invalid checklist_type.")
+    if not can_create_registered_template(actor):
+        raise ChecklistPermissionError("Not allowed to create a checklist template.")
+    if business_unit_id is None:
+        raise ChecklistValidationError("business_unit is required.")
+    business_unit = _validate_business_unit_in_establishment(
+        establishment_id=establishment_id,
+        business_unit_id=business_unit_id,
+    )
+    if actor.role in {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    } and not membership_covers_checklist_business_unit(actor, business_unit):
+        raise ChecklistPermissionError("Not allowed to create a checklist template.")
 
     return ChecklistTemplate.objects.create(
         establishment_id=establishment_id,
-        checklist_type=checklist_type,
         created_by=actor,
         business_unit=business_unit,
         title=_normalize_title(title),
         description=_normalize_description(description),
         status=TEMPLATE_STATUS_INACTIVE,
+        badge=badge,
     )
 
 
@@ -280,11 +319,11 @@ def update_checklist_template(
     title: str | None = None,
     description: str | None = None,
 ) -> ChecklistTemplate:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to update this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to update this checklist template.")
+    _require_manage_template(
+        actor=actor,
+        template=template,
+        action="update this checklist template",
+    )
 
     update_fields = ["updated_at"]
     if title is not None:
@@ -305,11 +344,7 @@ def add_task_template(
     task: str,
     position: int | None = None,
 ) -> ChecklistTaskTemplate:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to manage this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to manage this checklist template.")
+    _require_manage_template(actor=actor, template=template)
 
     if position is None:
         last = (
@@ -335,11 +370,7 @@ def update_task_template(
     position: int | None = None,
 ) -> ChecklistTaskTemplate:
     template = task_template.checklist_template
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to manage this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to manage this checklist template.")
+    _require_manage_template(actor=actor, template=template)
 
     update_fields = ["updated_at"]
     if task is not None:
@@ -359,11 +390,7 @@ def delete_task_template(
     actor: EstablishmentMembership,
 ) -> None:
     template = task_template.checklist_template
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to manage this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to manage this checklist template.")
+    _require_manage_template(actor=actor, template=template)
 
     task_template.delete()
     _maybe_deactivate_template_without_tasks(template)
@@ -376,11 +403,7 @@ def reorder_task_templates(
     actor: EstablishmentMembership,
     ordered_task_template_ids: list[uuid.UUID],
 ) -> list[ChecklistTaskTemplate]:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to manage this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to manage this checklist template.")
+    _require_manage_template(actor=actor, template=template)
 
     task_templates = list(template.task_templates.order_by("position", "created_at"))
     existing_ids = {task.id for task in task_templates}
@@ -408,11 +431,11 @@ def activate_checklist_template(
     template: ChecklistTemplate,
     actor: EstablishmentMembership,
 ) -> ChecklistTemplate:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to activate this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to activate this checklist template.")
+    _require_manage_template(
+        actor=actor,
+        template=template,
+        action="activate this checklist template",
+    )
 
     _validate_active_template_has_tasks(template)
     template.status = TEMPLATE_STATUS_ACTIVE
@@ -426,11 +449,11 @@ def deactivate_checklist_template(
     template: ChecklistTemplate,
     actor: EstablishmentMembership,
 ) -> ChecklistTemplate:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to deactivate this checklist template.")
-    elif not can_manage_personal_template(actor, template):
-        raise ChecklistPermissionError("Not allowed to deactivate this checklist template.")
+    _require_manage_template(
+        actor=actor,
+        template=template,
+        action="deactivate this checklist template",
+    )
 
     template.status = TEMPLATE_STATUS_INACTIVE
     template.save(update_fields=["status", "updated_at"])
@@ -456,15 +479,9 @@ def delete_checklist_template(
     template: ChecklistTemplate,
     actor: EstablishmentMembership,
 ) -> None:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_delete_shared_checklist_template(actor, template):
-            raise ChecklistPermissionError("Not allowed to delete this checklist template.")
-        _delete_shared_checklist_template(template=template)
-        return
-
-    if not can_manage_personal_template(actor, template):
+    if not can_delete_registered_template(actor, template):
         raise ChecklistPermissionError("Not allowed to delete this checklist template.")
-    _delete_personal_checklist_template(template=template)
+    _delete_registered_checklist_template(template=template)
 
 
 def _detach_terminal_executions(*, template: ChecklistTemplate) -> None:
@@ -473,7 +490,7 @@ def _detach_terminal_executions(*, template: ChecklistTemplate) -> None:
     )
 
 
-def _delete_shared_checklist_template(*, template: ChecklistTemplate) -> None:
+def _delete_registered_checklist_template(*, template: ChecklistTemplate) -> None:
     active_execution = get_active_execution_for_template(template=template)
     if active_execution is not None:
         raise ChecklistConflictError(
@@ -484,18 +501,6 @@ def _delete_shared_checklist_template(*, template: ChecklistTemplate) -> None:
     _detach_terminal_executions(template=template)
     template.assignments.update(status=ASSIGNMENT_STATUS_INACTIVE)
     template.assignments.filter(executions__isnull=True).delete()
-    template.delete()
-
-
-def _delete_personal_checklist_template(*, template: ChecklistTemplate) -> None:
-    active_execution = get_active_execution_for_template(template=template)
-    if active_execution is not None:
-        raise ChecklistConflictError(
-            _DELETE_ACTIVE_EXECUTION_MESSAGE,
-            active_execution_id=active_execution.id,
-        )
-
-    _detach_terminal_executions(template=template)
     template.delete()
 
 
@@ -511,16 +516,12 @@ def create_checklist_assignment(
     end_at: time,
     recurrence_days=None,
 ) -> ChecklistAssignment:
-    if not can_create_shared_assignment(actor, template):
+    if not can_create_checklist_assignment(actor, template):
         raise ChecklistPermissionError("Not allowed to create a checklist assignment.")
 
-    if template.checklist_type != CHECKLIST_TYPE_SHARED:
-        raise ChecklistValidationError("Assignments are only allowed for shared templates.")
     if template.status != TEMPLATE_STATUS_ACTIVE:
         raise ChecklistValidationError("Template must be active.")
     _validate_active_template_has_tasks(template)
-    if template.business_unit_id is None:
-        raise ChecklistValidationError("Shared template must have a business unit.")
 
     assigned_to = _validate_membership_in_establishment(
         establishment_id=template.establishment_id,
@@ -674,7 +675,7 @@ def update_checklist_assignment(
     end_at: time | None = None,
     recurrence_days=None,
 ) -> ChecklistAssignment:
-    if not can_manage_shared_assignment(actor, assignment):
+    if not can_manage_checklist_assignment(actor, assignment):
         raise ChecklistPermissionError("Not allowed to update this checklist assignment.")
     if assignment.status != ASSIGNMENT_STATUS_ACTIVE:
         raise ChecklistValidationError(_ASSIGNMENT_INACTIVE_PATCH_MESSAGE)
@@ -735,7 +736,7 @@ def deactivate_checklist_assignment(
     assignment: ChecklistAssignment,
     actor: EstablishmentMembership,
 ) -> ChecklistAssignment | None:
-    if not can_manage_shared_assignment(actor, assignment):
+    if not can_manage_checklist_assignment(actor, assignment):
         raise ChecklistPermissionError("Not allowed to deactivate this checklist assignment.")
 
     in_progress = get_in_progress_execution_for_assignment(assignment=assignment)
@@ -762,50 +763,150 @@ def deactivate_checklist_assignment(
 
 
 @transaction.atomic
-def create_personal_execution(
+def create_execution_from_template(
     *,
     template: ChecklistTemplate,
     actor: EstablishmentMembership,
+    assigned_to_id: uuid.UUID | None = None,
+    end_at: datetime | None = None,
 ) -> ChecklistExecution:
-    if not can_create_personal_execution(actor, template):
-        raise ChecklistPermissionError("Not allowed to create a personal checklist execution.")
+    if not can_launch_template_execution(actor, template):
+        raise ChecklistPermissionError("Not allowed to create a checklist execution.")
 
-    if template.checklist_type != CHECKLIST_TYPE_PERSONAL:
-        raise ChecklistValidationError("Personal executions require a personal template.")
     if template.status != TEMPLATE_STATUS_ACTIVE:
         raise ChecklistValidationError("Template must be active.")
     _validate_active_template_has_tasks(template)
 
     ChecklistTemplate.objects.select_for_update().get(pk=template.pk)
-    if ChecklistExecution.objects.filter(
-        checklist_template=template,
-        checklist_type=CHECKLIST_TYPE_PERSONAL,
-        status__in=ACTIVE_EXECUTION_STATUSES,
-    ).exists():
-        raise ChecklistConflictError(
-            "An active personal execution already exists for this template.",
+
+    if assigned_to_id is None:
+        assigned_to = actor
+    else:
+        assigned_to = _validate_membership_in_establishment(
+            establishment_id=template.establishment_id,
+            membership_id=assigned_to_id,
         )
+    _validate_assignee_covers_business_unit(
+        assigned_to=assigned_to,
+        business_unit=template.business_unit,
+    )
 
     now = timezone.now()
     execution = ChecklistExecution.objects.create(
         checklist_template=template,
         checklist_assignment=None,
-        checklist_type=CHECKLIST_TYPE_PERSONAL,
+        execution_source=EXECUTION_SOURCE_TEMPLATE,
         establishment_id=template.establishment_id,
-        assigned_to=actor,
-        assigned_by=None,
-        business_unit=None,
+        assigned_to=assigned_to,
+        assigned_by=actor if assigned_to.id != actor.id else None,
+        business_unit=template.business_unit,
         template_title=template.title,
         template_description=template.description,
         start_at=None,
         visible_from=None,
-        end_at=None,
+        end_at=end_at,
         occurrence_date=None,
         status=EXECUTION_STATUS_ASSIGNED,
         last_activity_at=now,
     )
     _create_task_execution_snapshots(execution=execution, template=template)
     return execution
+
+
+@transaction.atomic
+def create_flash_todo_execution(
+    *,
+    establishment_id: uuid.UUID,
+    actor: EstablishmentMembership,
+    title: str,
+    business_unit_id: uuid.UUID,
+    assigned_to_id: uuid.UUID,
+    tasks: list[dict],
+    description: str = "",
+    end_at: datetime | None = None,
+) -> ChecklistExecution:
+    business_unit = _validate_business_unit_in_establishment(
+        establishment_id=establishment_id,
+        business_unit_id=business_unit_id,
+    )
+    if not can_create_flash_todo(actor, business_unit):
+        raise ChecklistPermissionError("Not allowed to create a flash to-do.")
+
+    assigned_to = _validate_membership_in_establishment(
+        establishment_id=establishment_id,
+        membership_id=assigned_to_id,
+    )
+    _validate_assignee_covers_business_unit(
+        assigned_to=assigned_to,
+        business_unit=business_unit,
+    )
+
+    now = timezone.now()
+    execution = ChecklistExecution.objects.create(
+        checklist_template=None,
+        checklist_assignment=None,
+        execution_source=EXECUTION_SOURCE_FLASH_TODO,
+        establishment_id=establishment_id,
+        assigned_to=assigned_to,
+        assigned_by=actor if assigned_to.id != actor.id else None,
+        business_unit=business_unit,
+        template_title=_normalize_title(title),
+        template_description=_normalize_description(description),
+        start_at=None,
+        visible_from=None,
+        end_at=end_at,
+        occurrence_date=None,
+        status=EXECUTION_STATUS_ASSIGNED,
+        last_activity_at=now,
+    )
+    _create_ad_hoc_task_executions(execution=execution, tasks=tasks)
+    return execution
+
+
+@transaction.atomic
+def create_registered_checklist_template(
+    *,
+    establishment_id: uuid.UUID,
+    actor: EstablishmentMembership,
+    title: str,
+    description: str = "",
+    business_unit_id: uuid.UUID,
+    badge: str = CHECKLIST_BADGE_DEFAULT,
+    tasks: list[dict],
+    assign_now: bool = False,
+    assigned_to_id: uuid.UUID | None = None,
+    end_at: datetime | None = None,
+) -> tuple[ChecklistTemplate, ChecklistExecution | None]:
+    template = create_checklist_template(
+        establishment_id=establishment_id,
+        actor=actor,
+        title=title,
+        description=description,
+        business_unit_id=business_unit_id,
+        badge=_normalize_badge(badge),
+    )
+
+    for index, task_item in enumerate(tasks, start=1):
+        ChecklistTaskTemplate.objects.create(
+            checklist_template=template,
+            task=_normalize_task_input(task_item, index=index),
+            position=index,
+        )
+
+    template.status = TEMPLATE_STATUS_ACTIVE
+    template.save(update_fields=["status", "updated_at"])
+
+    execution = None
+    if assign_now:
+        if assigned_to_id is None:
+            raise ChecklistValidationError("assigned_to is required when assign_now is true.")
+        execution = create_execution_from_template(
+            template=template,
+            actor=actor,
+            assigned_to_id=assigned_to_id,
+            end_at=end_at,
+        )
+    return template, execution
 
 
 @transaction.atomic

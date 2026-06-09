@@ -11,7 +11,7 @@ export function hasCompleteChecklistTemplatePermissionHints(
     typeof hints.can_update === 'boolean' &&
     typeof hints.can_manage_tasks === 'boolean' &&
     typeof hints.can_create_assignment === 'boolean' &&
-    typeof hints.can_create_personal_execution === 'boolean' &&
+    typeof hints.can_launch_execution === 'boolean' &&
     typeof hints.can_delete === 'boolean'
   )
 }
@@ -34,12 +34,10 @@ export function canShowChecklistTemplateCreateAssignment(
   return hasCompleteChecklistTemplatePermissionHints(hints) && hints.can_create_assignment
 }
 
-export function canShowChecklistTemplateCreatePersonalExecution(
+export function canShowChecklistTemplateLaunchExecution(
   hints: ChecklistTemplatePermissionHints | null | undefined,
 ): boolean {
-  return (
-    hasCompleteChecklistTemplatePermissionHints(hints) && hints.can_create_personal_execution
-  )
+  return hasCompleteChecklistTemplatePermissionHints(hints) && hints.can_launch_execution
 }
 
 export function canShowChecklistTemplateDelete(

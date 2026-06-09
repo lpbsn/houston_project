@@ -4,22 +4,21 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('actions', '0003_action_affected_business_unit'),
+        ("actions", "0003_action_affected_business_unit"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='action',
-            name='operational_domain',
+            model_name="action",
+            name="operational_domain",
         ),
         migrations.RemoveField(
-            model_name='action',
-            name='operational_module',
+            model_name="action",
+            name="operational_module",
         ),
         migrations.RemoveField(
-            model_name='action',
-            name='operational_subject',
+            model_name="action",
+            name="operational_subject",
         ),
     ]

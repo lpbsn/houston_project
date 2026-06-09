@@ -36,9 +36,7 @@ def _create_signal(
         signal.is_pinned = is_pinned
         if last_activity_at is not None:
             signal.last_activity_at = last_activity_at
-        signal.save(
-            update_fields=["urgency", "is_pinned", "last_activity_at", "updated_at"]
-        )
+        signal.save(update_fields=["urgency", "is_pinned", "last_activity_at", "updated_at"])
     return signal
 
 

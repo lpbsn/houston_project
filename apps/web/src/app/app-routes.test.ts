@@ -50,31 +50,20 @@ describe('parseAppRoute', () => {
       kind: 'static',
       path: '/checklists',
     })
-    expect(parseAppRoute('/checklists/shared')).toEqual({
-      kind: 'static',
-      path: '/checklists/shared',
-    })
-    expect(parseAppRoute('/checklists/personal')).toEqual({
-      kind: 'static',
-      path: '/checklists/personal',
-    })
-    expect(parseAppRoute('/checklists/shared/new')).toEqual({
+    expect(parseAppRoute('/checklists/new')).toEqual({
       kind: 'checklist-template-create',
-      checklistType: 'shared',
     })
-    expect(parseAppRoute('/checklists/personal/new')).toEqual({
-      kind: 'checklist-template-create',
-      checklistType: 'personal',
-    })
-    expect(parseAppRoute('/checklists/shared/template-1')).toEqual({
+    expect(parseAppRoute('/checklists/template-1')).toEqual({
       kind: 'checklist-template-detail',
-      checklistType: 'shared',
       templateId: 'template-1',
     })
-    expect(parseAppRoute('/checklists/personal/template-2')).toEqual({
-      kind: 'checklist-template-detail',
-      checklistType: 'personal',
-      templateId: 'template-2',
+    expect(parseAppRoute('/checklists/shared')).toEqual({
+      kind: 'unknown',
+      pathname: '/checklists/shared',
+    })
+    expect(parseAppRoute('/checklists/personal')).toEqual({
+      kind: 'unknown',
+      pathname: '/checklists/personal',
     })
     expect(parseAppRoute('/checklists/executions/new')).toEqual({
       kind: 'checklist-execution-create',

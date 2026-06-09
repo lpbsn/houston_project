@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   hasAssignmentFormErrors,
   validateAssignmentForm,
-  validatePersonalTemplateCreate,
-  validateSharedTemplateCreate,
+  validateFlashTodoCreate,
+  validateRegisteredTemplateCreate,
   validateTask,
 } from './checklist-form-validation'
 
@@ -65,20 +65,72 @@ describe('checklist-form-validation', () => {
     expect(errors.recurrenceDays).toBeTruthy()
   })
 
-  it('requires business unit for shared template create', () => {
-    expect(validateSharedTemplateCreate({ title: 'Routine', businessUnitId: '' })).toBeTruthy()
+  it('requires business unit and tasks for registered template create', () => {
     expect(
-      validateSharedTemplateCreate({ title: 'Routine', businessUnitId: 'bu-1' }),
+      validateRegisteredTemplateCreate({
+        title: 'Routine',
+        businessUnitId: '',
+        taskCount: 1,
+        assignNow: false,
+        assignedTo: '',
+      }),
+    ).toBeTruthy()
+    expect(
+      validateRegisteredTemplateCreate({
+        title: 'Routine',
+        businessUnitId: 'bu-1',
+        taskCount: 1,
+        assignNow: false,
+        assignedTo: '',
+      }),
     ).toBeNull()
-  })
-
-  it('requires title for personal template create', () => {
-    expect(validatePersonalTemplateCreate({ title: '' })).toBeTruthy()
-    expect(validatePersonalTemplateCreate({ title: 'Ma routine' })).toBeNull()
   })
 
   it('requires task', () => {
     expect(validateTask('')).toBe('La tâche est obligatoire.')
     expect(validateTask('Vérifier stock')).toBeNull()
+  })
+
+  it('requires title, business unit, assignee, and tasks for flash to-do', () => {
+    expect(
+      validateFlashTodoCreate({
+        title: '',
+        businessUnitId: 'bu-1',
+        assignedTo: 'member-1',
+        taskCount: 1,
+      }),
+    ).toBeTruthy()
+    expect(
+      validateFlashTodoCreate({
+        title: 'Terrasse',
+        businessUnitId: '',
+        assignedTo: 'member-1',
+        taskCount: 1,
+      }),
+    ).toBeTruthy()
+    expect(
+      validateFlashTodoCreate({
+        title: 'Terrasse',
+        businessUnitId: 'bu-1',
+        assignedTo: '',
+        taskCount: 1,
+      }),
+    ).toBeTruthy()
+    expect(
+      validateFlashTodoCreate({
+        title: 'Terrasse',
+        businessUnitId: 'bu-1',
+        assignedTo: 'member-1',
+        taskCount: 0,
+      }),
+    ).toBeTruthy()
+    expect(
+      validateFlashTodoCreate({
+        title: 'Terrasse',
+        businessUnitId: 'bu-1',
+        assignedTo: 'member-1',
+        taskCount: 2,
+      }),
+    ).toBeNull()
   })
 })

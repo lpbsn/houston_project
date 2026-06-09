@@ -9,8 +9,7 @@ from houston.actions.selectors import ExecutionFeedViewMode
 from houston.checklists.constants import (
     ACTIVE_EXECUTION_STATUSES,
     ASSIGNMENT_STATUS_ACTIVE,
-    CHECKLIST_TYPE_PERSONAL,
-    CHECKLIST_TYPE_SHARED,
+    CHECKLIST_BADGES,
     EXECUTION_FEED_STATUSES,
     EXECUTION_STATUS_IN_PROGRESS,
     TREATED_TASK_STATUSES,
@@ -25,9 +24,8 @@ from houston.checklists.models import (
 from houston.checklists.permissions import (
     build_checklist_visibility_scope_q,
     can_execute_checklist_tasks,
-    can_manage_personal_template,
-    can_manage_shared_template,
-    can_view_shared_catalogue,
+    can_manage_registered_template,
+    can_view_registered_catalogue,
     checklist_execution_visible_to_membership,
     checklist_template_visible_to_membership,
 )
@@ -35,6 +33,7 @@ from houston.establishments.models import EstablishmentMembership
 
 _CHECKLIST_FEED_SELECT_RELATED = (
     "business_unit",
+    "checklist_template",
     "assigned_to__user",
     "assigned_by__user",
 )
@@ -47,21 +46,11 @@ def get_active_execution_for_template(
     return (
         ChecklistExecution.objects.filter(
             checklist_template=template,
-            checklist_type=template.checklist_type,
             status__in=ACTIVE_EXECUTION_STATUSES,
         )
         .order_by("-created_at")
         .first()
     )
-
-
-def get_active_personal_execution_for_template(
-    *,
-    template: ChecklistTemplate,
-) -> ChecklistExecution | None:
-    if template.checklist_type != CHECKLIST_TYPE_PERSONAL:
-        return None
-    return get_active_execution_for_template(template=template)
 
 
 def get_in_progress_execution_for_assignment(
@@ -75,49 +64,54 @@ def get_in_progress_execution_for_assignment(
     )
 
 
-def shared_templates_for_catalogue(
+def registered_templates_for_catalogue(
     *,
     membership: EstablishmentMembership,
+    created_by_me: bool = False,
+    badge: str | None = None,
+    business_unit_id: uuid.UUID | None = None,
 ) -> QuerySet[ChecklistTemplate]:
-    if not can_view_shared_catalogue(membership):
+    if not can_view_registered_catalogue(membership):
         return ChecklistTemplate.objects.none()
 
     queryset = ChecklistTemplate.objects.filter(
         establishment_id=membership.establishment_id,
-        checklist_type=CHECKLIST_TYPE_SHARED,
     ).select_related("business_unit", "created_by__user")
 
     if membership.role in {
         EstablishmentMembership.Role.OWNER,
         EstablishmentMembership.Role.DIRECTOR,
     }:
-        return queryset
-
-    if membership.role == EstablishmentMembership.Role.MANAGER:
+        filtered = queryset
+    elif membership.role in {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    }:
         scope_q = build_checklist_visibility_scope_q(membership=membership)
         if scope_q is None:
             return ChecklistTemplate.objects.none()
-        return queryset.filter(scope_q)
+        filtered = queryset.filter(scope_q)
+    else:
+        return ChecklistTemplate.objects.none()
 
-    return ChecklistTemplate.objects.none()
-
-
-def personal_templates_for_membership(
-    *,
-    membership: EstablishmentMembership,
-) -> QuerySet[ChecklistTemplate]:
-    return ChecklistTemplate.objects.filter(
-        establishment_id=membership.establishment_id,
-        checklist_type=CHECKLIST_TYPE_PERSONAL,
-        created_by_id=membership.id,
-    ).select_related("created_by__user")
+    if created_by_me:
+        filtered = filtered.filter(created_by_id=membership.id)
+    if badge is not None:
+        if badge not in CHECKLIST_BADGES:
+            return ChecklistTemplate.objects.none()
+        filtered = filtered.filter(badge=badge)
+    if business_unit_id is not None:
+        filtered = filtered.filter(business_unit_id=business_unit_id)
+    return filtered
 
 
 def assignments_for_management(
     *,
     membership: EstablishmentMembership,
 ) -> QuerySet[ChecklistAssignment]:
-    if not can_view_shared_catalogue(membership):
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return ChecklistAssignment.objects.none()
+    if not can_view_registered_catalogue(membership):
         return ChecklistAssignment.objects.none()
 
     queryset = ChecklistAssignment.objects.filter(
@@ -180,11 +174,8 @@ def get_checklist_execution_for_detail(
     return execution
 
 
-def checklist_personal_feed_q(*, membership: EstablishmentMembership) -> Q:
-    return (
-        Q(assigned_to_id=membership.id)
-        & Q(establishment_id=membership.establishment_id)
-    )
+def checklist_assigned_to_me_feed_q(*, membership: EstablishmentMembership) -> Q:
+    return Q(assigned_to_id=membership.id) & Q(establishment_id=membership.establishment_id)
 
 
 def checklist_general_feed_visibility_q(*, membership: EstablishmentMembership) -> Q:
@@ -202,9 +193,7 @@ def checklist_general_feed_visibility_q(*, membership: EstablishmentMembership) 
     scope_q = build_checklist_visibility_scope_q(membership=membership)
     if scope_q is None:
         return personal_q & Q(establishment_id=membership.establishment_id)
-    return (
-        personal_q | (scope_q & Q(checklist_type=CHECKLIST_TYPE_SHARED))
-    ) & Q(establishment_id=membership.establishment_id)
+    return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
 
 
 def checklist_execution_feed_queryset(
@@ -214,7 +203,7 @@ def checklist_execution_feed_queryset(
 ) -> QuerySet[ChecklistExecution]:
     now = timezone.now()
     visibility_q = (
-        checklist_personal_feed_q(membership=membership)
+        checklist_assigned_to_me_feed_q(membership=membership)
         if view_mode == "personal"
         else checklist_general_feed_visibility_q(membership=membership)
     )
@@ -292,10 +281,7 @@ def get_checklist_task_template_for_management(
     if task_template is None:
         return None
     template = task_template.checklist_template
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        if not can_manage_shared_template(membership, template):
-            return None
-    elif not can_manage_personal_template(membership, template):
+    if not can_manage_registered_template(membership, template):
         return None
     return task_template
 

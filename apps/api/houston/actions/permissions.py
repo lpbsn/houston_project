@@ -48,12 +48,9 @@ def action_visible_in_membership_scope(
         return True
 
     if action.signal_id is not None:
-        if (
-            action.affected_business_unit_id is not None
-            and membership_scope_covers_business_unit(
-                membership,
-                action.affected_business_unit,
-            )
+        if action.affected_business_unit_id is not None and membership_scope_covers_business_unit(
+            membership,
+            action.affected_business_unit,
         ):
             return True
         if (

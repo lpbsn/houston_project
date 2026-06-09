@@ -14,24 +14,27 @@ from houston.checklists.selectors import (
     assignments_for_management,
     checklist_execution_feed_queryset,
     get_checklist_execution_for_detail,
-    personal_templates_for_membership,
-    shared_templates_for_catalogue,
+    registered_templates_for_catalogue,
 )
 from houston.checklists.services import (
     create_checklist_assignment,
     create_checklist_template,
 )
-from houston.checklists.tests.conftest import add_task_template, assignment_schedule_from_datetime
+from houston.checklists.tests.conftest import (
+    add_task_template,
+    assignment_schedule_from_datetime,
+    stable_assignment_times,
+    stable_future_assignment_schedule,
+)
 from houston.establishments.tests.taxonomy_helpers import create_business_unit
 
 pytestmark = pytest.mark.django_db
 
 
-def _active_shared_template(owner_membership, business_unit):
+def _active_registered_template(owner_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Shared routine",
         business_unit_id=business_unit.id,
     )
@@ -41,19 +44,19 @@ def _active_shared_template(owner_membership, business_unit):
     return template
 
 
-def test_shared_catalogue_owner_sees_all(owner_membership, business_unit):
-    template = _active_shared_template(owner_membership, business_unit)
+def test_registered_catalogue_owner_sees_all(owner_membership, business_unit):
+    template = _active_registered_template(owner_membership, business_unit)
     ids = set(
-        shared_templates_for_catalogue(membership=owner_membership).values_list("id", flat=True)
+        registered_templates_for_catalogue(membership=owner_membership).values_list("id", flat=True)
     )
     assert template.id in ids
 
 
-def test_shared_catalogue_staff_is_empty(staff_membership, shared_template):
+def test_registered_catalogue_staff_sees_scoped_templates(staff_membership, registered_template):
     ids = set(
-        shared_templates_for_catalogue(membership=staff_membership).values_list("id", flat=True)
+        registered_templates_for_catalogue(membership=staff_membership).values_list("id", flat=True)
     )
-    assert ids == set()
+    assert registered_template.id in ids
 
 
 def test_manager_catalogue_is_scoped_to_membership_scope(
@@ -62,12 +65,11 @@ def test_manager_catalogue_is_scoped_to_membership_scope(
     business_unit,
     establishment,
 ):
-    in_scope = _active_shared_template(owner_membership, business_unit)
+    in_scope = _active_registered_template(owner_membership, business_unit)
     other_bu = create_business_unit(establishment=establishment, key="spa")
     out_scope = create_checklist_template(
         establishment_id=establishment.id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Spa routine",
         business_unit_id=other_bu.id,
     )
@@ -76,28 +78,37 @@ def test_manager_catalogue_is_scoped_to_membership_scope(
     out_scope.save(update_fields=["status", "updated_at"])
 
     ids = set(
-        shared_templates_for_catalogue(membership=manager_membership).values_list("id", flat=True)
+        registered_templates_for_catalogue(membership=manager_membership).values_list(
+            "id",
+            flat=True,
+        )
     )
     assert in_scope.id in ids
     assert out_scope.id not in ids
 
 
-def test_personal_catalogue_is_own_only(
+def test_created_by_me_catalogue_is_own_only(
     staff_membership,
     other_staff_membership,
-    personal_template,
+    staff_owned_template,
 ):
     own_ids = set(
-        personal_templates_for_membership(membership=staff_membership).values_list("id", flat=True)
+        registered_templates_for_catalogue(
+            membership=staff_membership,
+            created_by_me=True,
+        ).values_list("id", flat=True)
     )
     other_ids = set(
-        personal_templates_for_membership(membership=other_staff_membership).values_list(
+        registered_templates_for_catalogue(
+            membership=other_staff_membership,
+            created_by_me=True,
+        ).values_list(
             "id",
             flat=True,
         )
     )
-    assert personal_template.id in own_ids
-    assert personal_template.id not in other_ids
+    assert staff_owned_template.id in own_ids
+    assert staff_owned_template.id not in other_ids
 
 
 def test_assignments_for_management_scoped_for_manager(
@@ -107,25 +118,21 @@ def test_assignments_for_management_scoped_for_manager(
     business_unit,
     establishment,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     in_scope = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     other_bu = create_business_unit(establishment=establishment, key="bar")
     out_template = create_checklist_template(
         establishment_id=establishment.id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Bar routine",
         business_unit_id=other_bu.id,
     )
@@ -137,12 +144,9 @@ def test_assignments_for_management_scoped_for_manager(
         actor=owner_membership,
         assigned_to_id=owner_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
 
     ids = set(
@@ -157,28 +161,22 @@ def test_active_assignments_for_management_excludes_inactive(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     active = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     inactive = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=owner_membership.id,
-        **assignment_schedule_from_datetime(
-            now + timezone.timedelta(hours=2),
-            duration_hours=1,
-        ),
+        **stable_future_assignment_schedule(start_hour=16, duration_hours=1),
     )
     inactive.status = ChecklistAssignment.Status.INACTIVE
     inactive.save(update_fields=["status", "updated_at"])
@@ -199,30 +197,33 @@ def test_get_checklist_execution_for_detail_respects_visibility(
     other_staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
 
-    assert get_checklist_execution_for_detail(
-        membership=staff_membership,
-        execution_id=execution.id,
-    ) is not None
-    assert get_checklist_execution_for_detail(
-        membership=other_staff_membership,
-        execution_id=execution.id,
-    ) is None
+    assert (
+        get_checklist_execution_for_detail(
+            membership=staff_membership,
+            execution_id=execution.id,
+        )
+        is not None
+    )
+    assert (
+        get_checklist_execution_for_detail(
+            membership=other_staff_membership,
+            execution_id=execution.id,
+        )
+        is None
+    )
 
 
 def test_feed_selector_invisible_two_hours_before_start_at(
@@ -230,18 +231,18 @@ def test_feed_selector_invisible_two_hours_before_start_at(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
-    start_at = timezone.now() + timezone.timedelta(hours=2)
+    template = _active_registered_template(owner_membership, business_unit)
+    schedule = stable_future_assignment_schedule(start_hour=14, duration_hours=1)
     assignment = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
-        **assignment_schedule_from_datetime(start_at, duration_hours=1),
+        **schedule,
     )
     ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
     materialize_execution_from_assignment(
         assignment=assignment,
-        occurrence_date=start_at.date(),
+        occurrence_date=schedule["start_date"],
     )
 
     ids = set(
@@ -259,7 +260,7 @@ def test_feed_selector_visible_one_hour_before_start_at(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now() + timezone.timedelta(hours=1)
     assignment = create_checklist_assignment(
         template=template,
@@ -287,7 +288,7 @@ def test_feed_selector_keeps_overdue_execution_visible(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now() - timezone.timedelta(hours=3)
     assignment = create_checklist_assignment(
         template=template,
@@ -313,19 +314,16 @@ def test_feed_selector_excludes_done_and_canceled(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
     execution.status = ChecklistExecution.Status.DONE

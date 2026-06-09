@@ -11,13 +11,10 @@ import {
   useChecklistAssignmentForm,
 } from '@/features/checklists/lib/checklist-assignment-form'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
-import type { ChecklistType } from '@/features/checklists/types'
-
 type ChecklistAssignmentCreateSheetProps = {
   open: boolean
   establishmentId: string
   templateId: string
-  checklistType: ChecklistType
   businessUnitId: string
   onClose: () => void
   onSuccess: () => void
@@ -27,16 +24,11 @@ export function ChecklistAssignmentCreateSheet({
   open,
   establishmentId,
   templateId,
-  checklistType,
   businessUnitId,
   onClose,
   onSuccess,
 }: ChecklistAssignmentCreateSheetProps) {
-  const createMutation = useCreateChecklistAssignmentMutation(
-    establishmentId,
-    templateId,
-    checklistType,
-  )
+  const createMutation = useCreateChecklistAssignmentMutation(establishmentId, templateId)
 
   const {
     assignedTo,

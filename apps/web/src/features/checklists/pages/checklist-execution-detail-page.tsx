@@ -8,6 +8,7 @@ import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-ca
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { HoustonBadge } from '@/components/ui/terrain'
+import { formatChecklistFeedBadgeLabel } from '@/features/checklists/lib/checklist-display'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
 import {
   useCancelChecklistExecutionMutation,
@@ -148,7 +149,7 @@ export function ChecklistExecutionDetailPage({ executionId }: ChecklistExecution
     <div className="space-y-3 px-3 pb-28 pt-3">
       <div className="flex flex-wrap items-center gap-2">
         <HoustonBadge variant="blue">
-          {execution.checklist_type === 'shared' ? 'Partagée' : 'Personnelle'}
+          {formatChecklistFeedBadgeLabel(execution.execution_source, null)}
         </HoustonBadge>
         <span className="rounded-full bg-[#F0EFE9] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#7D7B75]">
           {formatChecklistExecutionStatusLabel(execution.status)}

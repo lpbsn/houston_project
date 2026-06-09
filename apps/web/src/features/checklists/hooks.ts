@@ -10,8 +10,9 @@ import {
   createChecklistTask,
   createChecklistTaskObservation,
   createChecklistTemplate,
-  createChecklistTemplateWithTasks,
-  createPersonalChecklistExecution,
+  createExecutionFromTemplate,
+  createFlashTodoExecution,
+  createRegisteredChecklistTemplate,
   deactivateChecklistAssignment,
   deactivateChecklistTemplate,
   deleteChecklistTask,
@@ -21,24 +22,24 @@ import {
   fetchChecklistTemplateDetail,
   fetchChecklistTemplates,
   markChecklistTaskDone,
-  quickCreatePersonalChecklistExecution,
   reorderChecklistTasks,
-  type ChecklistTemplateWithTasksInput,
+  type RegisteredChecklistTemplateInput,
   skipChecklistTask,
   updateChecklistAssignment,
   updateChecklistTask,
   updateChecklistTemplate,
-  type QuickPersonalChecklistInput,
 } from './api'
 import type {
   ChecklistAssignmentCreateRequest,
+  ChecklistFlashTodoCreateRequest,
+  ChecklistTemplateExecutionCreateRequest,
+  ChecklistTemplateListFilters,
   PatchedChecklistAssignmentUpdateRequest,
   ChecklistTaskCreateObservationRequest,
   ChecklistTaskReorderRequest,
   ChecklistTaskSkipRequest,
   ChecklistTaskTemplateCreateRequest,
   ChecklistTemplateCreateRequest,
-  ChecklistType,
   PatchedChecklistTaskTemplateUpdateRequest,
   PatchedChecklistTemplateUpdateRequest,
 } from './types'
@@ -46,22 +47,12 @@ import type {
 function invalidateChecklistSurfaces(
   queryClient: ReturnType<typeof useQueryClient>,
   establishmentId: string,
-  checklistType?: ChecklistType,
   templateId?: string,
 ) {
   void queryClient.invalidateQueries({ queryKey: checklistsQueryKeys.all })
-  if (checklistType) {
-    void queryClient.invalidateQueries({
-      queryKey: checklistsQueryKeys.templates(establishmentId, checklistType),
-    })
-  } else {
-    void queryClient.invalidateQueries({
-      queryKey: checklistsQueryKeys.templates(establishmentId, 'shared'),
-    })
-    void queryClient.invalidateQueries({
-      queryKey: checklistsQueryKeys.templates(establishmentId, 'personal'),
-    })
-  }
+  void queryClient.invalidateQueries({
+    queryKey: ['checklists', 'templates', establishmentId],
+  })
   if (templateId) {
     void queryClient.invalidateQueries({
       queryKey: checklistsQueryKeys.templateDetail(establishmentId, templateId),
@@ -77,28 +68,27 @@ function invalidateChecklistExecutionSurfaces(
   queryClient: ReturnType<typeof useQueryClient>,
   establishmentId: string,
   executionId: string,
-  checklistType?: ChecklistType,
 ) {
   void queryClient.invalidateQueries({
     queryKey: checklistsQueryKeys.executionDetail(establishmentId, executionId),
   })
-  invalidateChecklistSurfaces(queryClient, establishmentId, checklistType)
+  invalidateChecklistSurfaces(queryClient, establishmentId)
   void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all })
 }
 
 export function useChecklistTemplatesQuery(
   establishmentId: string | null,
-  checklistType: ChecklistType,
+  filters: ChecklistTemplateListFilters = {},
 ) {
   return useQuery({
     queryKey: establishmentId
-      ? checklistsQueryKeys.templates(establishmentId, checklistType)
+      ? checklistsQueryKeys.templates(establishmentId, filters)
       : ['checklists', 'templates', 'none'],
     queryFn: () => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchChecklistTemplates(establishmentId, checklistType)
+      return fetchChecklistTemplates(establishmentId, filters)
     },
     enabled: Boolean(establishmentId),
   })
@@ -145,12 +135,19 @@ export function useCreateChecklistTemplateMutation(establishmentId: string) {
     mutationFn: (body: ChecklistTemplateCreateRequest) =>
       createChecklistTemplate(establishmentId, body),
     onSuccess: (data) => {
-      invalidateChecklistSurfaces(
-        queryClient,
-        establishmentId,
-        data.checklist_type as ChecklistType,
-        data.id,
-      )
+      invalidateChecklistSurfaces(queryClient, establishmentId, data.id)
+    },
+  })
+}
+
+export function useCreateRegisteredChecklistTemplateMutation(establishmentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: RegisteredChecklistTemplateInput) =>
+      createRegisteredChecklistTemplate(establishmentId, input),
+    onSuccess: (data) => {
+      invalidateChecklistSurfaces(queryClient, establishmentId, data.id)
     },
   })
 }
@@ -158,7 +155,6 @@ export function useCreateChecklistTemplateMutation(establishmentId: string) {
 export function useUpdateChecklistTemplateMutation(
   establishmentId: string,
   templateId: string,
-  checklistType: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
@@ -166,7 +162,7 @@ export function useUpdateChecklistTemplateMutation(
     mutationFn: (body: PatchedChecklistTemplateUpdateRequest) =>
       updateChecklistTemplate(establishmentId, templateId, body),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
@@ -174,14 +170,13 @@ export function useUpdateChecklistTemplateMutation(
 export function useActivateChecklistTemplateMutation(
   establishmentId: string,
   templateId: string,
-  checklistType: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: () => activateChecklistTemplate(establishmentId, templateId),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
@@ -189,71 +184,42 @@ export function useActivateChecklistTemplateMutation(
 export function useDeactivateChecklistTemplateMutation(
   establishmentId: string,
   templateId: string,
-  checklistType: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: () => deactivateChecklistTemplate(establishmentId, templateId),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
 
-export function useDeleteChecklistTemplateMutation(
-  establishmentId: string,
-  checklistType: ChecklistType,
-) {
+export function useDeleteChecklistTemplateMutation(establishmentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (templateId: string) =>
       deleteChecklistTemplate(establishmentId, templateId),
     onSuccess: (_data, templateId) => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
 
-export function useCreateChecklistTemplateWithTasksMutation(establishmentId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (input: ChecklistTemplateWithTasksInput) =>
-      createChecklistTemplateWithTasks(establishmentId, input),
-    onSuccess: (data) => {
-      invalidateChecklistSurfaces(
-        queryClient,
-        establishmentId,
-        data.checklist_type as ChecklistType,
-        data.id,
-      )
-    },
-  })
-}
-
-export function useCreateChecklistTaskMutation(
-  establishmentId: string,
-  templateId: string,
-  checklistType: ChecklistType,
-) {
+export function useCreateChecklistTaskMutation(establishmentId: string, templateId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (body: ChecklistTaskTemplateCreateRequest) =>
       createChecklistTask(establishmentId, templateId, body),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
 
-export function useUpdateChecklistTaskMutation(
-  establishmentId: string,
-  templateId: string,
-  checklistType: ChecklistType,
-) {
+export function useUpdateChecklistTaskMutation(establishmentId: string, templateId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -265,39 +231,31 @@ export function useUpdateChecklistTaskMutation(
       body: PatchedChecklistTaskTemplateUpdateRequest
     }) => updateChecklistTask(establishmentId, taskTemplateId, body),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
 
-export function useDeleteChecklistTaskMutation(
-  establishmentId: string,
-  templateId: string,
-  checklistType: ChecklistType,
-) {
+export function useDeleteChecklistTaskMutation(establishmentId: string, templateId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (taskTemplateId: string) =>
       deleteChecklistTask(establishmentId, taskTemplateId),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
 
-export function useReorderChecklistTasksMutation(
-  establishmentId: string,
-  templateId: string,
-  checklistType: ChecklistType,
-) {
+export function useReorderChecklistTasksMutation(establishmentId: string, templateId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (body: ChecklistTaskReorderRequest) =>
       reorderChecklistTasks(establishmentId, templateId, body),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
@@ -305,7 +263,6 @@ export function useReorderChecklistTasksMutation(
 export function useCreateChecklistAssignmentMutation(
   establishmentId: string,
   templateId: string,
-  checklistType: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
@@ -313,7 +270,7 @@ export function useCreateChecklistAssignmentMutation(
     mutationFn: (body: ChecklistAssignmentCreateRequest) =>
       createChecklistAssignment(establishmentId, templateId, body),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
@@ -321,7 +278,6 @@ export function useCreateChecklistAssignmentMutation(
 export function useUpdateChecklistAssignmentMutation(
   establishmentId: string,
   templateId: string,
-  checklistType: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
@@ -334,7 +290,7 @@ export function useUpdateChecklistAssignmentMutation(
       body: PatchedChecklistAssignmentUpdateRequest
     }) => updateChecklistAssignment(establishmentId, assignmentId, body),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
@@ -342,7 +298,6 @@ export function useUpdateChecklistAssignmentMutation(
 export function useDeactivateChecklistAssignmentMutation(
   establishmentId: string,
   templateId: string,
-  checklistType: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
@@ -350,26 +305,22 @@ export function useDeactivateChecklistAssignmentMutation(
     mutationFn: (assignmentId: string) =>
       deactivateChecklistAssignment(establishmentId, assignmentId),
     onSuccess: () => {
-      invalidateChecklistSurfaces(queryClient, establishmentId, checklistType, templateId)
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }
 
-export function useCreatePersonalExecutionMutation(
+export function useCreateTemplateExecutionMutation(
   establishmentId: string,
   templateId: string,
 ) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => createPersonalChecklistExecution(establishmentId, templateId),
+    mutationFn: (body: ChecklistTemplateExecutionCreateRequest) =>
+      createExecutionFromTemplate(establishmentId, templateId, body),
     onSuccess: (data) => {
-      invalidateChecklistExecutionSurfaces(
-        queryClient,
-        establishmentId,
-        data.id,
-        'personal',
-      )
+      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, data.id)
     },
   })
 }
@@ -393,19 +344,14 @@ export function useChecklistExecutionDetailQuery(
   })
 }
 
-export function useQuickCreatePersonalChecklistMutation(establishmentId: string) {
+export function useCreateFlashTodoMutation(establishmentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: QuickPersonalChecklistInput) =>
-      quickCreatePersonalChecklistExecution(establishmentId, input),
+    mutationFn: (body: ChecklistFlashTodoCreateRequest) =>
+      createFlashTodoExecution(establishmentId, body),
     onSuccess: (data) => {
-      invalidateChecklistExecutionSurfaces(
-        queryClient,
-        establishmentId,
-        data.id,
-        'personal',
-      )
+      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, data.id)
     },
   })
 }
@@ -413,19 +359,13 @@ export function useQuickCreatePersonalChecklistMutation(establishmentId: string)
 export function useCancelChecklistExecutionMutation(
   establishmentId: string,
   executionId: string,
-  checklistType?: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: () => cancelChecklistExecution(establishmentId, executionId),
     onSuccess: () => {
-      invalidateChecklistExecutionSurfaces(
-        queryClient,
-        establishmentId,
-        executionId,
-        checklistType,
-      )
+      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })
 }
@@ -433,7 +373,6 @@ export function useCancelChecklistExecutionMutation(
 export function useMarkChecklistTaskDoneMutation(
   establishmentId: string,
   executionId: string,
-  checklistType?: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
@@ -441,21 +380,12 @@ export function useMarkChecklistTaskDoneMutation(
     mutationFn: (taskExecutionId: string) =>
       markChecklistTaskDone(establishmentId, taskExecutionId),
     onSuccess: () => {
-      invalidateChecklistExecutionSurfaces(
-        queryClient,
-        establishmentId,
-        executionId,
-        checklistType,
-      )
+      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })
 }
 
-export function useSkipChecklistTaskMutation(
-  establishmentId: string,
-  executionId: string,
-  checklistType?: ChecklistType,
-) {
+export function useSkipChecklistTaskMutation(establishmentId: string, executionId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -467,12 +397,7 @@ export function useSkipChecklistTaskMutation(
       body?: ChecklistTaskSkipRequest
     }) => skipChecklistTask(establishmentId, taskExecutionId, body),
     onSuccess: () => {
-      invalidateChecklistExecutionSurfaces(
-        queryClient,
-        establishmentId,
-        executionId,
-        checklistType,
-      )
+      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })
 }
@@ -480,7 +405,6 @@ export function useSkipChecklistTaskMutation(
 export function useCreateChecklistTaskObservationMutation(
   establishmentId: string,
   executionId: string,
-  checklistType?: ChecklistType,
 ) {
   const queryClient = useQueryClient()
 
@@ -493,12 +417,7 @@ export function useCreateChecklistTaskObservationMutation(
       body: ChecklistTaskCreateObservationRequest
     }) => createChecklistTaskObservation(establishmentId, taskExecutionId, body),
     onSuccess: () => {
-      invalidateChecklistExecutionSurfaces(
-        queryClient,
-        establishmentId,
-        executionId,
-        checklistType,
-      )
+      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })
 }

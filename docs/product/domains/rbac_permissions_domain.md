@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-09
-Implementation status: implemented for Phase 1
+Implementation status: implemented (Checklist RBAC unifié : [`checklist_domain.md`](checklist_domain.md) §9 — Lots 2–7 clos, plus personal/shared supprimés)
 
 ## 1. Purpose
 
@@ -176,6 +176,20 @@ Additional implemented establishment-scoped endpoints with backend RBAC (confirm
 - Observations submit and processing status under `.../observations/`
 
 Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`action_domain.md`](action_domain.md), [`checklist_domain.md`](checklist_domain.md) §9, [`feed_domain.md`](feed_domain.md) §7.
+
+### Checklist RBAC (cible — refonte unifiée)
+
+Le domaine Checklist n'utilise plus les concepts **personal/shared**. Une seule bibliothèque de **checklists enregistrées** ; badge Process/To-do = UX only (jamais RBAC).
+
+| Rôle | Résumé |
+| --- | --- |
+| **Owner / Director** | Flash To-do, création/modification/suppression/utilisation de toutes les checklists enregistrées de l'établissement ; assigner à tout membre actif |
+| **Manager** | Même capacités dans son **`MembershipScope`** BU ; assigné compatible scope |
+| **Staff** | Flash To-do et création enregistrée dans scope ; **voir et utiliser** modèles accessibles (y compris créés par d'autres) ; **modifier/supprimer uniquement** si `created_by = self` ; pas de gestion assignments ; cancel exécution si assigné |
+
+Helpers existants à réutiliser : `membership_scope_covers_business_unit`, `membership_covers_checklist_business_unit` ([`checklists/permissions.py`](../../../apps/api/houston/checklists/permissions.py)). Matrice détaillée : [`checklist_domain.md`](checklist_domain.md) §9.1.
+
+**Supprimé (produit)** : catalogue Staff « personal only » ; distinction RBAC shared vs personal ; permissions dérivées du badge Process/To-do.
 
 Candidate endpoints only:
 

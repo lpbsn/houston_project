@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from django.utils import timezone
 
-from houston.checklists.exceptions import ChecklistConflictError, ChecklistValidationError
+from houston.checklists.exceptions import ChecklistValidationError
 from houston.checklists.materialization import (
     materialize_assignment_occurrences_in_horizon,
     materialize_execution_from_assignment,
@@ -12,19 +12,22 @@ from houston.checklists.models import ChecklistExecution, ChecklistTemplate
 from houston.checklists.services import (
     create_checklist_assignment,
     create_checklist_template,
-    create_personal_execution,
+    create_execution_from_template,
 )
-from houston.checklists.tests.conftest import add_task_template, assignment_schedule_from_datetime
+from houston.checklists.tests.conftest import (
+    add_task_template,
+    assignment_schedule_from_datetime,
+    stable_assignment_times,
+)
 from houston.establishments.tests.taxonomy_helpers import create_establishment
 
 pytestmark = pytest.mark.django_db
 
 
-def _active_shared_template(owner_membership, business_unit):
+def _active_registered_template(owner_membership, business_unit):
     template = create_checklist_template(
         establishment_id=owner_membership.establishment_id,
         actor=owner_membership,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Routine",
         business_unit_id=business_unit.id,
     )
@@ -35,19 +38,16 @@ def _active_shared_template(owner_membership, business_unit):
 
 
 def test_materialize_requires_occurrence_date(owner_membership, staff_membership, business_unit):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     with pytest.raises(ChecklistValidationError):
         materialize_execution_from_assignment(
@@ -57,19 +57,16 @@ def test_materialize_requires_occurrence_date(owner_membership, staff_membership
 
 
 def test_materialize_is_idempotent(owner_membership, staff_membership, business_unit):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner_membership,
         assigned_to_id=staff_membership.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     first = ChecklistExecution.objects.get(checklist_assignment=assignment)
     second = materialize_execution_from_assignment(
@@ -85,7 +82,7 @@ def test_materialize_sets_visible_from_one_hour_before_start(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(
         template=template,
@@ -102,7 +99,7 @@ def test_recurring_materialization_within_horizon(
     staff_membership,
     business_unit,
 ):
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(
         template=template,
@@ -124,12 +121,15 @@ def test_recurring_materialization_within_horizon(
     assert len({execution.occurrence_date for execution in materialized}) == len(materialized)
 
 
-def test_personal_execution_has_no_assignment_or_occurrence_date(
+def test_staff_template_execution_has_no_assignment_or_occurrence_date(
     staff_membership,
-    personal_template,
+    staff_owned_template,
 ):
-    add_task_template(template=personal_template, task="Task")
-    execution = create_personal_execution(template=personal_template, actor=staff_membership)
+    add_task_template(template=staff_owned_template, task="Task")
+    execution = create_execution_from_template(
+        template=staff_owned_template,
+        actor=staff_membership,
+    )
     assert execution.checklist_assignment_id is None
     assert execution.occurrence_date is None
     assert execution.visible_from is None
@@ -138,19 +138,19 @@ def test_personal_execution_has_no_assignment_or_occurrence_date(
     assert execution.task_executions.count() == 1
 
 
-def test_personal_active_uniqueness(staff_membership, personal_template):
-    add_task_template(template=personal_template, task="Task")
-    create_personal_execution(template=personal_template, actor=staff_membership)
-    with pytest.raises(ChecklistConflictError):
-        create_personal_execution(template=personal_template, actor=staff_membership)
+def test_multiple_active_template_executions_allowed(staff_membership, staff_owned_template):
+    add_task_template(template=staff_owned_template, task="Task")
+    first = create_execution_from_template(template=staff_owned_template, actor=staff_membership)
+    second = create_execution_from_template(template=staff_owned_template, actor=staff_membership)
+    assert first.id != second.id
 
 
-def test_personal_execution_allowed_after_terminal(staff_membership, personal_template):
-    add_task_template(template=personal_template, task="Task")
-    first = create_personal_execution(template=personal_template, actor=staff_membership)
+def test_staff_template_execution_allowed_after_terminal(staff_membership, staff_owned_template):
+    add_task_template(template=staff_owned_template, task="Task")
+    first = create_execution_from_template(template=staff_owned_template, actor=staff_membership)
     first.status = ChecklistExecution.Status.DONE
     first.save(update_fields=["status", "updated_at"])
-    second = create_personal_execution(template=personal_template, actor=staff_membership)
+    second = create_execution_from_template(template=staff_owned_template, actor=staff_membership)
     assert second.id != first.id
 
 
@@ -161,7 +161,7 @@ def test_materialize_rejects_cross_establishment_assignment_template(
 ):
     from houston.checklists.models import ChecklistAssignment
 
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = ChecklistAssignment.objects.create(
         checklist_template=template,
@@ -170,12 +170,9 @@ def test_materialize_rejects_cross_establishment_assignment_template(
         assigned_by=owner_membership,
         business_unit_id=template.business_unit_id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     other_establishment = create_establishment(name="Other")
     assignment.establishment_id = other_establishment.id
@@ -194,7 +191,7 @@ def test_orphan_assignment_does_not_materialize(
 ):
     from houston.checklists.models import ChecklistAssignment
 
-    template = _active_shared_template(owner_membership, business_unit)
+    template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()
     assignment = ChecklistAssignment.objects.create(
         checklist_template=template,
@@ -203,12 +200,9 @@ def test_orphan_assignment_does_not_materialize(
         assigned_by=owner_membership,
         business_unit_id=template.business_unit_id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
         status=ChecklistAssignment.Status.ACTIVE,
     )
     assignment.checklist_template_id = None

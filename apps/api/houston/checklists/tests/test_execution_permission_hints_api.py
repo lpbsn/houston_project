@@ -26,22 +26,22 @@ def _execution_hints(api_client, membership, execution_id) -> dict:
     return response.json()["permission_hints"]
 
 
-def test_staff_assignee_shared_can_execute_not_cancel(
+def test_staff_assignee_assignment_execution_can_execute_and_cancel(
     api_client,
     staff_membership,
-    shared_execution,
+    assignment_execution,
 ):
-    hints = _execution_hints(api_client, staff_membership, shared_execution.id)
+    hints = _execution_hints(api_client, staff_membership, assignment_execution.id)
     assert hints["can_execute_tasks"] is True
-    assert hints["can_cancel"] is False
+    assert hints["can_cancel"] is True
 
 
-def test_staff_assignee_personal_can_execute_and_cancel(
+def test_staff_assignee_template_execution_can_execute_and_cancel(
     api_client,
     staff_membership,
-    personal_execution,
+    staff_template_execution,
 ):
-    hints = _execution_hints(api_client, staff_membership, personal_execution.id)
+    hints = _execution_hints(api_client, staff_membership, staff_template_execution.id)
     assert hints["can_execute_tasks"] is True
     assert hints["can_cancel"] is True
 
@@ -49,32 +49,32 @@ def test_staff_assignee_personal_can_execute_and_cancel(
 def test_staff_non_assignee_cannot_view_execution_detail(
     api_client,
     other_staff_membership,
-    shared_execution,
+    assignment_execution,
 ):
     token = login(api_client, user=other_staff_membership.user)
     response = api_client.get(
-        checklist_execution_url(other_staff_membership.establishment_id, shared_execution.id),
+        checklist_execution_url(other_staff_membership.establishment_id, assignment_execution.id),
         **auth_headers(token),
     )
     assert response.status_code == 404
 
 
-def test_owner_viewer_non_assignee_can_cancel_shared_not_execute(
+def test_owner_viewer_non_assignee_can_cancel_assignment_execution_not_execute(
     api_client,
     owner_membership,
-    shared_execution,
+    assignment_execution,
 ):
-    hints = _execution_hints(api_client, owner_membership, shared_execution.id)
+    hints = _execution_hints(api_client, owner_membership, assignment_execution.id)
     assert hints["can_execute_tasks"] is False
     assert hints["can_cancel"] is True
 
 
-def test_manager_in_bu_viewer_non_assignee_can_cancel_shared_not_execute(
+def test_manager_in_bu_viewer_non_assignee_can_cancel_assignment_execution_not_execute(
     api_client,
     manager_membership,
-    shared_execution,
+    assignment_execution,
 ):
-    hints = _execution_hints(api_client, manager_membership, shared_execution.id)
+    hints = _execution_hints(api_client, manager_membership, assignment_execution.id)
     assert hints["can_execute_tasks"] is False
     assert hints["can_cancel"] is True
 
@@ -83,7 +83,7 @@ def test_manager_out_of_bu_cannot_view_execution_detail(
     api_client,
     establishment,
     owner_membership,
-    shared_execution,
+    assignment_execution,
     business_unit,
 ):
     other_bu = create_business_unit(establishment=establishment, key="spa")
@@ -98,7 +98,7 @@ def test_manager_out_of_bu_cannot_view_execution_detail(
 
     token = login(api_client, user=out_manager.user)
     response = api_client.get(
-        checklist_execution_url(out_manager.establishment_id, shared_execution.id),
+        checklist_execution_url(out_manager.establishment_id, assignment_execution.id),
         **auth_headers(token),
     )
     assert response.status_code == 404
@@ -114,20 +114,20 @@ def test_manager_out_of_bu_cannot_view_execution_detail(
 def test_terminal_execution_hints_disable_actions(
     api_client,
     staff_membership,
-    shared_execution,
+    assignment_execution,
     status,
 ):
-    shared_execution.status = status
-    shared_execution.save(update_fields=["status", "updated_at"])
+    assignment_execution.status = status
+    assignment_execution.save(update_fields=["status", "updated_at"])
 
-    hints = _execution_hints(api_client, staff_membership, shared_execution.id)
+    hints = _execution_hints(api_client, staff_membership, assignment_execution.id)
     assert hints["can_execute_tasks"] is False
     assert hints["can_cancel"] is False
 
 
-def test_build_checklist_execution_permission_hints_unit(shared_execution, staff_membership):
+def test_build_checklist_execution_permission_hints_unit(assignment_execution, staff_membership):
     hints = build_checklist_execution_permission_hints(
         membership=staff_membership,
-        execution=shared_execution,
+        execution=assignment_execution,
     )
-    assert hints == {"can_execute_tasks": True, "can_cancel": False}
+    assert hints == {"can_execute_tasks": True, "can_cancel": True}

@@ -131,4 +131,3 @@ def test_replace_membership_scopes_persists_business_unit_row():
     scopes = list(MembershipScope.objects.filter(membership=membership))
     assert len(scopes) == 1
     assert scopes[0].business_unit_id == business_unit.id
-

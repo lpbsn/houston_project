@@ -6,67 +6,60 @@ import pytest
 from django.db import IntegrityError
 from django.utils import timezone
 
+from houston.checklists.constants import (
+    CHECKLIST_BADGE_PROCESS,
+    CHECKLIST_BADGE_TODO,
+    EXECUTION_SOURCE_ASSIGNMENT,
+    EXECUTION_SOURCE_FLASH_TODO,
+    EXECUTION_SOURCE_TEMPLATE,
+)
 from houston.checklists.models import (
     ChecklistAssignment,
     ChecklistExecution,
     ChecklistTaskTemplate,
     ChecklistTemplate,
 )
-from houston.checklists.tests.conftest import add_task_template
+from houston.checklists.tests.conftest import add_task_template, stable_assignment_times
 
 pytestmark = pytest.mark.django_db
 
 
-def test_shared_template_requires_business_unit(owner_membership, business_unit):
+def test_template_requires_business_unit(owner_membership, business_unit):
     establishment = owner_membership.establishment
     template = ChecklistTemplate.objects.create(
         establishment=establishment,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         created_by=owner_membership,
         business_unit=business_unit,
-        title="Shared checklist",
+        title="Registered checklist",
     )
     assert template.business_unit_id == business_unit.id
 
 
-def test_personal_template_rejects_business_unit(staff_membership, business_unit):
-    establishment = staff_membership.establishment
-    with pytest.raises(IntegrityError):
-        ChecklistTemplate.objects.create(
-            establishment=establishment,
-            checklist_type=ChecklistTemplate.ChecklistType.PERSONAL,
-            created_by=staff_membership,
-            business_unit=business_unit,
-            title="Invalid personal",
-        )
-
-
-def test_shared_template_rejects_missing_business_unit(owner_membership):
+def test_template_rejects_missing_business_unit(owner_membership):
     establishment = owner_membership.establishment
     with pytest.raises(IntegrityError):
         ChecklistTemplate.objects.create(
             establishment=establishment,
-            checklist_type=ChecklistTemplate.ChecklistType.SHARED,
             created_by=owner_membership,
             business_unit=None,
-            title="Invalid shared",
+            title="Invalid template",
         )
 
 
 def test_assignment_rejects_end_at_before_start_at(
     establishment,
-    shared_template,
+    registered_template,
     owner_membership,
     staff_membership,
 ):
     today = timezone.now().date()
     with pytest.raises(IntegrityError):
         ChecklistAssignment.objects.create(
-            checklist_template=shared_template,
+            checklist_template=registered_template,
             establishment=establishment,
             assigned_to=staff_membership,
             assigned_by=owner_membership,
-            business_unit=shared_template.business_unit,
+            business_unit=registered_template.business_unit,
             start_date=today,
             end_date=today,
             start_at=time(10, 0),
@@ -74,157 +67,175 @@ def test_assignment_rejects_end_at_before_start_at(
         )
 
 
-def test_task_template_unique_position_per_template(shared_template):
-    add_task_template(template=shared_template, task="First", position=1)
+def test_task_template_unique_position_per_template(registered_template):
+    add_task_template(template=registered_template, task="First", position=1)
     with pytest.raises(IntegrityError):
-        add_task_template(template=shared_template, task="Duplicate", position=1)
+        add_task_template(template=registered_template, task="Duplicate", position=1)
 
 
-def test_personal_execution_rejects_end_at(personal_template, staff_membership):
-    now = timezone.now()
-    with pytest.raises(IntegrityError):
-        ChecklistExecution.objects.create(
-            checklist_template=personal_template,
-            checklist_type=ChecklistExecution.ChecklistType.PERSONAL,
-            establishment=personal_template.establishment,
-            assigned_to=staff_membership,
-            template_title=personal_template.title,
-            end_at=now,
-            last_activity_at=now,
-        )
-
-
-def test_shared_execution_requires_assignment_and_business_unit(
+def test_assignment_execution_requires_assignment(
     establishment,
-    shared_template,
+    registered_template,
     staff_membership,
     owner_membership,
 ):
     now = timezone.now()
     with pytest.raises(IntegrityError):
         ChecklistExecution.objects.create(
-            checklist_template=shared_template,
+            checklist_template=registered_template,
             checklist_assignment=None,
-            checklist_type=ChecklistExecution.ChecklistType.SHARED,
+            execution_source=EXECUTION_SOURCE_ASSIGNMENT,
             establishment=establishment,
             assigned_to=staff_membership,
             assigned_by=owner_membership,
-            business_unit=shared_template.business_unit,
-            template_title=shared_template.title,
+            business_unit=registered_template.business_unit,
+            template_title=registered_template.title,
             last_activity_at=now,
         )
 
 
-def test_only_one_active_personal_execution_per_template(
+def test_template_execution_requires_template_without_assignment(
     establishment,
-    personal_template,
+    registered_template,
     staff_membership,
+    owner_membership,
 ):
     now = timezone.now()
-    ChecklistExecution.objects.create(
-        checklist_template=personal_template,
-        checklist_type=ChecklistExecution.ChecklistType.PERSONAL,
-        establishment=establishment,
-        assigned_to=staff_membership,
-        template_title=personal_template.title,
-        status=ChecklistExecution.Status.ASSIGNED,
-        last_activity_at=now,
-    )
     with pytest.raises(IntegrityError):
         ChecklistExecution.objects.create(
-            checklist_template=personal_template,
-            checklist_type=ChecklistExecution.ChecklistType.PERSONAL,
+            checklist_template=None,
+            checklist_assignment=None,
+            execution_source=EXECUTION_SOURCE_TEMPLATE,
             establishment=establishment,
             assigned_to=staff_membership,
-            template_title=personal_template.title,
-            status=ChecklistExecution.Status.IN_PROGRESS,
+            assigned_by=owner_membership,
+            business_unit=registered_template.business_unit,
+            template_title=registered_template.title,
             last_activity_at=now,
         )
 
 
-def test_new_personal_execution_allowed_after_terminal(
+def test_flash_todo_execution_requires_no_template_or_assignment(
     establishment,
-    personal_template,
+    business_unit,
+    staff_membership,
+):
+    now = timezone.now()
+    with pytest.raises(IntegrityError):
+        ChecklistExecution.objects.create(
+            checklist_template=None,
+            checklist_assignment=None,
+            execution_source=EXECUTION_SOURCE_FLASH_TODO,
+            establishment=establishment,
+            assigned_to=staff_membership,
+            business_unit=None,
+            template_title="Flash task",
+            last_activity_at=now,
+        )
+
+
+def test_flash_todo_execution_shape(
+    establishment,
+    business_unit,
+    staff_membership,
+):
+    now = timezone.now()
+    execution = ChecklistExecution.objects.create(
+        checklist_template=None,
+        checklist_assignment=None,
+        execution_source=EXECUTION_SOURCE_FLASH_TODO,
+        establishment=establishment,
+        assigned_to=staff_membership,
+        business_unit=business_unit,
+        template_title="Flash task",
+        last_activity_at=now,
+    )
+    assert execution.execution_source == EXECUTION_SOURCE_FLASH_TODO
+    assert execution.checklist_template_id is None
+
+
+def test_multiple_active_template_executions_allowed(
+    establishment,
+    registered_template,
     staff_membership,
 ):
     now = timezone.now()
     ChecklistExecution.objects.create(
-        checklist_template=personal_template,
-        checklist_type=ChecklistExecution.ChecklistType.PERSONAL,
+        checklist_template=registered_template,
+        execution_source=EXECUTION_SOURCE_TEMPLATE,
         establishment=establishment,
         assigned_to=staff_membership,
-        template_title=personal_template.title,
-        status=ChecklistExecution.Status.DONE,
+        business_unit=registered_template.business_unit,
+        template_title=registered_template.title,
+        status=ChecklistExecution.Status.ASSIGNED,
         last_activity_at=now,
     )
     second = ChecklistExecution.objects.create(
-        checklist_template=personal_template,
-        checklist_type=ChecklistExecution.ChecklistType.PERSONAL,
+        checklist_template=registered_template,
+        execution_source=EXECUTION_SOURCE_TEMPLATE,
         establishment=establishment,
         assigned_to=staff_membership,
-        template_title=personal_template.title,
-        status=ChecklistExecution.Status.ASSIGNED,
+        business_unit=registered_template.business_unit,
+        template_title=registered_template.title,
+        status=ChecklistExecution.Status.IN_PROGRESS,
         last_activity_at=now,
     )
-    assert second.status == ChecklistExecution.Status.ASSIGNED
+    assert second.status == ChecklistExecution.Status.IN_PROGRESS
 
 
 def test_assignment_occurrence_idempotence_key(
     establishment,
-    shared_template,
+    registered_template,
     owner_membership,
     staff_membership,
 ):
     now = timezone.now()
     assignment = ChecklistAssignment.objects.create(
-        checklist_template=shared_template,
+        checklist_template=registered_template,
         establishment=establishment,
         assigned_to=staff_membership,
         assigned_by=owner_membership,
-        business_unit=shared_template.business_unit,
+        business_unit=registered_template.business_unit,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=1)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=1)[0],
+        end_at=stable_assignment_times(duration_hours=1)[1],
     )
     occurrence = now.date()
     ChecklistExecution.objects.create(
-        checklist_template=shared_template,
+        checklist_template=registered_template,
         checklist_assignment=assignment,
-        checklist_type=ChecklistExecution.ChecklistType.SHARED,
+        execution_source=EXECUTION_SOURCE_ASSIGNMENT,
         establishment=establishment,
         assigned_to=staff_membership,
         assigned_by=owner_membership,
-        business_unit=shared_template.business_unit,
-        template_title=shared_template.title,
+        business_unit=registered_template.business_unit,
+        template_title=registered_template.title,
         occurrence_date=occurrence,
         last_activity_at=now,
     )
     with pytest.raises(IntegrityError):
         ChecklistExecution.objects.create(
-            checklist_template=shared_template,
+            checklist_template=registered_template,
             checklist_assignment=assignment,
-            checklist_type=ChecklistExecution.ChecklistType.SHARED,
+            execution_source=EXECUTION_SOURCE_ASSIGNMENT,
             establishment=establishment,
             assigned_to=staff_membership,
             assigned_by=owner_membership,
-            business_unit=shared_template.business_unit,
-            template_title=shared_template.title,
+            business_unit=registered_template.business_unit,
+            template_title=registered_template.title,
             occurrence_date=occurrence,
             last_activity_at=now,
         )
 
 
-def test_task_execution_snapshot_fields(shared_execution):
+def test_task_execution_snapshot_fields(assignment_execution):
     task = ChecklistTaskTemplate.objects.create(
-        checklist_template=shared_execution.checklist_template,
+        checklist_template=assignment_execution.checklist_template,
         task="Inspect fridge",
         position=1,
     )
-    task_execution = shared_execution.task_executions.create(
+    task_execution = assignment_execution.task_executions.create(
         checklist_task_template=task,
         task=task.task,
         position=task.position,
@@ -236,9 +247,51 @@ def test_task_execution_snapshot_fields(shared_execution):
 def test_template_defaults_to_inactive(owner_membership, business_unit):
     template = ChecklistTemplate.objects.create(
         establishment=owner_membership.establishment,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         created_by=owner_membership,
         business_unit=business_unit,
         title="Draft checklist",
     )
     assert template.status == ChecklistTemplate.Status.INACTIVE
+
+
+def test_template_badge_defaults_to_todo(owner_membership, business_unit):
+    template = ChecklistTemplate.objects.create(
+        establishment=owner_membership.establishment,
+        created_by=owner_membership,
+        business_unit=business_unit,
+        title="New checklist",
+    )
+    assert template.badge == CHECKLIST_BADGE_TODO
+
+
+def test_template_can_set_badge_process(owner_membership, business_unit):
+    template = ChecklistTemplate.objects.create(
+        establishment=owner_membership.establishment,
+        created_by=owner_membership,
+        business_unit=business_unit,
+        title="Process checklist",
+        badge=CHECKLIST_BADGE_PROCESS,
+    )
+    assert template.badge == CHECKLIST_BADGE_PROCESS
+
+
+def test_assignment_execution_stores_execution_source(
+    establishment,
+    registered_template,
+    checklist_assignment,
+    staff_membership,
+    owner_membership,
+):
+    now = timezone.now()
+    execution = ChecklistExecution.objects.create(
+        checklist_template=registered_template,
+        checklist_assignment=checklist_assignment,
+        execution_source=EXECUTION_SOURCE_ASSIGNMENT,
+        establishment=establishment,
+        assigned_to=staff_membership,
+        assigned_by=owner_membership,
+        business_unit=registered_template.business_unit,
+        template_title=registered_template.title,
+        last_activity_at=now,
+    )
+    assert execution.execution_source == EXECUTION_SOURCE_ASSIGNMENT

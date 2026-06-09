@@ -50,13 +50,15 @@ describe('checklist-assignment-create-sticky-footer', () => {
   })
 })
 
-describe('checklist-template-detail-page shared assignments layout', () => {
+describe('checklist-template-detail-page assignments layout', () => {
   it('places assignments before tasks and uses a sticky create footer', () => {
     const source = readPage('checklist-template-detail-page.tsx')
 
     expect(source).toContain('createButtonPlacement="sticky"')
     expect(source).toContain('ChecklistAssignmentCreateStickyFooter')
-    expect(source).toContain('showStickyCreateFooter ? \'pb-40\' : \'pb-3\'')
+    expect(source).toContain('showStickyCreateFooter ? \'pb-40\' : \'pb-28\'')
     expect(source.indexOf('assignmentSection')).toBeLessThan(source.indexOf('tasksSection'))
+    expect(source).toContain('ChecklistTemplateUseSheet')
+    expect(source).not.toContain('personal-executions')
   })
 })

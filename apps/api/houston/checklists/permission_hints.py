@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from houston.checklists.constants import (
-    ACTIVE_EXECUTION_STATUSES,
     ASSIGNMENT_STATUS_ACTIVE,
-    CHECKLIST_TYPE_PERSONAL,
-    CHECKLIST_TYPE_SHARED,
     TEMPLATE_STATUS_ACTIVE,
     TEMPLATE_STATUS_INACTIVE,
 )
@@ -33,16 +30,14 @@ def _can_manage_template(
     membership: EstablishmentMembership,
     template: ChecklistTemplate,
 ) -> bool:
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        return checklist_permissions.can_manage_shared_template(membership, template)
-    return checklist_permissions.can_manage_personal_template(membership, template)
+    return checklist_permissions.can_manage_registered_template(membership, template)
 
 
 def _build_checklist_template_permission_hints_core(
     *,
     membership: EstablishmentMembership,
     template: ChecklistTemplate,
-    include_personal_execution_hint: bool,
+    include_launch_execution_hint: bool,
     reflect_delete_conflicts: bool,
 ) -> dict[str, bool]:
     can_manage = _can_manage_template(membership, template)
@@ -51,33 +46,25 @@ def _build_checklist_template_permission_hints_core(
     is_active = template.status == TEMPLATE_STATUS_ACTIVE
     is_inactive = template.status == TEMPLATE_STATUS_INACTIVE
 
-    can_delete = False
-    if template.checklist_type == CHECKLIST_TYPE_SHARED:
-        can_delete = checklist_permissions.can_delete_shared_checklist_template(
-            membership,
-            template,
-        )
-    else:
-        can_delete = checklist_permissions.can_manage_personal_template(membership, template)
-
+    can_delete = checklist_permissions.can_delete_registered_template(
+        membership,
+        template,
+    )
     if can_delete and reflect_delete_conflicts:
         can_delete = get_active_execution_for_template(template=template) is None
 
     can_create_assignment = (
-        template.checklist_type == CHECKLIST_TYPE_SHARED
-        and checklist_permissions.can_create_shared_assignment(membership, template)
+        checklist_permissions.can_create_checklist_assignment(membership, template)
         and is_active
         and has_tasks
     )
 
-    can_create_personal_execution = False
-    if include_personal_execution_hint:
-        can_create_personal_execution = (
-            template.checklist_type == CHECKLIST_TYPE_PERSONAL
-            and checklist_permissions.can_create_personal_execution(membership, template)
+    can_launch_execution = False
+    if include_launch_execution_hint:
+        can_launch_execution = (
+            checklist_permissions.can_launch_template_execution(membership, template)
             and is_active
             and has_tasks
-            and get_active_execution_for_template(template=template) is None
         )
 
     return {
@@ -87,7 +74,8 @@ def _build_checklist_template_permission_hints_core(
         "can_deactivate": can_manage and is_active,
         "can_delete": can_delete,
         "can_create_assignment": can_create_assignment,
-        "can_create_personal_execution": can_create_personal_execution,
+        "can_launch_execution": can_launch_execution,
+        "can_use_template": can_launch_execution,
     }
 
 
@@ -99,7 +87,7 @@ def build_checklist_template_list_permission_hints(
     return _build_checklist_template_permission_hints_core(
         membership=membership,
         template=template,
-        include_personal_execution_hint=False,
+        include_launch_execution_hint=False,
         reflect_delete_conflicts=False,
     )
 
@@ -112,7 +100,7 @@ def build_checklist_template_detail_permission_hints(
     return _build_checklist_template_permission_hints_core(
         membership=membership,
         template=template,
-        include_personal_execution_hint=True,
+        include_launch_execution_hint=True,
         reflect_delete_conflicts=True,
     )
 
@@ -123,12 +111,10 @@ def build_checklist_assignment_permission_hints(
     assignment: ChecklistAssignment,
 ) -> dict[str, bool]:
     is_active = assignment.status == ASSIGNMENT_STATUS_ACTIVE
-    can_manage = checklist_permissions.can_manage_shared_assignment(membership, assignment)
+    can_manage = checklist_permissions.can_manage_checklist_assignment(membership, assignment)
     can_deactivate = can_manage and is_active
     if can_deactivate:
-        can_deactivate = (
-            get_in_progress_execution_for_assignment(assignment=assignment) is None
-        )
+        can_deactivate = get_in_progress_execution_for_assignment(assignment=assignment) is None
     return {
         "can_update": can_manage and is_active,
         "can_deactivate": can_deactivate,
@@ -140,6 +126,8 @@ def build_checklist_execution_permission_hints(
     membership: EstablishmentMembership,
     execution: ChecklistExecution,
 ) -> dict[str, bool]:
+    from houston.checklists.constants import ACTIVE_EXECUTION_STATUSES
+
     is_active = execution.status in ACTIVE_EXECUTION_STATUSES
     return {
         "can_execute_tasks": is_active

@@ -27,7 +27,12 @@ from houston.checklists.services import (
     mark_task_done,
     update_checklist_assignment,
 )
-from houston.checklists.tests.conftest import add_task_template, assignment_schedule_from_datetime
+from houston.checklists.tests.conftest import (
+    add_task_template,
+    assignment_schedule_from_datetime,
+    stable_assignment_times,
+    stable_future_assignment_schedule,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import (
     create_business_unit,
@@ -53,11 +58,10 @@ def _scoped_staff_on_establishment(owner, business_unit):
     return staff
 
 
-def _active_shared_template(owner, business_unit):
+def _active_registered_template(owner, business_unit):
     template = create_checklist_template(
         establishment_id=owner.establishment_id,
         actor=owner,
-        checklist_type=ChecklistTemplate.ChecklistType.SHARED,
         title="Opening routine",
         business_unit_id=business_unit.id,
     )
@@ -71,19 +75,16 @@ def test_execution_feed_includes_checklist_item(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner,
         assigned_to_id=staff.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
 
@@ -107,18 +108,18 @@ def test_execution_feed_checklist_invisible_two_hours_before_start(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
-    start_at = timezone.now() + timezone.timedelta(hours=2)
+    template = _active_registered_template(owner, business_unit)
+    schedule = stable_future_assignment_schedule(start_hour=14, duration_hours=1)
     assignment = create_checklist_assignment(
         template=template,
         actor=owner,
         assigned_to_id=staff.id,
-        **assignment_schedule_from_datetime(start_at, duration_hours=1),
+        **schedule,
     )
     ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
     materialize_execution_from_assignment(
         assignment=assignment,
-        occurrence_date=start_at.date(),
+        occurrence_date=schedule["start_date"],
     )
 
     token = login(api_client, user=staff.user)
@@ -138,7 +139,7 @@ def test_execution_feed_checklist_visible_one_hour_before_start(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     start_at = timezone.now() + timezone.timedelta(hours=1)
     assignment = create_checklist_assignment(
         template=template,
@@ -169,7 +170,7 @@ def test_execution_feed_checklist_overdue_stays_visible(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     start_at = timezone.now() - timezone.timedelta(hours=3)
     assignment = create_checklist_assignment(
         template=template,
@@ -197,19 +198,16 @@ def test_execution_feed_checklist_disappears_when_done(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner,
         assigned_to_id=staff.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     execution = ChecklistExecution.objects.prefetch_related("task_executions").get(
         checklist_assignment=assignment,
@@ -234,19 +232,16 @@ def test_execution_feed_checklist_disappears_when_canceled(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     now = timezone.now()
     assignment = create_checklist_assignment(
         template=template,
         actor=owner,
         assigned_to_id=staff.id,
         start_date=now.date(),
-
         end_date=now.date(),
-
-        start_at=now.time().replace(microsecond=0),
-
-        end_at=(now + timezone.timedelta(hours=2)).time().replace(microsecond=0),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
     )
     execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
     cancel_checklist_execution(execution=execution, actor=owner)
@@ -270,7 +265,7 @@ def test_execution_feed_checklist_disappears_when_assignment_update_auto_cancels
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
     now = timezone.now()
     days_ahead = (0 - now.weekday()) % 7
     monday_start = datetime.combine(
@@ -322,14 +317,14 @@ OCCURRENCE_DATE = date(2026, 6, 9)
 
 def test_execution_feed_three_assignments_tuesday_scenario(api_client):
     """
-    Reproduces the real-world case: Pierre (staff), personal feed, 2026-06-09 after 13:30.
-    A1 and A2 (Tuesday) must appear; A3 (starts 2026-06-13, Wed/Thu) must not.
-  Uses GET execution-feed (same endpoint as UI).
+      Reproduces the real-world case: Pierre (staff), personal feed, 2026-06-09 after 13:30.
+      A1 and A2 (Tuesday) must appear; A3 (starts 2026-06-13, Wed/Thu) must not.
+    Uses GET execution-feed (same endpoint as UI).
     """
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
 
     assignment_one = create_checklist_assignment(
         template=template,
@@ -427,9 +422,7 @@ def test_execution_feed_three_assignments_tuesday_scenario(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    checklist_entries = [
-        item for item in body["items"] if item["item_type"] == "checklist"
-    ]
+    checklist_entries = [item for item in body["items"] if item["item_type"] == "checklist"]
     assert len(checklist_entries) == 2
     checklist_ids = {entry["checklist"]["id"] for entry in checklist_entries}
     execution_ids = {
@@ -460,7 +453,7 @@ def test_execution_feed_keeps_checklists_when_actions_fill_page(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
-    template = _active_shared_template(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
 
     stale = SCENARIO_NOW - timezone.timedelta(hours=5)
     with patch.object(timezone, "now", return_value=stale):
@@ -515,9 +508,7 @@ def test_execution_feed_keeps_checklists_when_actions_fill_page(api_client):
 
     assert response.status_code == 200
     body = response.json()
-    checklist_entries = [
-        item for item in body["items"] if item["item_type"] == "checklist"
-    ]
+    checklist_entries = [item for item in body["items"] if item["item_type"] == "checklist"]
     action_entries = [item for item in body["items"] if item["item_type"] == "action"]
     assert len(checklist_entries) == 2
     assert len(action_entries) == 23

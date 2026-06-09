@@ -115,9 +115,7 @@ def test_draft_update_accepts_business_unit_without_subjects(
     assert updated.payload["activity_subjects"] == []
 
 
-def test_draft_accepts_business_unit_without_unit_type(
-    onboarding_session, owner, imported_catalog
-):
+def test_draft_accepts_business_unit_without_unit_type(onboarding_session, owner, imported_catalog):
     payload = draft_manual_v2_payload_bu_only()
     sanitized = validate_onboarding_proposal_payload(
         payload,
@@ -127,9 +125,7 @@ def test_draft_accepts_business_unit_without_unit_type(
     assert "unit_type" not in sanitized["business_units"][0]
 
 
-def test_submit_rejects_business_unit_without_subjects(
-    onboarding_session, owner, imported_catalog
-):
+def test_submit_rejects_business_unit_without_subjects(onboarding_session, owner, imported_catalog):
     payload = draft_manual_v2_payload_bu_only()
     payload["business_units"][0]["unit_type"] = "dedicated"
     proposal = create_manual_onboarding_proposal(
@@ -142,8 +138,7 @@ def test_submit_rejects_business_unit_without_subjects(
         submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
 
     assert any(
-        error.get("code") == "business_unit_without_subjects"
-        for error in exc_info.value.errors
+        error.get("code") == "business_unit_without_subjects" for error in exc_info.value.errors
     )
 
 
@@ -180,15 +175,10 @@ def test_submit_rejects_business_unit_without_unit_type(
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
         submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
 
-    assert any(
-        error.get("code") == "invalid_unit_type"
-        for error in exc_info.value.errors
-    )
+    assert any(error.get("code") == "invalid_unit_type" for error in exc_info.value.errors)
 
 
-def test_submit_accepts_complete_manual_v2_payload(
-    onboarding_session, owner, imported_catalog
-):
+def test_submit_accepts_complete_manual_v2_payload(onboarding_session, owner, imported_catalog):
     proposal = create_manual_onboarding_proposal(
         session=onboarding_session,
         actor=owner,
@@ -250,9 +240,7 @@ def test_manual_v2_persists_business_unit_description(onboarding_session, owner,
     assert business_unit.description == "Chambres, étages et housekeeping"
 
 
-def test_manual_v2_persists_excluded_subject_keys(
-    onboarding_session, owner, imported_catalog
-):
+def test_manual_v2_persists_excluded_subject_keys(onboarding_session, owner, imported_catalog):
     payload = valid_manual_v2_payload()
     business_unit_client_key = payload["business_units"][0]["client_key"]
     payload["excluded_catalog_subject_keys"] = {
@@ -282,8 +270,7 @@ def test_manual_v2_rejects_orphan_excluded_subject_keys(
         validate_onboarding_proposal_payload(payload)
 
     assert any(
-        error.get("code") == "orphan_excluded_catalog_subject"
-        for error in exc_info.value.errors
+        error.get("code") == "orphan_excluded_catalog_subject" for error in exc_info.value.errors
     )
 
 
@@ -420,9 +407,7 @@ def test_client_key_stable_when_label_changes(onboarding_session, owner):
 
     payload["business_units"][0]["label"] = "Nom modifié"
     validate_onboarding_proposal_payload(payload)
-    assert (
-        payload["activity_subjects"][0]["business_unit_client_key"] == business_unit_client_key
-    )
+    assert payload["activity_subjects"][0]["business_unit_client_key"] == business_unit_client_key
 
 
 def test_remove_proposed_subject_before_submit(onboarding_session, owner):
@@ -475,9 +460,7 @@ def test_remove_proposed_subject_before_submit(onboarding_session, owner):
 def test_activation_blocked_without_business_unit(onboarding_session, owner, imported_catalog):
     apply_validated_manual_v2_proposal(session=onboarding_session, owner=owner)
     _invite_director(session=onboarding_session, owner=owner)
-    BusinessUnit.objects.filter(establishment=onboarding_session.establishment).update(
-        active=False
-    )
+    BusinessUnit.objects.filter(establishment=onboarding_session.establishment).update(active=False)
 
     readiness = compute_activation_readiness(session=onboarding_session)
 

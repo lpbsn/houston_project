@@ -6,30 +6,31 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ActionCreateAssigneeSection } from '@/features/actions/components/action-create-assignee-section'
+import { ActionCreateDeadlineSection } from '@/features/actions/components/action-create-deadline-section'
+import {
+  applyDeadlinePreset,
+  buildDueAtFromParts,
+  syncDeadlineFieldsFromDueAt,
+  type DeadlinePreset,
+} from '@/features/actions/lib/action-create-deadline'
+import type { ScopedUserSearchResult } from '@/features/actions/types'
 import { ChecklistBusinessUnitSelect } from '@/features/checklists/components/checklist-business-unit-select'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
 import {
   ChecklistTaskDraftEditor,
   createChecklistTaskDraft,
 } from '@/features/checklists/components/checklist-task-draft-editor'
-import { ChecklistsApiError } from '@/features/checklists/api'
-import {
-  useCreateChecklistTemplateWithTasksMutation,
-  useQuickCreatePersonalChecklistMutation,
-} from '@/features/checklists/hooks'
+import { useCreateRegisteredChecklistTemplateMutation } from '@/features/checklists/hooks'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
 import {
-  validatePersonalTemplateCreate,
-  validateSharedTemplateCreate,
+  validateRegisteredTemplateCreate,
   validateTask,
 } from '@/features/checklists/lib/checklist-form-validation'
-import type { ChecklistType } from '@/features/checklists/types'
+import type { ChecklistBadge } from '@/features/checklists/types'
+import { cn } from '@/lib/utils'
 
-type ChecklistTemplateCreatePageProps = {
-  checklistType: ChecklistType
-}
-
-export function ChecklistTemplateCreatePage({ checklistType }: ChecklistTemplateCreatePageProps) {
+export function ChecklistTemplateCreatePage() {
   const { navigate } = useAppRoute()
   const { activeMembership } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
@@ -37,35 +38,52 @@ export function ChecklistTemplateCreatePage({ checklistType }: ChecklistTemplate
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [businessUnitId, setBusinessUnitId] = useState('')
+  const [badge, setBadge] = useState<ChecklistBadge>('todo')
   const [tasks, setTasks] = useState([createChecklistTaskDraft()])
+  const [assignNow, setAssignNow] = useState(false)
+  const [assignedTo, setAssignedTo] = useState(activeMembership?.id ?? '')
+  const [selectedUser, setSelectedUser] = useState<ScopedUserSearchResult | null>(null)
+  const [hasDeadline, setHasDeadline] = useState(false)
+  const [selectedPreset, setSelectedPreset] = useState<DeadlinePreset | null>('2h')
+  const [limitDate, setLimitDate] = useState('')
+  const [limitHours, setLimitHours] = useState('')
+  const [limitMinutes, setLimitMinutes] = useState('')
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
-  const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null)
 
-  const sharedCreateMutation = useCreateChecklistTemplateWithTasksMutation(establishmentId ?? '')
-  const personalCreateMutation = useQuickCreatePersonalChecklistMutation(establishmentId ?? '')
+  const createMutation = useCreateRegisteredChecklistTemplateMutation(establishmentId ?? '')
 
   if (!establishmentId) {
     return null
   }
 
-  const isShared = checklistType === 'shared'
-  const isPending = isShared ? sharedCreateMutation.isPending : personalCreateMutation.isPending
+  function badgeButtonClass(isSelected: boolean): string {
+    return cn(
+      'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+      isSelected
+        ? 'bg-[#EEF2FF] text-[#1B4FD8]'
+        : 'bg-[#F5F4F0] text-[#555] hover:bg-[#EBEAE4]',
+    )
+  }
+
+  function handleAssigneeChange(membershipId: string, user: ScopedUserSearchResult) {
+    setAssignedTo(membershipId)
+    setSelectedUser(user)
+  }
 
   async function handleSubmit() {
-    const validationError = isShared
-      ? validateSharedTemplateCreate({ title, businessUnitId })
-      : validatePersonalTemplateCreate({ title })
+    const normalizedTasks = tasks.map((task) => task.task.trim()).filter(Boolean)
+    const validationError = validateRegisteredTemplateCreate({
+      title,
+      businessUnitId,
+      taskCount: normalizedTasks.length,
+      assignNow,
+      assignedTo,
+    })
 
     if (validationError) {
       setFeedback({ variant: 'error', message: validationError })
-      return
-    }
-
-    const normalizedTasks = tasks.map((task) => task.task.trim()).filter(Boolean)
-    if (normalizedTasks.length === 0) {
-      setFeedback({ variant: 'error', message: 'Ajoutez au moins une tâche.' })
       return
     }
 
@@ -77,34 +95,39 @@ export function ChecklistTemplateCreatePage({ checklistType }: ChecklistTemplate
       }
     }
 
-    setFeedback(null)
-    setActiveExecutionId(null)
+    let endAt: string | null = null
+    if (assignNow && hasDeadline) {
+      const hours = Number.parseInt(limitHours, 10)
+      const minutes = Number.parseInt(limitMinutes, 10)
+      const dueAt = buildDueAtFromParts(limitDate, hours, minutes)
+      if (!dueAt) {
+        setFeedback({ variant: 'error', message: 'Choisissez une échéance valide.' })
+        return
+      }
+      endAt = dueAt.toISOString()
+    }
 
-    const taskPayload = normalizedTasks.map((taskValue) => ({ task: taskValue }))
+    setFeedback(null)
 
     try {
-      if (isShared) {
-        await sharedCreateMutation.mutateAsync({
-          checklist_type: 'shared',
-          title: title.trim(),
-          description: description.trim(),
-          business_unit_id: businessUnitId,
-          tasks: taskPayload,
-        })
+      const result = await createMutation.mutateAsync({
+        title: title.trim(),
+        description: description.trim(),
+        business_unit_id: businessUnitId,
+        badge,
+        tasks: normalizedTasks.map((taskValue) => ({ task: taskValue })),
+        assign_now: assignNow,
+        assigned_to: assignNow ? assignedTo : null,
+        end_at: assignNow ? endAt : null,
+      })
+
+      if (assignNow && result.id) {
         navigate('/checklists', { replace: true })
         return
       }
 
-      const execution = await personalCreateMutation.mutateAsync({
-        title: title.trim(),
-        description: description.trim(),
-        tasks: taskPayload,
-      })
-      navigate(`/checklists/executions/${execution.id}`, { replace: true })
+      navigate(`/checklists/${result.id}`, { replace: true })
     } catch (error) {
-      if (error instanceof ChecklistsApiError && error.activeExecutionId) {
-        setActiveExecutionId(error.activeExecutionId)
-      }
       setFeedback({
         variant: 'error',
         message: resolveChecklistErrorMessage(error, 'La checklist n’a pas pu être créée.'),
@@ -116,24 +139,27 @@ export function ChecklistTemplateCreatePage({ checklistType }: ChecklistTemplate
     <div className="space-y-3 px-3 pb-28 pt-3">
       {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
 
-      {activeExecutionId ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 w-full rounded-xl border-[#E8E6DF]"
-          onClick={() => navigate(`/checklists/executions/${activeExecutionId}`)}
-        >
-          Ouvrir l&apos;exécution en cours
-        </Button>
-      ) : null}
+      <ChecklistBusinessUnitSelect
+        establishmentId={establishmentId}
+        selectedBusinessUnitId={businessUnitId}
+        onBusinessUnitChange={setBusinessUnitId}
+      />
 
-      {isShared ? (
-        <ChecklistBusinessUnitSelect
-          establishmentId={establishmentId}
-          selectedBusinessUnitId={businessUnitId}
-          onBusinessUnitChange={setBusinessUnitId}
-        />
-      ) : null}
+      <section className="space-y-2">
+        <TerrainSectionLabel>Badge</TerrainSectionLabel>
+        <div className="flex flex-wrap gap-2">
+          {(['todo', 'process'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={badgeButtonClass(badge === value)}
+              onClick={() => setBadge(value)}
+            >
+              {value === 'process' ? 'Process' : 'To-do'}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="space-y-1.5">
         <TerrainSectionLabel>Titre</TerrainSectionLabel>
@@ -141,7 +167,7 @@ export function ChecklistTemplateCreatePage({ checklistType }: ChecklistTemplate
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={isShared ? 'Ex. Ouverture cuisine' : 'Ex. Ma routine du matin'}
+            placeholder="Ex. Fermeture restaurant"
             className="border-0 bg-transparent p-0 text-[15px] shadow-none focus-visible:ring-0"
           />
         </TerrainCard>
@@ -161,16 +187,94 @@ export function ChecklistTemplateCreatePage({ checklistType }: ChecklistTemplate
 
       <ChecklistTaskDraftEditor tasks={tasks} onTasksChange={setTasks} />
 
+      <section className="space-y-2">
+        <button
+          type="button"
+          className={cn(
+            'flex min-h-11 w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left',
+            assignNow ? 'border-[#1B4FD8] bg-[#EEF4FF]' : 'border-[#E8E6DF] bg-[#F5F4F0]',
+          )}
+          onClick={() => setAssignNow((current) => !current)}
+        >
+          <span className="text-sm font-medium text-[#1a1a1a]">Assigner maintenant</span>
+          <span className="text-xs text-[#7D7B75]">{assignNow ? 'Oui' : 'Non'}</span>
+        </button>
+
+        {assignNow ? (
+          <div className="space-y-3">
+            <ActionCreateAssigneeSection
+              establishmentId={establishmentId}
+              businessUnitId={businessUnitId || undefined}
+              assignedTo={assignedTo}
+              selectedUser={selectedUser}
+              onAssignedToChange={handleAssigneeChange}
+            />
+            {!hasDeadline ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 w-full rounded-xl border-[#E8E6DF]"
+                onClick={() => {
+                  const initialDue = applyDeadlinePreset('2h', new Date())
+                  const synced = syncDeadlineFieldsFromDueAt(initialDue)
+                  setHasDeadline(true)
+                  setSelectedPreset('2h')
+                  setLimitDate(synced.limitDate)
+                  setLimitHours(synced.limitHours)
+                  setLimitMinutes(synced.limitMinutes)
+                }}
+              >
+                Ajouter une échéance
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <ActionCreateDeadlineSection
+                  selectedPreset={selectedPreset}
+                  limitDate={limitDate}
+                  limitHours={limitHours}
+                  limitMinutes={limitMinutes}
+                  onPresetChange={(preset) => {
+                    const next = applyDeadlinePreset(preset, new Date())
+                    const synced = syncDeadlineFieldsFromDueAt(next)
+                    setSelectedPreset(preset)
+                    setLimitDate(synced.limitDate)
+                    setLimitHours(synced.limitHours)
+                    setLimitMinutes(synced.limitMinutes)
+                  }}
+                  onLimitDateChange={(value) => {
+                    setLimitDate(value)
+                    setSelectedPreset(null)
+                  }}
+                  onLimitTimeChange={(hours, minutes) => {
+                    setLimitHours(hours)
+                    setLimitMinutes(minutes)
+                    setSelectedPreset(null)
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9 w-full text-sm text-[#7D7B75]"
+                  onClick={() => setHasDeadline(false)}
+                >
+                  Retirer l&apos;échéance
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </section>
+
       <Button
         type="button"
         className="h-11 w-full rounded-xl bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
-        disabled={isPending}
+        disabled={createMutation.isPending}
         onClick={() => void handleSubmit()}
       >
-        {isPending ? (
+        {createMutation.isPending ? (
           <LoaderCircle className="mr-2 h-4 w-4 animate-spin" aria-hidden />
         ) : null}
-        {isShared ? 'Créer la checklist' : 'Créer et démarrer'}
+        Créer la checklist
       </Button>
     </div>
   )

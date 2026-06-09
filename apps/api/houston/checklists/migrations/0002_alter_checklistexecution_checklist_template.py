@@ -5,15 +5,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('checklists', '0001_initial'),
+        ("checklists", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='checklistexecution',
-            name='checklist_template',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='executions', to='checklists.checklisttemplate'),
+            model_name="checklistexecution",
+            name="checklist_template",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="executions",
+                to="checklists.checklisttemplate",
+            ),
         ),
     ]

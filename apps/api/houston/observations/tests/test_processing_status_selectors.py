@@ -25,6 +25,7 @@ def _setup_pipeline_taxonomy(establishment):
         label="Maintenance",
     )
 
+
 pytestmark = pytest.mark.django_db
 
 

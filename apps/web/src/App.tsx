@@ -54,16 +54,6 @@ import { ChecklistTemplateCreatePage } from '@/features/checklists/pages/checkli
 import { ChecklistTemplateDetailPage } from '@/features/checklists/pages/checklist-template-detail-page'
 import { ReportPage } from '@/features/observations/pages/report-page'
 
-function ChecklistHubRedirect() {
-  const { navigate } = useAppRoute()
-
-  useEffect(() => {
-    navigate('/checklists', { replace: true })
-  }, [navigate])
-
-  return null
-}
-
 function App() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
@@ -99,8 +89,6 @@ function App() {
           route.path === '/profile' ||
           route.path === '/team/invite' ||
           route.path === '/checklists' ||
-          route.path === '/checklists/shared' ||
-          route.path === '/checklists/personal' ||
           route.path === '/pending-onboarding' ||
           route.path === '/onboarding' ||
           route.path === '/select-establishment' ||
@@ -257,16 +245,11 @@ function App() {
     }
 
     if (route.kind === 'checklist-template-create') {
-      return <ChecklistTemplateCreatePage checklistType={route.checklistType} />
+      return <ChecklistTemplateCreatePage />
     }
 
     if (route.kind === 'checklist-template-detail') {
-      return (
-        <ChecklistTemplateDetailPage
-          checklistType={route.checklistType}
-          templateId={route.templateId}
-        />
-      )
+      return <ChecklistTemplateDetailPage templateId={route.templateId} />
     }
 
     if (route.kind === 'checklist-execution-create') {
@@ -333,10 +316,6 @@ function App() {
 
     if (route.path === '/checklists') {
       return <ChecklistHubPage onNavigate={navigate} />
-    }
-
-    if (route.path === '/checklists/shared' || route.path === '/checklists/personal') {
-      return <ChecklistHubRedirect />
     }
 
     if (route.path === '/onboarding') {

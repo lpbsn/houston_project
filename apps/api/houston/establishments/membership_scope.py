@@ -163,8 +163,7 @@ def build_action_visibility_scope_q(*, membership: EstablishmentMembership) -> Q
     if not bu_ids:
         return None
     linked_q = Q(signal_id__isnull=False) & (
-        Q(affected_business_unit_id__in=bu_ids)
-        | Q(responsible_business_unit_id__in=bu_ids)
+        Q(affected_business_unit_id__in=bu_ids) | Q(responsible_business_unit_id__in=bu_ids)
     )
     free_q = Q(signal_id__isnull=True) & Q(responsible_business_unit_id__in=bu_ids)
     return linked_q | free_q
@@ -203,14 +202,11 @@ def _resolve_scope_input_to_business_unit(
     establishment: Establishment,
     scope_input: MembershipScopeInput,
 ) -> BusinessUnit:
-    business_unit = (
-        BusinessUnit.objects.filter(
-            id=scope_input.scope_id,
-            establishment=establishment,
-            active=True,
-        )
-        .first()
-    )
+    business_unit = BusinessUnit.objects.filter(
+        id=scope_input.scope_id,
+        establishment=establishment,
+        active=True,
+    ).first()
     if business_unit is None:
         raise InvalidMembershipScopeAssignmentError(
             "Business unit scope must be active and belong to the same establishment."
@@ -243,9 +239,7 @@ def parse_membership_scope_inputs(
         scope_type = item.get("scope_type")
         scope_id = item.get("scope_id")
         if scope_type != MembershipScopeType.BUSINESS_UNIT:
-            raise InvalidMembershipScopeAssignmentError(
-                "Scope type must be business_unit."
-            )
+            raise InvalidMembershipScopeAssignmentError("Scope type must be business_unit.")
         if scope_id is None:
             raise InvalidMembershipScopeAssignmentError("Each scope must include scope_id.")
         try:

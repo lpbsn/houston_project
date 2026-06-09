@@ -78,11 +78,14 @@ def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
         establishment_id=membership.establishment_id,
         candidate=candidate,
     )
-    assert resolve_signal_location_text(
-        candidate=candidate,
-        resolved=resolved,
-        observation=observation,
-    ) == "Chambres"
+    assert (
+        resolve_signal_location_text(
+            candidate=candidate,
+            resolved=resolved,
+            observation=observation,
+        )
+        == "Chambres"
+    )
 
 
 def test_resolve_signal_location_text_uses_candidate_when_no_unit():

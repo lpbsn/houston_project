@@ -25,10 +25,6 @@ export type AppPath =
   | '/profile'
   | '/team/invite'
   | '/checklists'
-  | '/checklists/shared'
-  | '/checklists/personal'
-
-export type ChecklistRouteType = 'shared' | 'personal'
 
 export type AppRoute =
   | { kind: 'static'; path: AppPath }
@@ -36,8 +32,8 @@ export type AppRoute =
   | { kind: 'signal-action-create'; signalId: string }
   | { kind: 'action-create' }
   | { kind: 'action-detail'; actionId: string }
-  | { kind: 'checklist-template-create'; checklistType: ChecklistRouteType }
-  | { kind: 'checklist-template-detail'; checklistType: ChecklistRouteType; templateId: string }
+  | { kind: 'checklist-template-create' }
+  | { kind: 'checklist-template-detail'; templateId: string }
   | { kind: 'checklist-execution-create' }
   | { kind: 'checklist-execution-detail'; executionId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
@@ -93,29 +89,18 @@ function parseChecklistRoute(pathname: string): AppRoute | null {
     }
   }
 
-  if (pathname === '/checklists/shared/new') {
-    return { kind: 'checklist-template-create', checklistType: 'shared' }
+  if (pathname === '/checklists/new') {
+    return { kind: 'checklist-template-create' }
   }
 
-  if (pathname === '/checklists/personal/new') {
-    return { kind: 'checklist-template-create', checklistType: 'personal' }
-  }
-
-  const sharedDetailMatch = pathname.match(/^\/checklists\/shared\/([^/]+)$/)
-  if (sharedDetailMatch?.[1]) {
-    return {
-      kind: 'checklist-template-detail',
-      checklistType: 'shared',
-      templateId: sharedDetailMatch[1],
-    }
-  }
-
-  const personalDetailMatch = pathname.match(/^\/checklists\/personal\/([^/]+)$/)
-  if (personalDetailMatch?.[1]) {
-    return {
-      kind: 'checklist-template-detail',
-      checklistType: 'personal',
-      templateId: personalDetailMatch[1],
+  const detailMatch = pathname.match(/^\/checklists\/([^/]+)$/)
+  if (detailMatch?.[1]) {
+    const segment = detailMatch[1]
+    if (!['executions', 'new', 'shared', 'personal'].includes(segment)) {
+      return {
+        kind: 'checklist-template-detail',
+        templateId: segment,
+      }
     }
   }
 
@@ -193,9 +178,7 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/chat' ||
     pathname === '/profile' ||
     pathname === '/team/invite' ||
-    pathname === '/checklists' ||
-    pathname === '/checklists/shared' ||
-    pathname === '/checklists/personal'
+    pathname === '/checklists'
   ) {
     return { kind: 'static', path: pathname as AppPath }
   }

@@ -191,9 +191,7 @@ def test_owner_can_create_update_and_deactivate_runtime_taxonomy(api_client):
         **auth_headers(access_token),
     )
     assert deactivate_subject_response.status_code == 200
-    assert (
-        ActivitySubject.objects.get(id=subject_id).active is False
-    )
+    assert ActivitySubject.objects.get(id=subject_id).active is False
 
     deactivate_bu_response = api_client.post(
         business_unit_deactivate_url(establishment.id, restaurant_id),

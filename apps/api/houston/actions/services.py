@@ -114,13 +114,9 @@ def create_action(
     responsible_business_unit_id: uuid.UUID | None = None,
 ) -> Action:
     if signal_id is not None and responsible_business_unit_id is not None:
-        raise ActionValidationError(
-            "Cannot provide both signal and responsible_business_unit_id."
-        )
+        raise ActionValidationError("Cannot provide both signal and responsible_business_unit_id.")
     if signal_id is None and responsible_business_unit_id is None:
-        raise ActionValidationError(
-            "Either signal or responsible_business_unit_id is required."
-        )
+        raise ActionValidationError("Either signal or responsible_business_unit_id is required.")
 
     assigned_to = _validate_membership_in_establishment(
         establishment_id=establishment_id,
@@ -206,9 +202,7 @@ def accept_action(*, action: Action) -> Action:
     action.status = Action.Status.IN_PROGRESS
     action.accepted_at = now
     action.last_activity_at = now
-    action.save(
-        update_fields=["status", "accepted_at", "last_activity_at", "updated_at"]
-    )
+    action.save(update_fields=["status", "accepted_at", "last_activity_at", "updated_at"])
     return action
 
 
@@ -242,9 +236,7 @@ def validate_action(*, action: Action) -> Action:
     action.status = Action.Status.DONE
     action.validated_at = now
     action.last_activity_at = now
-    action.save(
-        update_fields=["status", "validated_at", "last_activity_at", "updated_at"]
-    )
+    action.save(update_fields=["status", "validated_at", "last_activity_at", "updated_at"])
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
     return action

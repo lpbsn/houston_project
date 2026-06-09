@@ -156,11 +156,7 @@ def test_feed_reporter_tiebreaker_observation_id(api_client):
 
     first_obs, second_obs = (obs_a, obs_b) if obs_a.id < obs_b.id else (obs_b, obs_a)
     first_membership = membership if first_obs.id == obs_a.id else alice_membership
-    expected_name = (
-        "Marie R."
-        if first_membership.user.last_name == "Renaud"
-        else "Alice L."
-    )
+    expected_name = "Marie R." if first_membership.user.last_name == "Renaud" else "Alice L."
 
     SignalSourceObservation.objects.create(
         signal=signal,
