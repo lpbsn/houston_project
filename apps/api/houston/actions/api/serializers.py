@@ -65,9 +65,26 @@ class ActionFeedItemSerializer(serializers.Serializer):
     permission_hints = ActionPermissionHintsSerializer()
 
 
+class ChecklistFeedItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    checklist_type = serializers.CharField()
+    status = serializers.CharField()
+    end_at = serializers.DateTimeField(allow_null=True)
+    is_overdue = serializers.BooleanField()
+    business_unit_key = serializers.CharField(allow_null=True)
+    business_unit_label = serializers.CharField(allow_null=True)
+    assigned_to_display_name = serializers.CharField()
+    last_activity_at = serializers.DateTimeField()
+    created_at = serializers.DateTimeField()
+    progress_treated_count = serializers.IntegerField()
+    progress_total_count = serializers.IntegerField()
+
+
 class ExecutionFeedItemSerializer(serializers.Serializer):
     item_type = serializers.CharField()
-    action = ActionFeedItemSerializer()
+    action = ActionFeedItemSerializer(required=False, allow_null=True)
+    checklist = ChecklistFeedItemSerializer(required=False, allow_null=True)
 
 
 class ExecutionFeedResponseSerializer(serializers.Serializer):

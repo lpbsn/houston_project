@@ -2,6 +2,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -151,6 +153,19 @@ CELERY_RESULT_BACKEND = env_str("CELERY_RESULT_BACKEND", "redis://redis:6379/2")
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
+
+# Celery Beat (first scheduled job in Houston). Requires a `celery-beat` process;
+# lazy checklist materialization on execution-feed read remains the primary safety net.
+CELERY_BEAT_SCHEDULE = {
+    "materialize-checklist-assignments-horizon": {
+        "task": "houston.checklists.tasks.materialize_checklist_assignments_horizon_task",
+        "schedule": crontab(
+            hour=env_int("HOUSTON_CHECKLIST_HORIZON_BEAT_HOUR_UTC", 3),
+            minute=env_int("HOUSTON_CHECKLIST_HORIZON_BEAT_MINUTE_UTC", 0),
+        ),
+        "kwargs": {"establishment_id": None},
+    },
+}
 
 # Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.
 AUTH_THROTTLE_SCOPE_LOGIN = "auth_login"

@@ -208,6 +208,17 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               Inviter un membre
             </Button>
           ) : null}
+
+          {activeMembership && role ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full rounded-xl border-[#E8E6DF]"
+              onClick={() => onNavigate?.('/checklists')}
+            >
+              Gérer les checklists
+            </Button>
+          ) : null}
         </TerrainCard>
 
         {onSignOut ? (

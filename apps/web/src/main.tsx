@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App'
+import { AppRouteProvider } from '@/app/app-routes'
 import { AuthProvider } from '@/app/auth-provider'
 import { queryClient } from '@/lib/query-client'
 import './styles/globals.css'
@@ -19,7 +20,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <App />
+        <AppRouteProvider>
+          <App />
+        </AppRouteProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

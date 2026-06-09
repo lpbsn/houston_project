@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -10,6 +11,14 @@ import {
   TerrainOrDivider,
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import {
+  checklistsQueryKeys,
+  createChecklistTaskObservation,
+} from '@/features/checklists/api'
+import {
+  parseChecklistReportingContext,
+  type ChecklistReportingContext,
+} from '@/features/checklists/lib/checklist-reporting-context'
 import { ReportPhotosSection, type ReportPhotoDraft } from '@/features/observations/components/report-photos-section'
 import { ReportSuccessPanel } from '@/features/observations/components/report-success-panel'
 import { ReportVoiceSection } from '@/features/observations/components/report-voice-section'
@@ -51,10 +60,20 @@ function getErrorMessage(error: unknown): string {
   return 'Une erreur est survenue.'
 }
 
+function getChecklistContextFromLocation(): ChecklistReportingContext | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  return parseChecklistReportingContext(window.location.search)
+}
+
 export function ReportPage({ onNavigate }: ReportPageProps) {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
+  const queryClient = useQueryClient()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+
+  const checklistContext = useMemo(() => getChecklistContextFromLocation(), [])
 
   const [text, setText] = useState('')
   const [photos, setPhotos] = useState<ReportPhotoDraft[]>([])
@@ -71,6 +90,39 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   const transcribeMutation = useTranscribeAudioMutation(establishmentId)
   const submitMutation = useSubmitObservationMutation(establishmentId)
 
+  const checklistSubmitMutation = useMutation({
+    mutationFn: async (input: {
+      taskExecutionId: string
+      text: string
+      temporaryUploadIds: string[]
+    }) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return createChecklistTaskObservation(establishmentId, input.taskExecutionId, {
+        text: input.text,
+        temporary_upload_ids:
+          input.temporaryUploadIds.length > 0 ? input.temporaryUploadIds : undefined,
+      })
+    },
+    onSuccess: () => {
+      if (!establishmentId || !checklistContext) {
+        return
+      }
+      void queryClient.invalidateQueries({
+        queryKey: checklistsQueryKeys.executionDetail(
+          establishmentId,
+          checklistContext.checklistExecutionId,
+        ),
+      })
+      void queryClient.invalidateQueries({ queryKey: checklistsQueryKeys.all })
+    },
+  })
+
+  const isSubmitPending = checklistContext
+    ? checklistSubmitMutation.isPending
+    : submitMutation.isPending
+
   const processingQuery = useObservationProcessingStatusQuery(
     establishmentId,
     submittedObservationId,
@@ -84,7 +136,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     textLength <= OBSERVATION_TEXT_MAX_LENGTH &&
     photos.every((photo) => photo.status === 'ready') &&
     !uploadMutation.isPending &&
-    !submitMutation.isPending &&
+    !isSubmitPending &&
     !isTranscribing
 
   const photoHint = useMemo(() => {
@@ -220,14 +272,25 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
       return
     }
 
+    const uploadIds = photos
+      .map((photo) => photo.uploadId)
+      .filter((id): id is string => Boolean(id))
+
     try {
-      const response = await submitMutation.mutateAsync({
-        text: trimmedText,
-        temporary_upload_ids: photos
-          .map((photo) => photo.uploadId)
-          .filter((id): id is string => Boolean(id)),
-      })
-      setSubmittedObservationId(response.id)
+      if (checklistContext) {
+        const response = await checklistSubmitMutation.mutateAsync({
+          taskExecutionId: checklistContext.checklistTaskExecutionId,
+          text: trimmedText,
+          temporaryUploadIds: uploadIds,
+        })
+        setSubmittedObservationId(response.observation_id)
+      } else {
+        const response = await submitMutation.mutateAsync({
+          text: trimmedText,
+          temporary_upload_ids: uploadIds,
+        })
+        setSubmittedObservationId(response.id)
+      }
       setText('')
       setPhotos([])
     } catch (error) {
@@ -240,6 +303,13 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
       return
     }
     onNavigate('/signals')
+  }
+
+  const handleReturnToChecklist = () => {
+    if (!onNavigate || !checklistContext) {
+      return
+    }
+    onNavigate(`/checklists/executions/${checklistContext.checklistExecutionId}`)
   }
 
   const pageShell = (content: React.ReactNode) => (
@@ -270,6 +340,9 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
         }
         showSignalFeedLink={showSignalFeedLink}
         onGoToSignalFeed={onNavigate ? handleGoToSignalFeed : undefined}
+        onReturnToChecklist={
+          checklistContext && onNavigate ? handleReturnToChecklist : undefined
+        }
         onNewObservation={() => setSubmittedObservationId(null)}
       />,
     )
@@ -277,11 +350,22 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
 
   return pageShell(
     <>
+      {checklistContext ? (
+        <TerrainCard className="border-[#E8E6DF] bg-[#FAFAF8]">
+          <p className={cn('text-sm font-medium', terrain.foreground)}>
+            Signalement lié à une checklist
+          </p>
+          <p className={cn('mt-1 text-xs', terrain.muted)}>
+            Votre signalement sera rattaché à la tâche en cours.
+          </p>
+        </TerrainCard>
+      ) : null}
+
       <ReportVoiceSection
         shouldReduceMotion={shouldReduceMotion}
         isRecording={isRecording}
         isTranscribing={isTranscribing}
-        isSubmitPending={submitMutation.isPending}
+        isSubmitPending={isSubmitPending}
         latestTranscript={latestTranscript}
         onStartRecording={() => void handleStartRecording()}
         onStopRecording={handleStopRecording}
@@ -326,7 +410,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
         disabled={!canSubmit}
         onClick={() => void handleSubmit()}
       >
-        {submitMutation.isPending ? (
+        {isSubmitPending ? (
           <>
             <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
             Envoi...

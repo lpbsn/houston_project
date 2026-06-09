@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  type PropsWithChildren,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 
 export type AppPath =
   | '/'
@@ -16,6 +24,11 @@ export type AppPath =
   | '/chat'
   | '/profile'
   | '/team/invite'
+  | '/checklists'
+  | '/checklists/shared'
+  | '/checklists/personal'
+
+export type ChecklistRouteType = 'shared' | 'personal'
 
 export type AppRoute =
   | { kind: 'static'; path: AppPath }
@@ -23,6 +36,10 @@ export type AppRoute =
   | { kind: 'signal-action-create'; signalId: string }
   | { kind: 'action-create' }
   | { kind: 'action-detail'; actionId: string }
+  | { kind: 'checklist-template-create'; checklistType: ChecklistRouteType }
+  | { kind: 'checklist-template-detail'; checklistType: ChecklistRouteType; templateId: string }
+  | { kind: 'checklist-execution-create' }
+  | { kind: 'checklist-execution-detail'; executionId: string }
   | { kind: 'invitation'; token: string }
   | { kind: 'unknown'; pathname: string }
 
@@ -60,6 +77,48 @@ function parseSignalDetailId(pathname: string): string | null {
     return null
   }
   return segments[0] || null
+}
+
+function parseChecklistRoute(pathname: string): AppRoute | null {
+  if (pathname === '/checklists/executions/new') {
+    return { kind: 'checklist-execution-create' }
+  }
+
+  const executionDetailMatch = pathname.match(/^\/checklists\/executions\/([^/]+)$/)
+  if (executionDetailMatch?.[1]) {
+    return {
+      kind: 'checklist-execution-detail',
+      executionId: executionDetailMatch[1],
+    }
+  }
+
+  if (pathname === '/checklists/shared/new') {
+    return { kind: 'checklist-template-create', checklistType: 'shared' }
+  }
+
+  if (pathname === '/checklists/personal/new') {
+    return { kind: 'checklist-template-create', checklistType: 'personal' }
+  }
+
+  const sharedDetailMatch = pathname.match(/^\/checklists\/shared\/([^/]+)$/)
+  if (sharedDetailMatch?.[1]) {
+    return {
+      kind: 'checklist-template-detail',
+      checklistType: 'shared',
+      templateId: sharedDetailMatch[1],
+    }
+  }
+
+  const personalDetailMatch = pathname.match(/^\/checklists\/personal\/([^/]+)$/)
+  if (personalDetailMatch?.[1]) {
+    return {
+      kind: 'checklist-template-detail',
+      checklistType: 'personal',
+      templateId: personalDetailMatch[1],
+    }
+  }
+
+  return null
 }
 
 function parseActionDetailId(pathname: string): string | null {
@@ -102,6 +161,11 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'action-detail', actionId }
   }
 
+  const checklistRoute = parseChecklistRoute(pathname)
+  if (checklistRoute) {
+    return checklistRoute
+  }
+
   if (
     pathname === '/' ||
     pathname === '/login' ||
@@ -117,7 +181,10 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/execution' ||
     pathname === '/chat' ||
     pathname === '/profile' ||
-    pathname === '/team/invite'
+    pathname === '/team/invite' ||
+    pathname === '/checklists' ||
+    pathname === '/checklists/shared' ||
+    pathname === '/checklists/personal'
   ) {
     return { kind: 'static', path: pathname as AppPath }
   }
@@ -129,7 +196,14 @@ function currentBrowserHref(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
 }
 
-export function useAppRoute() {
+type AppRouteContextValue = {
+  route: AppRoute
+  navigate: (href: string, options?: { replace?: boolean }) => void
+}
+
+const AppRouteContext = createContext<AppRouteContextValue | null>(null)
+
+export function AppRouteProvider({ children }: PropsWithChildren) {
   const [route, setRoute] = useState<AppRoute>(() =>
     parseAppRoute(currentBrowserHref()),
   )
@@ -157,5 +231,13 @@ export function useAppRoute() {
     setRoute(parseAppRoute(href))
   }, [])
 
-  return { route, navigate }
+  return createElement(AppRouteContext.Provider, { value: { route, navigate } }, children)
+}
+
+export function useAppRoute() {
+  const context = useContext(AppRouteContext)
+  if (!context) {
+    throw new Error('useAppRoute must be used within an AppRouteProvider.')
+  }
+  return context
 }

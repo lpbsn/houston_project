@@ -1,8 +1,8 @@
 # Checklist Domain
 
 Status: authoritative
-Last reviewed: 2026-06-08
-Implementation status: not_started
+Last reviewed: 2026-06-09
+Implementation status: implemented
 
 Historical reference only (not active product truth): [`docs/archive/codex/houston_checklist_domain.md`](../../archive/codex/houston_checklist_domain.md).
 
@@ -35,9 +35,9 @@ Checklist does not own:
 - `ChecklistTaskExecution` lifecycle: `pending` | `done` | `skipped` | `observation_created`.
 - `ChecklistTaskTemplate` with required `position` and MVP reorder support.
 - Shared templates scoped to a required `business_unit`; Personal templates with nullable `business_unit`.
-- Shared scheduling via `ChecklistAssignment`: required `start_at`, required `due_at` (`due_at > start_at`), optional weekly `recurrence_days`.
-- Execution materialization from assignments; `visible_from = start_at - 1 hour` on shared executions.
-- Personal: no `ChecklistAssignment`, no recurrence, no required `due_at`; one active execution per personal template.
+- Shared scheduling via `ChecklistAssignment`: required period (`start_date`, `end_date`), required daily times (`start_at`, `end_at` with `end_at > start_at` on the same day — no overnight slots), optional weekly `recurrence_days`.
+- Execution materialization from assignments; `visible_from = execution.start_at - 1 hour` on shared executions.
+- Personal: no `ChecklistAssignment`, no recurrence, no required `end_at`; one active execution per personal template.
 - Snapshot at execution materialization (template + tasks + assignment fields).
 - Backend-authorized task transitions: `mark_done`, `skip`, `create_observation_from_task`.
 - No `start` endpoint — automatic `assigned` → `in_progress` on first user task event.
@@ -46,16 +46,16 @@ Checklist does not own:
 - Concurrent execution rules: multiple active shared executions allowed; one active personal execution per personal template.
 - Inactive template blocks new assignments/executions; existing executions unchanged.
 - Empty checklist rules: no activation or execution without at least one task.
-- Checklist executions in Execution Feed (Phase 7 target — not implemented today).
+- Checklist executions in Execution Feed (polymorphic `item_type: checklist`).
 - **Profil → Gérer les checklists** for template/assignment management; **Execution Feed `+`** for quick Personal Checklist creation only.
 - No Checklist comments in MVP.
 
 Current code truth:
-- `apps/api/houston/checklists/` contains only the Django app stub (no `models.py`, no services, no API).
-- `apps/api/schema.yml` contains no checklist endpoints.
-- `GET execution-feed/` returns Action items only (`item_type: "action"`).
-- Frontend has disabled checklist placeholders only (`execution-checklist-placeholder-card.tsx`).
-- Profil has no « Gérer les checklists » entry yet ([`profile-page.tsx`](../../../apps/web/src/features/auth/pages/profile-page.tsx)).
+- Backend: [`apps/api/houston/checklists/`](../../../apps/api/houston/checklists/) (models, services, selectors, materialization, permissions, `permission_hints`, REST API).
+- OpenAPI: checklist endpoints implemented in [`apps/api/schema.yml`](../../../apps/api/schema.yml).
+- Execution Feed merges actions and checklist executions.
+- Frontend: [`apps/web/src/features/checklists/`](../../../apps/web/src/features/checklists/) (hub, template detail, assignment sheets, execution detail); feed card: [`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx).
+- Profil entry: « Gérer les checklists » on [`profile-page.tsx`](../../../apps/web/src/features/auth/pages/profile-page.tsx).
 
 ## 3. Décisions définitives MVP
 
@@ -65,7 +65,7 @@ Current code truth:
 | --- | --- | --- |
 | `ChecklistTemplate` | `active`, `inactive` | `draft`, `archived` |
 | `ChecklistAssignment` | `active`, `inactive` | `draft`, `archived` |
-| `ChecklistExecution` | `assigned`, `in_progress`, `done`, `canceled` | `open`, `completed` |
+| `ChecklistExecution` | `assigned`, `in_progress`, `done`, `canceled` | `open`, `completed`, `inactive`, `archived` |
 | `ChecklistTaskExecution` | `pending`, `done`, `skipped`, `observation_created` | — |
 
 ### 3.2 Complétion
@@ -103,9 +103,11 @@ ChecklistAssignment          # shared only
   assigned_to
   assigned_by
   business_unit              # snapshot from template
-  start_at                   # required
-  due_at                     # required; due_at > start_at
-  recurrence_days            # nullable list; empty/null = one-shot
+  start_date                 # required; period start (DateField)
+  end_date                   # required; period end (DateField); end_date >= start_date
+  start_at                   # required; daily start time (TimeField)
+  end_at                     # required; daily end time (TimeField); end_at > start_at (no overnight)
+  recurrence_days            # nullable list; empty/null = one-shot (end_date = start_date)
   status = active | inactive
 
 ChecklistExecution
@@ -115,9 +117,10 @@ ChecklistExecution
   assigned_to
   assigned_by                # nullable (null for personal self-run)
   business_unit              # snapshot: required if shared; null if personal
-  start_at                   # snapshot; nullable for personal
+  occurrence_date            # nullable; idempotence key for recurring occurrences
+  start_at                   # snapshot datetime; nullable for personal
+  end_at                     # snapshot datetime; nullable for personal
   visible_from               # snapshot; shared = start_at - 1h; null for personal (= visible immediately)
-  due_at                     # snapshot; nullable for personal
 ```
 
 ### 3.5 BusinessUnit / RBAC
@@ -131,29 +134,50 @@ Use `MembershipScope` on **BusinessUnit** only. Do not use `operational_domains`
 - Manager: see and manage shared templates, assignments, and executions only when `business_unit` is covered by their `MembershipScope`.
 - Staff: do **not** see shared template catalogue, assignments, or management UI; may only see and execute shared `ChecklistExecution` items assigned to them.
 
+**Who manages assignments vs who can be assigned (distinct rules):**
+
+| Concern | Owner / Director | Manager | Staff |
+|--------|------------------|---------|-------|
+| Create or update a shared `ChecklistAssignment` | yes (all BUs) | yes, if template `business_unit` is in their `MembershipScope` | no |
+| Be selected as `assigned_to` on a shared assignment | yes (implicit all-BU access in establishment) | yes, if template `business_unit` is in their `MembershipScope` | yes, if template `business_unit` is in their `MembershipScope` |
+
+- Backend enforces assignee eligibility on create and when `assigned_to` changes on update (`400` if the member does not cover the template BU).
+- User search for assignee pickers may pass `business_unit_id` on `GET /api/v1/establishments/{establishment_id}/users/search/` to list only active members covering that BU (generic establishments filter; not checklist-specific naming).
+- **Legacy tolerance (not the normal target rule):** an existing assignment may still display an assignee who no longer covers the BU, and schedule-only updates without changing `assigned_to` remain allowed. Any new assignment or assignee change must satisfy BU coverage.
+
 **Personal checklist:**
 - `ChecklistTemplate.business_unit` is **null**.
 - `ChecklistExecution.business_unit` is **null**.
 - Visible and manageable only by `created_by` / `assigned_to` (same member in MVP).
 - A member never sees another member's Personal Checklist Templates.
 
-### 3.6 Scheduling — `start_at`, `due_at`, `visible_from`
+### 3.6 Scheduling — period, daily times, `visible_from`
 
-**Shared `ChecklistAssignment`:**
-- `start_at` is **required**.
-- `due_at` is **required** and must satisfy `due_at > start_at`.
+**Establishment timezone (MVP):**
+- `Establishment.timezone` stores an IANA identifier (default `Europe/Paris` for the Mama Shelter Nice pilot).
+- `start_date`, `end_date`, `start_at`, and `end_at` on shared assignments are **establishment-local** calendar values.
+- `start_at` / `end_at` remain naive `TimeField` wall-clock times in the establishment timezone (not UTC, not user-browser offset).
+- Materialization combines `occurrence_date + start_at/end_at` in `Establishment.timezone`, producing aware `DateTimeField` snapshots stored in UTC by Django.
+- Lazy materialization and horizon windows use the **establishment-local calendar date** derived from `timezone.now()`, not raw UTC `date()`.
+
+**Shared `ChecklistAssignment` (schedule definition):**
+- **Period:** `start_date` and `end_date` (`DateField`) bound when occurrences may be materialized. `end_date >= start_date`.
+- **Daily times:** `start_at` and `end_at` (`TimeField`) define the per-occurrence window on each eligible day in establishment-local time. `end_at > start_at` on the same calendar day — **overnight slots are not supported** in MVP (e.g. `22:00 → 02:00` is rejected).
+- **Recurrence:** `recurrence_days` selects weekdays within the period. Empty or null ⇒ **one-shot** on `start_date` (`end_date` defaults to `start_date`).
 - Recurrence is **not** stored on `ChecklistExecution` — only on `ChecklistAssignment`.
+- An assignment is **not** auto-deleted after `end_date`; it remains `active` until explicitly retirée (`inactive`). Materialization simply stops producing new occurrences beyond `end_date`.
 
-**Shared `ChecklistExecution` (materialized):**
-- Copies `start_at`, `due_at` from assignment occurrence.
-- `visible_from = start_at - 1 hour`.
+**Shared `ChecklistExecution` (materialized occurrence):**
+- `occurrence_date` identifies the calendar day (establishment-local).
+- `start_at = combine(occurrence_date, assignment.start_at)` in `Establishment.timezone`; same for `end_at`.
+- `visible_from = execution.start_at - 1 hour`.
 - Appears in Execution Feed when `now >= visible_from` AND `status IN (assigned, in_progress)`.
-- **Overdue rule:** `due_at` does **not** remove an execution from the feed. An overdue execution remains visible while `assigned` or `in_progress`.
+- **Overdue rule:** `end_at` does **not** remove an execution from the feed. An overdue execution remains visible while `assigned` or `in_progress`.
 - Feed active exclusion: only `done` and `canceled`.
 
 **Personal:**
 - No `ChecklistAssignment`.
-- No required `due_at` in MVP.
+- No required `end_at` in MVP.
 - `visible_from` is **null** (visible immediately on creation).
 - `start_at` is **null** (immediate execution).
 
@@ -163,11 +187,17 @@ Use `MembershipScope` on **BusinessUnit** only. Do not use `operational_domains`
 - Empty or null `recurrence_days` ⇒ **one-shot** assignment.
 - Non-empty `recurrence_days` ⇒ **weekly simple recurrence** on selected days.
 - Each occurrence is a separate materialized `ChecklistExecution` linked to the assignment.
-- Deactivating an assignment (`inactive`) stops future materialization; existing executions unchanged.
+- Retirer une affectation (`inactive` via `POST .../deactivate/`) stoppe la matérialisation future.
 
-**Hors MVP:** full RRULE, calendar exceptions, complex end dates, advanced pause.
+**Hors MVP:** full RRULE, calendar exceptions, overnight time windows, advanced pause.
 
-**Materialization strategy (MVP):** short-horizon materialization (e.g. 14 days) via eager first occurrence on assignment create + periodic Celery job + lazy fallback on feed read. No complex planning engine.
+**Materialization strategy (MVP):** short-horizon materialization (14 days) via:
+
+1. **Eager** — first occurrence on assignment create;
+2. **Lazy** — `ensure_visible_executions_materialized` on execution-feed read (primary safety net);
+3. **Celery Beat** (optional `celery-beat` service) — daily `materialize_checklist_assignments_horizon_task` for all active assignments.
+
+Occurrences are idempotent, capped by assignment `end_date`, and never created after `end_date`. No complex planning engine.
 
 ### 3.8 Observation depuis tâche
 
@@ -178,7 +208,7 @@ Use `MembershipScope` on **BusinessUnit** only. Do not use `operational_domains`
 - `observation_created` counts as treated for execution completion.
 - Raw Observation text must not appear on checklist surfaces.
 
-Handoff target (not implemented): extend `Observation.origin` (e.g. `checklist_task`) and link `checklist_execution_id` / `checklist_task_execution_id`.
+Handoff implemented: `Observation.origin = checklist_task` with links to `checklist_execution_id` / `checklist_task_execution_id`.
 
 ### 3.9 Catalogue Staff
 
@@ -212,8 +242,30 @@ Staff may:
 ### 3.12 Template / Assignment `inactive`
 
 - An `inactive` template **blocks** creation of new assignments and personal executions.
-- An `inactive` assignment **blocks** future occurrence materialization.
-- Deactivating a template or assignment never modifies existing executions.
+- An `inactive` assignment (**retirée** in UX) **blocks** future occurrence materialization.
+- The standard assignment management list (`GET checklist-assignments/`) returns **active** assignments only; withdrawn (`inactive`) rows remain in the database for execution/observation history but are not shown in the current management UI.
+- `GET checklist-assignments/{id}/` may still return an `inactive` assignment (e.g. for API consistency); `PATCH` on an inactive assignment is refused with `400`.
+- `ChecklistExecution` has **no** `inactive` status — use `assigned`, `in_progress`, `done`, or `canceled` only.
+
+**Modifier une affectation** (`PATCH checklist-assignments/{id}/`):
+- Updates the `ChecklistAssignment` schedule fields (`assigned_to`, `start_date`, `end_date`, `start_at`, `end_at`, `recurrence_days`).
+- Propagates schedule/assignee snapshots to linked executions still in status `assigned` **and still valid** under the new schedule (`occurrence_date` within `[start_date, end_date]` and weekday in `recurrence_days`).
+- Automatically cancels (`canceled`) `assigned` executions whose `occurrence_date` no longer matches the new schedule.
+- Does **not** modify executions in `in_progress`, `done`, or `canceled`.
+- Daily `start_at`/`end_at` define the per-occurrence time window but do **not** filter eligible `occurrence_date` values (period + `recurrence_days` do).
+- Does **not** immediately materialize new occurrences when recurrence is expanded (horizon materialization handles that later).
+- Refused when assignment is already `inactive`.
+
+**Retirer une affectation** (`POST checklist-assignments/{id}/deactivate/`):
+- Blocked with `409` + `active_execution_id` if an `in_progress` execution exists on the assignment.
+- Cancels (`canceled`) all `assigned` executions on that assignment.
+- Preserves `done` / `canceled` history, task executions, and observations.
+- Hard-deletes the assignment row when no execution was ever created; otherwise sets `inactive`.
+
+**Supprimer une Shared Template** (`DELETE checklist-templates/{id}/`, Owner/Director only):
+- Allowed when no linked execution is `assigned` or `in_progress`.
+- Blocked with `409` + `active_execution_id` otherwise.
+- Terminal history (`done` / `canceled`) is detached (`checklist_template = null`) and preserved with snapshots.
 
 ### 3.13 `skipped_reason`
 
@@ -233,14 +285,14 @@ Staff may:
 
 ### 3.15 Snapshot
 
-Mandatory at execution materialization. Template and assignment edits never affect existing executions.
+Mandatory at execution materialization. Template edits never affect existing executions. Assignment `PATCH` updates snapshots on `assigned` executions only; `in_progress` and terminal executions keep their snapshots.
 
 Snapshot includes:
 - template `title` (and `description` if present);
 - shared `business_unit` (from template);
-- `start_at`, `due_at`, `visible_from` (from assignment occurrence);
+- `start_at`, `end_at`, `visible_from` (from assignment occurrence);
 - `assigned_to`, `assigned_by`;
-- per task: `title`, `instructions` (if any), `position`.
+- per task: `task`, `position`.
 
 Stored on `ChecklistExecution` and `ChecklistTaskExecution` snapshot fields (normalized rows, not a single opaque JSON blob required).
 
@@ -251,18 +303,15 @@ Stored on `ChecklistExecution` and `ChecklistTaskExecution` snapshot fields (nor
 - Assignment creation and personal execution creation are **forbidden** without at least one task on an active template.
 - If the last task of an `active` template is deleted, the template automatically becomes `inactive`.
 
-### 3.17 Tri Execution Feed (cible Phase 7)
+### 3.17 Tri Execution Feed (implémenté)
 
-When checklist items are added to Execution Feed, cross-type MVP sort is:
+Checklist items in Execution Feed are sorted among themselves by `last_activity_at desc` (then `created_at desc` as tiebreaker in selectors).
 
-```txt
-last_activity_at desc
-created_at desc
-```
+**Page merge (implemented in [`execution_feed.py`](../../../apps/api/houston/actions/execution_feed.py)):** visible checklist items are **prioritized** — up to `page_size` checklists appear first; Actions fill the remaining slots using existing Action sort keys (`requires_me_rank`, overdue, status, etc.). This is **not** a single global interleaved sort across both types.
 
-`due_at` may be shown on shared checklist feed items (including overdue indicator) but does not drive MVP sort and does not remove items from the feed.
+`end_at` may be shown on shared checklist feed items (including `is_overdue` when `now > end_at`) but does not drive sort and does not remove items from the feed.
 
-**Note:** implemented Action feed sorting today uses additional keys (`requires_me_rank`, overdue, status). Phase 7 integration must not break existing Action feed behavior; checklist items follow the simple sort above unless a dedicated reconciliation ticket explicitly aligns both types.
+Frontend: checklist cards render flat above grouped Action sections (see [`execution-feed-sections.ts`](../../../apps/web/src/features/execution/lib/execution-feed-sections.ts)).
 
 ### 3.18 Notifications
 
@@ -277,7 +326,7 @@ Depends on Notifications domain (Phase 6). MVP Checklist implementation must not
 - Manager: Shared Checklists (MembershipScope BU) + Mes checklists personnelles
 - Staff: Mes checklists personnelles only
 
-Shared management in Profil: list/create/edit/deactivate templates, manage tasks, create/update/deactivate assignments (`start_at`, `due_at`, `recurrence_days`).
+Shared management in Profil: list/create/edit/deactivate templates, manage tasks, create/update/retirer **active** assignments (`start_date`, `end_date`, `start_at`, `end_at`, `recurrence_days`); withdrawn assignments disappear from the list but are retained when execution history exists.
 
 **Execution Feed `+`** (quick terrain create):
 - **Personal Checklist only** — label « Checklist personnelle »
@@ -298,7 +347,7 @@ Shared management in Profil: list/create/edit/deactivate templates, manage tasks
 - Checklist comments.
 - Checklist notifications (assignation, done) — future lot after Notifications Phase 6.
 - Shorter Observation text for checklist origin.
-- `due_at` on Personal checklists or on templates.
+- `end_at` on Personal checklists or on templates.
 - Staff access to shared template catalogue or assignment management.
 - Shared Checklist creation from Execution Feed `+`.
 - Metrics dashboard / anomaly detection from checklist data.
@@ -312,7 +361,7 @@ Shared management in Profil: list/create/edit/deactivate templates, manage tasks
 - Checklist feed item progress display format (percentage vs fraction).
 - Whether to expose `ChecklistPermissionHints` on feed items (mirror Actions).
 - Metrics: `completion_rate`, `observations_created_from_checklist` storage and reporting surfaces.
-- Optional `due_at` reminder notifications (requires Notifications domain).
+- Optional `end_at` reminder notifications (requires Notifications domain).
 - Composite API for quick Personal Checklist from `+` (single request vs mutation chain).
 
 None of these block Cursor dev plan generation for MVP Checklist.
@@ -329,7 +378,7 @@ None of these block Cursor dev plan generation for MVP Checklist.
 - Treated task statuses: `done`, `skipped`, `observation_created`.
 - Observation-from-task uses Observation domain; no direct Signal or Action creation.
 - No raw Observation text on checklist detail, feed, notification, or realtime surfaces.
-- `due_at` never removes an active execution from the feed — only `done`/`canceled` do.
+- `end_at` never removes an active execution from the feed — only `done`/`canceled` do.
 - Notifications and realtime do not grant access and do not carry business truth.
 - Establishment scoping is mandatory on all checklist objects.
 
@@ -347,7 +396,7 @@ None of these block Cursor dev plan generation for MVP Checklist.
 ### `ChecklistTaskTemplate`
 
 - `checklist_template_id`
-- `title`, `instructions` (optional)
+- `task` (required, max 500 characters)
 - `position` (required, integer)
 
 ### `ChecklistAssignment` (shared only)
@@ -357,8 +406,10 @@ None of these block Cursor dev plan generation for MVP Checklist.
 - `assigned_to` → `EstablishmentMembership`
 - `assigned_by` → `EstablishmentMembership`
 - `business_unit` (snapshot from template)
-- `start_at` (required)
-- `due_at` (required; `due_at > start_at`)
+- `start_date` (required; `DateField`)
+- `end_date` (required; `DateField`; `end_date >= start_date`)
+- `start_at` (required; daily `TimeField`)
+- `end_at` (required; daily `TimeField`; `end_at > start_at`, no overnight)
 - `recurrence_days` (nullable list of weekdays; empty = one-shot)
 - `status`: `active` | `inactive`
 
@@ -371,10 +422,10 @@ None of these block Cursor dev plan generation for MVP Checklist.
 - `assigned_to` → `EstablishmentMembership`
 - `assigned_by` → `EstablishmentMembership` (nullable; null for personal self-run)
 - `business_unit` (snapshot; required if `shared`; null if `personal`)
-- `start_at` (snapshot; nullable for personal)
-- `visible_from` (snapshot; `start_at - 1h` for shared; null for personal)
-- `due_at` (snapshot; nullable for personal)
 - `occurrence_date` (nullable; idempotence key for recurring occurrences)
+- `start_at` (snapshot datetime; nullable for personal)
+- `end_at` (snapshot datetime; nullable for personal)
+- `visible_from` (snapshot; `start_at - 1h` for shared; null for personal)
 - `status`: `assigned` | `in_progress` | `done` | `canceled`
 - Snapshot: `template_title`, `template_description` (optional)
 - `last_activity_at` (maintained by backend for feed sort)
@@ -384,7 +435,7 @@ None of these block Cursor dev plan generation for MVP Checklist.
 
 - `checklist_execution_id`
 - `checklist_task_template_id` (nullable reference to origin template row)
-- Snapshot: `title`, `instructions`, `position`
+- Snapshot: `task`, `position`
 - `status`: `pending` | `done` | `skipped` | `observation_created`
 - `observation_id` (nullable FK after handoff)
 - `skipped_reason` (nullable)
@@ -413,7 +464,7 @@ None of these block Cursor dev plan generation for MVP Checklist.
 | --- | --- | --- |
 | — | `active` | create assignment (template must be `active`) |
 | `active` | `inactive` | deactivate assignment command |
-| `active` | `active` | update schedule (does not affect existing executions) |
+| `active` | `active` | update schedule (`PATCH`): syncs `assigned` executions still valid under new schedule; cancels `assigned` executions outside new schedule; does not modify `in_progress`, `done`, or `canceled` executions (see §3.12) |
 
 ### Execution
 
@@ -438,7 +489,7 @@ Task transitions are forbidden when execution is `done` or `canceled`.
 
 ## 9. Permissions
 
-Establishment-scoped, backend-enforced. Current code has no checklist-specific helpers yet — implement in `houston/checklists/permissions.py`.
+Establishment-scoped, backend-enforced. RBAC helpers live in [`permissions.py`](../../../apps/api/houston/checklists/permissions.py). UX hints (`can_update`, `can_delete`, `can_execute_tasks`, etc.) are derived in [`permission_hints.py`](../../../apps/api/houston/checklists/permission_hints.py) and exposed on template, assignment, and execution API responses — hints are not authorization authority.
 
 | Capability | Owner / Director | Manager | Staff |
 | --- | --- | --- | --- |
@@ -461,6 +512,23 @@ Establishment-scoped, backend-enforced. Current code has no checklist-specific h
 
 RBAC reference: [`rbac_permissions_domain.md`](rbac_permissions_domain.md) — `MembershipScope` on BusinessUnit only.
 
+### 9.1 Permission hints (UX helpers)
+
+Backend exposes `permission_hints` on template (list + detail), assignment, and execution API responses. **Hints are not authorization authority** — the backend still enforces permissions and may return `403` / `409`.
+
+| Resource | Hint keys | Notes |
+| --- | --- | --- |
+| Template | `can_update`, `can_manage_tasks`, `can_activate`, `can_deactivate`, `can_delete`, `can_create_assignment`, `can_create_personal_execution` (detail only) | List omits `can_create_personal_execution` |
+| Assignment | `can_update`, `can_deactivate` | `can_deactivate` is `false` when an `in_progress` execution exists on the assignment (deactivate returns `409`) |
+| Execution | `can_execute_tasks`, `can_cancel` | Task execution requires assignee; cancel rules per matrix above |
+
+**Delete template (`can_delete`):**
+
+- **Detail:** `false` when an active execution (`assigned` or `in_progress`) exists — matches `409` + `active_execution_id` on `DELETE`.
+- **List:** RBAC only (may still be `true` with active execution); UI delete flow must handle `409`.
+
+**Assignee eligibility:** enforced on assignment create/update when `assigned_to` changes — assignee must cover template `business_unit` via `MembershipScope` (`400` if not). User search may filter by `business_unit_id` (see §3.5).
+
 ## 10. Events
 
 No implemented checklist event contract in current code or `schema.yml`.
@@ -473,25 +541,23 @@ Candidate events (for future Notifications / Realtime lots):
 
 ## 11. API Surface
 
-Current API truth: `apps/api/schema.yml` — **no checklist endpoints implemented**.
-
-Candidate endpoints (establishment-scoped, `/api/v1/establishments/{establishment_id}/`):
+Current API truth: [`apps/api/schema.yml`](../../../apps/api/schema.yml) — checklist endpoints are **implemented** (establishment-scoped, `/api/v1/establishments/{establishment_id}/`).
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET, POST | `checklist-templates/?type=shared\|personal` | List (filtered by type / permissions) / create |
-| GET, PATCH | `checklist-templates/{id}/` | Detail / update |
+| GET, PATCH, DELETE | `checklist-templates/{id}/` | Detail / update / delete |
 | POST | `checklist-templates/{id}/activate/` | Activate (requires ≥1 task) |
 | POST | `checklist-templates/{id}/deactivate/` | Deactivate |
 | POST | `checklist-templates/{id}/tasks/` | Add task |
 | PATCH, DELETE | `checklist-task-templates/{id}/` | Update / delete task |
 | POST | `checklist-templates/{id}/tasks/reorder/` | Reorder tasks by position |
-| GET | `checklist-assignments/` | List shared assignments (RBAC filtered) |
+| GET | `checklist-assignments/` | List shared **active** assignments (RBAC filtered) |
 | POST | `checklist-templates/{id}/assignments/` | Create assignment + materialize first occurrence |
 | GET, PATCH | `checklist-assignments/{id}/` | Detail / update schedule |
 | POST | `checklist-assignments/{id}/deactivate/` | Deactivate assignment |
 | POST | `checklist-templates/{id}/personal-executions/` | Create personal execution (personal templates only) |
-| GET | `checklist-executions/{id}/` | Detail with task executions |
+| GET | `checklist-executions/{id}/` | Detail with task executions + `permission_hints` |
 | POST | `checklist-task-executions/{id}/mark-done/` | Mark task done |
 | POST | `checklist-task-executions/{id}/skip/` | Skip task (optional `skipped_reason`) |
 | POST | `checklist-task-executions/{id}/create-observation/` | Observation handoff |
@@ -499,9 +565,9 @@ Candidate endpoints (establishment-scoped, `/api/v1/establishments/{establishmen
 
 **Not in MVP:** `POST .../start/`, `POST .../executions/` on shared templates (use assignments).
 
-Execution Feed extension (Phase 7): extend existing `GET execution-feed/` with `item_type: "checklist"` items — no separate feed endpoint.
+Execution Feed: existing `GET execution-feed/` returns polymorphic items with `item_type: "action" | "checklist"` — no separate checklist feed endpoint.
 
-Do not treat any checklist endpoint as implemented until it exists in `schema.yml`.
+Inspect `schema.yml` before claiming any additional checklist endpoint exists.
 
 ## 12. Frontend Expectations
 
@@ -518,22 +584,34 @@ Do not treat any checklist endpoint as implemented until it exists in `schema.ym
 - No Checklist comment UI in MVP.
 - Checklist-origin Observation opens reporting flow with context; client must not create Signal or Action.
 - No raw Observation text on checklist UI.
-- Replace disabled placeholders when APIs exist (`execution-checklist-placeholder-card.tsx`).
+- Execution Feed renders checklist items via [`ExecutionChecklistCard`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx) (polymorphic `item_type: checklist`).
 - Notifications for assign / done: **future lot** — do not implement in initial Checklist frontend lot.
 - Staff: no shared catalogue or assignment UI; Profil shows personal section only.
 
-## 13. Execution Feed integration (Phase 7 target)
+## 13. Execution Feed integration (implemented)
 
 Owned by Feed domain for projection rules; Checklist domain owns lifecycle and feed-eligible statuses.
 
 - `ExecutionFeedItem` polymorphism: `item_type: "action" | "checklist"`.
-- Checklist feed item exposes safe summary (title, progress, `due_at`, overdue indicator, `business_unit` label, status).
+- Checklist feed item exposes safe summary (title, progress, `end_at`, `is_overdue`, `business_unit` label, status).
 - Visibility: `status IN (assigned, in_progress)` AND `now >= visible_from` (or `visible_from` null) AND RBAC `view_mode` rules (§9).
-- `due_at` does not remove items; only `done`/`canceled` exclude from active feed.
-- Sort: `last_activity_at desc`, `created_at desc` across Action and Checklist items (see §3.17).
+- `end_at` does not remove items; only `done`/`canceled` exclude from active feed.
+- Page merge: checklists prioritized, Actions fill remaining slots (see §3.17).
+- Orchestration: [`actions/execution_feed.py`](../../../apps/api/houston/actions/execution_feed.py) triggers lazy materialization then merges querysets.
 - See [`feed_domain.md`](feed_domain.md).
 
-## 14. AI Agent Notes
+## 14. Backend module architecture
+
+| Module | Path | Responsibility |
+| --- | --- | --- |
+| `selectors.py` | [`checklists/selectors.py`](../../../apps/api/houston/checklists/selectors.py) | Read-only query composition: catalogues, feed querysets, detail prefetch, overdue helper. No writes, no materialization. |
+| `materialization.py` | [`checklists/materialization.py`](../../../apps/api/houston/checklists/materialization.py) | Occurrence math, eager/lazy/horizon materialization, `visible_from = start_at - 1h`, idempotent execution create. |
+| `services.py` | [`checklists/services.py`](../../../apps/api/houston/checklists/services.py) | Business commands: template/task/assignment CRUD, execution transitions, observation handoff, assignment schedule sync. |
+| `permissions.py` | [`checklists/permissions.py`](../../../apps/api/houston/checklists/permissions.py) | RBAC pure: establishment-scoped authorization helpers. |
+| `permission_hints.py` | [`checklists/permission_hints.py`](../../../apps/api/houston/checklists/permission_hints.py) | UX hints derived from permissions (+ conflict checks where applicable); exposed on API responses, not authorization authority. |
+| `execution_feed.py` | [`actions/execution_feed.py`](../../../apps/api/houston/actions/execution_feed.py) | Thin polymorphic feed orchestrator: lazy materialization trigger, checklist-first page merge, Action fill. |
+
+## 15. AI Agent Notes
 
 - Inspect `apps/api/houston/checklists/` before claiming models, services, or APIs exist.
 - Inspect `schema.yml` before claiming checklist endpoints are implemented.

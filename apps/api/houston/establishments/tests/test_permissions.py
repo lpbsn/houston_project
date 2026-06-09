@@ -53,6 +53,7 @@ def build_membership(
         name=f"Establishment {uuid.uuid4().hex[:8]}",
         organization=organization,
         status=establishment_status,
+        timezone="UTC",
     )
     membership = EstablishmentMembership.objects.create(
         user=user,

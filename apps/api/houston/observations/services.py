@@ -28,14 +28,44 @@ def validate_observation_text(text: str) -> str:
     return normalized
 
 
+def _validate_checklist_observation_context(
+    *,
+    membership: EstablishmentMembership,
+    checklist_execution,
+    checklist_task_execution,
+) -> None:
+    if checklist_execution is None or checklist_task_execution is None:
+        raise ObservationValidationError("Checklist context is required.")
+    if checklist_execution.establishment_id != membership.establishment_id:
+        raise ObservationValidationError("Invalid checklist execution.")
+    if checklist_task_execution.checklist_execution_id != checklist_execution.id:
+        raise ObservationValidationError("Invalid checklist task execution.")
+    if checklist_execution.assigned_to_id != membership.id:
+        raise ObservationValidationError("Not allowed to submit this checklist observation.")
+
+
 @transaction.atomic
 def submit_observation(
     *,
     membership: EstablishmentMembership,
     text: str,
     temporary_upload_ids: list[uuid.UUID],
+    origin: str = Observation.Origin.DIRECT_REPORT,
+    checklist_execution=None,
+    checklist_task_execution=None,
 ) -> Observation:
     raw_text = validate_observation_text(text)
+
+    if origin == Observation.Origin.CHECKLIST_TASK:
+        _validate_checklist_observation_context(
+            membership=membership,
+            checklist_execution=checklist_execution,
+            checklist_task_execution=checklist_task_execution,
+        )
+    elif checklist_execution is not None or checklist_task_execution is not None:
+        raise ObservationValidationError(
+            "Checklist context is only allowed for checklist_task origin.",
+        )
 
     if len(temporary_upload_ids) > MAX_OBSERVATION_PHOTOS:
         raise ObservationValidationError("Too many photos.")
@@ -56,6 +86,9 @@ def submit_observation(
         establishment=membership.establishment,
         submitted_by_membership=membership,
         raw_text=raw_text,
+        origin=origin,
+        checklist_execution=checklist_execution,
+        checklist_task_execution=checklist_task_execution,
         submitted_at=now,
     )
     ObservationProcessing.objects.create(

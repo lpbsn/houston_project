@@ -12,16 +12,16 @@ import type { ExecutionViewMode } from '@/features/actions/types'
 
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionActionCard } from '../components/execution-action-card'
-import { ExecutionChecklistsPlaceholderSection } from '../components/execution-checklists-placeholder-section'
+import { ExecutionChecklistCard } from '../components/execution-checklist-card'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { groupExecutionActionsBySection } from '../lib/execution-action-sections'
+import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
 import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
-
-/** Dev/preview only — mock checklist UI for upcoming feature work. */
-const SHOW_EXECUTION_CHECKLIST_PREVIEW = true
+import { splitExecutionFeedItems } from '../lib/execution-feed-sections'
 
 type ExecutionFeedPageProps = {
   onOpenAction?: (actionId: string) => void
+  onOpenChecklist?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
 }
 
@@ -35,16 +35,23 @@ function getErrorMessage(error: unknown): string {
   return 'Une erreur est survenue.'
 }
 
-export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPageProps) {
+export function ExecutionFeedPage({
+  onOpenAction,
+  onOpenChecklist,
+  onNavigate,
+}: ExecutionFeedPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
   const feedQuery = useExecutionFeedQuery(establishmentId, viewMode)
+  const feedItems = feedQuery.isSuccess ? feedQuery.data.items : []
+  const { checklistItems, actionItems } = splitExecutionFeedItems(feedItems)
+  const actionGroups = groupExecutionActionsBySection(actionItems)
 
   const role = auth.bootstrap?.active_membership?.role
-  const canCreate = role === 'owner' || role === 'director' || role === 'manager'
+  const canCreate = canOpenExecutionCreateMenu(role)
 
   const createAction = canCreate ? (
     <Button
@@ -69,8 +76,10 @@ export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPag
     <div className="flex h-full min-h-0 flex-col">
       <ExecutionCreateMenuSheet
         open={isCreateMenuOpen}
+        role={role}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectAction={() => onNavigate?.('/actions/new')}
+        onSelectPersonalChecklist={() => onNavigate?.('/checklists/executions/new')}
       />
       <TerrainHubSubheader>
         <TerrainHubViewToolbar trailing={createAction}>
@@ -91,34 +100,42 @@ export function ExecutionFeedPage({ onOpenAction, onNavigate }: ExecutionFeedPag
         ) : null}
         {feedQuery.isSuccess ? (
           <div className="flex flex-col gap-3 pt-5">
-            {SHOW_EXECUTION_CHECKLIST_PREVIEW ? <ExecutionChecklistsPlaceholderSection /> : null}
             {feedQuery.data.items.length === 0 ? (
               <TerrainEmptyState
                 className="mx-3 mt-3"
-                title="Aucune action"
+                title="Aucune exécution"
                 description={getEmptyFeedDescription(viewMode)}
               />
             ) : (
-              groupExecutionActionsBySection(
-                feedQuery.data.items.flatMap((entry) =>
-                  entry.item_type === 'action' && entry.action ? [entry.action] : [],
-                ),
-              ).map((group) => (
-                <section key={group.section}>
-                  <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
-                    {group.label} · {group.items.length}
-                  </TerrainSectionLabel>
-                  <div className="flex flex-col gap-3 px-3">
-                    {group.items.map((item) => (
-                      <ExecutionActionCard
-                        key={item.id}
+              <>
+                {checklistItems.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {checklistItems.map((item) => (
+                      <ExecutionChecklistCard
+                        key={`checklist-${item.id}`}
                         item={item}
-                        onSelect={(id) => onOpenAction?.(id)}
+                        onSelect={(id) => onOpenChecklist?.(id)}
                       />
                     ))}
                   </div>
-                </section>
-              ))
+                ) : null}
+                {actionGroups.map((group) => (
+                  <section key={group.section}>
+                    <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
+                      {group.label} · {group.items.length}
+                    </TerrainSectionLabel>
+                    <div className="flex flex-col gap-3">
+                      {group.items.map((action) => (
+                        <ExecutionActionCard
+                          key={`action-${action.id}`}
+                          item={action}
+                          onSelect={(id) => onOpenAction?.(id)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </>
             )}
           </div>
         ) : null}

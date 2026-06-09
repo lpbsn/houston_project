@@ -24,6 +24,7 @@ type ActionCreateAssigneeSectionProps = {
   assignedTo: string
   selectedUser: ScopedUserSearchResult | null
   onAssignedToChange: (membershipId: string, user: ScopedUserSearchResult) => void
+  businessUnitId?: string
 }
 
 function getAvatarClass(index: number): string {
@@ -35,10 +36,13 @@ export function ActionCreateAssigneeSection({
   assignedTo,
   selectedUser,
   onAssignedToChange,
+  businessUnitId,
 }: ActionCreateAssigneeSectionProps) {
   const [query, setQuery] = useState(selectedUser?.display_name ?? '')
 
-  const usersQuery = useEstablishmentUserSearchQuery(establishmentId, query)
+  const usersQuery = useEstablishmentUserSearchQuery(establishmentId, query, {
+    businessUnitId,
+  })
 
   const results = usersQuery.data ?? []
   const showHint = query.trim().length > 0 && query.trim().length < 2
@@ -67,7 +71,11 @@ export function ActionCreateAssigneeSection({
         ) : null}
 
         {query.trim().length >= 2 && !usersQuery.isFetching && results.length === 0 ? (
-          <p className="mt-2 text-xs text-[#7D7B75]">Aucun membre trouvé.</p>
+          <p className="mt-2 text-xs text-[#7D7B75]">
+            {businessUnitId
+              ? 'Aucun utilisateur rattaché à ce périmètre.'
+              : 'Aucun membre trouvé.'}
+          </p>
         ) : null}
 
         {results.length > 0 ? (

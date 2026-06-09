@@ -26,6 +26,7 @@ JSON only. Keys:
 - `validated_text`, `establishment_taxonomy` (`business_units[]`, `operational_units[]`)
 - `active_signals_context` (0..20 active Signals with BU/AS keys)
 - `observation_id`, `establishment_id`, `submitted_at`, `media_count`, `schema_version`, `prompt_version`
+- Optional `checklist_context` when `Observation.origin = checklist_task` (server-validated): `origin`, `checklist_execution_id`, `checklist_task_execution_id`, `template_title`, `task`, `business_unit_key` (nullable)
 
 Each `business_unit` entry: `key`, `label`, `unit_type` (`dedicated` | `transversal`), `description`, `activity_subjects[]` (`key` = `normalized_name`, `label`, `description`).
 

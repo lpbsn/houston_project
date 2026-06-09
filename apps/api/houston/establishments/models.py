@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -8,6 +10,9 @@ from django.utils import timezone
 
 from houston.core.models import BaseModel
 from houston.organizations.models import Organization
+
+DEFAULT_ESTABLISHMENT_TIMEZONE = "Europe/Paris"
+ESTABLISHMENT_TIMEZONE_MAX_LENGTH = 63
 
 ACTIVITY_DESCRIPTION_MIN_LENGTH = 50
 ONBOARDING_TERMINAL_STATUSES = (
@@ -53,6 +58,20 @@ class Establishment(BaseModel):
         choices=Status.choices,
         default=Status.DRAFT,
     )
+    timezone = models.CharField(
+        max_length=ESTABLISHMENT_TIMEZONE_MAX_LENGTH,
+        default=DEFAULT_ESTABLISHMENT_TIMEZONE,
+    )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.timezone:
+            try:
+                ZoneInfo(self.timezone)
+            except ZoneInfoNotFoundError as exc:
+                raise ValidationError(
+                    {"timezone": "Invalid IANA timezone identifier."},
+                ) from exc
 
     def __str__(self) -> str:
         return self.name

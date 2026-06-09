@@ -1,0 +1,308 @@
+import { LoaderCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
+import { useAppRoute } from '@/app/app-routes'
+import { useAuth } from '@/app/auth-provider'
+import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ChecklistAssignmentCreateStickyFooter } from '@/features/checklists/components/checklist-assignment-create-sticky-footer'
+import { ChecklistAssignmentSection } from '@/features/checklists/components/checklist-assignment-section'
+import { ChecklistBusinessUnitSelect } from '@/features/checklists/components/checklist-business-unit-select'
+import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
+import { ChecklistTaskEditor } from '@/features/checklists/components/checklist-task-editor'
+import { ChecklistsApiError } from '@/features/checklists/api'
+import {
+  useChecklistTemplateDetailQuery,
+  useCreatePersonalExecutionMutation,
+  useUpdateChecklistTemplateMutation,
+} from '@/features/checklists/hooks'
+import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
+import { canSeeSharedChecklistManagement } from '@/features/checklists/lib/checklist-management-access'
+import {
+  canShowChecklistTemplateCreateAssignment,
+  canShowChecklistTemplateCreatePersonalExecution,
+  canShowChecklistTemplateManageTasks,
+  canShowChecklistTemplateUpdate,
+} from '@/features/checklists/lib/checklist-template-permission-hints'
+import { toRoleEnum } from '@/features/checklists/lib/checklist-role'
+import type { ChecklistType } from '@/features/checklists/types'
+import { terrain } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
+
+type ChecklistTemplateDetailPageProps = {
+  checklistType: ChecklistType
+  templateId: string
+}
+
+export function ChecklistTemplateDetailPage({
+  checklistType,
+  templateId,
+}: ChecklistTemplateDetailPageProps) {
+  const { navigate } = useAppRoute()
+  const { activeMembership } = useAuth()
+  const establishmentId = activeMembership?.establishment_id ?? null
+  const role = toRoleEnum(activeMembership?.role)
+
+  const detailQuery = useChecklistTemplateDetailQuery(establishmentId, templateId)
+  const updateMutation = useUpdateChecklistTemplateMutation(
+    establishmentId ?? '',
+    templateId,
+    checklistType,
+  )
+  const personalExecutionMutation = useCreatePersonalExecutionMutation(
+    establishmentId ?? '',
+    templateId,
+  )
+
+  const [titleDraft, setTitleDraft] = useState<string | null>(null)
+  const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
+    null,
+  )
+  const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null)
+  const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false)
+
+  const isShared = checklistType === 'shared'
+  const canAccessShared = canSeeSharedChecklistManagement(role)
+
+  useEffect(() => {
+    if (isShared && role && !canAccessShared) {
+      navigate('/checklists', { replace: true })
+    }
+  }, [canAccessShared, isShared, navigate, role])
+
+  if (!establishmentId || (isShared && !canAccessShared)) {
+    return null
+  }
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 px-3 py-10 text-sm text-[#7D7B75]">
+        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+        Chargement de la checklist...
+      </div>
+    )
+  }
+
+  if (detailQuery.isError || !detailQuery.data) {
+    return (
+      <div className="px-3 py-4">
+        <TerrainCard className={terrain.errorSurface}>
+          <p className="text-sm">Cette checklist est introuvable ou inaccessible.</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 rounded-xl"
+            onClick={() => navigate('/checklists')}
+          >
+            Retour à la liste
+          </Button>
+        </TerrainCard>
+      </div>
+    )
+  }
+
+  const template = detailQuery.data
+  const title = titleDraft ?? template.title
+  const description = descriptionDraft ?? template.description
+  const permissionHints = template.permission_hints
+  const canUpdateTemplate = canShowChecklistTemplateUpdate(permissionHints)
+  const canManageTasks = canShowChecklistTemplateManageTasks(permissionHints)
+  const canCreatePersonalExecution = canShowChecklistTemplateCreatePersonalExecution(permissionHints)
+  const canCreateAssignment = canShowChecklistTemplateCreateAssignment(permissionHints)
+  const isBusy = updateMutation.isPending || personalExecutionMutation.isPending
+
+  async function handleSaveMetadata() {
+    setFeedback(null)
+    try {
+      await updateMutation.mutateAsync({
+        title: title.trim(),
+        description: description.trim(),
+      })
+      setTitleDraft(null)
+      setDescriptionDraft(null)
+      setFeedback({ variant: 'success', message: 'Checklist mise à jour.' })
+    } catch (error) {
+      setFeedback({
+        variant: 'error',
+        message: resolveChecklistErrorMessage(error, 'La checklist n’a pas pu être mise à jour.'),
+      })
+    }
+  }
+
+  async function handleStartPersonalExecution() {
+    setFeedback(null)
+    setActiveExecutionId(null)
+    try {
+      const execution = await personalExecutionMutation.mutateAsync()
+      navigate(`/checklists/executions/${execution.id}`, { replace: true })
+    } catch (error) {
+      if (error instanceof ChecklistsApiError && error.activeExecutionId) {
+        setActiveExecutionId(error.activeExecutionId)
+      }
+      setFeedback({
+        variant: 'error',
+        message: resolveChecklistErrorMessage(
+          error,
+          'L’exécution n’a pas pu être démarrée.',
+        ),
+      })
+    }
+  }
+
+  const showStickyCreateFooter = isShared && canCreateAssignment
+
+  const taskCountLabel = (
+    <p className={cn('text-xs', terrain.mutedLight)}>
+      {template.tasks.length} tâche{template.tasks.length > 1 ? 's' : ''}
+    </p>
+  )
+
+  const feedbackBanner = feedback ? (
+    <ChecklistFeedback variant={feedback.variant} message={feedback.message} />
+  ) : null
+
+  const activeExecutionLink = activeExecutionId ? (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-10 w-full rounded-xl border-[#E8E6DF]"
+      onClick={() => navigate(`/checklists/executions/${activeExecutionId}`)}
+    >
+      Ouvrir l&apos;exécution en cours
+    </Button>
+  ) : null
+
+  const assignmentSection =
+    isShared && template.business_unit ? (
+      <ChecklistAssignmentSection
+        establishmentId={establishmentId}
+        templateId={templateId}
+        checklistType={checklistType}
+        canCreateAssignment={canCreateAssignment}
+        businessUnitId={template.business_unit.id}
+        createButtonPlacement="sticky"
+        isCreateSheetOpen={isCreateAssignmentOpen}
+        onCreateSheetOpenChange={setIsCreateAssignmentOpen}
+      />
+    ) : null
+
+  const metadataSection = (
+    <>
+      <section className="space-y-1.5">
+        <TerrainSectionLabel>Titre</TerrainSectionLabel>
+        <TerrainCard>
+          <Input
+            value={title}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            readOnly={!canUpdateTemplate}
+            className="border-0 bg-transparent p-0 text-[15px] shadow-none focus-visible:ring-0"
+          />
+        </TerrainCard>
+      </section>
+
+      <section className="space-y-1.5">
+        <TerrainSectionLabel>Description</TerrainSectionLabel>
+        <TerrainCard>
+          <textarea
+            value={description}
+            onChange={(e) => setDescriptionDraft(e.target.value)}
+            readOnly={!canUpdateTemplate}
+            className="min-h-[88px] w-full resize-y bg-transparent text-[14px] leading-relaxed text-[#444] outline-none"
+          />
+        </TerrainCard>
+      </section>
+
+      {isShared && template.business_unit ? (
+        <ChecklistBusinessUnitSelect
+          establishmentId={establishmentId}
+          selectedBusinessUnitId={template.business_unit.id}
+          onBusinessUnitChange={() => undefined}
+          readOnlyLabel={template.business_unit.label}
+        />
+      ) : null}
+
+      {canUpdateTemplate ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 w-full rounded-xl border-[#E8E6DF]"
+          disabled={isBusy}
+          onClick={() => void handleSaveMetadata()}
+        >
+          Enregistrer les informations
+        </Button>
+      ) : null}
+    </>
+  )
+
+  const tasksSection = canManageTasks ? (
+    <ChecklistTaskEditor
+      establishmentId={establishmentId}
+      templateId={templateId}
+      checklistType={checklistType}
+      tasks={template.tasks}
+    />
+  ) : (
+    <section className="space-y-2">
+      <TerrainSectionLabel>Tâches</TerrainSectionLabel>
+      <TerrainCard className="divide-y divide-[#F0EFE9] p-0">
+        {template.tasks.map((task, index) => (
+          <div key={task.id} className="px-4 py-3.5 text-sm text-[#1a1a1a]">
+            {index + 1}. {task.task}
+          </div>
+        ))}
+      </TerrainCard>
+    </section>
+  )
+
+  const personalExecutionButton = canCreatePersonalExecution ? (
+    <Button
+      type="button"
+      className="h-11 w-full rounded-xl bg-[#1D9E75] text-white hover:bg-[#1D9E75]/95"
+      disabled={isBusy}
+      onClick={() => void handleStartPersonalExecution()}
+    >
+      Démarrer une exécution personnelle
+    </Button>
+  ) : null
+
+  if (isShared) {
+    return (
+      <div className="flex min-h-full flex-col">
+        <div
+          className={cn(
+            'flex flex-1 flex-col space-y-3 px-3 pt-3',
+            showStickyCreateFooter ? 'pb-40' : 'pb-3',
+          )}
+        >
+          {taskCountLabel}
+          {feedbackBanner}
+          {activeExecutionLink}
+          {assignmentSection}
+          {metadataSection}
+          {tasksSection}
+          {personalExecutionButton}
+        </div>
+
+        {showStickyCreateFooter ? (
+          <ChecklistAssignmentCreateStickyFooter
+            onClick={() => setIsCreateAssignmentOpen(true)}
+          />
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 px-3 pb-28 pt-3">
+      {taskCountLabel}
+      {feedbackBanner}
+      {activeExecutionLink}
+      {metadataSection}
+      {tasksSection}
+      {personalExecutionButton}
+    </div>
+  )
+}

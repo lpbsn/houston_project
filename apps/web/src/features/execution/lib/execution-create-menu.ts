@@ -1,4 +1,4 @@
-export type ExecutionCreateMenuOptionId = 'action' | 'checklist'
+export type ExecutionCreateMenuOptionId = 'action' | 'personal_checklist'
 
 export type ExecutionCreateMenuOption = {
   id: ExecutionCreateMenuOptionId
@@ -7,22 +7,30 @@ export type ExecutionCreateMenuOption = {
   badge?: string
 }
 
-export const EXECUTION_CREATE_MENU_OPTIONS: ExecutionCreateMenuOption[] = [
-  {
-    id: 'action',
-    label: 'Action',
-    disabled: false,
-  },
-  {
-    id: 'checklist',
-    label: 'Checklist',
-    disabled: true,
-    badge: 'Bientôt',
-  },
-]
+export function getExecutionCreateMenuOptions(
+  role: string | null | undefined,
+): ExecutionCreateMenuOption[] {
+  const canCreateAction = role === 'owner' || role === 'director' || role === 'manager'
 
-export function getExecutionCreateMenuOption(
-  id: ExecutionCreateMenuOptionId,
-): ExecutionCreateMenuOption | undefined {
-  return EXECUTION_CREATE_MENU_OPTIONS.find((option) => option.id === id)
+  const options: ExecutionCreateMenuOption[] = []
+
+  if (canCreateAction) {
+    options.push({
+      id: 'action',
+      label: 'Action',
+      disabled: false,
+    })
+  }
+
+  options.push({
+    id: 'personal_checklist',
+    label: 'Checklist personnelle',
+    disabled: false,
+  })
+
+  return options
+}
+
+export function canOpenExecutionCreateMenu(role: string | null | undefined): boolean {
+  return Boolean(role)
 }

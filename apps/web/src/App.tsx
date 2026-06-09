@@ -44,7 +44,22 @@ import { SignalFeedPage } from '@/features/signals/pages/signal-feed-page'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
+import { ChecklistHubPage } from '@/features/checklists/pages/checklist-hub-page'
+import { ChecklistExecutionDetailPage } from '@/features/checklists/pages/checklist-execution-detail-page'
+import { ChecklistQuickCreatePage } from '@/features/checklists/pages/checklist-quick-create-page'
+import { ChecklistTemplateCreatePage } from '@/features/checklists/pages/checklist-template-create-page'
+import { ChecklistTemplateDetailPage } from '@/features/checklists/pages/checklist-template-detail-page'
 import { ReportPage } from '@/features/observations/pages/report-page'
+
+function ChecklistHubRedirect() {
+  const { navigate } = useAppRoute()
+
+  useEffect(() => {
+    navigate('/checklists', { replace: true })
+  }, [navigate])
+
+  return null
+}
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -80,6 +95,9 @@ function App() {
           route.path === '/chat' ||
           route.path === '/profile' ||
           route.path === '/team/invite' ||
+          route.path === '/checklists' ||
+          route.path === '/checklists/shared' ||
+          route.path === '/checklists/personal' ||
           route.path === '/pending-onboarding' ||
           route.path === '/onboarding' ||
           route.path === '/select-establishment' ||
@@ -87,7 +105,11 @@ function App() {
       route.kind === 'signal-detail' ||
       route.kind === 'signal-action-create' ||
       route.kind === 'action-create' ||
-      route.kind === 'action-detail'
+      route.kind === 'action-detail' ||
+      route.kind === 'checklist-template-create' ||
+      route.kind === 'checklist-template-detail' ||
+      route.kind === 'checklist-execution-create' ||
+      route.kind === 'checklist-execution-detail'
 
     if (isProtectedRoute && !auth.isAuthenticated && !allowsUnauthenticatedAccess(route)) {
       navigate('/login', { replace: true })
@@ -220,6 +242,27 @@ function App() {
       return <ActionDetailPage actionId={route.actionId} onNavigate={navigate} />
     }
 
+    if (route.kind === 'checklist-template-create') {
+      return <ChecklistTemplateCreatePage checklistType={route.checklistType} />
+    }
+
+    if (route.kind === 'checklist-template-detail') {
+      return (
+        <ChecklistTemplateDetailPage
+          checklistType={route.checklistType}
+          templateId={route.templateId}
+        />
+      )
+    }
+
+    if (route.kind === 'checklist-execution-create') {
+      return <ChecklistQuickCreatePage />
+    }
+
+    if (route.kind === 'checklist-execution-detail') {
+      return <ChecklistExecutionDetailPage executionId={route.executionId} />
+    }
+
     if (route.path === '/login') {
       return <LoginPage />
     }
@@ -244,6 +287,7 @@ function App() {
       return (
         <ExecutionFeedPage
           onOpenAction={(id) => navigate(`/actions/${id}`)}
+          onOpenChecklist={(id) => navigate(`/checklists/executions/${id}`)}
           onNavigate={navigate}
         />
       )
@@ -265,6 +309,14 @@ function App() {
 
     if (route.path === '/team/invite') {
       return <TeamInvitePage />
+    }
+
+    if (route.path === '/checklists') {
+      return <ChecklistHubPage onNavigate={navigate} />
+    }
+
+    if (route.path === '/checklists/shared' || route.path === '/checklists/personal') {
+      return <ChecklistHubRedirect />
     }
 
     if (route.path === '/onboarding') {

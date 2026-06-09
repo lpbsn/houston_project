@@ -1198,6 +1198,1169 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/checklist-assignments/:
+    get:
+      operationId: v1_establishments_checklist_assignments_list
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChecklistAssignment'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-assignments/{assignment_id}/:
+    get:
+      operationId: v1_establishments_checklist_assignments_retrieve
+      parameters:
+      - in: path
+        name: assignment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistAssignment'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_checklist_assignments_partial_update
+      parameters:
+      - in: path
+        name: assignment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistAssignmentUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistAssignmentUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistAssignmentUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistAssignment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-assignments/{assignment_id}/deactivate/:
+    post:
+      operationId: v1_establishments_checklist_assignments_deactivate_create
+      parameters:
+      - in: path
+        name: assignment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistAssignment'
+          description: ''
+        '204':
+          description: Assignment removed (no execution history).
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistPersonalExecutionConflict'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-executions/{execution_id}/:
+    get:
+      operationId: v1_establishments_checklist_executions_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistExecutionDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-executions/{execution_id}/cancel/:
+    post:
+      operationId: v1_establishments_checklist_executions_cancel_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/create-observation/:
+    post:
+      operationId: v1_establishments_checklist_task_executions_create_observation_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskCreateObservationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskCreateObservationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskCreateObservationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTaskCreateObservationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/mark-done/:
+    post:
+      operationId: v1_establishments_checklist_task_executions_mark_done_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTaskExecution'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/skip/:
+    post:
+      operationId: v1_establishments_checklist_task_executions_skip_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskSkipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskSkipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskSkipRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTaskExecution'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-task-templates/{task_template_id}/:
+    patch:
+      operationId: v1_establishments_checklist_task_templates_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistTaskTemplateUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistTaskTemplateUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistTaskTemplateUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTaskTemplate'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    delete:
+      operationId: v1_establishments_checklist_task_templates_destroy
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/:
+    get:
+      operationId: v1_establishments_checklist_templates_list
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - personal
+          - shared
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChecklistTemplateListItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    post:
+      operationId: v1_establishments_checklist_templates_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTemplateDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/:
+    get:
+      operationId: v1_establishments_checklist_templates_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTemplateDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_checklist_templates_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistTemplateUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistTemplateUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChecklistTemplateUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTemplateDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    delete:
+      operationId: v1_establishments_checklist_templates_destroy
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: No response body
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistPersonalExecutionConflict'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/activate/:
+    post:
+      operationId: v1_establishments_checklist_templates_activate_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTemplateDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/assignments/:
+    post:
+      operationId: v1_establishments_checklist_templates_assignments_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistAssignmentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistAssignmentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistAssignmentCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistAssignment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/deactivate/:
+    post:
+      operationId: v1_establishments_checklist_templates_deactivate_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTemplateDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/personal-executions/:
+    post:
+      operationId: v1_establishments_checklist_templates_personal_executions_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistPersonalExecutionConflict'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/tasks/:
+    post:
+      operationId: v1_establishments_checklist_templates_tasks_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskTemplateCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskTemplateCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskTemplateCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTaskTemplate'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/tasks/reorder/:
+    post:
+      operationId: v1_establishments_checklist_templates_tasks_reorder_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskReorderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskReorderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTaskReorderRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChecklistTaskTemplate'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/execution-feed/:
     get:
       operationId: v1_establishments_execution_feed_retrieve
@@ -2146,6 +3309,12 @@ paths:
         Results are tenant-filtered before serialization and return only a minimal
         membership-backed user summary.
       parameters:
+      - in: query
+        name: business_unit_id
+        schema:
+          type: string
+        description: When provided, limits results to active members covering this
+          BusinessUnit (Owner/Director implicitly; Manager/Staff via scope).
       - in: path
         name: establishment_id
         schema:
@@ -3643,6 +4812,556 @@ components:
       - default_unit_type
       - key
       - label
+    ChecklistAssignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        checklist_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_to_id:
+          type: string
+          format: uuid
+        assigned_to_display_name:
+          type: string
+        assigned_by_id:
+          type: string
+          format: uuid
+        assigned_by_display_name:
+          type: string
+        business_unit:
+          $ref: '#/components/schemas/ChecklistBusinessUnit'
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ChecklistAssignmentPermissionHints'
+      required:
+      - assigned_by_display_name
+      - assigned_by_id
+      - assigned_to_display_name
+      - assigned_to_id
+      - business_unit
+      - checklist_template_id
+      - created_at
+      - end_at
+      - end_date
+      - id
+      - permission_hints
+      - recurrence_days
+      - start_at
+      - start_date
+      - status
+      - updated_at
+    ChecklistAssignmentCreateRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required:
+      - assigned_to
+      - end_at
+      - end_date
+      - start_at
+      - start_date
+    ChecklistAssignmentPermissionHints:
+      type: object
+      properties:
+        can_update:
+          type: boolean
+        can_deactivate:
+          type: boolean
+      required:
+      - can_deactivate
+      - can_update
+    ChecklistBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - key
+      - label
+    ChecklistExecutionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        checklist_type:
+          type: string
+        checklist_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        checklist_assignment_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        template_title:
+          type: string
+        template_description:
+          type: string
+        business_unit:
+          allOf:
+          - $ref: '#/components/schemas/ChecklistBusinessUnit'
+          nullable: true
+        assigned_to_id:
+          type: string
+          format: uuid
+        assigned_to_display_name:
+          type: string
+        assigned_by_id:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_by_display_name:
+          type: string
+          nullable: true
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        done_at:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        task_executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistTaskExecution'
+        permission_hints:
+          $ref: '#/components/schemas/ChecklistExecutionPermissionHints'
+      required:
+      - assigned_by_display_name
+      - assigned_by_id
+      - assigned_to_display_name
+      - assigned_to_id
+      - business_unit
+      - canceled_at
+      - checklist_assignment_id
+      - checklist_template_id
+      - checklist_type
+      - created_at
+      - done_at
+      - end_at
+      - id
+      - last_activity_at
+      - occurrence_date
+      - permission_hints
+      - start_at
+      - started_at
+      - status
+      - task_executions
+      - template_description
+      - template_title
+      - updated_at
+      - visible_from
+    ChecklistExecutionPermissionHints:
+      type: object
+      properties:
+        can_execute_tasks:
+          type: boolean
+        can_cancel:
+          type: boolean
+      required:
+      - can_cancel
+      - can_execute_tasks
+    ChecklistFeedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        checklist_type:
+          type: string
+        status:
+          type: string
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_overdue:
+          type: boolean
+        business_unit_key:
+          type: string
+          nullable: true
+        business_unit_label:
+          type: string
+          nullable: true
+        assigned_to_display_name:
+          type: string
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        progress_treated_count:
+          type: integer
+        progress_total_count:
+          type: integer
+      required:
+      - assigned_to_display_name
+      - business_unit_key
+      - business_unit_label
+      - checklist_type
+      - created_at
+      - end_at
+      - id
+      - is_overdue
+      - last_activity_at
+      - progress_total_count
+      - progress_treated_count
+      - status
+      - title
+    ChecklistPersonalExecutionConflict:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        active_execution_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - code
+      - detail
+    ChecklistTaskCreateObservationRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 10
+        temporary_upload_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 3
+      required:
+      - text
+    ChecklistTaskCreateObservationResponse:
+      type: object
+      properties:
+        task_execution_id:
+          type: string
+          format: uuid
+        observation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        processing_status:
+          type: string
+      required:
+      - observation_id
+      - processing_status
+      - status
+      - task_execution_id
+    ChecklistTaskExecution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task:
+          type: string
+        position:
+          type: integer
+        status:
+          type: string
+        observation_id:
+          type: string
+          format: uuid
+          nullable: true
+        skipped_reason:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        skipped_at:
+          type: string
+          format: date-time
+          nullable: true
+        observation_created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - completed_at
+      - id
+      - observation_created_at
+      - observation_id
+      - position
+      - skipped_at
+      - skipped_reason
+      - status
+      - task
+    ChecklistTaskReorderRequest:
+      type: object
+      properties:
+        ordered_task_template_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - ordered_task_template_ids
+    ChecklistTaskSkipRequest:
+      type: object
+      properties:
+        skipped_reason:
+          type: string
+          nullable: true
+          maxLength: 500
+    ChecklistTaskTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task:
+          type: string
+        position:
+          type: integer
+      required:
+      - id
+      - position
+      - task
+    ChecklistTaskTemplateCreateRequest:
+      type: object
+      properties:
+        task:
+          type: string
+          maxLength: 500
+        position:
+          type: integer
+          minimum: 1
+      required:
+      - task
+    ChecklistTemplateCreateRequest:
+      type: object
+      properties:
+        checklist_type:
+          $ref: '#/components/schemas/ChecklistTypeEnum'
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          default: ''
+          maxLength: 2000
+        business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - checklist_type
+      - title
+    ChecklistTemplateDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        checklist_type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        business_unit:
+          allOf:
+          - $ref: '#/components/schemas/ChecklistBusinessUnit'
+          nullable: true
+        task_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ChecklistTemplatePermissionHints'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistTaskTemplate'
+      required:
+      - business_unit
+      - checklist_type
+      - created_at
+      - description
+      - id
+      - permission_hints
+      - status
+      - task_count
+      - tasks
+      - title
+      - updated_at
+    ChecklistTemplateListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        checklist_type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        business_unit:
+          allOf:
+          - $ref: '#/components/schemas/ChecklistBusinessUnit'
+          nullable: true
+        task_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ChecklistTemplatePermissionHints'
+      required:
+      - business_unit
+      - checklist_type
+      - created_at
+      - description
+      - id
+      - permission_hints
+      - status
+      - task_count
+      - title
+      - updated_at
+    ChecklistTemplatePermissionHints:
+      type: object
+      properties:
+        can_update:
+          type: boolean
+        can_manage_tasks:
+          type: boolean
+        can_activate:
+          type: boolean
+        can_deactivate:
+          type: boolean
+        can_delete:
+          type: boolean
+        can_create_assignment:
+          type: boolean
+        can_create_personal_execution:
+          type: boolean
+      required:
+      - can_activate
+      - can_create_assignment
+      - can_create_personal_execution
+      - can_deactivate
+      - can_delete
+      - can_manage_tasks
+      - can_update
+    ChecklistTypeEnum:
+      enum:
+      - personal
+      - shared
+      type: string
+      description: |-
+        * `personal` - personal
+        * `shared` - shared
     CsrfResponse:
       type: object
       properties:
@@ -3834,9 +5553,14 @@ components:
         item_type:
           type: string
         action:
-          $ref: '#/components/schemas/ActionFeedItem'
+          allOf:
+          - $ref: '#/components/schemas/ActionFeedItem'
+          nullable: true
+        checklist:
+          allOf:
+          - $ref: '#/components/schemas/ChecklistFeedItem'
+          nullable: true
       required:
-      - action
       - item_type
     ExecutionFeedResponse:
       type: object
@@ -4348,6 +6072,47 @@ components:
         description:
           type: string
           minLength: 50
+    PatchedChecklistAssignmentUpdateRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+          nullable: true
+    PatchedChecklistTaskTemplateUpdateRequest:
+      type: object
+      properties:
+        task:
+          type: string
+          maxLength: 500
+        position:
+          type: integer
+          minimum: 1
+    PatchedChecklistTemplateUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
     PatchedMembershipUpdateRequest:
       type: object
       properties:

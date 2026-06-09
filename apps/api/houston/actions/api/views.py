@@ -21,6 +21,7 @@ from houston.actions.api.serializers import (
     serialize_action_feed_item,
 )
 from houston.actions.exceptions import ActionStateError, ActionValidationError
+from houston.actions.execution_feed import build_execution_feed_page
 from houston.actions.models import Action
 from houston.actions.permissions import (
     can_accept_action,
@@ -31,11 +32,7 @@ from houston.actions.permissions import (
     can_update_action_due_at,
     can_validate_action_on_object,
 )
-from houston.actions.selectors import (
-    apply_execution_feed_sorting,
-    execution_feed_queryset,
-    get_action_for_detail,
-)
+from houston.actions.selectors import get_action_for_detail
 from houston.actions.services import (
     accept_action,
     cancel_action,
@@ -46,6 +43,7 @@ from houston.actions.services import (
     update_action_due_at,
     validate_action,
 )
+from houston.checklists.feed_serializers import serialize_checklist_feed_item
 from houston.establishments.permissions import HasActiveMembership, can_create_action
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
@@ -135,30 +133,41 @@ class ExecutionFeedView(EstablishmentScopedActionMixin, APIView):
             )
 
         page_size = _parse_page_size(request.query_params.get("page_size"))
-        queryset = apply_execution_feed_sorting(
-            execution_feed_queryset(
-                membership=membership,
-                view_mode=view_mode,  # type: ignore[arg-type]
-            ),
+        feed_items, total_count, has_more = build_execution_feed_page(
             membership=membership,
+            view_mode=view_mode,  # type: ignore[arg-type]
+            page_size=page_size,
         )
-        total_count = queryset.count()
-        items_qs = list(queryset[:page_size])
+
+        serialized_items = []
+        for feed_item in feed_items:
+            if feed_item.item_type == "action":
+                serialized_items.append(
+                    {
+                        "item_type": "action",
+                        "action": serialize_action_feed_item(
+                            action=feed_item.action,
+                            membership=membership,
+                            is_overdue=_action_overdue(feed_item.action),
+                        ),
+                        "checklist": None,
+                    }
+                )
+            else:
+                serialized_items.append(
+                    {
+                        "item_type": "checklist",
+                        "action": None,
+                        "checklist": serialize_checklist_feed_item(
+                            execution=feed_item.checklist,
+                        ),
+                    }
+                )
 
         payload = {
-            "items": [
-                {
-                    "item_type": "action",
-                    "action": serialize_action_feed_item(
-                        action=action,
-                        membership=membership,
-                        is_overdue=_action_overdue(action),
-                    ),
-                }
-                for action in items_qs
-            ],
+            "items": serialized_items,
             "next_cursor": None,
-            "has_more": total_count > page_size,
+            "has_more": has_more,
         }
         return Response(ExecutionFeedResponseSerializer(payload).data)
 

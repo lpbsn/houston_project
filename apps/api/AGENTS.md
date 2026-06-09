@@ -259,7 +259,7 @@ Rules (Phase 4 — **implemented** in codebase; archive Signal and timeline rema
 
 ### Action
 
-Phase 5 — **core implemented** (lifecycle + Execution Feed; notifications, comments, checklists in feed remain out of scope).
+Phase 5 — **core implemented** (lifecycle + Execution Feed Actions). Phase 7 Checklists — **implemented** (templates, assignments, executions, polymorphic Execution Feed merge). Notifications and comments remain out of scope.
 
 Allowed transitions:
 
@@ -277,15 +277,17 @@ Generic status mutation endpoints are forbidden.
 
 ### Feeds
 
-Phase 4 Signal Feed and Phase 5 Execution Feed — **core implemented** in codebase.
+Phase 4 Signal Feed and Phase 5/7 Execution Feed — **core implemented** in codebase.
+
+Execution Feed is **polymorphic** (`item_type: action | checklist`). Orchestration lives in `houston/actions/execution_feed.py`; checklist feed querysets in `houston/checklists/selectors.py`; lazy materialization in `houston/checklists/materialization.py`. Checklist items are prioritized in page assembly (checklists first, Actions fill remaining slots).
 
 Backend applies:
 
 - RBAC
 - establishment scope
-- `view_mode=personal|general` (Signal Feed: personal uses `MembershipScope`; Execution Feed personal uses assigned responsibilities)
+- `view_mode=personal|general` (Signal Feed: personal uses `MembershipScope`; Execution Feed personal uses assigned responsibilities for Actions and checklist rules for Checklists)
 - filters (Signal Feed: partial — see `schema.yml`)
-- sorting
+- sorting (per-type; see `feed_domain.md` for merge rules)
 - pagination (cursor envelope)
 
 Never return unauthorized data and rely on frontend hiding.
@@ -411,6 +413,8 @@ Tasks must not:
 - become the source of business truth
 
 Broker messages must stay small and non-sensitive.
+
+Celery Beat (optional `celery-beat` Compose service): `CELERY_BEAT_SCHEDULE` in `config/settings.py` runs `materialize_checklist_assignments_horizon_task` daily (UTC). Checklist horizon materialization also runs eagerly on assignment create and lazily on execution-feed read — Beat is not the only path.
 
 ------
 
