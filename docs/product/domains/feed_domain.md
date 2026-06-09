@@ -1,8 +1,8 @@
 # Feed Domain
 
 Status: authoritative
-Last reviewed: 2026-06-08
-Implementation status: partial (Signal Feed Phase 4 + Execution Feed Phase 5 Actions implemented; Checklist items Phase 7 target — not implemented)
+Last reviewed: 2026-06-09
+Implementation status: partial (Signal Feed Phase 4 + Execution Feed Phase 5/7 implemented — polymorphic Actions + Checklists)
 
 ## 1. Purpose
 
@@ -12,7 +12,7 @@ Feed owns Houston's authorized operational read projections:
 - safe feed items, backend-applied filters, backend-applied sorting, pagination, and optional permission hints.
 
 Feed does not own:
-- Signal, Action, or candidate Checklist lifecycle rules.
+- Signal, Action, or Checklist lifecycle rules.
 - Notification Center behavior.
 - realtime transport.
 - RBAC policy definition.
@@ -35,9 +35,11 @@ Feed is a read/projection domain. It is not business truth.
 
 Current truth:
 - `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
-- `GET execution-feed/` implemented (Phase 5, Actions only) with required `view_mode=personal|general`.
-- Response envelope: `items`, `next_cursor`, `has_more`.
-- Execution Feed **Vue globale** for Staff: created/assigned Actions only (not scope-based); **Ma vue** uses the same rule for Staff.
+- `GET execution-feed/` implemented (Phase 5 Actions + Phase 7 Checklists) with required `view_mode=personal|general`.
+- Response envelope: `items`, `next_cursor`, `has_more`; each item has `item_type: "action" | "checklist"`.
+- Execution Feed merge: visible checklist items are **prioritized** — up to `page_size` checklists first (sorted by `last_activity_at desc`), then Actions fill remaining slots (Action sort unchanged). Not a single cross-type `last_activity_at` interleave.
+- Lazy checklist materialization runs on feed read (`ensure_visible_executions_materialized`) before querying checklist items.
+- Execution Feed **Vue globale** for Staff: created/assigned Actions only (not scope-based); **Ma vue** uses the same rule for Staff. Checklist visibility follows [`checklist_domain.md`](checklist_domain.md) §9.
 
 ## 3. Out of Scope
 
@@ -61,7 +63,7 @@ Current truth:
 - Frontend filters, tabs, or view modes do not grant visibility.
 - Feed items must not contain raw Observation text.
 - Feed items must not contain raw media URLs or signed URLs.
-- Permission hints are UX helpers only, not authorization authority.
+- Permission hints are UX helpers only, not authorization authority (Action feed items may expose hints; Checklist items use safe summaries without per-item hints in MVP).
 - Lifecycle changes must happen through owning domain command endpoints.
 - Realtime invalidates or refetches feed queries; it does not carry complete feed state.
 - Search must not leak raw Observation content.
@@ -82,13 +84,12 @@ Current truth:
 
 - `ExecutionFeed`
   - Structured execution summary view for operational follow-up.
-  - **Implemented today:** Action items only.
-  - **Phase 7 target:** Checklist execution items alongside Actions (see [`checklist_domain.md`](checklist_domain.md)).
+  - **Implemented today:** polymorphic Action and Checklist execution items (see [`checklist_domain.md`](checklist_domain.md)).
 
 - `FeedItem`
   - Safe summary of a visible domain object.
   - Signal Feed item = structured Signal summary, never raw Observation text.
-  - Execution Feed item = structured execution summary for Action (implemented) and Checklist execution (Phase 7 target).
+  - Execution Feed item = structured execution summary for Action or Checklist (`item_type` discriminant).
 
 - `FeedFilter`
   - Backend query constraints such as `view_mode`, domains, statuses, urgency, item type, or `requires_my_action`.
@@ -112,7 +113,7 @@ Current truth:
 
 ## 6. Lifecycle / Statuses
 
-Not applicable as a business lifecycle in MVP. Feed reflects authorized read state from Signal, Action, and (Phase 7) Checklist domains.
+Not applicable as a business lifecycle in MVP. Feed reflects authorized read state from Signal, Action, and Checklist domains.
 
 Frontend display states may include:
 - loading
@@ -139,9 +140,9 @@ Frontend display states may include:
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
 | **Signal Feed** | Active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes. | All active establishment Signals. RBAC feed access only. |
-| **Execution Feed** (Actions — implemented) | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **personal** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. | **Owner/Director:** all active establishment Actions. **Manager:** personal set plus Actions in **`MembershipScope`**. **Staff:** same as personal (created/assigned only). **Not** subscription-based. |
+| **Execution Feed** (Actions + Checklists — implemented) | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **personal** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. Checklist items: assigned shared executions + own personal executions (see checklist rules below). | **Owner/Director:** all active establishment Actions + all visible checklist executions. **Manager:** personal Actions plus Actions in **`MembershipScope`**, plus scoped shared checklist executions + own personal. **Staff:** created/assigned Actions + assigned shared checklist executions + own personal. **Not** subscription-based. |
 
-**Execution Feed — Checklist items (Phase 7 target, not implemented):** visibility rules are defined in [`checklist_domain.md`](checklist_domain.md) §9 and §3.6. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. Shared executions use `visible_from = start_at - 1 hour`. `due_at` does not remove overdue items from the active feed — only `done` and `canceled` exclude items. Shared checklist executions use `business_unit` + `MembershipScope` for Manager general view; Staff see only assigned shared executions and own personal executions.
+**Execution Feed — Checklist items (implemented):** visibility rules in [`checklist_domain.md`](checklist_domain.md) §9 and §3.6. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. Shared executions use `visible_from = start_at - 1 hour`. `end_at` does not remove overdue items from the active feed — only `done` and `canceled` exclude items. Overdue indicator: `is_overdue` when `now > end_at` (shared only). Shared checklist executions use `business_unit` + `MembershipScope` for Manager general view; Staff see only assigned shared executions and own personal executions.
 
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
@@ -165,9 +166,9 @@ Implemented endpoints (establishment-scoped):
 
 Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
 
-Candidate / not implemented: advanced search, feed counts, checklist items in Execution Feed (Phase 7 — see [`checklist_domain.md`](checklist_domain.md) §3.16 for target sort), saved views.
+Candidate / not implemented: advanced search, feed counts, saved views, stable cross-type cursor pagination.
 
-**Phase 7 Checklist feed sort target** (when implemented): `last_activity_at desc`, `created_at desc` across Action and Checklist items. Checklist feed items may expose an overdue indicator when `now > due_at` but overdue does not affect inclusion or MVP sort. Implemented Action feed today uses additional sort keys (`requires_me_rank`, overdue, status) — Phase 7 integration must preserve existing Action behavior.
+**Execution Feed page merge (implemented):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at` and `is_overdue` (`now > end_at`); overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)).
 
 Detail routes belong to owning domains, not Feed.
 
@@ -236,4 +237,5 @@ Vue générale for each role above must still return **all** active establishmen
 
 - Feed items expose safe structured summaries only (no raw Observation text).
 - Signal Feed items expose BusinessUnit / ActivitySubject labels and keys for UI badges.
-- Execution Feed items expose Action BU/AS fields per `action_domain.md`.
+- Execution Feed Action items expose BU/AS fields per `action_domain.md`.
+- Execution Feed Checklist items expose safe summary: title, progress, `end_at`, `is_overdue`, `business_unit` label, status per [`checklist_domain.md`](checklist_domain.md) §13.

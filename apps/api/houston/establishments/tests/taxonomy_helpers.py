@@ -14,16 +14,23 @@ from houston.establishments.taxonomy_normalization import normalize_activity_sub
 from houston.organizations.models import Organization
 
 
-def create_establishment(*, name: str = "Demo Hotel") -> Establishment:
+def create_establishment(
+    *,
+    name: str = "Demo Hotel",
+    timezone: str | None = None,
+) -> Establishment:
     organization = Organization.objects.create(
         name=f"{name} Group {uuid.uuid4().hex[:6]}",
         status=Organization.Status.ACTIVE,
     )
-    return Establishment.objects.create(
-        name=name,
-        organization=organization,
-        status=Establishment.Status.ACTIVE,
-    )
+    kwargs = {
+        "name": name,
+        "organization": organization,
+        "status": Establishment.Status.ACTIVE,
+    }
+    if timezone is not None:
+        kwargs["timezone"] = timezone
+    return Establishment.objects.create(**kwargs)
 
 
 def create_membership(

@@ -156,11 +156,29 @@ class ScopedUserSearchRequestSerializer(serializers.Serializer):
         trim_whitespace=True,
         min_length=2,
     )
+    business_unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
 
-    q = serializers.CharField(
-        trim_whitespace=True,
-        min_length=2,
-    )
+    def validate(self, attrs):
+        business_unit_id = attrs.get("business_unit_id")
+        if business_unit_id is None:
+            return attrs
+
+        establishment_id = self.context.get("establishment_id")
+        if establishment_id is None:
+            return attrs
+
+        business_unit = BusinessUnit.objects.filter(
+            id=business_unit_id,
+            establishment_id=establishment_id,
+            active=True,
+        ).first()
+        if business_unit is None:
+            raise serializers.ValidationError(
+                {"business_unit_id": "Invalid business unit."},
+            )
+
+        attrs["business_unit"] = business_unit
+        return attrs
 
 
 class WorkspaceSummaryEstablishmentSerializer(serializers.Serializer):

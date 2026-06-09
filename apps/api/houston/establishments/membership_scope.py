@@ -108,6 +108,39 @@ def membership_scope_covers_business_unit(
     return False
 
 
+_ADMIN_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }
+)
+
+
+def membership_covers_business_unit_including_admins(
+    membership: EstablishmentMembership,
+    business_unit: BusinessUnit | None,
+) -> bool:
+    """Whether an active member operationally covers a BusinessUnit.
+
+    Owner/Director: implicit all-BU access within the establishment.
+    Manager/Staff: explicit MembershipScope rows only.
+    """
+    if business_unit is None or not business_unit.active:
+        return False
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+    if membership.establishment_id != business_unit.establishment_id:
+        return False
+    if membership.role in _ADMIN_ROLES:
+        return True
+    if membership.role in {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    }:
+        return membership_scope_covers_business_unit(membership, business_unit)
+    return False
+
+
 def build_signal_feed_scope_q_v2(*, membership: EstablishmentMembership) -> Q | None:
     """Ma vue filter on affected OR responsible BusinessUnit scopes."""
     bu_ids: set[UUID] = set()

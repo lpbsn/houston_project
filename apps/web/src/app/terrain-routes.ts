@@ -35,6 +35,15 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/chat',
   '/profile',
   '/team/invite',
+  '/checklists',
+  '/checklists/shared',
+  '/checklists/personal',
+])
+
+const CHECKLIST_TERRAIN_PATHS = new Set<string>([
+  '/checklists',
+  '/checklists/shared',
+  '/checklists/personal',
 ])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
@@ -54,7 +63,11 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
     route.kind === 'action-create' ||
-    route.kind === 'action-detail'
+    route.kind === 'action-detail' ||
+    route.kind === 'checklist-template-create' ||
+    route.kind === 'checklist-template-detail' ||
+    route.kind === 'checklist-execution-create' ||
+    route.kind === 'checklist-execution-detail'
   ) {
     return true
   }
@@ -71,11 +84,18 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
     route.kind === 'action-create' ||
-    route.kind === 'action-detail'
+    route.kind === 'action-detail' ||
+    route.kind === 'checklist-template-create' ||
+    route.kind === 'checklist-template-detail' ||
+    route.kind === 'checklist-execution-create' ||
+    route.kind === 'checklist-execution-detail'
   ) {
     return true
   }
   if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
+    return true
+  }
+  if (route.kind === 'static' && CHECKLIST_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   return false
@@ -172,6 +192,81 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
+  if (route.kind === 'static' && route.path === '/checklists') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Gérer les checklists',
+      backPath: '/profile',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/checklists/shared') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Checklists partagées',
+      backPath: '/checklists',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/checklists/personal') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Checklists personnelles',
+      backPath: '/checklists',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'checklist-template-create') {
+    const backPath = '/checklists'
+    return {
+      topbarVariant: 'detail',
+      title:
+        route.checklistType === 'shared'
+          ? 'Nouvelle checklist partagée'
+          : 'Nouvelle checklist personnelle',
+      backPath,
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'checklist-template-detail') {
+    const backPath = '/checklists'
+    return {
+      topbarVariant: 'detail',
+      title: 'Détail checklist',
+      backPath,
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'checklist-execution-create') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Checklist personnelle',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'checklist-execution-detail') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Checklist',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
   throw new Error('getTerrainRouteConfig called for a non-terrain route')
 }
 
@@ -193,6 +288,22 @@ export function getTerrainContentKey(route: AppRoute): string {
     return 'action-create'
   }
 
+  if (route.kind === 'checklist-template-create') {
+    return `checklist-template-create-${route.checklistType}`
+  }
+
+  if (route.kind === 'checklist-template-detail') {
+    return `checklist-template-detail-${route.checklistType}-${route.templateId}`
+  }
+
+  if (route.kind === 'checklist-execution-create') {
+    return 'checklist-execution-create'
+  }
+
+  if (route.kind === 'checklist-execution-detail') {
+    return `checklist-execution-detail-${route.executionId}`
+  }
+
   if (route.kind === 'static') {
     switch (route.path) {
       case '/reporting':
@@ -205,6 +316,12 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'chat'
       case '/profile':
         return 'profile'
+      case '/checklists':
+        return 'checklists-hub'
+      case '/checklists/shared':
+        return 'checklists-shared'
+      case '/checklists/personal':
+        return 'checklists-personal'
       default:
         break
     }

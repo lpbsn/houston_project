@@ -1,7 +1,7 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-06-08
+Last reviewed: 2026-06-09
 Implementation status: implemented for Phase 1
 
 ## 1. Purpose
@@ -17,7 +17,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Membership-backed BusinessUnit scope through `MembershipScope` rows.
 - Establishment visibility checks, action permission checks, and BusinessUnit scope access checks.
 - Backend permission enforcement for API reads, writes, command endpoints, feeds, realtime subscriptions, signed media access, notifications, comments, and chat access.
-- Frontend permission hints as convenience only, never as security authority.
+- Frontend permission hints as convenience only, never as security authority (implemented on Actions and Checklists API responses; see [`checklist_domain.md`](checklist_domain.md) §9.1).
 
 ## 3. Out of Scope
 
@@ -163,11 +163,21 @@ Implemented response truths:
 - Scoped user search is tenant-filtered at selector/queryset level before serialization and does not expose cross-establishment users.
 - Scoped user search response fields are intentionally minimal and do not expose broader user profile or tenant metadata.
 
+Additional implemented establishment-scoped endpoints with backend RBAC (confirm paths in `apps/api/schema.yml` before use):
+
+- Signal feed: `GET .../signal-feed/`
+- Execution feed (Actions + Checklists): `GET .../execution-feed/`
+- Actions lifecycle and commands under `.../actions/`
+- Checklists templates, assignments, executions, and task commands under `.../checklist-*`
+- Observations submit and processing status under `.../observations/`
+
+Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`action_domain.md`](action_domain.md), [`checklist_domain.md`](checklist_domain.md) §9, [`feed_domain.md`](feed_domain.md) §7.
+
 Candidate endpoints only:
 
 - Role assignment or BusinessUnit scope assignment endpoints.
 - Permission introspection endpoints.
-- Signal, action, checklist, comment, notification, chat, feed, and signed-media endpoints whose RBAC behavior is described in product docs but not present in `apps/api/schema.yml`.
+- Comment, notification, chat, and signed-media endpoints whose RBAC behavior is described in product docs but not present in `apps/api/schema.yml`.
 
 Target API convention from active product docs, not yet confirmed by current public resource endpoints:
 

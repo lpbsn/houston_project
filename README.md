@@ -77,9 +77,9 @@ The project currently uses a Django modular monolith as the business authority a
 - Phase 4 AI observation pipeline → Signal feed/detail (Celery + fake/OpenAI providers)
 - Signal feed (`/signals`) and detail with pin/unpin/urgency/resolve/cancel commands (no manual Signal CRUD)
 - Phase 5 core implemented: Action lifecycle + Execution Feed (`/actions/`, `/execution-feed/`)
+- Phase 7 Checklists implemented: templates, assignments, executions, polymorphic Execution Feed (Actions + Checklists)
 
 ## What Is Not Implemented Yet
-- Checklists runtime (if not yet exposed via API)
 - Notifications
 - Realtime business workflows + advanced feed surface
 - Production-grade frontend feature surface
@@ -153,6 +153,12 @@ docker compose up -d --force-recreate api celery
 ```
 
 Requires Redis (`CELERY_BROKER_URL`). Without the `celery` service, submitted observations stay `queued`. Automated tests use the fake provider via pytest fixtures (no live OpenAI in CI).
+
+Optional checklist horizon materialization (shared assignments): start Beat in addition to the worker. Lazy materialization on execution-feed read still applies without Beat.
+
+```bash
+docker compose up -d celery celery-beat
+```
 
 - Poll processing status after submit: `GET /api/v1/establishments/{id}/observations/{observation_id}/processing-status/`
 

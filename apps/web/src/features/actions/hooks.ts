@@ -148,12 +148,20 @@ export function useUpdateActionDueAtMutation(
   })
 }
 
-export function useEstablishmentUserSearchQuery(establishmentId: string, query: string) {
+export function useEstablishmentUserSearchQuery(
+  establishmentId: string,
+  query: string,
+  options: { businessUnitId?: string } = {},
+) {
   const trimmedQuery = query.trim()
+  const businessUnitId = options.businessUnitId
 
   return useQuery({
-    queryKey: establishmentUserSearchQueryKey(establishmentId, trimmedQuery),
-    queryFn: () => searchEstablishmentUsers(establishmentId, trimmedQuery),
+    queryKey: establishmentUserSearchQueryKey(establishmentId, trimmedQuery, businessUnitId),
+    queryFn: () =>
+      searchEstablishmentUsers(establishmentId, trimmedQuery, {
+        businessUnitId,
+      }),
     enabled: Boolean(establishmentId) && trimmedQuery.length >= 2,
   })
 }

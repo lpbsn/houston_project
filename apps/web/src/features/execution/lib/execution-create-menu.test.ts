@@ -1,35 +1,36 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  EXECUTION_CREATE_MENU_OPTIONS,
-  getExecutionCreateMenuOption,
+  canOpenExecutionCreateMenu,
+  getExecutionCreateMenuOptions,
 } from './execution-create-menu'
 
 describe('execution create menu options', () => {
-  it('exposes Action as enabled and Checklist as disabled with Bientôt badge', () => {
-    expect(EXECUTION_CREATE_MENU_OPTIONS).toHaveLength(2)
-
-    const action = getExecutionCreateMenuOption('action')
-    expect(action).toEqual({
-      id: 'action',
-      label: 'Action',
-      disabled: false,
-    })
-
-    const checklist = getExecutionCreateMenuOption('checklist')
-    expect(checklist).toEqual({
-      id: 'checklist',
-      label: 'Checklist',
-      disabled: true,
-      badge: 'Bientôt',
-    })
+  it('exposes Action and personal checklist for owner, director, and manager', () => {
+    for (const role of ['owner', 'director', 'manager'] as const) {
+      expect(getExecutionCreateMenuOptions(role)).toEqual([
+        { id: 'action', label: 'Action', disabled: false },
+        { id: 'personal_checklist', label: 'Checklist personnelle', disabled: false },
+      ])
+    }
   })
 
-  it('does not define a selectable checklist handler in menu config', () => {
-    const checklist = getExecutionCreateMenuOption('checklist')
-    expect(checklist?.disabled).toBe(true)
-    expect(EXECUTION_CREATE_MENU_OPTIONS.every((option) => option.id !== 'checklist' || option.disabled)).toBe(
-      true,
-    )
+  it('exposes only personal checklist for staff', () => {
+    expect(getExecutionCreateMenuOptions('staff')).toEqual([
+      { id: 'personal_checklist', label: 'Checklist personnelle', disabled: false },
+    ])
+  })
+
+  it('never exposes shared checklist creation from the feed menu', () => {
+    for (const role of ['owner', 'director', 'manager', 'staff'] as const) {
+      const options = getExecutionCreateMenuOptions(role)
+      expect(options.some((option) => option.label.toLowerCase().includes('partag'))).toBe(false)
+      expect(options.some((option) => option.id === 'checklist')).toBe(false)
+    }
+  })
+
+  it('allows staff to open the create menu', () => {
+    expect(canOpenExecutionCreateMenu('staff')).toBe(true)
+    expect(canOpenExecutionCreateMenu(null)).toBe(false)
   })
 })

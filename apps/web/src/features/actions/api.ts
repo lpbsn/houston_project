@@ -18,8 +18,15 @@ export const actionsQueryKeys = {
     ['actions', 'detail', establishmentId, actionId] as const,
 }
 
-export const establishmentUserSearchQueryKey = (establishmentId: string, query: string) =>
-  ['users', 'search', establishmentId, query] as const
+export const establishmentUserSearchQueryKey = (
+  establishmentId: string,
+  query: string,
+  businessUnitId?: string,
+) => ['users', 'search', establishmentId, query, businessUnitId ?? null] as const
+
+export type EstablishmentUserSearchOptions = {
+  businessUnitId?: string
+}
 
 export class ActionsApiError extends Error {
   status: number
@@ -202,13 +209,19 @@ export async function updateActionDueAt(
 export async function searchEstablishmentUsers(
   establishmentId: string,
   query: string,
+  options: EstablishmentUserSearchOptions = {},
 ): Promise<ScopedUserSearchResult[]> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/users/search/', {
         params: {
           path: { establishment_id: establishmentId },
-          query: { q: query },
+          query: {
+            q: query,
+            ...(options.businessUnitId
+              ? { business_unit_id: options.businessUnitId }
+              : {}),
+          },
         },
         headers: getAuthHeaders(accessToken),
       }),

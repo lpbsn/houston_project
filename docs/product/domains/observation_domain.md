@@ -1,7 +1,7 @@
 # Observation Domain
 
 Status: authoritative
-Last reviewed: 2026-06-08
+Last reviewed: 2026-06-09
 Implementation status: implemented (Phase 3 MVP — submit + processing queued; pipeline Phase 4)
 
 ## 1. Purpose
@@ -34,7 +34,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - Processing enqueue after persistence.
 - Local-only frontend draft before submit.
 - Simplified post-submit feedback for analysis progress and outcome.
-- Checklist MVP target (not implemented): checklist-origin Observation via `POST .../checklist-task-executions/{id}/create-observation/` (not a public extension of `POST observations/`), with context linkage (`checklist_execution_id`, `checklist_task_execution_id`, extended `origin`). Same 10–1,000 character validation as direct report — no shorter-text exception. See [`checklist_domain.md`](checklist_domain.md) §3.8.
+- Checklist-origin Observation (implemented): via `POST .../checklist-task-executions/{id}/create-observation/` (task command; not a public extension of `POST observations/`), with context linkage (`checklist_execution_id`, `checklist_task_execution_id`, `origin=checklist_task`). Same 10–1,000 character validation as direct report — no shorter-text exception. See [`checklist_domain.md`](checklist_domain.md) §3.8.
 
 ## 3. Out of Scope
 
@@ -88,8 +88,8 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
   - Owned here only as a relationship boundary, not as a media lifecycle contract.
 
 - `ObservationOrigin`
-  - Source context for the submission, such as direct reporting.
-  - Candidate: checklist-origin context and related linkage fields when that flow is implemented.
+  - Source context for the submission, such as direct reporting or checklist task handoff.
+  - Checklist-origin: `origin=checklist_task` with `checklist_execution_id` and `checklist_task_execution_id` linkage (see §2 MVP Scope).
 
 - `LocalObservationDraft`
   - Frontend-only draft state before submit.
@@ -160,8 +160,10 @@ Current API truth is `apps/api/schema.yml`.
 Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/establishments/{establishment_id}/observations/` — submit with `text` (maps to internal `raw_text`) and optional `temporary_upload_ids`; response includes `id`, `submitted_at`, `media_count`, `processing_status` only (no raw text).
 
-Candidate API capabilities only (Checklist MVP — not in `schema.yml` today):
-- submit checklist-origin Observation via `POST .../checklist-task-executions/{id}/create-observation/` only (task command; do not extend public `POST observations/`)
+Implemented checklist-origin endpoint (see `schema.yml`):
+- `POST /api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/create-observation/` — task command only; do not extend public `POST observations/`
+
+Candidate API capabilities only:
 - `GET` processing status (deferred; submit returns `processing_status=queued` in Phase 3)
 - internal or admin retry processing command (Phase 4+)
 

@@ -86,15 +86,50 @@ class ObservationPipelineProvider(Protocol):
     def propose(self, *, input_payload: dict[str, Any]) -> ObservationPipelineProviderResponse: ...
 
 
+def _build_checklist_context(*, observation: Observation) -> dict[str, Any] | None:
+    if observation.origin != Observation.Origin.CHECKLIST_TASK:
+        return None
+    if (
+        observation.checklist_execution_id is None
+        or observation.checklist_task_execution_id is None
+    ):
+        return None
+
+    execution = observation.checklist_execution
+    task_execution = observation.checklist_task_execution
+    business_unit_key = None
+    if execution.business_unit_id is not None:
+        business_unit_key = execution.business_unit.key
+
+    return {
+        "origin": Observation.Origin.CHECKLIST_TASK,
+        "checklist_execution_id": str(execution.id),
+        "checklist_task_execution_id": str(task_execution.id),
+        "template_title": execution.template_title,
+        "task": task_execution.task,
+        "business_unit_key": business_unit_key,
+    }
+
+
 def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
+    observation = (
+        Observation.objects.select_related(
+            "establishment",
+            "checklist_execution",
+            "checklist_execution__business_unit",
+            "checklist_task_execution",
+        )
+        .get(pk=observation.pk)
+    )
     establishment = observation.establishment
     establishment_taxonomy = build_establishment_taxonomy_snapshot(
         establishment_id=establishment.id,
     )
     media_count = observation.media_items.count()
     active_signals_context = _build_active_signals_context(establishment_id=establishment.id)
+    checklist_context = _build_checklist_context(observation=observation)
 
-    return {
+    payload: dict[str, Any] = {
         "observation_id": str(observation.id),
         "establishment_id": str(establishment.id),
         "validated_text": observation.raw_text,
@@ -105,6 +140,9 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     }
+    if checklist_context is not None:
+        payload["checklist_context"] = checklist_context
+    return payload
 
 
 def establishment_can_run_observation_pipeline(*, establishment_id: uuid.UUID) -> bool:
@@ -421,6 +459,9 @@ Tu structures des remontées terrain en propositions CandidateSignal pour Housto
 
 CONTEXTE
 - Le message utilisateur est un JSON. Le texte à analyser est dans "validated_text".
+- Si "checklist_context" est présent, l'observation provient d'une tâche checklist :
+  utiliser template_title, task et business_unit_key (si non null)
+  pour affiner le routage ; ne pas répéter validated_text dans les champs de sortie.
 - La taxonomie autorisée est dans "establishment_taxonomy.business_units" avec :
   key, label, unit_type (dedicated ou transversal), description, activity_subjects[].
 - Chaque activity_subject a key (= normalized_name), label, description.

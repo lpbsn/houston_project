@@ -35,6 +35,17 @@ def establishment(organization):
     return Establishment.objects.create(name="Nice", organization=organization)
 
 
+def test_establishment_defaults_to_europe_paris_timezone(organization):
+    establishment = Establishment.objects.create(name="Paris Pilot", organization=organization)
+    assert establishment.timezone == "Europe/Paris"
+
+
+def test_establishment_rejects_invalid_timezone(establishment):
+    establishment.timezone = "Not/A/Timezone"
+    with pytest.raises(ValidationError):
+        establishment.full_clean()
+
+
 @pytest.fixture
 def user():
     return User.objects.create_user(username="manager_01", password="secret")

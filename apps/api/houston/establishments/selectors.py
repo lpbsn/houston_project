@@ -4,7 +4,10 @@ from django.db import models
 from django.db.models import Q
 
 from houston.accounts.models import User
-from houston.establishments.membership_scope import membership_scope_prefetch
+from houston.establishments.membership_scope import (
+    membership_covers_business_unit_including_admins,
+    membership_scope_prefetch,
+)
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
@@ -149,6 +152,7 @@ def search_users_for_establishment(
     current_membership: EstablishmentMembership | None,
     establishment_id,
     query: str,
+    business_unit: BusinessUnit | None = None,
 ) -> list[EstablishmentMembership] | None:
     if current_membership is None or current_membership.establishment_id != establishment_id:
         return None
@@ -157,7 +161,7 @@ def search_users_for_establishment(
     if not normalized_query:
         return []
 
-    return list(
+    memberships = list(
         _management_membership_queryset(establishment_id=establishment_id)
         .filter(
             user__status=User.Status.ACTIVE,
@@ -172,6 +176,15 @@ def search_users_for_establishment(
             | Q(user__email__icontains=normalized_query)
         )
     )
+
+    if business_unit is None:
+        return memberships
+
+    return [
+        membership
+        for membership in memberships
+        if membership_covers_business_unit_including_admins(membership, business_unit)
+    ]
 
 
 def get_onboarding_session_for_actor(

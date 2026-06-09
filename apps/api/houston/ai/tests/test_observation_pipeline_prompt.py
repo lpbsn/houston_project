@@ -74,6 +74,7 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
         "schema_version",
         "prompt_version",
     }
+    assert "checklist_context" not in payload
     assert payload["active_signals_context"] == []
     assert payload["establishment_taxonomy"]["business_units"][0]["description"] == (
         "Chambres et couloirs."
@@ -123,3 +124,65 @@ def test_build_pipeline_input_includes_active_signals_context_v3():
     assert entry["responsible_business_unit_key"] == "hotel"
     assert entry["activity_subject_key"] == subject.normalized_name
     assert entry["operational_unit_key"] is None
+
+
+@pytest.mark.django_db
+def test_build_pipeline_input_includes_checklist_context_for_checklist_task_origin():
+    from django.utils import timezone
+
+    from houston.checklists.models import ChecklistExecution, ChecklistTaskExecution, ChecklistTemplate
+    from houston.checklists.services import create_checklist_template
+    from houston.checklists.tests.conftest import add_task_template
+    from houston.establishments.models import EstablishmentMembership
+    from houston.establishments.tests.taxonomy_helpers import create_membership
+    from houston.observations.models import Observation
+    from houston.observations.services import submit_observation
+
+    staff_membership = build_membership(role=EstablishmentMembership.Role.STAFF)
+
+    template = create_checklist_template(
+        establishment_id=staff_membership.establishment_id,
+        actor=staff_membership,
+        checklist_type=ChecklistTemplate.ChecklistType.PERSONAL,
+        title="Morning routine",
+    )
+    add_task_template(template=template, task="Check fridge", position=1)
+    template.status = ChecklistTemplate.Status.ACTIVE
+    template.save(update_fields=["status", "updated_at"])
+
+    execution = ChecklistExecution.objects.create(
+        checklist_template=template,
+        checklist_type=ChecklistTemplate.ChecklistType.PERSONAL,
+        establishment_id=staff_membership.establishment_id,
+        assigned_to=staff_membership,
+        assigned_by=None,
+        business_unit=None,
+        template_title=template.title,
+        template_description=template.description,
+        last_activity_at=timezone.now(),
+    )
+    task_execution = ChecklistTaskExecution.objects.create(
+        checklist_execution=execution,
+        task="Check fridge",
+        position=1,
+    )
+
+    observation = submit_observation(
+        membership=staff_membership,
+        text="Fridge temperature too high in kitchen area today",
+        temporary_upload_ids=[],
+        origin=Observation.Origin.CHECKLIST_TASK,
+        checklist_execution=execution,
+        checklist_task_execution=task_execution,
+    )
+
+    payload = build_pipeline_input(observation=observation)
+
+    assert payload["checklist_context"] == {
+        "origin": "checklist_task",
+        "checklist_execution_id": str(execution.id),
+        "checklist_task_execution_id": str(task_execution.id),
+        "template_title": "Morning routine",
+        "task": "Check fridge",
+        "business_unit_key": None,
+    }

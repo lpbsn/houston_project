@@ -774,7 +774,17 @@ class ScopedUserSearchView(APIView):
                 location=OpenApiParameter.QUERY,
                 required=True,
                 description="Search term with a minimum length of 2 characters.",
-            )
+            ),
+            OpenApiParameter(
+                name="business_unit_id",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description=(
+                    "When provided, limits results to active members covering this "
+                    "BusinessUnit (Owner/Director implicitly; Manager/Staff via scope)."
+                ),
+            ),
         ],
         responses={
             200: ScopedUserSearchResultSerializer(many=True),
@@ -790,7 +800,10 @@ class ScopedUserSearchView(APIView):
         ),
     )
     def get(self, request, establishment_id):
-        query_serializer = ScopedUserSearchRequestSerializer(data=request.query_params)
+        query_serializer = ScopedUserSearchRequestSerializer(
+            data=request.query_params,
+            context={"establishment_id": establishment_id},
+        )
         query_serializer.is_valid(raise_exception=True)
 
         access_context = get_api_access_context(request)
@@ -798,6 +811,7 @@ class ScopedUserSearchView(APIView):
             current_membership=access_context.active_membership,
             establishment_id=establishment_id,
             query=query_serializer.validated_data["q"],
+            business_unit=query_serializer.validated_data.get("business_unit"),
         )
         if memberships is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)

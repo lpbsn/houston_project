@@ -9,6 +9,7 @@ from houston.observations.constants import OBSERVATION_RAW_TEXT_MAX_LENGTH
 class Observation(BaseModel):
     class Origin(models.TextChoices):
         DIRECT_REPORT = "direct_report", "Direct report"
+        CHECKLIST_TASK = "checklist_task", "Checklist task"
 
     establishment = models.ForeignKey(
         "establishments.Establishment",
@@ -25,6 +26,20 @@ class Observation(BaseModel):
         max_length=40,
         choices=Origin.choices,
         default=Origin.DIRECT_REPORT,
+    )
+    checklist_execution = models.ForeignKey(
+        "checklists.ChecklistExecution",
+        on_delete=models.PROTECT,
+        related_name="observations",
+        null=True,
+        blank=True,
+    )
+    checklist_task_execution = models.ForeignKey(
+        "checklists.ChecklistTaskExecution",
+        on_delete=models.PROTECT,
+        related_name="origin_observations",
+        null=True,
+        blank=True,
     )
     submitted_at = models.DateTimeField()
 

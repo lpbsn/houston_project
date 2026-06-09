@@ -70,6 +70,32 @@ services:
     volumes:
       - .:/app
 
+  celery-beat:
+    build: *api_build
+    security_opt:
+      - no-new-privileges:true
+    command:
+      [
+        "uv",
+        "run",
+        "celery",
+        "-A",
+        "config",
+        "beat",
+        "-l",
+        "info",
+        "--scheduler",
+        "celery.beat:PersistentScheduler",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment: *api_environment
+    volumes:
+      - .:/app
+
   web:
     build:
       context: .

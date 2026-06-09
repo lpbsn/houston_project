@@ -1,24 +1,36 @@
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 
 import {
-  EXECUTION_CREATE_MENU_OPTIONS,
+  getExecutionCreateMenuOptions,
   type ExecutionCreateMenuOptionId,
 } from '../lib/execution-create-menu'
 
 type ExecutionCreateMenuSheetProps = {
   open: boolean
+  role: string | null | undefined
   onClose: () => void
   onSelectAction: () => void
+  onSelectPersonalChecklist: () => void
 }
 
 export function ExecutionCreateMenuSheet({
   open,
+  role,
   onClose,
   onSelectAction,
+  onSelectPersonalChecklist,
 }: ExecutionCreateMenuSheetProps) {
+  const options = getExecutionCreateMenuOptions(role)
+
   function handleSelect(id: ExecutionCreateMenuOptionId) {
     if (id === 'action') {
       onSelectAction()
+      onClose()
+      return
+    }
+
+    if (id === 'personal_checklist') {
+      onSelectPersonalChecklist()
       onClose()
     }
   }
@@ -26,7 +38,7 @@ export function ExecutionCreateMenuSheet({
   return (
     <TerrainBottomSheet title="Créer" open={open} onClose={onClose}>
       <ul className="flex flex-col gap-2">
-        {EXECUTION_CREATE_MENU_OPTIONS.map((option) => {
+        {options.map((option) => {
           if (option.disabled) {
             return (
               <li key={option.id}>

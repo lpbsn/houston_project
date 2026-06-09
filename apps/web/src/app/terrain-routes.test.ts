@@ -23,6 +23,26 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'action-create' })).toBe(true)
   })
 
+  it('returns true for checklist management routes', () => {
+    for (const path of ['/checklists', '/checklists/shared', '/checklists/personal'] as const) {
+      expect(usesTerrainShell({ kind: 'static', path })).toBe(true)
+    }
+    expect(
+      usesTerrainShell({ kind: 'checklist-template-create', checklistType: 'shared' }),
+    ).toBe(true)
+    expect(
+      usesTerrainShell({
+        kind: 'checklist-template-detail',
+        checklistType: 'personal',
+        templateId: 'tpl-1',
+      }),
+    ).toBe(true)
+    expect(usesTerrainShell({ kind: 'checklist-execution-create' })).toBe(true)
+    expect(
+      usesTerrainShell({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
+    ).toBe(true)
+  })
+
   it('returns false for non-terrain routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/app' })).toBe(false)
     expect(usesTerrainShell({ kind: 'static', path: '/login' })).toBe(false)
@@ -69,6 +89,78 @@ describe('getTerrainRouteConfig', () => {
       pageTitle: 'Profil',
       showBottomNav: true,
       activeNavPath: '/profile',
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures checklist execution create and detail routes', () => {
+    expect(getTerrainRouteConfig({ kind: 'checklist-execution-create' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Checklist personnelle',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+
+    expect(
+      getTerrainRouteConfig({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Checklist',
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures checklist template create and detail routes', () => {
+    expect(
+      getTerrainRouteConfig({ kind: 'checklist-template-create', checklistType: 'shared' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Nouvelle checklist partagée',
+      backPath: '/checklists',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+
+    expect(
+      getTerrainRouteConfig({
+        kind: 'checklist-template-detail',
+        checklistType: 'personal',
+        templateId: 'tpl-1',
+      }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Détail checklist',
+      backPath: '/checklists',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures checklist routes as detail shells without bottom nav', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/checklists' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Gérer les checklists',
+      backPath: '/profile',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/checklists/shared' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Checklists partagées',
+      backPath: '/checklists',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/checklists/personal' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Checklists personnelles',
+      backPath: '/checklists',
+      showBottomNav: false,
       mainScroll: 'auto',
     })
   })
@@ -129,6 +221,13 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'static', path: '/execution' })).toBe('execution')
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
     expect(getTerrainContentKey({ kind: 'static', path: '/profile' })).toBe('profile')
+    expect(getTerrainContentKey({ kind: 'static', path: '/checklists' })).toBe('checklists-hub')
+    expect(getTerrainContentKey({ kind: 'static', path: '/checklists/shared' })).toBe(
+      'checklists-shared',
+    )
+    expect(getTerrainContentKey({ kind: 'static', path: '/checklists/personal' })).toBe(
+      'checklists-personal',
+    )
   })
 
   it('includes signal id for detail routes', () => {
@@ -163,6 +262,9 @@ describe('requiresActiveMembership', () => {
       '/chat',
       '/profile',
       '/team/invite',
+      '/checklists',
+      '/checklists/shared',
+      '/checklists/personal',
     ] as const) {
       expect(requiresActiveMembership({ kind: 'static', path })).toBe(true)
     }
@@ -172,6 +274,20 @@ describe('requiresActiveMembership', () => {
     expect(requiresActiveMembership({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
     expect(requiresActiveMembership({ kind: 'action-detail', actionId: 'abc' })).toBe(true)
     expect(requiresActiveMembership({ kind: 'action-create' })).toBe(true)
+    expect(
+      requiresActiveMembership({ kind: 'checklist-template-create', checklistType: 'shared' }),
+    ).toBe(true)
+    expect(
+      requiresActiveMembership({
+        kind: 'checklist-template-detail',
+        checklistType: 'personal',
+        templateId: 'tpl-1',
+      }),
+    ).toBe(true)
+    expect(requiresActiveMembership({ kind: 'checklist-execution-create' })).toBe(true)
+    expect(
+      requiresActiveMembership({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
+    ).toBe(true)
   })
 
   it('returns false for onboarding and auth routes', () => {
