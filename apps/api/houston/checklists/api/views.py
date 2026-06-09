@@ -214,7 +214,7 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
             )
 
         try:
-            if data.get("tasks"):
+            if data.get("tasks") or data.get("assign_now", False):
                 template, _execution = create_registered_checklist_template(
                     establishment_id=self.establishment_id,
                     actor=membership,
@@ -222,7 +222,7 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
                     description=data.get("description", ""),
                     business_unit_id=data["business_unit_id"],
                     badge=data.get("badge", CHECKLIST_BADGE_DEFAULT),
-                    tasks=data["tasks"],
+                    tasks=data.get("tasks", []),
                     assign_now=data.get("assign_now", False),
                     assigned_to_id=data.get("assigned_to"),
                     end_at=data.get("end_at"),

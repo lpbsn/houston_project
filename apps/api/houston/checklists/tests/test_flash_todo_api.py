@@ -6,6 +6,7 @@ from houston.actions.tests.conftest import auth_headers, login
 from houston.checklists.models import ChecklistExecution, ChecklistTemplate
 from houston.checklists.tests.conftest import (
     add_task_template,
+    checklist_execution_url,
     checklist_flash_todo_url,
     checklist_template_url,
 )
@@ -44,6 +45,39 @@ def test_staff_can_create_flash_todo_in_scope(api_client, staff_membership, busi
     assert execution.execution_source == "flash_todo"
     assert execution.checklist_template_id is None
     assert execution.task_executions.count() == 1
+
+
+def test_staff_can_reload_and_cancel_delegated_flash_todo(
+    api_client,
+    staff_membership,
+    other_staff_membership,
+    business_unit,
+):
+    token = login(api_client, user=staff_membership.user)
+    create = api_client.post(
+        checklist_flash_todo_url(staff_membership.establishment_id),
+        _flash_payload(
+            business_unit_id=business_unit.id,
+            assigned_to_id=other_staff_membership.id,
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    assert create.status_code == 201
+    execution_id = create.json()["id"]
+    assert create.json()["assigned_by_id"] == str(staff_membership.id)
+
+    detail = api_client.get(
+        checklist_execution_url(staff_membership.establishment_id, execution_id),
+        **auth_headers(token),
+    )
+    assert detail.status_code == 200
+
+    cancel = api_client.post(
+        checklist_execution_url(staff_membership.establishment_id, execution_id, "cancel/"),
+        **auth_headers(token),
+    )
+    assert cancel.status_code == 200
 
 
 def test_staff_denied_flash_todo_out_of_scope(

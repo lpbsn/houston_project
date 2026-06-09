@@ -223,6 +223,8 @@ def checklist_execution_visible_to_membership(
 
     if execution.assigned_to_id == membership.id:
         return True
+    if execution.assigned_by_id == membership.id:
+        return True
     if membership.role in _ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
@@ -239,6 +241,8 @@ def can_cancel_checklist_execution(
     if not _same_establishment(membership, execution.establishment_id):
         return False
     if execution.assigned_to_id == membership.id:
+        return True
+    if execution.assigned_by_id == membership.id:
         return True
     if membership.role in _ADMIN_ROLES:
         return True

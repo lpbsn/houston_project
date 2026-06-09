@@ -297,6 +297,19 @@ def test_template_execution_visible_only_to_assignee_for_staff_roles(
     assert checklist_execution_visible_to_membership(owner_membership, staff_template_execution)
 
 
+def test_staff_delegator_can_view_and_cancel_delegated_execution(
+    staff_template_execution,
+    staff_membership,
+    other_staff_membership,
+):
+    staff_template_execution.assigned_to = other_staff_membership
+    staff_template_execution.assigned_by = staff_membership
+    staff_template_execution.save(update_fields=["assigned_to", "assigned_by", "updated_at"])
+
+    assert checklist_execution_visible_to_membership(staff_membership, staff_template_execution)
+    assert can_cancel_checklist_execution(staff_membership, staff_template_execution)
+
+
 def test_staff_sees_scoped_registered_template_regardless_of_author(
     registered_template,
     staff_owned_template,

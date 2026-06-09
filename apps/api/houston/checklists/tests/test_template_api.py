@@ -194,6 +194,32 @@ def test_create_registered_template_allowed_for_scoped_staff(
     assert response.status_code == 201
 
 
+def test_create_template_assign_now_without_tasks_returns_validation_error(
+    api_client,
+    staff_membership,
+    other_staff_membership,
+    business_unit,
+):
+    template_count_before = ChecklistTemplate.objects.count()
+    execution_count_before = ChecklistExecution.objects.count()
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        checklist_templates_url(staff_membership.establishment_id),
+        {
+            "title": "Assign now",
+            "business_unit_id": str(business_unit.id),
+            "assign_now": True,
+            "assigned_to": str(other_staff_membership.id),
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
+    assert ChecklistTemplate.objects.count() == template_count_before
+    assert ChecklistExecution.objects.count() == execution_count_before
+
+
 def test_activate_template_requires_task(api_client, owner_membership, business_unit):
     payload, token = _create_registered_template_via_api(
         api_client, owner_membership, business_unit
