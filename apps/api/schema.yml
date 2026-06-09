@@ -1198,6 +1198,788 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/:
+    get:
+      operationId: chat_conversations_list
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatConversationListResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/:
+    get:
+      operationId: chat_conversation_retrieve
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatConversationDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_chat_conversations_partial_update
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChatRenameGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChatRenameGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChatRenameGroupRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatConversationDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    delete:
+      operationId: v1_establishments_chat_conversations_destroy
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Group deleted.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/leave/:
+    post:
+      operationId: v1_establishments_chat_conversations_leave_create
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Left group.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/messages/:
+    get:
+      operationId: v1_establishments_chat_conversations_messages_retrieve
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessageListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/:
+    post:
+      operationId: v1_establishments_chat_conversations_participants_create
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatAddParticipantRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatAddParticipantRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatAddParticipantRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          description: Participant added.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/{membership_id}/:
+    delete:
+      operationId: v1_establishments_chat_conversations_participants_destroy
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Participant removed.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/{membership_id}/promote/:
+    post:
+      operationId: v1_establishments_chat_conversations_participants_promote_create
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Participant promoted.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/seen/:
+    post:
+      operationId: v1_establishments_chat_conversations_seen_create
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Conversation marked as seen.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/dm/:
+    post:
+      operationId: v1_establishments_chat_conversations_dm_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCreateDmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatCreateDmRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatCreateDmRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCreateConversationResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCreateConversationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/conversations/groups/:
+    post:
+      operationId: v1_establishments_chat_conversations_groups_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCreateGroupRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatCreateGroupRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatCreateGroupRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCreateConversationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/eligible-memberships/:
+    get:
+      operationId: v1_establishments_chat_eligible_memberships_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatEligibleMembershipsResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/settings/:
+    patch:
+      operationId: v1_establishments_chat_settings_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChatSettingsPatchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChatSettingsPatchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChatSettingsPatchRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSettingsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/status/:
+    get:
+      operationId: v1_establishments_chat_status_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatStatus'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/chat/ws-ticket/:
+    post:
+      operationId: v1_establishments_chat_ws_ticket_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - chat
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatWsTicketResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/checklist-assignments/:
     get:
       operationId: v1_establishments_checklist_assignments_list
@@ -4812,6 +5594,267 @@ components:
       - default_unit_type
       - key
       - label
+    ChatAddParticipantRequest:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+      required:
+      - membership_id
+    ChatConversationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+        unread:
+          type: boolean
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatParticipantSummary'
+        can_manage:
+          type: boolean
+        can_delete:
+          type: boolean
+      required:
+      - can_delete
+      - can_manage
+      - created_at
+      - id
+      - last_message_at
+      - participants
+      - title
+      - type
+      - unread
+    ChatConversationListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        unread:
+          type: boolean
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_message_preview:
+          allOf:
+          - $ref: '#/components/schemas/ChatMessagePreview'
+          nullable: true
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatParticipantSummary'
+      required:
+      - id
+      - last_message_at
+      - last_message_preview
+      - participants
+      - title
+      - type
+      - unread
+    ChatConversationListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatConversationListItem'
+      required:
+      - items
+    ChatCreateConversationResponse:
+      type: object
+      properties:
+        conversation:
+          $ref: '#/components/schemas/ChatConversationDetail'
+        created:
+          type: boolean
+      required:
+      - conversation
+    ChatCreateDmRequest:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+      required:
+      - membership_id
+    ChatCreateGroupRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        membership_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - membership_ids
+      - title
+    ChatEligibleMembershipsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMembershipSummary'
+      required:
+      - items
+    ChatMembershipSummary:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+      required:
+      - display_name
+      - membership_id
+      - role
+      - user_id
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        author_membership_id:
+          type: string
+          format: uuid
+        author_display_name:
+          type: string
+        body:
+          type: string
+        client_message_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - author_display_name
+      - author_membership_id
+      - body
+      - client_message_id
+      - created_at
+      - id
+    ChatMessageListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        has_more:
+          type: boolean
+      required:
+      - has_more
+      - items
+    ChatMessagePreview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        author_membership_id:
+          type: string
+          format: uuid
+        author_display_name:
+          type: string
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - author_display_name
+      - author_membership_id
+      - body
+      - created_at
+      - id
+    ChatParticipantSummary:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+        participant_role:
+          type: string
+      required:
+      - display_name
+      - membership_id
+      - participant_role
+      - role
+      - user_id
+    ChatSettingsResponse:
+      type: object
+      properties:
+        chat_enabled:
+          type: boolean
+      required:
+      - chat_enabled
+    ChatStatus:
+      type: object
+      properties:
+        chat_enabled:
+          type: boolean
+        can_access:
+          type: boolean
+        can_create_dm:
+          type: boolean
+        can_create_group:
+          type: boolean
+        can_manage_settings:
+          type: boolean
+      required:
+      - can_access
+      - can_create_dm
+      - can_create_group
+      - can_manage_settings
+      - chat_enabled
+    ChatWsTicketResponse:
+      type: object
+      properties:
+        ticket:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - expires_in
+      - ticket
     ChecklistAssignment:
       type: object
       properties:
@@ -6072,6 +7115,17 @@ components:
         description:
           type: string
           minLength: 50
+    PatchedChatRenameGroupRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 120
+    PatchedChatSettingsPatchRequest:
+      type: object
+      properties:
+        chat_enabled:
+          type: boolean
     PatchedChecklistAssignmentUpdateRequest:
       type: object
       properties:

@@ -1,7 +1,7 @@
 # Product Operating Model
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-09
 
 ## 1. Operating Model Summary
 
@@ -38,8 +38,8 @@ Detailed permission matrices belong to domain docs, not this document.
 - Checklists support recurring or personal operational routines and can produce contextualized Observations.
 - Comments support contextual discussion attached to Signals or Actions.
 - Notifications route attention when action or awareness is needed.
-- Realtime invalidation coordinates refetch and lightweight refresh behavior.
-- Establishment General Chat establishment level discussion and remains separate from the structured operational workflow in MVP.
+- Global realtime invalidation (deferred) will coordinate refetch for operational feeds.
+- Chat V1 provides establishment-level DM and free-group messaging, separate from the structured operational workflow.
 
 ## 5. Domain Boundaries
 
@@ -49,7 +49,7 @@ Detailed permission matrices belong to domain docs, not this document.
 - Checklist: recurring or personal operational routine.
 - Comment: contextual discussion attached to a workflow object.
 - Notification: attention routing.
-- Chat: free-form establishment discussion.
+- Chat V1: DM and free-group text messaging (not a single general room).
 - AI: proposal and structuring layer, not authority.
 
 ## 6. Current MVP Operating Model
@@ -64,8 +64,8 @@ The validated MVP phase order is:
 6. Phase 5 — Actions / Execution Feed
 7. Phase 6 — Notifications
 8. Phase 7 — Checklists
-9. Phase 8A — Realtime invalidation foundation
-10. Phase 8B — Establishment General Chat
+9. Phase 8 — Chat V1 ✅ core implemented
+10. Phase 8C — Global realtime invalidation (deferred)
 11. Phase 9 — Hardening
 12. Phase 10 — Pilot readiness
 

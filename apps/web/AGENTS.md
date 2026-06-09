@@ -267,20 +267,26 @@ Do not implement security boundaries in React.
 
 ## Realtime frontend rules
 
-Realtime messages are invalidation/refetch triggers only.
+**Global realtime** (deferred) messages are invalidation/refetch triggers only.
 
-On realtime event:
+On generic realtime event:
 
 1. inspect event type
 2. invalidate relevant TanStack Query keys
 3. refetch through REST API if needed
 4. update UI from server response
 
-Do not use websocket payloads as business truth.
+**Chat V1 exception** (see [`chat_domain.md`](../../docs/product/domains/chat_domain.md)):
 
-Do not store full websocket payloads as domain state.
+- WebSocket is the **only** message send channel in V1.
+- Receive `message.created` for live UI ; reconcile with REST after reconnect.
+- Failed send : local `failed` state ; retry via WebSocket after reconnect (no REST message send fallback).
+- Obtain ws-ticket through REST before each connection ; never store ticket in localStorage/sessionStorage.
+- Refetch conversations and messages after reconnect.
 
-Do not bypass REST API after realtime events.
+Do not use **generic** websocket payloads as business truth.
+
+Do not bypass REST for conversation structure, history, permissions, or seen state.
 
 ------
 

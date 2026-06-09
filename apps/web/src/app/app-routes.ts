@@ -40,6 +40,7 @@ export type AppRoute =
   | { kind: 'checklist-template-detail'; checklistType: ChecklistRouteType; templateId: string }
   | { kind: 'checklist-execution-create' }
   | { kind: 'checklist-execution-detail'; executionId: string }
+  | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'invitation'; token: string }
   | { kind: 'unknown'; pathname: string }
 
@@ -121,6 +122,11 @@ function parseChecklistRoute(pathname: string): AppRoute | null {
   return null
 }
 
+function parseChatConversationId(pathname: string): string | null {
+  const match = pathname.match(/^\/chat\/([^/]+)$/)
+  return match?.[1] ?? null
+}
+
 function parseActionDetailId(pathname: string): string | null {
   if (pathname === '/actions/new' || pathname === '/actions/new/') {
     return null
@@ -164,6 +170,11 @@ export function parseAppRoute(input: string): AppRoute {
   const checklistRoute = parseChecklistRoute(pathname)
   if (checklistRoute) {
     return checklistRoute
+  }
+
+  const chatConversationId = parseChatConversationId(pathname)
+  if (chatConversationId) {
+    return { kind: 'chat-conversation-detail', conversationId: chatConversationId }
   }
 
   if (

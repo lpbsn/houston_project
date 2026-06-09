@@ -51,6 +51,11 @@ export default defineConfig({
         // request instead of an internal container host such as api:8000.
         changeOrigin: false,
       },
+      '/ws': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000',
+        changeOrigin: false,
+        ws: true,
+      },
     },
   },
   test: {

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "houston.comments",
     "houston.notifications",
     "houston.realtime",
+    "houston.chat",
     "houston.ai",
     "houston.events",
     "houston.uploads",
@@ -165,6 +166,14 @@ CELERY_BEAT_SCHEDULE = {
         ),
         "kwargs": {"establishment_id": None},
     },
+    "purge-chat-messages": {
+        "task": "houston.chat.tasks.purge_chat_messages_task",
+        "schedule": crontab(
+            hour=env_int("HOUSTON_CHAT_PURGE_BEAT_HOUR_UTC", 4),
+            minute=env_int("HOUSTON_CHAT_PURGE_BEAT_MINUTE_UTC", 0),
+        ),
+        "kwargs": {"establishment_id": None},
+    },
 }
 
 # Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.
@@ -173,6 +182,7 @@ AUTH_THROTTLE_SCOPE_REFRESH = "auth_refresh"
 AUTH_THROTTLE_SCOPE_REGISTER = "auth_register"
 AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE = "auth_register_validate"
 AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT = "auth_invitation_accept"
+CHAT_THROTTLE_SCOPE_WS_TICKET = "chat_ws_ticket"
 
 # Emergency / dev kill switch for auth throttling (prefer high DEBUG quotas over disabling).
 HOUSTON_AUTH_THROTTLE_ENABLED = env_bool("HOUSTON_AUTH_THROTTLE_ENABLED", default=True)
@@ -221,6 +231,7 @@ def _auth_throttle_rates() -> dict[str, str]:
             AUTH_THROTTLE_SCOPE_REGISTER: _AUTH_THROTTLE_DEBUG_RATE,
             AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE: _AUTH_THROTTLE_DEBUG_RATE,
             AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT: _AUTH_THROTTLE_DEBUG_RATE,
+            CHAT_THROTTLE_SCOPE_WS_TICKET: _AUTH_THROTTLE_DEBUG_RATE,
         }
     else:
         rates = {
@@ -229,6 +240,7 @@ def _auth_throttle_rates() -> dict[str, str]:
             AUTH_THROTTLE_SCOPE_REGISTER: "5/hour",
             AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE: "30/hour",
             AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT: "10/hour",
+            CHAT_THROTTLE_SCOPE_WS_TICKET: "30/minute",
         }
 
     env_overrides = {
@@ -237,6 +249,7 @@ def _auth_throttle_rates() -> dict[str, str]:
         AUTH_THROTTLE_SCOPE_REGISTER: "HOUSTON_THROTTLE_AUTH_REGISTER",
         AUTH_THROTTLE_SCOPE_REGISTER_VALIDATE: "HOUSTON_THROTTLE_AUTH_REGISTER_VALIDATE",
         AUTH_THROTTLE_SCOPE_INVITATION_ACCEPT: "HOUSTON_THROTTLE_AUTH_INVITATION_ACCEPT",
+        CHAT_THROTTLE_SCOPE_WS_TICKET: "HOUSTON_THROTTLE_CHAT_WS_TICKET",
     }
     for scope, env_name in env_overrides.items():
         override = os.getenv(env_name)
@@ -247,14 +260,19 @@ def _auth_throttle_rates() -> dict[str, str]:
 
 CACHES = _build_default_caches()
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-        if DEBUG
-        else "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {"hosts": [REDIS_URL]},
+if DEBUG:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        }
     }
-}
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
+    }
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -306,6 +324,23 @@ HOUSTON_AUTH_REFRESH_COOKIE_SECURE = env_bool(
 )
 
 HOUSTON_REGISTRATION_INVITE_CODES = env_list("HOUSTON_REGISTRATION_INVITE_CODES", "")
+
+HOUSTON_CHAT_WS_TICKET_TTL_SECONDS = env_int("HOUSTON_CHAT_WS_TICKET_TTL_SECONDS", 60)
+HOUSTON_CHAT_WS_AUTH_TIMEOUT_SECONDS = env_int("HOUSTON_CHAT_WS_AUTH_TIMEOUT_SECONDS", 5)
+HOUSTON_CHAT_WS_TICKET_SALT = env_str(
+    "HOUSTON_CHAT_WS_TICKET_SALT",
+    "houston.chat.ws_ticket",
+)
+HOUSTON_CHAT_MESSAGE_RETENTION_DAYS = env_int(
+    "HOUSTON_CHAT_MESSAGE_RETENTION_DAYS",
+    7,
+)
+HOUSTON_CHAT_PURGE_BATCH_SIZE = env_int("HOUSTON_CHAT_PURGE_BATCH_SIZE", 1000)
+HOUSTON_CHAT_MESSAGE_SEND_RATE_LIMIT_PER_MINUTE = env_int(
+    "HOUSTON_CHAT_MESSAGE_SEND_RATE_LIMIT_PER_MINUTE",
+    30,
+)
+HOUSTON_CHAT_RATE_LIMIT_ENABLED = env_bool("HOUSTON_CHAT_RATE_LIMIT_ENABLED", default=True)
 
 OPENAI_API_KEY = env_str("OPENAI_API_KEY", "")
 HOUSTON_AI_ONBOARDING_PROVIDER = env_str("HOUSTON_AI_ONBOARDING_PROVIDER", "openai")

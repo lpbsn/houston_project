@@ -29,14 +29,14 @@ Houston remains a backend-authoritative operational workflow app.
 4. Phase 3 — Observation / Media / Transcription ✅ completed
 5. Phase 4 — AI Pipeline / Signal Feed ✅ completed
 6. Phase 5 — Actions / Execution Feed ✅ core implemented
-7. Phase 7 — Checklists
-8. Phase 8A — Realtime invalidation foundation
-9. Phase 8B — Establishment Chat
+7. Phase 7 — Checklists ✅ core implemented
+8. Phase 8 — Chat V1 (minimal Chat-only realtime) ✅ core implemented ✅ core implemented
+9. Phase 8C — Global realtime invalidation (Signal/Action/Notifications) — **deferred post Chat V1**
 10. Phase 6 — Notifications
 11. Phase 9 — Hardening
 12. Phase 10 — Pilot readiness
 
-Each phase gates the next one. Chat follows the realtime foundation and remains independent from the operational loop in MVP.
+Chat V1 ships before generic realtime invalidation. Chat remains independent from the operational loop.
 
 ## Scope Rules
 
@@ -97,47 +97,61 @@ Add in-app notifications and Notification Center behavior linked to backend even
 
 Add shared and personal checklists, including task-to-Observation handoff where required by the MVP.
 
-### Phase 8A — Realtime invalidation foundation
+### Phase 8 — Chat V1 (minimal Chat-only realtime) ✅ core implemented
 
-Realtime scope in MVP remains narrow:
+Authoritative product spec : [`chat_domain.md`](../domains/chat_domain.md).
+Technical debt register : [`chat_v1_technical_debt_2026-06-09.md`](../../audit/chat_v1_technical_debt_2026-06-09.md).
 
-- websocket authentication and subscription permission checks
-- lightweight invalidation events only
-- TanStack Query invalidation and REST refetch
-- no websocket business truth
-- no business workflow execution in realtime consumers
+Implementation lots (closed):
 
-### Phase 8B — Establishment General Chat
+| Lot | Scope | Status |
+|-----|--------|--------|
+| 2 | ASGI + Daphne + ws-ticket + consumer auth | ✅ |
+| 3 | Models + REST (no message POST) | ✅ |
+| 4 | WS `message.send` / `message.created` + personal-group broadcast | ✅ |
+| 5 | Terrain UI `/chat` | ✅ |
+| 6 | Purge 7j + membership deactivate + rate limits + `access_revoked` | ✅ |
+| 7 | Documentation alignment + acceptance checklist | ✅ |
 
-Chat is included in MVP scope, but it is intentionally isolated from Observations, Signals, Actions, Checklists, AI, and Notifications.
+Delivered scope:
 
-MVP chat scope:
+- DM + free groups (not a single establishment general chat)
+- membership-centric model (`ChatParticipant.membership`, `ChatMessage.author_membership`)
+- text messages only (max 2,000 chars)
+- WebSocket-only message send ; REST for structure, history, participants, seen, ws-ticket
+- REST one-time WebSocket ticket auth ; no `AuthMiddlewareStack`
+- Daphne ASGI server ; `AllowedHostsOriginValidator`
+- personal membership channel groups for delivery to connected participants without reconnect
+- minimal unread (`last_seen_message_id` UUID non-FK + `last_seen_message_created_at`)
+- hard purge messages after 7 days
+- `chat_enabled` on establishment (default true on activation ; data migration for existing active establishments)
 
-- one general chat per establishment
-- text messages only
-- active establishment members can view and send
-- paginated message list
-- soft delete
-- realtime invalidation and refetch only
+Exclusions:
 
-MVP chat exclusions:
-
-- no direct messages
-- no multiple channels
-- no attachments
-- no audio
-- no AI analysis
-- no mentions
-- no push notifications
-- no link with Signal, Action, Observation, or Checklist
-- no search
-- no reactions
-- no message editing
+- no chat notifications / push / sounds
+- no read receipts, delivered status, typing indicators
+- no REST message send endpoint
+- no attachments, audio, reactions, threads, search, message edit/delete
+- no link with Signal, Action, Observation, Checklist, Comments, Feed, AI
+- Owner/Director cannot read or delete groups outside participation (product API)
 
 API note:
 
-- any chat endpoint remains `candidate` unless it already exists in `apps/api/schema.yml`
-- this document does not claim any concrete chat endpoint is implemented today
+- Chat REST endpoints are implemented under `/api/v1/establishments/{establishment_id}/chat/` — see `apps/api/schema.yml`
+- WebSocket path : `/ws/v1/establishments/{establishment_id}/chat/` (not listed in OpenAPI)
+- Post-core gaps (group settings UI, events, bootstrap flag) remain in the debt register ; not blockers for core pilot chat
+
+### Phase 8C — Global realtime invalidation (deferred)
+
+Post Chat V1. Scope:
+
+- lightweight invalidation for Signal Feed, Execution Feed, notifications, detail views
+- TanStack Query invalidation and REST refetch
+- no websocket business truth
+- no business workflow execution in realtime consumers
+- does not reuse Chat message WebSocket protocol
+
+See [`realtime_domain.md`](../domains/realtime_domain.md).
 
 ### Phase 9 — Hardening
 

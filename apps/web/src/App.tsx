@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -36,6 +36,9 @@ import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 import { ChatPage } from '@/features/chat/pages/chat-page'
+import { ChatConversationPage } from '@/features/chat/pages/chat-conversation-page'
+import { ChatRealtimeProvider } from '@/features/chat/components/chat-realtime-provider'
+import { useChatConversationsQuery, useChatStatusQuery } from '@/features/chat/hooks'
 import { ActionCreatePage } from '@/features/actions/pages/action-create-page'
 import { ActionDetailPage } from '@/features/actions/pages/action-detail-page'
 import { ExecutionFeedPage } from '@/features/execution/pages/execution-feed-page'
@@ -109,7 +112,8 @@ function App() {
       route.kind === 'checklist-template-create' ||
       route.kind === 'checklist-template-detail' ||
       route.kind === 'checklist-execution-create' ||
-      route.kind === 'checklist-execution-detail'
+      route.kind === 'checklist-execution-detail' ||
+      route.kind === 'chat-conversation-detail'
 
     if (isProtectedRoute && !auth.isAuthenticated && !allowsUnauthenticatedAccess(route)) {
       navigate('/login', { replace: true })
@@ -176,6 +180,16 @@ function App() {
       navigate('/login', { replace: true })
     })
   }, [auth, navigate])
+
+  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const chatStatusQuery = useChatStatusQuery(auth.hasOperationalAccess ? establishmentId : null)
+  const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
+    enabled: Boolean(chatStatusQuery.data?.can_access),
+  })
+  const showChatNav = Boolean(
+    chatStatusQuery.data?.can_access && chatStatusQuery.data.chat_enabled,
+  )
+  const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
 
   const routeContent = useMemo(() => {
     if (
@@ -263,6 +277,10 @@ function App() {
       return <ChecklistExecutionDetailPage executionId={route.executionId} />
     }
 
+    if (route.kind === 'chat-conversation-detail') {
+      return <ChatConversationPage conversationId={route.conversationId} />
+    }
+
     if (route.path === '/login') {
       return <LoginPage />
     }
@@ -294,7 +312,9 @@ function App() {
     }
 
     if (route.path === '/chat') {
-      return <ChatPage />
+      return (
+        <ChatPage onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)} />
+      )
     }
 
     if (route.path === '/profile') {
@@ -473,32 +493,66 @@ function App() {
                       ),
                     }
 
-  if (route.kind === 'unknown' && auth.hasOperationalAccess) {
+  const activeChatConversationId =
+    route.kind === 'chat-conversation-detail' ? route.conversationId : null
+
+  const isChatRoute =
+    route.kind === 'chat-conversation-detail' ||
+    (route.kind === 'static' && route.path === '/chat')
+
+  const wrapTerrainWithChatRealtime = (terrainShell: ReactNode) => {
+    if (!showChatNav && !isChatRoute) {
+      return terrainShell
+    }
+
     return (
+      <ChatRealtimeProvider
+        establishmentId={establishmentId}
+        activeConversationId={activeChatConversationId}
+        onAccessRevoked={(event) => {
+          if (
+            route.kind === 'chat-conversation-detail' &&
+            event.conversation_id === route.conversationId
+          ) {
+            navigate('/chat')
+          }
+        }}
+      >
+        {terrainShell}
+      </ChatRealtimeProvider>
+    )
+  }
+
+  if (route.kind === 'unknown' && auth.hasOperationalAccess) {
+    return wrapTerrainWithChatRealtime(
       <TerrainShell
         contentKey="not-found"
         showBottomNav={true}
         activeNavPath="/reporting"
         mainScroll="auto"
         navigate={navigate}
+        showChatNav={showChatNav}
+        chatHasUnread={chatHasUnread}
         topbar={
           <TerrainTopbar variant="hub" pageTitle="Page introuvable" showBottomBorder={true} />
         }
       >
         {routeContent}
-      </TerrainShell>
+      </TerrainShell>,
     )
   }
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    return (
+    return wrapTerrainWithChatRealtime(
       <TerrainShell
         contentKey={getTerrainContentKey(route)}
         showBottomNav={terrainConfig.showBottomNav}
         activeNavPath={terrainConfig.activeNavPath}
         mainScroll={terrainConfig.mainScroll}
         navigate={navigate}
+        showChatNav={showChatNav}
+        chatHasUnread={chatHasUnread}
         topbar={
           <TerrainTopbar
             variant={terrainConfig.topbarVariant}
@@ -521,7 +575,7 @@ function App() {
         }
       >
         {routeContent}
-      </TerrainShell>
+      </TerrainShell>,
     )
   }
 

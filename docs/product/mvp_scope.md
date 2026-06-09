@@ -1,7 +1,7 @@
 # MVP Scope
 
 Status: authoritative
-Last reviewed: 2026-05-27
+Last reviewed: 2026-06-09
 
 ## 1. MVP Objective
 
@@ -17,8 +17,8 @@ The MVP objective is simple: a field team can report, structure, assign, execute
 6. Phase 5 — Actions / Execution Feed
 7. Phase 6 — Notifications
 8. Phase 7 — Checklists
-9. Phase 8A — Realtime invalidation foundation
-10. Phase 8B — Establishment General Chat
+9. Phase 8 — Chat V1 (minimal Chat-only realtime) ✅ core implemented
+10. Phase 8C — Global realtime invalidation (deferred post Chat V1)
 11. Phase 9 — Hardening
 12. Phase 10 — Pilot readiness
 
@@ -41,8 +41,8 @@ Observation → Signal → Action → Execution → Validation → Feed update
 - Feeds
 - Notifications
 - Checklists
-- Realtime invalidation
-- Establishment General Chat
+- Chat V1 (DM + free groups, WebSocket messages)
+- Global realtime invalidation (deferred post Chat V1)
 - Security/RGPD baseline
 
 ## 5. Explicit MVP Exclusions
@@ -54,8 +54,9 @@ Observation → Signal → Action → Execution → Validation → Feed update
 - Advanced AI review UI
 - Recommended assignees
 - Direct-to-storage uploads unless already validated
-- Direct messages
-- Multi-channel chat
+- Single establishment-wide general chat room (replaced by Chat V1 DM + groups)
+- Chat notifications, read receipts, typing indicators
+- REST message send for chat (WebSocket only in V1)
 - AI analysis of Chat
 - Chat-to-signal conversion
 - Native mobile app

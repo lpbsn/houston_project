@@ -1,173 +1,257 @@
-# Chat Domain
+# Chat Domain (V1)
 
 Status: authoritative
-Last reviewed: 2026-05-28
-Implementation status: not_started
+Last reviewed: 2026-06-09
+Implementation status: **implemented_core** (Lots 2–6 done — REST, WS messages, Terrain UI, purge, hardening ; Lot 7 doc alignment)
+
+**Dettes techniques actives** : [`chat_v1_technical_debt_2026-06-09.md`](../../audit/chat_v1_technical_debt_2026-06-09.md) (P0/Lot 6 closed ; post-MVP product gaps remain)
 
 ## 1. Purpose
 
-Chat owns Houston's basic establishment-wide general communication space in MVP.
+Chat V1 owns establishment-scoped free-form text communication between active members.
 
-- It owns free-form text conversation for one general chat per establishment.
-- It owns chat message creation, authorized reading, and message ordering within that chat.
-- It does not own workflow creation, workflow routing, feed projection, comments, notification routing, or generic realtime invalidation.
+- It owns **direct messages (DM)** and **free groups** inside one establishment.
+- It owns conversation structure, participant management, message persistence, minimal unread state, and Chat-specific WebSocket message delivery.
+- It does **not** own workflow creation, Signal/Action/Observation/Checklist routing, feed projection, comments, notifications, generic realtime invalidation, or AI analysis.
 
-## 2. MVP Scope
+Chat V1 is **not** a single establishment-wide general chat room.
 
-- One general chat per establishment.
-- Authenticated active establishment members can read and send messages when backend-authorized.
-- Text-only user-authored messages.
-- Chat message body max length is 2,000 characters.
-- Establishment-scoped message history through authorized API if implemented later.
-- Message ordering by `created_at` ascending in conversation view.
-- Candidate paginated history and backfill behavior if implemented later.
-- Candidate Chat-specific realtime delivery only if separately implemented and authorized.
+## 2. V1 Scope
 
-## 3. Out of Scope
+### Conversations
 
-- Direct messages, private chat, or cross-establishment chat.
-- Multiple rooms, channels, topics, or user-created chat spaces.
-- Threads, reactions, read receipts, typing indicators, or presence.
-- Attachments, media, files, audio, photos, forwarding, pinning, or search.
-- AI analysis, summarization, moderation, routing, or chat-to-workflow conversion.
-- Signal, Action, Checklist, Observation, Feed, Comment, or Notification integration.
-- Workflow creation, assignment, escalation, or operational routing from Chat messages.
-- Message editing, deletion, moderation, reporting, or retention tooling unless separately validated.
+- **DM** : unique conversation between two active `EstablishmentMembership` rows in the same establishment.
+  - Reopening an existing DM reuses the same conversation.
+- **Free groups** : user-created groups with a title and explicit participants.
+  - No system/official groups in V1.
+- Conversations may remain after all messages are purged (empty conversation shell allowed).
+
+### Messages
+
+- Text only.
+- Max 2,000 characters after trim.
+- Ordering : `created_at` ascending, then `id`.
+- Idempotency via `client_message_id` per `(conversation, author_membership)`.
+- **WebSocket is the only message send channel in V1** (no REST message write endpoint).
+- Messages are stored in PostgreSQL **before** WebSocket broadcast.
+- Hard purge of messages older than 7 days (automatic).
+
+### Access
+
+- Chat is establishment-global : **no** BusinessUnit / ActivitySubject / `MembershipScope` restriction for chat access.
+- Available when establishment is `active`, `chat_enabled=True`, and caller has an active membership.
+- All active roles may use chat : Owner, Director, Manager, Staff.
+- Staff may create DMs ; Staff **cannot** create groups.
+- Owner, Director, Manager may create groups.
+
+### Unread (minimal)
+
+- Per-participant unread only ; no read receipts, no delivered status, no typing indicator.
+- A conversation is unread for the current membership when :
+  - a last message exists ;
+  - the last message was not sent by the current membership ;
+  - the participant has not marked the conversation seen through `POST .../seen/`.
+- Seen state uses `last_seen_message_id` (UUID, **no FK**) + `last_seen_message_created_at` so unread survives message purge.
+- **Forbidden** : `ChatMessageRead`, visible read receipts, double-check marks, “vu/lu” UI.
+
+### Realtime (Chat-only)
+
+- Chat V1 uses a **dedicated WebSocket protocol** for live message delivery.
+- This is an explicit exception to generic realtime invalidation rules (see [`realtime_domain.md`](realtime_domain.md)).
+- WebSocket auth : REST one-time ticket in the first message (see [`authentication_charter.md`](../../architecture/authentication_charter.md)).
+- Allowed WS server events in V1 :
+  - `message.created`
+  - `message.rejected`
+  - `conversation.access_revoked` (targeted to the affected user only)
+- **Not allowed** in V1 : `conversation.updated` broadcast, typing, read/delivered events, notification events.
+
+### WebSocket delivery — new conversations while connected
+
+- Do not rely only on conversation groups joined at auth time.
+- Each authenticated connection joins a **personal membership group** :
+  - `chat_est_{establishment_id}_mbr_{membership_id}`
+- Message broadcast targets each active participant's personal group so a connected member receives the first message of a newly created DM/group **without reconnecting**.
+- Optional conversation groups may be joined dynamically when a participant is added ; personal-group delivery remains mandatory.
+
+### Establishment flag
+
+- `Establishment.chat_enabled` : `True` by default when establishment becomes `active`.
+- Data migration sets `chat_enabled=True` for existing active establishments.
+- Owner/Director may disable chat for the establishment.
+
+## 3. Out of Scope (V1)
+
+- Single establishment-wide general chat room.
+- Chat notifications, push, sounds, Notification Center integration.
+- Read receipts, delivered status, typing indicators, presence.
+- `ChatMessageRead` or per-message read APIs.
+- REST endpoint to send messages (WS only).
+- Attachments, audio, reactions, threads, message search, message edit/delete by users.
+- Link to Signal, Action, Observation, Checklist, Comments, Feed, AI pipeline.
+- Cross-establishment chat.
+- Owner/Director reading conversations they do not participate in.
+- Owner/Director deleting groups they do not participate in via product API.
+- Groups tied to BusinessUnit / ActivitySubject / `MembershipScope`.
+- Polling as a continuous message transport.
 
 ## 4. Core Invariants
 
-- Chat is free-form establishment-wide communication, not a structured workflow surface.
-- Chat is intentionally isolated from Observation, Signal, Action, Checklist, Feed, Notification, Comments, Realtime invalidation, and AI in MVP.
-- Backend remains the authority for chat access, message creation, and message history.
-- Chat access is establishment-scoped and requires authenticated active membership plus backend authorization.
-- Chat never grants access to any other resource.
-- Chat messages are user-authored text only in MVP.
-- Chat message body must be 1 to 2,000 characters after trimming whitespace.
-- Backend validation is authoritative for message length.
-- Chat does not create, update, resolve, assign, or route Signals, Actions, Checklists, or Observations.
-- Chat content must not appear in Feed items.
-- Chat content must not be included in notification payloads unless separately validated later.
-- Chat content must not be sent to AI in MVP.
-- Generic realtime invalidation must not be treated as raw Chat message transport.
-- Any future Chat realtime transport must be Chat-specific and separately authorized.
+- **Membership-centric model** : `ChatParticipant.membership` and `ChatMessage.author_membership` are authoritative ; API may expose derived user display fields only.
+- Backend owns access, conversation rules, message validation, purge, and unread.
+- Chat never grants access to operational resources (Signals, Actions, etc.).
+- Participant-only visibility : only active participants can read a conversation ; Owner/Director have **no** read access outside participation.
+- Cross-establishment access is forbidden.
+- Inactive, suspended, invited, or deactivated members are not eligible.
+- When a membership becomes inactive :
+  - remove from groups (`left_at` set) ;
+  - **delete DM conversations entirely** if they involve that membership ;
+  - keep group conversations but remove the participant ;
+  - preserve their messages until hard purge.
+- Chat content must not appear in Feed items or notification payloads in V1.
+- Chat content must not be sent to AI in V1.
+- Chat message bodies may appear in WebSocket payloads **only** to authorized active participants of that conversation.
+- Chat message bodies must not appear in standard technical logs.
+- PostgreSQL is message truth ; Redis is not business truth.
 
 ## 5. Main Objects
 
-- `ChatRoom`
-  - MVP concept for the establishment general chat.
-  - One general room per establishment in MVP.
-  - Not user-created in MVP.
-
-- `ChatMessage`
-  - User-authored text message inside the establishment general chat.
-  - Establishment-scoped and ordered by creation time.
+- `ChatConversation`
+  - `type` : `dm` | `group`
+  - `establishment` FK
+  - DM : canonical pair `dm_membership_a`, `dm_membership_b` (sorted membership IDs)
+  - Group : `title`, `created_by_membership`
+  - `last_message_at` for list sorting
+  - `deleted_at` for group soft-delete
 
 - `ChatParticipant`
-  - Active establishment member allowed to access the general chat.
-  - Derived from membership and authorization, not manually managed in MVP.
+  - `conversation` FK
+  - `membership` FK (`EstablishmentMembership`) — **primary reference**
+  - `role` : `member` | `admin`
+  - `joined_at`, `left_at` (active when `left_at IS NULL`)
+  - `last_seen_message_id` (UUID, no FK), `last_seen_message_created_at`
 
-- `ChatMessageAuthor`
-  - Authenticated user who created the message.
-  - Must be an active authorized member at send time.
-
-- Candidate `ChatMessageDelivery`
-  - Candidate realtime delivery concept if Chat-specific transport is added later.
-  - Not validated as persisted business truth.
-
-- Candidate `ChatHistoryPage`
-  - Candidate paginated history/backfill response.
-  - Exact pagination shape is not validated yet.
-
-- Candidate `ChatChannel`
-  - Candidate websocket channel for Chat-specific delivery.
-  - Separate from generic realtime invalidation channels.
+- `ChatMessage`
+  - `conversation` FK
+  - `author_membership` FK
+  - `body` (text, max 2000 trimmed)
+  - `client_message_id` (UUID, idempotency key)
 
 ## 6. Lifecycle / Statuses
 
-- ChatRoom has no product lifecycle in MVP; one default general chat exists per establishment.
-- `ChatMessage`: `created`
-
-Not validated yet:
-- message editing is out of MVP
-- message deletion
-- delivery or read-status lifecycle
+- `ChatConversation` : active until group deleted (`deleted_at`) ; DM deleted when involving inactive membership.
+- `ChatMessage` : `created` → hard-deleted by purge after 7 days.
+- No user message edit/delete in V1.
 
 ## 7. Permissions
 
-- Chat access is establishment-scoped.
-- Reading messages requires authenticated active membership in the establishment plus backend authorization.
-- Sending messages requires authenticated active membership in the establishment plus backend authorization.
-- Fetching history or older pages must use the same backend authorization boundary as message reads.
-- Any future Chat websocket subscription must use the same backend authorization boundary as HTTP read/send access.
-- Cross-establishment chat access is forbidden.
-- Deactivated members cannot read or send.
-- Owner, Director, Manager, and Staff are expected MVP participants only when they are active authorized members.
-- Chat does not grant access to Signals, Actions, Checklists, Observations, feeds, or any other operational resource.
+| Action | Rule |
+|--------|------|
+| Access chat | Active membership + active establishment + `chat_enabled` |
+| Create DM | Any active member ; target = active membership same establishment |
+| Create group | Manager, Director, Owner |
+| View conversation | Active participant only |
+| Send message | Active participant ; WS only ; revalidated on each send |
+| Group admin actions | Participant with `admin` role |
+| Add/remove/promote participants | Group admin |
+| Rename group | Group admin |
+| Delete group | **Group admin participant only** (product API) |
+| Leave group | Any active member participant |
+| Toggle `chat_enabled` | Owner/Director |
+| Mark seen | Current participant only ; no broadcast to others |
+
+**Group without admin** : promote oldest remaining Owner/Director participant ; else oldest admin-eligible participant per service rule.
+
+**Support/admin delete outside participation** : management command only ; not product API V1.
 
 ## 8. Events
 
-No implemented Chat event contract is validated in current code or in `apps/api/schema.yml`.
+Internal `EventEnvelope` events (payloads without message body):
 
-Candidate events only:
-- `ChatMessageCreated`
-- `ChatMessageDeleted`
-- `ChatMessageDeliveryFailed`
+- `ChatConversationCreated`
+- `ChatConversationDeleted`
+- `ChatGroupRenamed`
+- `ChatParticipantAdded`
+- `ChatParticipantRemoved`
+- `ChatParticipantPromoted`
+- `ChatMessageCreated` (ids only)
+- `ChatMessagePurged`
+- `ChatConversationSeen` (local participant ; no WS broadcast to others)
+- `ChatEnabledForEstablishment` / `ChatDisabledForEstablishment`
+
+**Forbidden** : `ChatMessageRead`, `ChatReadReceiptCreated`, `ChatMessageDelivered`, typing events.
 
 ## 9. API / Channel Surface
 
-Current HTTP API truth is `apps/api/schema.yml`.
-Current WebSocket/channel truth is current backend code.
+**HTTP API truth** : [`apps/api/schema.yml`](../../../apps/api/schema.yml) — Chat endpoints under `/api/v1/establishments/{establishment_id}/chat/` are **implemented** (Lots 3–4). Do not assume parity with this doc without checking schema + debt register.
 
-Implemented HTTP endpoints confirmed today:
-- none
+### REST (establishment-scoped, implemented)
 
-Implemented channels confirmed today:
-- none
+All under `/api/v1/establishments/{establishment_id}/chat/` :
 
-Candidate HTTP capabilities only:
-- fetch establishment general chat messages
-- send establishment general chat message
-- fetch older paginated history
+- `POST ws-ticket/`
+- `GET status/`
+- `GET conversations/`
+- `POST conversations/dm/`
+- `POST conversations/groups/`
+- `GET/PATCH/DELETE conversations/{id}/` (delete : admin participant only)
+- `GET conversations/{id}/messages/` (read only)
+- `POST conversations/{id}/seen/`
+- `GET eligible-memberships/`
+- Participant management endpoints (add, remove, promote, leave)
+- `PATCH settings/` (`chat_enabled` toggle)
 
-Candidate channel only:
-- `ChatChannel`
-- `EstablishmentGeneralChatChannel`
+**No** `POST conversations/{id}/messages/` in V1.
 
-Current implementation note:
-- Current code proves Channels foundation only.
-- `apps/api/config/asgi.py` exposes HTTP only.
-- No backend `chat` app, chat API route, chat consumer, or chat frontend surface is confirmed today.
+### WebSocket
+
+- Path : `/ws/v1/establishments/{establishment_id}/chat/`
+- Auth : first message `{ "type": "auth", "ticket": "..." }`
+- Send : `{ "type": "message.send", "conversation_id", "client_message_id", "body" }`
+- ASGI : `AllowedHostsOriginValidator` + `URLRouter` ; **no** `AuthMiddlewareStack`
+- Server : Daphne
+
+### Channel groups
+
+- Personal (mandatory) : `chat_est_{establishment_id}_mbr_{membership_id}`
+- Conversation (optional supplement) : `chat_est_{establishment_id}_conv_{conversation_id}`
 
 ## 10. Frontend Expectations
 
-- Chat UI should be a simple establishment-wide general conversation surface.
-- Chat must remain visually and behaviorally separate from Signal and Action comments.
-- Chat must not appear as a Signal, Action, Checklist, Feed, or Notification feature.
-- Frontend must fetch chat history through authorized API when chat APIs exist.
-- TanStack Query owns chat history and send-state reconciliation when HTTP APIs exist.
-- Frontend must not use websocket payloads as business truth.
-- Any future realtime Chat delivery must reconcile with authorized API state after reconnect, failure, or missed delivery.
-- Frontend must handle loading, empty, sending, failed-send, reconnecting, and pagination states if those APIs or channels are implemented.
-- Frontend should show a character counter or warning near 1,800 characters and block submit above 2,000 characters, while backend remains authoritative.
-- Frontend must not create workflows from Chat messages.
-- Frontend must not send attachments, media, or Chat content to AI in MVP.
-- Frontend must use generated OpenAPI clients only for chat routes that exist in `apps/api/schema.yml`.
+- Route `/chat` ; mobile-first Terrain UI (WhatsApp-inspired), not a parallel design system.
+- TanStack Query : conversations, messages, eligible-memberships, seen mutations.
+- WebSocket : message send + receive ; failed send → local `failed` state → retry after reconnect (WS only).
+- Reconnect : new ws-ticket ; refetch conversations and open conversation messages.
+- No localStorage/sessionStorage for tokens or chat payloads.
+- No read-receipt UI ; minimal unread badge only.
+- Show retention notice : messages older than 7 days are automatically deleted.
+- Hide chat nav when `chat_enabled=false` or user cannot access.
 
 ## 11. AI Agent Notes
 
-- Inspect current code before claiming Chat models, services, events, endpoints, channels, or frontend surfaces exist.
-- Inspect `apps/api/schema.yml` before listing any Chat HTTP API as implemented.
-- Inspect `realtime_domain.md` before adding Chat websocket behavior, but do not treat generic invalidation as raw chat protocol.
-- Inspect `comments_domain.md` before changing Chat versus Comments boundaries.
-- Inspect `notification_domain.md` before adding any Chat notification behavior.
-- Inspect `rbac_permissions_domain.md` before changing Chat access assumptions.
-- Inspect `security_rgpd_domain.md` before changing content, logging, retention, export, or privacy assumptions.
-- Do not connect Chat to Signal, Action, Checklist, Observation, Feed, Notification, Comments, or AI in MVP.
-- Do not add message editing in MVP.
-- Do not add room management, room activation, room deactivation, or user-created rooms in MVP.
-- Do not add direct messages, multiple rooms, threads, reactions, read receipts, typing indicators, presence, attachments, or media unless separately validated.
-- Do not increase Chat message max length without updating this document, backend validation, frontend validation, API schema, and tests.
-- Do not send Chat content to AI.
-- Do not include Chat content in notification payloads unless separately validated.
-- Do not claim endpoints or channels are implemented without proof in current code and `apps/api/schema.yml`.
-- When Chat APIs or channels are added later, update backend authorization, OpenAPI, generated clients, frontend handling, tests, and this document together.
+- Inspect `apps/api/schema.yml` for the current Chat REST surface (implemented).
+- Inspect [`chat_v1_technical_debt_2026-06-09.md`](../../audit/chat_v1_technical_debt_2026-06-09.md) for remaining post-core gaps (events, group settings UI, bootstrap flag).
+- Inspect [`realtime_domain.md`](realtime_domain.md) for Chat vs global realtime boundary.
+- Inspect [`authentication_charter.md`](../../architecture/authentication_charter.md) before WebSocket auth work.
+- Inspect [`rbac_permissions_domain.md`](rbac_permissions_domain.md) and [`identity_membership_domain.md`](identity_membership_domain.md) for eligibility.
+- Do not implement general establishment chat, REST message send, read receipts, notifications, or Signal/Action links.
+- Do not use `AuthMiddlewareStack` for Chat WebSocket.
+- Do not rely only on conversation groups joined at auth for message delivery.
+- When implementing Chat, update OpenAPI, generated clients, tests, and this document together.
+
+## 12. V1 acceptance criteria (documentation)
+
+Checklist aligned with Chat V1 implementation plan §3.5 — verified **2026-06-09** after Lots 2–6:
+
+- [x] Single active Chat V1 definition (this document + carve-out in [`realtime_domain.md`](realtime_domain.md))
+- [x] WebSocket auth = REST one-time ticket ; no `AuthMiddlewareStack` ; Origin validated (`AllowedHostsOriginValidator`)
+- [x] Chat realtime separated from deferred global Signal/Action/Notification invalidation
+- [x] Chat notifications explicitly out of scope (§3)
+- [x] Minimal unread only ; no read receipts ; unread survives purge (`last_seen_message_id` UUID non-FK + `last_seen_message_created_at`)
+- [x] Hard purge after 7 days documented and implemented (Celery + management command) ; purge does not break participant seen state
+- [x] Message send WebSocket-only ; no REST `POST .../messages/`
+- [x] Membership-centric model (`ChatParticipant.membership`, `ChatMessage.author_membership`)
+- [x] Participant eligibility and permissions documented (§7) and enforced in backend tests
+- [x] REST + WS endpoints present in [`apps/api/schema.yml`](../../../apps/api/schema.yml) and backend `houston/chat/`
+- [x] Terrain UI at `/chat` and `/chat/:conversationId` (Lots 5)
+- [x] Membership deactivation hook, `conversation.access_revoked`, rate limits (Lot 6)
+- [ ] Post-core product gaps tracked in debt register only (group management UI, `chat_enabled` toggle UI, `EventEnvelope`, bootstrap `chat_available`)

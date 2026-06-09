@@ -39,7 +39,7 @@ The project currently uses a Django modular monolith as the business authority a
 - React owns rendering, interaction, local UI state, and API consumption.
 - TanStack Query is the only place for server state in the frontend.
 - Zustand is limited to harmless UI state such as panel visibility.
-- REST remains the source of truth. Realtime is for invalidation/refetch signals only.
+- REST remains the source of truth. Global realtime (deferred) is for invalidation/refetch only. Chat V1 uses a dedicated WebSocket message protocol (see `docs/product/domains/chat_domain.md`).
 - OpenAPI-first changes must flow from backend schema to generated frontend types.
 - `houston.core` remains for technical primitives, not business workflows.
 
@@ -78,10 +78,12 @@ The project currently uses a Django modular monolith as the business authority a
 - Signal feed (`/signals`) and detail with pin/unpin/urgency/resolve/cancel commands (no manual Signal CRUD)
 - Phase 5 core implemented: Action lifecycle + Execution Feed (`/actions/`, `/execution-feed/`)
 - Phase 7 Checklists implemented: templates, assignments, executions, polymorphic Execution Feed (Actions + Checklists)
+- Phase 8 Chat V1 core implemented: DM + free groups, REST structure/history/seen/ws-ticket, WebSocket message send/receive, Terrain UI (`/chat`), 7-day purge, membership deactivation hooks — see `docs/product/domains/chat_domain.md`
 
 ## What Is Not Implemented Yet
 - Notifications
-- Realtime business workflows + advanced feed surface
+- Global realtime invalidation (Signal/Action/Notifications) — deferred post Chat V1
+- Chat post-core product gaps (group management UI, Owner/Director `chat_enabled` toggle UI, `EventEnvelope` events, bootstrap `chat_available`) — see `docs/audit/chat_v1_technical_debt_2026-06-09.md`
 - Production-grade frontend feature surface
 
 ## Auth Notes

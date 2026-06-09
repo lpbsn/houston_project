@@ -44,9 +44,9 @@ The product is built to make this loop reliable, visible, and usable in real fie
 ## 5. Communication Principles
 
 - Operational work belongs in Observations, Signals, Actions, and Checklists.
-- Free-form exchange belongs in Establishment General Chat.
-- Chat is independent in MVP.
-- Comments are contextual, while Chat is general.
+- Free-form exchange belongs in Chat V1 (DM and free groups).
+- Chat is independent from the operational workflow in MVP.
+- Comments are contextual (Signal/Action) ; Chat is establishment-scoped messaging, not a single general room.
 
 ## 6. MVP Discipline
 

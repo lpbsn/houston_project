@@ -1748,7 +1748,8 @@ def activate_onboarding_session(
 
     now = timezone.now()
     establishment.status = Establishment.Status.ACTIVE
-    establishment.save(update_fields=["status", "updated_at"])
+    establishment.chat_enabled = True
+    establishment.save(update_fields=["status", "chat_enabled", "updated_at"])
 
     session.status = OnboardingSession.Status.ACTIVATED
     session.activated_at = now
@@ -1857,6 +1858,10 @@ def deactivate_membership_for_management(
     if membership.status != EstablishmentMembership.Status.DEACTIVATED:
         membership.status = EstablishmentMembership.Status.DEACTIVATED
         membership.save(update_fields=["status", "updated_at"])
+
+    from houston.chat.services import handle_membership_chat_deactivation
+
+    handle_membership_chat_deactivation(membership=membership)
 
     _clear_selected_establishment_for_membership(membership)
 

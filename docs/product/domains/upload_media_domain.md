@@ -25,7 +25,7 @@ It does not own Observation submission validity, AI transcription behavior, priv
 
 ## 3. Out of Scope
 
-- Media attachments in Establishment General Chat.
+- Media attachments in Chat V1.
 - Public media galleries, public sharing links, or publicly reachable media URLs.
 - Arbitrary file manager behavior.
 - Document, PDF, or video upload unless later validated.
@@ -168,6 +168,6 @@ Candidate API capabilities only:
 - Do not log media content, signed access URLs, or sensitive filenames.
 - Do not send images to AI in MVP.
 - Do not persist transcription audio as Observation media in MVP.
-- Do not add media to Establishment General Chat in MVP.
+- Do not add media to Chat V1.
 - Do not increase the photo limit without updating product docs, backend validation, frontend validation, and tests.
 - When upload/media APIs are added later, update backend authorization, OpenAPI, generated clients, tests, and this document together.

@@ -442,21 +442,30 @@ Redis must not be used for:
 
 Channels consumers must stay thin.
 
-Consumers may:
+**Chat V1** (`houston/chat/`) is the first WebSocket surface :
+
+- ASGI : `AllowedHostsOriginValidator` + `URLRouter` — **no** `AuthMiddlewareStack`
+- Auth : REST ws-ticket consumed in first WS message (see [`authentication_charter.md`](../../docs/architecture/authentication_charter.md))
+- Server : Daphne
+- Message send : WebSocket only in V1 (no REST message write)
+- Delivery : personal membership group `chat_est_{establishment_id}_mbr_{membership_id}` so new conversations deliver without reconnect
+- Spec : [`chat_domain.md`](../../docs/product/domains/chat_domain.md)
+
+**Global realtime** (deferred) consumers may:
 
 - authenticate user
 - check membership
 - check channel subscription permission
-- send lightweight events
+- send lightweight invalidation events
 - trigger frontend refetch
 
 Consumers must not:
 
-- perform business workflows
-- send full business payloads
-- expose sensitive content
-- bypass REST API
-- mutate domain state except technical connection state
+- perform business workflows outside their domain
+- send full business payloads on **generic** invalidation channels
+- expose sensitive content to unauthorized recipients
+- bypass REST API for authoritative reads
+- mutate domain state except technical connection state and Chat message persistence path
 
 ------
 

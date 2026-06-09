@@ -67,7 +67,8 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'checklist-template-create' ||
     route.kind === 'checklist-template-detail' ||
     route.kind === 'checklist-execution-create' ||
-    route.kind === 'checklist-execution-detail'
+    route.kind === 'checklist-execution-detail' ||
+    route.kind === 'chat-conversation-detail'
   ) {
     return true
   }
@@ -88,7 +89,8 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'checklist-template-create' ||
     route.kind === 'checklist-template-detail' ||
     route.kind === 'checklist-execution-create' ||
-    route.kind === 'checklist-execution-detail'
+    route.kind === 'checklist-execution-detail' ||
+    route.kind === 'chat-conversation-detail'
   ) {
     return true
   }
@@ -139,6 +141,16 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'chat-conversation-detail') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Conversation',
+      backPath: '/chat',
+      showBottomNav: false,
+      mainScroll: 'hidden',
     }
   }
 
@@ -302,6 +314,10 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'checklist-execution-detail') {
     return `checklist-execution-detail-${route.executionId}`
+  }
+
+  if (route.kind === 'chat-conversation-detail') {
+    return `chat-conversation-detail-${route.conversationId}`
   }
 
   if (route.kind === 'static') {

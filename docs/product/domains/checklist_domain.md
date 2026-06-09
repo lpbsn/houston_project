@@ -352,7 +352,7 @@ Shared management in Profil: list/create/edit/deactivate templates, manage tasks
 - Shared Checklist creation from Execution Feed `+`.
 - Metrics dashboard / anomaly detection from checklist data.
 - Advanced Execution Feed sort (`requires_me_rank` for checklist items).
-- Realtime invalidation for checklist (Phase 8A — separate from Checklist core lot).
+- Realtime invalidation for checklist (Phase 8C global realtime — separate from Checklist core lot).
 - Treating `ChecklistTaskExecution` as an Action.
 
 ## 5. Questions non bloquantes post-MVP

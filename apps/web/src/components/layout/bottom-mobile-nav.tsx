@@ -16,6 +16,8 @@ type BottomMobileNavProps = {
   activePath: TerrainNavPath
   navigate: (pathname: string, options?: { replace?: boolean }) => void
   className?: string
+  showChat?: boolean
+  chatHasUnread?: boolean
 }
 
 type NavItem = {
@@ -35,10 +37,18 @@ const NAV_ITEMS: NavItem[] = [
 
 const MotionA = motion.a
 
-export function BottomMobileNav({ activePath, navigate, className }: BottomMobileNavProps) {
+export function BottomMobileNav({
+  activePath,
+  navigate,
+  className,
+  showChat = true,
+  chatHasUnread = false,
+}: BottomMobileNavProps) {
   const shouldReduceMotion = useReducedMotion()
   const tapProps = terrainTapProps(shouldReduceMotion)
   const NavLink = shouldReduceMotion ? 'a' : MotionA
+  const visibleItems = NAV_ITEMS.filter((item) => item.path !== '/chat' || showChat)
+  const columnCount = visibleItems.length
 
   return (
     <nav
@@ -48,8 +58,11 @@ export function BottomMobileNav({ activePath, navigate, className }: BottomMobil
         className,
       )}
     >
-      <ul className="grid grid-cols-5 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1">
-        {NAV_ITEMS.map((item) => {
+      <ul
+        className="grid px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1"
+        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+      >
+        {visibleItems.map((item) => {
           const isActive = activePath === item.path
           const Icon = item.icon
 
@@ -90,13 +103,16 @@ export function BottomMobileNav({ activePath, navigate, className }: BottomMobil
                   navigate(item.path)
                 }}
                 className={cn(
-                  'flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
+                  'relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[#7D7B75]',
                   isActive && 'text-[#1B4FD8]',
                 )}
                 {...tapProps}
               >
                 <Icon className={cn('h-5 w-5', isActive && 'stroke-[2.5]')} />
                 <span className="text-[11px] font-medium leading-none">{item.label}</span>
+                {item.path === '/chat' && chatHasUnread ? (
+                  <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-[#1B4FD8]" />
+                ) : null}
               </NavLink>
             </li>
           )

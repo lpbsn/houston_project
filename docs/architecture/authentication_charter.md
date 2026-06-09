@@ -310,3 +310,88 @@ Auth throttling for public auth mutation endpoints is implemented via DRF `Scope
 ### Remaining security TODOs
 
 - add suspicious token reuse monitoring and alerting
+
+## 14. WebSocket authentication (Chat V1)
+
+Chat V1 is the first WebSocket surface. It uses a **different auth path** from REST bearer tokens.
+
+### Architecture rules
+
+- **Do not use `AuthMiddlewareStack`** or Django session auth for Chat WebSocket.
+- Product WebSocket auth must not depend on session cookies or implicit `scope["user"]` from Django auth middleware.
+- Use `AllowedHostsOriginValidator` (or equivalent Channels origin check) before the consumer.
+- Validate `Origin` / `Host` against `ALLOWED_HOSTS` and frontend dev origins in `CSRF_TRUSTED_ORIGINS`.
+
+### Ticket-based WebSocket auth (mandatory for Chat V1)
+
+1. Client obtains a short-lived ticket through authenticated REST :
+
+```
+POST /api/v1/establishments/{establishment_id}/chat/ws-ticket/
+Authorization: Bearer <access_token>
+```
+
+2. Response :
+
+```json
+{
+  "ticket": "<opaque-one-time-token>",
+  "expires_in": 60
+}
+```
+
+3. Client opens WebSocket **without** token in the URL :
+
+```
+/ws/v1/establishments/{establishment_id}/chat/
+```
+
+4. First message must be :
+
+```json
+{
+  "type": "auth",
+  "ticket": "<opaque-one-time-token>"
+}
+```
+
+5. Consumer validates ticket, marks it used, loads user/session/membership/establishment, then responds `auth.ok` or closes with an auth error.
+
+### Ticket properties
+
+- opaque random token
+- TTL about 60 seconds
+- one-time use (atomic consume in Redis)
+- scoped to `user_id`, `session_id` (when available), `establishment_id`, and `membership_id`
+- stored in Redis (or dedicated cache) as digest/metadata only — not business truth
+- invalidated immediately after successful use
+
+### Forbidden for WebSocket auth
+
+- long-lived access or refresh tokens in the WebSocket URL
+- refresh token flow over WebSocket
+- storing WebSocket tickets in `localStorage` or `sessionStorage`
+- bypassing REST membership/establishment/`chat_enabled` checks at ticket issuance
+- `AuthMiddlewareStack` as the primary Chat auth mechanism
+
+### Ticket issuance checks (fail closed)
+
+- user active (not suspended)
+- active membership in the establishment
+- active establishment and organization
+- `chat_enabled=True`
+- URL `establishment_id` matches session-selected active membership context
+
+### Consumer auth timeout
+
+- If no valid `auth` message within a short window (about 5 seconds), close the connection (code `4408`).
+
+### Tests required for WebSocket auth changes
+
+- valid ticket auth
+- expired ticket rejected
+- reused ticket rejected
+- wrong establishment rejected
+- inactive membership / suspended user / chat disabled rejected
+- missing or late auth message closes connection
+- origin/host rejection when invalid

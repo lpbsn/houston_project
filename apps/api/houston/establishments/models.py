@@ -62,6 +62,7 @@ class Establishment(BaseModel):
         max_length=ESTABLISHMENT_TIMEZONE_MAX_LENGTH,
         default=DEFAULT_ESTABLISHMENT_TIMEZONE,
     )
+    chat_enabled = models.BooleanField(default=False)
 
     def clean(self) -> None:
         super().clean()

@@ -44,7 +44,7 @@ Current truth:
 - Quiet hours, digests, grouping, or presence-aware suppression.
 - Rich media, attachments, or media binaries inside notifications.
 - Notification-based access grants or notification-based business truth.
-- Chat notifications are out of MVP until `chat_domain.md` validates them.
+- Chat notifications are **out of Chat V1 and MVP** ; see [`chat_domain.md`](chat_domain.md). No notification on new chat messages in V1.
 - Full provider setup or push runbook details.
 - Full admin notification console or analytics dashboard.
 - Cross-tenant notifications.

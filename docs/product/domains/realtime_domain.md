@@ -1,8 +1,8 @@
 # Realtime Domain
 
 Status: authoritative
-Last reviewed: 2026-05-28
-Implementation status: partial foundation only
+Last reviewed: 2026-06-09
+Implementation status: partial foundation only (generic Signal/Action/Notification invalidation not implemented ; Chat V1 WS lives in `houston/chat/` — see Chat V1 section below)
 
 ## 1. Purpose
 
@@ -28,9 +28,35 @@ Current code truth:
 
 - Channels is installed and channel-layer configuration exists.
 - `houston.realtime` exists as a backend app.
-- Partial means infrastructure foundation only; no product realtime behavior is implemented yet.
-- No websocket routing, consumers, channel groups, or frontend websocket client are confirmed in current code.
-- No realtime-specific HTTP route is confirmed in `apps/api/schema.yml`.
+- Partial means infrastructure foundation only; **generic** Signal/Action/Notification realtime is not implemented yet.
+- Chat V1 WebSocket (routing, consumer, channel groups, frontend client) is implemented under `houston/chat/` — see Chat V1 section below.
+- No **generic** realtime-specific HTTP route is confirmed in `apps/api/schema.yml`.
+
+### Chat V1 realtime (separate contract — see [`chat_domain.md`](chat_domain.md))
+
+Chat V1 is implemented **before** generic Signal/Action/Notification realtime invalidation.
+
+- Chat uses its own WebSocket path, ticket auth, and message protocol under `houston/chat/`.
+- Chat V1 realtime is **messages-only** over WebSocket : `message.created`, `message.rejected`, plus targeted `conversation.access_revoked`.
+- Chat message text may be transported over WebSocket **only** to authorized active participants of that conversation.
+- Chat V1 is **not** generic invalidation/refetch ; it is live message delivery with PostgreSQL as persisted truth.
+- REST remains authoritative for conversation structure, history, participants, seen state, and ws-ticket issuance.
+- **No REST message send in V1** ; WebSocket is the only write channel for messages.
+
+Chat WebSocket delivery must not depend only on conversation groups joined at auth :
+
+- each connection joins a personal membership group `chat_est_{establishment_id}_mbr_{membership_id}` ;
+- message broadcast targets participants' personal groups so new DM/groups deliver the first message without reconnect.
+
+Auth stack for Chat WebSocket :
+
+- `AllowedHostsOriginValidator` + `URLRouter` ;
+- **no** `AuthMiddlewareStack` ;
+- ticket REST one-time in first WS message (see [`authentication_charter.md`](../../architecture/authentication_charter.md)).
+
+### Global realtime invalidation (deferred — post Chat V1)
+
+Future phases may add lightweight invalidation for Signal Feed, Execution Feed, notifications, and detail views. That work follows the rules in sections 3–4 below and must not reuse the Chat message protocol.
 
 ## 3. Out of Scope
 
@@ -38,10 +64,12 @@ Current code truth:
 - Lifecycle mutation or business workflow execution inside realtime consumers.
 - Access grants through connection, subscription, channel naming, or message receipt.
 - Complete resource snapshots over realtime transport.
-- Observation text/body, comment bodies, chat message bodies, media links, signed media links, credentials, or AI request/model-input content in realtime payloads.
+- Observation text/body, comment bodies, media links, signed media links, credentials, or AI request/model-input content in **generic** realtime invalidation payloads.
+- Chat message bodies in **generic** invalidation channels (Chat V1 has its own scoped exception — see Chat V1 section above and [`chat_domain.md`](chat_domain.md)).
 - Guaranteed delivery semantics, durable offline queues, or replay as workflow authority.
 - Public channels, cross-tenant subscriptions, or bypass of normal API authorization.
-- Chat protocol design, typing indicators, read receipts, or other chat-specific behavior unless separately validated under Chat scope later.
+- Chat protocol implementation in `houston/realtime` as a generic framework (Chat lives in `houston/chat/`).
+- Chat typing indicators, read receipts, delivered status, or notification routing (see [`chat_domain.md`](chat_domain.md) out of scope).
 - Provider runbooks, scaling architecture, GraphQL subscriptions, or SSE unless separately validated.
 
 ## 4. Core Invariants
@@ -59,7 +87,8 @@ Current code truth:
 - Feed remains a backend-authorized projection; realtime only helps refresh it.
 - Done shared ChecklistExecutions disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
 - Notifications remain persisted attention messages; realtime only helps refresh their UI.
-- Generic Realtime messages must not transport raw Chat messages; any future Chat realtime protocol belongs to Chat domain.
+- Generic Realtime invalidation must not transport raw Chat messages.
+- Chat V1 message transport is defined only in [`chat_domain.md`](chat_domain.md) and is not a precedent for generic invalidation payloads.
 - Events remain immutable traces; realtime is selective transport around view-changing changes.
 
 Safe payload examples:
@@ -76,7 +105,7 @@ Unsafe payload examples:
 
 - Observation text/body
 - complete comment body
-- chat message body
+- chat message body (in generic invalidation payloads; Chat V1 scoped exception applies only in Chat WS protocol)
 - media links or temporary signed media links
 - authentication credentials
 - AI request or model-input content
@@ -168,18 +197,24 @@ Candidate transport-level events:
 - `RealtimeMessageDelivered`
 - `RealtimeMessageFailed`
 
-Chat message transport, if implemented later, belongs to Chat scope rather than this generic invalidation contract.
+Chat message transport is implemented in `houston/chat/` and belongs to Chat scope only — not this generic invalidation contract.
 
 ## 9. API / Channel Surface
 
 Current HTTP API truth is `apps/api/schema.yml`.
 Current WebSocket/channel truth is current backend code.
 
-Implemented HTTP routes confirmed today:
+**Chat V1 WebSocket** (implemented — see [`chat_domain.md`](chat_domain.md)):
+
+- Path : `/ws/v1/establishments/{establishment_id}/chat/`
+- App : `houston/chat/` (consumer, routing, ws-ticket REST)
+- Not part of generic invalidation channels below
+
+Implemented HTTP routes confirmed today (generic realtime):
 
 - none for realtime
 
-Implemented channels confirmed today:
+Implemented channels confirmed today (generic realtime):
 
 - none
 
@@ -193,11 +228,11 @@ Candidate channels only:
 - candidate `ChecklistExecutionChannel`
 - candidate `CommentContextChannel`
 
-Current implementation note:
+Current implementation note (generic realtime):
 
 - Backend settings include Channels and a channel layer.
-- `apps/api/config/asgi.py` currently exposes HTTP only.
-- No websocket route table, consumer implementation, or confirmed group naming exists in current code.
+- `apps/api/config/asgi.py` exposes HTTP and **Chat V1 WebSocket** (`AllowedHostsOriginValidator` + `houston/chat/` routing).
+- **Generic** invalidation websocket routes, consumers, and channel groups are not implemented in `houston/realtime/`.
 
 ## 10. Frontend Expectations
 
@@ -213,12 +248,13 @@ Current implementation note:
 - Notification Center should refetch when matching recipient-scoped notification messages arrive.
 - Comment surfaces should refetch only their authorized parent context when later implemented.
 - Checklist execution surfaces should refetch through their owning APIs when later implemented.
-- If Chat later uses realtime, it should follow Chat-specific rules rather than reuse this document as a message protocol.
+- Chat V1 follows [`chat_domain.md`](chat_domain.md) ; do not apply generic invalidation-only rules to Chat message WebSocket delivery.
+- Global Signal/Action/Notification realtime (when implemented) follows invalidation/refetch rules in this document.
 
 Current code truth:
 
-- No frontend websocket client is confirmed in `apps/web/src/`.
-- No realtime query invalidation hook is confirmed in current frontend code.
+- Chat V1 frontend WebSocket client exists in `apps/web/src/features/chat/` (`useChatWebSocket`, `ChatRealtimeProvider`).
+- No **generic** Signal/Action/Notification realtime query invalidation hook is confirmed in current frontend code.
 
 ## 11. AI Agent Notes
 
@@ -228,12 +264,13 @@ Current code truth:
 - Inspect Notification documentation before changing notification refresh behavior.
 - Inspect Signal, Action, and Checklist documentation before changing detail invalidation triggers.
 - Inspect Comments documentation before changing comment refresh behavior.
-- Chat domain documentation does not exist today; use active product docs and MVP build-plan boundaries before adding chat transport behavior.
+- Read [`chat_domain.md`](chat_domain.md) before Chat WebSocket work ; do not implement Chat in `houston/realtime` as a generic platform.
 - Inspect RBAC documentation before changing subscription authorization.
 - Inspect Security / RGPD documentation before changing payload content or logging.
 - Do not make realtime authoritative state.
 - Do not make realtime grant access.
-- Do not send Observation text/body, comment bodies, chat message bodies, media links, signed media links, credentials, or AI request/model-input content in realtime payloads.
+- Do not send Observation text/body, comment bodies, media links, signed media links, credentials, or AI request/model-input content in **generic** realtime payloads.
+- Do not send chat message bodies outside the Chat V1 WebSocket protocol defined in [`chat_domain.md`](chat_domain.md).
 - Do not implement client-side lifecycle mutation based only on realtime payloads.
 - Do not claim candidate channels are implemented without code proof.
 - When realtime transport is added later, update backend authorization, frontend invalidation hooks, tests, docs, and this document together.

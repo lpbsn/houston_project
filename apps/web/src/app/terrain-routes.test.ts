@@ -207,6 +207,18 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
+  it('configures chat conversation detail without bottom nav', () => {
+    expect(
+      getTerrainRouteConfig({ kind: 'chat-conversation-detail', conversationId: 'conv-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Conversation',
+      backPath: '/chat',
+      showBottomNav: false,
+      mainScroll: 'hidden',
+    })
+  })
+
   it('throws for non-terrain routes', () => {
     expect(() => getTerrainRouteConfig({ kind: 'static', path: '/app' })).toThrow(
       'getTerrainRouteConfig called for a non-terrain route',
@@ -241,6 +253,12 @@ describe('getTerrainContentKey', () => {
       'signal-action-create-abc',
     )
     expect(getTerrainContentKey({ kind: 'action-create' })).toBe('action-create')
+  })
+
+  it('includes chat conversation id for detail routes', () => {
+    expect(
+      getTerrainContentKey({ kind: 'chat-conversation-detail', conversationId: 'conv-1' }),
+    ).toBe('chat-conversation-detail-conv-1')
   })
 
   it('throws for non-terrain routes', () => {

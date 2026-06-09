@@ -117,9 +117,13 @@ Permission outcomes are:
 - Boundary rules
   - Feed visibility is backend-owned.
   - Comments inherit parent-resource visibility and must not bypass RBAC.
-  - Chat is establishment-scoped and independent in MVP; it must not bypass structured workflow permissions.
+  - Chat V1 is establishment-scoped and independent ; it does not bypass structured workflow permissions and does not use BusinessUnit / `MembershipScope` gates.
+  - Chat access is participant-only : Owner/Director have no read access to conversations they do not participate in.
+  - Chat group delete (product API) requires the caller to be an active **admin participant** ; not available to Owner/Director outside participation.
+  - Staff may create DMs ; Staff cannot create groups ; Manager/Director/Owner may create groups.
   - Notifications may target authorized recipients, but they never create access.
-  - Realtime may invalidate or trigger refetch only; it does not carry business truth or permission authority.
+  - Generic realtime may invalidate or trigger refetch only (deferred post Chat V1).
+  - Chat V1 WebSocket may deliver message text to authorized participants only ; see [`chat_domain.md`](chat_domain.md).
 
 ## 8. Events
 
@@ -192,7 +196,8 @@ Target API convention from active product docs, not yet confirmed by current pub
 - TanStack Query owns server state and refetch behavior.
 - Frontend must handle `401` as unauthenticated and should be prepared for `403` and `404` according to the target API convention above.
 - Frontend must not infer real authorization from raw role or scope data alone.
-- Frontend must not rely on websocket payloads as business truth; realtime should trigger invalidation and REST refetch.
+- Frontend must not rely on generic websocket invalidation payloads as business truth; global realtime should trigger REST refetch (deferred).
+- Chat V1 WebSocket messages are a scoped exception : reconcile with REST after reconnect ; see [`chat_domain.md`](chat_domain.md).
 - Frontend must not persist permission-sensitive business data outside the validated auth/session design.
 
 ## 11. AI Agent Notes

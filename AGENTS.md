@@ -209,18 +209,25 @@ Report it and propose a dedicated setup task.
 
 REST API remains the source of truth.
 
-WebSockets are only for:
+**Global realtime** (Signal/Action/Notifications — deferred post Chat V1) uses WebSockets only for:
 
 - invalidation
 - refetch triggers
 - lightweight event notifications
 - non-sensitive UI refresh signals
 
-Do not send full business payloads over WebSockets.
+Do not send full business payloads over **generic** WebSocket invalidation channels.
+
+**Chat V1 exception** (see [`docs/product/domains/chat_domain.md`](docs/product/domains/chat_domain.md)):
+
+- Chat has a dedicated WebSocket protocol in `houston/chat/` for live text message delivery only.
+- WebSocket auth uses REST one-time ticket ; no `AuthMiddlewareStack` ; no token in URL.
+- PostgreSQL remains message truth ; WS does not replace REST for history, structure, or permissions.
+- No REST message send endpoint in Chat V1.
 
 Do not build business truth inside realtime consumers.
 
-Do not make WebSocket consumers perform business workflows.
+Do not make WebSocket consumers perform business workflows outside their domain scope.
 
 ---
 

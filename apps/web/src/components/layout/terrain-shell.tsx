@@ -13,6 +13,8 @@ type TerrainShellProps = PropsWithChildren<{
   activeNavPath?: TerrainNavPath
   mainScroll?: TerrainMainScroll
   navigate: (pathname: string, options?: { replace?: boolean }) => void
+  showChatNav?: boolean
+  chatHasUnread?: boolean
 }>
 
 export function TerrainShell({
@@ -22,6 +24,8 @@ export function TerrainShell({
   activeNavPath,
   mainScroll = 'auto',
   navigate,
+  showChatNav = true,
+  chatHasUnread = false,
   children,
 }: TerrainShellProps) {
   const shouldReduceMotion = useReducedMotion()
@@ -53,6 +57,8 @@ export function TerrainShell({
           className="shrink-0"
           activePath={activeNavPath}
           navigate={navigate}
+          showChat={showChatNav}
+          chatHasUnread={chatHasUnread}
         />
       ) : null}
     </div>
