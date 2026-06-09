@@ -36,3 +36,5 @@ htmlcov/
 
 # Docker
 *.pid
+# Celery Beat local runtime files
+apps/api/celerybeat-schedule*
