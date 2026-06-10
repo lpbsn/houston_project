@@ -38,3 +38,7 @@ htmlcov/
 *.pid
 # Celery Beat local runtime files
 apps/api/celerybeat-schedule*
+
+# Local/private runtime media
+apps/api/private_media/**
+!apps/api/private_media/.gitkeep
