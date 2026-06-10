@@ -13,11 +13,11 @@ import pytest
 from django.conf import settings
 
 from houston.ai.observation_pipeline import OpenAIObservationPipelineProvider
-from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.signals.models import Signal
 from houston.signals.services import run_observation_pipeline
 from houston.signals.tests.conftest import create_observation, create_restaurant_v3_taxonomy
+from houston.testing.factories import build_membership
 
 pytestmark = [
     pytest.mark.django_db,

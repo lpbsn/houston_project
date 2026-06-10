@@ -14,13 +14,9 @@ from houston.establishments.models import (
     OnboardingSession,
 )
 from houston.establishments.tests.taxonomy_helpers import create_business_unit
-from houston.establishments.tests.test_onboarding_api import (
-    auth_headers,
-    create_onboarding_session,
-    create_ready_runtime,
-    create_user,
-    login,
-)
+from houston.testing.auth import auth_headers, login
+from houston.testing.factories import create_user
+from houston.testing.onboarding import create_onboarding_session, create_ready_runtime
 
 pytestmark = pytest.mark.django_db
 

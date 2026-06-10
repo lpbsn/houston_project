@@ -1,0 +1,32 @@
+---
+description: Always apply. Houston project contract, stack, sources of truth, and validation commands.
+alwaysApply: true
+---
+
+# Houston Project Contract
+
+Houston is a mobile-first operational PWA.
+
+## Stack
+Backend: Django, DRF, PostgreSQL, Redis, Celery, Django Channels, Daphne.
+Frontend: React, TypeScript, Vite, Tailwind, TanStack Query.
+Infra: Docker Compose, Makefile, OpenAPI-generated frontend types.
+
+## Sources of truth
+- Backend domain logic: services, selectors, permissions, models, API tests.
+- API contract: DRF serializers/views + generated OpenAPI schema/types.
+- Frontend server state: TanStack Query + generated API types.
+- Docs may be stale. Verify behavior in code and tests first.
+
+## Architecture rules
+- Do not bypass RBAC, establishment isolation, membership status, or lifecycle guards.
+- Do not duplicate backend business rules in frontend except for UX hints.
+- Do not silently change API contracts.
+- Do not add abstractions unless they remove real duplication or risk.
+- Prefer small explicit services/selectors over hidden magic.
+
+## Validation
+Use relevant commands, not all commands blindly:
+- Backend: `make test`, focused `pytest`, `make lint`, `make migrations-check`, `make check`
+- Frontend: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`
+- Full confidence: `make verify`

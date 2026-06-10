@@ -28,7 +28,6 @@ from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
-from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import (
     AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
@@ -43,6 +42,7 @@ from houston.signals.tests.conftest import (
     create_observation,
     create_restaurant_v3_taxonomy,
 )
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
 

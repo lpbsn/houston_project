@@ -5,19 +5,18 @@ import uuid
 import pytest
 from django.utils import timezone
 
+from houston.accounts.models import User
 from houston.establishments.models import (
-    ActivitySubject,
     BusinessUnit,
     EstablishmentMembership,
     MembershipScope,
 )
-from houston.establishments.tests.conftest import TEST_PASSWORD
-from houston.establishments.tests.taxonomy_helpers import (
-    create_membership_with_business_unit_scope,
-)
-from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.models import Signal
-from houston.signals.tests.conftest import auth_headers, login
+from houston.testing.auth import TEST_PASSWORD, auth_headers, build_api_membership, login
+from houston.testing.taxonomy import (
+    create_membership_with_business_unit_scope,
+    create_signal_v3_for_membership,
+)
 
 __all__ = [
     "auth_headers",
@@ -35,20 +34,11 @@ __all__ = [
 ]
 
 
-def build_api_membership(**kwargs) -> EstablishmentMembership:
-    membership = build_membership(**kwargs)
-    membership.user.set_password(TEST_PASSWORD)
-    membership.user.save(update_fields=["password"])
-    return membership
-
-
 def build_api_membership_on_establishment(
     establishment_membership: EstablishmentMembership,
     *,
     role=EstablishmentMembership.Role.STAFF,
 ) -> EstablishmentMembership:
-    from houston.accounts.models import User
-
     user = User.objects.create_user(
         username=f"user_{uuid.uuid4().hex[:8]}",
         password=TEST_PASSWORD,
@@ -82,30 +72,6 @@ def assign_business_unit_scope(
     return create_membership_with_business_unit_scope(
         membership=membership,
         business_unit=business_unit,
-    )
-
-
-def create_signal_v3_for_membership(
-    membership: EstablishmentMembership,
-    *,
-    affected_business_unit: BusinessUnit,
-    responsible_business_unit: BusinessUnit,
-    activity_subject: ActivitySubject,
-    status: str = Signal.Status.OPEN,
-    title: str = "Signal title",
-    location_text: str = "chambre 102",
-) -> Signal:
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
-        affected_business_unit=affected_business_unit,
-        responsible_business_unit=responsible_business_unit,
-        activity_subject=activity_subject,
-        title=title,
-        structured_summary="Summary",
-        location_text=location_text,
-        status=status,
-        last_activity_at=now,
     )
 
 

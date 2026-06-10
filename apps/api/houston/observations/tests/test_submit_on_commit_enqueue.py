@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 from houston.establishments.tests.conftest import TEST_PASSWORD
-from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.services import submit_observation
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

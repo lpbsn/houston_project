@@ -6,7 +6,6 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
-from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
@@ -18,6 +17,7 @@ from houston.signals.tests.conftest import (
     create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,
 )
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
 

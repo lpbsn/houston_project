@@ -1,0 +1,32 @@
+---
+description: Always apply. Minimal execution guardrails for Cursor agent work on Houston.
+alwaysApply: true
+---
+
+# Agent Guardrails
+
+Before editing:
+- inspect existing code and tests
+- reuse the current pattern
+- identify impacted layer: backend, frontend, API, async, security, tests
+
+Do not:
+- invent parallel architecture
+- mix feature, refactor, cleanup, and formatting
+- rename public fields, routes, enums, statuses, or events casually
+- duplicate services, selectors, hooks, API clients, serializers, or permissions
+- weaken tests, RBAC, tenant isolation, or lifecycle guards
+
+If API changes:
+- update tests, schema/types, and frontend callers
+
+If permissions change:
+- test allowed, forbidden, inactive, and out-of-scope cases
+
+If lifecycle changes:
+- test valid transition, forbidden transition, and side effects
+
+End with:
+- Changed
+- Validated
+- Risks / not verified

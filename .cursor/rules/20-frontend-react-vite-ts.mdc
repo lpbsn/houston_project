@@ -1,0 +1,39 @@
+---
+description: Frontend React/Vite/TypeScript conventions for Houston web app.
+globs:
+  - "apps/web/**/*.ts"
+  - "apps/web/**/*.tsx"
+  - "apps/web/**/*.css"
+alwaysApply: false
+---
+
+# Frontend Rules
+
+## TypeScript
+- Keep strict typing.
+- Prefer generated API types.
+- Avoid `any`; justify if unavoidable.
+- Use adapters only when transforming API data for UI.
+
+## React
+- Keep components small and explicit.
+- Server state belongs in TanStack Query.
+- Local UI state stays local.
+- Avoid global state unless shared across distant screens.
+- Do not duplicate backend permissions; use backend hints for display only.
+
+## API
+- API calls live outside components.
+- Use shared API client/retry/error helpers.
+- Mutations must invalidate precise query keys.
+- Optimistic UI needs rollback/error behavior.
+
+## UI
+- Loading, empty, error, unauthorized, and offline states must be explicit.
+- Icon-only buttons need accessible names.
+- Do not break route/back behavior.
+- Do not reintroduce legacy shell/nav into terrain routes.
+
+## Tests
+Add/update tests for routing, query behavior, mutations, permissions, forms, empty/error/loading states.
+Run relevant: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.

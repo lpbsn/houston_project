@@ -126,6 +126,7 @@ def test_issue_and_consume_ws_ticket_unit():
     cache.clear()
 
 
+@pytest.mark.slow
 @override_settings(HOUSTON_CHAT_WS_TICKET_TTL_SECONDS=1)
 def test_ws_ticket_expired_rejected():
     establishment = create_establishment()

@@ -18,10 +18,9 @@ from houston.checklists.models import (
     ChecklistTemplate,
 )
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.tests.taxonomy_helpers import (
+from houston.testing.factories import create_establishment, create_membership
+from houston.testing.taxonomy import (
     create_business_unit,
-    create_establishment,
-    create_membership,
     create_membership_with_business_unit_scope,
 )
 

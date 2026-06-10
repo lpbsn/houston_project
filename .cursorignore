@@ -1,0 +1,44 @@
+# secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+
+# git / local env
+.git/
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+
+# node
+node_modules/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/coverage/
+
+# python/build/test
+htmlcov/
+.coverage
+*.pyc
+*.log
+
+# docker/local volumes
+postgres-data/
+redis-data/
+docker-data/
+
+# media/private files
+media/
+private_media/
+uploads/
+storage/
+
+# mac/system
+.DS_Store
+__MACOSX/

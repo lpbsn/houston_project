@@ -1,449 +1,121 @@
-## Frontend stack:
+# Frontend AGENTS.md
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- shadcn/ui
-- TanStack Query
-- minimal Zustand
-- Framer Motion, minimal usage only
-- PWA-ready
+Applies to `apps/web/**`.
+
+## Stack
+
+React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, minimal Zustand, minimal Framer Motion, PWA-ready.
 
 Do not upgrade frontend framework versions unless explicitly requested.
 
-------
+## Ownership
 
-## Frontend principles
-
-React is the UI layer.
-
-The backend owns business rules.
-
-OpenAPI owns API contracts.
-
-TanStack Query owns server state.
-
-Zustand owns UI/client state only.
-
-The frontend must remain API-driven and thin.
+- React renders UI and user interactions.
+- Backend owns business rules, permissions, lifecycle, visibility, and validation.
+- OpenAPI/generated types own API data contracts.
+- TanStack Query owns server state.
+- Zustand owns local UI/client state only.
 
 Do not move business workflows to React.
 
-Do not compute real permissions in React.
-
-Do not duplicate backend business state in client stores.
-
-------
-
-## Frontend structure
-
-Expected structure:
-
-```
-src/
-  api/
-    generated/
-  app/
-  components/
-    ui/
-    domain/
-    layout/
-  features/
-  stores/
-  lib/
-```
+## API flow
 
 Use:
 
-- `src/api/generated/` for generated OpenAPI client files
-- `src/app/` for app bootstrap, providers, routing, layout shell
-- `src/components/ui/` for generic shadcn/ui-style primitives
-- `src/components/domain/` for reusable Houston domain components
-- `src/components/layout/` for layout primitives
-- `src/features/` for feature-level screens and flows
-- `src/stores/` for minimal UI/client state stores
-- `src/lib/` for small frontend utilities
-
-Do not create new top-level folders unless clearly justified.
-
-------
-
-## API usage rules
-
-Use the generated OpenAPI TypeScript client.
-
-Do not call `fetch` directly inside feature components.
-
-Do not manually duplicate generated API types.
-
-Do not manually edit generated API client files.
-
-If generated API types are wrong, fix the backend schema/source and regenerate.
-
-No frontend endpoint usage without OpenAPI.
-
-API usage should flow through:
-
-```
 generated client -> API wrapper/hook -> TanStack Query -> component
-```
 
-Auth retry + multipart upload guidance:
-- Prefer the shared `withAuthRetry` helper from `src/api/client.ts` for 401 -> refresh retry flows.
-- For multipart submission (e.g. observations media), use `FormData` and do not manually force the `Content-Type` header; let the browser set the multipart boundary (see `src/features/observations/api.ts`).
-- For the invitation accept flow, do not clear/purge auth state before the API request succeeds; update auth state only after success (see `src/features/invitations/api.ts`).
-------
+Do not:
+- call `fetch` directly in feature components
+- manually duplicate generated API types
+- manually edit generated API files
+- use endpoints not present in OpenAPI
+- store server-owned data in Zustand
 
-## Server state vs UI state
+If generated types are wrong, fix backend schema and regenerate.
 
-Use TanStack Query for:
+## Mobile-first / PWA
 
-- API reads
-- API mutations
-- caching
-- refetching
-- invalidation
-- loading/error/success state tied to server data
+Houston is phone-first for field teams.
 
-Use Zustand only for:
+- build mobile layout first
+- no desktop-only or hover-only UX
+- no horizontal page scroll
+- critical actions must be reachable on phone
+- loading, empty, error, unauthorized, and offline states must be explicit
+- no casual caching of authenticated operational data
+- no durable offline mutation queue unless explicitly implemented
+- no persistent storage of sensitive business data
 
-- local UI state
-- temporary client state
-- drawer/sidebar state
-- selected tab/view mode when not persisted by backend
+## State
+
+Use TanStack Query for reads, mutations, cache, invalidation, and server-derived loading/error state.
+
+Use Zustand only for UI state:
+- drawer/sidebar
+- selected tab/view mode
 - modal state
-- short-lived form UI helpers
-
-Do not store server-owned data in Zustand.
+- short-lived form helpers
 
 Forbidden in Zustand:
-
-- Signals feed data
-- Actions feed data
-- current permissions
-- establishment business truth
+- feed data
+- permissions
 - workflow statuses
 - backend-derived visibility
-- duplicated API response caches
+- API response caches
 
-------
+## Components
 
-## React component rules
-
-React components should remain presentation-oriented whenever possible.
-
-Components may:
-
-- render UI
-- handle user interaction
-- call focused hooks
-- display loading/error/empty/success states
-- compose domain components
+Components may render UI, handle interactions, call focused hooks, and display states.
 
 Components must not:
-
 - perform direct fetch calls
-- contain business workflow decisions
 - compute real permissions
+- encode lifecycle transitions
+- orchestrate complex API workflows
 - duplicate backend state
-- perform complex API orchestration
-- encode status transition rules
 
-Custom hooks must stay small and focused.
+## Permissions
 
-Split hooks by intent:
+Frontend may display backend permission hints.
+Frontend must not enforce security.
+Unauthorized data must not be sent and hidden locally.
 
-- read hooks
-- mutation hooks
-- UI-only hooks
+## Realtime
 
-------
+Generic realtime is invalidation/refetch only.
+Backend remains source of truth.
+On realtime event, invalidate or safely patch TanStack Query.
 
-## Feature structure rules
+Chat V1 exception:
+- WebSocket sends messages
+- REST remains source for history/structure/permissions
+- ws-ticket is REST-issued and not persisted
 
-Feature folders may contain:
+## UI conventions
 
-```
-components/
-hooks/
-pages/
-forms/
-types.ts
-```
+Use shadcn/ui primitives and existing Houston domain components first.
+Prefer simple, readable Tailwind.
+Use Framer Motion sparingly; operational clarity beats polish.
+Respect accessibility basics: labels, accessible icon buttons, reduced motion.
 
-Keep feature code close to the workflow it supports.
+## Tests
 
-Promote reusable UI to `components/domain/` only when it is reused or clearly generic across Houston domains.
-
-Avoid over-abstracting early.
-
-Prefer readable duplication over premature generic components.
-
-------
-
-## UI rules
-
-Prioritize:
-
-- mobile-first layouts
-- touch-friendly interactions
-- responsive behavior
-- clear hierarchy
-- fast execution flows
-- readable operational screens
-- clear loading/error/empty/success states
-
-Every data-driven screen must handle relevant states:
-
-- loading
-- error
-- empty
-- success
-
-Use reusable Houston domain components before creating one-off screen UI.
-
-Prefer simple UI over clever UI.
-
-Avoid dense desktop-first layouts.
-
-Avoid hidden critical actions.
-
-Avoid business-critical actions without clear feedback.
-
-------
-
-## shadcn/ui and Tailwind rules
-
-Use shadcn/ui primitives as base components.
-
-Keep styling local and readable.
-
-Prefer Tailwind utility composition over custom CSS unless repeated patterns justify extraction.
-
-Do not create heavy design abstractions too early.
-
-Use domain components for Houston-specific UI patterns.
-
-------
-
-## Framer Motion rules
-
-Use Framer Motion sparingly.
-
-Allowed:
-
-- micro-interactions
-- mobile transitions
-- small feedback animations
-- panel/drawer transitions
-
-Avoid:
-
-- animation-heavy UI
-- decorative animations that slow operational use
-- complex animation state machines
-- motion that hides latency or state changes
-
-Operational clarity is more important than visual polish.
-
-------
-
-## Permission and visibility rules
-
-The backend owns permissions.
-
-Frontend may display backend-provided permission flags.
-
-Frontend must not calculate real permissions from raw role/domain data.
-
-Frontend must not receive unauthorized data and hide it locally.
-
-If a backend response says an action is forbidden, the UI must handle it gracefully.
-
-Do not implement security boundaries in React.
-
-------
-
-## Realtime frontend rules
-
-**Global realtime** (deferred) messages are invalidation/refetch triggers only.
-
-On generic realtime event:
-
-1. inspect event type
-2. invalidate relevant TanStack Query keys
-3. refetch through REST API if needed
-4. update UI from server response
-
-**Chat V1 exception** (see [`chat_domain.md`](../../docs/product/domains/chat_domain.md)):
-
-- WebSocket is the **only** message send channel in V1.
-- Receive `message.created` for live UI ; reconcile with REST after reconnect.
-- Failed send : local `failed` state ; retry via WebSocket after reconnect (no REST message send fallback).
-- Obtain ws-ticket through REST before each connection ; never store ticket in localStorage/sessionStorage.
-- Refetch conversations and messages after reconnect.
-
-Do not use **generic** websocket payloads as business truth.
-
-Do not bypass REST for conversation structure, history, permissions, or seen state.
-
-------
-
-## Forms rules
-
-Forms should validate UI-level constraints only.
-
-Backend remains responsible for business validation.
-
-Frontend validation may cover:
-
-- required visible fields
-- primitive format checks
-- basic length checks
-- immediate UX feedback
-
-Frontend validation must not replace backend validation.
-
-When backend returns validation errors, display them clearly.
-Backend error responses follow the standardized `{ code, detail, errors? }` contract documented in [`api_error_contract.md`](../../docs/architecture/api_error_contract.md).
-
-------
-
-## Error handling rules
-
-User-facing errors should be clear and actionable.
-
-Do not expose raw technical errors directly to users.
-
-Preserve enough technical detail for debugging in developer logs when appropriate.
-
-Handle:
-
-- network errors
-- validation errors
-- permission errors
-- business conflict errors
-- empty results
-- expired sessions
-
-------
-
-## PWA and offline rules
-
-PWA-ready does not mean offline business workflows by default.
-
-Forbidden unless explicitly implemented:
-
-- durable offline storage of sensitive business data
-- offline mutation queue for operational workflows
-- storing raw Observation text persistently
-- storing media locally beyond temporary browser handling
-
-Text drafts may be frontend-only if explicitly scoped and non-durable.
-
-------
-
-## Frontend commands
-
-Run from repository root unless stated otherwise.
-
-Install dependencies:
-
-```
-cd apps/web && npm install
-```
-
-Typecheck:
-
-```
-cd apps/web && npm run typecheck
-```
-
-Lint:
-
-```
-cd apps/web && npm run lint
-```
-
-Build:
-
-```
-cd apps/web && npm run build
-```
-
-Test:
-
-```
-cd apps/web && npm test
-cd apps/web && npm run test:watch
-```
-
-Generate API client:
-
-```
-Use the project-defined API client generation command if it exists.
-If missing, do not invent it.
-```
-
-------
-
-## Frontend testing rules
-
-Add or update tests when changing:
-
-- reusable domain components
-- critical forms
+Add/update tests for:
 - API hooks
-- mutation flows
-- routing behavior
-- permission-based UI display
-- error/empty/loading states
+- mutations
+- routing
+- permission-based UI
+- mobile states
+- loading/error/empty states
+- query invalidation/realtime behavior
 
-Frontend tests should verify:
+## Commands
 
-- loading state
-- error state
-- empty state
-- success state
-- user interaction
-- mutation behavior
-- query invalidation when applicable
+Run from repo root unless needed:
 
-Prefer behavior-focused tests.
+- typecheck: `cd apps/web && npm run typecheck`
+- lint: `cd apps/web && npm run lint`
+- tests: `cd apps/web && npm test`
+- build: `cd apps/web && npm run build`
 
-Avoid tests that only check implementation details.
-
-------
-
-## TypeScript rules
-
-Do not use `any` unless explicitly justified.
-
-Prefer generated API types.
-
-Avoid duplicating backend DTO types manually.
-
-Use narrow local types only for UI-specific state.
-
-If a type comes from the API, use the generated type.
-
-If generated types are wrong, fix the backend schema and regenerate.
-
-------
-
-## Frontend Definition of Done
-
-Frontend work is done only when:
-
-- generated API types are used when applicable
-- no direct fetch is added inside feature components
-- TanStack Query handles server state
-- Zustand is limited to UI/client state
-- React does not contain business workflows
-- loading/error/empty/success states are handled when relevant
-- mobile-first behavior is preserved
-- permissions are backend-driven
-- relevant frontend commands were run or a reason is given
-- tests are added/updated when behavior changes
-- risks/debt are stated
+Use project-defined API generation command if it exists. Do not invent missing commands.

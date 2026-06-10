@@ -1,73 +1,34 @@
 from __future__ import annotations
 
-import uuid
-
 import pytest
-from houston.accounts.models import User
-from houston.establishments.models import Establishment, EstablishmentMembership
-from houston.establishments.tests.conftest import TEST_PASSWORD
-from houston.organizations.models import Organization
+from houston.testing.auth import login
+from houston.testing.factories import (
+    TEST_PASSWORD,
+    create_establishment,
+    create_membership,
+    create_user,
+)
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db
+
+__all__ = [
+    "TEST_PASSWORD",
+    "api_client",
+    "create_establishment",
+    "create_membership",
+    "create_user",
+    "default_ws_headers",
+    "get_ws_ticket",
+    "login",
+    "ws_chat_path",
+    "ws_ticket_url",
+]
 
 
 @pytest.fixture
 def api_client():
     return APIClient(enforce_csrf_checks=True)
-
-
-def create_user(*, username: str, status: str = User.Status.ACTIVE) -> User:
-    return User.objects.create_user(
-        username=username,
-        email=f"{username}@example.com",
-        password=TEST_PASSWORD,
-        status=status,
-    )
-
-
-def create_establishment(
-    *,
-    status: str = Establishment.Status.ACTIVE,
-    chat_enabled: bool = True,
-) -> Establishment:
-    organization = Organization.objects.create(
-        name=f"Org {uuid.uuid4().hex[:6]}",
-        status=Organization.Status.ACTIVE,
-    )
-    return Establishment.objects.create(
-        name="Chat Hotel",
-        organization=organization,
-        status=status,
-        chat_enabled=chat_enabled,
-    )
-
-
-def create_membership(
-    *,
-    user: User,
-    establishment: Establishment,
-    role: str = EstablishmentMembership.Role.STAFF,
-    status: str = EstablishmentMembership.Status.ACTIVE,
-) -> EstablishmentMembership:
-    return EstablishmentMembership.objects.create(
-        user=user,
-        establishment=establishment,
-        role=role,
-        status=status,
-    )
-
-
-def login(api_client: APIClient, *, user: User) -> str:
-    csrf = api_client.get("/api/v1/auth/csrf/").cookies["csrftoken"].value
-    response = api_client.post(
-        "/api/v1/auth/login/",
-        {"identifier": user.email, "password": TEST_PASSWORD},
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf,
-    )
-    assert response.status_code == 200
-    return response.json()["access_token"]
 
 
 def ws_ticket_url(establishment_id) -> str:

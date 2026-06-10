@@ -18,7 +18,11 @@ def test_membership_deactivation_deletes_dm_conversations(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.OWNER,
     )
-    staff_membership = create_membership(user=staff, establishment=establishment)
+    staff_membership = create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=staff)
 
     dm_response = create_dm(
@@ -49,7 +53,11 @@ def test_membership_deactivation_removes_group_participant(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    staff_membership = create_membership(user=staff, establishment=establishment)
+    staff_membership = create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=manager)
 
     group_response = create_group(
@@ -85,7 +93,11 @@ def test_group_promotes_new_admin_when_last_admin_leaves(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    staff_membership = create_membership(user=staff, establishment=establishment)
+    staff_membership = create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=manager)
 
     group_response = create_group(

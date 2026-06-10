@@ -6,7 +6,6 @@ from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
-from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.observations.selectors import (
     get_observation_processing_status,
@@ -15,6 +14,7 @@ from houston.observations.selectors import (
 from houston.signals.models import CandidateSignal, Signal
 from houston.signals.services import run_observation_pipeline
 from houston.signals.tests.conftest import create_observation
+from houston.testing.factories import build_membership
 
 
 def _setup_pipeline_taxonomy(establishment):

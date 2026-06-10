@@ -11,7 +11,6 @@ from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
-from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.constants import (
     AI_LOCATION_TEXT_MAX_LENGTH,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
@@ -24,6 +23,7 @@ from houston.signals.services import (
     resolve_taxonomy_from_candidate,
 )
 from houston.signals.tests.conftest import create_observation
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
 

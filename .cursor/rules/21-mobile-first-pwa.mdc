@@ -1,0 +1,45 @@
+---
+description: Mobile-first and PWA constraints for Houston frontend.
+globs:
+  - "apps/web/**/*.ts"
+  - "apps/web/**/*.tsx"
+  - "apps/web/**/*.css"
+  - "apps/web/public/**"
+  - "apps/web/index.html"
+alwaysApply: false
+---
+
+# Mobile-first / PWA Rules
+
+Houston is used by field teams on phones first.
+
+## Mobile-first UI
+- Build mobile layout first; enhance with `sm:`, `md:`, `lg:`.
+- No desktop-first layout later patched for mobile.
+- No horizontal page scroll.
+- No hover-only or desktop-only interaction.
+- Critical actions must be reachable on mobile.
+- Prefer sticky bottom primary actions for field workflows.
+- Keep tap targets comfortable and spaced.
+
+## PWA constraints
+- Preserve manifest/installability basics.
+- Preserve explicit offline/network failure states.
+- Do not cache authenticated operational API data casually.
+- Do not make stale operational data look fresh.
+- Do not add push, background sync, or aggressive service-worker caching without approval.
+
+## Forms
+- Phone keyboard friendly inputs.
+- Visible labels or accessible names.
+- Inline validation near the field.
+- Pending submit state prevents double-submit.
+
+## Performance/accessibility
+- Avoid heavy dependencies and unnecessary animations.
+- Respect reduced motion.
+- Icon-only buttons need accessible names.
+- Loading/empty/error/offline states are mandatory.
+
+## Tests
+When changing mobile/PWA behavior, cover route, nav, sticky action, form state, offline/error state, or query invalidation.

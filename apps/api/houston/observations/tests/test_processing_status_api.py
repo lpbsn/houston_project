@@ -11,7 +11,6 @@ from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
-from houston.establishments.tests.test_permissions import build_membership
 from houston.observations.models import ObservationProcessing
 from houston.observations.selectors import resolve_ux_status
 from houston.signals.models import CandidateSignal, Signal
@@ -22,6 +21,7 @@ from houston.signals.tests.conftest import (
     create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,
 )
+from houston.testing.factories import build_membership
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db

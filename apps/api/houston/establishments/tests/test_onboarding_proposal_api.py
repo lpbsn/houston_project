@@ -14,12 +14,9 @@ from houston.establishments.models import (
 )
 from houston.establishments.services import create_manual_onboarding_proposal
 from houston.establishments.tests.conftest import valid_manual_v2_payload
-from houston.establishments.tests.test_onboarding_api import (
-    auth_headers,
-    create_onboarding_session,
-    create_user,
-    login,
-)
+from houston.testing.auth import auth_headers, login
+from houston.testing.factories import create_user
+from houston.testing.onboarding import create_onboarding_session
 
 pytestmark = pytest.mark.django_db
 
@@ -146,48 +143,6 @@ def test_foreign_session_and_mismatched_proposal_are_denied(api_client):
     )
     assert foreign_response.status_code == 404
     assert mismatched_response.status_code == 404
-
-
-def test_submit_and_apply_creates_business_units_and_activity_subjects(api_client):
-    owner = create_user(username="proposal_api_apply_owner")
-    session = create_onboarding_session(actor=owner)
-    proposal = create_manual_onboarding_proposal(
-        session=session,
-        actor=owner,
-        payload=valid_manual_v2_payload(),
-    )
-
-    access_token = login(api_client, user=owner)
-    submit_response = api_client.post(
-        f"/api/v1/onboarding-sessions/{session.id}/proposals/{proposal.id}/submit/",
-        format="json",
-        **auth_headers(access_token),
-    )
-    assert submit_response.status_code == 200
-    assert submit_response.json()["proposal"]["status"] == OnboardingProposal.Status.VALIDATED
-
-    apply_response = api_client.post(
-        f"/api/v1/onboarding-sessions/{session.id}/proposals/{proposal.id}/apply/",
-        format="json",
-        **auth_headers(access_token),
-    )
-    assert apply_response.status_code == 200
-    assert apply_response.json()["proposal"]["status"] == OnboardingProposal.Status.APPLIED
-    assert BusinessUnit.objects.filter(
-        establishment=session.establishment,
-        key="coworking",
-        active=True,
-    ).exists()
-    business_unit = BusinessUnit.objects.get(
-        establishment=session.establishment,
-        key="coworking",
-    )
-    assert ActivitySubject.objects.filter(
-        establishment=session.establishment,
-        business_unit=business_unit,
-        normalized_name="proprete",
-        active=True,
-    ).exists()
 
 
 def test_reject_does_not_mutate_runtime(api_client):

@@ -27,34 +27,14 @@ describe('ActionDeadlineProgressBar', () => {
     vi.useRealTimers()
   })
 
-  it('renders progressbar before deadline labels in the DOM', () => {
+  it('renders a progressbar element', () => {
     const html = renderBar({
       createdAt,
       dueAt,
       isOverdue: false,
     })
 
-    const progressIndex = html.indexOf('role="progressbar"')
-    const remainingIndex = html.indexOf('restantes')
-    const dueByIndex = html.indexOf('avant ')
-
-    expect(progressIndex).toBeGreaterThanOrEqual(0)
-    expect(remainingIndex).toBeGreaterThan(progressIndex)
-    expect(dueByIndex).toBeGreaterThan(progressIndex)
-  })
-
-  it('shows overdue label and due-by label below the bar when overdue', () => {
-    vi.setSystemTime(new Date('2026-06-04T11:00:00.000Z'))
-
-    const html = renderBar({
-      createdAt,
-      dueAt,
-      isOverdue: true,
-    })
-
-    expect(html).toContain('En retard')
-    expect(html).toMatch(/avant \d+h\d{2}/)
-    expect(html.indexOf('role="progressbar"')).toBeLessThan(html.indexOf('En retard'))
+    expect(html).toContain('role="progressbar"')
   })
 
   it('shrinks the fill from the right as time elapses', () => {

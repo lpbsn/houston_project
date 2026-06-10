@@ -1,0 +1,39 @@
+---
+description: Backend Django/DRF conventions for models, services, selectors, permissions, APIs, async, and tests.
+globs:
+  - "apps/api/**/*.py"
+  - "config/**/*.py"
+alwaysApply: false
+---
+
+# Backend Rules
+
+## Structure
+- Views stay thin: auth, permission, serializer, service call, response.
+- Serializers validate/represent; they do not hold domain workflows.
+- Services perform writes/lifecycle transitions.
+- Selectors/querysets perform reusable reads.
+- Permissions enforce RBAC server-side.
+
+## Data integrity
+- Use transactions for multi-write state changes.
+- Add DB constraints for hard invariants.
+- Keep establishment isolation explicit.
+- Validate membership status and scope before mutations.
+- Do not trust frontend permission hints.
+
+## API contract
+- Stable request/response shapes.
+- Stable error codes where already used.
+- If serializer/view response changes, update OpenAPI schema and frontend callers.
+- Do not create local frontend types duplicating generated API types.
+
+## Async
+- Celery tasks pass IDs, reload from DB, and handle missing records.
+- Retryable tasks must be idempotent.
+- WebSocket/realtime flows must authenticate membership and establishment.
+
+## Tests
+- Add/update focused tests for lifecycle, permissions, API contract, tenant isolation, regression.
+- Prefer service/API tests over broad slow tests.
+- Never remove tests unless duplicate, obsolete, or replaced by stronger coverage.

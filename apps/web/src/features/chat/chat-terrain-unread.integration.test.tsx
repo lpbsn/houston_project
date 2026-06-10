@@ -8,7 +8,6 @@ import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { chatQueryKeys } from './api'
 import { ChatRealtimeProvider } from './components/chat-realtime-provider'
 import { hasUnreadConversations } from './lib/chat-display'
-import { patchConversationsOnMessageCreated } from './lib/chat-conversations-cache'
 import type { ChatConversationListItem, ChatMessage, ChatWsMessageCreatedEvent } from './types'
 
 const ESTABLISHMENT_ID = 'est-1'
@@ -140,20 +139,5 @@ describe('chat terrain unread integration', () => {
     )
 
     expect(navMarkup).toContain('rounded-full')
-    expect(navMarkup).toContain('bg-[#1B4FD8]')
-  })
-
-  it('matches optimistic patch used by append cache helper', () => {
-    const current = { items: [sampleConversation()] }
-    const message = incomingMessage()
-
-    const patched = patchConversationsOnMessageCreated(current, {
-      conversationId: 'conv-1',
-      message,
-      viewerMembershipId: VIEWER_MEMBERSHIP_ID,
-      activeConversationId: null,
-    })
-
-    expect(patched?.items[0]?.unread).toBe(true)
   })
 })

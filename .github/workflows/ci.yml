@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: houston
+          POSTGRES_USER: houston
+          POSTGRES_PASSWORD: houston
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U houston -d houston"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    env:
+      DJANGO_SECRET_KEY: ci-secret-key
+      DJANGO_DEBUG: "0"
+      POSTGRES_DB: houston
+      POSTGRES_USER: houston
+      POSTGRES_PASSWORD: houston
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      CELERY_RESULT_BACKEND: redis://localhost:6379/2
+      HOUSTON_AI_OBSERVATION_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install backend dependencies
+        run: uv sync
+      - name: Run backend tests
+        run: uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Run frontend tests
+        working-directory: apps/web
+        run: npm test
+      - name: Typecheck frontend
+        working-directory: apps/web
+        run: npm run typecheck

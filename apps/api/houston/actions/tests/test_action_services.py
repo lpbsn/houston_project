@@ -3,12 +3,15 @@ from __future__ import annotations
 import pytest
 from django.utils import timezone
 
-from houston.actions.exceptions import ActionValidationError
+from houston.actions.exceptions import ActionStateError, ActionValidationError
 from houston.actions.models import Action
 from houston.actions.services import (
     accept_action,
+    cancel_action,
     create_action,
     mark_action_done,
+    reassign_action,
+    reopen_action,
     validate_action,
 )
 from houston.actions.tests.conftest import (
@@ -17,40 +20,126 @@ from houston.actions.tests.conftest import (
     build_api_membership_on_establishment,
     create_signal_v3_for_membership,
 )
-from houston.establishments.models import BusinessUnit, EstablishmentMembership
-from houston.establishments.tests.taxonomy_helpers import (
-    create_activity_subject,
-    create_business_unit,
-)
+from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
+from houston.testing.taxonomy import hotel_maintenance_setup
 
 pytestmark = pytest.mark.django_db
 
 
-def _hotel_maintenance_setup(establishment):
-    hotel = create_business_unit(
-        establishment=establishment,
-        key="hotel",
-        label="Hôtel",
+def _open_action(*, owner, staff, maintenance):
+    return create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Task",
+        instruction="Do it",
+        assigned_to_id=staff.id,
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        responsible_business_unit_id=maintenance.id,
     )
-    maintenance = create_business_unit(
-        establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
-        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+
+
+def test_accept_action_transitions_open_to_in_progress():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+
+    action = accept_action(action=action)
+
+    action.refresh_from_db()
+    assert action.status == Action.Status.IN_PROGRESS
+    assert action.accepted_at is not None
+
+
+def test_accept_action_rejects_done_state():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action.status = Action.Status.DONE
+    action.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(ActionStateError, match="cannot be accepted"):
+        accept_action(action=action)
+
+
+def test_reopen_action_from_pending_validation():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action = accept_action(action=action)
+    action = mark_action_done(action=action)
+
+    action = reopen_action(action=action)
+
+    action.refresh_from_db()
+    assert action.status == Action.Status.REOPENED
+    assert action.accepted_at is None
+
+
+def test_cancel_action_from_open():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+
+    action = cancel_action(action=action)
+
+    action.refresh_from_db()
+    assert action.status == Action.Status.CANCELED
+
+
+def test_cancel_action_rejects_done_state():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action.status = Action.Status.DONE
+    action.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(ActionStateError, match="cannot be canceled"):
+        cancel_action(action=action)
+
+
+def test_reassign_action_updates_assignee():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
     )
-    electricite = create_activity_subject(
-        establishment=establishment,
-        business_unit=maintenance,
-        label="Électricité",
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+
+    action = reassign_action(action=action, assigned_to_id=other_staff.id)
+
+    action.refresh_from_db()
+    assert action.assigned_to_id == other_staff.id
+    assert action.status == Action.Status.OPEN
+
+
+def test_reassign_rejects_done_state():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
     )
-    return hotel, maintenance, electricite
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action.status = Action.Status.DONE
+    action.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(ActionStateError, match="cannot be reassigned"):
+        reassign_action(action=action, assigned_to_id=other_staff.id)
 
 
 def test_mark_action_done_sets_marked_done_at_not_validated():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     action = create_action(
         establishment_id=owner.establishment_id,
         created_by=owner,
@@ -72,7 +161,7 @@ def test_mark_action_done_sets_marked_done_at_not_validated():
 def test_validate_action_sets_validated_at():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     action = create_action(
         establishment_id=owner.establishment_id,
         created_by=owner,
@@ -94,7 +183,7 @@ def test_validate_action_sets_validated_at():
 def test_linked_action_copies_classification_from_signal():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     signal = create_signal_v3_for_membership(
         owner,
         affected_business_unit=hotel,
@@ -144,7 +233,7 @@ def test_linked_action_rejects_signal_without_classification():
 def test_free_action_stores_responsible_only():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
 
     action = create_action(
         establishment_id=owner.establishment_id,
@@ -169,7 +258,7 @@ def test_free_action_rejects_manager_out_of_scope():
         role=EstablishmentMembership.Role.MANAGER,
     )
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     assign_business_unit_scope(manager, hotel)
 
     with pytest.raises(ActionValidationError, match="Not allowed"):
@@ -187,7 +276,7 @@ def test_free_action_rejects_manager_out_of_scope():
 def test_first_linked_action_moves_signal_to_in_progress_and_unpins():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     signal = create_signal_v3_for_membership(
         owner,
         affected_business_unit=hotel,
@@ -218,7 +307,7 @@ def test_first_linked_action_moves_signal_to_in_progress_and_unpins():
 def test_linked_action_auto_resolves_signal_when_all_done():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     signal = create_signal_v3_for_membership(
         owner,
         affected_business_unit=hotel,

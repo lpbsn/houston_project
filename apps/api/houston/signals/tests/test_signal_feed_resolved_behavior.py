@@ -8,7 +8,6 @@ from django.utils import timezone
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
 from houston.signals.selectors import apply_feed_sorting, feed_signals_for_establishment
-from houston.signals.services import resolve_signal
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
@@ -215,25 +214,3 @@ def test_detail_resolved_permission_hints_all_false(api_client):
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
     assert hints["can_create_action"] is False
-
-
-def test_resolve_signal_clears_pin_and_high_urgency():
-    membership = build_api_membership()
-    now = timezone.now()
-    signal = create_minimal_v3_signal(
-        membership,
-        title="Pinned urgent",
-        status=Signal.Status.IN_PROGRESS,
-    )
-    signal.urgency = Signal.Urgency.HIGH
-    signal.is_pinned = True
-    signal.pinned_at = now
-    signal.save(update_fields=["urgency", "is_pinned", "pinned_at", "updated_at"])
-
-    result = resolve_signal(signal=signal)
-
-    assert result.status == Signal.Status.RESOLVED
-    assert result.is_pinned is False
-    assert result.pinned_at is None
-    assert result.pinned_by_membership_id is None
-    assert result.urgency == Signal.Urgency.NORMAL

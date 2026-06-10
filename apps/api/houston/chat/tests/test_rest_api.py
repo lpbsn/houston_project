@@ -208,7 +208,11 @@ def test_get_eligible_memberships_excludes_self_and_returns_peers(api_client):
 def test_staff_cannot_patch_chat_settings(api_client):
     establishment = create_establishment(chat_enabled=True)
     staff = create_user(username="chat_settings_staff")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=staff)
 
     response = api_client.patch(
@@ -300,7 +304,11 @@ def test_owner_outside_participation_cannot_delete_group(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    staff_membership = create_membership(user=staff, establishment=establishment)
+    staff_membership = create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token_manager = login(api_client, user=manager)
 
     group_response = create_group(
@@ -331,9 +339,21 @@ def test_group_participant_add_remove_promote_and_leave(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    staff_a_membership = create_membership(user=staff_a, establishment=establishment)
-    staff_b_membership = create_membership(user=staff_b, establishment=establishment)
-    staff_c_membership = create_membership(user=staff_c, establishment=establishment)
+    staff_a_membership = create_membership(
+        user=staff_a,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    staff_b_membership = create_membership(
+        user=staff_b,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    staff_c_membership = create_membership(
+        user=staff_c,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token_manager = login(api_client, user=manager)
 
     group_response = create_group(
@@ -415,7 +435,11 @@ def test_staff_can_create_dm(api_client):
     establishment = create_establishment()
     staff = create_user(username="chat_staff")
     target = create_user(username="chat_target")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     target_membership = create_membership(user=target, establishment=establishment)
     token = login(api_client, user=staff)
 
@@ -446,7 +470,11 @@ def test_staff_cannot_create_group(api_client):
     establishment = create_establishment()
     staff = create_user(username="chat_staff_group")
     other = create_user(username="chat_other")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     other_membership = create_membership(user=other, establishment=establishment)
     token = login(api_client, user=staff)
 
@@ -500,8 +528,16 @@ def test_owner_outside_participation_gets_404(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.OWNER,
     )
-    create_membership(user=staff_a, establishment=establishment)
-    membership_b = create_membership(user=staff_b, establishment=establishment)
+    create_membership(
+        user=staff_a,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    membership_b = create_membership(
+        user=staff_b,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token_a = login(api_client, user=staff_a)
 
     dm_response = api_client.post(

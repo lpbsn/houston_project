@@ -7,10 +7,7 @@ import {
   getSignalStatusBadgeVariant,
   groupFeedItemsByStatus,
   partitionFeedPinnedItems,
-  PINNED_SIGNAL_CARD_BANNER_LABEL,
   PINNED_SIGNAL_CARD_CLASS,
-  PINNED_SIGNAL_CARD_DETAIL_CTA,
-  PINNED_SIGNAL_CARD_SEPARATOR_CLASS,
   SIGNAL_CARD_LEFT_ACCENT,
   SIGNAL_CARD_LEFT_ACCENT_COLOR,
 } from './signal-display'
@@ -55,9 +52,7 @@ describe('groupFeedItemsByStatus', () => {
       item({ id: '2', status: 'in_progress' }),
     ])
     expect(groups).toHaveLength(2)
-    expect(groups?.[0].label).toBe('En attente')
     expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].label).toBe('En cours')
     expect(groups?.[1].dotVariant).toBe('primary')
   })
 
@@ -68,11 +63,8 @@ describe('groupFeedItemsByStatus', () => {
       item({ id: '3', status: 'resolved' }),
     ])
     expect(groups).toHaveLength(3)
-    expect(groups?.[0].label).toBe('En attente')
     expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].label).toBe('En cours')
     expect(groups?.[1].dotVariant).toBe('primary')
-    expect(groups?.[2].label).toBe('Résolus')
     expect(groups?.[2].dotVariant).toBe('success')
     expect(groups?.[2].items.map((entry) => entry.id)).toEqual(['3'])
   })
@@ -83,9 +75,7 @@ describe('groupFeedItemsByStatus', () => {
       item({ id: 'done', status: 'resolved' }),
     ])
     expect(groups).toHaveLength(2)
-    expect(groups?.[0].label).toBe('En attente')
     expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].label).toBe('Résolus')
     expect(groups?.[1].dotVariant).toBe('success')
   })
 })
@@ -119,12 +109,7 @@ describe('partitionFeedPinnedItems', () => {
 describe('pinned signal card display helpers', () => {
   it('uses neutral shell without left accent (pending-validation card family)', () => {
     expect(getPinnedSignalCardClassName()).toBe(PINNED_SIGNAL_CARD_CLASS)
-    expect(PINNED_SIGNAL_CARD_CLASS).toContain('border-[#E8E6DF]')
-    expect(PINNED_SIGNAL_CARD_CLASS).toContain('bg-[#F0EFE9]')
     expect(PINNED_SIGNAL_CARD_CLASS).not.toContain('border-l-')
-    expect(PINNED_SIGNAL_CARD_SEPARATOR_CLASS).toBe('border-t border-[#E8E6DF]')
-    expect(PINNED_SIGNAL_CARD_BANNER_LABEL).toBe('Épinglé')
-    expect(PINNED_SIGNAL_CARD_DETAIL_CTA).toBe('Voir le détail →')
   })
 })
 

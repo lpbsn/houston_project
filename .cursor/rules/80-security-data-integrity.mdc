@@ -1,0 +1,37 @@
+---
+description: Use when touching auth, RBAC, memberships, uploads, media, secrets, WebSocket, Celery, AI calls, destructive operations, or tenant isolation.
+alwaysApply: false
+---
+
+# Security / Data Integrity Rules
+
+## Secrets
+- Never commit secrets, tokens, credentials, private keys, production data, or real uploads.
+- Never log secrets or sensitive payloads.
+
+## Authorization
+- Enforce establishment isolation server-side.
+- Validate active membership before access.
+- Validate role and BusinessUnit scope before mutations.
+- Frontend checks are UX only, never security.
+
+## Uploads/media
+- Validate real file content, not only declared MIME.
+- Enforce size/type limits.
+- Use private storage and signed URLs.
+- Do not expose raw storage paths.
+- Do not send observation photos to AI unless product contract changes.
+
+## Async/realtime
+- Celery tasks must be safe to retry.
+- WebSocket events must validate participant/membership access.
+- Broadcast minimal payloads.
+
+## AI/data
+- Send minimum necessary context.
+- Do not leak raw sensitive data in logs or prompts.
+- Preserve retention rules.
+
+## Destructive actions
+- Prefer blocked delete or soft delete when linked business records exist.
+- Hard delete only when product contract explicitly allows it.

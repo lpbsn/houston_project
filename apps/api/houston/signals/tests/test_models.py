@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
 from houston.signals.tests.conftest import create_minimal_v3_signal, create_observation
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
 

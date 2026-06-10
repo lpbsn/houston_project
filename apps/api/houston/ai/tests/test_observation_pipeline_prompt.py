@@ -13,13 +13,13 @@ from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
-from houston.establishments.tests.test_permissions import build_membership
 from houston.signals.constants import (
     AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
     MAX_CANDIDATES_PER_OBSERVATION,
 )
 from houston.signals.tests.conftest import create_observation
+from houston.testing.factories import build_membership
 
 
 def test_prompt_version_constant_is_v3():

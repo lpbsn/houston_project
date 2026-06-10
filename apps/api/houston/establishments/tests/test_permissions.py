@@ -23,6 +23,7 @@ from houston.establishments.permissions import (
     can_view_signal_feed,
 )
 from houston.organizations.models import Organization
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
 
@@ -30,38 +31,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def request_factory():
     return RequestFactory()
-
-
-def build_membership(
-    *,
-    role=EstablishmentMembership.Role.STAFF,
-    membership_status=EstablishmentMembership.Status.ACTIVE,
-    user_status=User.Status.ACTIVE,
-    organization_status=Organization.Status.ACTIVE,
-    establishment_status=Establishment.Status.ACTIVE,
-):
-    organization = Organization.objects.create(
-        name=f"Org {uuid.uuid4().hex[:8]}",
-        status=organization_status,
-    )
-    user = User.objects.create_user(
-        username=f"user_{uuid.uuid4().hex[:8]}",
-        password="secret",
-        status=user_status,
-    )
-    establishment = Establishment.objects.create(
-        name=f"Establishment {uuid.uuid4().hex[:8]}",
-        organization=organization,
-        status=establishment_status,
-        timezone="UTC",
-    )
-    membership = EstablishmentMembership.objects.create(
-        user=user,
-        establishment=establishment,
-        role=role,
-        status=membership_status,
-    )
-    return membership
 
 
 def build_permission_request(

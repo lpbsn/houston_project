@@ -16,34 +16,14 @@ from houston.actions.tests.conftest import (
     create_signal_v3_for_membership,
     login,
 )
-from houston.establishments.models import BusinessUnit, EstablishmentMembership
-from houston.establishments.tests.taxonomy_helpers import (
-    create_activity_subject,
-    create_business_unit,
-)
+from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
+from houston.testing.taxonomy import (
+    create_business_unit,
+    hotel_maintenance_setup,
+)
 
 pytestmark = pytest.mark.django_db
-
-
-def _hotel_maintenance_setup(establishment):
-    hotel = create_business_unit(
-        establishment=establishment,
-        key="hotel",
-        label="Hôtel",
-    )
-    maintenance = create_business_unit(
-        establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
-        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
-    )
-    electricite = create_activity_subject(
-        establishment=establishment,
-        business_unit=maintenance,
-        label="Électricité",
-    )
-    return hotel, maintenance, electricite
 
 
 def test_manager_update_due_at_only_own_created(api_client):
@@ -52,7 +32,7 @@ def test_manager_update_due_at_only_own_created(api_client):
         owner,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     assign_business_unit_scope(manager, maintenance)
 
     token_manager = login(api_client, user=manager.user)
@@ -104,7 +84,7 @@ def test_manager_update_due_at_only_own_created(api_client):
 
 def test_staff_cannot_create_action(api_client):
     staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(staff.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
     token = login(api_client, user=staff.user)
     payload = create_free_action_payload(
         membership=staff,
@@ -121,7 +101,7 @@ def test_staff_cannot_create_action(api_client):
 
 def test_create_free_action(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     token = login(api_client, user=owner.user)
     payload = create_free_action_payload(
         membership=owner,
@@ -144,7 +124,7 @@ def test_create_free_action(api_client):
 
 def test_create_linked_action(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     signal = create_signal_v3_for_membership(
         owner,
         affected_business_unit=hotel,
@@ -169,7 +149,7 @@ def test_create_linked_action(api_client):
 
 def test_linked_action_signal_summary_includes_urgency_and_location(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     signal = create_signal_v3_for_membership(
         owner,
         affected_business_unit=hotel,
@@ -196,7 +176,7 @@ def test_linked_action_signal_summary_includes_urgency_and_location(api_client):
 
 def test_create_rejects_legacy_module_key(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     token = login(api_client, user=owner.user)
     payload = create_free_action_payload(
         membership=owner,
@@ -220,7 +200,7 @@ def test_manager_affected_sees_linked_action(api_client):
         role=EstablishmentMembership.Role.MANAGER,
     )
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     assign_business_unit_scope(manager_hotel, hotel)
 
     signal = create_signal_v3_for_membership(
@@ -254,7 +234,7 @@ def test_manager_out_of_scope_cannot_see_linked_action(api_client):
         role=EstablishmentMembership.Role.MANAGER,
     )
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     bar = create_business_unit(establishment=owner.establishment, key="bar", label="Bar")
     assign_business_unit_scope(outsider, bar)
 
@@ -287,7 +267,7 @@ def test_manager_free_action_out_of_scope_denied(api_client):
         owner,
         role=EstablishmentMembership.Role.MANAGER,
     )
-    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
     assign_business_unit_scope(manager, hotel)
 
     token = login(api_client, user=manager.user)

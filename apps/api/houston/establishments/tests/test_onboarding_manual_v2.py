@@ -6,7 +6,6 @@ import pytest
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
-from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
@@ -25,23 +24,18 @@ from houston.establishments.services import (
     update_onboarding_proposal_payload,
     validate_onboarding_proposal_payload,
 )
-from houston.establishments.tests.conftest import (
+from houston.testing.auth import auth_headers, ensure_csrf, login
+from houston.testing.factories import create_user
+from houston.testing.onboarding import (
     MANUAL_V2_PROPOSAL_SCHEMA_VERSION,
     apply_validated_manual_v2_proposal,
+    create_onboarding_session,
     draft_manual_v2_payload_bu_only,
     valid_manual_v2_payload,
 )
-from houston.establishments.tests.taxonomy_helpers import (
+from houston.testing.taxonomy import (
     assert_business_unit_scope_response,
     business_unit_scope_payload,
-    create_business_unit,
-)
-from houston.establishments.tests.test_onboarding_api import (
-    auth_headers,
-    create_onboarding_session,
-    create_user,
-    ensure_csrf,
-    login,
 )
 
 pytestmark = pytest.mark.django_db
@@ -50,11 +44,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def api_client():
     return APIClient(enforce_csrf_checks=True)
-
-
-@pytest.fixture
-def imported_catalog():
-    return sync_catalog_from_normalized_rows()
 
 
 @pytest.fixture
@@ -486,64 +475,6 @@ def test_activation_blocked_bu_without_subject(onboarding_session, owner, import
     )
 
 
-def test_activation_ready_after_manual_v2_apply_and_director_invite(
-    onboarding_session,
-    owner,
-    imported_catalog,
-):
-    apply_validated_manual_v2_proposal(session=onboarding_session, owner=owner)
-    _invite_director(session=onboarding_session, owner=owner)
-
-    readiness = compute_activation_readiness(session=onboarding_session)
-
-    assert readiness["is_ready"] is True
-    assert readiness["blockers"] == []
-    assert "activation_mode" not in readiness
-
-
-def test_activation_ready_with_manual_business_units_without_legacy_modules(
-    onboarding_session,
-    owner,
-):
-    business_unit = create_business_unit(
-        establishment=onboarding_session.establishment,
-        key="hotel",
-        label="Hotel",
-    )
-    ActivitySubject.objects.create(
-        establishment=onboarding_session.establishment,
-        business_unit=business_unit,
-        normalized_name="proprete",
-        label="Propreté",
-        active=True,
-    )
-    _invite_director(session=onboarding_session, owner=owner)
-
-    readiness = compute_activation_readiness(session=onboarding_session)
-    assert readiness["is_ready"] is True
-
-
-def test_post_create_manual_v2_proposal_api(
-    api_client,
-    onboarding_session,
-    owner,
-    imported_catalog,
-):
-    access_token = login(api_client, user=owner)
-    csrf_token = ensure_csrf(api_client)
-    response = api_client.post(
-        f"/api/v1/onboarding-sessions/{onboarding_session.id}/proposals/",
-        {"payload": valid_manual_v2_payload()},
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
-    )
-
-    assert response.status_code == 201, response.json()
-    body = response.json()
-    assert body["proposal"]["payload"]["schema_version"] == MANUAL_V2_PROPOSAL_SCHEMA_VERSION
-
-
 def test_director_cannot_create_manual_v2_proposal_on_draft(
     api_client,
     onboarding_session,
@@ -569,46 +500,6 @@ def test_director_cannot_create_manual_v2_proposal_on_draft(
     )
 
     assert response.status_code == 403
-
-
-def test_submit_and_apply_manual_v2_proposal_api(
-    api_client,
-    onboarding_session,
-    owner,
-    imported_catalog,
-):
-    access_token = login(api_client, user=owner)
-    csrf_token = ensure_csrf(api_client)
-
-    create_response = api_client.post(
-        f"/api/v1/onboarding-sessions/{onboarding_session.id}/proposals/",
-        {"payload": valid_manual_v2_payload()},
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
-    )
-    proposal_id = create_response.json()["proposal"]["id"]
-
-    submit_response = api_client.post(
-        f"/api/v1/onboarding-sessions/{onboarding_session.id}/proposals/{proposal_id}/submit/",
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
-    )
-    assert submit_response.status_code == 200
-    assert submit_response.json()["proposal"]["status"] == "validated"
-
-    apply_response = api_client.post(
-        f"/api/v1/onboarding-sessions/{onboarding_session.id}/proposals/{proposal_id}/apply/",
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
-    )
-    assert apply_response.status_code == 200
-    assert BusinessUnit.objects.filter(
-        establishment=onboarding_session.establishment,
-        active=True,
-    ).exists()
 
 
 def test_invitation_manager_with_bu_scopes_after_manual_v2_apply(

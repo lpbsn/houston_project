@@ -18,13 +18,11 @@ from houston.establishments.models import (
     OnboardingSession,
     OperationalUnit,
 )
-from houston.establishments.tests.conftest import (
-    create_ready_runtime,
-)
-from houston.establishments.tests.taxonomy_helpers import (
-    create_membership_with_business_unit_scope,
-)
 from houston.organizations.models import Organization
+from houston.testing.auth import auth_headers, login
+from houston.testing.factories import create_user
+from houston.testing.onboarding import create_onboarding_session, create_ready_runtime
+from houston.testing.taxonomy import create_membership_with_business_unit_scope
 
 pytestmark = pytest.mark.django_db
 
@@ -32,70 +30,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def api_client():
     return APIClient(enforce_csrf_checks=True)
-
-
-def create_user(*, username: str, status: str = User.Status.ACTIVE) -> User:
-    return User.objects.create_user(
-        username=username,
-        email=f"{username}@example.com",
-        password="secret",
-        status=status,
-    )
-
-
-def create_onboarding_session(
-    *,
-    actor: User,
-    role: str = EstablishmentMembership.Role.OWNER,
-    membership_status: str = EstablishmentMembership.Status.ACTIVE,
-    organization_status: str = Organization.Status.ACTIVE,
-    establishment_status: str = Establishment.Status.DRAFT,
-    session_status: str = OnboardingSession.Status.STARTED,
-) -> OnboardingSession:
-    organization = Organization.objects.create(
-        name=f"Demo Group {uuid.uuid4().hex[:6]}",
-        status=organization_status,
-    )
-    establishment = Establishment.objects.create(
-        name=f"Demo Site {uuid.uuid4().hex[:6]}",
-        organization=organization,
-        status=establishment_status,
-    )
-    session = OnboardingSession.objects.create(
-        organization=organization,
-        establishment=establishment,
-        started_by=actor,
-        status=session_status,
-    )
-    EstablishmentMembership.objects.create(
-        user=actor,
-        establishment=establishment,
-        role=role,
-        status=membership_status,
-    )
-    return session
-
-
-def ensure_csrf(api_client: APIClient) -> str:
-    response = api_client.get("/api/v1/auth/csrf/")
-    assert response.status_code == 200
-    return api_client.cookies["csrftoken"].value
-
-
-def login(api_client: APIClient, *, user: User) -> str:
-    csrf_token = ensure_csrf(api_client)
-    response = api_client.post(
-        "/api/v1/auth/login/",
-        {"identifier": user.email, "password": "secret"},
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-    )
-    assert response.status_code == 200
-    return response.json()["access_token"]
-
-
-def auth_headers(access_token: str) -> dict:
-    return {"HTTP_AUTHORIZATION": f"Bearer {access_token}"}
 
 
 def test_create_onboarding_session_success_for_owner(api_client):
