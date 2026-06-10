@@ -1,18 +1,50 @@
+# Git
 .git
-.venv
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
-node_modules/
-dist/
-.DS_Store
-.idea/
-.vscode/
+.gitignore
+
+# Local env / secrets
 .env
 .env.*
 !.env.example
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Python local env / caches
+.venv
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
+.mypy_cache/
+**/.mypy_cache/
+.cache/
+**/.cache/
+.coverage
+htmlcov/
+
+# Frontend local deps / builds
+node_modules/
+**/node_modules/
+apps/web/node_modules/
+dist/
+**/dist/
+apps/web/dist/
+apps/web/coverage/
+
+# Runtime media
+apps/api/private_media/
+apps/api/private_media/**
+
+# Celery Beat runtime files
+apps/api/celerybeat-schedule*
+
+# Logs
 *.log
