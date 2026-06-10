@@ -416,6 +416,14 @@ def get_establishment_business_unit_tree(
     }
 
 
+_SCOPE_FILTERED_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    }
+)
+
+
 def get_business_units_for_establishment(
     *,
     current_membership: EstablishmentMembership | None,
@@ -425,7 +433,25 @@ def get_business_units_for_establishment(
         return None
     if current_membership.status != EstablishmentMembership.Status.ACTIVE:
         return None
-    return get_establishment_business_unit_tree(establishment_id=establishment_id)
+
+    tree = get_establishment_business_unit_tree(establishment_id=establishment_id)
+    if tree is None:
+        return None
+
+    if current_membership.role not in _SCOPE_FILTERED_ROLES:
+        return tree
+
+    business_unit_ids = [item["id"] for item in tree["business_units"]]
+    business_units_by_id = BusinessUnit.objects.in_bulk(business_unit_ids)
+    tree["business_units"] = [
+        item
+        for item in tree["business_units"]
+        if membership_covers_business_unit_including_admins(
+            current_membership,
+            business_units_by_id.get(item["id"]),
+        )
+    ]
+    return tree
 
 
 def business_unit_has_active_membership_scopes(*, business_unit: BusinessUnit) -> bool:

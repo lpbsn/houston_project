@@ -365,6 +365,111 @@ def test_recreate_same_label_reactivates_existing_business_unit(api_client):
     assert hotel.description == "Réactivé"
 
 
+def test_owner_can_get_business_unit_tree(api_client):
+    establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+
+    response = api_client.get(
+        business_units_url(establishment.id),
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    keys = {item["key"] for item in response.json()["business_units"]}
+    assert keys == {hotel.key, maintenance.key}
+
+
+def test_manager_with_hotel_scope_can_get_scoped_business_unit_tree(api_client):
+    establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
+    manager = create_user(username="runtime_tree_manager")
+    manager_membership = create_membership_for_user(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=hotel,
+    )
+    access_token = login(api_client, user=manager)
+
+    response = api_client.get(
+        business_units_url(establishment.id),
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["business_units"]) == 1
+    assert body["business_units"][0]["id"] == str(hotel.id)
+    assert body["business_units"][0]["key"] == hotel.key
+
+
+def test_manager_without_scope_gets_empty_business_unit_tree(api_client):
+    establishment, _owner, _hotel, _maintenance = setup_active_establishment_with_runtime()
+    manager = create_user(username="runtime_tree_unscoped_manager")
+    create_membership_for_user(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    access_token = login(api_client, user=manager)
+
+    response = api_client.get(
+        business_units_url(establishment.id),
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["business_units"] == []
+
+
+def test_staff_with_scope_can_get_scoped_business_unit_tree(api_client):
+    establishment, _owner, _hotel, maintenance = setup_active_establishment_with_runtime()
+    staff = create_user(username="runtime_tree_staff")
+    staff_membership = create_membership_for_user(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=staff_membership,
+        business_unit=maintenance,
+    )
+    access_token = login(api_client, user=staff)
+
+    response = api_client.get(
+        business_units_url(establishment.id),
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["business_units"]) == 1
+    assert body["business_units"][0]["id"] == str(maintenance.id)
+    assert body["business_units"][0]["key"] == maintenance.key
+
+
+def test_manager_cannot_post_business_unit(api_client):
+    establishment, _owner, _hotel, _maintenance = setup_active_establishment_with_runtime()
+    manager = create_user(username="runtime_tree_post_manager")
+    create_membership_for_user(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    access_token = login(api_client, user=manager)
+
+    response = api_client.post(
+        business_units_url(establishment.id),
+        {"label": "Restaurant"},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+
+
 def test_draft_establishment_runtime_mutations_return_forbidden(api_client):
     organization = Organization.objects.create(
         name=f"Draft Org {uuid.uuid4().hex[:6]}",

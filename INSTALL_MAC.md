@@ -17,6 +17,7 @@ Remplacez `<URL_DU_REPO>` par l’URL SSH réelle fournie par votre équipe (ex.
 | **Machine neuve** | Premier clone, jamais lancé sur ce Mac | `cp .env.example .env` → `make build` → **`make bootstrap-dev`** → `make web-install` → `make web-dev` |
 | **Reset destructif** | Repartir d’une base vide (données locales perdues) | **`make reset-dev-db`** (lire le warning) → éventuellement `make web-install` → `make web-dev` |
 | **Quotidien / après `git pull`** | Stack déjà configurée, pas de wipe | **`make bootstrap-dev`** (non destructif, safe à relancer) ou `make up-backend` |
+| **Shared-dev (DB distante équipe)** | Deux devs sur la même DB métier (Neon, etc.) | `cp .env.shared-dev.example .env.shared-dev` (1Password) → **`make shared-dev-bootstrap`** → `make web-dev` — voir [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) |
 
 - **`make bootstrap-dev`** ne remplace pas **`make build`** (première install) ni **`make web-install`** (frontend local).
 - **`make reset-dev-db`** efface la DB Postgres locale et **tous les volumes Docker du projet** (dont `web_node_modules` si vous utilisez le conteneur `web`). Il ne modifie ni le code ni le `.env`. Relancez **`make web-install`** si le frontend Docker (`make up`) était utilisé.

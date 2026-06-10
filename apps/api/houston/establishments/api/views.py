@@ -313,7 +313,6 @@ class EstablishmentBusinessUnitTreeView(APIView):
     permission_classes_get = [
         permissions.IsAuthenticated,
         HasActiveMembership,
-        CanManageMemberships,
     ]
     permission_classes_post = [
         permissions.IsAuthenticated,

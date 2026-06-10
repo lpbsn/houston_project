@@ -69,6 +69,7 @@ Do not:
 - add dependencies without approval
 - upgrade framework versions unless requested
 - mix feature, refactor, cleanup, and formatting
+- Ne jamais lancer directement des commandes docker compose complexes si une commande Makefile existe.
 
 ## Nested instructions
 

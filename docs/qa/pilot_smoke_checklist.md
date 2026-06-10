@@ -4,7 +4,7 @@ Checklist opérationnelle pour valider une démo ou un pilote local Houston.
 
 ## Préparation stack
 
-- [ ] `.env` configuré (`DJANGO_SECRET_KEY`, `HOUSTON_REGISTRATION_INVITE_CODES`)
+- [ ] **Local** : `.env` configuré (`DJANGO_SECRET_KEY`, `HOUSTON_REGISTRATION_INVITE_CODES`) — ou **shared-dev** : `.env.shared-dev` depuis 1Password ([`shared_dev_database.md`](../engineering/shared_dev_database.md))
 - [ ] Médias privés OK (volume Docker `private_media` ; dossier local `apps/api/private_media` seulement hors Docker / dépannage)
 - [ ] `make bootstrap-dev` OK (inclut `catalog-check` : 14 `CatalogBusinessUnit`, 134 `CatalogActivitySubject`)
 - [ ] `docker compose ps` : `postgres`, `redis`, `api`, `celery` **Up**

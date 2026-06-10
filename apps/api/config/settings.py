@@ -85,6 +85,11 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+_postgres_sslmode = env_str("POSTGRES_SSLMODE", "")
+_postgres_db_options: dict[str, str] = {}
+if _postgres_sslmode:
+    _postgres_db_options["sslmode"] = _postgres_sslmode
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -93,6 +98,7 @@ DATABASES = {
         "PASSWORD": env_str("POSTGRES_PASSWORD", "houston"),
         "HOST": env_str("POSTGRES_HOST", "postgres"),
         "PORT": env_str("POSTGRES_PORT", "5432"),
+        **({"OPTIONS": _postgres_db_options} if _postgres_db_options else {}),
     }
 }
 

@@ -16,6 +16,12 @@ Preferred local workflow:
 - full stack only when needed: `make up`
 - optional scheduler (celery-beat): `make up-scheduler` (Compose profile `scheduler`)
 
+Shared-dev (remote PostgreSQL, `.env.shared-dev`):
+- `make shared-dev-up` — runs compose preflight (`assert-shared-dev-compose.sh`) before `up`
+- `make shared-dev-check` / `make shared-dev-bootstrap` / `make shared-dev-migrate`
+- see `docs/engineering/shared_dev_database.md`
+- never run `make reset-dev-db` or `make test` against shared-dev credentials in `.env`
+
 Do not run `docker compose up` without explicit service/profile unless requested.
 
 Do not edit `.env` or introduce real secrets.

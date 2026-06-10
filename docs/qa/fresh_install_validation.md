@@ -42,7 +42,21 @@ make web-install   # si le conteneur web Docker (make up) était utilisé
 make web-dev
 ```
 
-`make reset-dev-db` affiche un warning, supprime la DB Postgres locale et les volumes Docker du projet, puis relance `make bootstrap-dev`.
+`make reset-dev-db` affiche un warning, supprime la DB Postgres locale et les volumes Docker du projet, puis relance `make bootstrap-dev`. Refusé si `.env` pointe vers une DB distante (garde-fou `assert-local-dev-db.sh`).
+
+### Shared-dev (DB distante équipe, optionnel)
+
+```bash
+cp .env.shared-dev.example .env.shared-dev
+# Remplir depuis 1Password
+make shared-dev-check
+make shared-dev-bootstrap
+make web-dev
+```
+
+- Preflight obligatoire : `infra/scripts/assert-shared-dev-compose.sh` (vérifie `depends_on` sans `postgres` via `docker compose config`).
+- `make reset-dev-db` et `make test` : **local uniquement** (`.env` avec `POSTGRES_HOST=postgres`).
+- Guide : [`shared_dev_database.md`](../engineering/shared_dev_database.md).
 
 ## Vérifications automatiques
 
@@ -84,4 +98,5 @@ Checklist opérationnelle courte : [`pilot_smoke_checklist.md`](pilot_smoke_chec
 
 - Installation Mac : [`INSTALL_MAC.md`](../../INSTALL_MAC.md)
 - Catalogue v2 : [`business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md)
-- Makefile : `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`
+- Makefile : `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `shared-dev-up`, `shared-dev-bootstrap`, `shared-dev-check`
+- Shared-dev : [`shared_dev_database.md`](../engineering/shared_dev_database.md)

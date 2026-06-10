@@ -1,0 +1,23 @@
+# Shared-dev override: remote PostgreSQL via .env.shared-dev (no local postgres service).
+# Requires depends_on: !override so Compose merge does not keep postgres from docker-compose.yml.
+# Validate merged config: make shared-dev-check (runs infra/scripts/assert-shared-dev-compose.sh).
+
+services:
+  api:
+    depends_on: !override
+      redis:
+        condition: service_started
+
+  celery:
+    depends_on: !override
+      redis:
+        condition: service_started
+
+  celery-beat:
+    depends_on: !override
+      redis:
+        condition: service_started
+
+  postgres:
+    profiles:
+      - local-db
