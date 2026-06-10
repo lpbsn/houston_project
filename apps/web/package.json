@@ -50,5 +50,13 @@
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
     "vitest": "^4.1.8"
+  },
+  "volta": {
+    "node": "24.15.0",
+    "npm": "11.16.0"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "msw@2.14.6": true
   }
 }
