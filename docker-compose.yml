@@ -43,6 +43,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      - private_media:/app/apps/api/private_media
 
   celery:
     build: *api_build
@@ -69,8 +70,11 @@ services:
     environment: *api_environment
     volumes:
       - .:/app
+      - private_media:/app/apps/api/private_media
 
   celery-beat:
+    profiles:
+      - scheduler
     build: *api_build
     security_opt:
       - no-new-privileges:true
@@ -86,6 +90,8 @@ services:
         "info",
         "--scheduler",
         "celery.beat:PersistentScheduler",
+        "--schedule",
+        "/var/lib/celerybeat/celerybeat-schedule",
       ]
     depends_on:
       postgres:
@@ -95,6 +101,7 @@ services:
     environment: *api_environment
     volumes:
       - .:/app
+      - celerybeat_data:/var/lib/celerybeat
 
   web:
     build:
@@ -141,3 +148,5 @@ services:
 volumes:
   postgres_data:
   web_node_modules:
+  private_media:
+  celerybeat_data:

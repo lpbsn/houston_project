@@ -106,7 +106,7 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 **macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Chaque machine a sa propre base Postgres (volume Docker local).
 
-**Fresh install backend** (après `cp .env.example .env`, `mkdir -p apps/api/private_media`, et `make build` sur une machine neuve) :
+**Fresh install backend** (après `cp .env.example .env` et `make build` sur une machine neuve) :
 
 ```bash
 make bootstrap-dev
@@ -116,7 +116,13 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
 
 **Reset local destructif** (DB + volumes Docker effacés) : `make reset-dev-db` — détails et parcours machine neuve vs reset dans [`INSTALL_MAC.md`](INSTALL_MAC.md). Validation E2E : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
 
-**Frontend local vs conteneur `web`** : `make up` démarre aussi le service Docker `web` sur le port 5173 ; pour le frontend en npm sur l’hôte, utilisez `make up-backend` puis `make web-dev` (ne pas lancer les deux frontends en parallèle).
+**Workflow quotidien (recommandé macOS / OrbStack)** : `make up-backend` + `make web-dev` — backend dans Docker, frontend npm local.
+
+**Stack complète Docker** : `make up` — démarre `api`, `celery` et le conteneur `web` (port 5173).
+
+**Scheduler optionnel** (matérialisation horizon checklists) : `make up-scheduler` — démarre le backend puis `celery-beat` (profile Compose `scheduler`). La matérialisation lazy sur lecture du execution feed reste disponible sans Beat.
+
+**Frontend local vs conteneur `web`** : ne pas lancer `make up` et `make web-dev` en parallèle (conflit port 5173).
 
 1. Copy `.env.example` to `.env`.
 2. Set backend-only onboarding variables in `.env` (never commit real secrets):
@@ -159,8 +165,10 @@ Requires Redis (`CELERY_BROKER_URL`). Without the `celery` service, submitted ob
 Optional checklist horizon materialization (shared assignments): start Beat in addition to the worker. Lazy materialization on execution-feed read still applies without Beat.
 
 ```bash
-docker compose up -d celery celery-beat
+make up-scheduler
 ```
+
+`docker compose up -d celery-beat` reste techniquement possible avec `--profile scheduler`, mais c’est une commande non recommandée — `make up-scheduler` garantit que le backend et les dépendances nécessaires sont démarrés.
 
 - Poll processing status after submit: `GET /api/v1/establishments/{id}/observations/{observation_id}/processing-status/`
 
@@ -183,10 +191,20 @@ Core commands:
 
 ```bash
 make build
+make up-backend
 make up
+make up-scheduler
 make down
 make shell
 ```
+
+### Clean archive (no secrets or runtime artifacts)
+
+```bash
+git archive --format=zip --output=houston-clean.zip HEAD
+```
+
+Excludes `.env`, `private_media`, `node_modules`, caches, and other untracked/gitignored paths automatically.
 
 ## Docker security (local)
 
@@ -201,8 +219,8 @@ services:
     user: "${UID}:${GID}"
 ```
 
-- **`private_media`** — operational uploads live under `apps/api/private_media/` (gitignored). Create on the host before first upload: `mkdir -p apps/api/private_media`. Django fails fast at `manage.py check` if the path is not writable (`uploads.E001`).
-- **Last resort (Linux)** — if permissions still block writes, a named volume for `private_media` only is documented in troubleshooting; do not add it by default.
+- **`private_media`** — en Docker, les médias privés sont stockés dans le volume nommé `private_media` (monté sur `/app/apps/api/private_media`). Le dossier local `apps/api/private_media` n’est requis que pour un usage backend hors Docker ou pour du dépannage. Django fails fast at `manage.py check` if the path is not writable (`uploads.E001`). Valider l’écriture après changement de volume (voir post-hardening validation).
+- **Runtime volumes** — `postgres_data`, `web_node_modules` (conteneur `web`), `private_media`, `celerybeat_data` (profile `scheduler`).
 - **Bind mount risk** — if `.env` exists at the repo root, processes in api/celery can read `/app/.env`. Never commit `.env`.
 - **`docker compose config`** may print interpolated secrets — do not paste output into public tickets or CI logs. Do **not** run `docker compose config | grep -E 'OPENAI|SECRET|PASSWORD'` in shareable logs.
 - **Postgres (5432)** and **Redis (6379)** are exposed on the host for local dev; tighten before pre-prod.

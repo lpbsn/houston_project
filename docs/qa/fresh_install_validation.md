@@ -15,7 +15,7 @@
 - Fichier `.env` (copie de `.env.example`) avec au minimum :
   - `DJANGO_SECRET_KEY` personnalisé
   - `HOUSTON_REGISTRATION_INVITE_CODES` pour `/onboarding`
-- Dossier `apps/api/private_media` créé (`mkdir -p apps/api/private_media`)
+- Médias privés : en Docker, volume nommé `private_media` (géré par Compose). Le dossier local `apps/api/private_media` n’est requis que hors Docker ou pour du dépannage.
 - Images Docker construites (`make build`) — première install uniquement
 
 ## Séquences
@@ -24,12 +24,13 @@
 
 ```bash
 cp .env.example .env
-mkdir -p apps/api/private_media
 make build
 make bootstrap-dev
 make web-install
 make web-dev
 ```
+
+Scheduler optionnel (checklists horizon) : `make up-scheduler`.
 
 `make bootstrap-dev` enchaîne : `up-backend` → `migrate` → `import-catalog` → `check` → `catalog-check`.
 

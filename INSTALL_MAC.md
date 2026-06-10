@@ -14,7 +14,7 @@ Remplacez `<URL_DU_REPO>` par l’URL SSH réelle fournie par votre équipe (ex.
 
 | Parcours | Quand l’utiliser | Commandes clés |
 |----------|------------------|----------------|
-| **Machine neuve** | Premier clone, jamais lancé sur ce Mac | `cp .env.example .env` → `mkdir -p apps/api/private_media` → `make build` → **`make bootstrap-dev`** → `make web-install` → `make web-dev` |
+| **Machine neuve** | Premier clone, jamais lancé sur ce Mac | `cp .env.example .env` → `make build` → **`make bootstrap-dev`** → `make web-install` → `make web-dev` |
 | **Reset destructif** | Repartir d’une base vide (données locales perdues) | **`make reset-dev-db`** (lire le warning) → éventuellement `make web-install` → `make web-dev` |
 | **Quotidien / après `git pull`** | Stack déjà configurée, pas de wipe | **`make bootstrap-dev`** (non destructif, safe à relancer) ou `make up-backend` |
 
@@ -69,7 +69,9 @@ Ne mettez **jamais** de clé OpenAI ou de code d’invitation dans une variable 
 
 ---
 
-### Étape 5 — Créer le dossier pour les fichiers uploadés
+### Étape 5 — Médias privés (optionnel en Docker)
+
+En Docker, les médias privés sont stockés dans le volume nommé `private_media`. Le dossier local `apps/api/private_media` n’est requis que pour un usage backend hors Docker ou pour du dépannage :
 
 ```bash
 mkdir -p apps/api/private_media
@@ -122,6 +124,16 @@ docker compose ps
 ```
 
 Les services `postgres`, `redis`, `api` et `celery` doivent être **Up**. `make catalog-check` doit afficher **14** `CatalogBusinessUnit` et **134** `CatalogActivitySubject`.
+
+### Scheduler optionnel (checklists horizon)
+
+Pour la matérialisation planifiée des assignments partagés (en plus du worker Celery) :
+
+```bash
+make up-scheduler
+```
+
+`docker compose up -d celery-beat` reste techniquement possible avec `--profile scheduler`, mais c’est une commande non recommandée — `make up-scheduler` démarre d’abord le backend complet.
 
 ---
 
@@ -339,13 +351,15 @@ cp .env.example .env
 
 Ne commitez **jamais** `.env` (déjà dans [`.gitignore`](.gitignore)).
 
-### 5.2 Dossier médias privés (avant uploads / certaines checks)
+### 5.2 Médias privés
+
+En Docker, les médias privés sont stockés dans le volume nommé `private_media`. Le dossier local `apps/api/private_media` n’est requis que pour un usage backend hors Docker ou pour du dépannage :
 
 ```bash
 mkdir -p apps/api/private_media
 ```
 
-Requis par le README pour les uploads ; Django peut échouer au `check` si le chemin n’est pas inscriptible.
+Django peut échouer au `check` si le chemin n’est pas inscriptible (`uploads.E001`).
 
 ### 5.3 Variables — lecture minimale pour démarrer
 
@@ -643,7 +657,7 @@ Exécution via Docker : `docker compose exec api python manage.py <commande>`.
 4. Si contrat API modifié : `make schema` puis `make web-api-generate`
 5. Frontend : `make web-install` si `package-lock.json` a changé
 6. Si `.env` modifié : `docker compose up -d --force-recreate api celery`
-7. Si nouveau besoin médias : vérifier `apps/api/private_media` existe toujours
+7. Si nouveau besoin médias : en Docker, le volume `private_media` est géré par Compose ; hors Docker, vérifier `apps/api/private_media`
 
 ---
 
@@ -678,11 +692,21 @@ Exécution via Docker : `docker compose exec api python manage.py <commande>`.
 
 ### Permission / uploads / `uploads.E001`
 
+En Docker, les uploads utilisent le volume nommé `private_media`. Valider l’écriture :
+
 ```bash
-mkdir -p apps/api/private_media
-chmod u+rwx apps/api/private_media
+docker compose exec api sh -lc 'python - <<PY
+from pathlib import Path
+p = Path("private_media/.write-test")
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text("ok")
+print(p.read_text())
+p.unlink()
+PY'
 docker compose exec api python manage.py check
 ```
+
+Hors Docker ou dépannage : `mkdir -p apps/api/private_media` puis `chmod u+rwx apps/api/private_media`.
 
 Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ; rarement nécessaire sur Docker Desktop Mac ou OrbStack.
 
@@ -713,7 +737,7 @@ Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ;
 - [ ] `git clone` réussi, branche à jour
 - [ ] `.env` créé depuis `.env.example`, `DJANGO_SECRET_KEY` personnalisé
 - [ ] `HOUSTON_REGISTRATION_INVITE_CODES` défini si besoin de `/onboarding`
-- [ ] `apps/api/private_media` créé
+- [ ] Médias privés OK (volume Docker `private_media` en usage Docker ; dossier local `apps/api/private_media` seulement hors Docker / dépannage)
 - [ ] `docker compose ps` : `postgres`, `redis`, `api`, `celery` **Up**
 - [ ] `make bootstrap-dev` terminé sans erreur (ou `make migrate` + `make import-catalog` + `make catalog-check`)
 - [ ] `make catalog-check` → 14 `CatalogBusinessUnit`, 134 `CatalogActivitySubject`

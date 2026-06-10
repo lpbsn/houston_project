@@ -1,4 +1,4 @@
-.PHONY: build up up-backend down check test lint schema shell migrate migrations-check \
+.PHONY: build up up-backend up-scheduler down check test lint schema shell migrate migrations-check \
 	web-install web-dev web-build web-typecheck web-test web-api-generate verify \
 	docker-verify-security import-catalog catalog-check bootstrap-dev reset-dev-db
 
@@ -10,6 +10,11 @@ up:
 
 up-backend:
 	docker compose up -d postgres redis api celery
+	docker compose exec -u 0 api chown -R houston:houston /app/apps/api/private_media
+
+up-scheduler: up-backend
+	docker compose --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
+	docker compose --profile scheduler up -d celery-beat
 
 down:
 	docker compose down

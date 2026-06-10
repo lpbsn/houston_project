@@ -5,7 +5,7 @@ Checklist opérationnelle pour valider une démo ou un pilote local Houston.
 ## Préparation stack
 
 - [ ] `.env` configuré (`DJANGO_SECRET_KEY`, `HOUSTON_REGISTRATION_INVITE_CODES`)
-- [ ] `apps/api/private_media` existe
+- [ ] Médias privés OK (volume Docker `private_media` ; dossier local `apps/api/private_media` seulement hors Docker / dépannage)
 - [ ] `make bootstrap-dev` OK (inclut `catalog-check` : 14 `CatalogBusinessUnit`, 134 `CatalogActivitySubject`)
 - [ ] `docker compose ps` : `postgres`, `redis`, `api`, `celery` **Up**
 - [ ] `curl` health → `200` sur http://localhost:8000/api/v1/health/
@@ -30,6 +30,7 @@ Checklist opérationnelle pour valider une démo ou un pilote local Houston.
 ## Worker & IA
 
 - [ ] Service **celery** démarré (sinon observations restent `queued`)
+- [ ] (Optionnel) `make up-scheduler` pour celery-beat (matérialisation horizon checklists)
 - [ ] (Optionnel) `OPENAI_API_KEY` + `HOUSTON_AI_OBSERVATION_PROVIDER=openai` pour signaux réalistes en manuel
 
 ## URLs de référence
