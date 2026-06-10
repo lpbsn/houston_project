@@ -1,0 +1,47 @@
+---
+description: Docker, OrbStack and local environment rules.
+alwaysApply: true
+---
+
+# Docker / OrbStack
+
+OrbStack is the recommended local Docker runtime on macOS.
+The project must remain standard Docker Compose compatible.
+
+Use Makefile targets before raw docker compose commands.
+
+Preferred local workflow:
+- backend stack: `make up-backend`
+- frontend local: `make web-dev`
+- full stack only when needed: `make up`
+
+Do not run `docker compose up` without explicit service/profile unless requested.
+
+Do not edit `.env` or introduce real secrets.
+Edit `.env.example` only for documented configuration.
+
+Do not commit or package:
+- `.env`
+- `.venv`
+- `node_modules`
+- `.git`
+- `private_media`
+- celerybeat runtime files
+- caches
+
+Use named volumes for container-owned runtime state:
+- Postgres data
+- frontend node_modules in Docker mode
+- private media
+- celerybeat schedule state
+
+Do not bind-mount database data, node_modules, Python virtualenvs, or runtime media from macOS unless explicitly justified.
+
+After dependency changes:
+- backend: `make build`
+- frontend local: `make web-install`
+- contract changes: `make schema && make web-api-generate`
+
+Before final success:
+- run the smallest relevant check first
+- run `make verify` only for final confidence
