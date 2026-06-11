@@ -158,7 +158,7 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
             )
         ],
     )
-    outcome = apply_pipeline_output(observation=observation, output=output)
+    outcome = apply_pipeline_output(observation=observation, output=output).outcome
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
 
     token = login(api_client, user=membership.user)

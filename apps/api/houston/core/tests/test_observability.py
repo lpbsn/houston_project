@@ -4,6 +4,7 @@ import uuid
 
 from houston.core.observability import (
     build_api_request_log_context,
+    build_observation_pipeline_timing_log_context,
     build_observation_processing_log_context,
     build_refresh_token_reuse_log_context,
     build_temporary_upload_image_type_log_context,
@@ -119,3 +120,26 @@ def test_build_temporary_upload_image_type_log_context_is_safe():
     assert "event" not in context
     assert "uploaded_filename" not in context
     assert "name" not in context
+
+
+def test_build_observation_pipeline_timing_log_context_omits_sensitive_fields():
+    observation_id = uuid.uuid4()
+    establishment_id = uuid.uuid4()
+
+    context = build_observation_pipeline_timing_log_context(
+        observation_id=observation_id,
+        establishment_id=establishment_id,
+        event="observation_pipeline_input_built",
+        duration_ms=12,
+        input_payload_bytes=2048,
+        business_unit_count=3,
+        active_signal_context_count=1,
+        provider="openai",
+        model="gpt-4.1-mini",
+    )
+
+    assert context["observation_id"] == str(observation_id)
+    assert context["duration_ms"] == 12
+    assert context["input_payload_bytes"] == 2048
+    assert "validated_text" not in context
+    assert "raw_text" not in str(context).lower()

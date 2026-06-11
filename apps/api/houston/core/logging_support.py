@@ -36,6 +36,18 @@ _STRUCTURED_EXTRA_KEYS = frozenset(
         "horizon_days",
         "task_name",
         "recovered_count",
+        "duration_ms",
+        "total_duration_ms",
+        "provider_duration_ms",
+        "parse_duration_ms",
+        "business_unit_count",
+        "active_signal_context_count",
+        "input_payload_bytes",
+        "provider",
+        "model",
+        "candidate_count",
+        "created_count",
+        "aggregated_count",
     }
 )
 

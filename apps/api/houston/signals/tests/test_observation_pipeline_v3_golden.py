@@ -260,7 +260,7 @@ def test_g6_subject_hors_responsible_rejected():
             responsible_business_unit_key="maintenance",
             activity_subject_key="proprete_chambre",
         ),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
     assert Signal.objects.count() == 0
@@ -290,7 +290,7 @@ def test_g7_non_transversal_responsible_rejected():
             responsible_business_unit_key="restaurant",
             activity_subject_key="service",
         ),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
     assert Signal.objects.count() == 0
@@ -337,6 +337,6 @@ def test_no_signal_created_when_candidates_empty():
             schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
             candidates=[],
         ),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED

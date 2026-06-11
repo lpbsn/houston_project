@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -23,6 +24,7 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.core.observability import (
+    build_observation_pipeline_timing_log_context,
     build_observation_processing_log_context,
     observation_processing_duration_seconds,
 )
@@ -67,6 +69,13 @@ class ResolvedTaxonomy:
     affected_business_unit: BusinessUnit | None = None
     responsible_business_unit: BusinessUnit | None = None
     activity_subject: ActivitySubject | None = None
+
+
+@dataclass(frozen=True)
+class PipelineApplyResult:
+    outcome: ObservationProcessing.Outcome
+    created_count: int
+    aggregated_count: int
 
 
 def normalize_location_text(value: str | None) -> str:
@@ -367,10 +376,14 @@ def apply_pipeline_output(
     *,
     observation: Observation,
     output: ObservationPipelineOutput,
-) -> ObservationProcessing.Outcome:
+) -> PipelineApplyResult:
     candidates = output.candidates[:MAX_CANDIDATES_PER_OBSERVATION]
     if not candidates:
-        return ObservationProcessing.Outcome.NO_SIGNAL_CREATED
+        return PipelineApplyResult(
+            outcome=ObservationProcessing.Outcome.NO_SIGNAL_CREATED,
+            created_count=0,
+            aggregated_count=0,
+        )
 
     seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]] = set()
     created_count = 0
@@ -448,15 +461,23 @@ def apply_pipeline_output(
         created_count += 1
 
     if created_count == 0 and aggregated_count == 0:
-        if rejected_count == len(candidates):
-            return ObservationProcessing.Outcome.NO_SIGNAL_CREATED
-        return ObservationProcessing.Outcome.NO_SIGNAL_CREATED
+        return PipelineApplyResult(
+            outcome=ObservationProcessing.Outcome.NO_SIGNAL_CREATED,
+            created_count=0,
+            aggregated_count=0,
+        )
 
     if created_count > 0 and aggregated_count > 0:
-        return ObservationProcessing.Outcome.SIGNALS_CREATED
-    if aggregated_count > 0:
-        return ObservationProcessing.Outcome.SIGNAL_AGGREGATED
-    return ObservationProcessing.Outcome.SIGNALS_CREATED
+        outcome = ObservationProcessing.Outcome.SIGNALS_CREATED
+    elif aggregated_count > 0:
+        outcome = ObservationProcessing.Outcome.SIGNAL_AGGREGATED
+    else:
+        outcome = ObservationProcessing.Outcome.SIGNALS_CREATED
+    return PipelineApplyResult(
+        outcome=outcome,
+        created_count=created_count,
+        aggregated_count=aggregated_count,
+    )
 
 
 def recover_stuck_observation_processing_batch() -> int:
@@ -534,6 +555,7 @@ def run_observation_pipeline(
             ),
         )
 
+    pipeline_started_at = time.monotonic()
     try:
         output = call_observation_pipeline(
             observation=observation,
@@ -542,7 +564,7 @@ def run_observation_pipeline(
     except ObservationPipelineSkippedError:
         with transaction.atomic():
             processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
-            outcome = apply_pipeline_output(
+            apply_result = apply_pipeline_output(
                 observation=observation,
                 output=ObservationPipelineOutput(
                     schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
@@ -551,7 +573,7 @@ def run_observation_pipeline(
             )
             processing.status = ObservationProcessing.Status.PROCESSED
             processing.processed_at = timezone.now()
-            processing.outcome = outcome
+            processing.outcome = apply_result.outcome
             processing.last_error_code = ""
             processing.save(
                 update_fields=[
@@ -562,6 +584,14 @@ def run_observation_pipeline(
                     "updated_at",
                 ]
             )
+        processing.refresh_from_db()
+        _log_observation_pipeline_completed(
+            observation=observation,
+            processing=processing,
+            pipeline_started_at=pipeline_started_at,
+            apply_result=apply_result,
+            apply_duration_ms=0,
+        )
         return
     except (
         ObservationPipelineUnavailableError,
@@ -582,12 +612,13 @@ def run_observation_pipeline(
         )
         raise
 
+    apply_started_at = time.monotonic()
     with transaction.atomic():
         processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
-        outcome = apply_pipeline_output(observation=observation, output=output)
+        apply_result = apply_pipeline_output(observation=observation, output=output)
         processing.status = ObservationProcessing.Status.PROCESSED
         processing.processed_at = timezone.now()
-        processing.outcome = outcome
+        processing.outcome = apply_result.outcome
         processing.last_error_code = ""
         processing.save(
             update_fields=[
@@ -598,6 +629,64 @@ def run_observation_pipeline(
                 "updated_at",
             ]
         )
+    apply_duration_ms = int((time.monotonic() - apply_started_at) * 1000)
+    _log_observation_pipeline_signals_applied(
+        observation=observation,
+        apply_result=apply_result,
+        apply_duration_ms=apply_duration_ms,
+    )
+    _log_observation_pipeline_completed(
+        observation=observation,
+        processing=processing,
+        pipeline_started_at=pipeline_started_at,
+        apply_result=apply_result,
+        apply_duration_ms=apply_duration_ms,
+    )
+
+
+def _log_observation_pipeline_signals_applied(
+    *,
+    observation: Observation,
+    apply_result: PipelineApplyResult,
+    apply_duration_ms: int,
+) -> None:
+    logger.info(
+        "observation_pipeline_signals_applied",
+        extra=build_observation_pipeline_timing_log_context(
+            observation_id=observation.id,
+            establishment_id=observation.establishment_id,
+            event="observation_pipeline_signals_applied",
+            duration_ms=apply_duration_ms,
+            outcome=apply_result.outcome,
+            created_count=apply_result.created_count,
+            aggregated_count=apply_result.aggregated_count,
+        ),
+    )
+
+
+def _log_observation_pipeline_completed(
+    *,
+    observation: Observation,
+    processing: ObservationProcessing,
+    pipeline_started_at: float,
+    apply_result: PipelineApplyResult,
+    apply_duration_ms: int,
+) -> None:
+    total_duration_ms = int((time.monotonic() - pipeline_started_at) * 1000)
+    logger.info(
+        "observation_pipeline_completed",
+        extra=build_observation_pipeline_timing_log_context(
+            observation_id=observation.id,
+            establishment_id=observation.establishment_id,
+            event="observation_pipeline_completed",
+            total_duration_ms=total_duration_ms,
+            duration_ms=apply_duration_ms,
+            outcome=apply_result.outcome,
+            created_count=apply_result.created_count,
+            aggregated_count=apply_result.aggregated_count,
+            attempt_count=processing.attempt_count,
+        ),
+    )
 
 
 def _try_recover_stuck_processing(*, processing: ObservationProcessing) -> bool:

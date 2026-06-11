@@ -110,3 +110,37 @@ def test_stuck_processing_logs_duration_and_status(caplog):
 
     processing.refresh_from_db()
     assert processing.status == ObservationProcessing.Status.PROCESSED
+
+
+def test_successful_pipeline_logs_safe_timing_fields(caplog):
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(
+        membership=membership,
+        text="Sensitive operational detail that must never appear in logs.",
+    )
+
+    with caplog.at_level(logging.INFO, logger="houston.ai.observation_pipeline"):
+        with caplog.at_level(logging.INFO, logger="houston.signals.services"):
+            run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
+
+    timing_events = {
+        "observation_pipeline_input_built",
+        "observation_pipeline_provider_finished",
+        "observation_pipeline_output_parsed",
+        "observation_pipeline_signals_applied",
+        "observation_pipeline_completed",
+    }
+    logged_events = {record.getMessage() for record in caplog.records}
+    assert timing_events.issubset(logged_events)
+
+    completed = next(
+        record
+        for record in caplog.records
+        if record.getMessage() == "observation_pipeline_completed"
+    )
+    assert completed.observation_id == str(observation.id)
+    assert completed.total_duration_ms is not None
+    assert completed.attempt_count == 1
+    assert "Sensitive operational detail" not in caplog.text
+    assert observation.raw_text not in caplog.text

@@ -74,6 +74,27 @@ _OBSERVATION_ENQUEUE_LOG_KEYS = frozenset(
         "exception_class",
     }
 )
+_OBSERVATION_PIPELINE_TIMING_LOG_KEYS = frozenset(
+    {
+        "observation_id",
+        "establishment_id",
+        "event",
+        "duration_ms",
+        "total_duration_ms",
+        "provider_duration_ms",
+        "parse_duration_ms",
+        "business_unit_count",
+        "active_signal_context_count",
+        "input_payload_bytes",
+        "provider",
+        "model",
+        "candidate_count",
+        "outcome",
+        "created_count",
+        "aggregated_count",
+        "attempt_count",
+    }
+)
 _SENSITIVE_FIELD_NAMES = frozenset(
     {
         "raw_text",
@@ -252,6 +273,62 @@ def build_observation_processing_failure_log_context(
         event=event,
         exception_class=exception_class,
     )
+
+
+def build_observation_pipeline_timing_log_context(
+    *,
+    observation_id: uuid.UUID,
+    establishment_id: uuid.UUID,
+    event: str,
+    duration_ms: int | None = None,
+    total_duration_ms: int | None = None,
+    provider_duration_ms: int | None = None,
+    parse_duration_ms: int | None = None,
+    business_unit_count: int | None = None,
+    active_signal_context_count: int | None = None,
+    input_payload_bytes: int | None = None,
+    provider: str = "",
+    model: str = "",
+    candidate_count: int | None = None,
+    outcome: str = "",
+    created_count: int | None = None,
+    aggregated_count: int | None = None,
+    attempt_count: int | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "observation_id": str(observation_id),
+        "establishment_id": str(establishment_id),
+        "event": event.strip()[:80],
+    }
+    if duration_ms is not None:
+        context["duration_ms"] = duration_ms
+    if total_duration_ms is not None:
+        context["total_duration_ms"] = total_duration_ms
+    if provider_duration_ms is not None:
+        context["provider_duration_ms"] = provider_duration_ms
+    if parse_duration_ms is not None:
+        context["parse_duration_ms"] = parse_duration_ms
+    if business_unit_count is not None:
+        context["business_unit_count"] = business_unit_count
+    if active_signal_context_count is not None:
+        context["active_signal_context_count"] = active_signal_context_count
+    if input_payload_bytes is not None:
+        context["input_payload_bytes"] = input_payload_bytes
+    if provider.strip():
+        context["provider"] = provider.strip()[:32]
+    if model.strip():
+        context["model"] = model.strip()[:64]
+    if candidate_count is not None:
+        context["candidate_count"] = candidate_count
+    if outcome.strip():
+        context["outcome"] = outcome.strip()[:32]
+    if created_count is not None:
+        context["created_count"] = created_count
+    if aggregated_count is not None:
+        context["aggregated_count"] = aggregated_count
+    if attempt_count is not None:
+        context["attempt_count"] = attempt_count
+    return sanitize_log_context(context, allowed_keys=_OBSERVATION_PIPELINE_TIMING_LOG_KEYS)
 
 
 def build_observation_enqueue_failure_log_context(

@@ -67,7 +67,7 @@ def test_apply_pipeline_creates_open_signal():
     outcome = apply_pipeline_output(
         observation=observation,
         output=_output_with_candidate(),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
@@ -85,7 +85,7 @@ def test_invalid_taxonomy_key_rejects_candidate():
     outcome = apply_pipeline_output(
         observation=observation,
         output=_output_with_candidate(affected_key="unknown"),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
     assert Signal.objects.count() == 0
@@ -139,7 +139,7 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
                 )
             ],
         ),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNAL_AGGREGATED
     row = CandidateSignal.objects.get(observation=observation)
