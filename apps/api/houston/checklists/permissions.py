@@ -9,6 +9,7 @@ from houston.checklists.models import (
 )
 from houston.establishments.membership_scope import membership_scope_covers_business_unit
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
+from houston.establishments.permissions import _is_valid_membership
 
 _ADMIN_ROLES = frozenset(
     {
@@ -24,10 +25,6 @@ _MANAGEMENT_ROLES = frozenset(
         EstablishmentMembership.Role.MANAGER,
     }
 )
-
-
-def _is_active_membership(membership: EstablishmentMembership | None) -> bool:
-    return membership is not None and membership.status == EstablishmentMembership.Status.ACTIVE
 
 
 def _same_establishment(
@@ -78,18 +75,18 @@ def build_checklist_visibility_scope_q(*, membership: EstablishmentMembership) -
 
 
 def can_access_checklist_management(membership: EstablishmentMembership | None) -> bool:
-    return _is_active_membership(membership)
+    return _is_valid_membership(membership)
 
 
 def can_create_registered_template(membership: EstablishmentMembership | None) -> bool:
-    return _is_active_membership(membership)
+    return _is_valid_membership(membership)
 
 
 def can_delete_registered_template(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if not _same_establishment(membership, template.establishment_id):
         return False
@@ -117,7 +114,7 @@ def registered_template_visible_to_membership(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if not _same_establishment(membership, template.establishment_id):
         return False
@@ -140,7 +137,7 @@ def can_create_checklist_assignment(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     return membership.role in _MANAGEMENT_ROLES and can_manage_registered_template(
         membership,
@@ -152,7 +149,7 @@ def checklist_assignment_visible_to_membership(
     membership: EstablishmentMembership | None,
     assignment: ChecklistAssignment,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
@@ -176,7 +173,7 @@ def can_create_flash_todo(
     membership: EstablishmentMembership | None,
     business_unit: BusinessUnit,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if not _same_establishment(membership, business_unit.establishment_id):
         return False
@@ -205,7 +202,7 @@ def can_execute_checklist_tasks(
     membership: EstablishmentMembership | None,
     execution: ChecklistExecution,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if not _same_establishment(membership, execution.establishment_id):
         return False
@@ -216,7 +213,7 @@ def checklist_execution_visible_to_membership(
     membership: EstablishmentMembership | None,
     execution: ChecklistExecution,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if not _same_establishment(membership, execution.establishment_id):
         return False
@@ -234,7 +231,7 @@ def can_cancel_checklist_execution(
     membership: EstablishmentMembership | None,
     execution: ChecklistExecution,
 ) -> bool:
-    if not _is_active_membership(membership):
+    if not _is_valid_membership(membership):
         return False
     if not _same_establishment(membership, execution.establishment_id):
         return False
