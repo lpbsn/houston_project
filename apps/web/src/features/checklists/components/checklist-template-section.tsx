@@ -1,6 +1,6 @@
 import { LoaderCircle, Trash2 } from 'lucide-react'
 
-import { TerrainCard } from '@/components/layout/terrain-card'
+import { TerrainCard } from '@/components/ui/terrain'
 import { HoustonBadge } from '@/components/ui/terrain'
 import { formatChecklistBadgeLabel } from '@/features/checklists/lib/checklist-display'
 import { canShowChecklistTemplateDelete } from '@/features/checklists/lib/checklist-template-permission-hints'

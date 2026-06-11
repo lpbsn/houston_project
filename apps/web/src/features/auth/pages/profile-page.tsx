@@ -3,7 +3,7 @@ import {
   TerrainCard,
   TerrainFieldLabel,
   TerrainSectionLabel,
-} from '@/components/layout/terrain-card'
+} from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import {
   canAccessManagementSpace,

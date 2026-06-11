@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from houston.accounts.models import User, UserSession
+from houston.accounts.permission_hints import build_bootstrap_permission_hints
 from houston.establishments.membership_scope import (
     membership_scope_prefetch,
     membership_scope_rows_for_membership,
@@ -26,22 +27,6 @@ def list_active_memberships(user: User) -> list[EstablishmentMembership]:
 def list_bootstrap_memberships(user: User) -> list[dict]:
     memberships = list_active_memberships(user)
     return [_serialize_membership(membership) for membership in memberships]
-
-
-def build_bootstrap_permission_hints(
-    active_membership: EstablishmentMembership | None,
-) -> dict:
-    from houston.chat.permissions import can_access_chat
-    from houston.establishments.permissions import (
-        can_invite_memberships,
-        can_manage_runtime_context,
-    )
-
-    return {
-        "chat_available": can_access_chat(active_membership),
-        "can_invite": can_invite_memberships(active_membership),
-        "can_manage_runtime_config": can_manage_runtime_context(active_membership),
-    }
 
 
 def build_bootstrap_payload(

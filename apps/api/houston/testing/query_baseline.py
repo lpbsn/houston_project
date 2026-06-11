@@ -24,9 +24,10 @@ EXECUTION_FEED_EMPTY_MAX_QUERIES = 8
 EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 11
 
 # GET .../chat/conversations/ — 3 DMs with one message each
-CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS = 12
-# Observed delta when increasing conversations from 1 to 3 (latest-message N+1)
-CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE = 2
+# Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)
+CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS = 10
+# Observed delta when increasing conversations from 1 to 3 (flat after Phase S1 batching)
+CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE = 0
 
 # GET .../conversations/{id}/messages/ — default page, 1 stored message
 CHAT_MESSAGES_LIST_MAX_QUERIES = 10

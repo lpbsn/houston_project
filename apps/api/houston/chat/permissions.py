@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from houston.chat.models import ChatConversation, ChatParticipant
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.permissions import (
-    _ACTION_ROLES,
-    _ADMIN_ROLES,
-    _is_valid_membership,
-)
+from houston.establishments.permissions import _is_valid_membership
+from houston.establishments.role_constants import _ACTION_ROLES, _ADMIN_ROLES
 
 
 def can_access_chat(membership: EstablishmentMembership | None) -> bool:

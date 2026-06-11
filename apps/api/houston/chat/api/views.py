@@ -43,6 +43,7 @@ from houston.chat.selectors import (
     get_conversation_for_participant,
     get_eligible_chat_memberships_queryset,
     get_latest_message,
+    get_latest_messages_by_conversation_ids,
     is_conversation_unread,
     list_conversations_for_membership,
     list_messages_for_conversation,
@@ -177,22 +178,21 @@ def _serialize_conversation_list_item(
     *,
     conversation: ChatConversation,
     viewer_membership_id: uuid.UUID,
+    latest_message=None,
 ) -> dict:
-    participant = next(
-        (
-            item
-            for item in conversation.participants.all()
-            if item.membership_id == viewer_membership_id and item.left_at is None
-        ),
-        None,
-    )
-    latest_message = get_latest_message(conversation.id)
+    participant = None
+    active_participants = []
+    for item in conversation.participants.all():
+        if item.left_at is not None:
+            continue
+        active_participants.append(item)
+        if item.membership_id == viewer_membership_id:
+            participant = item
     unread = (
         is_conversation_unread(participant=participant, latest_message=latest_message)
         if participant is not None
         else False
     )
-    active_participants = [item for item in conversation.participants.all() if item.left_at is None]
     return {
         "id": conversation.id,
         "type": conversation.type,
@@ -290,14 +290,20 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
         if isinstance(membership, Response):
             return membership
 
-        conversations = list_conversations_for_membership(
-            establishment_id=self.establishment_id,
-            membership_id=membership.id,
+        conversations = list(
+            list_conversations_for_membership(
+                establishment_id=self.establishment_id,
+                membership_id=membership.id,
+            )
+        )
+        latest_messages_by_conversation_id = get_latest_messages_by_conversation_ids(
+            [conversation.id for conversation in conversations]
         )
         items = [
             _serialize_conversation_list_item(
                 conversation=conversation,
                 viewer_membership_id=membership.id,
+                latest_message=latest_messages_by_conversation_id.get(conversation.id),
             )
             for conversation in conversations
         ]

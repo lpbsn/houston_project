@@ -10,21 +10,7 @@ from houston.checklists.models import (
 from houston.establishments.membership_scope import membership_scope_covers_business_unit
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.permissions import _is_valid_membership
-
-_ADMIN_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }
-)
-
-_MANAGEMENT_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.MANAGER,
-    }
-)
+from houston.establishments.role_constants import _ADMIN_ROLES, _MANAGEMENT_ROLES
 
 
 def _same_establishment(

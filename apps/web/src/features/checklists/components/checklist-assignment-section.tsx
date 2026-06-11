@@ -2,7 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
-import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-card'
+import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { ChecklistAssignmentCreateSheet } from '@/features/checklists/components/checklist-assignment-create-sheet'
 import { ChecklistAssignmentEditSheet } from '@/features/checklists/components/checklist-assignment-edit-sheet'

@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
-import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-card'
+import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'

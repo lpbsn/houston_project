@@ -10,18 +10,12 @@ from houston.establishments.permissions import (
 from houston.establishments.permissions import (
     can_validate_action as establishment_can_validate_action,
 )
+from houston.establishments.role_constants import _ADMIN_ROLES
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
 from houston.signals.permissions import (
     signal_actionable_by_membership,
     signal_matches_membership_scope,
-)
-
-_ADMIN_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }
 )
 
 

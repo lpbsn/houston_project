@@ -19,7 +19,7 @@ from houston.signals.tests.conftest import (
 )
 from houston.testing.factories import build_membership
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.slow]
 
 
 def test_observation_with_lighting_issue_and_bar_stock_shortage_splits_into_two_signals():

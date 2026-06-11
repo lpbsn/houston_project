@@ -756,7 +756,7 @@ def test_chat_conversations_list_query_count_baseline(api_client):
 
 
 def test_chat_conversations_list_query_count_grows_with_list_size(api_client):
-    """Documents per-conversation N+1; Phase S1 batching should lower this delta."""
+    """Flat query growth after Phase S1 latest-message batching."""
     from houston.testing.query_baseline import CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE
 
     one = _chat_conversations_query_count(api_client, conversation_count=1)

@@ -8,29 +8,13 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
 )
+from houston.establishments.role_constants import (
+    _ACTION_ROLES,
+    _ADMIN_ROLES,
+    _INVITATION_ROLES,
+    _VALID_ROLES,
+)
 from houston.organizations.models import Organization
-
-_ADMIN_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }
-)
-_INVITATION_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.MANAGER,
-    }
-)
-_ACTION_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.MANAGER,
-    }
-)
-_VALID_ROLES = frozenset(choice for choice, _ in EstablishmentMembership.Role.choices)
 
 
 def can_access_app(membership: EstablishmentMembership | None) -> bool:

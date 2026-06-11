@@ -19,7 +19,7 @@ from houston.signals.services import apply_pipeline_output, run_observation_pipe
 from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.slow]
 
 
 def _setup_hotel_taxonomy(establishment):

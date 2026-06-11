@@ -5,15 +5,9 @@ from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import (
     can_view_signal_feed as establishment_can_view_signal_feed,
 )
+from houston.establishments.role_constants import _ADMIN_ROLES
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
-
-_ADMIN_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }
-)
 
 
 def can_view_signal_feed(membership: EstablishmentMembership | None) -> bool:
