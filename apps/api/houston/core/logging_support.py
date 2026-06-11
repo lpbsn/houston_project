@@ -34,6 +34,8 @@ _STRUCTURED_EXTRA_KEYS = frozenset(
         "error_raised_at",
         "exception_class",
         "horizon_days",
+        "task_name",
+        "recovered_count",
     }
 )
 

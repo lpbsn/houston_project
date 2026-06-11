@@ -15,13 +15,13 @@ def test_submit_enqueues_after_commit():
     membership = build_membership()
     membership.user.set_password(TEST_PASSWORD)
     membership.user.save(update_fields=["password"])
-    with patch("houston.observations.services._enqueue_observation_processing") as enqueue:
-        submit_observation(
+    with patch("houston.signals.tasks.process_observation_task.delay") as delay:
+        observation = submit_observation(
             membership=membership,
             text="Valid observation text here.",
             temporary_upload_ids=[],
         )
-        enqueue.assert_called_once()
+        delay.assert_called_once_with(str(observation.id))
 
 
 def test_submit_does_not_enqueue_on_transaction_rollback():

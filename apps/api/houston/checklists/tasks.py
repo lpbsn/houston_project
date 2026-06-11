@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from celery import shared_task
+from django.conf import settings
 
 from houston.checklists.materialization import materialize_assignments_horizon
 from houston.core.observability import build_celery_task_failure_log_context
@@ -11,9 +12,12 @@ from houston.core.observability import build_celery_task_failure_log_context
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+@shared_task(
+    max_retries=0,
+    soft_time_limit=settings.HOUSTON_CELERY_BEAT_TASK_SOFT_TIME_LIMIT_SECONDS,
+    time_limit=settings.HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS,
+)
 def materialize_checklist_assignments_horizon_task(
-    self,
     establishment_id: str | None = None,
     horizon_days: int = 14,
 ) -> int:
@@ -30,6 +34,7 @@ def materialize_checklist_assignments_horizon_task(
                 establishment_id=establishment_id,
                 horizon_days=horizon_days,
                 exception_class=type(exc).__name__,
+                task_name="materialize_checklist_assignments_horizon_task",
             ),
             exc_info=False,
         )

@@ -314,3 +314,27 @@ def test_detail_shows_done_action_not_in_feed(api_client):
     )
     assert detail.status_code == 200
     assert detail.json()["status"] == Action.Status.DONE
+
+
+def test_execution_feed_query_count_baseline_empty(api_client):
+    """Phase L baseline: materialization + dual count() on empty action/checklist feed."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    token = login(api_client, user=owner.user)
+    url = execution_feed_url(owner.establishment_id) + _feed_query("general")
+
+    from houston.testing.query_baseline import (
+        EXECUTION_FEED_EMPTY_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    assert_query_count_at_most(
+        context,
+        max_queries=EXECUTION_FEED_EMPTY_MAX_QUERIES,
+        label="execution_feed_general_empty",
+    )

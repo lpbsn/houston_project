@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -55,6 +56,9 @@ if TYPE_CHECKING:
     from houston.ai.observation_pipeline import ObservationPipelineProvider
 
 logger = logging.getLogger(__name__)
+
+_STUCK_PROCESSING_RECOVERY_ERROR_CODE = "stuck_processing_recovered"
+_MAX_OBSERVATION_PIPELINE_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -455,6 +459,29 @@ def apply_pipeline_output(
     return ObservationProcessing.Outcome.SIGNALS_CREATED
 
 
+def recover_stuck_observation_processing_batch() -> int:
+    stuck_threshold = settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS
+    cutoff = timezone.now() - timedelta(seconds=stuck_threshold)
+    stuck_ids = list(
+        ObservationProcessing.objects.filter(
+            status=ObservationProcessing.Status.PROCESSING,
+            processing_started_at__lt=cutoff,
+        ).values_list("id", flat=True)
+    )
+    acted_on = 0
+    for processing_id in stuck_ids:
+        processing = ObservationProcessing.objects.filter(id=processing_id).first()
+        if processing is None:
+            continue
+        if _try_recover_stuck_processing(processing=processing):
+            acted_on += 1
+            continue
+        processing.refresh_from_db()
+        if processing.status == ObservationProcessing.Status.FAILED:
+            acted_on += 1
+    return acted_on
+
+
 def run_observation_pipeline(
     observation_id: uuid.UUID,
     *,
@@ -469,6 +496,15 @@ def run_observation_pipeline(
         )
         if processing is None:
             return
+        if processing.status == ObservationProcessing.Status.PROCESSING:
+            if not _try_recover_stuck_processing(processing=processing):
+                _log_observation_processing_skip(processing=processing)
+                return
+            processing = (
+                ObservationProcessing.objects.select_for_update()
+                .select_related("observation", "observation__establishment")
+                .get(id=processing.id)
+            )
         if processing.status not in {
             ObservationProcessing.Status.QUEUED,
             ObservationProcessing.Status.RETRYING,
@@ -564,25 +600,78 @@ def run_observation_pipeline(
         )
 
 
+def _try_recover_stuck_processing(*, processing: ObservationProcessing) -> bool:
+    duration = observation_processing_duration_seconds(processing=processing)
+    stuck_threshold = settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS
+    is_stuck = duration is not None and duration >= stuck_threshold
+    if not is_stuck:
+        return False
+
+    logger.warning(
+        "observation_pipeline_stuck_processing",
+        extra=build_observation_processing_log_context(
+            processing=processing,
+            event="observation_pipeline_stuck_processing",
+        ),
+    )
+
+    with transaction.atomic():
+        processing = (
+            ObservationProcessing.objects.select_for_update()
+            .select_related("observation")
+            .get(id=processing.id)
+        )
+        if processing.status != ObservationProcessing.Status.PROCESSING:
+            return processing.status == ObservationProcessing.Status.RETRYING
+
+        if processing.attempt_count < _MAX_OBSERVATION_PIPELINE_ATTEMPTS:
+            processing.status = ObservationProcessing.Status.RETRYING
+            processing.processing_started_at = None
+            processing.last_error_code = _STUCK_PROCESSING_RECOVERY_ERROR_CODE
+            processing.save(
+                update_fields=[
+                    "status",
+                    "processing_started_at",
+                    "last_error_code",
+                    "updated_at",
+                ]
+            )
+            _log_observation_processing_outcome(
+                processing=processing,
+                event="observation_pipeline_stuck_recovered",
+                level=logging.WARNING,
+            )
+            return True
+
+        processing.status = ObservationProcessing.Status.FAILED
+        processing.last_error_code = _STUCK_PROCESSING_RECOVERY_ERROR_CODE
+        processing.processed_at = timezone.now()
+        processing.save(
+            update_fields=[
+                "status",
+                "last_error_code",
+                "processed_at",
+                "updated_at",
+            ]
+        )
+        _log_observation_processing_outcome(
+            processing=processing,
+            event="observation_pipeline_failed",
+        )
+        return False
+
+
 def _log_observation_processing_skip(*, processing: ObservationProcessing) -> None:
     if processing.status != ObservationProcessing.Status.PROCESSING:
         return
 
-    duration = observation_processing_duration_seconds(processing=processing)
-    stuck_threshold = settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS
-    is_stuck = duration is not None and duration >= stuck_threshold
-    log_context = build_observation_processing_log_context(
-        processing=processing,
-        event=(
-            "observation_pipeline_stuck_processing"
-            if is_stuck
-            else "observation_pipeline_skip_in_flight_processing"
+    logger.info(
+        "observation_pipeline_skip_in_flight_processing",
+        extra=build_observation_processing_log_context(
+            processing=processing,
+            event="observation_pipeline_skip_in_flight_processing",
         ),
     )
-    if is_stuck:
-        logger.warning("observation_pipeline_stuck_processing", extra=log_context)
-    else:
-        logger.info("observation_pipeline_skip_in_flight_processing", extra=log_context)
 
 
 def _log_observation_processing_outcome(
@@ -625,7 +714,7 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
             .select_related("observation")
             .get(id=processing_id)
         )
-        if processing.attempt_count < 3:
+        if processing.attempt_count < _MAX_OBSERVATION_PIPELINE_ATTEMPTS:
             processing.status = ObservationProcessing.Status.RETRYING
             processing.last_error_code = error_code
             processing.save(update_fields=["status", "last_error_code", "updated_at"])

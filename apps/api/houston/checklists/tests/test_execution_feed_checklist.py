@@ -514,3 +514,43 @@ def test_execution_feed_keeps_checklists_when_actions_fill_page(api_client):
     assert len(action_entries) == 23
     assert len(body["items"]) == 25
     assert body["has_more"] is True
+
+
+def test_execution_feed_checklist_query_count_baseline(api_client):
+    """Phase L baseline: read-path materialization + checklist branch counts (DB-01)."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
+    staff = _scoped_staff_on_establishment(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
+    now = timezone.now()
+    create_checklist_assignment(
+        template=template,
+        actor=owner,
+        assigned_to_id=staff.id,
+        start_date=now.date(),
+        end_date=now.date(),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
+    )
+
+    from houston.testing.query_baseline import (
+        EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    token = login(api_client, user=staff.user)
+    url = execution_feed_url(staff.establishment_id) + _feed_query("personal")
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    checklist_items = [
+        item for item in response.json()["items"] if item["item_type"] == "checklist"
+    ]
+    assert len(checklist_items) == 1
+    assert_query_count_at_most(
+        context,
+        max_queries=EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES,
+        label="execution_feed_personal_one_checklist",
+    )

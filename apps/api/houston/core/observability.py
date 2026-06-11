@@ -63,6 +63,8 @@ _CELERY_TASK_FAILURE_LOG_KEYS = frozenset(
         "establishment_id",
         "horizon_days",
         "exception_class",
+        "task_name",
+        "deleted_count",
     }
 )
 _OBSERVATION_ENQUEUE_LOG_KEYS = frozenset(
@@ -217,12 +219,18 @@ def build_celery_task_failure_log_context(
     exception_class: str,
     establishment_id: str | None = None,
     horizon_days: int | None = None,
+    task_name: str = "",
+    deleted_count: int | None = None,
 ) -> dict[str, Any]:
     context: dict[str, Any] = {"exception_class": exception_class}
     if establishment_id is not None:
         context["establishment_id"] = establishment_id
     if horizon_days is not None:
         context["horizon_days"] = horizon_days
+    if task_name.strip():
+        context["task_name"] = task_name.strip()[:80]
+    if deleted_count is not None:
+        context["deleted_count"] = deleted_count
     return sanitize_log_context(context, allowed_keys=_CELERY_TASK_FAILURE_LOG_KEYS)
 
 

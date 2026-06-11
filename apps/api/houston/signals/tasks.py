@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from celery import shared_task
+from django.conf import settings
 
 from houston.ai.observation_pipeline import (
     ObservationPipelineTimeoutError,
@@ -14,12 +15,21 @@ from houston.core.observability import (
     build_observation_processing_log_context,
 )
 from houston.observations.models import ObservationProcessing
-from houston.signals.services import run_observation_pipeline
+from houston.signals.services import (
+    recover_stuck_observation_processing_batch,
+    run_observation_pipeline,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    soft_time_limit=settings.HOUSTON_CELERY_OBSERVATION_PIPELINE_SOFT_TIME_LIMIT_SECONDS,
+    time_limit=settings.HOUSTON_CELERY_OBSERVATION_PIPELINE_TIME_LIMIT_SECONDS,
+)
 def process_observation_task(self, observation_id: str) -> None:
     logger.info(
         "observation_pipeline_task_started",
@@ -56,3 +66,20 @@ def process_observation_task(self, observation_id: str) -> None:
             exc_info=False,
         )
         raise
+
+
+@shared_task(
+    max_retries=0,
+    soft_time_limit=settings.HOUSTON_CELERY_BEAT_TASK_SOFT_TIME_LIMIT_SECONDS,
+    time_limit=settings.HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS,
+)
+def recover_stuck_observation_processing_task() -> int:
+    recovered_count = recover_stuck_observation_processing_batch()
+    logger.info(
+        "observation_pipeline_stuck_recovery_sweep_completed",
+        extra={
+            "recovered_count": recovered_count,
+            "event": "observation_pipeline_stuck_recovery_sweep_completed",
+        },
+    )
+    return recovered_count

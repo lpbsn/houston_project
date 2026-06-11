@@ -107,3 +107,6 @@ def test_stuck_processing_logs_duration_and_status(caplog):
     assert record.processing_status == ObservationProcessing.Status.PROCESSING
     assert record.processing_duration_seconds >= 90
     assert observation.raw_text not in caplog.text
+
+    processing.refresh_from_db()
+    assert processing.status == ObservationProcessing.Status.PROCESSED

@@ -288,3 +288,55 @@ def test_staff_restaurant_scope_sees_but_cannot_act_on_maintenance_responsible_s
 
     assert signal_visible_in_membership_scope(membership, lighting_signal) is True
     assert signal_actionable_by_membership(membership, lighting_signal) is False
+
+
+def test_signal_feed_query_count_baseline_two_items(api_client):
+    """Phase L baseline: 2 signals, general view. 
+    Bound includes full count() + serializer extras.
+    """
+    membership = build_api_membership()
+    _create_signal(membership, title="Baseline A")
+    _create_signal(membership, title="Baseline B")
+    token = login(api_client, user=membership.user)
+    url = signal_feed_url(membership.establishment_id) + "?view_mode=general"
+
+    from houston.testing.query_baseline import (
+        SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 2
+    assert_query_count_at_most(
+        context,
+        max_queries=SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS,
+        label="signal_feed_general_two_items",
+    )
+
+
+def test_signal_feed_query_count_grows_with_item_count(api_client):
+    """Documents per-item query overhead (DB-04); Phase E should lower this delta."""
+    from houston.testing.query_baseline import (
+        SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS,
+        capture_queries,
+    )
+
+    def query_count_for(item_count: int) -> int:
+        membership = build_api_membership()
+        for index in range(item_count):
+            _create_signal(membership, title=f"Scale {index}")
+        token = login(api_client, user=membership.user)
+        url = signal_feed_url(membership.establishment_id) + "?view_mode=general"
+        with capture_queries() as context:
+            response = api_client.get(url, **auth_headers(token))
+        assert response.status_code == 200
+        assert len(response.json()["items"]) == item_count
+        return len(context.captured_queries)
+
+    one_item = query_count_for(1)
+    three_items = query_count_for(3)
+    assert three_items - one_item <= SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS
