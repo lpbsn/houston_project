@@ -3649,6 +3649,11 @@ paths:
           type: string
         description: Comma-separated BusinessUnit keys (max 20). Matches affected_business_unit
           OR responsible_business_unit.
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque pagination cursor from a previous response next_cursor.
       - in: path
         name: establishment_id
         schema:

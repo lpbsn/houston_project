@@ -291,9 +291,7 @@ def test_staff_restaurant_scope_sees_but_cannot_act_on_maintenance_responsible_s
 
 
 def test_signal_feed_query_count_baseline_two_items(api_client):
-    """Phase L baseline: 2 signals, general view. 
-    Bound includes full count() + serializer extras.
-    """
+    """Phase E ceiling: 2 signals, general view (was 11 in Phase L)."""
     membership = build_api_membership()
     _create_signal(membership, title="Baseline A")
     _create_signal(membership, title="Baseline B")
@@ -319,7 +317,7 @@ def test_signal_feed_query_count_baseline_two_items(api_client):
 
 
 def test_signal_feed_query_count_grows_with_item_count(api_client):
-    """Documents per-item query overhead (DB-04); Phase E should lower this delta."""
+    """Phase E: per-item serializer overhead should stay flat with prefetch."""
     from houston.testing.query_baseline import (
         SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS,
         capture_queries,

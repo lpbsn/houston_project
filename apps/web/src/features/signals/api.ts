@@ -54,7 +54,11 @@ function assertSignalData<T>(result: {
   throw parseError(result.response, result.error)
 }
 
-function buildSignalFeedQuery(viewMode: SignalViewMode, filters: SignalFeedFilters) {
+function buildSignalFeedQuery(
+  viewMode: SignalViewMode,
+  filters: SignalFeedFilters,
+  options: { cursor?: string; pageSize?: number } = {},
+) {
   const normalized = normalizeSignalFeedFilters(filters)
 
   return {
@@ -66,6 +70,8 @@ function buildSignalFeedQuery(viewMode: SignalViewMode, filters: SignalFeedFilte
     ...(normalized.activitySubjectIds.length > 0
       ? { activity_subject_ids: normalized.activitySubjectIds.join(',') }
       : {}),
+    ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.pageSize ? { page_size: options.pageSize } : {}),
   }
 }
 
@@ -82,13 +88,14 @@ export async function fetchSignalFeed(
   establishmentId: string,
   viewMode: SignalViewMode,
   filters: SignalFeedFilters,
+  options: { cursor?: string; pageSize?: number } = {},
 ): Promise<SignalFeedResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/signal-feed/', {
         params: {
           path: { establishment_id: establishmentId },
-          query: buildSignalFeedQuery(viewMode, filters),
+          query: buildSignalFeedQuery(viewMode, filters, options),
         },
         headers: getAuthHeaders(accessToken),
       }),

@@ -150,7 +150,7 @@ def test_feed_pagination_offset_may_hide_resolved_when_actives_fill_page(api_cli
             title=f"Active {index}",
             status=Signal.Status.OPEN,
         )
-    _create_signal(membership, title="Resolved", status=Signal.Status.RESOLVED)
+    resolved = _create_signal(membership, title="Resolved", status=Signal.Status.RESOLVED)
     token = login(api_client, user=membership.user)
 
     response = api_client.get(
@@ -163,6 +163,18 @@ def test_feed_pagination_offset_may_hide_resolved_when_actives_fill_page(api_cli
     assert len(body["items"]) == 2
     assert all(item["status"] != Signal.Status.RESOLVED for item in body["items"])
     assert body["has_more"] is True
+    assert body["next_cursor"] is not None
+
+    page_two = api_client.get(
+        signal_feed_url(membership.establishment_id)
+        + f"?view_mode=general&page_size=2&cursor={body['next_cursor']}",
+        **auth_headers(token),
+    )
+
+    assert page_two.status_code == 200
+    page_two_body = page_two.json()
+    page_two_ids = {item["id"] for item in page_two_body["items"]}
+    assert str(resolved.id) in page_two_ids
 
 
 def test_detail_resolved_returns_200(api_client):

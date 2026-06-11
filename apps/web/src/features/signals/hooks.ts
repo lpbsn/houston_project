@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   cancelSignal,
@@ -17,15 +17,24 @@ export function useSignalFeedQuery(
   viewMode: SignalViewMode,
   filters: SignalFeedFilters,
 ) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: establishmentId
       ? signalsQueryKeys.feed(establishmentId, viewMode, filters)
       : ['signals', 'feed', 'none'],
-    queryFn: () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchSignalFeed(establishmentId, viewMode, filters)
+      return fetchSignalFeed(establishmentId, viewMode, filters, {
+        cursor: pageParam,
+      })
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more || !lastPage.next_cursor) {
+        return undefined
+      }
+      return lastPage.next_cursor
     },
     enabled: Boolean(establishmentId),
   })

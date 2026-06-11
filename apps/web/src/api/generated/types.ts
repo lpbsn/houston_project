@@ -6289,6 +6289,8 @@ export interface operations {
                 activity_subject_ids?: string;
                 /** @description Comma-separated BusinessUnit keys (max 20). Matches affected_business_unit OR responsible_business_unit. */
                 business_unit_keys?: string;
+                /** @description Opaque pagination cursor from a previous response next_cursor. */
+                cursor?: string;
                 page_size?: number;
                 /** @description Comma-separated feed statuses: open, in_progress, resolved (max 3). */
                 statuses?: string;

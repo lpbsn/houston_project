@@ -22,6 +22,12 @@ from houston.signals.exceptions import (
     SignalStateError,
     SignalValidationError,
 )
+from houston.signals.feed_cursor import (
+    SignalFeedCursorError,
+    apply_signal_feed_cursor,
+    encode_signal_feed_cursor,
+    parse_signal_feed_cursor,
+)
 from houston.signals.feed_filters import (
     SignalFeedFilterValidationError,
     build_applied_filters_payload,
@@ -83,6 +89,12 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
             ),
             OpenApiParameter(name="page_size", required=False, type=int),
             OpenApiParameter(
+                name="cursor",
+                required=False,
+                type=str,
+                description="Opaque pagination cursor from a previous response next_cursor.",
+            ),
+            OpenApiParameter(
                 name="statuses",
                 required=False,
                 type=str,
@@ -133,6 +145,14 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
         page_size = _parse_page_size(request.query_params.get("page_size"))
 
         try:
+            cursor = parse_signal_feed_cursor(request.query_params.get("cursor"))
+        except SignalFeedCursorError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
             feed_filters = parse_signal_feed_filters(
                 query_params=request.query_params,
                 establishment_id=self.establishment_id,
@@ -148,14 +168,19 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
             view_mode=view_mode,  # type: ignore[arg-type]
             filters=feed_filters if feed_filters.has_any() else None,
         )
-        items = list(queryset[:page_size])
+        if cursor is not None:
+            queryset = apply_signal_feed_cursor(queryset, cursor)
+        page_candidates = list(queryset[: page_size + 1])
+        has_more = len(page_candidates) > page_size
+        items = page_candidates[:page_size]
+        next_cursor = encode_signal_feed_cursor(items[-1]) if has_more and items else None
 
         payload = {
             "items": [
                 serialize_signal_feed_item(signal=signal, membership=membership) for signal in items
             ],
-            "next_cursor": None,
-            "has_more": queryset.count() > page_size,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
             "applied_filters": build_applied_filters_payload(
                 view_mode=view_mode,
                 filters=feed_filters,

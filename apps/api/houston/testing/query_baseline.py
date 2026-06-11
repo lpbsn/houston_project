@@ -11,9 +11,10 @@ from django.test.utils import CaptureQueriesContext
 # docs/audit/db_scalability_phase_l_2026-06-11.md
 
 # GET .../signals/feed/?view_mode=general — owner, 2 feed-visible signals
-SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS = 11
-# Observed delta when increasing feed items from 1 to 3 (serializer partial N+1)
-SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS = 2
+# Phase L: 11 queries; Phase E: 8 (prefetch-aware serializer + has_more without count)
+SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS = 8
+# Observed delta when increasing feed items from 1 to 3 (flat after Phase E prefetch fix)
+SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS = 0
 
 # GET .../execution-feed/?view_mode=general — owner, empty feed
 EXECUTION_FEED_EMPTY_MAX_QUERIES = 9

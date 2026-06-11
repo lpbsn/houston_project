@@ -21,14 +21,28 @@ def format_reporter_display_name(user: User) -> str | None:
 
 
 def reporter_display_name_for_signal(signal: Signal) -> str | None:
-    link = _oldest_source_observation_link(signal)
+    link = oldest_source_observation_link(signal)
     if link is None:
         return None
     user = link.observation.submitted_by_membership.user
     return format_reporter_display_name(user)
 
 
-def _oldest_source_observation_link(signal: Signal):
+def media_count_for_signal(signal: Signal) -> int:
+    link = oldest_source_observation_link(signal)
+    if link is None:
+        return 0
+    return observation_media_count(link.observation)
+
+
+def observation_media_count(observation) -> int:
+    prefetched = getattr(observation, "_prefetched_objects_cache", None)
+    if prefetched is not None and "media_items" in prefetched:
+        return len(prefetched["media_items"])
+    return observation.media_items.count()
+
+
+def oldest_source_observation_link(signal: Signal):
     prefetched = getattr(signal, "source_links_by_observation_chronology", None)
     if prefetched is not None:
         return prefetched[0] if prefetched else None

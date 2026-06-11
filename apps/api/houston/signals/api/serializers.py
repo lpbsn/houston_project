@@ -3,7 +3,12 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.signals.models import Signal
-from houston.signals.reporter_display import reporter_display_name_for_signal
+from houston.signals.reporter_display import (
+    media_count_for_signal,
+    observation_media_count,
+    oldest_source_observation_link,
+    reporter_display_name_for_signal,
+)
 from houston.signals.services import structured_summary_short
 
 
@@ -68,11 +73,6 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         can_set_signal_urgency,
     )
 
-    media_count = 0
-    link = signal.source_observation_links.select_related("observation").first()
-    if link is not None:
-        media_count = link.observation.media_items.count()
-
     return {
         "id": signal.id,
         "title": signal.title,
@@ -100,7 +100,7 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         ),
         "operational_unit_key": signal.operational_unit.key if signal.operational_unit else None,
         "location_text": signal.location_text,
-        "media_count": media_count,
+        "media_count": media_count_for_signal(signal),
         "last_activity_at": signal.last_activity_at,
         "created_at": signal.created_at,
         "reporter_display_name": reporter_display_name_for_signal(signal),
@@ -118,14 +118,7 @@ def serialize_signal_detail(*, signal: Signal, membership) -> dict:
     payload = serialize_signal_feed_item(signal=signal, membership=membership)
     payload["structured_summary"] = signal.structured_summary
 
-    link = (
-        signal.source_observation_links.select_related(
-            "observation",
-            "observation__submitted_by_membership__user",
-        )
-        .order_by("created_at")
-        .first()
-    )
+    link = oldest_source_observation_link(signal)
     if link is None:
         payload["source_context"] = {
             "submitted_at": None,
@@ -139,6 +132,6 @@ def serialize_signal_detail(*, signal: Signal, membership) -> dict:
         payload["source_context"] = {
             "submitted_at": observation.submitted_at,
             "reporter_display_name": display,
-            "media_count": observation.media_items.count(),
+            "media_count": observation_media_count(observation),
         }
     return payload
