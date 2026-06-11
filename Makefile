@@ -40,6 +40,8 @@ up-backend:
 	$(COMPOSE) up -d postgres redis api celery
 	$(COMPOSE) exec -u 0 api chown -R houston:houston /app/apps/api/private_media
 
+# Celery Beat (profile scheduler): checklist horizon, chat purge, upload TTL cleanup.
+# Not started by bootstrap-dev — run explicitly after local or shared-dev bootstrap.
 up-scheduler: up-backend
 	$(COMPOSE) --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
 	$(COMPOSE) --profile scheduler up -d celery-beat
@@ -112,9 +114,12 @@ import-catalog: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py import_business_unit_catalog'
 
 catalog-check:
-	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py shell -c "import sys; from houston.establishments.models import CatalogBusinessUnit, CatalogActivitySubject; bu = CatalogBusinessUnit.objects.count(); n = CatalogActivitySubject.objects.count(); (print(\"catalog-check FAILED: CatalogBusinessUnit=%d (expected 14), CatalogActivitySubject=%d (expected 134)\" % (bu, n)), print(\"Run: make import-catalog\"), sys.exit(1)) if bu != 14 or n != 134 else print(\"catalog-check OK: %d CatalogBusinessUnit, %d CatalogActivitySubject\" % (bu, n))"'
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py verify_catalog_counts'
 
 bootstrap-dev: assert-local-dev-db up-backend migrate import-catalog check catalog-check
+	@echo ""
+	@echo "Optional: run 'make up-scheduler' to start celery-beat (checklist horizon, chat purge, upload TTL)."
+	@echo "Lazy read-path materialization remains available without Beat."
 
 reset-dev-db: assert-local-dev-db
 	@echo "WARNING: reset-dev-db is destructive."
@@ -155,7 +160,9 @@ shared-dev-check:
 	fi
 
 shared-dev-bootstrap: shared-dev-up shared-dev-migrate shared-dev-import-catalog shared-dev-check
-	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py shell -c "import sys; from houston.establishments.models import CatalogBusinessUnit, CatalogActivitySubject; bu = CatalogBusinessUnit.objects.count(); n = CatalogActivitySubject.objects.count(); (print(\"catalog-check FAILED: CatalogBusinessUnit=%d (expected 14), CatalogActivitySubject=%d (expected 134)\" % (bu, n)), print(\"Run: make shared-dev-bootstrap\"), sys.exit(1)) if bu != 14 or n != 134 else print(\"catalog-check OK: %d CatalogBusinessUnit, %d CatalogActivitySubject\" % (bu, n))"'
+	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py verify_catalog_counts'
+	@echo ""
+	@echo "Optional: run 'make up-scheduler' to start celery-beat (checklist horizon, chat purge, upload TTL)."
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac

@@ -25,6 +25,7 @@ Never commit `.env.shared-dev`. Use [`.env.shared-dev.example`](../../.env.share
    ```bash
    make shared-dev-bootstrap
    ```
+   `shared-dev-bootstrap` does **not** start `celery-beat`. For scheduled jobs (checklist horizon materialization, chat message purge, upload TTL cleanup), run `make up-scheduler` after bootstrap. Lazy read-path checklist materialization remains available without Beat.
 6. Frontend (unchanged):
    ```bash
    make web-dev
@@ -35,6 +36,12 @@ Never commit `.env.shared-dev`. Use [`.env.shared-dev.example`](../../.env.share
 ```bash
 make shared-dev-up      # redis + api + celery (remote DB)
 make web-dev
+```
+
+Optional scheduler (same as local dev):
+
+```bash
+make up-scheduler       # celery-beat — not started by shared-dev-up or shared-dev-bootstrap
 ```
 
 After `git pull` with new migrations (coordinate with your teammate — one `migrate` at a time):
