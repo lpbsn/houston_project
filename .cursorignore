@@ -33,10 +33,10 @@ postgres-data/
 redis-data/
 docker-data/
 
-# media/private files
+# media/private files (root-level runtime dirs only; not apps/api/houston/uploads/)
 media/
 private_media/
-uploads/
+/uploads/
 storage/
 
 # mac/system

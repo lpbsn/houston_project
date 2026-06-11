@@ -180,6 +180,13 @@ CELERY_BEAT_SCHEDULE = {
         ),
         "kwargs": {"establishment_id": None},
     },
+    "cleanup-expired-uploads": {
+        "task": "houston.uploads.tasks.cleanup_expired_uploads_task",
+        "schedule": crontab(
+            hour=env_int("HOUSTON_UPLOAD_PURGE_BEAT_HOUR_UTC", 5),
+            minute=env_int("HOUSTON_UPLOAD_PURGE_BEAT_MINUTE_UTC", 0),
+        ),
+    },
 }
 
 # Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.
