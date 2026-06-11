@@ -8,6 +8,8 @@ from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
 from config.asgi import application
 from django.db import close_old_connections
+from houston.accounts.models import UserSession
+from houston.accounts.services import revoke_session
 from houston.chat.services import remove_group_participant
 from houston.chat.tests.conftest import (
     create_establishment,
@@ -16,6 +18,8 @@ from houston.chat.tests.conftest import (
     default_ws_headers,
     get_ws_ticket,
     login,
+    ws_chat_path,
+    ws_ticket_url,
 )
 from houston.chat.tests.test_rest_api import create_group
 
@@ -77,6 +81,39 @@ def test_ws_emits_access_revoked_when_participant_is_removed(api_client):
     assert event["type"] == "conversation.access_revoked"
     assert event["conversation_id"] == conversation_id
     assert event["reason"] == "participant_removed"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ws_auth_rejects_revoked_session_after_ticket_consume(api_client):
+    establishment = create_establishment()
+    user = create_user(username="chat_ws_revoked_session")
+    create_membership(user=user, establishment=establishment)
+    token = login(api_client, user=user)
+
+    ticket_response = api_client.post(
+        ws_ticket_url(establishment.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    ticket = ticket_response.json()["ticket"]
+    session = UserSession.objects.get(user=user)
+    revoke_session(session=session)
+
+    async def run():
+        communicator = WebsocketCommunicator(
+            application,
+            ws_chat_path(establishment.id),
+            headers=default_ws_headers(),
+        )
+        connected, _ = await communicator.connect()
+        assert connected
+        await communicator.send_json_to({"type": "auth", "ticket": ticket})
+        response = await communicator.receive_output()
+        assert response["type"] == "websocket.close"
+        assert response["code"] == 4001
+        await communicator.disconnect()
+
+    async_to_sync(run)()
+    close_old_connections()
 
 
 @pytest.mark.django_db(transaction=True)
