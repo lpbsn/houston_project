@@ -6,12 +6,11 @@ from unittest.mock import patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-from houston.accounts.models import User
 from houston.ai.transcription import TranscriptionResult
-from houston.establishments.models import Establishment, EstablishmentMembership
-from houston.establishments.tests.conftest import TEST_PASSWORD
+from houston.establishments.models import EstablishmentMembership
 from houston.observations.models import Observation, ObservationProcessing
-from houston.organizations.models import Organization
+from houston.testing.auth import login
+from houston.testing.factories import create_establishment, create_membership, create_user
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -21,48 +20,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def api_client():
     return APIClient(enforce_csrf_checks=True)
-
-
-def create_user(*, username: str) -> User:
-    return User.objects.create_user(
-        username=username,
-        email=f"{username}@example.com",
-        password=TEST_PASSWORD,
-        status=User.Status.ACTIVE,
-    )
-
-
-def create_establishment(*, status: str = Establishment.Status.ACTIVE) -> Establishment:
-    organization = Organization.objects.create(
-        name=f"Org {uuid.uuid4().hex[:6]}",
-        status=Organization.Status.ACTIVE,
-    )
-    return Establishment.objects.create(
-        name="Observation Hotel",
-        organization=organization,
-        status=status,
-    )
-
-
-def create_membership(*, user: User, establishment: Establishment) -> EstablishmentMembership:
-    return EstablishmentMembership.objects.create(
-        user=user,
-        establishment=establishment,
-        role=EstablishmentMembership.Role.STAFF,
-        status=EstablishmentMembership.Status.ACTIVE,
-    )
-
-
-def login(api_client: APIClient, *, user: User) -> str:
-    csrf = api_client.get("/api/v1/auth/csrf/").cookies["csrftoken"].value
-    response = api_client.post(
-        "/api/v1/auth/login/",
-        {"identifier": user.email, "password": TEST_PASSWORD},
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf,
-    )
-    assert response.status_code == 200
-    return response.json()["access_token"]
 
 
 def _png_upload() -> SimpleUploadedFile:
@@ -85,9 +42,13 @@ def transcriptions_url(establishment_id) -> str:
 
 
 def test_submit_observation_persists_raw_text_without_api_exposure(api_client):
-    establishment = create_establishment()
+    establishment = create_establishment(name="Observation Hotel")
     staff = create_user(username="obs_staff")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=staff)
 
     submitted_text = "Fuite d'eau visible au niveau du couloir principal."
@@ -116,9 +77,13 @@ def test_submit_observation_persists_raw_text_without_api_exposure(api_client):
 
 
 def test_submit_rejects_short_text(api_client):
-    establishment = create_establishment()
+    establishment = create_establishment(name="Observation Hotel")
     staff = create_user(username="obs_short")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=staff)
 
     response = api_client.post(
@@ -136,9 +101,13 @@ def test_submit_rejects_short_text(api_client):
 
 
 def test_submit_with_temporary_photo_upload(api_client):
-    establishment = create_establishment()
+    establishment = create_establishment(name="Observation Hotel")
     staff = create_user(username="obs_photo")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=staff)
 
     upload_response = api_client.post(
@@ -169,9 +138,13 @@ def test_transcription_returns_editable_text_without_persisting_audio(
     mock_transcribe,
     api_client,
 ):
-    establishment = create_establishment()
+    establishment = create_establishment(name="Observation Hotel")
     staff = create_user(username="obs_audio")
-    create_membership(user=staff, establishment=establishment)
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     token = login(api_client, user=staff)
 
     mock_transcribe.return_value = TranscriptionResult(

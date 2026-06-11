@@ -240,3 +240,34 @@ def test_create_registered_checklist_template_composite_assign_now(
     assert template.task_templates.count() == 1
     assert execution is not None
     assert execution.assigned_to_id == other_staff_membership.id
+
+
+def test_create_registered_checklist_template_rolls_back_on_execution_failure(
+    staff_membership,
+    business_unit,
+    other_staff_membership,
+    monkeypatch,
+):
+    def _fail_execution(**kwargs):
+        raise ChecklistValidationError("Execution creation failed.")
+
+    monkeypatch.setattr(
+        "houston.checklists.services.create_execution_from_template",
+        _fail_execution,
+    )
+
+    with pytest.raises(ChecklistValidationError):
+        create_registered_checklist_template(
+            establishment_id=staff_membership.establishment_id,
+            actor=staff_membership,
+            title="Composite rollback",
+            business_unit_id=business_unit.id,
+            tasks=[{"title": "Step 1"}],
+            assign_now=True,
+            assigned_to_id=other_staff_membership.id,
+        )
+
+    assert not ChecklistTemplate.objects.filter(title="Composite rollback").exists()
+    assert ChecklistTaskTemplate.objects.filter(
+        checklist_template__title="Composite rollback",
+    ).count() == 0

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-card'
+import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import type { RoleEnum } from '@/features/auth/types'
 import { ChecklistTemplateSection } from '@/features/checklists/components/checklist-template-section'

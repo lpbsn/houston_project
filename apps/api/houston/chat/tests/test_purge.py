@@ -7,6 +7,7 @@ import pytest
 from django.utils import timezone
 from houston.chat.models import ChatConversation, ChatMessage
 from houston.chat.purge import purge_chat_messages
+from houston.chat.tasks import purge_chat_messages_task
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.test_rest_api import create_dm
 
@@ -111,3 +112,31 @@ def test_purge_can_be_scoped_to_establishment():
     assert result.deleted_count == 1
     assert not ChatMessage.objects.filter(id=message_a.id).exists()
     assert ChatMessage.objects.filter(id=message_b.id).exists()
+
+
+@pytest.mark.django_db
+def test_purge_chat_messages_task_deletes_old_messages():
+    establishment = create_establishment()
+    sender = create_user(username="chat_purge_task_sender")
+    receiver = create_user(username="chat_purge_task_receiver")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    conversation = ChatConversation.objects.create(
+        establishment=establishment,
+        type=ChatConversation.Type.DM,
+        created_by_membership=sender_membership,
+        dm_membership_a=sender_membership,
+        dm_membership_b=receiver_membership,
+    )
+    old_message = ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="old",
+        client_message_id=uuid.uuid4(),
+    )
+    old_created_at = timezone.now() - timedelta(days=8)
+    ChatMessage.objects.filter(id=old_message.id).update(created_at=old_created_at)
+
+    deleted_count = purge_chat_messages_task.run()
+    assert deleted_count == 1
+    assert not ChatMessage.objects.filter(id=old_message.id).exists()

@@ -15,6 +15,7 @@ from django.utils import timezone
 from houston.accounts import tokens
 from houston.accounts.models import AccessToken, SessionRefreshToken, User, UserSession
 from houston.accounts.selectors import build_bootstrap_payload
+from houston.core.observability import build_refresh_token_reuse_log_context
 from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
@@ -373,14 +374,13 @@ def validate_refresh_token(*, raw_refresh_token: str) -> SessionRefreshToken:
             family_id=refresh_token.family_id,
         )
         logger.warning(
-            (
-                "refresh_token_reuse_detected session_id=%s family_id=%s "
-                "refresh_token_id=%s user_id=%s"
+            "refresh_token_reuse_detected",
+            extra=build_refresh_token_reuse_log_context(
+                session_id=refresh_token.session_id,
+                refresh_family_id=refresh_token.family_id,
+                refresh_record_id=refresh_token.id,
+                user_id=refresh_token.session.user_id,
             ),
-            refresh_token.session_id,
-            refresh_token.family_id,
-            refresh_token.id,
-            refresh_token.session.user_id,
         )
         raise RefreshTokenReuseError
 

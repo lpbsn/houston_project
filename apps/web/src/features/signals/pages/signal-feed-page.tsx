@@ -56,7 +56,9 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
   }
 
   const feedItems =
-    feedQuery.isSuccess && feedQuery.data.items.length > 0 ? feedQuery.data.items : null
+    feedQuery.isSuccess && feedQuery.data.pages.some((page) => page.items.length > 0)
+      ? feedQuery.data.pages.flatMap((page) => page.items)
+      : null
   const { pinnedItems, unpinnedItems } = feedItems
     ? partitionFeedPinnedItems(feedItems)
     : { pinnedItems: [], unpinnedItems: [] }
@@ -121,7 +123,9 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           />
         ) : null}
 
-        {feedQuery.isSuccess && feedQuery.data.items.length === 0 && filtersActive ? (
+        {feedQuery.isSuccess &&
+        feedQuery.data.pages.every((page) => page.items.length === 0) &&
+        filtersActive ? (
           <div className="mx-3 mt-3 space-y-2">
             <TerrainEmptyState
               title="Aucun résultat"
@@ -137,7 +141,9 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           </div>
         ) : null}
 
-        {feedQuery.isSuccess && feedQuery.data.items.length === 0 && !filtersActive ? (
+        {feedQuery.isSuccess &&
+        feedQuery.data.pages.every((page) => page.items.length === 0) &&
+        !filtersActive ? (
           <TerrainEmptyState
             className="mx-3 mt-3"
             title="Aucun signal actif"
@@ -149,7 +155,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           />
         ) : null}
 
-        {feedQuery.isSuccess && feedQuery.data.items.length > 0 ? (
+        {feedQuery.isSuccess && feedItems && feedItems.length > 0 ? (
           <div className="flex flex-col gap-3 pt-5">
             {pinnedItems.length > 0 ? renderItems(pinnedItems, 'pinned') : null}
 
@@ -166,6 +172,19 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
 
             {!groups && unpinnedItems.length > 0 ? (
               <div>{renderItems(unpinnedItems)}</div>
+            ) : null}
+
+            {feedQuery.hasNextPage ? (
+              <div className="flex justify-center py-4">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
+                  onClick={() => void feedQuery.fetchNextPage()}
+                  disabled={feedQuery.isFetchingNextPage}
+                >
+                  {feedQuery.isFetchingNextPage ? 'Chargement…' : 'Charger plus'}
+                </button>
+              </div>
             ) : null}
           </div>
         ) : null}

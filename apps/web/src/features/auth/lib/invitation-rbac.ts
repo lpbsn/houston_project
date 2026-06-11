@@ -19,11 +19,3 @@ export function getAllowedInviteTargetRoles(
       return NO_TARGET_ROLES
   }
 }
-
-export function canSeeInviteMemberButton(role: RoleEnum | null | undefined) {
-  return getAllowedInviteTargetRoles(role).length > 0
-}
-
-export function canAccessTeamInvite(role: RoleEnum | null | undefined) {
-  return getAllowedInviteTargetRoles(role).length > 0
-}

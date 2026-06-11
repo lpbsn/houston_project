@@ -30,3 +30,25 @@ Use relevant commands, not all commands blindly:
 - Backend: `make test`, focused `pytest`, `make lint`, `make migrations-check`, `make check`
 - Frontend: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`
 - Full confidence: `make verify`
+
+## Command execution policy
+
+Backend commands must never be run natively from the host.
+
+Do not run:
+
+cd apps/api && uv run ...
+Backend checks must run through Make targets or inside the Docker api container.
+Use:
+make backend-check
+make backend-test
+make backend-lint
+make backend-migrations-check
+make backend-schema
+or, if needed:
+docker compose exec api uv run ...
+Frontend commands may run natively from apps/web:
+cd apps/web && npm test
+cd apps/web && npm run typecheck
+cd apps/web && npm run build
+Shared-dev commands must be explicit and must never be used for tests, reset, or bootstrap

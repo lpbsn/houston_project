@@ -76,12 +76,19 @@ class PendingOnboardingMembershipSerializer(serializers.Serializer):
     can_continue_onboarding = serializers.BooleanField()
 
 
+class BootstrapPermissionHintsSerializer(serializers.Serializer):
+    chat_available = serializers.BooleanField()
+    can_invite = serializers.BooleanField()
+    can_manage_runtime_config = serializers.BooleanField()
+
+
 class BootstrapResponseSerializer(serializers.Serializer):
     authenticated = serializers.BooleanField()
     user = UserPublicSerializer()
     memberships = MembershipSerializer(many=True)
     active_membership = MembershipSerializer(allow_null=True)
     pending_onboarding_memberships = PendingOnboardingMembershipSerializer(many=True)
+    permission_hints = BootstrapPermissionHintsSerializer()
 
 
 class AuthResponseSerializer(BootstrapResponseSerializer):

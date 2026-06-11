@@ -4,12 +4,15 @@ import { useState } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  canManageRuntimeConfigFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import { OperationalConfigBusinessUnitCard } from '@/features/establishment-config/components/operational-config-business-unit-card'
 import {
   useCreateRuntimeBusinessUnit,
   useOperationalConfigTree,
 } from '@/features/establishment-config/hooks'
-import { canAccessOperationalConfig } from '@/features/establishment-config/lib/operational-config-access'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
 import { BusinessUnitAutocomplete } from '@/features/onboarding/components/business-unit-autocomplete'
 import type { CatalogBusinessUnitSuggestion } from '@/features/onboarding/types'
@@ -194,8 +197,9 @@ function OperationalConfigAccessDenied({
 }
 
 export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps) {
-  const { activeMembership } = useAuth()
+  const { activeMembership, bootstrap } = useAuth()
   const establishmentId = activeMembership?.establishment_id
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
 
   if (!establishmentId) {
     return (
@@ -210,7 +214,7 @@ export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps
     )
   }
 
-  if (!canAccessOperationalConfig(activeMembership.role)) {
+  if (!canManageRuntimeConfigFromBootstrapHints(permissionHints)) {
     return <OperationalConfigAccessDenied onNavigate={onNavigate} />
   }
 

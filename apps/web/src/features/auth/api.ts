@@ -161,6 +161,7 @@ function toBootstrapResponse(payload: AuthResponse): BootstrapResponse {
     memberships: payload.memberships,
     active_membership: payload.active_membership,
     pending_onboarding_memberships: payload.pending_onboarding_memberships ?? [],
+    permission_hints: payload.permission_hints,
   }
 }
 

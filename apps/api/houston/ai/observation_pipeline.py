@@ -17,6 +17,7 @@ from houston.ai.observation_pipeline_diagnostics import (
 )
 from houston.ai.observation_pipeline_provider_schema import openai_strict_response_format
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
+from houston.core.observability import build_observation_pipeline_timing_log_context
 from houston.establishments.taxonomy_snapshot import (
     build_establishment_taxonomy_snapshot,
     establishment_has_active_business_units,
@@ -210,21 +211,32 @@ class OpenAIObservationPipelineProvider:
         )
         self.last_provider_request_id = ""
         self.last_response_format_mode = RESPONSE_FORMAT_JSON_SCHEMA_STRICT
+        self._client: Any | None = None
+
+    def _get_client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ObservationPipelineUnavailableError("OpenAI SDK is not installed.") from exc
+        self._client = OpenAI(
+            api_key=self.api_key,
+            timeout=self.timeout_seconds,
+            max_retries=self.max_retries,
+        )
+        return self._client
 
     def propose(self, *, input_payload: dict[str, Any]) -> ObservationPipelineProviderResponse:
         if not self.api_key:
             raise ObservationPipelineUnavailableError("OpenAI API key is not configured.")
 
         try:
-            from openai import APIConnectionError, APITimeoutError, BadRequestError, OpenAI
+            from openai import APIConnectionError, APITimeoutError, BadRequestError
         except ImportError as exc:
             raise ObservationPipelineUnavailableError("OpenAI SDK is not installed.") from exc
 
-        client = OpenAI(
-            api_key=self.api_key,
-            timeout=self.timeout_seconds,
-            max_retries=self.max_retries,
-        )
+        client = self._get_client()
         messages = [
             {"role": "system", "content": _system_prompt()},
             {"role": "user", "content": json.dumps(input_payload, ensure_ascii=False)},
@@ -319,18 +331,71 @@ def call_observation_pipeline(
         )
 
     provider = provider or get_observation_pipeline_provider()
-    input_payload = build_pipeline_input(observation=observation)
-    started_at = time.monotonic()
+    provider_name = provider.provider
+    provider_model = getattr(provider, "model", "")
 
+    input_started_at = time.monotonic()
+    input_payload = build_pipeline_input(observation=observation)
+    input_duration_ms = _elapsed_ms(input_started_at)
+    taxonomy = input_payload.get("establishment_taxonomy") or {}
+    business_unit_count = len(taxonomy.get("business_units") or [])
+    active_signal_context_count = len(input_payload.get("active_signals_context") or [])
+    input_payload_bytes = len(
+        json.dumps(input_payload, ensure_ascii=False).encode("utf-8"),
+    )
+    logger.info(
+        "observation_pipeline_input_built",
+        extra=build_observation_pipeline_timing_log_context(
+            observation_id=observation.id,
+            establishment_id=observation.establishment_id,
+            event="observation_pipeline_input_built",
+            duration_ms=input_duration_ms,
+            business_unit_count=business_unit_count,
+            active_signal_context_count=active_signal_context_count,
+            input_payload_bytes=input_payload_bytes,
+            provider=provider_name,
+            model=provider_model,
+        ),
+    )
+
+    provider_started_at = time.monotonic()
     try:
         response = provider.propose(input_payload=input_payload)
+        provider_duration_ms = _elapsed_ms(provider_started_at)
+        logger.info(
+            "observation_pipeline_provider_finished",
+            extra=build_observation_pipeline_timing_log_context(
+                observation_id=observation.id,
+                establishment_id=observation.establishment_id,
+                event="observation_pipeline_provider_finished",
+                provider_duration_ms=provider_duration_ms,
+                provider=provider_name,
+                model=response.model or provider_model,
+            ),
+        )
+
+        parse_started_at = time.monotonic()
         output = parse_pipeline_output(response.payload)
+        parse_duration_ms = _elapsed_ms(parse_started_at)
+        logger.info(
+            "observation_pipeline_output_parsed",
+            extra=build_observation_pipeline_timing_log_context(
+                observation_id=observation.id,
+                establishment_id=observation.establishment_id,
+                event="observation_pipeline_output_parsed",
+                parse_duration_ms=parse_duration_ms,
+                candidate_count=len(output.candidates),
+                provider=provider_name,
+                model=response.model or provider_model,
+            ),
+        )
+
         _write_usage_log(
             observation=observation,
-            provider=provider.provider,
-            model=response.model or getattr(provider, "model", ""),
+            provider=provider_name,
+            model=response.model or provider_model,
             status=AIUsageLog.Status.SUCCEEDED,
-            latency_ms=_elapsed_ms(started_at),
+            latency_ms=provider_duration_ms + parse_duration_ms,
             correlation_id=correlation_id,
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
@@ -340,10 +405,10 @@ def call_observation_pipeline(
     except ObservationPipelineTimeoutError as exc:
         _write_usage_log(
             observation=observation,
-            provider=provider.provider,
-            model=getattr(provider, "model", ""),
+            provider=provider_name,
+            model=provider_model,
             status=AIUsageLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
+            latency_ms=_elapsed_ms(provider_started_at),
             error_code=exc.error_code,
             correlation_id=correlation_id,
         )
@@ -351,10 +416,10 @@ def call_observation_pipeline(
     except ObservationPipelineUnavailableError as exc:
         _write_usage_log(
             observation=observation,
-            provider=provider.provider,
-            model=getattr(provider, "model", ""),
+            provider=provider_name,
+            model=provider_model,
             status=AIUsageLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
+            latency_ms=_elapsed_ms(provider_started_at),
             error_code=exc.error_code,
             correlation_id=correlation_id,
         )
@@ -372,10 +437,10 @@ def call_observation_pipeline(
         )
         _write_usage_log(
             observation=observation,
-            provider=provider.provider,
-            model=getattr(provider, "model", ""),
+            provider=provider_name,
+            model=provider_model,
             status=AIUsageLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
+            latency_ms=_elapsed_ms(provider_started_at),
             error_code=exc.error_code,
             error_context=error_context,
             correlation_id=correlation_id,
@@ -395,10 +460,10 @@ def call_observation_pipeline(
         )
         _write_usage_log(
             observation=observation,
-            provider=provider.provider,
-            model=getattr(provider, "model", ""),
+            provider=provider_name,
+            model=provider_model,
             status=AIUsageLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
+            latency_ms=_elapsed_ms(provider_started_at),
             error_code=exc.error_code,
             error_context=error_context,
             correlation_id=correlation_id,

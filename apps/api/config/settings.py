@@ -180,6 +180,19 @@ CELERY_BEAT_SCHEDULE = {
         ),
         "kwargs": {"establishment_id": None},
     },
+    "cleanup-expired-uploads": {
+        "task": "houston.uploads.tasks.cleanup_expired_uploads_task",
+        "schedule": crontab(
+            hour=env_int("HOUSTON_UPLOAD_PURGE_BEAT_HOUR_UTC", 5),
+            minute=env_int("HOUSTON_UPLOAD_PURGE_BEAT_MINUTE_UTC", 0),
+        ),
+    },
+    "recover-stuck-observation-processing": {
+        "task": "houston.signals.tasks.recover_stuck_observation_processing_task",
+        "schedule": crontab(
+            minute=env_int("HOUSTON_OBSERVATION_STUCK_RECOVERY_BEAT_MINUTE_UTC", 15),
+        ),
+    },
 }
 
 # Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.
@@ -360,6 +373,55 @@ HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA = env_bool(
     "HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA",
     default=True,
 )
+
+HOUSTON_LOG_LEVEL = env_str("HOUSTON_LOG_LEVEL", "INFO")
+HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS = env_int(
+    "HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS",
+    HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS * 2,
+)
+HOUSTON_CELERY_OBSERVATION_PIPELINE_SOFT_TIME_LIMIT_SECONDS = env_int(
+    "HOUSTON_CELERY_OBSERVATION_PIPELINE_SOFT_TIME_LIMIT_SECONDS",
+    HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS + 60,
+)
+HOUSTON_CELERY_OBSERVATION_PIPELINE_TIME_LIMIT_SECONDS = env_int(
+    "HOUSTON_CELERY_OBSERVATION_PIPELINE_TIME_LIMIT_SECONDS",
+    HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS + 120,
+)
+HOUSTON_CELERY_BEAT_TASK_SOFT_TIME_LIMIT_SECONDS = env_int(
+    "HOUSTON_CELERY_BEAT_TASK_SOFT_TIME_LIMIT_SECONDS",
+    3300,
+)
+HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS = env_int(
+    "HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS",
+    3600,
+)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "houston_structured": {
+            "()": "houston.core.logging_support.HoustonStructuredFormatter",
+            "format": "%(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "houston_structured",
+        },
+    },
+    "loggers": {
+        "houston": {
+            "level": HOUSTON_LOG_LEVEL,
+            "propagate": True,
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": HOUSTON_LOG_LEVEL,
+    },
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {

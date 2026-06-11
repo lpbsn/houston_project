@@ -19,7 +19,7 @@ from houston.signals.tests.conftest import (
 )
 from houston.testing.factories import build_membership
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.slow]
 
 
 def test_observation_with_lighting_issue_and_bar_stock_shortage_splits_into_two_signals():
@@ -33,7 +33,7 @@ def test_observation_with_lighting_issue_and_bar_stock_shortage_splits_into_two_
     outcome = apply_pipeline_output(
         observation=observation,
         output=golden_two_candidate_pipeline_output(taxonomy=taxonomy),
-    )
+    ).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 2
@@ -96,7 +96,7 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
             ),
         ],
     )
-    outcome = apply_pipeline_output(observation=observation, output=output)
+    outcome = apply_pipeline_output(observation=observation, output=output).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
@@ -144,7 +144,7 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
             ),
         ],
     )
-    outcome = apply_pipeline_output(observation=observation, output=output)
+    outcome = apply_pipeline_output(observation=observation, output=output).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
@@ -187,7 +187,7 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
             ),
         ],
     )
-    outcome = apply_pipeline_output(observation=observation, output=output)
+    outcome = apply_pipeline_output(observation=observation, output=output).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.count() == 1

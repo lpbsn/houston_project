@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from houston.accounts.models import User, UserSession
+from houston.accounts.permission_hints import build_bootstrap_permission_hints
 from houston.establishments.membership_scope import (
     membership_scope_prefetch,
     membership_scope_rows_for_membership,
@@ -50,6 +51,7 @@ def build_bootstrap_payload(
             None if active_membership is None else _serialize_membership(active_membership)
         ),
         "pending_onboarding_memberships": pending_onboarding_memberships,
+        "permission_hints": build_bootstrap_permission_hints(active_membership),
     }
 
 

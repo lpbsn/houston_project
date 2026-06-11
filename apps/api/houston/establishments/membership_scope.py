@@ -13,6 +13,7 @@ from houston.establishments.models import (
     EstablishmentMembership,
     MembershipScope,
 )
+from houston.establishments.role_constants import _ADMIN_ROLES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -106,14 +107,6 @@ def membership_scope_covers_business_unit(
         if bu_id == business_unit.id:
             return True
     return False
-
-
-_ADMIN_ROLES = frozenset(
-    {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }
-)
 
 
 def membership_covers_business_unit_including_admins(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from houston.accounts.models import User
 from houston.checklists.constants import CHECKLIST_BADGE_PROCESS, CHECKLIST_BADGE_TODO
 from houston.checklists.models import ChecklistTemplate
 from houston.checklists.permissions import (
@@ -22,13 +23,78 @@ from houston.checklists.permissions import (
     registered_template_visible_to_membership,
 )
 from houston.checklists.tests.conftest import stable_assignment_times
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import (
     create_business_unit,
     create_membership,
 )
+from houston.organizations.models import Organization
+from houston.testing.factories import build_membership
 
 pytestmark = pytest.mark.django_db
+
+
+def _assert_checklist_access_denied(membership):
+    assert not can_access_checklist_management(membership)
+    assert not can_create_registered_template(membership)
+    assert not can_view_registered_catalogue(membership)
+
+
+def test_deactivated_membership_denies_checklist_permissions():
+    membership = build_membership(membership_status=EstablishmentMembership.Status.DEACTIVATED)
+
+    _assert_checklist_access_denied(membership)
+
+
+@pytest.mark.parametrize(
+    "establishment_status",
+    [
+        Establishment.Status.DRAFT,
+        Establishment.Status.DEACTIVATED,
+    ],
+)
+def test_non_active_establishment_denies_checklist_permissions(establishment_status):
+    membership = build_membership(establishment_status=establishment_status)
+
+    _assert_checklist_access_denied(membership)
+
+
+@pytest.mark.parametrize(
+    "organization_status",
+    [
+        Organization.Status.SUSPENDED,
+        Organization.Status.ARCHIVED,
+    ],
+)
+def test_non_active_organization_denies_checklist_permissions(organization_status):
+    membership = build_membership(organization_status=organization_status)
+
+    _assert_checklist_access_denied(membership)
+
+
+@pytest.mark.parametrize(
+    "user_status",
+    [
+        User.Status.PENDING,
+        User.Status.SUSPENDED,
+        User.Status.ANONYMIZED,
+    ],
+)
+def test_non_active_user_denies_checklist_permissions(user_status):
+    membership = build_membership(user_status=user_status)
+
+    _assert_checklist_access_denied(membership)
+
+
+def test_deactivated_membership_denies_object_scoped_checklist_permissions(
+    registered_template,
+    assignment_execution,
+):
+    membership = build_membership(membership_status=EstablishmentMembership.Status.DEACTIVATED)
+
+    assert not registered_template_visible_to_membership(membership, registered_template)
+    assert not can_execute_checklist_tasks(membership, assignment_execution)
+    assert not checklist_execution_visible_to_membership(membership, assignment_execution)
 
 
 def test_all_active_roles_can_access_checklist_management(

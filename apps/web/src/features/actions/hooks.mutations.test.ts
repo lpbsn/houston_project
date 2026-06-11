@@ -6,9 +6,7 @@ import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestQueryClient } from '@/test-utils'
-import { signalsQueryKeys } from '@/features/signals/api'
 
-import { actionsQueryKeys } from './api'
 import { useAcceptActionMutation } from './hooks'
 
 const acceptAction = vi.fn(async () => ({ id: 'action-1', status: 'in_progress' }))
@@ -42,7 +40,13 @@ describe('useAcceptActionMutation', () => {
     })
 
     expect(acceptAction).toHaveBeenCalledWith('est-1', 'action-1')
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: actionsQueryKeys.all })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: signalsQueryKeys.all })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['actions', 'execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['actions', 'detail', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['actions'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals'] })
   })
 })

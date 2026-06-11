@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { signalsQueryKeys } from '@/features/signals/api'
+import { invalidateActionMutationSurfaces } from '@/lib/query-invalidation'
 
 import {
   acceptAction,
@@ -19,9 +19,11 @@ import {
 } from './api'
 import type { ActionCreateRequest, ExecutionViewMode } from './types'
 
-function invalidateActionSurfaces(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all })
-  void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+function invalidateActionSurfaces(
+  queryClient: ReturnType<typeof useQueryClient>,
+  establishmentId: string,
+) {
+  invalidateActionMutationSurfaces(queryClient, establishmentId)
 }
 
 export function useExecutionFeedQuery(
@@ -68,7 +70,9 @@ export function useCreateActionMutation(establishmentId: string | null) {
       return createAction(establishmentId, body)
     },
     onSuccess: () => {
-      invalidateActionSurfaces(queryClient)
+      if (establishmentId) {
+        invalidateActionSurfaces(queryClient, establishmentId)
+      }
     },
   })
 }
@@ -90,7 +94,9 @@ function useActionCommandMutation(
       return command(establishmentId, actionId)
     },
     onSuccess: () => {
-      invalidateActionSurfaces(queryClient)
+      if (establishmentId) {
+        invalidateActionSurfaces(queryClient, establishmentId)
+      }
     },
   })
 }
@@ -125,7 +131,9 @@ export function useReassignActionMutation(establishmentId: string | null, action
       return reassignAction(establishmentId, actionId, assignedTo)
     },
     onSuccess: () => {
-      invalidateActionSurfaces(queryClient)
+      if (establishmentId) {
+        invalidateActionSurfaces(queryClient, establishmentId)
+      }
     },
   })
 }
@@ -143,7 +151,9 @@ export function useUpdateActionDueAtMutation(
       return updateActionDueAt(establishmentId, actionId, dueAt)
     },
     onSuccess: () => {
-      invalidateActionSurfaces(queryClient)
+      if (establishmentId) {
+        invalidateActionSurfaces(queryClient, establishmentId)
+      }
     },
   })
 }

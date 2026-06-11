@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { MembershipInviteCard } from '@/features/auth/components/membership-invite-card'
 import {
-  canAccessTeamInvite,
-  getAllowedInviteTargetRoles,
-} from '@/features/auth/lib/invitation-rbac'
+  canInviteFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
+import { getAllowedInviteTargetRoles } from '@/features/auth/lib/invitation-rbac'
 import type { RoleEnum } from '@/features/auth/types'
 
 const INVITATION_ROLES: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
@@ -20,10 +21,11 @@ function toRoleEnum(role: string | null | undefined): RoleEnum | null {
 }
 
 export function TeamInvitePage() {
-  const { activeMembership } = useAuth()
+  const { activeMembership, bootstrap } = useAuth()
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
   const role = toRoleEnum(activeMembership?.role)
   const allowedTargetRoles = getAllowedInviteTargetRoles(role)
-  const canAccess = Boolean(activeMembership) && canAccessTeamInvite(role)
+  const canAccess = Boolean(activeMembership) && canInviteFromBootstrapHints(permissionHints)
 
   if (!canAccess || !activeMembership) {
     return (

@@ -1,4 +1,4 @@
-import { TerrainCard } from '@/components/layout/terrain-card'
+import { TerrainCard } from '@/components/ui/terrain'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 

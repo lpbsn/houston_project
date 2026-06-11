@@ -29,8 +29,11 @@ def build_execution_feed_page(
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
     page_size: int,
-) -> tuple[list[ExecutionFeedPageItem], int, bool]:
-    ensure_visible_executions_materialized(membership=membership)
+) -> tuple[list[ExecutionFeedPageItem], bool]:
+    ensure_visible_executions_materialized(
+        membership=membership,
+        view_mode=view_mode,
+    )
 
     action_qs = execution_feed_queryset(membership=membership, view_mode=view_mode)
     checklist_qs = checklist_execution_feed_queryset(
@@ -38,31 +41,45 @@ def build_execution_feed_page(
         view_mode=view_mode,
     )
 
-    action_count = action_qs.count()
-    checklist_count = checklist_qs.count()
-    total_count = action_count + checklist_count
+    checklist_candidates = list(apply_checklist_feed_sorting(checklist_qs)[: page_size + 1])
+    checklist_count = len(checklist_candidates)
 
     if checklist_count == 0:
-        actions = list(
-            apply_execution_feed_sorting(action_qs, membership=membership)[:page_size],
+        action_candidates = list(
+            apply_execution_feed_sorting(action_qs, membership=membership)[: page_size + 1],
         )
+        has_more = len(action_candidates) > page_size
         return (
-            [ExecutionFeedPageItem(item_type="action", action=action) for action in actions],
-            total_count,
-            total_count > page_size,
+            [
+                ExecutionFeedPageItem(item_type="action", action=action)
+                for action in action_candidates[:page_size]
+            ],
+            has_more,
         )
 
-    checklists = list(apply_checklist_feed_sorting(checklist_qs)[:page_size])
-    action_slots = max(0, page_size - len(checklists))
-    actions = (
-        list(apply_execution_feed_sorting(action_qs, membership=membership)[:action_slots])
-        if action_slots
-        else []
+    if checklist_count > page_size:
+        has_more = checklist_count > page_size or action_qs.exists()
+        return (
+            [
+                ExecutionFeedPageItem(item_type="checklist", checklist=checklist)
+                for checklist in checklist_candidates[:page_size]
+            ],
+            has_more,
+        )
+
+    checklists = checklist_candidates
+    action_slots = page_size - len(checklists)
+    action_candidates = list(
+        apply_execution_feed_sorting(action_qs, membership=membership)[: action_slots + 1],
     )
+    has_more = len(action_candidates) > action_slots
 
     items: list[ExecutionFeedPageItem] = [
         ExecutionFeedPageItem(item_type="checklist", checklist=checklist)
         for checklist in checklists
     ]
-    items.extend(ExecutionFeedPageItem(item_type="action", action=action) for action in actions)
-    return items, total_count, total_count > page_size
+    items.extend(
+        ExecutionFeedPageItem(item_type="action", action=action)
+        for action in action_candidates[:action_slots]
+    )
+    return items, has_more

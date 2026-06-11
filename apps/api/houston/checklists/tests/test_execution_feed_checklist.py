@@ -401,7 +401,7 @@ def test_execution_feed_three_assignments_tuesday_scenario(api_client):
         )
         assert len(feed_qs_ids) == 2
 
-        merged_items, total_count, _has_more = build_execution_feed_page(
+        merged_items, _has_more = build_execution_feed_page(
             membership=staff,
             view_mode="personal",
             page_size=25,
@@ -412,7 +412,7 @@ def test_execution_feed_three_assignments_tuesday_scenario(api_client):
             if item.item_type == "checklist" and item.checklist is not None
         }
         assert merged_checklist_ids == feed_qs_ids
-        assert total_count == 2
+        assert len(merged_checklist_ids) == 2
 
         token = login(api_client, user=staff.user)
         response = api_client.get(
@@ -514,3 +514,88 @@ def test_execution_feed_keeps_checklists_when_actions_fill_page(api_client):
     assert len(action_entries) == 23
     assert len(body["items"]) == 25
     assert body["has_more"] is True
+
+
+def test_execution_feed_has_more_when_checklists_fill_page_and_actions_exist(api_client):
+    """Page filled by checklists still reports has_more when actions remain (API-03)."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
+    staff = _scoped_staff_on_establishment(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
+
+    page_size = 2
+    for index in range(page_size):
+        now = timezone.now()
+        create_checklist_assignment(
+            template=template,
+            actor=owner,
+            assigned_to_id=staff.id,
+            start_date=now.date(),
+            end_date=now.date(),
+            start_at=stable_assignment_times(duration_hours=2)[0],
+            end_at=stable_assignment_times(duration_hours=2)[1],
+        )
+
+    create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Overflow action",
+        instruction="Instruction text",
+        assigned_to_id=staff.id,
+        due_at=timezone.now(),
+        responsible_business_unit_id=business_unit.id,
+    )
+
+    token = login(api_client, user=staff.user)
+    response = api_client.get(
+        execution_feed_url(staff.establishment_id)
+        + _feed_query("personal")
+        + f"&page_size={page_size}",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    checklist_entries = [item for item in body["items"] if item["item_type"] == "checklist"]
+    assert len(checklist_entries) == page_size
+    assert body["has_more"] is True
+
+
+def test_execution_feed_checklist_query_count_baseline(api_client):
+    """Phase G: personal feed with checklist; no dual count() (DB-01)."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
+    staff = _scoped_staff_on_establishment(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
+    now = timezone.now()
+    create_checklist_assignment(
+        template=template,
+        actor=owner,
+        assigned_to_id=staff.id,
+        start_date=now.date(),
+        end_date=now.date(),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
+    )
+
+    from houston.testing.query_baseline import (
+        EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    token = login(api_client, user=staff.user)
+    url = execution_feed_url(staff.establishment_id) + _feed_query("personal")
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    checklist_items = [
+        item for item in response.json()["items"] if item["item_type"] == "checklist"
+    ]
+    assert len(checklist_items) == 1
+    assert_query_count_at_most(
+        context,
+        max_queries=EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES,
+        label="execution_feed_personal_one_checklist",
+    )

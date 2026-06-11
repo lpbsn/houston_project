@@ -1,7 +1,7 @@
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainSectionLabel } from '@/components/layout/terrain-card'
+import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { toRoleEnum } from '@/features/checklists/lib/checklist-role'
 import { cn } from '@/lib/utils'

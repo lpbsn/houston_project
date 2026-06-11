@@ -133,7 +133,7 @@ class ExecutionFeedView(EstablishmentScopedActionMixin, APIView):
             )
 
         page_size = _parse_page_size(request.query_params.get("page_size"))
-        feed_items, total_count, has_more = build_execution_feed_page(
+        feed_items, has_more = build_execution_feed_page(
             membership=membership,
             view_mode=view_mode,  # type: ignore[arg-type]
             page_size=page_size,

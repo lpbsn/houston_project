@@ -26,7 +26,8 @@ from houston.chat.selectors import (
     get_latest_message,
 )
 from houston.establishments.models import Establishment, EstablishmentMembership
-from houston.establishments.permissions import _ADMIN_ROLES, _is_valid_membership
+from houston.establishments.permissions import _is_valid_membership
+from houston.establishments.role_constants import _ADMIN_ROLES
 
 from .constants import CHAT_GROUP_TITLE_MAX_LENGTH, CHAT_MESSAGE_BODY_MAX_LENGTH
 from .ws_notify import (

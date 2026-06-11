@@ -3,11 +3,12 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from django.db.models import Case, IntegerField, Prefetch, QuerySet, Value, When
+from django.db.models import Prefetch, QuerySet
 
 from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
+from houston.signals.feed_cursor import feed_sort_case_expressions
 from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
 from houston.signals.models import Signal, SignalSourceObservation
 
@@ -55,23 +56,7 @@ def feed_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[S
 
 
 def apply_feed_sorting(queryset: QuerySet[Signal]) -> QuerySet[Signal]:
-    status_group_rank = Case(
-        When(status__in=[Signal.Status.OPEN, Signal.Status.IN_PROGRESS], then=Value(0)),
-        When(status=Signal.Status.RESOLVED, then=Value(1)),
-        default=Value(2),
-        output_field=IntegerField(),
-    )
-    urgency_order = Case(
-        When(urgency=Signal.Urgency.HIGH, then=Value(0)),
-        default=Value(1),
-        output_field=IntegerField(),
-    )
-    status_rank = Case(
-        When(status=Signal.Status.OPEN, then=Value(0)),
-        When(status=Signal.Status.IN_PROGRESS, then=Value(1)),
-        default=Value(2),
-        output_field=IntegerField(),
-    )
+    status_group_rank, urgency_order, status_rank = feed_sort_case_expressions()
     return queryset.order_by(
         status_group_rank,
         "-is_pinned",
@@ -79,6 +64,7 @@ def apply_feed_sorting(queryset: QuerySet[Signal]) -> QuerySet[Signal]:
         status_rank,
         "-last_activity_at",
         "-created_at",
+        "-id",
     )
 
 

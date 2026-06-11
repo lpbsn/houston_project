@@ -699,3 +699,112 @@ def test_director_can_re_enable_chat_after_disable(api_client):
 
     assert response.status_code == 200
     assert response.json()["chat_enabled"] is True
+
+
+def _chat_conversations_query_count(
+    api_client,
+    *,
+    conversation_count: int,
+) -> int:
+    """Build N DMs (one message each) and return query count for GET conversations/."""
+    import uuid
+
+    from houston.chat.models import ChatConversation, ChatMessage
+    from houston.testing.query_baseline import capture_queries
+
+    establishment = create_establishment()
+    user = create_user(username=f"chat_baseline_user_{conversation_count}")
+    membership = create_membership(user=user, establishment=establishment)
+    token = login(api_client, user=user)
+    for index in range(conversation_count):
+        peer = create_user(username=f"chat_baseline_peer_{conversation_count}_{index}")
+        peer_membership = create_membership(user=peer, establishment=establishment)
+        dm_response = create_dm(
+            api_client,
+            token=token,
+            establishment_id=establishment.id,
+            target_membership_id=peer_membership.id,
+        )
+        conversation = ChatConversation.objects.get(
+            id=dm_response.json()["conversation"]["id"],
+        )
+        ChatMessage.objects.create(
+            conversation=conversation,
+            author_membership=membership,
+            body="baseline message",
+            client_message_id=uuid.uuid4(),
+        )
+
+    with capture_queries() as context:
+        response = api_client.get(
+            chat_url(establishment.id, "conversations/"),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == conversation_count
+    return len(context.captured_queries)
+
+
+def test_chat_conversations_list_query_count_baseline(api_client):
+    """Phase L baseline: conversation list with latest-message lookup per row (DB-03)."""
+    from houston.testing.query_baseline import (
+        CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS,
+    )
+
+    query_count = _chat_conversations_query_count(api_client, conversation_count=3)
+    assert query_count <= CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS
+
+
+def test_chat_conversations_list_query_count_grows_with_list_size(api_client):
+    """Flat query growth after Phase S1 latest-message batching."""
+    from houston.testing.query_baseline import CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE
+
+    one = _chat_conversations_query_count(api_client, conversation_count=1)
+    three = _chat_conversations_query_count(api_client, conversation_count=3)
+    assert three - one <= CHAT_CONVERSATIONS_MAX_QUERY_DELTA_ONE_TO_THREE
+
+
+def test_chat_messages_list_query_count_baseline(api_client):
+    """Phase L baseline: cursor-paginated messages list for a single conversation."""
+    import uuid
+
+    from houston.chat.models import ChatConversation, ChatMessage
+    from houston.testing.query_baseline import (
+        CHAT_MESSAGES_LIST_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    establishment = create_establishment()
+    sender = create_user(username="chat_messages_baseline_sender")
+    receiver = create_user(username="chat_messages_baseline_receiver")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    token = login(api_client, user=sender)
+
+    dm_response = create_dm(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        target_membership_id=receiver_membership.id,
+    )
+    conversation_id = dm_response.json()["conversation"]["id"]
+    conversation = ChatConversation.objects.get(id=conversation_id)
+    ChatMessage.objects.create(
+        conversation=conversation,
+        author_membership=sender_membership,
+        body="baseline list message",
+        client_message_id=uuid.uuid4(),
+    )
+
+    messages_url = chat_url(establishment.id, f"conversations/{conversation_id}/messages/")
+    with capture_queries() as context:
+        response = api_client.get(messages_url, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 1
+    assert_query_count_at_most(
+        context,
+        max_queries=CHAT_MESSAGES_LIST_MAX_QUERIES,
+        label="chat_messages_list_one_message",
+    )

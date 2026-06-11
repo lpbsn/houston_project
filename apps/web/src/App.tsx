@@ -1,8 +1,26 @@
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { useAppRoute } from '@/app/app-routes'
+import {
+  LazyActionCreatePage,
+  LazyActionDetailPage,
+  LazyChatConversationPage,
+  LazyChatPage,
+  LazyChatRealtimeProvider,
+  LazyChecklistExecutionDetailPage,
+  LazyChecklistHubPage,
+  LazyChecklistQuickCreatePage,
+  LazyChecklistTemplateCreatePage,
+  LazyChecklistTemplateDetailPage,
+  LazyExecutionFeedPage,
+  LazyProfilePage,
+  LazyReportPage,
+  LazySignalDetailPage,
+  LazySignalFeedPage,
+} from '@/app/lazy-terrain-pages'
 import { NotFoundPage } from '@/app/not-found-page'
+import { RoutePageLoading } from '@/app/route-page-loading'
 import { useAuth } from '@/app/auth-provider'
 import {
   getTerrainContentKey,
@@ -18,7 +36,6 @@ import { bootstrapQueryKey } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
-import { ProfilePage } from '@/features/auth/pages/profile-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import {
@@ -35,24 +52,14 @@ import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishm
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
-import { ChatPage } from '@/features/chat/pages/chat-page'
-import { ChatConversationPage } from '@/features/chat/pages/chat-conversation-page'
-import { ChatRealtimeProvider } from '@/features/chat/components/chat-realtime-provider'
-import { useChatConversationsQuery, useChatStatusQuery } from '@/features/chat/hooks'
-import { ActionCreatePage } from '@/features/actions/pages/action-create-page'
-import { ActionDetailPage } from '@/features/actions/pages/action-detail-page'
-import { ExecutionFeedPage } from '@/features/execution/pages/execution-feed-page'
-import { SignalDetailPage } from '@/features/signals/pages/signal-detail-page'
-import { SignalFeedPage } from '@/features/signals/pages/signal-feed-page'
+import { useChatConversationsQuery } from '@/features/chat/hooks'
+import {
+  getBootstrapPermissionHints,
+  isChatNavAvailable,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
-import { ChecklistHubPage } from '@/features/checklists/pages/checklist-hub-page'
-import { ChecklistExecutionDetailPage } from '@/features/checklists/pages/checklist-execution-detail-page'
-import { ChecklistQuickCreatePage } from '@/features/checklists/pages/checklist-quick-create-page'
-import { ChecklistTemplateCreatePage } from '@/features/checklists/pages/checklist-template-create-page'
-import { ChecklistTemplateDetailPage } from '@/features/checklists/pages/checklist-template-detail-page'
-import { ReportPage } from '@/features/observations/pages/report-page'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -170,13 +177,13 @@ function App() {
   }, [auth, navigate])
 
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const chatStatusQuery = useChatStatusQuery(auth.hasOperationalAccess ? establishmentId : null)
-  const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
-    enabled: Boolean(chatStatusQuery.data?.can_access),
-  })
+  const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
   const showChatNav = Boolean(
-    chatStatusQuery.data?.can_access && chatStatusQuery.data.chat_enabled,
+    auth.hasOperationalAccess && isChatNavAvailable(permissionHints),
   )
+  const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
+    enabled: showChatNav,
+  })
   const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
 
   const routeContent = useMemo(() => {
@@ -227,41 +234,41 @@ function App() {
     }
 
     if (route.kind === 'signal-detail') {
-      return <SignalDetailPage signalId={route.signalId} onNavigate={navigate} />
+      return <LazySignalDetailPage signalId={route.signalId} onNavigate={navigate} />
     }
 
     if (route.kind === 'signal-action-create') {
       return (
-        <ActionCreatePage mode="linked" signalId={route.signalId} onNavigate={navigate} />
+        <LazyActionCreatePage mode="linked" signalId={route.signalId} onNavigate={navigate} />
       )
     }
 
     if (route.kind === 'action-create') {
-      return <ActionCreatePage mode="free" onNavigate={navigate} />
+      return <LazyActionCreatePage mode="free" onNavigate={navigate} />
     }
 
     if (route.kind === 'action-detail') {
-      return <ActionDetailPage actionId={route.actionId} onNavigate={navigate} />
+      return <LazyActionDetailPage actionId={route.actionId} onNavigate={navigate} />
     }
 
     if (route.kind === 'checklist-template-create') {
-      return <ChecklistTemplateCreatePage />
+      return <LazyChecklistTemplateCreatePage />
     }
 
     if (route.kind === 'checklist-template-detail') {
-      return <ChecklistTemplateDetailPage templateId={route.templateId} />
+      return <LazyChecklistTemplateDetailPage templateId={route.templateId} />
     }
 
     if (route.kind === 'checklist-execution-create') {
-      return <ChecklistQuickCreatePage />
+      return <LazyChecklistQuickCreatePage />
     }
 
     if (route.kind === 'checklist-execution-detail') {
-      return <ChecklistExecutionDetailPage executionId={route.executionId} />
+      return <LazyChecklistExecutionDetailPage executionId={route.executionId} />
     }
 
     if (route.kind === 'chat-conversation-detail') {
-      return <ChatConversationPage conversationId={route.conversationId} />
+      return <LazyChatConversationPage conversationId={route.conversationId} />
     }
 
     if (route.path === '/login') {
@@ -277,16 +284,16 @@ function App() {
     }
 
     if (route.path === '/app/report' || route.path === '/reporting') {
-      return <ReportPage onNavigate={navigate} />
+      return <LazyReportPage onNavigate={navigate} />
     }
 
     if (route.path === '/signals') {
-      return <SignalFeedPage onOpenSignal={(id) => navigate(`/signals/${id}`)} />
+      return <LazySignalFeedPage onOpenSignal={(id) => navigate(`/signals/${id}`)} />
     }
 
     if (route.path === '/execution') {
       return (
-        <ExecutionFeedPage
+        <LazyExecutionFeedPage
           onOpenAction={(id) => navigate(`/actions/${id}`)}
           onOpenChecklist={(id) => navigate(`/checklists/executions/${id}`)}
           onNavigate={navigate}
@@ -296,13 +303,13 @@ function App() {
 
     if (route.path === '/chat') {
       return (
-        <ChatPage onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)} />
+        <LazyChatPage onOpenConversation={(conversationId) => navigate(`/chat/${conversationId}`)} />
       )
     }
 
     if (route.path === '/profile') {
       return (
-        <ProfilePage
+        <LazyProfilePage
           onNavigate={navigate}
           onSignOut={handleSignOut}
           isLoggingOut={auth.isLoggingOut}
@@ -315,7 +322,7 @@ function App() {
     }
 
     if (route.path === '/checklists') {
-      return <ChecklistHubPage onNavigate={navigate} />
+      return <LazyChecklistHubPage onNavigate={navigate} />
     }
 
     if (route.path === '/onboarding') {
@@ -485,20 +492,22 @@ function App() {
     }
 
     return (
-      <ChatRealtimeProvider
-        establishmentId={establishmentId}
-        activeConversationId={activeChatConversationId}
-        onAccessRevoked={(event) => {
-          if (
-            route.kind === 'chat-conversation-detail' &&
-            event.conversation_id === route.conversationId
-          ) {
-            navigate('/chat')
-          }
-        }}
-      >
-        {terrainShell}
-      </ChatRealtimeProvider>
+      <Suspense fallback={<RoutePageLoading />}>
+        <LazyChatRealtimeProvider
+          establishmentId={establishmentId}
+          activeConversationId={activeChatConversationId}
+          onAccessRevoked={(event) => {
+            if (
+              route.kind === 'chat-conversation-detail' &&
+              event.conversation_id === route.conversationId
+            ) {
+              navigate('/chat')
+            }
+          }}
+        >
+          {terrainShell}
+        </LazyChatRealtimeProvider>
+      </Suspense>
     )
   }
 
@@ -516,7 +525,7 @@ function App() {
           <TerrainTopbar variant="hub" pageTitle="Page introuvable" showBottomBorder={true} />
         }
       >
-        {routeContent}
+        <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </TerrainShell>,
     )
   }
@@ -553,7 +562,7 @@ function App() {
           />
         }
       >
-        {routeContent}
+        <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </TerrainShell>,
     )
   }
@@ -566,7 +575,7 @@ function App() {
         description={routeCopy.description}
         actions={routeCopy.actions}
       >
-        {routeContent}
+        <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </AppShell>
     </motion.main>
   )

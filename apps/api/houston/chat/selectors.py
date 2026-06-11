@@ -117,12 +117,22 @@ def list_conversations_for_membership(
 
 
 def get_latest_message(conversation_id: uuid.UUID) -> ChatMessage | None:
-    return (
-        ChatMessage.objects.filter(conversation_id=conversation_id)
+    return get_latest_messages_by_conversation_ids([conversation_id]).get(conversation_id)
+
+
+def get_latest_messages_by_conversation_ids(
+    conversation_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, ChatMessage]:
+    if not conversation_ids:
+        return {}
+
+    latest_messages = (
+        ChatMessage.objects.filter(conversation_id__in=conversation_ids)
         .select_related("author_membership", "author_membership__user")
-        .order_by("-created_at", "-id")
-        .first()
+        .order_by("conversation_id", "-created_at", "-id")
+        .distinct("conversation_id")
     )
+    return {message.conversation_id: message for message in latest_messages}
 
 
 def list_messages_for_conversation(
