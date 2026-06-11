@@ -41,6 +41,8 @@ describe('useResolveSignalMutation', () => {
     })
 
     expect(resolveSignal).toHaveBeenCalledWith('est-1', 'signal-1')
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: signalsQueryKeys.all })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: signalsQueryKeys.all })
   })
 })

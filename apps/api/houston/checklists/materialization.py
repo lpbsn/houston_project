@@ -4,6 +4,7 @@ import uuid
 from datetime import date, datetime, timedelta
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from houston.checklists.constants import (
@@ -26,6 +27,7 @@ from houston.checklists.models import (
     ChecklistTaskExecution,
     ChecklistTemplate,
 )
+from houston.checklists.permissions import build_checklist_visibility_scope_q
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.timezone_utils import (
     establishment_local_date,
@@ -265,9 +267,37 @@ def materialize_assignments_horizon(
     return count
 
 
+def _assignment_materialization_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: str,
+) -> Q:
+    if view_mode == "personal":
+        return Q(
+            assigned_to_id=membership.id,
+            establishment_id=membership.establishment_id,
+        )
+
+    if membership.role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return Q(establishment_id=membership.establishment_id)
+
+    personal_q = Q(assigned_to_id=membership.id)
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return personal_q & Q(establishment_id=membership.establishment_id)
+
+    scope_q = build_checklist_visibility_scope_q(membership=membership)
+    if scope_q is None:
+        return personal_q & Q(establishment_id=membership.establishment_id)
+    return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
+
+
 def ensure_visible_executions_materialized(
     *,
     membership: EstablishmentMembership,
+    view_mode: str = "personal",
     horizon_days: int = MATERIALIZATION_HORIZON_DAYS,
 ) -> int:
     now = timezone.now()
@@ -275,8 +305,12 @@ def ensure_visible_executions_materialized(
         establishment=membership.establishment,
         at=now,
     )
+    visibility_q = _assignment_materialization_visibility_q(
+        membership=membership,
+        view_mode=view_mode,
+    )
     assignments = ChecklistAssignment.objects.filter(
-        establishment_id=membership.establishment_id,
+        visibility_q,
         status=ASSIGNMENT_STATUS_ACTIVE,
     )
     count = 0

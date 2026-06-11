@@ -2,8 +2,21 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from houston.checklists.constants import TREATED_TASK_STATUSES
 from houston.checklists.models import ChecklistExecution
 from houston.checklists.selectors import checklist_execution_overdue
+
+
+def _progress_counts(execution: ChecklistExecution) -> tuple[int, int]:
+    treated_count = getattr(execution, "progress_treated_count", None)
+    total_count = getattr(execution, "progress_total_count", None)
+    if treated_count is not None and total_count is not None:
+        return treated_count, total_count
+
+    tasks = list(execution.task_executions.all())
+    total_count = len(tasks)
+    treated_count = sum(1 for task in tasks if task.status in TREATED_TASK_STATUSES)
+    return treated_count, total_count
 
 
 def _membership_display_name(membership) -> str:
@@ -37,18 +50,7 @@ def serialize_checklist_feed_item(
     overdue = (
         is_overdue if is_overdue is not None else checklist_execution_overdue(execution=execution)
     )
-    treated_count = getattr(execution, "progress_treated_count", None)
-    total_count = getattr(execution, "progress_total_count", None)
-    if treated_count is None or total_count is None:
-        tasks = execution.task_executions.all()
-        total_count = tasks.count()
-        treated_count = tasks.filter(
-            status__in=[
-                "done",
-                "skipped",
-                "observation_created",
-            ],
-        ).count()
+    treated_count, total_count = _progress_counts(execution)
 
     return {
         "id": execution.id,

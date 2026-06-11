@@ -5,12 +5,15 @@ import {
   TerrainSectionLabel,
 } from '@/components/layout/terrain-card'
 import { Button } from '@/components/ui/button'
-import { canSeeInviteMemberButton } from '@/features/auth/lib/invitation-rbac'
+import {
+  canAccessManagementSpace,
+  canInviteFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import type { RoleEnum } from '@/features/auth/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-const MANAGEMENT_ROLES = new Set(['owner', 'director', 'manager'])
 const INVITATION_ROLES: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
 
 const ROLE_DISPLAY_LABELS: Record<RoleEnum, string> = {
@@ -123,14 +126,15 @@ function ProfileField({ label, value }: { label: string; value: string }) {
 }
 
 export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: ProfilePageProps) {
-  const { activeMembership, user, isBootstrapping, isReady } = useAuth()
+  const { activeMembership, bootstrap, user, isBootstrapping, isReady } = useAuth()
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
 
   const firstName = readOptionalUserName(user, 'first_name')
   const lastName = readOptionalUserName(user, 'last_name')
   const identityLabel = user ? (user.email ?? user.username) : null
   const role = toRoleEnum(activeMembership?.role)
-  const canAccessManagement = role ? MANAGEMENT_ROLES.has(role) : false
-  const canInviteMember = canSeeInviteMemberButton(role)
+  const canAccessManagement = canAccessManagementSpace(permissionHints)
+  const canInviteMember = canInviteFromBootstrapHints(permissionHints)
   const scopeSummary = toScopeSummaryText(activeMembership?.scope_summary, role)
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)

@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -12,10 +11,6 @@ import {
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import {
-  checklistsQueryKeys,
-  createChecklistTaskObservation,
-} from '@/features/checklists/api'
-import {
   parseChecklistReportingContext,
   type ChecklistReportingContext,
 } from '@/features/checklists/lib/checklist-reporting-context'
@@ -24,6 +19,7 @@ import { ReportSuccessPanel } from '@/features/observations/components/report-su
 import { ReportVoiceSection } from '@/features/observations/components/report-voice-section'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
+  useChecklistReportSubmitMutation,
   useDeleteTemporaryPhotoMutation,
   useObservationProcessingStatusQuery,
   useSubmitObservationMutation,
@@ -43,21 +39,12 @@ import {
   OBSERVATION_TEXT_MAX_LENGTH,
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ReportPageProps = {
   onNavigate?: (pathname: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ObservationsApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 function getChecklistContextFromLocation(): ChecklistReportingContext | null {
@@ -70,7 +57,6 @@ function getChecklistContextFromLocation(): ChecklistReportingContext | null {
 export function ReportPage({ onNavigate }: ReportPageProps) {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
-  const queryClient = useQueryClient()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
   const checklistContext = useMemo(() => getChecklistContextFromLocation(), [])
@@ -89,35 +75,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   const deleteMutation = useDeleteTemporaryPhotoMutation(establishmentId)
   const transcribeMutation = useTranscribeAudioMutation(establishmentId)
   const submitMutation = useSubmitObservationMutation(establishmentId)
-
-  const checklistSubmitMutation = useMutation({
-    mutationFn: async (input: {
-      taskExecutionId: string
-      text: string
-      temporaryUploadIds: string[]
-    }) => {
-      if (!establishmentId) {
-        throw new Error('Établissement non sélectionné.')
-      }
-      return createChecklistTaskObservation(establishmentId, input.taskExecutionId, {
-        text: input.text,
-        temporary_upload_ids:
-          input.temporaryUploadIds.length > 0 ? input.temporaryUploadIds : undefined,
-      })
-    },
-    onSuccess: () => {
-      if (!establishmentId || !checklistContext) {
-        return
-      }
-      void queryClient.invalidateQueries({
-        queryKey: checklistsQueryKeys.executionDetail(
-          establishmentId,
-          checklistContext.checklistExecutionId,
-        ),
-      })
-      void queryClient.invalidateQueries({ queryKey: checklistsQueryKeys.all })
-    },
-  })
+  const checklistSubmitMutation = useChecklistReportSubmitMutation(establishmentId, checklistContext)
 
   const isSubmitPending = checklistContext
     ? checklistSubmitMutation.isPending
@@ -165,6 +123,9 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     processingQuery.data?.ux_status,
   )
 
+  const resolveReportError = (error: unknown) =>
+    resolveApiErrorMessage(error, ObservationsApiError, 'Une erreur est survenue.')
+
   const handlePhotoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -198,7 +159,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
           photo.localId === localId ? { ...photo, status: 'failed' } : photo,
         ),
       )
-      setFormError(getErrorMessage(error))
+      setFormError(resolveReportError(error))
     }
   }
 
@@ -242,7 +203,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
             return merged.slice(0, OBSERVATION_TEXT_MAX_LENGTH)
           })
         } catch (error) {
-          setFormError(getErrorMessage(error))
+          setFormError(resolveReportError(error))
         } finally {
           setIsTranscribing(false)
         }
@@ -294,7 +255,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
       setText('')
       setPhotos([])
     } catch (error) {
-      setFormError(getErrorMessage(error))
+      setFormError(resolveReportError(error))
     }
   }
 
@@ -336,7 +297,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
         processingSignals={processingSignals}
         isProcessingLoading={processingQuery.isLoading || processingQuery.isFetching}
         processingErrorMessage={
-          processingQuery.isError ? getErrorMessage(processingQuery.error) : null
+          processingQuery.isError ? resolveReportError(processingQuery.error) : null
         }
         showSignalFeedLink={showSignalFeedLink}
         onGoToSignalFeed={onNavigate ? handleGoToSignalFeed : undefined}

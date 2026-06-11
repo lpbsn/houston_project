@@ -52,7 +52,11 @@ import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishm
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
-import { useChatConversationsQuery, useChatStatusQuery } from '@/features/chat/hooks'
+import { useChatConversationsQuery } from '@/features/chat/hooks'
+import {
+  getBootstrapPermissionHints,
+  isChatNavAvailable,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
@@ -173,13 +177,13 @@ function App() {
   }, [auth, navigate])
 
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const chatStatusQuery = useChatStatusQuery(auth.hasOperationalAccess ? establishmentId : null)
-  const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
-    enabled: Boolean(chatStatusQuery.data?.can_access),
-  })
+  const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
   const showChatNav = Boolean(
-    chatStatusQuery.data?.can_access && chatStatusQuery.data.chat_enabled,
+    auth.hasOperationalAccess && isChatNavAvailable(permissionHints),
   )
+  const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
+    enabled: showChatNav,
+  })
   const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
 
   const routeContent = useMemo(() => {

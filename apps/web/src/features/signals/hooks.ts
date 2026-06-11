@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
+
 import {
   cancelSignal,
   fetchSignalDetail,
@@ -66,7 +68,9 @@ export function usePinSignalMutation(establishmentId: string | null, signalId: s
       return pinSignal(establishmentId, signalId)
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+      if (establishmentId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      }
     },
   })
 }
@@ -81,7 +85,9 @@ export function useUnpinSignalMutation(establishmentId: string | null, signalId:
       return unpinSignal(establishmentId, signalId)
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+      if (establishmentId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      }
     },
   })
 }
@@ -96,7 +102,9 @@ export function useSignalUrgencyMutation(establishmentId: string | null, signalI
       return setSignalUrgency(establishmentId, signalId, urgency)
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+      if (establishmentId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      }
     },
   })
 }
@@ -112,7 +120,9 @@ function useSignalLifecycleMutationSuccess(
 ) {
   const queryClient = useQueryClient()
   return () => {
-    void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+    if (establishmentId) {
+      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    }
     if (establishmentId && signalId) {
       queryClient.removeQueries({
         queryKey: signalsQueryKeys.detail(establishmentId, signalId),
@@ -154,7 +164,9 @@ export function useResolveSignalMutation(
       return resolveSignal(establishmentId, signalId)
     },
     onSuccess: (detail: SignalDetail) => {
-      void queryClient.invalidateQueries({ queryKey: signalsQueryKeys.all })
+      if (establishmentId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      }
       if (establishmentId && signalId) {
         queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, signalId), detail)
       }

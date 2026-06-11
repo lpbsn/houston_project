@@ -317,7 +317,7 @@ def test_detail_shows_done_action_not_in_feed(api_client):
 
 
 def test_execution_feed_query_count_baseline_empty(api_client):
-    """Phase L baseline: materialization + dual count() on empty action/checklist feed."""
+    """Phase G: empty feed without dual count(); scoped materialization (DB-01)."""
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     token = login(api_client, user=owner.user)
     url = execution_feed_url(owner.establishment_id) + _feed_query("general")

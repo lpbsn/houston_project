@@ -17,9 +17,11 @@ SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS = 8
 SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS = 0
 
 # GET .../execution-feed/?view_mode=general — owner, empty feed
-EXECUTION_FEED_EMPTY_MAX_QUERIES = 9
+# Phase L: 9 queries; Phase G: 8 (has_more without dual count())
+EXECUTION_FEED_EMPTY_MAX_QUERIES = 8
 # GET .../execution-feed/?view_mode=personal — staff, 1 visible checklist execution
-EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 13
+# Phase L: 13 queries; Phase G: 11 (has_more without dual count() + scoped materialization)
+EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 11
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 CHAT_CONVERSATIONS_LIST_MAX_QUERIES_THREE_ITEMS = 12

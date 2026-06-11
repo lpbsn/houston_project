@@ -230,7 +230,7 @@ def test_ensure_visible_uses_establishment_local_date_at_utc_day_boundary():
         )
         assert local_today == date(2026, 6, 10)
 
-        ensure_visible_executions_materialized(membership=staff)
+        ensure_visible_executions_materialized(membership=staff, view_mode="personal")
 
         execution = ChecklistExecution.objects.get(checklist_template=template)
         assert execution.occurrence_date == date(2026, 6, 10)

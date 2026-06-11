@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { actionsQueryKeys } from '@/features/actions/api'
+import {
+  invalidateChecklistMutationSurfaces,
+} from '@/lib/query-invalidation'
 
 import {
   activateChecklistTemplate,
@@ -49,19 +51,7 @@ function invalidateChecklistSurfaces(
   establishmentId: string,
   templateId?: string,
 ) {
-  void queryClient.invalidateQueries({ queryKey: checklistsQueryKeys.all })
-  void queryClient.invalidateQueries({
-    queryKey: ['checklists', 'templates', establishmentId],
-  })
-  if (templateId) {
-    void queryClient.invalidateQueries({
-      queryKey: checklistsQueryKeys.templateDetail(establishmentId, templateId),
-    })
-  }
-  void queryClient.invalidateQueries({
-    queryKey: checklistsQueryKeys.assignments(establishmentId),
-  })
-  void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all })
+  invalidateChecklistMutationSurfaces(queryClient, establishmentId, templateId)
 }
 
 function invalidateChecklistExecutionSurfaces(
@@ -72,8 +62,7 @@ function invalidateChecklistExecutionSurfaces(
   void queryClient.invalidateQueries({
     queryKey: checklistsQueryKeys.executionDetail(establishmentId, executionId),
   })
-  invalidateChecklistSurfaces(queryClient, establishmentId)
-  void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all })
+  invalidateChecklistMutationSurfaces(queryClient, establishmentId)
 }
 
 export function useChecklistTemplatesQuery(
