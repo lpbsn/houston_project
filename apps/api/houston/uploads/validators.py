@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from django.conf import settings
 from PIL import Image
 
+from houston.core.observability import build_temporary_upload_image_type_log_context
+
 try:
     import pillow_heif
 except ImportError:  # pragma: no cover
@@ -122,18 +124,16 @@ def validate_observation_photo_upload(
     except UnsupportedImageTypeError:
         # Safe diagnostic metadata only; no file bytes/content logged.
         logger.warning(
-            "Unsupported temporary upload image type: "
-            "uploaded_filename=%s declared_content_type=%s size_bytes=%s "
-            "pillow_image_format=%s pillow_image_mode=%s pillow_image_size=%s "
-            "heif_plugin_loaded=%s error_raised_at=%s",
-            getattr(uploaded_file, "name", ""),
-            normalized_declared,
-            size_bytes,
-            detected.image_format,
-            detected.image_mode,
-            detected.image_size,
-            pillow_heif is not None,
-            "_canonical_from_detected_format",
+            "temporary_upload_image_type_unsupported",
+            extra=build_temporary_upload_image_type_log_context(
+                declared_content_type=normalized_declared,
+                size_bytes=size_bytes,
+                pillow_image_format=detected.image_format,
+                pillow_image_mode=detected.image_mode,
+                pillow_image_size=detected.image_size,
+                heif_plugin_loaded=pillow_heif is not None,
+                error_raised_at="_canonical_from_detected_format",
+            ),
         )
         raise
 

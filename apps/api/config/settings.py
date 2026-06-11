@@ -368,6 +368,39 @@ HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA = env_bool(
     default=True,
 )
 
+HOUSTON_LOG_LEVEL = env_str("HOUSTON_LOG_LEVEL", "INFO")
+HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS = env_int(
+    "HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS",
+    HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS * 2,
+)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "houston_structured": {
+            "()": "houston.core.logging_support.HoustonStructuredFormatter",
+            "format": "%(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "houston_structured",
+        },
+    },
+    "loggers": {
+        "houston": {
+            "level": HOUSTON_LOG_LEVEL,
+            "propagate": True,
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": HOUSTON_LOG_LEVEL,
+    },
+}
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",

@@ -5558,6 +5558,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PendingOnboardingMembership'
+        permission_hints:
+          $ref: '#/components/schemas/BootstrapPermissionHints'
         access_token:
           type: string
         access_token_expires_at:
@@ -5570,6 +5572,7 @@ components:
       - authenticated
       - memberships
       - pending_onboarding_memberships
+      - permission_hints
       - user
     BadgeEnum:
       enum:
@@ -5579,6 +5582,19 @@ components:
       description: |-
         * `process` - process
         * `todo` - todo
+    BootstrapPermissionHints:
+      type: object
+      properties:
+        chat_available:
+          type: boolean
+        can_invite:
+          type: boolean
+        can_manage_runtime_config:
+          type: boolean
+      required:
+      - can_invite
+      - can_manage_runtime_config
+      - chat_available
     BootstrapResponse:
       type: object
       properties:
@@ -5598,11 +5614,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PendingOnboardingMembership'
+        permission_hints:
+          $ref: '#/components/schemas/BootstrapPermissionHints'
       required:
       - active_membership
       - authenticated
       - memberships
       - pending_onboarding_memberships
+      - permission_hints
       - user
     BusinessUnitTreeItem:
       type: object
@@ -6593,6 +6612,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PendingOnboardingMembership'
+        permission_hints:
+          $ref: '#/components/schemas/BootstrapPermissionHints'
         access_token:
           type: string
         access_token_expires_at:
@@ -6612,6 +6633,7 @@ components:
       - establishment_id
       - memberships
       - pending_onboarding_memberships
+      - permission_hints
       - user
     DirectorInvitationErrorResponse:
       type: object
@@ -7531,6 +7553,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PendingOnboardingMembership'
+        permission_hints:
+          $ref: '#/components/schemas/BootstrapPermissionHints'
         access_token:
           type: string
         access_token_expires_at:
@@ -7551,6 +7575,7 @@ components:
       - memberships
       - onboarding_session_id
       - pending_onboarding_memberships
+      - permission_hints
       - user
     RoleEnum:
       enum:

@@ -5,6 +5,7 @@ import uuid
 
 from celery import shared_task
 from houston.chat.purge import purge_chat_messages
+from houston.core.observability import build_celery_task_failure_log_context
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,13 @@ def purge_chat_messages_task(
             },
         )
         return result.deleted_count
-    except Exception:
-        logger.exception(
-            "Chat message purge task failed",
-            extra={"establishment_id": establishment_id},
+    except Exception as exc:
+        logger.error(
+            "chat_message_purge_task_failed",
+            extra=build_celery_task_failure_log_context(
+                establishment_id=establishment_id,
+                exception_class=type(exc).__name__,
+            ),
+            exc_info=False,
         )
         raise

@@ -6,6 +6,7 @@ import uuid
 from celery import shared_task
 
 from houston.checklists.materialization import materialize_assignments_horizon
+from houston.core.observability import build_celery_task_failure_log_context
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,14 @@ def materialize_checklist_assignments_horizon_task(
             establishment_id=parsed_establishment_id,
             horizon_days=horizon_days,
         )
-    except Exception:
-        logger.exception(
-            "Checklist assignment horizon materialization failed",
-            extra={"establishment_id": establishment_id},
+    except Exception as exc:
+        logger.error(
+            "checklist_assignment_horizon_materialization_failed",
+            extra=build_celery_task_failure_log_context(
+                establishment_id=establishment_id,
+                horizon_days=horizon_days,
+                exception_class=type(exc).__name__,
+            ),
+            exc_info=False,
         )
         raise

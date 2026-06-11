@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -18,6 +20,10 @@ from houston.ai.observation_pipeline import (
 from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
+)
+from houston.core.observability import (
+    build_observation_processing_log_context,
+    observation_processing_duration_seconds,
 )
 from houston.establishments.models import (
     ActivitySubject,
@@ -47,6 +53,8 @@ from houston.signals.signal_classification import (
 
 if TYPE_CHECKING:
     from houston.ai.observation_pipeline import ObservationPipelineProvider
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -465,6 +473,7 @@ def run_observation_pipeline(
             ObservationProcessing.Status.QUEUED,
             ObservationProcessing.Status.RETRYING,
         }:
+            _log_observation_processing_skip(processing=processing)
             return
 
         observation = processing.observation
@@ -479,6 +488,14 @@ def run_observation_pipeline(
                 "attempt_count",
                 "updated_at",
             ]
+        )
+        logger.info(
+            "observation_pipeline_processing_started",
+            extra=build_observation_processing_log_context(
+                processing=processing,
+                establishment_id=observation.establishment_id,
+                event="observation_pipeline_processing_started",
+            ),
         )
 
     try:
@@ -547,22 +564,72 @@ def run_observation_pipeline(
         )
 
 
+def _log_observation_processing_skip(*, processing: ObservationProcessing) -> None:
+    if processing.status != ObservationProcessing.Status.PROCESSING:
+        return
+
+    duration = observation_processing_duration_seconds(processing=processing)
+    stuck_threshold = settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS
+    is_stuck = duration is not None and duration >= stuck_threshold
+    log_context = build_observation_processing_log_context(
+        processing=processing,
+        event=(
+            "observation_pipeline_stuck_processing"
+            if is_stuck
+            else "observation_pipeline_skip_in_flight_processing"
+        ),
+    )
+    if is_stuck:
+        logger.warning("observation_pipeline_stuck_processing", extra=log_context)
+    else:
+        logger.info("observation_pipeline_skip_in_flight_processing", extra=log_context)
+
+
+def _log_observation_processing_outcome(
+    *,
+    processing: ObservationProcessing,
+    event: str,
+    level: int = logging.WARNING,
+) -> None:
+    logger.log(
+        level,
+        event,
+        extra=build_observation_processing_log_context(
+            processing=processing,
+            event=event,
+        ),
+    )
+
+
 def _mark_processing_failed(*, processing_id: uuid.UUID, error_code: str) -> None:
     with transaction.atomic():
-        processing = ObservationProcessing.objects.select_for_update().get(id=processing_id)
+        processing = (
+            ObservationProcessing.objects.select_for_update()
+            .select_related("observation")
+            .get(id=processing_id)
+        )
         processing.status = ObservationProcessing.Status.FAILED
         processing.last_error_code = error_code
         processing.processed_at = timezone.now()
         processing.save(update_fields=["status", "last_error_code", "processed_at", "updated_at"])
+    _log_observation_processing_outcome(
+        processing=processing,
+        event="observation_pipeline_failed",
+    )
 
 
 def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: str) -> None:
     with transaction.atomic():
-        processing = ObservationProcessing.objects.select_for_update().get(id=processing_id)
+        processing = (
+            ObservationProcessing.objects.select_for_update()
+            .select_related("observation")
+            .get(id=processing_id)
+        )
         if processing.attempt_count < 3:
             processing.status = ObservationProcessing.Status.RETRYING
             processing.last_error_code = error_code
             processing.save(update_fields=["status", "last_error_code", "updated_at"])
+            event = "observation_pipeline_retry_scheduled"
         else:
             processing.status = ObservationProcessing.Status.FAILED
             processing.last_error_code = error_code
@@ -575,6 +642,8 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
                     "updated_at",
                 ]
             )
+            event = "observation_pipeline_failed"
+    _log_observation_processing_outcome(processing=processing, event=event)
 
 
 @transaction.atomic

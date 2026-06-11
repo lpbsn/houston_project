@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.test import RequestFactory
 from rest_framework import exceptions, status
 
@@ -93,3 +95,23 @@ def test_unexpected_error_returns_safe_internal_error():
         "code": "internal_error",
         "detail": "An unexpected error occurred.",
     }
+
+
+def test_unexpected_error_logs_safe_request_context(caplog):
+    exc = RuntimeError("unexpected failure with secret raw_text payload")
+
+    with caplog.at_level(logging.ERROR, logger="houston.core.api.exceptions"):
+        response = api_exception_handler(exc, _context())
+
+    assert response is not None
+    error_records = [
+        record for record in caplog.records if record.getMessage() == "api_unhandled_exception"
+    ]
+    assert len(error_records) == 1
+    record = error_records[0]
+    assert record.levelname == "ERROR"
+    assert not record.exc_info
+    assert record.request_path == "/api/v1/health/"
+    assert record.request_method == "GET"
+    assert record.exception_class == "RuntimeError"
+    assert "secret raw_text payload" not in caplog.text

@@ -28,6 +28,22 @@ def list_bootstrap_memberships(user: User) -> list[dict]:
     return [_serialize_membership(membership) for membership in memberships]
 
 
+def build_bootstrap_permission_hints(
+    active_membership: EstablishmentMembership | None,
+) -> dict:
+    from houston.chat.permissions import can_access_chat
+    from houston.establishments.permissions import (
+        can_invite_memberships,
+        can_manage_runtime_context,
+    )
+
+    return {
+        "chat_available": can_access_chat(active_membership),
+        "can_invite": can_invite_memberships(active_membership),
+        "can_manage_runtime_config": can_manage_runtime_context(active_membership),
+    }
+
+
 def build_bootstrap_payload(
     user: User,
     *,
@@ -50,6 +66,7 @@ def build_bootstrap_payload(
             None if active_membership is None else _serialize_membership(active_membership)
         ),
         "pending_onboarding_memberships": pending_onboarding_memberships,
+        "permission_hints": build_bootstrap_permission_hints(active_membership),
     }
 
 

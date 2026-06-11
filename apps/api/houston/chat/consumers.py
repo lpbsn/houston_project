@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from uuid import UUID
 
 from channels.db import database_sync_to_async
@@ -20,8 +21,11 @@ from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message
 from houston.chat.services import MessageSendResult, create_message
 from houston.chat.ws_payloads import build_message_created_payload, build_message_rejected_payload
 from houston.chat.ws_ticket import WsTicketError, consume_ws_ticket
+from houston.core.observability import build_ws_auth_failure_log_context
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
+
+logger = logging.getLogger(__name__)
 
 WS_CLOSE_AUTH_FAILED = 4001
 WS_CLOSE_FORBIDDEN = 4002
@@ -102,12 +106,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except asyncio.CancelledError:
             return
         if not self.authenticated:
+            logger.warning(
+                "chat_ws_auth_failed",
+                extra=build_ws_auth_failure_log_context(
+                    establishment_id=self.establishment_id,
+                    reason="auth_timeout",
+                    close_code=WS_CLOSE_AUTH_TIMEOUT,
+                ),
+            )
             await self.close(code=WS_CLOSE_AUTH_TIMEOUT)
 
     async def _handle_auth(self, payload: dict) -> None:
         ticket = payload.get("ticket")
         if not isinstance(ticket, str) or not ticket.strip():
-            await self.close(code=WS_CLOSE_AUTH_FAILED)
+            await self._close_auth_failed(reason="missing_ticket")
             return
 
         try:
@@ -116,16 +128,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 establishment_id=self.establishment_id,
             )
         except WsTicketError:
-            await self.close(code=WS_CLOSE_AUTH_FAILED)
+            await self._close_auth_failed(reason="invalid_ticket")
             return
 
         membership = await self._load_membership(ticket_payload.membership_id)
         if membership is None:
-            await self.close(code=WS_CLOSE_FORBIDDEN)
+            await self._close_ws_auth(
+                reason="membership_not_found",
+                close_code=WS_CLOSE_FORBIDDEN,
+            )
             return
 
         if membership.establishment_id != self.establishment_id:
-            await self.close(code=WS_CLOSE_TENANT_INVALID)
+            await self._close_ws_auth(
+                reason="tenant_mismatch",
+                close_code=WS_CLOSE_TENANT_INVALID,
+            )
             return
 
         if not can_access_chat(membership):
@@ -135,7 +153,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 and not membership.establishment.chat_enabled
                 else WS_CLOSE_FORBIDDEN
             )
-            await self.close(code=close_code)
+            reason = "chat_disabled" if close_code == WS_CLOSE_CHAT_DISABLED else "forbidden"
+            await self._close_ws_auth(reason=reason, close_code=close_code)
             return
 
         self.authenticated = True
@@ -344,3 +363,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def _send_error(self, *, code: str, detail: str) -> None:
         await self.send(text_data=json.dumps({"type": "error", "code": code, "detail": detail}))
+
+    async def _close_auth_failed(self, *, reason: str) -> None:
+        await self._close_ws_auth(reason=reason, close_code=WS_CLOSE_AUTH_FAILED)
+
+    async def _close_ws_auth(self, *, reason: str, close_code: int) -> None:
+        logger.warning(
+            "chat_ws_auth_failed",
+            extra=build_ws_auth_failure_log_context(
+                establishment_id=self.establishment_id,
+                reason=reason,
+                close_code=close_code,
+            ),
+        )
+        await self.close(code=close_code)

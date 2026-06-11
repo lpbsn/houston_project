@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from django.db import transaction
 from django.utils import timezone
 
+from houston.core.observability import build_observation_enqueue_failure_log_context
 from houston.establishments.models import EstablishmentMembership
 from houston.observations.constants import (
     MAX_OBSERVATION_PHOTOS,
@@ -17,6 +19,8 @@ from houston.observations.exceptions import (
 )
 from houston.observations.models import Observation, ObservationMedia, ObservationProcessing
 from houston.uploads.models import TemporaryUpload
+
+logger = logging.getLogger(__name__)
 
 
 def validate_observation_text(text: str) -> str:
@@ -121,4 +125,16 @@ def submit_observation(
 def _enqueue_observation_processing(observation_id: uuid.UUID) -> None:
     from houston.signals.tasks import process_observation_task
 
-    process_observation_task.delay(str(observation_id))
+    try:
+        process_observation_task.delay(str(observation_id))
+    except Exception as exc:
+        logger.error(
+            "observation_processing_enqueue_failed",
+            extra=build_observation_enqueue_failure_log_context(
+                observation_id=observation_id,
+                event="observation_processing_enqueue_failed",
+                exception_class=type(exc).__name__,
+            ),
+            exc_info=False,
+        )
+        raise

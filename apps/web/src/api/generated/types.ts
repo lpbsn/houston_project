@@ -1685,6 +1685,7 @@ export interface components {
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
+            permission_hints: components["schemas"]["BootstrapPermissionHints"];
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
@@ -1695,12 +1696,18 @@ export interface components {
          * @enum {string}
          */
         BadgeEnum: "process" | "todo";
+        BootstrapPermissionHints: {
+            chat_available: boolean;
+            can_invite: boolean;
+            can_manage_runtime_config: boolean;
+        };
         BootstrapResponse: {
             authenticated: boolean;
             user: components["schemas"]["UserPublic"];
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
+            permission_hints: components["schemas"]["BootstrapPermissionHints"];
         };
         BusinessUnitTreeItem: {
             /** Format: uuid */
@@ -2096,6 +2103,7 @@ export interface components {
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
+            permission_hints: components["schemas"]["BootstrapPermissionHints"];
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;
@@ -2478,6 +2486,7 @@ export interface components {
             memberships: components["schemas"]["Membership"][];
             active_membership: components["schemas"]["Membership"] | null;
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
+            permission_hints: components["schemas"]["BootstrapPermissionHints"];
             access_token: string;
             /** Format: date-time */
             access_token_expires_at: string;

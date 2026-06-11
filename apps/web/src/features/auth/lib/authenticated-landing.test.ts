@@ -28,6 +28,11 @@ function bootstrap(
     memberships: [],
     active_membership: null,
     pending_onboarding_memberships: [],
+    permission_hints: {
+      chat_available: false,
+      can_invite: false,
+      can_manage_runtime_config: false,
+    },
     ...overrides,
   }
 }
