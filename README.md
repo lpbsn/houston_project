@@ -83,7 +83,7 @@ The project currently uses a Django modular monolith as the business authority a
 ## What Is Not Implemented Yet
 - Notifications
 - Global realtime invalidation (Signal/Action/Notifications) — deferred post Chat V1
-- Chat post-core product gaps (group management UI, Owner/Director `chat_enabled` toggle UI, `EventEnvelope` events, bootstrap `chat_available`) — see `docs/audit/chat_v1_technical_debt_2026-06-09.md`
+- Chat post-core product gaps (group management UI, Owner/Director `chat_enabled` toggle UI, `EventEnvelope` events) — see `docs/audit/chat_v1_technical_debt_2026-06-09.md`. Bootstrap `permission_hints.chat_available` is implemented (gates Terrain chat nav).
 - Production-grade frontend feature surface
 
 ## Auth Notes
@@ -127,10 +127,10 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
 **Frontend local vs conteneur `web`** : ne pas lancer `make up` et `make web-dev` en parallèle (conflit port 5173).
 
 1. Copy `.env.example` to `.env`.
-2. Set backend-only onboarding variables in `.env` (never commit real secrets):
+2. Set backend-only variables in `.env` (never commit real secrets):
    - `HOUSTON_REGISTRATION_INVITE_CODES` — comma-separated codes required for public `/onboarding` registration (empty disables registration).
-   - `OPENAI_API_KEY` — server-only OpenAI key for live onboarding AI (optional in dev if you rely on template fallback).
-   - `HOUSTON_AI_ONBOARDING_MODEL`, `HOUSTON_AI_ONBOARDING_TIMEOUT_SECONDS`, `HOUSTON_AI_ONBOARDING_USE_STRICT_JSON_SCHEMA` — optional tuning; see `.env.example` for defaults.
+   - Onboarding is **manual V2 only** (BusinessUnit / ActivitySubject) — AI onboarding env vars are legacy and not product-active; see [`docs/product/domains/runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
+   - `OPENAI_API_KEY` — server-only key for observation → signal pipeline (optional in dev).
    - `HOUSTON_AI_OBSERVATION_PROVIDER` — use `openai` with a valid `OPENAI_API_KEY` for realistic manual Signaler testing (default in `.env.example`). Automated pytest forces `fake` automatically. Do not use `fake` to validate real-world observation understanding (it may produce generic titles like "Structured issue").
    - `HOUSTON_AI_OBSERVATION_MODEL`, `HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS`, `HOUSTON_AI_OBSERVATION_MAX_RETRIES` — optional tuning for observation → signal processing.
    - Do not put API keys or invite codes in `VITE_*` variables.

@@ -19,7 +19,7 @@
 | Documentation produit | **Élevée** | `chat_domain.md`, README, build plan, realtime carve-out alignés (Lot 7) |
 | Tests frontend | **Faible–moyenne** | Pages/hooks manuels ; pas de tests Vitest hook WS |
 
-**Verdict** : **Core Chat V1 utilisable en dev/staging** (DM, groupes, envoi WS, purge 7j, inactivation). Post-core : events, UI gestion groupe, toggle `chat_enabled`, bootstrap flag, tests FE WS.
+**Verdict** : **Core Chat V1 utilisable en dev/staging** (DM, groupes, envoi WS, purge 7j, inactivation, bootstrap `chat_available`). Post-core : events, UI gestion groupe, toggle `chat_enabled`, tests FE WS.
 
 ---
 
@@ -41,7 +41,6 @@
 | 6 | **Events métier absents** | Pas d’audit / analytics internes | Aucun `events.py` ; pas d’émission `EventEnvelope` |
 | 7 | **Gestion groupe UI absente** | API REST complète sans surface Terrain | Backend testé ; FE = create DM/groupe + fil seulement |
 | 8 | **Toggle `chat_enabled` UI absent** | Owner/Director passent par API ou admin | `PATCH .../chat/settings/` non consommé côté web |
-| 11 | **`chat_available` bootstrap absent** | FE appelle `status` + `conversations` sur nav terrain | Flag non exposé dans `BootstrapResponse` |
 
 ### P2 — Amélioration / écarts plan
 
@@ -76,6 +75,7 @@
 | 3 | `conversation.access_revoked` | `ws_notify.py`, consumer handler, tests |
 | 4 | Documentation produit en retard | Lot 7 : `chat_domain.md`, README, build plan, §12 acceptance |
 | 5 | Rate limits WS | REST ws-ticket throttle + `rate_limits.py` message.send |
+| 11 | `chat_available` bootstrap absent | `permission_hints.chat_available` dans bootstrap ; FE `bootstrap-permission-hints.ts` — **2026-06-12** |
 | 9 | Promotion admin auto | `_ensure_group_has_admin()` on leave/remove/deactivate |
 | 10 | Suppression DM à l’inactivation | Service deactivate supprime DM impliquant le membership |
 
@@ -100,8 +100,7 @@
 1. UI gestion groupe (rename, participants, leave, delete)
 2. UI toggle `chat_enabled` Owner/Director
 3. `EventEnvelope` chat (ids only, no body)
-4. Bootstrap `chat_available`
-5. Tests FE hook WS + composants composer/retry
+4. Tests FE hook WS + composants composer/retry
 
 ---
 

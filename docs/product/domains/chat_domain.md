@@ -254,4 +254,4 @@ Checklist aligned with Chat V1 implementation plan §3.5 — verified **2026-06-
 - [x] REST + WS endpoints present in [`apps/api/schema.yml`](../../../apps/api/schema.yml) and backend `houston/chat/`
 - [x] Terrain UI at `/chat` and `/chat/:conversationId` (Lots 5)
 - [x] Membership deactivation hook, `conversation.access_revoked`, rate limits (Lot 6)
-- [ ] Post-core product gaps tracked in debt register only (group management UI, `chat_enabled` toggle UI, `EventEnvelope`, bootstrap `chat_available`)
+- [ ] Post-core product gaps tracked in debt register only (group management UI, `chat_enabled` toggle UI, `EventEnvelope`)

@@ -25,7 +25,7 @@ Never commit `.env.shared-dev`. Use [`.env.shared-dev.example`](../../.env.share
    ```bash
    make shared-dev-bootstrap
    ```
-   `shared-dev-bootstrap` does **not** start `celery-beat`. For scheduled jobs (checklist horizon materialization, chat message purge, upload TTL cleanup), run `make up-scheduler` after bootstrap. Lazy read-path checklist materialization remains available without Beat.
+   `shared-dev-bootstrap` does **not** start `celery-beat`. For scheduled jobs (checklist horizon materialization, chat message purge, upload TTL cleanup), start Beat against the **shared-dev** Compose merge — see [Scheduler in shared-dev mode](#scheduler-in-shared-dev-mode). Lazy read-path checklist materialization remains available without Beat.
 6. Frontend (unchanged):
    ```bash
    make web-dev
@@ -38,11 +38,7 @@ make shared-dev-up      # redis + api + celery (remote DB)
 make web-dev
 ```
 
-Optional scheduler (same as local dev):
-
-```bash
-make up-scheduler       # celery-beat — not started by shared-dev-up or shared-dev-bootstrap
-```
+Optional scheduler — **do not** use `make up-scheduler` here (it targets local `.env` only). See [Scheduler in shared-dev mode](#scheduler-in-shared-dev-mode).
 
 After `git pull` with new migrations (coordinate with your teammate — one `migrate` at a time):
 
@@ -110,6 +106,32 @@ POSTGRES_SSLMODE=require
 ```
 
 Local `.env` omits this (or uses `disable`) — Django reads `POSTGRES_SSLMODE` in [`apps/api/config/settings.py`](../../apps/api/config/settings.py).
+
+## Scheduler in shared-dev mode
+
+`make up-scheduler` runs `$(COMPOSE) up-backend` against **local** `.env` (`docker-compose.yml` only). After `make shared-dev-up`, that target would start local `postgres` and point `api`/`celery-beat` at the wrong database.
+
+**Today (manual):** start `celery-beat` with the shared-dev merge after `make shared-dev-up`:
+
+```bash
+docker compose \
+  --profile scheduler \
+  --env-file .env.shared-dev \
+  -f docker-compose.yml \
+  -f docker-compose.shared-dev.yml \
+  run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
+
+docker compose \
+  --profile scheduler \
+  --env-file .env.shared-dev \
+  -f docker-compose.yml \
+  -f docker-compose.shared-dev.yml \
+  up -d celery-beat
+```
+
+**Planned:** `make shared-dev-up-scheduler` (Makefile target — engineering lot L7) will wrap the commands above with the same preflight as `shared-dev-up`.
+
+Local dev (`.env`) continues to use `make up-scheduler`.
 
 ## Safety guards
 

@@ -1,7 +1,7 @@
 # Action Domain
 
 Status: authoritative  
-Last reviewed: 2026-06-07  
+Last reviewed: 2026-06-12  
 Implementation status: implemented (BE-ACTION-V2)
 
 ## 1. Purpose
@@ -43,8 +43,9 @@ An Action is classified by **BusinessUnit / ActivitySubject** (v2, authoritative
 - AI-created Actions
 - Generic status PATCH
 - ActivitySubject on free Actions
-- Checklists in Execution Feed (Phase 7)
 - Historical data backfill
+
+Checklist executions in the polymorphic Execution Feed are **in scope** — see [`checklist_domain.md`](checklist_domain.md) §5.6 and [`feed_domain.md`](feed_domain.md) §7.
 
 ## 4. Core Invariants
 

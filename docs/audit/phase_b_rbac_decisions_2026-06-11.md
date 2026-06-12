@@ -31,6 +31,7 @@ Replaced checklist-local `_is_active_membership` (membership status only) with e
 | **Recommendation** | **Keep** — intentional divergence between list scope and detail access. |
 | **Owner** | Product |
 | **Patch** | None without product sign-off. If changed later: apply `signal_visible_in_membership_scope` (or equivalent) in `_can_view_signal_detail` and add `signals/tests/test_permissions.py`. |
+| **Domain docs** | Propagated 2026-06-12 — [`signal_domain.md`](../product/domains/signal_domain.md) §7, [`rbac_permissions_domain.md`](../product/domains/rbac_permissions_domain.md) §7, [`feed_domain.md`](../product/domains/feed_domain.md) §7. |
 
 ---
 

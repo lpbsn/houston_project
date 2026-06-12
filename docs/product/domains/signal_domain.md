@@ -1,7 +1,7 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-06-03
+Last reviewed: 2026-06-12
 Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; Phase 5 core Action side effects implemented; archive, timeline not implemented)
 
 ## 1. Purpose
@@ -160,8 +160,9 @@ Not validated yet:
 - RBAC baseline defines establishment membership, role, and BusinessUnit scope authority. Signal command helpers exist for implemented APIs.
 - Owner and Director target behavior: broad establishment-level Signal visibility and actionability, subject to RBAC.
 - Manager target behavior: actionability requires RBAC (`MembershipScope` BusinessUnit coverage) and Signal BU classification.
-- Ma vue (`view_mode=personal`) filters by **`MembershipScope`** (Owner/Director: all feed-visible establishment Signals).
-- Vue générale (`view_mode=general`) shows all feed-visible establishment Signals without subscription filter.
+- Ma vue (`view_mode=personal`) filters by **`MembershipScope`** for Manager/Staff (affected **or** responsible BusinessUnit in scope). Owner/Director: all feed-visible establishment Signals.
+- Vue générale (`view_mode=general`) shows all feed-visible establishment Signals for every role — **no** `MembershipScope` BU filter on the list (establishment-wide read).
+- **Detail access** (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, urgency, cancel, resolve, and create-action commands remain scope-aware for Manager/Staff (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
 - Visibility does not imply actionability.
 - Resolving Signals, canceling Signals, changing urgency, and pinning require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
 - **Cancel and resolve** (implemented): Owner and Director may act on any active Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy; **Staff are denied** cancel and resolve.
@@ -262,10 +263,12 @@ Do not treat any Signal route as implemented until it exists in `apps/api/schema
 
 ### Lifecycle (active feed eligibility)
 
-| Status | In active Signal Feed |
+Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
+
+| Status | In active Signal Feed (default) |
 | --- | --- |
-| `open`, `in_progress` | Yes |
-| `resolved`, `canceled`, `archived` | No (default) |
+| `open`, `in_progress`, `resolved` | Yes |
+| `canceled`, `archived` | No |
 
 ### Aggregation (when pipeline exists)
 

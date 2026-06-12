@@ -1,14 +1,14 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-06-09
+Last reviewed: 2026-06-12
 Implementation status: implemented (Checklist RBAC unifié : [`checklist_domain.md`](checklist_domain.md) §9 — Lots 2–7 clos, plus personal/shared supprimés)
 
 ## 1. Purpose
 
 This domain defines what an authenticated user can see and do inside an establishment after identity and membership have already been resolved.
 
-Identity, organization, establishment, membership lifecycle, and membership selection rules belong to [identity_membership_domain.md](/Users/leobsn/Desktop/houston_project/docs/product/domains/identity_membership_domain.md). RBAC builds on that model and uses active `EstablishmentMembership` as the authorization root.
+Identity, organization, establishment, membership lifecycle, and membership selection rules belong to [`identity_membership_domain.md`](identity_membership_domain.md). RBAC builds on that model and uses active `EstablishmentMembership` as the authorization root.
 
 ## 2. MVP Scope
 
@@ -108,6 +108,13 @@ Permission outcomes are:
   - Reporting and execution role, not management authority.
   - Current implemented helpers allow app access, signal-feed access, and observation creation, but not action creation or action validation.
   - BusinessUnit scope coverage required for visibility (or owner/director broad access).
+
+- Signal Feed — list scope vs detail access (validated 2026-06-11, audit BE-RBAC02)
+  - **Ma vue** (`view_mode=personal`): Manager/Staff see Signals where affected **or** responsible BusinessUnit is in `MembershipScope`. Owner/Director see all feed-visible establishment Signals.
+  - **Vue générale** (`view_mode=general`): all feed-visible establishment Signals for every role — no BU filter on the list.
+  - **Detail** (`GET .../signals/{id}/`): any member passing `can_view_signal_feed` may read feed-visible Signal detail by ID, including deep-links outside Ma vue BU scope. Implemented in `get_signal_for_detail` / `_can_view_signal_detail` (`signals/selectors.py`).
+  - **Intentional divergence:** Ma vue list filtering is narrower than detail read access. Command authorization (pin, urgency, cancel, resolve, create linked action) remains scope-aware for Manager/Staff.
+  - Product decision: **keep** this divergence short term. Do not align detail reads to Ma vue BU scope without explicit product sign-off.
 
 - Visibility vs actionability
   - Seeing a resource does not automatically allow acting on it.
