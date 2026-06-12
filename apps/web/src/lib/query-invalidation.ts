@@ -1,4 +1,24 @@
-import type { QueryClient } from '@tanstack/react-query'
+import type { Query, QueryClient } from '@tanstack/react-query'
+
+export function isAuthQueryKey(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] === 'auth'
+}
+
+function isNonAuthQuery(query: Query): boolean {
+  return !isAuthQueryKey(query.queryKey)
+}
+
+/** Establishment switch: cancel then remove every query except auth. */
+export function purgeNonAuthQueries(queryClient: QueryClient) {
+  void queryClient.cancelQueries({ predicate: isNonAuthQuery })
+  queryClient.removeQueries({ predicate: isNonAuthQuery })
+}
+
+/** Logout / invalidated session: cancel in-flight work then wipe the cache. */
+export function clearAuthenticatedQueryCache(queryClient: QueryClient) {
+  void queryClient.cancelQueries()
+  queryClient.clear()
+}
 
 export function invalidateEstablishmentSignalQueries(
   queryClient: QueryClient,

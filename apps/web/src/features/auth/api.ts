@@ -1,5 +1,9 @@
 import { apiClient, withAuthRetry } from '@/api/client'
 import { queryClient } from '@/lib/query-client'
+import {
+  clearAuthenticatedQueryCache,
+  purgeNonAuthQueries,
+} from '@/lib/query-invalidation'
 
 import { ensureCsrfToken } from './csrf'
 import { clearAccessToken, getAccessToken, setAccessToken } from './session'
@@ -182,7 +186,7 @@ let restorePromise: Promise<string | null> | null = null
 
 export function clearAuthState() {
   clearAccessToken()
-  queryClient.removeQueries({ queryKey: bootstrapQueryKey, exact: true })
+  clearAuthenticatedQueryCache(queryClient)
 }
 
 async function executeRefresh() {
@@ -361,6 +365,7 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
     throw buildAuthError(result.response, result.error, 'We could not switch this establishment.')
   }
 
+  purgeNonAuthQueries(queryClient)
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }
