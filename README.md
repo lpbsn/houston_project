@@ -106,7 +106,7 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 **macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Par défaut, chaque machine a sa propre base Postgres (volume Docker local). Pour partager une DB distante entre développeurs : [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) (`make shared-dev-up` + `.env.shared-dev`).
 
-**Fresh install backend** (après `cp .env.example .env` et `make build` sur une machine neuve) :
+**Fresh install backend** (après `cp .env.example .env` et `make build-backend` sur une machine neuve) :
 
 ```bash
 make bootstrap-dev
@@ -120,7 +120,7 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
 
 **Shared-dev (DB PostgreSQL distante partagée)** : `cp .env.shared-dev.example .env.shared-dev` (secrets via 1Password) → `make shared-dev-bootstrap` → `make web-dev`. Voir [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md).
 
-**Stack complète Docker** : `make up` — démarre `api`, `celery` et le conteneur `web` (port 5173).
+**Stack complète Docker** : `make up` — démarre `api`, `celery` et le conteneur `web` (port 5173), sans rebuild. Utiliser `make up-build` pour reconstruire les images avant démarrage.
 
 **Scheduler optionnel** (matérialisation horizon checklists) : `make up-scheduler` — démarre le backend puis `celery-beat` (profile Compose `scheduler`). La matérialisation lazy sur lecture du execution feed reste disponible sans Beat.
 
@@ -134,33 +134,33 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
    - `HOUSTON_AI_OBSERVATION_PROVIDER` — use `openai` with a valid `OPENAI_API_KEY` for realistic manual Signaler testing (default in `.env.example`). Automated pytest forces `fake` automatically. Do not use `fake` to validate real-world observation understanding (it may produce generic titles like "Structured issue").
    - `HOUSTON_AI_OBSERVATION_MODEL`, `HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS`, `HOUSTON_AI_OBSERVATION_MAX_RETRIES` — optional tuning for observation → signal processing.
    - Do not put API keys or invite codes in `VITE_*` variables.
-3. Start the stack:
+3. Start the stack (recommended):
 
 ```bash
-docker compose up --build
+make bootstrap-dev
 ```
 
-4. Apply database migrations:
+Or step by step: `make build-backend` → `make up-backend` → `make migrate`.
 
-```bash
-make migrate
-```
+For the full Docker frontend stack (port 5173 in a container): `make up` or `make up-build` after dependency changes.
 
-5. For observation → signal processing (manual Signaler):
+4. For observation → signal processing (manual Signaler):
 
 - Set in `.env`: `HOUSTON_AI_OBSERVATION_PROVIDER=openai` and `OPENAI_API_KEY=...` (see `.env.example`). Start the API and Celery worker:
 
 ```bash
-docker compose up -d api celery
+make up-backend
 ```
 
 (`make up` also starts `celery` alongside `api` and `web`.)
 
-- After changing env vars, recreate both containers:
+- After changing env vars, recreate backend containers (reloads `.env`; does not touch postgres/redis):
 
 ```bash
-docker compose up -d --force-recreate api celery
+make recreate-backend
 ```
+
+For a simple process bounce without reloading `.env` (e.g. bind-mounted code only): `make restart-backend`.
 
 Requires Redis (`CELERY_BROKER_URL`). Without the `celery` service, submitted observations stay `queued`. Automated tests use the fake provider via pytest fixtures (no live OpenAI in CI).
 
@@ -176,7 +176,7 @@ make up-scheduler
 
 Optional live OpenAI smoke (not CI standard): set `HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1` and run `pytest -m openai_observation_smoke`.
 
-6. Generate the backend schema and frontend API types when needed:
+5. Generate the backend schema and frontend API types when needed:
 
 ```bash
 make schema
@@ -192,12 +192,18 @@ make web-api-generate
 Core commands:
 
 ```bash
-make build
-make up-backend
-make up
+make build-backend    # api + celery + celery-beat (houston-api:dev)
+make build-web        # frontend container only
+make build            # both
+make up-backend       # postgres + redis + api + celery (local DB guard)
+make up               # api + celery + web (no rebuild)
+make up-build         # same, with --build
+make restart-backend  # bounce api/celery; does not reload .env
+make recreate-backend # after .env changes; recreates api/celery (--no-deps)
 make up-scheduler
 make down
 make shell
+make infra-check      # guard script tests (no DB)
 ```
 
 ### Clean archive (no secrets or runtime artifacts)
@@ -210,7 +216,7 @@ Excludes `.env`, `private_media`, `node_modules`, caches, and other untracked/gi
 
 ## Docker security (local)
 
-- **api** and **celery** run as the non-root container user `houston` (see [`infra/docker/api/Dockerfile`](infra/docker/api/Dockerfile)). `chown` in the image applies to `/opt/venv` only; the bind mount `.:/app` uses **host file ownership** — image `chown` on `/app` does not fix runtime permissions.
+- **api**, **celery**, and **celery-beat** share one backend image tag `houston-api:dev` (see [`docker-compose.yml`](docker-compose.yml)). Legacy local tags `houston_project-api:latest` / `houston_project-celery:latest` from older setups may remain; remove manually with `docker image rm` if desired — not automated by Makefile targets. `chown` in the image applies to `/opt/venv` only; the bind mount `.:/app` uses **host file ownership** — image `chown` on `/app` does not fix runtime permissions.
 - **Linux only** — if you get `Permission denied` on the bind mount, use a local `docker-compose.override.yml` (do not commit secrets):
 
 ```yaml
@@ -226,7 +232,7 @@ services:
 - **Bind mount risk** — if `.env` exists at the repo root, processes in api/celery can read `/app/.env`. Never commit `.env`.
 - **`docker compose config`** may print interpolated secrets — do not paste output into public tickets or CI logs. Do **not** run `docker compose config | grep -E 'OPENAI|SECRET|PASSWORD'` in shareable logs.
 - **Postgres (5432)** and **Redis (6379)** are exposed on the host for local dev; tighten before pre-prod.
-- **Phase 4** — observation processing needs the celery worker: `docker compose up -d api celery`. After `.env` changes: `docker compose up -d --force-recreate api celery`. Automated pytest does **not** require the Compose celery service (fixtures use the fake provider).
+- **Phase 4** — observation processing needs the celery worker: `make up-backend`. After `.env` changes: `make recreate-backend` (not `restart-backend`, which does not reload env). Automated pytest does **not** require the Compose celery service (fixtures use the fake provider).
 
 Safe env smoke checks (no secret values):
 
@@ -242,8 +248,8 @@ Post-hardening validation (from repo root):
 
 ```bash
 docker compose config
-docker compose build api celery
-docker compose up -d api celery
+make build-backend
+make up-backend
 docker compose exec api id
 docker compose exec celery id
 docker compose logs celery --tail=100
@@ -319,9 +325,8 @@ Do not manually edit generated API types.
 The intended local verification flow is:
 
 ```bash
-make build
-make up
-make migrate
+make build-backend
+make bootstrap-dev
 make check
 make test
 make lint

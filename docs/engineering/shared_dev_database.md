@@ -123,13 +123,19 @@ Local dev (`.env`) continues to use `make up-scheduler`.
 
 ## Safety guards
 
+Local-only targets run [`assert-local-dev-db.sh`](../../infra/scripts/assert-local-dev-db.sh), which validates the **effective** `POSTGRES_HOST` from `docker compose config` (not just the `.env` file) and refuses a shell `POSTGRES_HOST` override pointing to a remote host.
+
 | Command | Guard |
 |---------|-------|
-| `make reset-dev-db` | Refused if `.env` points to shared/remote DB ([`assert-local-dev-db.sh`](../../infra/scripts/assert-local-dev-db.sh)) |
-| `make test` | Same — pytest must not run against shared DB |
+| `make up`, `make up-backend`, `make up-scheduler` | Refused if effective DB is remote/shared |
+| `make reset-dev-db`, `make migrate`, `make test`, `make bootstrap-dev` | Same |
 | `make shared-dev-*` | Requires `.env.shared-dev` + compose preflight |
 
+`make check`, `make shell`, and `make catalog-check` are **not** guarded (read-only / debug).
+
 **There is no `make shared-dev-reset`.** To wipe the shared database, use your cloud provider console (e.g. Neon) deliberately.
+
+Run `make infra-check` to test guard scripts without a database.
 
 ## Migration coordination
 

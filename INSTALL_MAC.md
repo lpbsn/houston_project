@@ -14,12 +14,12 @@ Remplacez `<URL_DU_REPO>` par l’URL SSH réelle fournie par votre équipe (ex.
 
 | Parcours | Quand l’utiliser | Commandes clés |
 |----------|------------------|----------------|
-| **Machine neuve** | Premier clone, jamais lancé sur ce Mac | `cp .env.example .env` → `make build` → **`make bootstrap-dev`** → `make web-install` → `make web-dev` |
+| **Machine neuve** | Premier clone, jamais lancé sur ce Mac | `cp .env.example .env` → `make build-backend` → **`make bootstrap-dev`** → `make web-install` → `make web-dev` |
 | **Reset destructif** | Repartir d’une base vide (données locales perdues) | **`make reset-dev-db`** (lire le warning) → éventuellement `make web-install` → `make web-dev` |
 | **Quotidien / après `git pull`** | Stack déjà configurée, pas de wipe | **`make bootstrap-dev`** (non destructif, safe à relancer) ou `make up-backend` |
 | **Shared-dev (DB distante équipe)** | Deux devs sur la même DB métier (Neon, etc.) | `cp .env.shared-dev.example .env.shared-dev` (1Password) → **`make shared-dev-bootstrap`** → `make web-dev` — voir [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) |
 
-- **`make bootstrap-dev`** ne remplace pas **`make build`** (première install) ni **`make web-install`** (frontend local).
+- **`make bootstrap-dev`** ne remplace pas **`make build-backend`** (première install) ni **`make web-install`** (frontend local).
 - **`make reset-dev-db`** efface la DB Postgres locale et **tous les volumes Docker du projet** (dont `web_node_modules` si vous utilisez le conteneur `web`). Il ne modifie ni le code ni le `.env`. Relancez **`make web-install`** si le frontend Docker (`make up`) était utilisé.
 - Validation E2E documentée : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
 
@@ -95,7 +95,7 @@ docker compose version
 ### Étape 7 — Construire les images Docker (première fois, plusieurs minutes)
 
 ```bash
-make build
+make build-backend
 ```
 
 ---
@@ -235,7 +235,7 @@ make web-dev
 | `make migrate` ou `make bootstrap-dev` échoue | `make up-backend` puis réessayer `make bootstrap-dev` |
 | Catalogue vide / autocomplete vide | `make import-catalog` puis `make catalog-check` |
 | Repartir de zéro (DB locale) | `make reset-dev-db` puis `make web-install` si besoin |
-| Inscription refusée | Vérifier `HOUSTON_REGISTRATION_INVITE_CODES` dans `.env`, puis `docker compose up -d --force-recreate api` |
+| Inscription refusée | Vérifier `HOUSTON_REGISTRATION_INVITE_CODES` dans `.env`, puis `make recreate-backend` |
 
 Détails et dépannage : sections 2 à 14 ci-dessous.
 
@@ -415,7 +415,7 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 docker compose build
 ```
 
-Équivalent Makefile : `make build`.
+Équivalent Makefile : `make build-backend` (backend) ou `make build` (backend + web).
 
 ### 6.2 Démarrer l’infra et le backend (sans conteneur frontend)
 
@@ -449,16 +449,16 @@ docker compose logs -f celery
 ### 6.4 Alternative : tout Docker (y compris frontend)
 
 ```bash
-docker compose up --build
-```
-
-ou :
-
-```bash
 make up
 ```
 
-`make up` exécute : `docker compose up --build api celery web` — le frontend sera sur http://localhost:5173 **dans Docker**. **Ne lancez pas en même temps** `make web-dev` (même port 5173).
+Rebuild explicite si Dockerfiles ou dépendances ont changé :
+
+```bash
+make up-build
+```
+
+`make up` exécute : `docker compose up api celery web` — le frontend sera sur http://localhost:5173 **dans Docker**, sans rebuild. **Ne lancez pas en même temps** `make web-dev` (même port 5173).
 
 ### 6.5 Arrêter la stack
 
@@ -552,8 +552,10 @@ Gardez un terminal avec Docker (`api`, `celery`, …) et un terminal avec `make 
 ### Recréer api/celery après modification du `.env`
 
 ```bash
-docker compose up -d --force-recreate api celery
+make recreate-backend
 ```
+
+Recrée `api` et `celery` pour recharger `.env` (`postgres` / `redis` non touchés). Pour un simple bounce process sans recharger `.env` : `make restart-backend`.
 
 (Documenté dans [`README.md`](README.md) pour le pipeline observation → signal.)
 
@@ -623,8 +625,13 @@ make docker-verify-security
 
 | Action | Commande (racine du repo) |
 |--------|---------------------------|
+| Construire images backend (api/celery/beat) | `make build-backend` |
+| Construire tout (backend + web) | `make build` |
 | Démarrer backend + worker (sans frontend Docker) | `make up-backend` |
 | Démarrer stack complète (API + Celery + frontend Docker) | `make up` |
+| Stack complète avec rebuild | `make up-build` |
+| Bounce process api/celery (sans recharger `.env`) | `make restart-backend` |
+| Recréer api/celery après changement `.env` | `make recreate-backend` |
 | Arrêter | `make down` |
 | Logs API | `docker compose logs -f api` |
 | Shell dans le conteneur API | `make shell` |
@@ -652,11 +659,11 @@ Exécution via Docker : `docker compose exec api python manage.py <commande>`.
 ## 12. Mise à jour après `git pull`
 
 1. Récupérer le code : `git pull`
-2. Reconstruire si Dockerfiles/dépendances changent : `docker compose build`
+2. Reconstruire si Dockerfiles/dépendances changent : `make build-backend`
 3. Redémarrer + migrations + catalogue : `make bootstrap-dev` (ou `make up-backend` puis `make migrate` + `make import-catalog`)
 4. Si contrat API modifié : `make schema` puis `make web-api-generate`
 5. Frontend : `make web-install` si `package-lock.json` a changé
-6. Si `.env` modifié : `docker compose up -d --force-recreate api celery`
+6. Si `.env` modifié : `make recreate-backend`
 7. Si nouveau besoin médias : en Docker, le volume `private_media` est géré par Compose ; hors Docker, vérifier `apps/api/private_media`
 
 ---
@@ -713,7 +720,7 @@ Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ;
 ### Inscription `/onboarding` impossible
 
 - Vérifiez `HOUSTON_REGISTRATION_INVITE_CODES` non vide dans `.env`.
-- Recréez api après changement : `docker compose up -d --force-recreate api`.
+- Recréez api/celery après changement `.env` : `make recreate-backend`.
 
 ### Observations bloquées en `queued`
 

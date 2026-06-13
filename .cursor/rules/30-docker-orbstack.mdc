@@ -13,14 +13,22 @@ Use Makefile targets before raw docker compose commands.
 Preferred local workflow:
 - backend stack: `make up-backend`
 - frontend local: `make web-dev`
-- full stack only when needed: `make up`
+- full stack only when needed: `make up` (no rebuild; use `make up-build` after image changes)
 - optional scheduler (celery-beat): `make up-scheduler` (local `.env`) or `make shared-dev-up-scheduler` (`.env.shared-dev`)
+
+Build / restart:
+- backend image `houston-api:dev` (api + celery + celery-beat): `make build-backend`
+- full stack images: `make build`
+- bounce process (does not reload `.env`): `make restart-backend`
+- after `.env` changes (recreates api/celery, `--no-deps`): `make recreate-backend`
+- guard script tests (no DB): `make infra-check`
 
 Shared-dev (remote PostgreSQL, `.env.shared-dev`):
 - `make shared-dev-up` — runs compose preflight (`assert-shared-dev-compose.sh`) before `up`
 - `make shared-dev-check` / `make shared-dev-bootstrap` / `make shared-dev-migrate`
 - see `docs/engineering/shared_dev_database.md`
 - never run `make reset-dev-db` or `make test` against shared-dev credentials in `.env`
+- local `make up*` targets refuse remote DB (Compose-effective guard)
 
 Do not run `docker compose up` without explicit service/profile unless requested.
 
@@ -45,7 +53,7 @@ Use named volumes for container-owned runtime state:
 Do not bind-mount database data, node_modules, Python virtualenvs, or runtime media from macOS unless explicitly justified.
 
 After dependency changes:
-- backend: `make build`
+- backend: `make build-backend`
 - frontend local: `make web-install`
 - contract changes: `make schema && make web-api-generate`
 
