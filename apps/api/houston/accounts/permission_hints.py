@@ -8,12 +8,14 @@ def build_bootstrap_permission_hints(
 ) -> dict:
     from houston.chat.permissions import can_access_chat
     from houston.establishments.permissions import (
+        can_create_action,
         can_invite_memberships,
         can_manage_runtime_context,
     )
 
     return {
         "chat_available": can_access_chat(active_membership),
+        "can_create_action": can_create_action(active_membership),
         "can_invite": can_invite_memberships(active_membership),
         "can_manage_runtime_config": can_manage_runtime_context(active_membership),
     }

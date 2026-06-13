@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canAccessManagementSpace,
+  canCreateActionFromBootstrapHints,
   canInviteFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   getBootstrapPermissionHints,
@@ -31,19 +32,28 @@ describe('bootstrap-permission-hints', () => {
   it('returns safe defaults when bootstrap is missing', () => {
     expect(getBootstrapPermissionHints(null)).toEqual({
       chat_available: false,
+      can_create_action: false,
       can_invite: false,
       can_manage_runtime_config: false,
     })
   })
 
   it('drives chat nav visibility from chat_available', () => {
-    expect(isChatNavAvailable({ chat_available: true, can_invite: false, can_manage_runtime_config: false })).toBe(true)
+    expect(
+      isChatNavAvailable({
+        chat_available: true,
+        can_create_action: false,
+        can_invite: false,
+        can_manage_runtime_config: false,
+      }),
+    ).toBe(true)
     expect(isChatNavAvailable(getBootstrapPermissionHints(null))).toBe(false)
   })
 
   it('drives invite affordances from can_invite', () => {
     const hints = bootstrap({
       chat_available: false,
+      can_create_action: false,
       can_invite: true,
       can_manage_runtime_config: false,
     }).permission_hints
@@ -55,6 +65,7 @@ describe('bootstrap-permission-hints', () => {
   it('drives runtime config gating from can_manage_runtime_config', () => {
     const hints = bootstrap({
       chat_available: false,
+      can_create_action: false,
       can_invite: false,
       can_manage_runtime_config: true,
     }).permission_hints
@@ -67,6 +78,7 @@ describe('bootstrap-permission-hints', () => {
     expect(
       canAccessManagementSpace({
         chat_available: false,
+        can_create_action: false,
         can_invite: true,
         can_manage_runtime_config: false,
       }),
@@ -74,10 +86,23 @@ describe('bootstrap-permission-hints', () => {
     expect(
       canAccessManagementSpace({
         chat_available: false,
+        can_create_action: false,
         can_invite: false,
         can_manage_runtime_config: true,
       }),
     ).toBe(true)
     expect(canAccessManagementSpace(getBootstrapPermissionHints(null))).toBe(false)
+  })
+
+  it('drives free action create affordances from can_create_action', () => {
+    expect(
+      canCreateActionFromBootstrapHints({
+        chat_available: false,
+        can_create_action: true,
+        can_invite: false,
+        can_manage_runtime_config: false,
+      }),
+    ).toBe(true)
+    expect(canCreateActionFromBootstrapHints(getBootstrapPermissionHints(null))).toBe(false)
   })
 })

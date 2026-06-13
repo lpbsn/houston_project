@@ -1698,6 +1698,7 @@ export interface components {
         BadgeEnum: "process" | "todo";
         BootstrapPermissionHints: {
             chat_available: boolean;
+            can_create_action: boolean;
             can_invite: boolean;
             can_manage_runtime_config: boolean;
         };

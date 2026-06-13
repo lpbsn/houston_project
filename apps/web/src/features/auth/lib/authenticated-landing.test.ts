@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseAppRoute } from '@/app/app-routes'
+import { isProtectedRoute } from '@/app/terrain-routes'
 import {
   allowsUnauthenticatedAccess,
   isPublicAuthRoute,
@@ -30,6 +31,7 @@ function bootstrap(
     pending_onboarding_memberships: [],
     permission_hints: {
       chat_available: false,
+      can_create_action: false,
       can_invite: false,
       can_manage_runtime_config: false,
     },
@@ -186,11 +188,10 @@ describe('allowsUnauthenticatedAccess', () => {
 
   it('does not redirect unauthenticated onboarding to login', () => {
     const route = { kind: 'static' as const, path: '/onboarding' as const }
-    const isProtectedRoute = true
     const isAuthenticated = false
 
     expect(
-      isProtectedRoute && !isAuthenticated && !allowsUnauthenticatedAccess(route),
+      isProtectedRoute(route) && !isAuthenticated && !allowsUnauthenticatedAccess(route),
     ).toBe(false)
   })
 })

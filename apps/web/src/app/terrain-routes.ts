@@ -38,6 +38,26 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/checklists',
 ])
 
+const PROTECTED_STATIC_PATHS = new Set<string>([
+  ...OPERATIONAL_STATIC_PATHS,
+  '/pending-onboarding',
+  '/onboarding',
+  '/select-establishment',
+  '/no-establishment',
+])
+
+const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
+  'signal-detail',
+  'signal-action-create',
+  'action-create',
+  'action-detail',
+  'checklist-template-create',
+  'checklist-template-detail',
+  'checklist-execution-create',
+  'checklist-execution-detail',
+  'chat-conversation-detail',
+])
+
 const CHECKLIST_TERRAIN_PATHS = new Set<string>(['/checklists'])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
@@ -47,6 +67,18 @@ const TERRAIN_HUB_PATHS = new Set<string>([
   '/chat',
   '/profile',
 ])
+
+export function isProtectedRoute(route: AppRoute): boolean {
+  if (route.kind === 'unknown' || route.kind === 'invitation') {
+    return false
+  }
+
+  if (route.kind === 'static') {
+    return PROTECTED_STATIC_PATHS.has(route.path)
+  }
+
+  return OPERATIONAL_ROUTE_KINDS.has(route.kind)
+}
 
 export function requiresActiveMembership(route: AppRoute): boolean {
   if (route.kind === 'unknown' || route.kind === 'invitation') {

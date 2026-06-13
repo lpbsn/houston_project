@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LoaderCircle, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
+import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,7 @@ export function ExecutionFeedPage({
   const actionGroups = groupExecutionActionsBySection(actionItems)
 
   const role = auth.bootstrap?.active_membership?.role
+  const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
   const canCreate = canOpenExecutionCreateMenu(role)
 
   const createAction = canCreate ? (
@@ -76,7 +78,7 @@ export function ExecutionFeedPage({
     <div className="flex h-full min-h-0 flex-col">
       <ExecutionCreateMenuSheet
         open={isCreateMenuOpen}
-        role={role}
+        permissionHints={permissionHints}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectAction={() => onNavigate?.('/actions/new')}
         onSelectFlashTodo={() => onNavigate?.('/checklists/executions/new')}

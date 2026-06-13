@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
+import type { BootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 
 import {
   getChecklistCreateSubmenuOptions,
@@ -11,7 +12,7 @@ import {
 
 type ExecutionCreateMenuSheetProps = {
   open: boolean
-  role: string | null | undefined
+  permissionHints: BootstrapPermissionHints
   onClose: () => void
   onSelectAction: () => void
   onSelectFlashTodo: () => void
@@ -23,7 +24,7 @@ type MenuView = 'main' | 'checklist'
 
 export function ExecutionCreateMenuSheet({
   open,
-  role,
+  permissionHints,
   onClose,
   onSelectAction,
   onSelectFlashTodo,
@@ -33,7 +34,9 @@ export function ExecutionCreateMenuSheet({
   const [view, setView] = useState<MenuView>('main')
 
   const options =
-    view === 'main' ? getExecutionCreateMenuOptions(role) : getChecklistCreateSubmenuOptions()
+    view === 'main'
+      ? getExecutionCreateMenuOptions(permissionHints)
+      : getChecklistCreateSubmenuOptions()
   const title = view === 'main' ? 'Créer' : 'Checklist'
 
   function handleClose() {

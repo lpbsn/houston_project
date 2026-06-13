@@ -1,3 +1,5 @@
+import type { BootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
+
 export type ExecutionCreateMenuOptionId = 'action' | 'flash_todo' | 'checklist'
 
 export type ChecklistCreateSubmenuOptionId = 'create_registered' | 'use_existing'
@@ -15,9 +17,9 @@ export type ChecklistCreateSubmenuOption = {
 }
 
 export function getExecutionCreateMenuOptions(
-  role: string | null | undefined,
+  permissionHints: BootstrapPermissionHints | null | undefined,
 ): ExecutionCreateMenuOption[] {
-  const canCreateAction = role === 'owner' || role === 'director' || role === 'manager'
+  const canCreateAction = permissionHints?.can_create_action === true
 
   const options: ExecutionCreateMenuOption[] = []
 

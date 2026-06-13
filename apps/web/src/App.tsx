@@ -25,6 +25,7 @@ import { useAuth } from '@/app/auth-provider'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
+  isProtectedRoute,
   requiresActiveMembership,
   usesTerrainShell,
 } from '@/app/terrain-routes'
@@ -84,33 +85,9 @@ function App() {
       return
     }
 
-    const isProtectedRoute =
-      (route.kind === 'static' &&
-        (route.path === '/app' ||
-          route.path === '/app/operational-config' ||
-          route.path === '/app/report' ||
-          route.path === '/reporting' ||
-          route.path === '/signals' ||
-          route.path === '/execution' ||
-          route.path === '/chat' ||
-          route.path === '/profile' ||
-          route.path === '/team/invite' ||
-          route.path === '/checklists' ||
-          route.path === '/pending-onboarding' ||
-          route.path === '/onboarding' ||
-          route.path === '/select-establishment' ||
-          route.path === '/no-establishment')) ||
-      route.kind === 'signal-detail' ||
-      route.kind === 'signal-action-create' ||
-      route.kind === 'action-create' ||
-      route.kind === 'action-detail' ||
-      route.kind === 'checklist-template-create' ||
-      route.kind === 'checklist-template-detail' ||
-      route.kind === 'checklist-execution-create' ||
-      route.kind === 'checklist-execution-detail' ||
-      route.kind === 'chat-conversation-detail'
+    const isProtectedRouteMatch = isProtectedRoute(route)
 
-    if (isProtectedRoute && !auth.isAuthenticated && !allowsUnauthenticatedAccess(route)) {
+    if (isProtectedRouteMatch && !auth.isAuthenticated && !allowsUnauthenticatedAccess(route)) {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, route])

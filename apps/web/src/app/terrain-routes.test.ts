@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTerrainContentKey,
   getTerrainRouteConfig,
+  isProtectedRoute,
   requiresActiveMembership,
   usesTerrainShell,
 } from '@/app/terrain-routes'
@@ -235,6 +236,32 @@ describe('getTerrainContentKey', () => {
     expect(() => getTerrainContentKey({ kind: 'static', path: '/app' })).toThrow(
       'getTerrainContentKey called for a non-terrain route',
     )
+  })
+})
+
+describe('isProtectedRoute', () => {
+  it('returns true for protected static routes', () => {
+    for (const path of [
+      '/reporting',
+      '/pending-onboarding',
+      '/onboarding',
+      '/select-establishment',
+      '/no-establishment',
+    ] as const) {
+      expect(isProtectedRoute({ kind: 'static', path })).toBe(true)
+    }
+  })
+
+  it('returns true for operational detail routes', () => {
+    expect(isProtectedRoute({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
+    expect(isProtectedRoute({ kind: 'action-create' })).toBe(true)
+  })
+
+  it('returns false for public routes', () => {
+    expect(isProtectedRoute({ kind: 'static', path: '/login' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'static', path: '/' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'invitation', token: 't' })).toBe(false)
+    expect(isProtectedRoute({ kind: 'unknown', pathname: '/foo' })).toBe(false)
   })
 })
 

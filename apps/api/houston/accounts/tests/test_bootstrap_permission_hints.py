@@ -7,6 +7,7 @@ from houston.accounts.models import User
 from houston.chat.permissions import can_access_chat
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import (
+    can_create_action,
     can_invite_memberships,
     can_manage_runtime_context,
 )
@@ -55,18 +56,19 @@ def fetch_bootstrap_hints(
 
 
 @pytest.mark.parametrize(
-    ("role", "expected_can_invite", "expected_can_manage_runtime_config"),
+    ("role", "expected_can_create_action", "expected_can_invite", "expected_can_manage_runtime_config"),
     [
-        (EstablishmentMembership.Role.OWNER, True, True),
-        (EstablishmentMembership.Role.DIRECTOR, True, True),
-        (EstablishmentMembership.Role.MANAGER, True, False),
-        (EstablishmentMembership.Role.STAFF, False, False),
+        (EstablishmentMembership.Role.OWNER, True, True, True),
+        (EstablishmentMembership.Role.DIRECTOR, True, True, True),
+        (EstablishmentMembership.Role.MANAGER, True, True, False),
+        (EstablishmentMembership.Role.STAFF, False, False, False),
     ],
 )
 def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
     api_client,
     active_user,
     role,
+    expected_can_create_action,
     expected_can_invite,
     expected_can_manage_runtime_config,
 ):
@@ -78,9 +80,11 @@ def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
 
     assert hints == {
         "chat_available": can_access_chat(membership),
+        "can_create_action": expected_can_create_action,
         "can_invite": expected_can_invite,
         "can_manage_runtime_config": expected_can_manage_runtime_config,
     }
+    assert hints["can_create_action"] is can_create_action(membership)
     assert hints["can_invite"] is can_invite_memberships(membership)
     assert hints["can_manage_runtime_config"] is can_manage_runtime_context(membership)
 
@@ -111,6 +115,7 @@ def test_bootstrap_permission_hints_are_false_without_active_membership(
 
     assert hints == {
         "chat_available": False,
+        "can_create_action": False,
         "can_invite": False,
         "can_manage_runtime_config": False,
     }
@@ -143,6 +148,7 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_establishment(
     assert response.json()["active_membership"] is None
     assert response.json()["permission_hints"] == {
         "chat_available": False,
+        "can_create_action": False,
         "can_invite": False,
         "can_manage_runtime_config": False,
     }
@@ -164,6 +170,7 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_organization(
 
     assert hints == {
         "chat_available": False,
+        "can_create_action": False,
         "can_invite": False,
         "can_manage_runtime_config": False,
     }

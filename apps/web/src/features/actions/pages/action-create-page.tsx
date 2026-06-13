@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
+import {
+  canCreateActionFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
@@ -42,14 +46,10 @@ function getErrorMessage(error: unknown): string {
   return 'Une erreur est survenue.'
 }
 
-function canCreateActionRole(role: string | undefined): boolean {
-  return role === 'owner' || role === 'director' || role === 'manager'
-}
-
 export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-  const role = auth.bootstrap?.active_membership?.role
+  const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
 
   const initialDue = applyDeadlinePreset('2h', new Date())
   const initialDeadline = syncDeadlineFieldsFromDueAt(initialDue)
@@ -192,7 +192,7 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
         />
       )
     }
-  } else if (!canCreateActionRole(role)) {
+  } else if (!canCreateActionFromBootstrapHints(permissionHints)) {
     return (
       <TerrainErrorState
         className="mx-3 mt-3"

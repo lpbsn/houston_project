@@ -5592,11 +5592,14 @@ components:
       properties:
         chat_available:
           type: boolean
+        can_create_action:
+          type: boolean
         can_invite:
           type: boolean
         can_manage_runtime_config:
           type: boolean
       required:
+      - can_create_action
       - can_invite
       - can_manage_runtime_config
       - chat_available

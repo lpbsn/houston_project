@@ -4,6 +4,7 @@ export type BootstrapPermissionHints = BootstrapResponse['permission_hints']
 
 const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   chat_available: false,
+  can_create_action: false,
   can_invite: false,
   can_manage_runtime_config: false,
 }
@@ -20,6 +21,10 @@ export function isChatNavAvailable(hints: BootstrapPermissionHints): boolean {
 
 export function canInviteFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
   return hints.can_invite
+}
+
+export function canCreateActionFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
+  return hints.can_create_action
 }
 
 export function canManageRuntimeConfigFromBootstrapHints(hints: BootstrapPermissionHints): boolean {

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { ActionDeadlineProgressBar } from '@/components/domain/action-deadline-progress-bar'
-import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { HoustonBadge } from '@/components/ui/terrain'
@@ -67,19 +67,14 @@ export function ChecklistExecutionDetailPage({ executionId }: ChecklistExecution
 
   if (detailQuery.isError || !detailQuery.data) {
     return (
-      <div className="px-3 py-4">
-        <TerrainCard className={terrain.errorSurface}>
-          <p className="text-sm">Cette exécution est introuvable ou inaccessible.</p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-3 rounded-xl"
-            onClick={() => navigate('/execution')}
-          >
-            Retour au fil
-          </Button>
-        </TerrainCard>
-      </div>
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message={resolveChecklistErrorMessage(
+          detailQuery.error,
+          'Cette exécution est introuvable ou inaccessible.',
+        )}
+        onRetry={() => void detailQuery.refetch()}
+      />
     )
   }
 
