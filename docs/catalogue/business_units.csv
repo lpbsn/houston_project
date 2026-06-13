@@ -1,7 +1,7 @@
 key,label,default_unit_type,description,sort_order
-hotel,Hôtel,dedicated,,10
-petit_dejeuner,Petit déjeuner,dedicated,,20
-restaurant,Restaurant,dedicated,,30
+hotel,Hôtel,dedicated,"Périmètre hébergement : chambres, couloirs, espaces communs et services chambre. Exclut restauration/bar sauf problème transversal maintenance.",10
+petit_dejeuner,Petit déjeuner,dedicated,"Service petit-déjeuner : buffet, salle PDJ, stocks et propreté dédiés.",20
+restaurant,Restaurant,dedicated,"Restauration sur place : salle, cuisine, service, stocks et propreté resto.",30
 livraison_uber_eats_deliveroo,Livraison (Uber Eats / Deliveroo),dedicated,,40
 commerce,Commerce,dedicated,,50
 coworking,Coworking,dedicated,,60
@@ -9,7 +9,7 @@ salles_de_reunion,Salles de réunion,dedicated,,70
 salle_de_sport,Salle de sport,dedicated,,80
 loisirs,Loisirs,dedicated,,90
 spa_piscine,SPA - Piscine,dedicated,,100
-maintenance,Maintenance,transversal,,110
+maintenance,Maintenance,transversal,"Pôle transversal interventions techniques : plomberie, électricité, équipements, CVC, conformité. Prioritaire quand la nature est panne ou fuite, pas un simple nettoyage.",110
 communication,Communication,transversal,,120
 rh,RH,transversal,,130
 evenements_privatisations,Événements & privatisations,transversal,,140

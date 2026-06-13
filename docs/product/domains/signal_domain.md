@@ -1,8 +1,8 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-06-12
-Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; Phase 5 core Action side effects implemented; archive, timeline not implemented)
+Last reviewed: 2026-06-13
+Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline v4 aggregation on `issue_focus`; archive, timeline not implemented)
 
 ## 1. Purpose
 
@@ -30,7 +30,7 @@ Signal is the operational object between Observation and Action. It is not the r
 - Signal creation from backend-validated candidate Signals proposed from Observation pipeline output.
 - Aggregation of a candidate Signal into an existing active Signal when backend validation decides it matches an ongoing situation.
 - Signal lifecycle statuses: `open`, `in_progress`, `resolved`, `canceled`, `archived`.
-- Routing through **BusinessUnit / ActivitySubject classification** per Signal: `affected_business_unit`, `responsible_business_unit`, `activity_subject` (optional `operational_unit` for structured location; `location_text` for free text).
+- Routing through **BusinessUnit / ActivitySubject classification** per Signal: `affected_business_unit`, `responsible_business_unit`, `activity_subject` (optional `operational_unit` for structured location; `location_text` for free text; **`issue_focus`** for operational focus and aggregation discriminant).
 - Human-controlled urgency.
 - Candidate pinned-open behavior for important visible Signals.
 - Safe Signal summaries for feed and detail surfaces.
@@ -98,7 +98,8 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 
 - `SignalAggregation`
   - Backend decision that a candidate Signal belongs to an existing active Signal instead of creating a new one.
-  - Exact stored recurrence/count shape is not validated yet.
+  - Match key (v4): `(affected_bu, responsible_bu, activity_subject, operational_unit | null, normalize(issue_focus))`.
+  - `aggregate_into_signal_id` LLM hint is accepted only when taxonomy and `issue_focus` align with the target active Signal.
 
 - `LinkedObservationContext`
   - Safe reference to source Observation context.
@@ -274,8 +275,10 @@ Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
 
 | Scenario | Expected behavior |
 | --- | --- |
-| Candidate matches active Signal | Aggregate into existing Signal |
+| Candidate matches active Signal (same aggregation key incl. `issue_focus`) | Aggregate into existing Signal |
+| Candidate same quadruplet but different `issue_focus` | Create new Signal |
 | Candidate matches resolved Signal | Create new Signal |
 | Aggregation target closed/archived | Rejected |
+| LLM hint `aggregate_into_signal_id` with mismatched `issue_focus` | Ignore hint, create new Signal |
 
 Tests must use BU/AS runtime taxonomy keys from onboarding, not legacy flat domain keys.

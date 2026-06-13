@@ -25,6 +25,7 @@ def _v3_candidate(**kwargs) -> PipelineCandidateOutput:
     base = {
         "title": "Issue",
         "structured_summary": "Structured summary for test.",
+        "issue_focus": "climatisation",
         "affected_business_unit_key": "hotel",
         "responsible_business_unit_key": "hotel",
         "activity_subject_key": "climatisation",

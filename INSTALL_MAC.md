@@ -388,8 +388,7 @@ Ces valeurs sont déjà correctes dans `.env.example` pour Compose (hôtes `post
 
 | Variable | Rôle |
 |----------|------|
-| `OPENAI_API_KEY` | Clé serveur uniquement — onboarding IA, transcription, pipeline observation → signal |
-| `HOUSTON_AI_ONBOARDING_*` | Réglages onboarding IA |
+| `OPENAI_API_KEY` | Clé serveur uniquement — transcription, pipeline observation → signal |
 | `HOUSTON_AI_OBSERVATION_*` | Pipeline observation ; défaut `openai` dans `.env.example` |
 | `HOUSTON_AI_TRANSCRIPTION_*` | Transcription audio |
 | `HOUSTON_AUTH_THROTTLE_*`, `HOUSTON_CACHE_REDIS_URL` | Throttling auth |

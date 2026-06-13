@@ -200,6 +200,7 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
             PipelineCandidateOutput(
                 title="Clim en panne chambre 104",
                 structured_summary="Eau au sol, climatisation en panne.",
+                issue_focus="clim chambre 104",
                 affected_business_unit_key=business_unit.key,
                 responsible_business_unit_key=business_unit.key,
                 activity_subject_key="maintenance",

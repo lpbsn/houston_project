@@ -103,11 +103,13 @@ Prefer behavior tests over fragile internal mocks.
 
 ## Commands
 
-Run from repo root unless needed:
+Run from repo root via Make (Docker stack required for backend):
 
-- lint: `cd apps/api && uv run ruff check .`
-- format check: `cd apps/api && uv run ruff format --check .`
-- tests: `cd apps/api && uv run pytest`
-- migrations check: `cd apps/api && uv run python manage.py makemigrations --check --dry-run`
+- lint: `make backend-lint` (or `make lint`)
+- tests: `make backend-test` (or `make test` — local DB guard only)
+- migrations check: `make backend-migrations-check`
+- full backend gate: `make backend-check`
+
+Do not run `cd apps/api && uv run pytest` natively on the host — use Make targets or `docker compose exec api`.
 
 Use project-defined schema/catalog commands if they exist. Do not invent missing commands.

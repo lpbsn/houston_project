@@ -2,10 +2,10 @@
 	build up up-backend up-scheduler down \
 	check test lint schema schema-check shell migrate migrations-check \
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check \
-	web-install web-dev web-build web-typecheck web-test web-api-generate web-check \
+	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-check \
 	verify local-check docker-verify-security \
 	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db \
-	shared-dev-up shared-dev-bootstrap shared-dev-migrate shared-dev-import-catalog shared-dev-check
+	shared-dev-up shared-dev-up-scheduler shared-dev-bootstrap shared-dev-migrate shared-dev-import-catalog shared-dev-check
 
 # -----------------------------------------------------------------------------
 # Compose / env
@@ -159,10 +159,14 @@ shared-dev-check:
 		$(SHARED_COMPOSE) run --rm --no-deps -T api sh -lc 'cd $(API_DIR) && uv run python manage.py check'; \
 	fi
 
+shared-dev-up-scheduler: shared-dev-up
+	$(SHARED_COMPOSE) --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
+	$(SHARED_COMPOSE) --profile scheduler up -d celery-beat
+
 shared-dev-bootstrap: shared-dev-up shared-dev-migrate shared-dev-import-catalog shared-dev-check
 	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py verify_catalog_counts'
 	@echo ""
-	@echo "Optional: run 'make up-scheduler' to start celery-beat (checklist horizon, chat purge, upload TTL)."
+	@echo "Optional: run 'make shared-dev-up-scheduler' to start celery-beat (checklist horizon, chat purge, upload TTL)."
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac
@@ -179,6 +183,9 @@ web-build:
 
 web-typecheck:
 	cd $(WEB_DIR) && npm run typecheck
+
+web-lint:
+	cd $(WEB_DIR) && npm run lint
 
 web-test:
 	cd $(WEB_DIR) && npm test

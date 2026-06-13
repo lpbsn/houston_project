@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from django.utils import timezone
 
@@ -48,6 +50,7 @@ def _output_with_candidate(
             PipelineCandidateOutput(
                 title="Clim en panne",
                 structured_summary="La climatisation ne fonctionne plus.",
+                issue_focus="climatisation",
                 affected_business_unit_key=affected_key,
                 responsible_business_unit_key=responsible_key,
                 activity_subject_key=subject_key,
@@ -119,6 +122,7 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
         activity_subject=subject,
         title="Signal actif",
         structured_summary="Situation en cours.",
+        issue_focus="maintenance",
         last_activity_at=timezone.now(),
     )
 
@@ -130,6 +134,7 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
                 PipelineCandidateOutput(
                     title="Prolongation",
                     structured_summary="Même sujet, aggravation.",
+                    issue_focus="maintenance",
                     affected_business_unit_key="hotel",
                     responsible_business_unit_key="hotel",
                     activity_subject_key="maintenance",
@@ -160,3 +165,147 @@ def test_run_pipeline_with_fake_provider():
     processing.refresh_from_db()
     assert processing.status == ObservationProcessing.Status.PROCESSED
     assert Signal.objects.filter(establishment=membership.establishment).exists()
+
+
+def test_apply_pipeline_rejects_hint_when_issue_focus_mismatch():
+    membership = build_membership()
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
+    observation = create_observation(membership=membership)
+    mojito_signal = Signal.objects.create(
+        establishment=membership.establishment,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
+        title="Rupture sirop mojito",
+        structured_summary="Sirop mojito manquant.",
+        issue_focus="sirop mojito",
+        last_activity_at=timezone.now(),
+    )
+
+    outcome = apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[
+                PipelineCandidateOutput(
+                    title="Rupture de pain",
+                    structured_summary="Plus de pain disponible.",
+                    issue_focus="pain",
+                    affected_business_unit_key="hotel",
+                    responsible_business_unit_key="hotel",
+                    activity_subject_key="maintenance",
+                    operational_unit_key=None,
+                    location_text=None,
+                    aggregate_into_signal_id=str(mojito_signal.id),
+                )
+            ],
+        ),
+    ).outcome
+
+    assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 2
+    row = CandidateSignal.objects.get(observation=observation)
+    assert row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+    assert row.result_signal_id != mojito_signal.id
+    assert row.result_signal.issue_focus == "pain"
+
+
+def test_apply_pipeline_logs_candidate_applied_audit(caplog):
+    membership = build_membership()
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
+    observation = create_observation(membership=membership)
+    existing = Signal.objects.create(
+        establishment=membership.establishment,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
+        title="Signal actif",
+        structured_summary="Situation en cours.",
+        issue_focus="maintenance",
+        last_activity_at=timezone.now(),
+    )
+
+    with caplog.at_level(logging.INFO, logger="houston.signals.services"):
+        apply_pipeline_output(
+            observation=observation,
+            output=ObservationPipelineOutput(
+                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                candidates=[
+                    PipelineCandidateOutput(
+                        title="Prolongation",
+                        structured_summary="Même sujet, aggravation.",
+                        issue_focus="maintenance",
+                        affected_business_unit_key="hotel",
+                        responsible_business_unit_key="hotel",
+                        activity_subject_key="maintenance",
+                        operational_unit_key=None,
+                        location_text=None,
+                        aggregate_into_signal_id=str(existing.id),
+                    )
+                ],
+            ),
+        )
+
+    applied_records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "observation_pipeline_candidate_applied"
+    ]
+    assert len(applied_records) == 1
+    record = applied_records[0]
+    assert record.hint_used is True
+    assert getattr(record, "hint_rejected_reason", "") == ""
+    assert record.candidate_outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
+    assert record.aggregation_key
+    assert observation.raw_text not in caplog.text
+
+
+def test_apply_pipeline_logs_hint_rejected_on_issue_focus_mismatch(caplog):
+    membership = build_membership()
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
+    observation = create_observation(membership=membership)
+    mojito_signal = Signal.objects.create(
+        establishment=membership.establishment,
+        affected_business_unit=hotel,
+        responsible_business_unit=hotel,
+        activity_subject=subject,
+        title="Rupture sirop mojito",
+        structured_summary="Sirop mojito manquant.",
+        issue_focus="sirop mojito",
+        last_activity_at=timezone.now(),
+    )
+
+    with caplog.at_level(logging.INFO, logger="houston.signals.services"):
+        apply_pipeline_output(
+            observation=observation,
+            output=ObservationPipelineOutput(
+                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                candidates=[
+                    PipelineCandidateOutput(
+                        title="Rupture de pain",
+                        structured_summary="Plus de pain disponible.",
+                        issue_focus="pain",
+                        affected_business_unit_key="hotel",
+                        responsible_business_unit_key="hotel",
+                        activity_subject_key="maintenance",
+                        operational_unit_key=None,
+                        location_text=None,
+                        aggregate_into_signal_id=str(mojito_signal.id),
+                    )
+                ],
+            ),
+        )
+
+    applied_records = [
+        record
+        for record in caplog.records
+        if record.getMessage() == "observation_pipeline_candidate_applied"
+    ]
+    assert len(applied_records) == 1
+    record = applied_records[0]
+    assert record.hint_used is False
+    assert record.hint_rejected_reason == "hint_issue_focus_mismatch"
+    assert record.candidate_outcome == CandidateSignal.Outcome.CREATED_SIGNAL

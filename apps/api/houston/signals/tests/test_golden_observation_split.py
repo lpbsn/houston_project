@@ -77,6 +77,7 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
             PipelineCandidateOutput(
                 title="Lumière clignote à l'entrée du restaurant",
                 structured_summary="Entrée restaurant, éclairage instable.",
+                issue_focus="lumière entrée restaurant",
                 affected_business_unit_key=RESTAURANT_MODULE_KEY,
                 responsible_business_unit_key="maintenance",
                 activity_subject_key=taxonomy.lighting_subject.normalized_name,
@@ -87,6 +88,7 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
             PipelineCandidateOutput(
                 title="Rupture de sirop mojito au bar",
                 structured_summary="Bar, sirop mojito manquant.",
+                issue_focus="sirop mojito",
                 affected_business_unit_key="bar",
                 responsible_business_unit_key="bar",
                 activity_subject_key="stock",
@@ -125,6 +127,7 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
             PipelineCandidateOutput(
                 title="Lumière clignote à l'entrée du restaurant",
                 structured_summary="Entrée restaurant, éclairage instable.",
+                issue_focus="lumière entrée restaurant",
                 affected_business_unit_key=RESTAURANT_MODULE_KEY,
                 responsible_business_unit_key="maintenance",
                 activity_subject_key="electricite",
@@ -135,6 +138,7 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
             PipelineCandidateOutput(
                 title="Rupture de sirop mojito au bar",
                 structured_summary="Bar, sirop mojito manquant.",
+                issue_focus="sirop mojito",
                 affected_business_unit_key="bar",
                 responsible_business_unit_key="bar",
                 activity_subject_key=taxonomy.stock_subject.normalized_name,
@@ -168,6 +172,7 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
             PipelineCandidateOutput(
                 title="Lumière entrée",
                 structured_summary="Entrée restaurant.",
+                issue_focus="lumière entrée restaurant",
                 affected_business_unit_key=RESTAURANT_MODULE_KEY,
                 responsible_business_unit_key="maintenance",
                 activity_subject_key=taxonomy.lighting_subject.normalized_name,
@@ -178,6 +183,7 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
             PipelineCandidateOutput(
                 title="Stock inventé",
                 structured_summary="Bar.",
+                issue_focus="stock inventé",
                 affected_business_unit_key="invented",
                 responsible_business_unit_key="invented",
                 activity_subject_key="invented_subject",

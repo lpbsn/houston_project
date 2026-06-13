@@ -4,13 +4,17 @@ import pytest
 from pydantic import ValidationError
 
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
-from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
+from houston.signals.constants import (
+    AI_ISSUE_FOCUS_MAX_LENGTH,
+    AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+)
 
 
 def _valid_candidate(**overrides):
     base = {
         "title": "Clim en panne",
         "structured_summary": "La climatisation ne fonctionne plus.",
+        "issue_focus": "clim chambre 104",
         "affected_business_unit_key": "hotel",
         "responsible_business_unit_key": "maintenance",
         "activity_subject_key": "climatisation",
@@ -86,6 +90,39 @@ def test_rejects_location_text_longer_than_120():
                 "candidates": [_valid_candidate(location_text="x" * 121)],
             }
         )
+
+
+def test_rejects_missing_issue_focus():
+    payload = _valid_candidate()
+    del payload["issue_focus"]
+    with pytest.raises(ValidationError):
+        ObservationPipelineOutput.model_validate(
+            {
+                "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                "candidates": [payload],
+            }
+        )
+
+
+def test_rejects_issue_focus_longer_than_80():
+    with pytest.raises(ValidationError):
+        ObservationPipelineOutput.model_validate(
+            {
+                "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                "candidates": [_valid_candidate(issue_focus="x" * (AI_ISSUE_FOCUS_MAX_LENGTH + 1))],
+            }
+        )
+
+
+def test_accepts_issue_focus_up_to_80_chars():
+    focus = "x" * AI_ISSUE_FOCUS_MAX_LENGTH
+    output = ObservationPipelineOutput.model_validate(
+        {
+            "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            "candidates": [_valid_candidate(issue_focus=focus)],
+        }
+    )
+    assert output.candidates[0].issue_focus == focus
 
 
 def test_rejects_more_than_five_candidates():

@@ -5,7 +5,6 @@ import uuid
 import pytest
 from rest_framework.test import APIClient
 
-from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
@@ -18,17 +17,12 @@ from houston.testing.auth import auth_headers, login
 from houston.testing.factories import create_user
 from houston.testing.onboarding import create_onboarding_session
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("imported_catalog")]
 
 
 @pytest.fixture
 def api_client():
     return APIClient(enforce_csrf_checks=True)
-
-
-@pytest.fixture(autouse=True)
-def imported_catalog():
-    return sync_catalog_from_normalized_rows()
 
 
 def test_proposal_endpoints_require_authentication(api_client):

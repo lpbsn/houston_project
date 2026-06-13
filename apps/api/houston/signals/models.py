@@ -4,6 +4,7 @@ from django.db import models
 
 from houston.core.models import BaseModel
 from houston.signals.constants import (
+    AI_ISSUE_FOCUS_MAX_LENGTH,
     SIGNAL_LOCATION_TEXT_MAX_LENGTH,
     SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH,
     SIGNAL_TITLE_MAX_LENGTH,
@@ -78,6 +79,11 @@ class Signal(BaseModel):
     structured_summary = models.TextField(max_length=SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH)
     location_text = models.CharField(
         max_length=SIGNAL_LOCATION_TEXT_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    issue_focus = models.CharField(
+        max_length=AI_ISSUE_FOCUS_MAX_LENGTH,
         blank=True,
         default="",
     )
@@ -167,6 +173,11 @@ class CandidateSignal(BaseModel):
     title = models.CharField(max_length=SIGNAL_TITLE_MAX_LENGTH, blank=True, default="")
     structured_summary = models.TextField(
         max_length=SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    issue_focus = models.CharField(
+        max_length=AI_ISSUE_FOCUS_MAX_LENGTH,
         blank=True,
         default="",
     )
