@@ -38,6 +38,7 @@ markers = [
     "allow_openai_observation_propose: test may call OpenAIObservationPipelineProvider.propose (e.g. missing API key guard test)",
     "openai_transcription_smoke: opt-in live OpenAI transcription test",
     "slow: tests over 1s or explicit sleep",
+    "auth_throttle: tests that assert real rate-limit behavior (429); excluded from relaxed-throttle fixture",
 ]
 
 [tool.ruff]
