@@ -401,7 +401,7 @@ def test_execution_feed_three_assignments_tuesday_scenario(api_client):
         )
         assert len(feed_qs_ids) == 2
 
-        merged_items, _has_more = build_execution_feed_page(
+        merged_items, _has_more, _next_cursor = build_execution_feed_page(
             membership=staff,
             view_mode="personal",
             page_size=25,

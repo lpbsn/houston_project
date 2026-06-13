@@ -5869,6 +5869,8 @@ export interface operations {
     v1_establishments_execution_feed_retrieve: {
         parameters: {
             query: {
+                /** @description Opaque pagination cursor from a previous response next_cursor. */
+                cursor?: string;
                 page_size?: number;
                 view_mode: "general" | "personal";
             };

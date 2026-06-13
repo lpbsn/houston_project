@@ -79,13 +79,18 @@ function actionPathParams(establishmentId: string, actionId: string) {
 export async function fetchExecutionFeed(
   establishmentId: string,
   viewMode: ExecutionViewMode,
+  options: { cursor?: string; pageSize?: number } = {},
 ): Promise<ExecutionFeedResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/execution-feed/', {
         params: {
           path: { establishment_id: establishmentId },
-          query: { view_mode: viewMode },
+          query: {
+            view_mode: viewMode,
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
         },
         headers: getAuthHeaders(accessToken),
       }),

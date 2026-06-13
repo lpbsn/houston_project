@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { invalidateActionMutationSurfaces } from '@/lib/query-invalidation'
 
@@ -30,15 +30,24 @@ export function useExecutionFeedQuery(
   establishmentId: string | null,
   viewMode: ExecutionViewMode,
 ) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: establishmentId
       ? actionsQueryKeys.feed(establishmentId, viewMode)
       : ['actions', 'execution-feed', 'none'],
-    queryFn: () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchExecutionFeed(establishmentId, viewMode)
+      return fetchExecutionFeed(establishmentId, viewMode, {
+        cursor: pageParam,
+      })
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more || !lastPage.next_cursor) {
+        return undefined
+      }
+      return lastPage.next_cursor
     },
     enabled: Boolean(establishmentId),
   })

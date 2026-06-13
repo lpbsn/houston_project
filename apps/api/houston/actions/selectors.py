@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
@@ -79,11 +80,12 @@ def apply_execution_feed_sorting(
     queryset: QuerySet[Action],
     *,
     membership: EstablishmentMembership,
+    as_of: datetime | None = None,
 ) -> QuerySet[Action]:
-    now = timezone.now()
+    reference_time = as_of or timezone.now()
     is_overdue = Case(
         When(
-            due_at__lt=now,
+            due_at__lt=reference_time,
             status__in=[
                 Action.Status.OPEN,
                 Action.Status.IN_PROGRESS,
@@ -128,6 +130,7 @@ def apply_execution_feed_sorting(
         "due_at",
         "-last_activity_at",
         "-created_at",
+        "-id",
     )
 
 
