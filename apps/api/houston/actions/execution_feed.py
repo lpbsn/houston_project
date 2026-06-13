@@ -14,7 +14,9 @@ from houston.checklists.selectors import (
     apply_checklist_feed_sorting,
     checklist_execution_feed_queryset,
 )
+from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.role_constants import _ADMIN_ROLES
 
 
 @dataclass(frozen=True)
@@ -24,12 +26,26 @@ class ExecutionFeedPageItem:
     checklist: ChecklistExecution | None = None
 
 
+def _membership_for_execution_feed(
+    membership: EstablishmentMembership,
+) -> EstablishmentMembership:
+    if membership.role in _ADMIN_ROLES:
+        return membership
+    return (
+        EstablishmentMembership.objects.filter(pk=membership.pk)
+        .select_related("establishment")
+        .prefetch_related(membership_scope_prefetch())
+        .get()
+    )
+
+
 def build_execution_feed_page(
     *,
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
     page_size: int,
 ) -> tuple[list[ExecutionFeedPageItem], bool]:
+    membership = _membership_for_execution_feed(membership)
     ensure_visible_executions_materialized(
         membership=membership,
         view_mode=view_mode,

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
 
 from houston.actions.exceptions import ActionStateError, ActionValidationError
@@ -37,6 +40,30 @@ def _open_action(*, owner, staff, maintenance):
         due_at=timezone.now() + timezone.timedelta(days=1),
         responsible_business_unit_id=maintenance.id,
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_accept_only_one_succeeds():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+
+    def try_accept(_: int) -> str:
+        close_old_connections()
+        try:
+            accept_action(action=action)
+            return "ok"
+        except ActionStateError:
+            return "error"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(try_accept, range(2)))
+
+    assert results.count("ok") == 1
+    assert results.count("error") == 1
+    action.refresh_from_db()
+    assert action.status == Action.Status.IN_PROGRESS
 
 
 def test_accept_action_transitions_open_to_in_progress():

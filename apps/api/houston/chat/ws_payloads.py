@@ -52,3 +52,10 @@ def build_conversation_access_revoked_payload(
         "conversation_id": str(conversation_id),
         "reason": reason,
     }
+
+
+def build_membership_access_revoked_payload(*, reason: str) -> dict:
+    return {
+        "type": "access.revoked",
+        "reason": reason,
+    }

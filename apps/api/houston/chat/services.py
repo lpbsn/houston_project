@@ -33,6 +33,7 @@ from .constants import CHAT_GROUP_TITLE_MAX_LENGTH, CHAT_MESSAGE_BODY_MAX_LENGTH
 from .ws_notify import (
     schedule_conversation_access_revoked,
     schedule_conversation_access_revoked_for_memberships,
+    schedule_membership_access_revoked,
 )
 
 
@@ -142,6 +143,12 @@ def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) 
             conversation_id=participant.conversation_id,
             reason="membership_deactivated",
         )
+
+    schedule_membership_access_revoked(
+        establishment_id=establishment_id,
+        membership_id=membership_id,
+        reason="membership_deactivated",
+    )
 
 
 def _require_chat_membership(

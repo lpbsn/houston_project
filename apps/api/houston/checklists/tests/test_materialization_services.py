@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from houston.checklists.exceptions import ChecklistValidationError
 from houston.checklists.materialization import (
+    READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+    ensure_visible_executions_materialized,
     materialize_assignment_occurrences_in_horizon,
     materialize_execution_from_assignment,
 )
@@ -35,6 +37,35 @@ def _active_registered_template(owner_membership, business_unit):
     template.status = ChecklistTemplate.Status.ACTIVE
     template.save(update_fields=["status", "updated_at"])
     return template
+
+
+def test_ensure_visible_skips_recently_materialized_assignments(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_registered_template(owner_membership, business_unit)
+    start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        recurrence_days=["monday", "wednesday", "friday"],
+        **assignment_schedule_from_datetime(start_at, duration_hours=1),
+    )
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+    materialize_assignment_occurrences_in_horizon(
+        assignment=assignment,
+        horizon_days=READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+        now=start_at,
+    )
+
+    created = ensure_visible_executions_materialized(
+        membership=staff_membership,
+        view_mode="personal",
+    )
+
+    assert created == 0
 
 
 def test_materialize_requires_occurrence_date(owner_membership, staff_membership, business_unit):

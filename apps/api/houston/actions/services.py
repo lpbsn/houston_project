@@ -194,8 +194,13 @@ def create_action(
     )
 
 
+def _lock_action_for_transition(*, action_id: uuid.UUID) -> Action:
+    return Action.objects.select_for_update().get(pk=action_id)
+
+
 @transaction.atomic
 def accept_action(*, action: Action) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status not in {Action.Status.OPEN, Action.Status.REOPENED}:
         raise ActionStateError("Action cannot be accepted in its current state.")
     now = timezone.now()
@@ -208,6 +213,7 @@ def accept_action(*, action: Action) -> Action:
 
 @transaction.atomic
 def mark_action_done(*, action: Action) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status != Action.Status.IN_PROGRESS:
         raise ActionStateError("Action cannot be marked done in its current state.")
     now = timezone.now()
@@ -230,6 +236,7 @@ def mark_action_done(*, action: Action) -> Action:
 
 @transaction.atomic
 def validate_action(*, action: Action) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status != Action.Status.PENDING_VALIDATION:
         raise ActionStateError("Action cannot be validated in its current state.")
     now = timezone.now()
@@ -244,6 +251,7 @@ def validate_action(*, action: Action) -> Action:
 
 @transaction.atomic
 def reopen_action(*, action: Action) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status not in {Action.Status.PENDING_VALIDATION, Action.Status.DONE}:
         raise ActionStateError("Action cannot be reopened in its current state.")
     action.status = Action.Status.REOPENED
@@ -261,6 +269,7 @@ def reopen_action(*, action: Action) -> Action:
 
 @transaction.atomic
 def cancel_action(*, action: Action) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status not in ACTIVE_ACTION_STATUSES:
         raise ActionStateError("Action cannot be canceled in its current state.")
     action.status = Action.Status.CANCELED
@@ -277,6 +286,7 @@ def reassign_action(
     action: Action,
     assigned_to_id: uuid.UUID,
 ) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
         raise ActionStateError("Action cannot be reassigned in its current state.")
     assigned_to = _validate_membership_in_establishment(
@@ -295,6 +305,7 @@ def reassign_action(
 
 @transaction.atomic
 def update_action_due_at(*, action: Action, due_at) -> Action:
+    action = _lock_action_for_transition(action_id=action.id)
     if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
         raise ActionStateError("Due date cannot be updated in the current state.")
     action.due_at = due_at

@@ -22,6 +22,8 @@ from houston.chat.tests.conftest import (
     ws_ticket_url,
 )
 from houston.chat.tests.test_rest_api import create_group
+from houston.establishments.models import EstablishmentMembership
+from houston.establishments.services import deactivate_membership_for_management
 
 
 async def _connect_authenticated(*, ticket: str, establishment):
@@ -36,6 +38,43 @@ async def _connect_authenticated(*, ticket: str, establishment):
     auth_event = await communicator.receive_json_from()
     assert auth_event["type"] == "auth.ok"
     return communicator
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ws_disconnects_when_membership_is_deactivated(api_client):
+    establishment = create_establishment()
+    owner = create_user(username="chat_ws_deactivate_owner")
+    target = create_user(username="chat_ws_deactivate_target")
+    owner_membership = create_membership(
+        user=owner,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    target_membership = create_membership(user=target, establishment=establishment)
+    target_ticket = get_ws_ticket(api_client, user=target, establishment=establishment)
+
+    async def run():
+        communicator = await _connect_authenticated(
+            ticket=target_ticket,
+            establishment=establishment,
+        )
+        await database_sync_to_async(deactivate_membership_for_management)(
+            current_membership=owner_membership,
+            establishment_id=establishment.id,
+            membership_id=target_membership.id,
+        )
+        event = await communicator.receive_json_from()
+        close_event = await communicator.receive_output()
+        await communicator.disconnect()
+        return event, close_event
+
+    event, close_event = async_to_sync(run)()
+    close_old_connections()
+
+    assert event["type"] == "access.revoked"
+    assert event["reason"] == "membership_deactivated"
+    assert close_event["type"] == "websocket.close"
+    assert close_event["code"] == 4002
 
 
 @pytest.mark.django_db(transaction=True)

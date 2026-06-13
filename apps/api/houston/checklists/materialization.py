@@ -35,6 +35,8 @@ from houston.establishments.timezone_utils import (
 )
 
 MATERIALIZATION_HORIZON_DAYS = 14
+READ_PATH_MATERIALIZATION_HORIZON_DAYS = 3
+READ_PATH_MATERIALIZATION_STALE_MINUTES = 30
 VISIBLE_FROM_OFFSET = timedelta(hours=1)
 
 _RECURRENCE_DAY_TO_WEEKDAY = {
@@ -294,6 +296,58 @@ def _assignment_materialization_visibility_q(
     return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
 
 
+def _existing_occurrence_dates_for_assignment(
+    *,
+    assignment: ChecklistAssignment,
+    occurrence_dates: list[date],
+) -> set[date]:
+    if not occurrence_dates:
+        return set()
+    return set(
+        ChecklistExecution.objects.filter(
+            checklist_assignment_id=assignment.id,
+            occurrence_date__in=occurrence_dates,
+        ).values_list("occurrence_date", flat=True)
+    )
+
+
+def _visible_occurrence_dates_for_assignment(
+    *,
+    assignment: ChecklistAssignment,
+    occurrence_dates: list[date],
+    now: datetime,
+) -> list[date]:
+    visible_dates: list[date] = []
+    for occurrence_date in occurrence_dates:
+        occurrence_start_at, _ = _occurrence_datetimes(
+            assignment=assignment,
+            occurrence_date=occurrence_date,
+        )
+        if occurrence_start_at - VISIBLE_FROM_OFFSET <= now:
+            visible_dates.append(occurrence_date)
+    return visible_dates
+
+
+def _assignment_read_path_materialization_is_fresh(
+    *,
+    assignment: ChecklistAssignment,
+    visible_occurrence_dates: list[date],
+    now: datetime,
+    stale_minutes: int = READ_PATH_MATERIALIZATION_STALE_MINUTES,
+) -> bool:
+    if assignment.last_materialized_at is None:
+        return False
+    if (now - assignment.last_materialized_at) >= timedelta(minutes=stale_minutes):
+        return False
+    if not visible_occurrence_dates:
+        return True
+    existing_dates = _existing_occurrence_dates_for_assignment(
+        assignment=assignment,
+        occurrence_dates=visible_occurrence_dates,
+    )
+    return existing_dates.issuperset(visible_occurrence_dates)
+
+
 def ensure_visible_executions_materialized(
     *,
     membership: EstablishmentMembership,
@@ -305,6 +359,7 @@ def ensure_visible_executions_materialized(
         establishment=membership.establishment,
         at=now,
     )
+    read_horizon_days = min(horizon_days, READ_PATH_MATERIALIZATION_HORIZON_DAYS)
     visibility_q = _assignment_materialization_visibility_q(
         membership=membership,
         view_mode=view_mode,
@@ -315,19 +370,39 @@ def ensure_visible_executions_materialized(
     )
     count = 0
     for assignment in assignments.select_related("checklist_template", "establishment"):
-        for occurrence_date in _iter_occurrence_dates(
+        occurrence_dates = _iter_occurrence_dates(
             assignment=assignment,
             from_date=local_today,
-            until_date=local_today + timedelta(days=horizon_days),
+            until_date=local_today + timedelta(days=read_horizon_days),
+        )
+        visible_occurrence_dates = _visible_occurrence_dates_for_assignment(
+            assignment=assignment,
+            occurrence_dates=occurrence_dates,
+            now=now,
+        )
+        if _assignment_read_path_materialization_is_fresh(
+            assignment=assignment,
+            visible_occurrence_dates=visible_occurrence_dates,
+            now=now,
         ):
-            occurrence_start_at, _ = _occurrence_datetimes(
+            continue
+
+        existing_dates = _existing_occurrence_dates_for_assignment(
+            assignment=assignment,
+            occurrence_dates=visible_occurrence_dates,
+        )
+        materialized_any = False
+        for occurrence_date in visible_occurrence_dates:
+            if occurrence_date in existing_dates:
+                continue
+            materialize_execution_from_assignment(
                 assignment=assignment,
                 occurrence_date=occurrence_date,
             )
-            if occurrence_start_at - VISIBLE_FROM_OFFSET <= now:
-                materialize_execution_from_assignment(
-                    assignment=assignment,
-                    occurrence_date=occurrence_date,
-                )
-                count += 1
+            count += 1
+            materialized_any = True
+
+        if materialized_any:
+            assignment.last_materialized_at = now
+            assignment.save(update_fields=["last_materialized_at", "updated_at"])
     return count

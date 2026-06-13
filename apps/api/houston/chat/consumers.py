@@ -101,6 +101,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_conversation_access_revoked(self, event: dict) -> None:
         await self.send(text_data=json.dumps(event["payload"]))
 
+    async def chat_membership_access_revoked(self, event: dict) -> None:
+        await self.send(text_data=json.dumps(event["payload"]))
+        self.authenticated = False
+        await self.close(code=WS_CLOSE_FORBIDDEN)
+
     async def _enforce_auth_timeout(self) -> None:
         try:
             await asyncio.sleep(settings.HOUSTON_CHAT_WS_AUTH_TIMEOUT_SECONDS)

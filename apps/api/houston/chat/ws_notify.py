@@ -6,7 +6,10 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
 from houston.chat.groups import membership_group_name
-from houston.chat.ws_payloads import build_conversation_access_revoked_payload
+from houston.chat.ws_payloads import (
+    build_conversation_access_revoked_payload,
+    build_membership_access_revoked_payload,
+)
 
 
 def notify_conversation_access_revoked(
@@ -64,6 +67,44 @@ def schedule_conversation_access_revoked(
             establishment_id=establishment_id,
             membership_id=membership_id,
             conversation_id=conversation_id,
+            reason=reason,
+        )
+    )
+
+
+def notify_membership_access_revoked(
+    *,
+    establishment_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    reason: str,
+) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+
+    payload = build_membership_access_revoked_payload(reason=reason)
+    async_to_sync(channel_layer.group_send)(
+        membership_group_name(
+            establishment_id=establishment_id,
+            membership_id=membership_id,
+        ),
+        {
+            "type": "chat.membership.access_revoked",
+            "payload": payload,
+        },
+    )
+
+
+def schedule_membership_access_revoked(
+    *,
+    establishment_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    reason: str,
+) -> None:
+    transaction.on_commit(
+        lambda: notify_membership_access_revoked(
+            establishment_id=establishment_id,
+            membership_id=membership_id,
             reason=reason,
         )
     )

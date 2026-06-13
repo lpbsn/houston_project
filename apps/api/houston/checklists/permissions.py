@@ -7,7 +7,10 @@ from houston.checklists.models import (
     ChecklistExecution,
     ChecklistTemplate,
 )
-from houston.establishments.membership_scope import membership_scope_covers_business_unit
+from houston.establishments.membership_scope import (
+    _iter_membership_scopes,
+    membership_scope_covers_business_unit,
+)
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.permissions import _is_valid_membership
 from houston.establishments.role_constants import _ADMIN_ROLES, _MANAGEMENT_ROLES
@@ -22,7 +25,7 @@ def _same_establishment(
 
 def _scope_business_unit_ids(membership: EstablishmentMembership) -> set:
     bu_ids: set = set()
-    for scope in membership.scope_links.all():
+    for scope in _iter_membership_scopes(membership):
         if scope.business_unit_id is not None:
             bu_ids.add(scope.business_unit_id)
     return bu_ids

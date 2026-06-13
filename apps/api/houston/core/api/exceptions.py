@@ -29,7 +29,7 @@ def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response:
                 request_method=request_method,
                 exception_class=type(exc).__name__,
             ),
-            exc_info=False,
+            exc_info=True,
         )
         return Response(
             {
