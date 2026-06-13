@@ -154,11 +154,13 @@ make up-backend
 
 (`make up` also starts `celery` alongside `api` and `web`.)
 
-- After changing env vars, recreate backend containers:
+- After changing env vars, recreate backend containers (reloads `.env`; does not touch postgres/redis):
 
 ```bash
-make restart-backend
+make recreate-backend
 ```
+
+For a simple process bounce without reloading `.env` (e.g. bind-mounted code only): `make restart-backend`.
 
 Requires Redis (`CELERY_BROKER_URL`). Without the `celery` service, submitted observations stay `queued`. Automated tests use the fake provider via pytest fixtures (no live OpenAI in CI).
 
@@ -196,7 +198,8 @@ make build            # both
 make up-backend       # postgres + redis + api + celery (local DB guard)
 make up               # api + celery + web (no rebuild)
 make up-build         # same, with --build
-make restart-backend  # after .env changes
+make restart-backend  # bounce api/celery; does not reload .env
+make recreate-backend # after .env changes; recreates api/celery (--no-deps)
 make up-scheduler
 make down
 make shell
@@ -213,7 +216,7 @@ Excludes `.env`, `private_media`, `node_modules`, caches, and other untracked/gi
 
 ## Docker security (local)
 
-- **api**, **celery**, and **celery-beat** share one backend image tag `houston-api:dev` (see [`docker-compose.yml`](docker-compose.yml)). `chown` in the image applies to `/opt/venv` only; the bind mount `.:/app` uses **host file ownership** — image `chown` on `/app` does not fix runtime permissions.
+- **api**, **celery**, and **celery-beat** share one backend image tag `houston-api:dev` (see [`docker-compose.yml`](docker-compose.yml)). Legacy local tags `houston_project-api:latest` / `houston_project-celery:latest` from older setups may remain; remove manually with `docker image rm` if desired — not automated by Makefile targets. `chown` in the image applies to `/opt/venv` only; the bind mount `.:/app` uses **host file ownership** — image `chown` on `/app` does not fix runtime permissions.
 - **Linux only** — if you get `Permission denied` on the bind mount, use a local `docker-compose.override.yml` (do not commit secrets):
 
 ```yaml
@@ -229,7 +232,7 @@ services:
 - **Bind mount risk** — if `.env` exists at the repo root, processes in api/celery can read `/app/.env`. Never commit `.env`.
 - **`docker compose config`** may print interpolated secrets — do not paste output into public tickets or CI logs. Do **not** run `docker compose config | grep -E 'OPENAI|SECRET|PASSWORD'` in shareable logs.
 - **Postgres (5432)** and **Redis (6379)** are exposed on the host for local dev; tighten before pre-prod.
-- **Phase 4** — observation processing needs the celery worker: `make up-backend`. After `.env` changes: `make restart-backend`. Automated pytest does **not** require the Compose celery service (fixtures use the fake provider).
+- **Phase 4** — observation processing needs the celery worker: `make up-backend`. After `.env` changes: `make recreate-backend` (not `restart-backend`, which does not reload env). Automated pytest does **not** require the Compose celery service (fixtures use the fake provider).
 
 Safe env smoke checks (no secret values):
 

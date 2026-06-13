@@ -19,7 +19,8 @@ Preferred local workflow:
 Build / restart:
 - backend image `houston-api:dev` (api + celery + celery-beat): `make build-backend`
 - full stack images: `make build`
-- after `.env` changes: `make restart-backend`
+- bounce process (does not reload `.env`): `make restart-backend`
+- after `.env` changes (recreates api/celery, `--no-deps`): `make recreate-backend`
 - guard script tests (no DB): `make infra-check`
 
 Shared-dev (remote PostgreSQL, `.env.shared-dev`):

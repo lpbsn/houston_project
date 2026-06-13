@@ -235,7 +235,7 @@ make web-dev
 | `make migrate` ou `make bootstrap-dev` échoue | `make up-backend` puis réessayer `make bootstrap-dev` |
 | Catalogue vide / autocomplete vide | `make import-catalog` puis `make catalog-check` |
 | Repartir de zéro (DB locale) | `make reset-dev-db` puis `make web-install` si besoin |
-| Inscription refusée | Vérifier `HOUSTON_REGISTRATION_INVITE_CODES` dans `.env`, puis `make restart-backend` |
+| Inscription refusée | Vérifier `HOUSTON_REGISTRATION_INVITE_CODES` dans `.env`, puis `make recreate-backend` |
 
 Détails et dépannage : sections 2 à 14 ci-dessous.
 
@@ -552,8 +552,10 @@ Gardez un terminal avec Docker (`api`, `celery`, …) et un terminal avec `make 
 ### Recréer api/celery après modification du `.env`
 
 ```bash
-make restart-backend
+make recreate-backend
 ```
+
+Recrée `api` et `celery` pour recharger `.env` (`postgres` / `redis` non touchés). Pour un simple bounce process sans recharger `.env` : `make restart-backend`.
 
 (Documenté dans [`README.md`](README.md) pour le pipeline observation → signal.)
 
@@ -628,7 +630,8 @@ make docker-verify-security
 | Démarrer backend + worker (sans frontend Docker) | `make up-backend` |
 | Démarrer stack complète (API + Celery + frontend Docker) | `make up` |
 | Stack complète avec rebuild | `make up-build` |
-| Redémarrer api/celery après changement `.env` | `make restart-backend` |
+| Bounce process api/celery (sans recharger `.env`) | `make restart-backend` |
+| Recréer api/celery après changement `.env` | `make recreate-backend` |
 | Arrêter | `make down` |
 | Logs API | `docker compose logs -f api` |
 | Shell dans le conteneur API | `make shell` |
@@ -660,7 +663,7 @@ Exécution via Docker : `docker compose exec api python manage.py <commande>`.
 3. Redémarrer + migrations + catalogue : `make bootstrap-dev` (ou `make up-backend` puis `make migrate` + `make import-catalog`)
 4. Si contrat API modifié : `make schema` puis `make web-api-generate`
 5. Frontend : `make web-install` si `package-lock.json` a changé
-6. Si `.env` modifié : `make restart-backend`
+6. Si `.env` modifié : `make recreate-backend`
 7. Si nouveau besoin médias : en Docker, le volume `private_media` est géré par Compose ; hors Docker, vérifier `apps/api/private_media`
 
 ---
@@ -717,7 +720,7 @@ Les notes Linux `user: "${UID}:${GID}"` du README concernent surtout **Linux** ;
 ### Inscription `/onboarding` impossible
 
 - Vérifiez `HOUSTON_REGISTRATION_INVITE_CODES` non vide dans `.env`.
-- Recréez api après changement : `make restart-backend`.
+- Recréez api/celery après changement `.env` : `make recreate-backend`.
 
 ### Observations bloquées en `queued`
 

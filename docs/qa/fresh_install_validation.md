@@ -32,6 +32,8 @@ make web-dev
 
 Scheduler optionnel (checklists horizon) : `make up-scheduler`.
 
+Après modification de `.env` (stack déjà up) : `make recreate-backend` (recrée `api`/`celery` pour recharger les variables ; `postgres`/`redis` non touchés). `make restart-backend` ne recharge pas `.env`.
+
 `make bootstrap-dev` enchaîne : `up-backend` → `migrate` → `import-catalog` → `check` → `catalog-check`.
 
 ### Reset destructif (repartir d’une base vide)
@@ -98,5 +100,5 @@ Checklist opérationnelle courte : [`pilot_smoke_checklist.md`](pilot_smoke_chec
 
 - Installation Mac : [`INSTALL_MAC.md`](../../INSTALL_MAC.md)
 - Catalogue v2 : [`business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md)
-- Makefile : `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `shared-dev-up`, `shared-dev-bootstrap`, `shared-dev-check`
+- Makefile : `import-catalog`, `catalog-check`, `bootstrap-dev`, `reset-dev-db`, `recreate-backend`, `restart-backend`, `shared-dev-up`, `shared-dev-bootstrap`, `shared-dev-check`
 - Shared-dev : [`shared_dev_database.md`](../engineering/shared_dev_database.md)

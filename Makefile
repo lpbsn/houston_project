@@ -1,6 +1,6 @@
 .PHONY: \
 	build build-backend build-web \
-	up up-build up-backend up-scheduler restart-backend down \
+	up up-build up-backend up-scheduler restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-check \
@@ -49,10 +49,18 @@ up-backend: assert-local-dev-db
 	$(COMPOSE) up -d postgres redis api celery
 	$(COMPOSE) exec -u 0 api chown -R houston:houston /app/apps/api/private_media
 
+# Simple process restart (bind-mounted code). Does not reload .env or image.
 restart-backend:
 	$(COMPOSE) restart api celery
 	@if $(COMPOSE) --profile scheduler ps --status running --services 2>/dev/null | grep -qx celery-beat; then \
 		$(COMPOSE) --profile scheduler restart celery-beat; \
+	fi
+
+# Recreate api/celery (--no-deps: postgres/redis untouched) to reload .env.
+recreate-backend: assert-local-dev-db
+	$(COMPOSE) up -d --force-recreate --no-deps api celery
+	@if $(COMPOSE) --profile scheduler ps --status running --services 2>/dev/null | grep -qx celery-beat; then \
+		$(COMPOSE) --profile scheduler up -d --force-recreate --no-deps celery-beat; \
 	fi
 
 # Celery Beat (profile scheduler): checklist horizon, chat purge, upload TTL cleanup.
