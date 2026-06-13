@@ -107,6 +107,7 @@ _OBSERVATION_PIPELINE_CANDIDATE_APPLY_LOG_KEYS = frozenset(
         "hint_used",
         "hint_rejected_reason",
         "candidate_outcome",
+        "aggregation_match_mode",
     }
 )
 _SENSITIVE_FIELD_NAMES = frozenset(
@@ -357,6 +358,7 @@ def build_observation_pipeline_candidate_apply_log_context(
     taxonomy_bucket_key: str = "",
     issue_focus: str = "",
     active_taxonomy_peer_count: int | None = None,
+    aggregation_match_mode: str = "",
 ) -> dict[str, Any]:
     context: dict[str, Any] = {
         "observation_id": str(observation_id),
@@ -375,6 +377,8 @@ def build_observation_pipeline_candidate_apply_log_context(
         context["hint_rejected_reason"] = hint_rejected_reason.strip()[:80]
     if candidate_outcome.strip():
         context["candidate_outcome"] = candidate_outcome.strip()[:32]
+    if aggregation_match_mode.strip():
+        context["aggregation_match_mode"] = aggregation_match_mode.strip()[:32]
     return sanitize_log_context(
         context,
         allowed_keys=_OBSERVATION_PIPELINE_CANDIDATE_APPLY_LOG_KEYS,

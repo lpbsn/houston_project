@@ -277,6 +277,8 @@ Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
 | --- | --- |
 | Candidate matches active Signal (same aggregation key incl. `issue_focus`) | Aggregate into existing Signal |
 | Candidate same quadruplet but different `issue_focus` | Create new Signal |
+| Active legacy Signal with empty `issue_focus` and same taxonomy quadruplet (exactly one match) | Aggregate via legacy fallback; enrich Signal `issue_focus` from candidate |
+| Multiple active legacy Signals same quadruplet with empty `issue_focus` | Create new Signal (ambiguous legacy bucket) |
 | Candidate matches resolved Signal | Create new Signal |
 | Aggregation target closed/archived | Rejected |
 | LLM hint `aggregate_into_signal_id` with mismatched `issue_focus` | Ignore hint, create new Signal |
