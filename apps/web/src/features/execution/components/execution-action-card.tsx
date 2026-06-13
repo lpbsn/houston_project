@@ -1,5 +1,4 @@
 import { Bell } from 'lucide-react'
-import type { KeyboardEvent } from 'react'
 
 import type { ActionFeedItem } from '@/features/actions/types'
 import { ActionStatusBadge } from '@/features/actions/components/action-status-badge'
@@ -19,6 +18,7 @@ import {
   shouldShowActionUrgentBadge,
 } from '@/features/actions/lib/action-display'
 import { HoustonBadge } from '@/components/ui/terrain'
+import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import {
   terrainFeedCardBaseClassName,
   terrainFeedInteractiveCardClassName,
@@ -26,17 +26,6 @@ import {
 type ExecutionActionCardProps = {
   item: ActionFeedItem
   onSelect: (actionId: string) => void
-}
-
-function handleCardKeyDown(
-  event: KeyboardEvent<HTMLElement>,
-  onSelect: (actionId: string) => void,
-  actionId: string,
-) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    onSelect(actionId)
-  }
 }
 
 function PendingValidationExecutionActionCard({
@@ -57,7 +46,7 @@ function PendingValidationExecutionActionCard({
         'border border-[#E69138] bg-[#FFF9ED] hover:border-[#E69138]/80',
       )}
       onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >
@@ -117,7 +106,7 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
       className={terrainFeedInteractiveCardClassName()}
       style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >

@@ -5,7 +5,7 @@ import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import type { RoleEnum } from '@/features/auth/types'
+import { toRoleEnum } from '@/features/auth/lib/role'
 import { ChecklistTemplateSection } from '@/features/checklists/components/checklist-template-section'
 import {
   useChecklistTemplatesQuery,
@@ -20,21 +20,11 @@ import type { ChecklistBadge, ChecklistTemplateListFilters } from '@/features/ch
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-const INVITATION_ROLES: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
-
 type ChecklistHubPageProps = {
   onNavigate?: (pathname: string) => void
 }
 
 type BadgeFilter = 'all' | ChecklistBadge
-
-function toRoleEnum(role: string | null | undefined): RoleEnum | null {
-  if (!role) {
-    return null
-  }
-
-  return INVITATION_ROLES.find((candidate) => candidate === role) ?? null
-}
 
 function filterButtonClass(isSelected: boolean): string {
   return cn(

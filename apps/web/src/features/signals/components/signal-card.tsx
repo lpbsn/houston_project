@@ -1,7 +1,7 @@
-import type { KeyboardEvent } from 'react'
 import { Pin } from 'lucide-react'
 
 import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
+import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { terrainFeedCardBaseClassName, terrainFeedInteractiveCardClassName } from '@/lib/terrain-styles'
 
 import {
@@ -24,17 +24,6 @@ type SignalCardProps = {
   variant?: 'feed' | 'pinned'
 }
 
-function handleCardKeyDown(
-  event: KeyboardEvent<HTMLElement>,
-  onSelect: (signalId: string) => void,
-  signalId: string,
-) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    onSelect(signalId)
-  }
-}
-
 function FeedSignalCard({ item, onSelect }: SignalCardProps) {
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
@@ -48,7 +37,7 @@ function FeedSignalCard({ item, onSelect }: SignalCardProps) {
       className={terrainFeedInteractiveCardClassName(surfaceClass)}
       style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >
@@ -98,7 +87,7 @@ function PinnedSignalCard({ item, onSelect }: SignalCardProps) {
     <article
       className={terrainFeedCardBaseClassName(getPinnedSignalCardClassName())}
       onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >

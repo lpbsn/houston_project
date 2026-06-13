@@ -7,6 +7,7 @@ import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
 import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { ActionsApiError } from '@/features/actions/api'
 import { useExecutionFeedQuery } from '@/features/actions/hooks'
 import type { ExecutionViewMode } from '@/features/actions/types'
@@ -24,16 +25,6 @@ type ExecutionFeedPageProps = {
   onOpenAction?: (actionId: string) => void
   onOpenChecklist?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ActionsApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 export function ExecutionFeedPage({
@@ -98,7 +89,7 @@ export function ExecutionFeedPage({
         ) : null}
         {feedQuery.isError ? (
           <TerrainErrorState
-            message={getErrorMessage(feedQuery.error)}
+            message={resolveApiErrorMessage(feedQuery.error, ActionsApiError, 'Une erreur est survenue.')}
             onRetry={() => void feedQuery.refetch()}
           />
         ) : null}

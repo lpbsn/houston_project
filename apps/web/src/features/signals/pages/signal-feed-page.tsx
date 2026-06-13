@@ -9,6 +9,7 @@ import {
   TerrainErrorState,
   TerrainSectionLabel,
 } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { SignalCard } from '../components/signal-card'
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
@@ -27,16 +28,6 @@ import type { SignalFeedItem, SignalViewMode } from '../types'
 
 type SignalFeedPageProps = {
   onOpenSignal: (signalId: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof SignalsApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
@@ -118,7 +109,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
         {feedQuery.isError ? (
           <TerrainErrorState
             className="mx-3 mt-3"
-            message={getErrorMessage(feedQuery.error)}
+            message={resolveApiErrorMessage(feedQuery.error, SignalsApiError, 'Une erreur est survenue.')}
             onRetry={() => void feedQuery.refetch()}
           />
         ) : null}

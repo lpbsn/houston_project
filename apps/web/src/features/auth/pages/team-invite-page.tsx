@@ -8,17 +8,7 @@ import {
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { getAllowedInviteTargetRoles } from '@/features/auth/lib/invitation-rbac'
-import type { RoleEnum } from '@/features/auth/types'
-
-const INVITATION_ROLES: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
-
-function toRoleEnum(role: string | null | undefined): RoleEnum | null {
-  if (!role) {
-    return null
-  }
-
-  return INVITATION_ROLES.find((candidate) => candidate === role) ?? null
-}
+import { toRoleEnum } from '@/features/auth/lib/role'
 
 export function TeamInvitePage() {
   const { activeMembership, bootstrap } = useAuth()

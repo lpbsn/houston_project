@@ -2,6 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainErrorState } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
 import { ActionsApiError } from '../api'
@@ -25,16 +26,6 @@ import {
 type ActionDetailPageProps = {
   actionId: string
   onNavigate: (pathname: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ActionsApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps) {
@@ -75,7 +66,7 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message={getErrorMessage(detailQuery.error)}
+        message={resolveApiErrorMessage(detailQuery.error, ActionsApiError, 'Une erreur est survenue.')}
         onRetry={() => void detailQuery.refetch()}
       />
     )
@@ -118,7 +109,7 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
         <ActionDetailStickyFooter
           hints={hints}
           isPending={isPending}
-          mutationErrorMessage={mutationError ? getErrorMessage(mutationError) : null}
+          mutationErrorMessage={mutationError ? resolveApiErrorMessage(mutationError, ActionsApiError, 'Une erreur est survenue.') : null}
           onAccept={() => void acceptMutation.mutate()}
           onMarkDone={() => void markDoneMutation.mutate()}
           onValidate={() => void validateMutation.mutate()}

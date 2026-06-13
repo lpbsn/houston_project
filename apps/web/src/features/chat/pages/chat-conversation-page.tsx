@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { ChatApiError } from '../api'
 import { ChatComposer } from '../components/chat-composer'
@@ -23,16 +24,6 @@ import {
 
 type ChatConversationPageProps = {
   conversationId: string
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ChatApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 export function ChatConversationPage({ conversationId }: ChatConversationPageProps) {
@@ -100,7 +91,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message={getErrorMessage(detailQuery.error)}
+        message={resolveApiErrorMessage(detailQuery.error, ChatApiError, 'Une erreur est survenue.')}
         onRetry={() => void detailQuery.refetch()}
       />
     )
@@ -110,7 +101,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message={getErrorMessage(messagesQuery.error)}
+        message={resolveApiErrorMessage(messagesQuery.error, ChatApiError, 'Une erreur est survenue.')}
         onRetry={() => void messagesQuery.refetch()}
       />
     )

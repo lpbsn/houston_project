@@ -6,6 +6,7 @@ import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { ChatApiError } from '../api'
 import { ChatCreateSheet } from '../components/chat-create-sheet'
@@ -17,16 +18,6 @@ import { useChatConversationsQuery, useChatStatusQuery } from '../hooks'
 
 type ChatPageProps = {
   onOpenConversation: (conversationId: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ChatApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 export function ChatPage({ onOpenConversation }: ChatPageProps) {
@@ -64,7 +55,7 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message={getErrorMessage(statusQuery.error)}
+        message={resolveApiErrorMessage(statusQuery.error, ChatApiError, 'Une erreur est survenue.')}
         onRetry={() => void statusQuery.refetch()}
       />
     )
@@ -118,7 +109,7 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
         {conversationsQuery.isError ? (
           <TerrainErrorState
             className="mx-3 mt-3"
-            message={getErrorMessage(conversationsQuery.error)}
+            message={resolveApiErrorMessage(conversationsQuery.error, ChatApiError, 'Une erreur est survenue.')}
             onRetry={() => void conversationsQuery.refetch()}
           />
         ) : null}

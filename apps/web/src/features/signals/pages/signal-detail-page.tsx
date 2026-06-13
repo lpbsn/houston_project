@@ -2,6 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { ActionDetailCommentsDisabledSection } from '@/features/actions/components/action-detail-disabled-section'
 import { cn } from '@/lib/utils'
 
@@ -27,16 +28,6 @@ import type { SignalDetail } from '../types'
 type SignalDetailPageProps = {
   signalId: string
   onNavigate: (pathname: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof SignalsApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 function formatDescriptionContent(structuredSummary: string): string {
@@ -90,7 +81,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message={getErrorMessage(detailQuery.error)}
+        message={resolveApiErrorMessage(detailQuery.error, SignalsApiError, 'Une erreur est survenue.')}
         onRetry={() => void detailQuery.refetch()}
       />
     )
@@ -159,7 +150,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           onCancel={() => void cancelMutation.mutate()}
           onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
           lifecycleErrorMessage={
-            lifecycleError ? getErrorMessage(lifecycleError) : null
+            lifecycleError ? resolveApiErrorMessage(lifecycleError, SignalsApiError, 'Une erreur est survenue.') : null
           }
         />
       ) : null}

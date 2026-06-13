@@ -8,7 +8,7 @@ import {
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainCard, TerrainErrorState, TerrainSectionLabel, TerrainStickyFooter } from '@/components/ui/terrain'
 import { ActionsApiError } from '@/features/actions/api'
 import { ActionCreateAssigneeSection } from '@/features/actions/components/action-create-assignee-section'
 import { ActionCreateBusinessUnitSection } from '@/features/actions/components/action-create-business-unit-section'
@@ -27,6 +27,7 @@ import { SignalClassificationBadges } from '@/features/signals/components/signal
 import { useSignalDetailQuery } from '@/features/signals/hooks'
 import { SignalsApiError } from '@/features/signals/api'
 import { shouldShowSignalCreateActionPlan } from '@/features/signals/lib/signal-create-action'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -34,16 +35,6 @@ type ActionCreatePageProps = {
   mode: 'linked' | 'free'
   signalId?: string
   onNavigate: (pathname: string) => void
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof ActionsApiError || error instanceof SignalsApiError) {
-    return error.detail
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return 'Une erreur est survenue.'
 }
 
 export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePageProps) {
@@ -177,7 +168,11 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
       return (
         <TerrainErrorState
           className="mx-3 mt-3"
-          message={getErrorMessage(detailQuery.error)}
+          message={resolveApiErrorMessage(
+            detailQuery.error,
+            SignalsApiError,
+            resolveApiErrorMessage(detailQuery.error, ActionsApiError, 'Une erreur est survenue.'),
+          )}
           onRetry={() => void detailQuery.refetch()}
         />
       )
@@ -202,7 +197,13 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
     )
   }
 
-  const errorMessage = createMutation.error ? getErrorMessage(createMutation.error) : null
+  const errorMessage = createMutation.error
+    ? resolveApiErrorMessage(
+        createMutation.error,
+        ActionsApiError,
+        resolveApiErrorMessage(createMutation.error, SignalsApiError, 'Une erreur est survenue.'),
+      )
+    : null
 
   return (
     <div className="flex min-h-full flex-col">
@@ -290,14 +291,7 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
           ) : null}
         </div>
 
-        <footer
-          className={cn(
-            'sticky bottom-0 z-10 mt-auto shrink-0',
-            'border-t border-[#E8E6DF] bg-[#F5F4F0]',
-            'shadow-[0_-4px_12px_rgba(0,0,0,0.04)]',
-            'px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-          )}
-        >
+        <TerrainStickyFooter>
           <Button
             type="submit"
             disabled={!canSubmit || createMutation.isPending}
@@ -308,7 +302,7 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
           >
             {createMutation.isPending ? 'Création…' : 'Créer'}
           </Button>
-        </footer>
+        </TerrainStickyFooter>
       </form>
     </div>
   )

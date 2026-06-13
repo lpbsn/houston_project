@@ -1,5 +1,4 @@
 import { ClipboardCheck, Clock } from 'lucide-react'
-import type { KeyboardEvent } from 'react'
 
 import { HoustonBadge } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
@@ -10,23 +9,13 @@ import {
   formatChecklistProgressLabel,
 } from '@/features/checklists/lib/checklist-display'
 import type { ChecklistFeedItem } from '@/features/checklists/types'
+import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { terrainFeedCardBaseClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ExecutionChecklistCardProps = {
   item: ChecklistFeedItem
   onSelect: (executionId: string) => void
-}
-
-function handleCardKeyDown(
-  event: KeyboardEvent<HTMLElement>,
-  onSelect: (executionId: string) => void,
-  executionId: string,
-) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    onSelect(executionId)
-  }
 }
 
 function getTaskProgressPercent(treatedCount: number, totalCount: number): number {
@@ -57,7 +46,7 @@ export function ExecutionChecklistCard({ item, onSelect }: ExecutionChecklistCar
       )}
       style={{ borderColor }}
       onClick={() => onSelect(item.id)}
-      onKeyDown={(event) => handleCardKeyDown(event, onSelect, item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
       tabIndex={0}
     >

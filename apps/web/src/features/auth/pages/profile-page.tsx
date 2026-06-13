@@ -10,11 +10,10 @@ import {
   canInviteFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
+import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
-
-const INVITATION_ROLES: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
 
 const ROLE_DISPLAY_LABELS: Record<RoleEnum, string> = {
   owner: 'Propriétaire',
@@ -40,14 +39,6 @@ type ProfilePageProps = {
   onNavigate?: (pathname: string) => void
   onSignOut?: () => void
   isLoggingOut?: boolean
-}
-
-function toRoleEnum(role: string | null | undefined): RoleEnum | null {
-  if (!role) {
-    return null
-  }
-
-  return INVITATION_ROLES.find((candidate) => candidate === role) ?? null
 }
 
 function readOptionalUserName(user: unknown, key: 'first_name' | 'last_name') {

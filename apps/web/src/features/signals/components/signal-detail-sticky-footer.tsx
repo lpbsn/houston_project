@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { TerrainStickyFooter } from '@/components/ui/terrain'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -27,15 +28,7 @@ export function SignalDetailStickyFooter({
   const hasLifecycle = hints.can_resolve || hints.can_cancel
 
   return (
-    <footer
-      className={cn(
-        'sticky bottom-0 z-10 mt-auto shrink-0',
-        'border-t border-[#E8E6DF] bg-[#F5F4F0]',
-        'shadow-[0_-4px_12px_rgba(0,0,0,0.04)]',
-        'px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-        'flex flex-col gap-2',
-      )}
-    >
+    <TerrainStickyFooter className="flex flex-col gap-2">
       {hasLifecycle ? (
         <SignalLifecycleActions
           hints={hints}
@@ -63,6 +56,6 @@ export function SignalDetailStickyFooter({
           {lifecycleErrorMessage}
         </p>
       ) : null}
-    </footer>
+    </TerrainStickyFooter>
   )
 }
