@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import patch
 
 import pytest
+from django.db import IntegrityError
 from django.utils import timezone
 
 from houston.ai.observation_pipeline import FakeObservationPipelineProvider
@@ -16,8 +18,13 @@ from houston.establishments.tests.taxonomy_helpers import (
 )
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
+from houston.signals.exceptions import SignalPipelineCandidateError
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
-from houston.signals.services import apply_pipeline_output, run_observation_pipeline
+from houston.signals.services import (
+    apply_pipeline_output,
+    run_observation_pipeline,
+    validate_pipeline_output_issue_focus,
+)
 from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
@@ -60,6 +67,147 @@ def _output_with_candidate(
             )
         ],
     )
+
+
+def _fake_provider_payload(*, issue_focus: str = "climatisation"):
+    return {
+        "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+        "candidates": [
+            {
+                "title": "Clim en panne",
+                "structured_summary": "La climatisation ne fonctionne plus.",
+                "issue_focus": issue_focus,
+                "affected_business_unit_key": "hotel",
+                "responsible_business_unit_key": "hotel",
+                "activity_subject_key": "maintenance",
+                "operational_unit_key": None,
+                "location_text": None,
+                "aggregate_into_signal_id": None,
+            }
+        ],
+    }
+
+
+def test_validate_pipeline_output_rejects_whitespace_only_issue_focus():
+    with pytest.raises(SignalPipelineCandidateError):
+        validate_pipeline_output_issue_focus(
+            output=ObservationPipelineOutput(
+                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                candidates=[
+                    PipelineCandidateOutput(
+                        title="Clim en panne",
+                        structured_summary="La climatisation ne fonctionne plus.",
+                        issue_focus="   ",
+                        affected_business_unit_key="hotel",
+                        responsible_business_unit_key="hotel",
+                        activity_subject_key="maintenance",
+                        operational_unit_key=None,
+                        location_text=None,
+                        aggregate_into_signal_id=None,
+                    )
+                ],
+            )
+        )
+
+
+def test_apply_pipeline_rejects_whitespace_only_issue_focus():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+
+    with pytest.raises(SignalPipelineCandidateError):
+        apply_pipeline_output(
+            observation=observation,
+            output=ObservationPipelineOutput(
+                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                candidates=[
+                    PipelineCandidateOutput(
+                        title="Clim en panne",
+                        structured_summary="La climatisation ne fonctionne plus.",
+                        issue_focus="   ",
+                        affected_business_unit_key="hotel",
+                        responsible_business_unit_key="hotel",
+                        activity_subject_key="maintenance",
+                        operational_unit_key=None,
+                        location_text=None,
+                        aggregate_into_signal_id=None,
+                    )
+                ],
+            ),
+        )
+
+
+def test_run_pipeline_marks_failed_on_invalid_issue_focus():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    provider = FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   "))
+
+    run_observation_pipeline(observation.id, provider=provider)
+
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert processing.status == ObservationProcessing.Status.FAILED
+    assert processing.last_error_code == "invalid_issue_focus"
+    assert processing.status != ObservationProcessing.Status.PROCESSING
+
+
+def test_no_candidate_signal_on_invalid_issue_focus():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    provider = FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   "))
+
+    run_observation_pipeline(observation.id, provider=provider)
+
+    assert CandidateSignal.objects.filter(observation=observation).count() == 0
+
+
+def test_run_pipeline_marks_failed_on_apply_integrity_error():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    provider = FakeObservationPipelineProvider()
+
+    with patch(
+        "houston.signals.services._persist_pending_candidate",
+        side_effect=IntegrityError(
+            'null value in column "issue_focus" violates not-null constraint'
+        ),
+    ):
+        with pytest.raises(IntegrityError):
+            run_observation_pipeline(observation.id, provider=provider)
+
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert processing.status == ObservationProcessing.Status.FAILED
+    assert processing.last_error_code == "pipeline_persist_error"
+    assert processing.status != ObservationProcessing.Status.PROCESSING
+
+
+def test_no_observation_stuck_in_processing_after_apply_error():
+    membership = build_membership()
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+
+    run_observation_pipeline(
+        observation.id,
+        provider=FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   ")),
+    )
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert processing.status != ObservationProcessing.Status.PROCESSING
+
+    observation_two = create_observation(membership=membership)
+    with patch(
+        "houston.signals.services._persist_pending_candidate",
+        side_effect=IntegrityError("persist failed"),
+    ):
+        with pytest.raises(IntegrityError):
+            run_observation_pipeline(observation_two.id, provider=FakeObservationPipelineProvider())
+    processing_two = observation_two.processing
+    processing_two.refresh_from_db()
+    assert processing_two.status != ObservationProcessing.Status.PROCESSING
 
 
 def test_apply_pipeline_creates_open_signal():

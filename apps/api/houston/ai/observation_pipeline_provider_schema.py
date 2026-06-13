@@ -53,6 +53,7 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 },
                 "issue_focus": {
                     "type": "string",
+                    "minLength": 1,
                     "maxLength": AI_ISSUE_FOCUS_MAX_LENGTH,
                     "description": (
                         "Stable operational focus: product, object, equipment, or situation "

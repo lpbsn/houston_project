@@ -101,6 +101,11 @@ backend-test: assert-local-dev-db
 
 backend-check: check backend-lint backend-migrations-check backend-schema-check backend-test
 
+backend-rebuild:
+	docker compose down
+	docker compose build api celery
+	docker compose up -d api celery redis postgres
+
 docker-verify-security:
 	$(API_EXEC) id
 	$(COMPOSE) exec -T celery id

@@ -19,3 +19,7 @@ class SignalPermissionError(SignalServiceError):
 
 class SignalBusinessConflictError(SignalServiceError):
     error_code = "business_conflict"
+
+
+class SignalPipelineCandidateError(SignalServiceError):
+    error_code = "invalid_issue_focus"

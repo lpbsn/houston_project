@@ -8,7 +8,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.ai.observation_pipeline import (
@@ -51,6 +51,7 @@ from houston.signals.constants import (
 )
 from houston.signals.exceptions import (
     SignalBusinessConflictError,
+    SignalPipelineCandidateError,
     SignalStateError,
     SignalValidationError,
 )
@@ -98,6 +99,38 @@ def normalize_issue_focus(value: str | None) -> str:
     if len(normalized) > AI_ISSUE_FOCUS_MAX_LENGTH:
         return normalized[:AI_ISSUE_FOCUS_MAX_LENGTH]
     return normalized
+
+
+def require_normalized_issue_focus(value: str | None) -> str:
+    normalized = normalize_issue_focus(value)
+    if not normalized:
+        raise SignalPipelineCandidateError("issue_focus is required after normalization.")
+    return normalized
+
+
+def validate_pipeline_output_issue_focus(
+    *,
+    output: ObservationPipelineOutput,
+    observation: Observation | None = None,
+) -> None:
+    for index, candidate in enumerate(output.candidates):
+        try:
+            require_normalized_issue_focus(candidate.issue_focus)
+        except SignalPipelineCandidateError:
+            extra: dict[str, str | int | bool] = {
+                "candidate_index": index,
+                "issue_focus_present": candidate.issue_focus is not None,
+                "issue_focus_normalized_empty": True,
+                "event": "observation_pipeline_invalid_issue_focus",
+            }
+            if observation is not None:
+                extra["observation_id"] = str(observation.id)
+                extra["establishment_id"] = str(observation.establishment_id)
+            logger.warning(
+                "observation_pipeline_invalid_issue_focus",
+                extra=extra,
+            )
+            raise
 
 
 def format_aggregation_key(
@@ -182,7 +215,7 @@ def create_signal_from_candidate(
         title=title.strip(),
         structured_summary=structured_summary.strip(),
         location_text=location_text,
-        issue_focus=normalize_issue_focus(candidate.issue_focus),
+        issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         last_activity_at=now,
     )
     record_source_observation_link(
@@ -471,7 +504,7 @@ def _persist_pending_candidate(
         location_text=normalize_location_text(candidate.location_text),
         title=candidate.title.strip(),
         structured_summary=candidate.structured_summary.strip(),
-        issue_focus=normalize_issue_focus(candidate.issue_focus),
+        issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         ai_aggregate_hint_signal_id=hint_id,
         outcome=CandidateSignal.Outcome.PENDING,
@@ -509,7 +542,7 @@ def apply_pipeline_output(
                 establishment=observation.establishment,
                 title=candidate.title.strip()[:200],
                 structured_summary=candidate.structured_summary.strip()[:2000],
-                issue_focus=normalize_issue_focus(candidate.issue_focus),
+                issue_focus=require_normalized_issue_focus(candidate.issue_focus),
                 schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
                 outcome=CandidateSignal.Outcome.REJECTED,
             )
@@ -519,7 +552,7 @@ def apply_pipeline_output(
         assert resolved.affected_business_unit is not None
         assert resolved.responsible_business_unit is not None
         assert resolved.activity_subject is not None
-        normalized_issue_focus = normalize_issue_focus(candidate.issue_focus)
+        normalized_issue_focus = require_normalized_issue_focus(candidate.issue_focus)
         eval_log_fields = _issue_focus_eval_log_fields(
             establishment_id=observation.establishment_id,
             resolved=resolved,
@@ -790,22 +823,60 @@ def run_observation_pipeline(
         raise
 
     apply_started_at = time.monotonic()
-    with transaction.atomic():
-        processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
-        apply_result = apply_pipeline_output(observation=observation, output=output)
-        processing.status = ObservationProcessing.Status.PROCESSED
-        processing.processed_at = timezone.now()
-        processing.outcome = apply_result.outcome
-        processing.last_error_code = ""
-        processing.save(
-            update_fields=[
-                "status",
-                "processed_at",
-                "outcome",
-                "last_error_code",
-                "updated_at",
-            ]
+    try:
+        validate_pipeline_output_issue_focus(output=output, observation=observation)
+    except SignalPipelineCandidateError:
+        _mark_processing_failed(processing_id=processing.id, error_code="invalid_issue_focus")
+        return
+
+    try:
+        with transaction.atomic():
+            processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
+            apply_result = apply_pipeline_output(observation=observation, output=output)
+            processing.status = ObservationProcessing.Status.PROCESSED
+            processing.processed_at = timezone.now()
+            processing.outcome = apply_result.outcome
+            processing.last_error_code = ""
+            processing.save(
+                update_fields=[
+                    "status",
+                    "processed_at",
+                    "outcome",
+                    "last_error_code",
+                    "updated_at",
+                ]
+            )
+    except SignalPipelineCandidateError:
+        _mark_processing_failed(processing_id=processing.id, error_code="invalid_issue_focus")
+        return
+    except IntegrityError:
+        _mark_processing_failed(
+            processing_id=processing.id,
+            error_code="pipeline_persist_error",
         )
+        logger.exception(
+            "observation_pipeline_apply_persist_failed",
+            extra={
+                "observation_id": str(observation.id),
+                "establishment_id": str(observation.establishment_id),
+                "event": "observation_pipeline_apply_persist_failed",
+            },
+        )
+        raise
+    except Exception:
+        _mark_processing_failed(
+            processing_id=processing.id,
+            error_code="pipeline_internal_error",
+        )
+        logger.exception(
+            "observation_pipeline_apply_failed",
+            extra={
+                "observation_id": str(observation.id),
+                "establishment_id": str(observation.establishment_id),
+                "event": "observation_pipeline_apply_failed",
+            },
+        )
+        raise
     apply_duration_ms = int((time.monotonic() - apply_started_at) * 1000)
     _log_observation_pipeline_signals_applied(
         observation=observation,

@@ -82,3 +82,8 @@ def test_openai_schema_objects_have_additional_properties_false(openai_schema):
         assert obj.get("additionalProperties") is False, (
             f"Object missing additionalProperties: {obj}"
         )
+
+
+def test_openai_schema_issue_focus_has_min_length(openai_schema):
+    candidate = openai_schema["$defs"]["pipeline_candidate"]
+    assert candidate["properties"]["issue_focus"]["minLength"] == 1

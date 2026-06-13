@@ -104,6 +104,24 @@ def test_rejects_missing_issue_focus():
         )
 
 
+def test_rejects_null_issue_focus_at_parse():
+    with pytest.raises(ValidationError):
+        ObservationPipelineOutput.model_validate(
+            {
+                "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                "candidates": [_valid_candidate(issue_focus=None)],
+            }
+        )
+
+
+def test_rejects_whitespace_only_issue_focus_after_normalize():
+    from houston.signals.exceptions import SignalPipelineCandidateError
+    from houston.signals.services import require_normalized_issue_focus
+
+    with pytest.raises(SignalPipelineCandidateError):
+        require_normalized_issue_focus("   ")
+
+
 def test_rejects_issue_focus_longer_than_80():
     with pytest.raises(ValidationError):
         ObservationPipelineOutput.model_validate(
