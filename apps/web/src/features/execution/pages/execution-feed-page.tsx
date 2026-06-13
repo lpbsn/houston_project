@@ -38,7 +38,9 @@ export function ExecutionFeedPage({
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
   const feedQuery = useExecutionFeedQuery(establishmentId, viewMode)
-  const feedItems = feedQuery.isSuccess ? feedQuery.data.items : []
+  const feedItems = feedQuery.isSuccess
+    ? feedQuery.data.pages.flatMap((page) => page.items)
+    : []
   const { checklistItems, actionItems } = splitExecutionFeedItems(feedItems)
   const actionGroups = groupExecutionActionsBySection(actionItems)
 
@@ -95,7 +97,7 @@ export function ExecutionFeedPage({
         ) : null}
         {feedQuery.isSuccess ? (
           <div className="flex flex-col gap-3 pt-5">
-            {feedQuery.data.items.length === 0 ? (
+            {feedItems.length === 0 ? (
               <TerrainEmptyState
                 className="mx-3 mt-3"
                 title="Aucune exécution"
@@ -130,6 +132,18 @@ export function ExecutionFeedPage({
                     </div>
                   </section>
                 ))}
+                {feedQuery.hasNextPage ? (
+                  <div className="flex justify-center py-4">
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
+                      onClick={() => void feedQuery.fetchNextPage()}
+                      disabled={feedQuery.isFetchingNextPage}
+                    >
+                      {feedQuery.isFetchingNextPage ? 'Chargement…' : 'Charger plus'}
+                    </button>
+                  </div>
+                ) : null}
               </>
             )}
           </div>

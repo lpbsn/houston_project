@@ -74,7 +74,13 @@ Optional endpoint-specific fields (e.g. `applied_filters` on Signal Feed) are do
 | Endpoint | Status |
 |----------|--------|
 | `GET .../signal-feed/` | **Reference** — full cursor round-trip |
-| `GET .../execution-feed/` | **Gap P0** — pseudo-paginated (`has_more` only, `next_cursor` always `null`) |
+| `GET .../execution-feed/` | **Complete** — polymorphic cursor (checklist-first merge preserved) |
+
+Execution Feed cursor specifics (HOU-BACKLOG-019):
+
+- Opaque server cursor with checklist phase and action phase (`action_phase_start` = action phase without item position).
+- Sort tie-breaker `-id` on checklist and action lists.
+- Action cursor encodes `as_of` to stabilize `is_overdue_rank` across paginated requests (mid-pagination rank drift possible if status changes between pages; mutations invalidate the feed).
 
 ### Tier B — Chronological streams
 
@@ -148,7 +154,7 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 
 | Envelope | Endpoints |
 |----------|-----------|
-| `{ items, next_cursor, has_more }` | Signal feed (complete), Execution feed (`next_cursor` stub) |
+| `{ items, next_cursor, has_more }` | Signal feed (complete), Execution feed (complete) |
 | `{ items, has_more }` | Chat messages |
 | `{ items }` | Chat conversations, chat eligible memberships |
 | Raw `Item[]` | Checklist templates, checklist assignments, users search, memberships, catalog suggest, onboarding proposals |
@@ -173,7 +179,7 @@ One PR = one endpoint (or one coherent group) fully aligned. No dual-format tran
 | Anti-pattern | Why |
 |--------------|-----|
 | `queryset.count()` for `has_more` on feeds | Full-scan cost; use `limit + 1` |
-| `next_cursor` always `null` while `has_more` is `true` | Broken contract; clients cannot load page 2 (Execution Feed today) |
+| `next_cursor` always `null` while `has_more` is `true` | Broken contract; clients cannot load page 2 |
 | DRF `PageNumberPagination` / offset on dynamic feeds | Unstable under realtime updates |
 | Raw `Item[]` without documented Tier C/D justification | Inconsistent FE consumption; migrate to `{ items }` |
 | Frontend-only pagination (client slice of full list) | Scales poorly; backend must bound or paginate (checklist assignments over-fetch today) |
@@ -194,8 +200,8 @@ Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain imp
 
 | ID | Priority | Summary |
 |----|----------|---------|
-| HOU-PAG-001 | P0 | Execution Feed — cursor backend |
-| HOU-PAG-002 | P0 | Execution Feed — frontend `useInfiniteQuery` |
+| HOU-PAG-001 | P0 | Execution Feed — cursor backend (**delivered** HOU-BACKLOG-019) |
+| HOU-PAG-002 | P0 | Execution Feed — frontend `useInfiniteQuery` (**delivered** HOU-BACKLOG-019) |
 | HOU-PAG-003 | P1 | Chat messages — align envelope or document exception |
 | HOU-PAG-004 | P1 | Chat conversations — cursor pagination + N+1 fix |
 | HOU-PAG-005 | P1 | Users search — `limit` cap |

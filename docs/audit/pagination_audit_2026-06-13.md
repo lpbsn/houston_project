@@ -50,33 +50,20 @@ Audit main list endpoints exposed in the Houston app. Classify pagination behavi
 | Response | `{ items, next_cursor, has_more, applied_filters }` |
 | Decision | **Keep as reference.** Document in standard. |
 
-### 4.2 Execution Feed — implementation priority P0
+### 4.2 Execution Feed — **resolved** (HOU-BACKLOG-019 / HOU-PAG-001+002)
 
 | Field | Value |
 |-------|-------|
 | Route | `GET /api/v1/establishments/{establishment_id}/execution-feed/` |
-| Classification | **Pseudo-paginated** |
-| Backend | [`actions/api/views.py`](../../apps/api/houston/actions/api/views.py), [`actions/execution_feed.py`](../../apps/api/houston/actions/execution_feed.py) |
-| Frontend | [`actions/hooks.ts`](../../apps/web/src/features/actions/hooks.ts) — `useQuery` (single page) |
-| Query params | `view_mode` (required), `page_size` — **no `cursor` in OpenAPI** |
-| Response | `{ items, next_cursor, has_more }` but **`next_cursor` always `null`** |
-| FE behavior | Reads `data.items` only; ignores `has_more` / `next_cursor` |
-| Decision | **P0** — implement full cursor (HOU-PAG-001 backend, HOU-PAG-002 frontend) |
+| Classification | **Cursor-paginated** (was pseudo-paginated) |
+| Backend | [`actions/api/views.py`](../../apps/api/houston/actions/api/views.py), [`actions/execution_feed.py`](../../apps/api/houston/actions/execution_feed.py), [`actions/execution_feed_cursor.py`](../../apps/api/houston/actions/execution_feed_cursor.py) |
+| Frontend | [`actions/hooks.ts`](../../apps/web/src/features/actions/hooks.ts) — `useInfiniteQuery` + « Charger plus » |
+| Query params | `view_mode` (required), `cursor`, `page_size` |
+| Response | `{ items, next_cursor, has_more }` — `has_more=true` ⇒ non-null `next_cursor` |
+| Merge rule | Checklist-first preserved (not global cross-type sort) |
+| Delivered | 2026-06-13 — HOU-BACKLOG-019 |
 
-```mermaid
-flowchart LR
-  subgraph ref [Reference_SignalFeed]
-    SF_API["signal-feed\ncursor + next_cursor"]
-    SF_FE["useInfiniteQuery"]
-    SF_API --> SF_FE
-  end
-  subgraph gap [Gap_ExecutionFeed]
-    EF_API["execution-feed\nhas_more only"]
-    EF_FE["useQuery single page"]
-    EF_API --> EF_FE
-  end
-  ref -.->|"target"| gap
-```
+**Resolution note:** Polymorphic opaque cursor (checklist phase + action phase with `as_of` and `action_phase_start`). Sort tie-breaker `-id`. Invalid cursor → `400 validation_error`.
 
 ### 4.3 Checklist templates
 
@@ -142,7 +129,7 @@ flowchart LR
 
 | Envelope | Endpoints |
 |----------|-----------|
-| `{ items, next_cursor, has_more }` | Signal feed (complete), Execution feed (stub) |
+| `{ items, next_cursor, has_more }` | Signal feed (complete), Execution feed (complete) |
 | `{ items, has_more }` | Chat messages |
 | `{ items }` | Chat conversations, chat eligible memberships |
 | Raw `Item[]` | Checklist templates/assignments, users search, memberships, catalog suggest, onboarding proposals |
@@ -154,8 +141,8 @@ flowchart LR
 
 | ID | Issue | Files |
 |----|-------|-------|
-| INC-01 | Execution Feed schema promises `next_cursor`; backend always returns `null`; no `cursor` query param | `actions/api/views.py`, `schema.yml` |
-| INC-02 | Execution Feed FE ignores `has_more`; no load-more UI | `actions/hooks.ts`, `execution-feed-page.tsx` |
+| INC-01 | ~~Execution Feed schema promises `next_cursor`; backend always returns `null`; no `cursor` query param~~ | **Resolved** HOU-BACKLOG-019 |
+| INC-02 | ~~Execution Feed FE ignores `has_more`; no load-more UI~~ | **Resolved** HOU-BACKLOG-019 |
 | INC-03 | Chat messages: two cursor models (server opaque vs client `created_at\|id`) | `chat/api/views.ts`, `chat/hooks.ts` |
 | INC-04 | Checklist assignments: establishment-wide fetch, template filter in UI | `checklists/hooks.ts`, `checklist-assignment-section.tsx` |
 | INC-05 | Raw arrays vs `{ items }` split across list endpoints | Multiple views/serializers |
@@ -166,7 +153,7 @@ flowchart LR
 | Endpoint | Class | Pagination decision |
 |----------|-------|---------------------|
 | Signal feed | Cursor-paginated | **Reference** — no change |
-| Execution feed | Pseudo-paginated | **P0** — full cursor + FE infinite query |
+| Execution feed | Cursor-paginated | **Delivered** — HOU-BACKLOG-019 |
 | Checklist templates | Non-paginated | Non-priority; paginate if > ~50 |
 | Checklist assignments | Non-paginated | Non-priority; API filter + paginate if needed |
 | Users search | Non-paginated | Add `limit` (P1) |
@@ -179,32 +166,26 @@ flowchart LR
 
 ## 9. Derived implementation tickets
 
-### HOU-PAG-001 (P0) — Execution Feed cursor backend
+### HOU-PAG-001 (P0) — Execution Feed cursor backend — **delivered**
 
 **Scope:** Polymorphic cursor (action + checklist merge rules), `cursor` query param, real `next_cursor`, `limit+1` for `has_more`, API tests.
 
-**Files:** `actions/api/views.py`, `actions/execution_feed.py`, new cursor module (pattern: `signals/feed_cursor.py`), `schema.yml`, tests in `actions/tests/test_execution_feed_api.py`.
-
 **Acceptance:**
 
-- [ ] `cursor` and `page_size` in OpenAPI
-- [ ] Page 2 reachable when `has_more=true`
-- [ ] `next_cursor` non-null when `has_more=true`
-- [ ] Focused pytest green
+- [x] `cursor` and `page_size` in OpenAPI
+- [x] Page 2 reachable when `has_more=true`
+- [x] `next_cursor` non-null when `has_more=true`
+- [x] Focused pytest green
 
-### HOU-PAG-002 (P0) — Execution Feed frontend
+### HOU-PAG-002 (P0) — Execution Feed frontend — **delivered**
 
 **Scope:** `useInfiniteQuery`, load-more button, optional `page_size`.
 
-**Depends on:** HOU-PAG-001.
-
-**Files:** `actions/hooks.ts`, `actions/api.ts`, `execution-feed-page.tsx`, generated types.
-
 **Acceptance:**
 
-- [ ] `make web-api-generate` after schema update
-- [ ] `npm run typecheck` + `npm test` green
-- [ ] Load more fetches page 2 with server cursor
+- [x] `make web-api-generate` after schema update
+- [x] `npm run typecheck` + `npm test` green
+- [x] Load more fetches page 2 with server cursor
 
 ### HOU-PAG-003 (P1) — Chat messages envelope
 
@@ -260,7 +241,7 @@ No backward compatibility layer. Breaking changes OK in same PR.
 ## 12. Risks / not verified
 
 - ~50-row threshold not measured on local fixtures
-- Polymorphic Execution Feed cursor feasibility under checklist-first merge — validate in PAG-001
+- Polymorphic Execution Feed cursor under checklist-first merge — **validated** in HOU-BACKLOG-019
 - S0 API-02 (`count()` on signal feed) may be stale vs current `limit+1` implementation
 
 ## 13. HOU-BACKLOG-018 acceptance

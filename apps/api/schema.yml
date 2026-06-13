@@ -3216,6 +3216,11 @@ paths:
     get:
       operationId: v1_establishments_execution_feed_retrieve
       parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque pagination cursor from a previous response next_cursor.
       - in: path
         name: establishment_id
         schema:

@@ -22,6 +22,10 @@ from houston.actions.api.serializers import (
 )
 from houston.actions.exceptions import ActionStateError, ActionValidationError
 from houston.actions.execution_feed import build_execution_feed_page
+from houston.actions.execution_feed_cursor import (
+    ExecutionFeedCursorError,
+    parse_execution_feed_cursor,
+)
 from houston.actions.models import Action
 from houston.actions.permissions import (
     can_accept_action,
@@ -106,6 +110,12 @@ class ExecutionFeedView(EstablishmentScopedActionMixin, APIView):
                 enum=["personal", "general"],
             ),
             OpenApiParameter(name="page_size", required=False, type=int),
+            OpenApiParameter(
+                name="cursor",
+                required=False,
+                type=str,
+                description="Opaque pagination cursor from a previous response next_cursor.",
+            ),
         ],
         responses={
             200: ExecutionFeedResponseSerializer,
@@ -133,10 +143,19 @@ class ExecutionFeedView(EstablishmentScopedActionMixin, APIView):
             )
 
         page_size = _parse_page_size(request.query_params.get("page_size"))
-        feed_items, has_more = build_execution_feed_page(
+        try:
+            cursor = parse_execution_feed_cursor(request.query_params.get("cursor"))
+        except ExecutionFeedCursorError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        feed_items, has_more, next_cursor = build_execution_feed_page(
             membership=membership,
             view_mode=view_mode,  # type: ignore[arg-type]
             page_size=page_size,
+            cursor=cursor,
         )
 
         serialized_items = []
@@ -166,7 +185,7 @@ class ExecutionFeedView(EstablishmentScopedActionMixin, APIView):
 
         payload = {
             "items": serialized_items,
-            "next_cursor": None,
+            "next_cursor": next_cursor,
             "has_more": has_more,
         }
         return Response(ExecutionFeedResponseSerializer(payload).data)

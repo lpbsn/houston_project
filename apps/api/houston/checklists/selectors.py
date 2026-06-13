@@ -227,7 +227,7 @@ def checklist_execution_feed_queryset(
 def apply_checklist_feed_sorting(
     queryset: QuerySet[ChecklistExecution],
 ) -> QuerySet[ChecklistExecution]:
-    return queryset.order_by("-last_activity_at", "-created_at")
+    return queryset.order_by("-last_activity_at", "-created_at", "-id")
 
 
 def checklist_execution_overdue(*, execution: ChecklistExecution, now=None) -> bool:
