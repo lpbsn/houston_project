@@ -6,23 +6,17 @@ from houston.establishments.business_unit_catalog import (
     suggest_activity_subjects,
     suggest_business_units,
 )
-from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.models import BusinessUnit, CatalogBusinessUnit
 
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture
-def imported_catalog():
-    return sync_catalog_from_normalized_rows()
-
-
-def test_suggest_business_units_returns_empty_without_import():
+def test_suggest_business_units_returns_empty_without_import(requires_empty_catalog):
     results = suggest_business_units(query="hotel")
     assert results == []
 
 
-def test_suggest_activity_subjects_returns_empty_without_import():
+def test_suggest_activity_subjects_returns_empty_without_import(requires_empty_catalog):
     results = suggest_activity_subjects(
         business_unit_key="hotel",
         query="proprete",

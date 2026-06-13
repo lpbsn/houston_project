@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from houston.signals.constants import (
+    AI_ISSUE_FOCUS_MAX_LENGTH,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
     MAX_CANDIDATES_PER_OBSERVATION,
 )
@@ -33,6 +34,7 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
             "required": [
                 "title",
                 "structured_summary",
+                "issue_focus",
                 "affected_business_unit_key",
                 "responsible_business_unit_key",
                 "activity_subject_key",
@@ -48,6 +50,15 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 "structured_summary": {
                     "type": "string",
                     "description": "Structured summary without raw observation text.",
+                },
+                "issue_focus": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": AI_ISSUE_FOCUS_MAX_LENGTH,
+                    "description": (
+                        "Stable operational focus: product, object, equipment, or situation "
+                        "(include discriminant location when needed, e.g. clim chambre 104)."
+                    ),
                 },
                 "affected_business_unit_key": {
                     "type": "string",

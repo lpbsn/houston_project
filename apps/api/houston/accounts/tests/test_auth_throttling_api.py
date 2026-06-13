@@ -22,7 +22,7 @@ from houston.accounts.tests.test_registration_api import (
     registration_payload,
 )
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.auth_throttle]
 
 
 @pytest.fixture

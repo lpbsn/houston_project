@@ -8,7 +8,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.ai.observation_pipeline import (
@@ -24,6 +24,7 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.core.observability import (
+    build_observation_pipeline_candidate_apply_log_context,
     build_observation_pipeline_timing_log_context,
     build_observation_processing_log_context,
     observation_processing_duration_seconds,
@@ -35,9 +36,14 @@ from houston.establishments.models import (
     OperationalUnit,
 )
 from houston.observations.models import Observation, ObservationProcessing
+from houston.signals.aggregation_eval import (
+    count_active_taxonomy_peers_with_different_focus,
+    format_taxonomy_bucket_key,
+)
 from houston.signals.classification_fallback import try_apply_responsible_affected_fallback
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
+    AI_ISSUE_FOCUS_MAX_LENGTH,
     AI_LOCATION_TEXT_MAX_LENGTH,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
     MAX_CANDIDATES_PER_OBSERVATION,
@@ -45,6 +51,7 @@ from houston.signals.constants import (
 )
 from houston.signals.exceptions import (
     SignalBusinessConflictError,
+    SignalPipelineCandidateError,
     SignalStateError,
     SignalValidationError,
 )
@@ -85,6 +92,55 @@ def normalize_location_text(value: str | None) -> str:
     if len(normalized) > AI_LOCATION_TEXT_MAX_LENGTH:
         return normalized[:AI_LOCATION_TEXT_MAX_LENGTH]
     return normalized
+
+
+def normalize_issue_focus(value: str | None) -> str:
+    normalized = " ".join((value or "").strip().lower().split())
+    if len(normalized) > AI_ISSUE_FOCUS_MAX_LENGTH:
+        return normalized[:AI_ISSUE_FOCUS_MAX_LENGTH]
+    return normalized
+
+
+def require_normalized_issue_focus(value: str | None) -> str:
+    normalized = normalize_issue_focus(value)
+    if not normalized:
+        raise SignalPipelineCandidateError("issue_focus is required after normalization.")
+    return normalized
+
+
+def validate_pipeline_output_issue_focus(
+    *,
+    output: ObservationPipelineOutput,
+    observation: Observation | None = None,
+) -> None:
+    for index, candidate in enumerate(output.candidates):
+        try:
+            require_normalized_issue_focus(candidate.issue_focus)
+        except SignalPipelineCandidateError:
+            extra: dict[str, str | int | bool] = {
+                "candidate_index": index,
+                "issue_focus_present": candidate.issue_focus is not None,
+                "issue_focus_normalized_empty": True,
+                "event": "observation_pipeline_invalid_issue_focus",
+            }
+            if observation is not None:
+                extra["observation_id"] = str(observation.id)
+                extra["establishment_id"] = str(observation.establishment_id)
+            logger.warning(
+                "observation_pipeline_invalid_issue_focus",
+                extra=extra,
+            )
+            raise
+
+
+def format_aggregation_key(
+    key: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None, str],
+) -> str:
+    affected_id, responsible_id, subject_id, unit_id, issue_focus = key
+    unit_token = str(unit_id) if unit_id is not None else "null"
+    return (
+        f"{affected_id}|{responsible_id}|{subject_id}|{unit_token}|{issue_focus}"
+    )
 
 
 def resolve_signal_location_text(
@@ -159,6 +215,7 @@ def create_signal_from_candidate(
         title=title.strip(),
         structured_summary=structured_summary.strip(),
         location_text=location_text,
+        issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         last_activity_at=now,
     )
     record_source_observation_link(
@@ -184,19 +241,53 @@ def aggregate_candidate_into_signal(
     return signal
 
 
-def _candidate_dedupe_key(
+def _aggregation_key(
     *,
     affected_business_unit_id: uuid.UUID,
     responsible_business_unit_id: uuid.UUID,
     activity_subject_id: uuid.UUID,
     unit_id: uuid.UUID | None,
-) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]:
+    issue_focus: str,
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None, str]:
     return (
         affected_business_unit_id,
         responsible_business_unit_id,
         activity_subject_id,
         unit_id,
+        issue_focus,
     )
+
+
+def _issue_focus_eval_log_fields(
+    *,
+    establishment_id: uuid.UUID,
+    resolved: ResolvedTaxonomy,
+    normalized_issue_focus: str,
+    include_peer_count: bool = False,
+) -> dict[str, str | int]:
+    assert resolved.affected_business_unit is not None
+    assert resolved.responsible_business_unit is not None
+    assert resolved.activity_subject is not None
+    unit_id = resolved.operational_unit.id if resolved.operational_unit else None
+    fields: dict[str, str | int] = {
+        "issue_focus": normalized_issue_focus,
+        "taxonomy_bucket_key": format_taxonomy_bucket_key(
+            affected_business_unit_id=resolved.affected_business_unit.id,
+            responsible_business_unit_id=resolved.responsible_business_unit.id,
+            activity_subject_id=resolved.activity_subject.id,
+            operational_unit_id=unit_id,
+        ),
+    }
+    if include_peer_count:
+        fields["active_taxonomy_peer_count"] = count_active_taxonomy_peers_with_different_focus(
+            establishment_id=establishment_id,
+            affected_business_unit_id=resolved.affected_business_unit.id,
+            responsible_business_unit_id=resolved.responsible_business_unit.id,
+            activity_subject_id=resolved.activity_subject.id,
+            operational_unit_id=unit_id,
+            issue_focus=normalized_issue_focus,
+        )
+    return fields
 
 
 def _resolve_activity_subject(
@@ -315,6 +406,7 @@ def find_active_signal_for_aggregation(
     *,
     establishment_id: uuid.UUID,
     resolved: ResolvedTaxonomy,
+    issue_focus: str,
     for_update: bool = False,
 ) -> Signal | None:
     if (
@@ -329,6 +421,7 @@ def find_active_signal_for_aggregation(
         affected_business_unit=resolved.affected_business_unit,
         responsible_business_unit=resolved.responsible_business_unit,
         activity_subject=resolved.activity_subject,
+        issue_focus=issue_focus,
         status__in=ACTIVE_SIGNAL_STATUSES,
     )
     if resolved.operational_unit is None:
@@ -340,6 +433,52 @@ def find_active_signal_for_aggregation(
         queryset = queryset.select_for_update()
 
     return queryset.order_by("-last_activity_at").first()
+
+
+def _signal_taxonomy_matches(*, signal: Signal, resolved: ResolvedTaxonomy) -> bool:
+    assert resolved.affected_business_unit is not None
+    assert resolved.responsible_business_unit is not None
+    assert resolved.activity_subject is not None
+    if signal.affected_business_unit_id != resolved.affected_business_unit.id:
+        return False
+    if signal.responsible_business_unit_id != resolved.responsible_business_unit.id:
+        return False
+    if signal.activity_subject_id != resolved.activity_subject.id:
+        return False
+    if resolved.operational_unit is None:
+        return signal.operational_unit_id is None
+    return signal.operational_unit_id == resolved.operational_unit.id
+
+
+def _try_resolve_hint_signal(
+    *,
+    establishment_id: uuid.UUID,
+    candidate: PipelineCandidateOutput,
+    resolved: ResolvedTaxonomy,
+    normalized_issue_focus: str,
+    for_update: bool = False,
+) -> tuple[Signal | None, str | None]:
+    if not candidate.aggregate_into_signal_id:
+        return None, None
+
+    try:
+        hint_id = uuid.UUID(str(candidate.aggregate_into_signal_id))
+    except (TypeError, ValueError):
+        return None, "invalid_hint_id"
+
+    queryset = Signal.objects.filter(id=hint_id, establishment_id=establishment_id)
+    if for_update:
+        queryset = queryset.select_for_update()
+    signal = queryset.first()
+    if signal is None:
+        return None, "hint_signal_not_found"
+    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+        return None, "hint_signal_not_active"
+    if not _signal_taxonomy_matches(signal=signal, resolved=resolved):
+        return None, "hint_taxonomy_mismatch"
+    if normalize_issue_focus(signal.issue_focus) != normalized_issue_focus:
+        return None, "hint_issue_focus_mismatch"
+    return signal, None
 
 
 def _persist_pending_candidate(
@@ -365,6 +504,7 @@ def _persist_pending_candidate(
         location_text=normalize_location_text(candidate.location_text),
         title=candidate.title.strip(),
         structured_summary=candidate.structured_summary.strip(),
+        issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         ai_aggregate_hint_signal_id=hint_id,
         outcome=CandidateSignal.Outcome.PENDING,
@@ -385,7 +525,7 @@ def apply_pipeline_output(
             aggregated_count=0,
         )
 
-    seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None]] = set()
+    seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None, str]] = set()
     created_count = 0
     aggregated_count = 0
     rejected_count = 0
@@ -402,6 +542,7 @@ def apply_pipeline_output(
                 establishment=observation.establishment,
                 title=candidate.title.strip()[:200],
                 structured_summary=candidate.structured_summary.strip()[:2000],
+                issue_focus=require_normalized_issue_focus(candidate.issue_focus),
                 schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
                 outcome=CandidateSignal.Outcome.REJECTED,
             )
@@ -411,11 +552,18 @@ def apply_pipeline_output(
         assert resolved.affected_business_unit is not None
         assert resolved.responsible_business_unit is not None
         assert resolved.activity_subject is not None
-        dedupe_key = _candidate_dedupe_key(
+        normalized_issue_focus = require_normalized_issue_focus(candidate.issue_focus)
+        eval_log_fields = _issue_focus_eval_log_fields(
+            establishment_id=observation.establishment_id,
+            resolved=resolved,
+            normalized_issue_focus=normalized_issue_focus,
+        )
+        dedupe_key = _aggregation_key(
             affected_business_unit_id=resolved.affected_business_unit.id,
             responsible_business_unit_id=resolved.responsible_business_unit.id,
             activity_subject_id=resolved.activity_subject.id,
             unit_id=resolved.operational_unit.id if resolved.operational_unit else None,
+            issue_focus=normalized_issue_focus,
         )
         if dedupe_key in seen_keys:
             row = _persist_pending_candidate(
@@ -426,6 +574,15 @@ def apply_pipeline_output(
             row.outcome = CandidateSignal.Outcome.REJECTED
             row.save(update_fields=["outcome", "updated_at"])
             rejected_count += 1
+            _log_pipeline_candidate_applied(
+                observation=observation,
+                aggregation_key=format_aggregation_key(dedupe_key),
+                hint_used=False,
+                hint_rejected_reason="",
+                candidate_outcome=CandidateSignal.Outcome.REJECTED,
+                issue_focus=str(eval_log_fields["issue_focus"]),
+                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+            )
             continue
         seen_keys.add(dedupe_key)
 
@@ -435,9 +592,37 @@ def apply_pipeline_output(
             resolved=resolved,
         )
 
+        hint_signal, hint_rejected_reason = _try_resolve_hint_signal(
+            establishment_id=observation.establishment_id,
+            candidate=candidate,
+            resolved=resolved,
+            normalized_issue_focus=normalized_issue_focus,
+            for_update=True,
+        )
+        if hint_signal is not None:
+            signal = aggregate_candidate_into_signal(
+                signal=hint_signal,
+                observation=observation,
+            )
+            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+            row.result_signal = signal
+            row.save(update_fields=["outcome", "result_signal", "updated_at"])
+            aggregated_count += 1
+            _log_pipeline_candidate_applied(
+                observation=observation,
+                aggregation_key=format_aggregation_key(dedupe_key),
+                hint_used=True,
+                hint_rejected_reason="",
+                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+                issue_focus=str(eval_log_fields["issue_focus"]),
+                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+            )
+            continue
+
         existing = find_active_signal_for_aggregation(
             establishment_id=observation.establishment_id,
             resolved=resolved,
+            issue_focus=normalized_issue_focus,
             for_update=True,
         )
         if existing is not None:
@@ -446,8 +631,23 @@ def apply_pipeline_output(
             row.result_signal = signal
             row.save(update_fields=["outcome", "result_signal", "updated_at"])
             aggregated_count += 1
+            _log_pipeline_candidate_applied(
+                observation=observation,
+                aggregation_key=format_aggregation_key(dedupe_key),
+                hint_used=False,
+                hint_rejected_reason=hint_rejected_reason or "",
+                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+                issue_focus=str(eval_log_fields["issue_focus"]),
+                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+            )
             continue
 
+        create_eval_log_fields = _issue_focus_eval_log_fields(
+            establishment_id=observation.establishment_id,
+            resolved=resolved,
+            normalized_issue_focus=normalized_issue_focus,
+            include_peer_count=True,
+        )
         signal = create_signal_from_candidate(
             observation=observation,
             candidate=candidate,
@@ -459,6 +659,16 @@ def apply_pipeline_output(
         row.result_signal = signal
         row.save(update_fields=["outcome", "result_signal", "updated_at"])
         created_count += 1
+        _log_pipeline_candidate_applied(
+            observation=observation,
+            aggregation_key=format_aggregation_key(dedupe_key),
+            hint_used=False,
+            hint_rejected_reason=hint_rejected_reason or "",
+            candidate_outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
+            issue_focus=str(create_eval_log_fields["issue_focus"]),
+            taxonomy_bucket_key=str(create_eval_log_fields["taxonomy_bucket_key"]),
+            active_taxonomy_peer_count=int(create_eval_log_fields["active_taxonomy_peer_count"]),
+        )
 
     if created_count == 0 and aggregated_count == 0:
         return PipelineApplyResult(
@@ -613,22 +823,60 @@ def run_observation_pipeline(
         raise
 
     apply_started_at = time.monotonic()
-    with transaction.atomic():
-        processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
-        apply_result = apply_pipeline_output(observation=observation, output=output)
-        processing.status = ObservationProcessing.Status.PROCESSED
-        processing.processed_at = timezone.now()
-        processing.outcome = apply_result.outcome
-        processing.last_error_code = ""
-        processing.save(
-            update_fields=[
-                "status",
-                "processed_at",
-                "outcome",
-                "last_error_code",
-                "updated_at",
-            ]
+    try:
+        validate_pipeline_output_issue_focus(output=output, observation=observation)
+    except SignalPipelineCandidateError:
+        _mark_processing_failed(processing_id=processing.id, error_code="invalid_issue_focus")
+        return
+
+    try:
+        with transaction.atomic():
+            processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
+            apply_result = apply_pipeline_output(observation=observation, output=output)
+            processing.status = ObservationProcessing.Status.PROCESSED
+            processing.processed_at = timezone.now()
+            processing.outcome = apply_result.outcome
+            processing.last_error_code = ""
+            processing.save(
+                update_fields=[
+                    "status",
+                    "processed_at",
+                    "outcome",
+                    "last_error_code",
+                    "updated_at",
+                ]
+            )
+    except SignalPipelineCandidateError:
+        _mark_processing_failed(processing_id=processing.id, error_code="invalid_issue_focus")
+        return
+    except IntegrityError:
+        _mark_processing_failed(
+            processing_id=processing.id,
+            error_code="pipeline_persist_error",
         )
+        logger.exception(
+            "observation_pipeline_apply_persist_failed",
+            extra={
+                "observation_id": str(observation.id),
+                "establishment_id": str(observation.establishment_id),
+                "event": "observation_pipeline_apply_persist_failed",
+            },
+        )
+        raise
+    except Exception:
+        _mark_processing_failed(
+            processing_id=processing.id,
+            error_code="pipeline_internal_error",
+        )
+        logger.exception(
+            "observation_pipeline_apply_failed",
+            extra={
+                "observation_id": str(observation.id),
+                "establishment_id": str(observation.establishment_id),
+                "event": "observation_pipeline_apply_failed",
+            },
+        )
+        raise
     apply_duration_ms = int((time.monotonic() - apply_started_at) * 1000)
     _log_observation_pipeline_signals_applied(
         observation=observation,
@@ -641,6 +889,34 @@ def run_observation_pipeline(
         pipeline_started_at=pipeline_started_at,
         apply_result=apply_result,
         apply_duration_ms=apply_duration_ms,
+    )
+
+
+def _log_pipeline_candidate_applied(
+    *,
+    observation: Observation,
+    aggregation_key: str,
+    hint_used: bool,
+    hint_rejected_reason: str,
+    candidate_outcome: str,
+    issue_focus: str = "",
+    taxonomy_bucket_key: str = "",
+    active_taxonomy_peer_count: int | None = None,
+) -> None:
+    logger.info(
+        "observation_pipeline_candidate_applied",
+        extra=build_observation_pipeline_candidate_apply_log_context(
+            observation_id=observation.id,
+            establishment_id=observation.establishment_id,
+            event="observation_pipeline_candidate_applied",
+            aggregation_key=aggregation_key,
+            hint_used=hint_used,
+            hint_rejected_reason=hint_rejected_reason,
+            candidate_outcome=candidate_outcome,
+            issue_focus=issue_focus,
+            taxonomy_bucket_key=taxonomy_bucket_key,
+            active_taxonomy_peer_count=active_taxonomy_peer_count,
+        ),
     )
 
 

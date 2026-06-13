@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from houston.signals.constants import AI_LOCATION_TEXT_MAX_LENGTH, MAX_CANDIDATES_PER_OBSERVATION
+from houston.signals.constants import (
+    AI_ISSUE_FOCUS_MAX_LENGTH,
+    AI_LOCATION_TEXT_MAX_LENGTH,
+    MAX_CANDIDATES_PER_OBSERVATION,
+)
 
 
 class _StrictModel(BaseModel):
@@ -12,6 +16,7 @@ class _StrictModel(BaseModel):
 class PipelineCandidateOutput(_StrictModel):
     title: str = Field(min_length=1, max_length=200)
     structured_summary: str = Field(min_length=1, max_length=2000)
+    issue_focus: str = Field(min_length=1, max_length=AI_ISSUE_FOCUS_MAX_LENGTH)
     affected_business_unit_key: str = Field(min_length=1, max_length=100)
     responsible_business_unit_key: str = Field(min_length=1, max_length=100)
     activity_subject_key: str = Field(min_length=1, max_length=200)

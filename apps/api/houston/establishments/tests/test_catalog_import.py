@@ -17,11 +17,6 @@ from houston.establishments.models import CatalogActivitySubject, CatalogBusines
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture
-def imported_catalog():
-    return sync_catalog_from_normalized_rows()
-
-
 def test_normalized_seed_counts():
     catalog = normalize_catalog_from_source()
     assert len(catalog.business_units) == EXPECTED_CATALOG_BUSINESS_UNIT_COUNT

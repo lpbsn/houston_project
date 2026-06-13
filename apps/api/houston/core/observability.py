@@ -95,6 +95,20 @@ _OBSERVATION_PIPELINE_TIMING_LOG_KEYS = frozenset(
         "attempt_count",
     }
 )
+_OBSERVATION_PIPELINE_CANDIDATE_APPLY_LOG_KEYS = frozenset(
+    {
+        "observation_id",
+        "establishment_id",
+        "event",
+        "aggregation_key",
+        "taxonomy_bucket_key",
+        "issue_focus",
+        "active_taxonomy_peer_count",
+        "hint_used",
+        "hint_rejected_reason",
+        "candidate_outcome",
+    }
+)
 _SENSITIVE_FIELD_NAMES = frozenset(
     {
         "raw_text",
@@ -329,6 +343,42 @@ def build_observation_pipeline_timing_log_context(
     if attempt_count is not None:
         context["attempt_count"] = attempt_count
     return sanitize_log_context(context, allowed_keys=_OBSERVATION_PIPELINE_TIMING_LOG_KEYS)
+
+
+def build_observation_pipeline_candidate_apply_log_context(
+    *,
+    observation_id: uuid.UUID,
+    establishment_id: uuid.UUID,
+    event: str,
+    aggregation_key: str,
+    hint_used: bool,
+    hint_rejected_reason: str = "",
+    candidate_outcome: str = "",
+    taxonomy_bucket_key: str = "",
+    issue_focus: str = "",
+    active_taxonomy_peer_count: int | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "observation_id": str(observation_id),
+        "establishment_id": str(establishment_id),
+        "event": event.strip()[:80],
+        "aggregation_key": aggregation_key[:512],
+        "hint_used": hint_used,
+    }
+    if taxonomy_bucket_key.strip():
+        context["taxonomy_bucket_key"] = taxonomy_bucket_key.strip()[:512]
+    if issue_focus.strip():
+        context["issue_focus"] = issue_focus.strip()[:80]
+    if active_taxonomy_peer_count is not None:
+        context["active_taxonomy_peer_count"] = active_taxonomy_peer_count
+    if hint_rejected_reason.strip():
+        context["hint_rejected_reason"] = hint_rejected_reason.strip()[:80]
+    if candidate_outcome.strip():
+        context["candidate_outcome"] = candidate_outcome.strip()[:32]
+    return sanitize_log_context(
+        context,
+        allowed_keys=_OBSERVATION_PIPELINE_CANDIDATE_APPLY_LOG_KEYS,
+    )
 
 
 def build_observation_enqueue_failure_log_context(

@@ -56,6 +56,7 @@ def test_openai_response_format_uses_json_schema_strict():
     assert "affected_business_unit_key" in candidate["required"]
     assert "responsible_business_unit_key" in candidate["required"]
     assert "activity_subject_key" in candidate["required"]
+    assert "issue_focus" in candidate["required"]
     assert "operational_unit_key" in candidate["required"]
     assert "location_text" in candidate["required"]
     assert "aggregate_into_signal_id" in candidate["required"]
@@ -81,3 +82,8 @@ def test_openai_schema_objects_have_additional_properties_false(openai_schema):
         assert obj.get("additionalProperties") is False, (
             f"Object missing additionalProperties: {obj}"
         )
+
+
+def test_openai_schema_issue_focus_has_min_length(openai_schema):
+    candidate = openai_schema["$defs"]["pipeline_candidate"]
+    assert candidate["properties"]["issue_focus"]["minLength"] == 1

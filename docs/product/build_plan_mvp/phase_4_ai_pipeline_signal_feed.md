@@ -1,11 +1,11 @@
 # Phase 4 — AI Observation Pipeline + Signal Feed + Signal Detail
 
 Status: **implemented** (reference)  
-Last reviewed: 2026-06-08
+Last reviewed: 2026-06-13
 
 ## Scope
 
-- Observation → AI pipeline v3 → persisted `CandidateSignal` → validated `Signal` (create or aggregate).
+- Observation → AI pipeline v4 → persisted `CandidateSignal` → validated `Signal` (create or aggregate).
 - Signal Feed (`view_mode=personal|general`) and Signal Detail.
 - Commands: pin, unpin, set urgency, resolve, cancel.
 - **No** manual Signal CRUD; **no** feed subscription model in Phase 4 (deferred — future BU-only, then ActivitySubject subscribe/unsubscribe).

@@ -74,7 +74,7 @@ Current API truth implements Phase 3: Observation submit, temporary photo upload
 Implemented in `apps/api/schema.yml`:
 
 - Signal with **BusinessUnit / ActivitySubject** classification (`affected_business_unit`, `responsible_business_unit`, `activity_subject`)
-- Observation → CandidateSignal → validated Signal pipeline v3 (Celery + OpenAI/fake providers)
+- Observation → CandidateSignal → validated Signal pipeline v4 (Celery + OpenAI/fake providers)
 - `signal-feed/` with `view_mode=personal|general` (**Ma vue** = `MembershipScope`; Owner/Director personal = all active)
 - Signal detail + pin/unpin/urgency/resolve/cancel (no manual Signal CRUD)
 - Feed subscription (`MembershipFeedSubscription`) **deferred** — future BU-only, then ActivitySubject subscribe/unsubscribe

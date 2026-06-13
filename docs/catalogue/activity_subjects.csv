@@ -1,7 +1,7 @@
 key,label,business_unit_key,description,sort_order
 hotel__experience_client,Experience client,hotel,,10
-hotel__menage,Ménage,hotel,,20
-hotel__maintenance,Maintenance,hotel,,30
+hotel__menage,Ménage,hotel,"Propreté et remise en état chambres et espaces communs : nettoyage, éponge/séchage salissures au sol, sécurisation temporaire. Exclut fuites actives (plomberie) et pannes ascenseur/CVC (équipements).",20
+hotel__maintenance,Maintenance,hotel,"Maintenance légère hôtelière sous responsabilité hôtel : détails chambre et espaces, hors panne transversale.",30
 hotel__linge,Linge,hotel,,40
 hotel__check_in_out,Check in/out,hotel,,50
 hotel__communication,Communication,hotel,,60
@@ -10,34 +10,34 @@ hotel__rh,RH,hotel,,80
 hotel__signaletique,Signalétique,hotel,,90
 hotel__facturation_caisse,Facturation & caisse,hotel,,100
 petit_dejeuner__experience_client,Expérience client,petit_dejeuner,,110
-petit_dejeuner__proprete,Propreté,petit_dejeuner,,120
+petit_dejeuner__proprete,Propreté,petit_dejeuner,"Propreté espaces petit-déjeuner : tables, buffet, sols. Nettoyage et remise en état, pas pannes techniques.",120
 petit_dejeuner__mise_en_place,Mise en place,petit_dejeuner,,130
 petit_dejeuner__rh,RH,petit_dejeuner,,140
-petit_dejeuner__maintenance,Maintenance,petit_dejeuner,,150
+petit_dejeuner__maintenance,Maintenance,petit_dejeuner,"Maintenance légère espace PDJ hors panne transversale (plomberie, CVC, équipements).",150
 petit_dejeuner__menu,Menu,petit_dejeuner,,160
-petit_dejeuner__stock,Stock,petit_dejeuner,,170
+petit_dejeuner__stock,Stock,petit_dejeuner,"Ruptures et réassorts stock petit-déjeuner. Produits différents = focus différent (ex. pain vs confiture).",170
 petit_dejeuner__commercialisation,Commercialisation,petit_dejeuner,,180
 restaurant__experience_client,Expérience client,restaurant,,190
-restaurant__proprete,Propreté,restaurant,,200
+restaurant__proprete,Propreté,restaurant,"Propreté salle et espaces clients : tables, sols, sanitaires. Exclut fuites/canalisations (plomberie).",200
 restaurant__mise_en_place,Mise en place,restaurant,,210
 restaurant__service_accueil,Service & accueil,restaurant,,220
-restaurant__maintenance,Maintenance,restaurant,,230
+restaurant__maintenance,Maintenance,restaurant,"Maintenance légère resto sous responsabilité resto : équipements salle/cuisine hors panne transversale.",230
 restaurant__communication,Communication,restaurant,,240
 restaurant__rh,RH,restaurant,,250
 restaurant__menu,Menu,restaurant,,260
-restaurant__stock,Stock,restaurant,,270
+restaurant__stock,Stock,restaurant,"Ruptures et réassorts produits resto/bar. Segmenter par produit/référence dans le focus même subject stock.",270
 restaurant__commercialisation,Commercialisation,restaurant,,280
 restaurant__admin,Admin,restaurant,,290
 livraison_uber_eats_deliveroo__emballages_presentation,Emballages & présentation,livraison_uber_eats_deliveroo,,300
 livraison_uber_eats_deliveroo__performance_operationnelle,Performance opérationnelle,livraison_uber_eats_deliveroo,,310
 livraison_uber_eats_deliveroo__gestion_tablette_plateforme,Gestion tablette & plateforme,livraison_uber_eats_deliveroo,,320
-livraison_uber_eats_deliveroo__stocks_dedies_livraison,Stocks dédiés livraison,livraison_uber_eats_deliveroo,,330
+livraison_uber_eats_deliveroo__stocks_dedies_livraison,Stocks dédiés livraison,livraison_uber_eats_deliveroo,"Stocks et consommables dédiés commandes livraison : emballages, contenants, ingrédients plateformes. Segmenter par produit dans le focus.",330
 livraison_uber_eats_deliveroo__gestion_sav,Gestion SAV,livraison_uber_eats_deliveroo,,340
 livraison_uber_eats_deliveroo__commercialisation,Commercialisation,livraison_uber_eats_deliveroo,,350
 commerce__experience_client,Expérience client,commerce,,360
-commerce__stock,Stock,commerce,,370
-commerce__proprete,Propreté,commerce,,380
-commerce__securite,Sécurité,commerce,,390
+commerce__stock,Stock,commerce,"Ruptures et niveaux stock point de vente. Chaque produit distinct = focus distinct.",370
+commerce__proprete,Propreté,commerce,"Propreté surface de vente et réserve client : sols, vitrines, sanitaires.",380
+commerce__securite,Sécurité,commerce,"Vol, effraction, alarme, situation à risque immédiat en magasin.",390
 commerce__maintenance,Maintenance,commerce,,400
 commerce__signaletique,Signalétique,commerce,,410
 commerce__prix,Prix,commerce,,420
@@ -47,7 +47,7 @@ commerce__produit,Produit,commerce,,450
 commerce__fournisseurs,Fournisseurs,commerce,,460
 commerce__admin,Admin,commerce,,470
 coworking__experience_utilisateur,Expérience utilisateur,coworking,,480
-coworking__proprete,Propreté,coworking,,490
+coworking__proprete,Propreté,coworking,"Propreté espaces coworking : open space, sanitaires, cuisines partagées.",490
 coworking__maintenance,Maintenance,coworking,,500
 coworking__connexion_it,Connexion & IT,coworking,,510
 coworking__ambiance,Ambiance,coworking,,520
@@ -59,7 +59,7 @@ coworking__rh_planning,RH & planning,coworking,,570
 coworking__facturation_membres,Facturation membres,coworking,,580
 coworking__communication,Communication,coworking,,590
 salles_de_reunion__experience_utilisateur,Expérience utilisateur,salles_de_reunion,,600
-salles_de_reunion__proprete,Propreté,salles_de_reunion,,610
+salles_de_reunion__proprete,Propreté,salles_de_reunion,"Propreté salles de réunion et espaces associés.",610
 salles_de_reunion__maintenance,Maintenance,salles_de_reunion,,620
 salles_de_reunion__connexion_it,Connexion & IT,salles_de_reunion,,630
 salles_de_reunion__communication,Communication,salles_de_reunion,,640
@@ -67,9 +67,9 @@ salles_de_reunion__commercialisation,Commercialisation,salles_de_reunion,,650
 salles_de_reunion__service,Service,salles_de_reunion,,660
 salles_de_reunion__rh_planning,RH & planning,salles_de_reunion,,670
 salles_de_reunion__facturation,Facturation,salles_de_reunion,,680
-salle_de_sport__proprete,Propreté,salle_de_sport,,690
+salle_de_sport__proprete,Propreté,salle_de_sport,"Propreté salles, vestiaires et circulations sport.",690
 salle_de_sport__maintenance,Maintenance,salle_de_sport,,700
-salle_de_sport__securite,Sécurité,salle_de_sport,,710
+salle_de_sport__securite,Sécurité,salle_de_sport,"Sécurité membres : blessure, matériel dangereux, accès non autorisé.",710
 salle_de_sport__experience_membre,Expérience membre,salle_de_sport,,720
 salle_de_sport__signaletique,Signalétique,salle_de_sport,,730
 salle_de_sport__planning_cours,Planning cours,salle_de_sport,,740
@@ -77,8 +77,8 @@ salle_de_sport__commercialisation,Commercialisation,salle_de_sport,,750
 salle_de_sport__communication,Communication,salle_de_sport,,760
 salle_de_sport__rh,RH,salle_de_sport,,770
 loisirs__experience_client,Expérience client,loisirs,,780
-loisirs__proprete,Propreté,loisirs,,790
-loisirs__securite,Sécurité,loisirs,,800
+loisirs__proprete,Propreté,loisirs,"Propreté espaces loisirs ouverts au public : sols, sanitaires, zones de jeu.",790
+loisirs__securite,Sécurité,loisirs,"Sécurité public activités : incident, zone dangereuse, évacuation.",800
 loisirs__signaletique,Signalétique,loisirs,,810
 loisirs__evenements,Evenements,loisirs,,820
 loisirs__commercialisation,Commercialisation,loisirs,,830
@@ -88,21 +88,21 @@ loisirs__evenement,Evenement,loisirs,,860
 loisirs__rh,RH,loisirs,,870
 loisirs__billetterie_caisse,Billetterie & caisse,loisirs,,880
 loisirs__prestataires,Préstataires,loisirs,,890
-spa_piscine__proprete,Propreté,spa_piscine,,900
-spa_piscine__maintenance,Maintenance,spa_piscine,,910
-spa_piscine__securite,Sécurité,spa_piscine,,920
+spa_piscine__proprete,Propreté,spa_piscine,"Propreté spa/piscine : abords, vestiaires, surfaces humides. Exclut traitement eau piscine (maintenance technique).",900
+spa_piscine__maintenance,Maintenance,spa_piscine,"Maintenance légère spa/piscine hors CVC/plomberie transversale.",910
+spa_piscine__securite,Sécurité,spa_piscine,"Sécurité baigneurs : noyade signalée, panne garde-corps, non-conformité piscine.",920
 spa_piscine__experience_membre,Expérience membre,spa_piscine,,930
 spa_piscine__signaletique,Signalétique,spa_piscine,,940
 spa_piscine__commercialisation,Commercialisation,spa_piscine,,950
 spa_piscine__communication,Communication,spa_piscine,,960
 spa_piscine__rh,RH,spa_piscine,,970
-maintenance__cvc,CVC,maintenance,,980
-maintenance__electricite,Électricité,maintenance,,990
-maintenance__plomberie_eau,Plomberie & Eau,maintenance,,1000
+maintenance__cvc,CVC,maintenance,"Chauffage, ventilation, climatisation. Inclure chambre/zone dans le focus si discriminant entre problèmes distincts.",980
+maintenance__electricite,Électricité,maintenance,"Pannes électriques, éclairage inopérant, prises, tableaux. Dysfonctionnement électrique, pas simple remplacement ampoule si procédure staff.",990
+maintenance__plomberie_eau,Plomberie & Eau,maintenance,"Fuites, canalisations, robinetterie, évacuations et alimentation en eau. Exclut flaques à nettoyer sans fuite active (ménage/propreté).",1000
 maintenance__maintenance_batiment_second_uvre,Maintenance bâtiment & second œuvre,maintenance,,1010
-maintenance__equipements_dexploitation,Équipements d’exploitation,maintenance,,1020
+maintenance__equipements_dexploitation,Équipements d'exploitation,maintenance,"Ascenseurs, portes automatiques, équipements techniques d'exploitation en panne. Exclut débris/objets cassés au sol à ramasser (ménage) sauf si l'équipement est HS.",1020
 maintenance__reseau_informatique,Réseau & informatique,maintenance,,1030
-maintenance__securite_conformite,Sécurité & conformité,maintenance,,1040
+maintenance__securite_conformite,Sécurité & conformité,maintenance,"Conformité sécurité incendie, extincteurs, issues de secours, audits réglementaires.",1040
 maintenance__logistique_consommables_techniques,Logistique & consommables techniques,maintenance,,1050
 maintenance__ouverture_fermeture_technique,Ouverture / fermeture technique,maintenance,,1060
 maintenance__prestataires_sous_traitance,Prestataires & sous-traitance,maintenance,,1070

@@ -14,7 +14,7 @@ Preferred local workflow:
 - backend stack: `make up-backend`
 - frontend local: `make web-dev`
 - full stack only when needed: `make up`
-- optional scheduler (celery-beat): `make up-scheduler` (Compose profile `scheduler`)
+- optional scheduler (celery-beat): `make up-scheduler` (local `.env`) or `make shared-dev-up-scheduler` (`.env.shared-dev`)
 
 Shared-dev (remote PostgreSQL, `.env.shared-dev`):
 - `make shared-dev-up` — runs compose preflight (`assert-shared-dev-compose.sh`) before `up`

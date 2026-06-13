@@ -15,17 +15,22 @@ Phase build: tests protect product risk, not line coverage.
 ### Commands
 
 ```bash
-# Canonical (Docker stack)
+# Canonical (Docker stack, local DB only)
 make test
+make backend-test
 
-# Local with services running
-cd apps/api && uv run pytest
+# Lint (Docker)
+make backend-lint
+make lint
+
+# Local with services running — prefer Make targets above
+docker compose exec api sh -lc 'cd /app/apps/api && uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q'
 
 # Profile slow tests
 docker compose exec api pytest --durations=50 -q
 
-# Exclude opt-in / slow markers
-uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q
+# Reproduce CI backend test env locally (DJANGO_DEBUG=0, production throttle rates)
+docker compose exec api sh -lc 'cd /app/apps/api && DJANGO_DEBUG=0 uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q'
 ```
 
 ### Layout
@@ -37,7 +42,9 @@ uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow
   - `taxonomy.py` — business units, activity subjects, restaurant v3 taxonomy
   - `onboarding.py` — manual V2 payloads and onboarding session helpers
   - `pipeline.py` — observation/golden pipeline helpers
-- Session-scoped `imported_catalog` fixture: `establishments/tests/conftest.py`
+- Catalog fixtures in `establishments/tests/conftest.py`:
+  - `imported_catalog` — function-scoped sync via `sync_catalog_from_normalized_rows()`
+  - `requires_empty_catalog` — assert no catalog rows (tests that expect an empty DB)
 
 **Do not** import helpers from `test_*.py` modules.
 
@@ -54,6 +61,19 @@ uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow
 
 - `openai_observation_smoke`, `openai_smoke` — opt-in live AI (env-gated)
 - `slow` — explicit sleep or >1s tests (excluded from fast CI job)
+- `auth_throttle` — tests that assert real rate-limit behavior (429). Excluded from the global relaxed-throttle fixture in `houston/conftest.py`. Use this marker plus local low-rate overrides when adding new throttle tests.
+
+### Auth throttling in pytest
+
+CI runs with `DJANGO_DEBUG=0`, which enables production auth throttle quotas and Redis-backed counters. The standard test suite calls `/auth/login/` hundreds of times from the same IP, so unguarded runs hit 429 and cascade into auth/RBAC failures.
+
+`houston/conftest.py` applies an autouse fixture (`relaxed_auth_throttling_for_standard_tests`) for all tests **except** those marked `auth_throttle`:
+
+- LocMem cache with a unique `LOCATION` per test
+- relaxed quotas (`1000/minute`, mirroring DEBUG settings)
+- skip via `yield; return` when `@pytest.mark.auth_throttle` is present (never bare `return` in this yield fixture)
+
+Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-limit, etc.) must use `@pytest.mark.auth_throttle` and their own low-rate cache isolation. Production rates in `config/settings.py` are unchanged.
 
 ### Product priorities (must stay covered)
 
@@ -76,9 +96,14 @@ uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow
 ### Commands
 
 ```bash
-cd apps/web && npm test
-cd apps/web && npm run typecheck
 make web-test
+make web-lint
+make web-typecheck
+make web-build
+
+cd apps/web && npm test
+cd apps/web && npm run lint
+cd apps/web && npm run typecheck
 ```
 
 ### Layout
@@ -93,11 +118,42 @@ make web-test
 - Auth provider, WebSocket hooks, and TanStack Query mutations use **jsdom** + test-utils.
 - Do not assert exact Tailwind classes or French copy unless it encodes a business rule in lib code.
 
-## CI
+## CI vs local gates
 
-GitHub Actions workflow `.github/workflows/ci.yml` runs:
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
 
-- Backend: `uv run pytest` with PostgreSQL + Redis services (smoke/slow excluded)
-- Frontend: `npm test` + `npm run typecheck`
+| Job | Steps |
+|-----|-------|
+| `backend-tests` | `uv run ruff check .` + `uv run pytest` (PostgreSQL + Redis; smoke/slow excluded) |
+| `frontend-tests` | `npm run lint` + `npm test` + `npm run typecheck` |
 
-Full local gate: `make verify` (includes schema, lint, build).
+CI does **not** run migrations check, OpenAPI schema diff, or frontend build — those stay in local Make targets.
+
+### Local validation targets
+
+| Target | What it runs |
+|--------|----------------|
+| `make backend-check` | Django check, ruff, migrations check, schema diff, pytest |
+| `make web-check` | vitest, typecheck, build |
+| `make local-check` | `backend-check` + `web-check` |
+| `make verify` | alias for `local-check` |
+
+Run `make verify` before merging when the Docker stack is up and you need full confidence. For day-to-day backend work, `make backend-test` or `make backend-lint` is enough.
+
+### Issue focus aggregation eval (Lot 5)
+
+```bash
+# Live OpenAI corpus diff (opt-in, not CI)
+export HOUSTON_RUN_OPENAI_OBSERVATION_SMOKE_TEST=1
+docker compose exec api uv run python manage.py evaluate_observation_pipeline --case-id G01 --case-id G03
+docker compose exec api uv run python manage.py evaluate_observation_pipeline --json --fail-on-diff
+
+# Plumbing check without OpenAI
+docker compose exec api uv run python manage.py evaluate_observation_pipeline --provider fake --case-id G01
+
+# DB aggregation metrics (pilot monitoring)
+docker compose exec api uv run python manage.py report_issue_focus_aggregation_eval --json
+make backend-test PYTEST_ARGS='houston/signals/tests/test_pipeline_v4_golden.py houston/signals/tests/test_aggregation_eval.py houston/signals/tests/test_evaluate_observation_pipeline.py -q'
+```
+
+See [`issue_focus_aggregation_eval_lot5.md`](issue_focus_aggregation_eval_lot5.md).

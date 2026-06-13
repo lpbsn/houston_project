@@ -336,6 +336,7 @@ def test_accept_staff_invitation_keeps_membership_scopes(api_client):
     assert membership.status == EstablishmentMembership.Status.ACTIVE
 
 
+@pytest.mark.auth_throttle
 def test_accept_over_limit_returns_429(api_client, monkeypatch):
     import rest_framework.throttling as drf_throttling
 

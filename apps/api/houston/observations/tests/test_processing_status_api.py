@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import uuid
+from unittest.mock import patch
 
 import pytest
+from django.db import IntegrityError
 from houston.ai.observation_pipeline import FakeObservationPipelineProvider
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.conftest import TEST_PASSWORD
@@ -13,6 +15,7 @@ from houston.establishments.tests.taxonomy_helpers import (
 )
 from houston.observations.models import ObservationProcessing
 from houston.observations.selectors import resolve_ux_status
+from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal
 from houston.signals.services import apply_pipeline_output, run_observation_pipeline
 from houston.signals.tests.conftest import (
@@ -37,6 +40,38 @@ def processing_status_url(establishment_id, observation_id) -> str:
         f"/api/v1/establishments/{establishment_id}/observations/"
         f"{observation_id}/processing-status/"
     )
+
+
+def _setup_hotel_taxonomy(establishment):
+    hotel = create_business_unit(
+        establishment=establishment,
+        key="hotel",
+        label="Hotel",
+    )
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+
+
+def _fake_provider_payload(*, issue_focus: str = "climatisation"):
+    return {
+        "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+        "candidates": [
+            {
+                "title": "Clim en panne",
+                "structured_summary": "La climatisation ne fonctionne plus.",
+                "issue_focus": issue_focus,
+                "affected_business_unit_key": "hotel",
+                "responsible_business_unit_key": "hotel",
+                "activity_subject_key": "maintenance",
+                "operational_unit_key": None,
+                "location_text": None,
+                "aggregate_into_signal_id": None,
+            }
+        ],
+    }
 
 
 def login(api_client: APIClient, *, user) -> str:
@@ -227,3 +262,54 @@ def test_processing_status_failed(api_client):
     assert body["status"] == ObservationProcessing.Status.FAILED
     assert body["ux_status"] == "analysis_failed"
     assert body["last_error_code"] == "provider_timeout"
+
+
+def test_processing_status_invalid_issue_focus(api_client):
+    membership = build_membership()
+    membership.user.set_password(TEST_PASSWORD)
+    membership.user.save(update_fields=["password"])
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    run_observation_pipeline(
+        observation.id,
+        provider=FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   ")),
+    )
+
+    token = login(api_client, user=membership.user)
+    response = api_client.get(
+        processing_status_url(membership.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == ObservationProcessing.Status.FAILED
+    assert body["ux_status"] == "analysis_failed"
+    assert body["last_error_code"] == "invalid_issue_focus"
+
+
+def test_processing_status_persist_error(api_client):
+    membership = build_membership()
+    membership.user.set_password(TEST_PASSWORD)
+    membership.user.save(update_fields=["password"])
+    _setup_hotel_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+
+    with patch(
+        "houston.signals.services._persist_pending_candidate",
+        side_effect=IntegrityError("persist failed"),
+    ):
+        with pytest.raises(IntegrityError):
+            run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
+
+    token = login(api_client, user=membership.user)
+    response = api_client.get(
+        processing_status_url(membership.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == ObservationProcessing.Status.FAILED
+    assert body["ux_status"] == "analysis_failed"
+    assert body["last_error_code"] == "pipeline_persist_error"

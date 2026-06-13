@@ -38,7 +38,7 @@ make shared-dev-up      # redis + api + celery (remote DB)
 make web-dev
 ```
 
-Optional scheduler — **do not** use `make up-scheduler` here (it targets local `.env` only). See [Scheduler in shared-dev mode](#scheduler-in-shared-dev-mode).
+Optional scheduler — **do not** use `make up-scheduler` here (it targets local `.env` only). Use `make shared-dev-up-scheduler` — see [Scheduler in shared-dev mode](#scheduler-in-shared-dev-mode).
 
 After `git pull` with new migrations (coordinate with your teammate — one `migrate` at a time):
 
@@ -111,25 +111,13 @@ Local `.env` omits this (or uses `disable`) — Django reads `POSTGRES_SSLMODE` 
 
 `make up-scheduler` runs `$(COMPOSE) up-backend` against **local** `.env` (`docker-compose.yml` only). After `make shared-dev-up`, that target would start local `postgres` and point `api`/`celery-beat` at the wrong database.
 
-**Today (manual):** start `celery-beat` with the shared-dev merge after `make shared-dev-up`:
+Use the dedicated target instead:
 
 ```bash
-docker compose \
-  --profile scheduler \
-  --env-file .env.shared-dev \
-  -f docker-compose.yml \
-  -f docker-compose.shared-dev.yml \
-  run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
-
-docker compose \
-  --profile scheduler \
-  --env-file .env.shared-dev \
-  -f docker-compose.yml \
-  -f docker-compose.shared-dev.yml \
-  up -d celery-beat
+make shared-dev-up-scheduler
 ```
 
-**Planned:** `make shared-dev-up-scheduler` (Makefile target — engineering lot L7) will wrap the commands above with the same preflight as `shared-dev-up`.
+This runs the same preflight as `shared-dev-up`, ensures `redis` + `api` + `celery` are up against the remote DB, then starts `celery-beat` with the shared-dev Compose merge.
 
 Local dev (`.env`) continues to use `make up-scheduler`.
 

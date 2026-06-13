@@ -1,8 +1,8 @@
 # AI Domain
 
 Status: authoritative
-Last reviewed: 2026-06-01
-Implementation status: partial (transcription + observation pipeline v3 implemented; AI onboarding permanently removed from product)
+Last reviewed: 2026-06-13
+Implementation status: partial (transcription + observation pipeline v4 implemented — prompt/schema `ai_observation_pipeline_v4`, aggregation on `issue_focus`, golden corpus G01–G11 green; AI onboarding permanently removed from product)
 
 ## 1. Purpose
 
@@ -106,7 +106,7 @@ It does not own:
 - `PromptVersion`
   - Version identifier for control text used by an AI flow.
   - Full prompt text storage does not belong in this domain reference.
-  - Observation pipeline: `prompt_version` and `schema_version` are both `ai_observation_pipeline_v3`; recorded on `AIUsageLog`.
+  - Observation pipeline: `prompt_version` and `schema_version` are both `ai_observation_pipeline_v4`; recorded on `AIUsageLog`. Structured output requires `issue_focus` per candidate (v4).
 
 - `AIError`
   - Safe technical failure state with normalized error metadata.

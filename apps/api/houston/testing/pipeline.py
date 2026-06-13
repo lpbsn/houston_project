@@ -36,6 +36,7 @@ def golden_two_candidate_pipeline_output(
                     "Éclairage instable signalé à l'entrée du restaurant, "
                     "intervention maintenance requise."
                 ),
+                issue_focus="lumière entrée restaurant",
                 affected_business_unit_key=RESTAURANT_MODULE_KEY,
                 responsible_business_unit_key="maintenance",
                 activity_subject_key=taxonomy.lighting_subject.normalized_name,
@@ -48,6 +49,7 @@ def golden_two_candidate_pipeline_output(
                 structured_summary=(
                     "Plus de sirop mojito disponible au bar, réassort stock nécessaire."
                 ),
+                issue_focus="sirop mojito",
                 affected_business_unit_key="bar",
                 responsible_business_unit_key="bar",
                 activity_subject_key=taxonomy.stock_subject.normalized_name,

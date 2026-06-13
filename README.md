@@ -70,7 +70,7 @@ The project currently uses a Django modular monolith as the business authority a
 - Phase 1 membership management API for owner/director users
 - Phase 1 scoped user search for the current active establishment
 - Phase 2 runtime config / onboarding minimal ✅ completed
-- **Taxonomy v2 and Lot 6 are complete:** BusinessUnit / ActivitySubject product model is authoritative, RBAC is BU-only, manual onboarding V2 and pipeline v3 are live, and legacy Module/Domain/Subject compatibility is removed.
+- **Taxonomy v2 and Lot 6 are complete:** BusinessUnit / ActivitySubject product model is authoritative, RBAC is BU-only, manual onboarding V2 and pipeline v4 are live, and legacy Module/Domain/Subject compatibility is removed.
 - Observation submission (text + optional validated photo temporary uploads)
 - Temporary photo uploads + private media storage (authorized only)
 - Audio transcription endpoint (temporary audio deleted after each request)
@@ -129,7 +129,7 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
 1. Copy `.env.example` to `.env`.
 2. Set backend-only variables in `.env` (never commit real secrets):
    - `HOUSTON_REGISTRATION_INVITE_CODES` — comma-separated codes required for public `/onboarding` registration (empty disables registration).
-   - Onboarding is **manual V2 only** (BusinessUnit / ActivitySubject) — AI onboarding env vars are legacy and not product-active; see [`docs/product/domains/runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
+   - Onboarding is **manual V2 only** (BusinessUnit / ActivitySubject) — see [`docs/product/domains/runtime_config_onboarding_domain.md`](docs/product/domains/runtime_config_onboarding_domain.md).
    - `OPENAI_API_KEY` — server-only key for observation → signal pipeline (optional in dev).
    - `HOUSTON_AI_OBSERVATION_PROVIDER` — use `openai` with a valid `OPENAI_API_KEY` for realistic manual Signaler testing (default in `.env.example`). Automated pytest forces `fake` automatically. Do not use `fake` to validate real-world observation understanding (it may produce generic titles like "Structured issue").
    - `HOUSTON_AI_OBSERVATION_MODEL`, `HOUSTON_AI_OBSERVATION_TIMEOUT_SECONDS`, `HOUSTON_AI_OBSERVATION_MAX_RETRIES` — optional tuning for observation → signal processing.

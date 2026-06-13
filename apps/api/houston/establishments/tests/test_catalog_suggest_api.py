@@ -4,7 +4,6 @@ import pytest
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
-from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.models import BusinessUnit
 from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.establishments.tests.taxonomy_helpers import create_establishment
@@ -45,12 +44,11 @@ def auth_headers(api_client, active_user):
     return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
 
-@pytest.fixture
-def imported_catalog():
-    return sync_catalog_from_normalized_rows()
-
-
-def test_catalog_business_unit_suggest_returns_empty_without_import(api_client, auth_headers):
+def test_catalog_business_unit_suggest_returns_empty_without_import(
+    requires_empty_catalog,
+    api_client,
+    auth_headers,
+):
     response = api_client.get(
         "/api/v1/catalog/business-units/suggest/",
         {"q": "Cow"},

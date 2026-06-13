@@ -227,6 +227,7 @@ def create_v3_signal(
     structured_summary: str = "Structured summary safe.",
     status: str = Signal.Status.OPEN,
     location_text: str = "",
+    issue_focus: str = "",
 ) -> Signal:
     from django.utils import timezone
 
@@ -239,6 +240,7 @@ def create_v3_signal(
         title=title,
         structured_summary=structured_summary,
         location_text=location_text,
+        issue_focus=issue_focus,
         status=status,
         last_activity_at=now,
     )

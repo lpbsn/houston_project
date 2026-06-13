@@ -173,6 +173,7 @@ def _build_active_signals_context(*, establishment_id: uuid.UUID) -> list[dict[s
                     signal.operational_unit.key if signal.operational_unit_id else None
                 ),
                 "location_text": signal.location_text or None,
+                "issue_focus": signal.issue_focus or None,
             }
         )
     return entries
@@ -534,13 +535,45 @@ CONTEXTE
 - Les descriptions des pôles aident à distinguer périmètres et responsabilités.
 - Les images ne sont pas fournies ; "media_count" est informatif uniquement.
 
+MÉTHODE — ANALYSE PROBLÈME PAR PROBLÈME
+1. Lire validated_text et lister mentalement chaque problème opérationnel DISTINCT
+   (objet, produit, équipement ou situation séparée).
+2. Pour chaque problème, appliquer la grille mentale avant de produire le JSON :
+   - symptôme observé (ce que la personne voit ou constate),
+   - nature / cause probable (salissure, panne, rupture stock, fuite, casse…),
+   - action attendue (éponger, réparer, réapprovisionner, sécuriser…),
+   - lieu pertinent (inclus dans issue_focus si discriminant),
+   - pôle responsable (transversal ou dedicated selon règles ci-dessous).
+3. Produire un candidat JSON par problème distinct (max {MAX_CANDIDATES_PER_OBSERVATION}).
+   Ne fusionne jamais plusieurs problèmes différents en un seul candidat.
+
+ISSUE_FOCUS (obligatoire, 1–80 caractères)
+- Identifiant court et STABLE de ce qui est concerné par le Signal.
+- Inclure l'objet, produit ou équipement : pain, sirop mojito, ascenseur principal.
+- Inclure le lieu dans issue_focus UNIQUEMENT quand il discrimine des problèmes distincts
+  (ex. clim chambre 104 vs clim chambre 312 ; fuite couloir est).
+- Omettre ou garder stable le lieu quand c'est le même problème récurrent
+  (ex. eau couloir pour toute flaque au couloir ; sirop mojito pour ruptures mojito).
+- Formulation courte, minuscules préférées, sans ponctuation superflue.
+- issue_focus sert à distinguer deux candidats même quadruplet taxonomique
+  et à décider create vs aggregate — pas de synonymes inventés pour le même focus.
+
+DÉSAMBIGUÏSATION (contexte grammatical, pas de liste mots-clé)
+- Distingue symptôme, cause et action via le sens de la phrase, pas via des mots isolés.
+- Salissure / flaque à traiter (ménage, propreté) ≠ fuite / canalisation (plomberie).
+  Ex. "eau par terre" sans fuite → propreté ; "fuite d'eau" → plomberie.
+- Objet cassé / salissure à sécuriser ≠ équipement en panne.
+  Ex. "verre cassé près des ascenseurs" → propreté/sécurisation ;
+  "ascenseur en panne" → maintenance équipements.
+- Ne route pas vers un pôle dedicated uniquement parce que son nom apparaît dans le texte
+  si la nature du problème relève d'un pôle transversal du snapshot.
+
 ROUTAGE — LIEU VS NATURE DU PROBLÈME
 - affected_business_unit_key : où le problème est observé (lieu, espace, pôle impacté).
 - responsible_business_unit_key : qui doit traiter (nature opérationnelle du problème).
 - activity_subject_key : sujet sous responsible_business_unit (normalized_name exact).
-- location_text : contexte libre ou localisation précise (chambre 104, restaurant, bar).
-- Ne route pas vers un pôle dedicated uniquement parce que son nom apparaît dans le texte
-  si la nature du problème relève d'un pôle transversal du snapshot.
+- location_text : contexte libre ou localisation précise pour l'affichage (chambre 104, bar).
+  Ne remplace pas issue_focus ; n'entre jamais dans une clé d'agrégation backend.
 
 PRIORITÉ TRANSVERSALE
 - Si un BusinessUnit unit_type=transversal possède un activity_subject correspondant
@@ -552,23 +585,28 @@ FALLBACK DEDICATED
 - Si aucun pôle transversal pertinent n'existe pour la nature du problème,
   responsible = affected et activity_subject sous affected.
 
-MISSION
-Pour chaque problème opérationnel DISTINCT, produire un candidat
-(max {MAX_CANDIDATES_PER_OBSERVATION}).
-Ne fusionne jamais plusieurs problèmes différents en un seul candidat.
-
 SEGMENTATION
-Séparer si lieux, pôles impactés, responsables, sujets ou problèmes diffèrent.
+- Séparer si lieux impactés, responsables, sujets, problèmes ou issue_focus diffèrent.
+- Règle négative : produits ou objets différents → candidats différents
+  même si même activity_subject (ex. pain et sirop mojito sous stock/bar → 2 candidats).
+- Ne pas fusionner deux ruptures de stock distinctes en un seul candidat "stock bar".
 
 TEXTE DE SORTIE
 - title : titre court orienté action (≤ 80 caractères).
-- structured_summary : 1–3 phrases factuelles ; inclure lieu précis si mentionné.
+- structured_summary : 1–3 phrases factuelles ; inclure lieu précis si mentionné ;
+  porter symptôme et action attendue (grille mentale), sans recopier validated_text.
 - location_text : lieu court libre (≤ 120 caractères), null si aucun lieu distinct ;
   jamais le texte complet de validated_text.
 
 AGRÉGATION (optionnel)
-- aggregate_into_signal_id : UUID d'un signal dans active_signals_context si le problème
-  prolonge clairement une situation ouverte ; sinon null.
+- aggregate_into_signal_id : UUID d'un signal dans active_signals_context UNIQUEMENT si :
+  (a) le problème prolonge clairement la même situation ouverte, ET
+  (b) issue_focus est identique (même focus stable) à la situation cible, ET
+  (c) la taxonomie (affected, responsible, activity_subject) est compatible.
+- Si le hint pointe vers un signal actif mais issue_focus diffère → null (créer nouveau Signal).
+- Anti-biais active_signals_context : la présence d'un signal actif sur un sujet proche
+  (ex. mojito actif) ne doit PAS faire agréger un problème différent (ex. pain).
+- Sans correspondance claire → aggregate_into_signal_id = null.
 
 HORS PÉRIMÈTRE
 - urgence, priorité, detected_domains[], scores de confiance
@@ -580,9 +618,9 @@ SI RIEN N'EST ACTIONNABLE
 FORMAT DE RÉPONSE
 Un seul objet JSON strict :
 schema_version = "{AI_OBSERVATION_PIPELINE_SCHEMA_VERSION}"
-candidates[] avec title, structured_summary, affected_business_unit_key,
-responsible_business_unit_key, activity_subject_key, operational_unit_key,
-location_text, aggregate_into_signal_id.
+candidates[] avec title, structured_summary, issue_focus,
+affected_business_unit_key, responsible_business_unit_key, activity_subject_key,
+operational_unit_key, location_text, aggregate_into_signal_id.
 """
 
 
@@ -612,6 +650,7 @@ def _default_fake_payload(input_payload: dict[str, Any]) -> dict[str, Any]:
             {
                 "title": "Structured issue",
                 "structured_summary": "Validated structured summary for tests.",
+                "issue_focus": "structured issue",
                 "affected_business_unit_key": unit["key"],
                 "responsible_business_unit_key": unit["key"],
                 "activity_subject_key": subject["key"],

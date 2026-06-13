@@ -76,6 +76,7 @@ def _single_candidate_openai_payload(
                     "Éclairage instable signalé à l'entrée du restaurant, "
                     "intervention maintenance requise."
                 ),
+                "issue_focus": "lumière entrée restaurant",
                 "affected_business_unit_key": affected_key,
                 "responsible_business_unit_key": responsible_key,
                 "activity_subject_key": subject_key,

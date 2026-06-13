@@ -42,6 +42,7 @@ def _candidate(**overrides) -> PipelineCandidateOutput:
     base = {
         "title": "Issue",
         "structured_summary": "Structured summary for tests.",
+        "issue_focus": "maintenance",
         "affected_business_unit_key": "hotel",
         "responsible_business_unit_key": "hotel",
         "activity_subject_key": "maintenance",

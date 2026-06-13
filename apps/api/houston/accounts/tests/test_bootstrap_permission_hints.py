@@ -56,7 +56,12 @@ def fetch_bootstrap_hints(
 
 
 @pytest.mark.parametrize(
-    ("role", "expected_can_create_action", "expected_can_invite", "expected_can_manage_runtime_config"),
+    (
+        "role",
+        "expected_can_create_action",
+        "expected_can_invite",
+        "expected_can_manage_runtime_config",
+    ),
     [
         (EstablishmentMembership.Role.OWNER, True, True, True),
         (EstablishmentMembership.Role.DIRECTOR, True, True, True),
