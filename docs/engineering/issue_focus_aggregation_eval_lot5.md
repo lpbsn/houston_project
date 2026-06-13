@@ -22,8 +22,11 @@ Each pipeline candidate apply emits `observation_pipeline_candidate_applied` wit
 | `issue_focus` | Normalized focus used for matching |
 | `active_taxonomy_peer_count` | On **create** only: count of other active Signals same taxonomy, different focus |
 | `hint_rejected_reason` | e.g. `hint_issue_focus_mismatch` when LLM hint rejected |
+| `aggregation_match_mode` | On aggregate only: `exact`, `hint`, or `legacy_fallback` (pre-v4 Signals with empty `issue_focus`) |
 
 Source: [`apps/api/houston/core/observability.py`](../../apps/api/houston/core/observability.py), [`apps/api/houston/signals/services.py`](../../apps/api/houston/signals/services.py).
+
+**Legacy fallback (runtime, not Lot 4bis):** active Signals created before pipeline v4 may have `issue_focus=""`. Apply-side legacy fallback aggregates a single unambiguous match and enriches `issue_focus` from the candidate. This does **not** change G09–G11 reformulation behavior (those active Signals already have distinct non-empty focuses).
 
 ### DB report command
 

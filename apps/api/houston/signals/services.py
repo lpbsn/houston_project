@@ -101,6 +101,10 @@ def normalize_issue_focus(value: str | None) -> str:
     return normalized
 
 
+def is_legacy_empty_issue_focus(value: str | None) -> bool:
+    return not normalize_issue_focus(value)
+
+
 def require_normalized_issue_focus(value: str | None) -> str:
     normalized = normalize_issue_focus(value)
     if not normalized:
@@ -231,8 +235,15 @@ def aggregate_candidate_into_signal(
     *,
     signal: Signal,
     observation: Observation,
+    normalized_issue_focus: str | None = None,
 ) -> Signal:
-    touch_signal_activity(signal=signal)
+    now = timezone.now()
+    update_fields = ["last_activity_at", "updated_at"]
+    signal.last_activity_at = now
+    if normalized_issue_focus and is_legacy_empty_issue_focus(signal.issue_focus):
+        signal.issue_focus = normalized_issue_focus
+        update_fields.insert(0, "issue_focus")
+    signal.save(update_fields=update_fields)
     record_source_observation_link(
         signal=signal,
         observation=observation,
@@ -435,6 +446,37 @@ def find_active_signal_for_aggregation(
     return queryset.order_by("-last_activity_at").first()
 
 
+def find_active_legacy_signal_for_aggregation(
+    *,
+    establishment_id: uuid.UUID,
+    resolved: ResolvedTaxonomy,
+) -> Signal | None:
+    if (
+        resolved.affected_business_unit is None
+        or resolved.responsible_business_unit is None
+        or resolved.activity_subject is None
+    ):
+        return None
+
+    queryset = Signal.objects.filter(
+        establishment_id=establishment_id,
+        affected_business_unit=resolved.affected_business_unit,
+        responsible_business_unit=resolved.responsible_business_unit,
+        activity_subject=resolved.activity_subject,
+        issue_focus="",
+        status__in=ACTIVE_SIGNAL_STATUSES,
+    )
+    if resolved.operational_unit is None:
+        queryset = queryset.filter(operational_unit__isnull=True)
+    else:
+        queryset = queryset.filter(operational_unit=resolved.operational_unit)
+
+    matches = list(queryset.select_for_update().order_by("-last_activity_at")[:2])
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
 def _signal_taxonomy_matches(*, signal: Signal, resolved: ResolvedTaxonomy) -> bool:
     assert resolved.affected_business_unit is not None
     assert resolved.responsible_business_unit is not None
@@ -603,6 +645,7 @@ def apply_pipeline_output(
             signal = aggregate_candidate_into_signal(
                 signal=hint_signal,
                 observation=observation,
+                normalized_issue_focus=normalized_issue_focus,
             )
             row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
             row.result_signal = signal
@@ -616,6 +659,7 @@ def apply_pipeline_output(
                 candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
                 issue_focus=str(eval_log_fields["issue_focus"]),
                 taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+                aggregation_match_mode="hint",
             )
             continue
 
@@ -626,7 +670,11 @@ def apply_pipeline_output(
             for_update=True,
         )
         if existing is not None:
-            signal = aggregate_candidate_into_signal(signal=existing, observation=observation)
+            signal = aggregate_candidate_into_signal(
+                signal=existing,
+                observation=observation,
+                normalized_issue_focus=normalized_issue_focus,
+            )
             row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
             row.result_signal = signal
             row.save(update_fields=["outcome", "result_signal", "updated_at"])
@@ -639,6 +687,33 @@ def apply_pipeline_output(
                 candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
                 issue_focus=str(eval_log_fields["issue_focus"]),
                 taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+                aggregation_match_mode="exact",
+            )
+            continue
+
+        legacy_existing = find_active_legacy_signal_for_aggregation(
+            establishment_id=observation.establishment_id,
+            resolved=resolved,
+        )
+        if legacy_existing is not None:
+            signal = aggregate_candidate_into_signal(
+                signal=legacy_existing,
+                observation=observation,
+                normalized_issue_focus=normalized_issue_focus,
+            )
+            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+            row.result_signal = signal
+            row.save(update_fields=["outcome", "result_signal", "updated_at"])
+            aggregated_count += 1
+            _log_pipeline_candidate_applied(
+                observation=observation,
+                aggregation_key=format_aggregation_key(dedupe_key),
+                hint_used=False,
+                hint_rejected_reason=hint_rejected_reason or "",
+                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+                issue_focus=str(eval_log_fields["issue_focus"]),
+                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+                aggregation_match_mode="legacy_fallback",
             )
             continue
 
@@ -902,6 +977,7 @@ def _log_pipeline_candidate_applied(
     issue_focus: str = "",
     taxonomy_bucket_key: str = "",
     active_taxonomy_peer_count: int | None = None,
+    aggregation_match_mode: str = "",
 ) -> None:
     logger.info(
         "observation_pipeline_candidate_applied",
@@ -916,6 +992,7 @@ def _log_pipeline_candidate_applied(
             issue_focus=issue_focus,
             taxonomy_bucket_key=taxonomy_bucket_key,
             active_taxonomy_peer_count=active_taxonomy_peer_count,
+            aggregation_match_mode=aggregation_match_mode,
         ),
     )
 
