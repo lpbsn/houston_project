@@ -20,7 +20,8 @@ RUN groupadd --gid 1000 houston \
     && useradd --uid 1000 --gid houston --create-home --shell /bin/sh houston
 
 COPY pyproject.toml uv.lock README.md /app/
-RUN uv sync --frozen --no-install-project --group dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --group dev
 
 COPY . /app
 

@@ -6,17 +6,17 @@ services:
   api:
     depends_on: !override
       redis:
-        condition: service_started
+        condition: service_healthy
 
   celery:
     depends_on: !override
       redis:
-        condition: service_started
+        condition: service_healthy
 
   celery-beat:
     depends_on: !override
       redis:
-        condition: service_started
+        condition: service_healthy
 
   postgres:
     profiles:

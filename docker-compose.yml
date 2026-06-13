@@ -2,6 +2,8 @@ x-api-build: &api_build
   context: .
   dockerfile: infra/docker/api/Dockerfile
 
+x-api-image: &api_image houston-api:dev
+
 x-api-environment: &api_environment
   DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,api}
   CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
@@ -31,6 +33,7 @@ x-api-environment: &api_environment
 
 services:
   api:
+    image: *api_image
     build: *api_build
     command: ["/app/infra/docker/api/entrypoint.sh"]
     security_opt:
@@ -39,7 +42,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     environment: *api_environment
     ports:
       - "8000:8000"
@@ -48,6 +51,7 @@ services:
       - private_media:/app/apps/api/private_media
 
   celery:
+    image: *api_image
     build: *api_build
     security_opt:
       - no-new-privileges:true
@@ -68,7 +72,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     environment: *api_environment
     volumes:
       - .:/app
@@ -77,6 +81,7 @@ services:
   celery-beat:
     profiles:
       - scheduler
+    image: *api_image
     build: *api_build
     security_opt:
       - no-new-privileges:true
@@ -99,7 +104,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     environment: *api_environment
     volumes:
       - .:/app

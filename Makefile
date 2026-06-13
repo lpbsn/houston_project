@@ -1,9 +1,10 @@
 .PHONY: \
-	build up up-backend up-scheduler down \
+	build build-backend build-web \
+	up up-build up-backend up-scheduler restart-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
-	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check \
+	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-check \
-	verify local-check docker-verify-security \
+	verify local-check docker-verify-security infra-check \
 	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db \
 	shared-dev-up shared-dev-up-scheduler shared-dev-bootstrap shared-dev-migrate shared-dev-import-catalog shared-dev-check
 
@@ -30,19 +31,33 @@ SHARED_COMPOSE := $(COMPOSE) --env-file $(SHARED_ENV_FILE) \
 # Docker lifecycle
 # -----------------------------------------------------------------------------
 
-build:
-	$(COMPOSE) build
+build-backend:
+	DOCKER_BUILDKIT=1 $(COMPOSE) --profile scheduler build api celery celery-beat
 
-up:
+build-web:
+	$(COMPOSE) build web
+
+build: build-backend build-web
+
+up: assert-local-dev-db
+	$(COMPOSE) up api celery web
+
+up-build: assert-local-dev-db
 	$(COMPOSE) up --build api celery web
 
-up-backend:
+up-backend: assert-local-dev-db
 	$(COMPOSE) up -d postgres redis api celery
 	$(COMPOSE) exec -u 0 api chown -R houston:houston /app/apps/api/private_media
 
+restart-backend:
+	$(COMPOSE) restart api celery
+	@if $(COMPOSE) --profile scheduler ps --status running --services 2>/dev/null | grep -qx celery-beat; then \
+		$(COMPOSE) --profile scheduler restart celery-beat; \
+	fi
+
 # Celery Beat (profile scheduler): checklist horizon, chat purge, upload TTL cleanup.
 # Not started by bootstrap-dev — run explicitly after local or shared-dev bootstrap.
-up-scheduler: up-backend
+up-scheduler: assert-local-dev-db up-backend
 	$(COMPOSE) --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
 	$(COMPOSE) --profile scheduler up -d celery-beat
 
@@ -58,6 +73,9 @@ shell:
 
 assert-local-dev-db:
 	@infra/scripts/assert-local-dev-db.sh .env
+
+infra-check:
+	@infra/scripts/test-dev-guards.sh
 
 # -----------------------------------------------------------------------------
 # Backend — Docker only
@@ -101,10 +119,7 @@ backend-test: assert-local-dev-db
 
 backend-check: check backend-lint backend-migrations-check backend-schema-check backend-test
 
-backend-rebuild:
-	docker compose down
-	docker compose build api celery
-	docker compose up -d api celery redis postgres
+backend-rebuild: down build-backend up-backend
 
 docker-verify-security:
 	$(API_EXEC) id

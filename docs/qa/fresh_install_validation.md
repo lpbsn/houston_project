@@ -16,7 +16,7 @@
   - `DJANGO_SECRET_KEY` personnalisé
   - `HOUSTON_REGISTRATION_INVITE_CODES` pour `/onboarding`
 - Médias privés : en Docker, volume nommé `private_media` (géré par Compose). Le dossier local `apps/api/private_media` n’est requis que hors Docker ou pour du dépannage.
-- Images Docker construites (`make build`) — première install uniquement
+- Images Docker construites (`make build-backend`) — première install uniquement
 
 ## Séquences
 
@@ -24,7 +24,7 @@
 
 ```bash
 cp .env.example .env
-make build
+make build-backend
 make bootstrap-dev
 make web-install
 make web-dev
