@@ -8,6 +8,8 @@
 
 Events, production/staging readiness, and generic realtime platform are **out of scope** (deferred).
 
+**Update (2026-06-13, HOU-BACKLOG-018):** Pagination inventory, per-endpoint decisions, and implementation tickets are documented in [`pagination_audit_2026-06-13.md`](pagination_audit_2026-06-13.md). Authoritative standard: [`api_pagination_standard.md`](../engineering/api_pagination_standard.md). API-02/API-03/API-04 findings below are superseded for pagination policy by that audit where they differ.
+
 ---
 
 ## 1. Executive summary

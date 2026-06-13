@@ -56,7 +56,9 @@ Documented for S1 pagination decisions. Threshold guidance: investigate paginati
 | `GET .../chat/conversations/` | `chat/api/views.py` | None | Grows with DM/group count; compounds DB-03 N+1 |
 | `GET .../chat/eligible-memberships/` | `chat/api/views.py` | None | Grows with active memberships |
 
-**Paginated (reference):** signal feed (`page_size`), execution feed (`page_size`), chat messages (`page_size` + cursor).
+**Paginated (reference):** signal feed (`page_size` + cursor), execution feed (`page_size` only — cursor gap P0), chat messages (`page_size` + cursor).
+
+**Pagination standard (2026-06-13):** Full classification and tickets — [`pagination_audit_2026-06-13.md`](pagination_audit_2026-06-13.md), [`api_pagination_standard.md`](../engineering/api_pagination_standard.md).
 
 ---
 

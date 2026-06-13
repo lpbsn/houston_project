@@ -17,11 +17,14 @@ docs/
   00_ai_documentation_policy.md
   README.md
   architecture/
+  engineering/
   product/
   product/Build_Plan/
   api/
   archive/
 ```
+
+Engineering standards (e.g. [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md)) live under `docs/engineering/`.
 
 This index does not require creating a larger doc tree immediately. It defines how the active documentation set should be read.
 

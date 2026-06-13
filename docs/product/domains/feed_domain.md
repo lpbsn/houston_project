@@ -1,7 +1,7 @@
 # Feed Domain
 
-Status: authoritative
-Last reviewed: 2026-06-09
+Status: authoritative  
+Last reviewed: 2026-06-13
 Implementation status: implemented (Signal Feed Phase 4 + Execution Feed Phase 5/7 — polymorphic Actions + Checklists unifiées). Checklist feed rules alignées sur [`checklist_domain.md`](checklist_domain.md) (Lots 2–7 clos).
 
 ## 1. Purpose
@@ -101,8 +101,9 @@ Current truth:
   - Exact sort rules remain candidate until implemented.
 
 - `FeedCursor`
-  - Candidate pagination cursor for stable incremental loading.
-  - Not implemented API truth today.
+  - Opaque pagination cursor for stable incremental loading on dynamic feeds.
+  - **Implemented** for Signal Feed (`cursor` query param, `next_cursor` response). See [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
+  - **Stub on Execution Feed** — `has_more` without working `next_cursor`; implementation priority P0 (HOU-PAG-001/002). See [`pagination_audit_2026-06-13.md`](../../audit/pagination_audit_2026-06-13.md).
 
 - `PermissionHint`
   - Candidate backend-provided UI hint such as visible actions or disabled actions.
@@ -162,12 +163,14 @@ Current API truth is `apps/api/schema.yml`.
 
 Implemented endpoints (establishment-scoped):
 
-- `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `statuses`, `business_unit_keys`, `activity_subject_ids`
-- `GET /api/v1/establishments/{establishment_id}/execution-feed/?view_mode=personal|general` — required `view_mode`
+- `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_keys`, `activity_subject_ids`. **Cursor pagination implemented** (reference).
+- `GET /api/v1/establishments/{establishment_id}/execution-feed/?view_mode=personal|general` — required `view_mode`; optional `page_size`. **Pseudo-paginated** — first page only; `next_cursor` always `null` (gap P0).
 
 Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
 
-Candidate / not implemented: advanced search, feed counts, saved views, stable cross-type cursor pagination.
+Pagination standard and audit: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md), [`pagination_audit_2026-06-13.md`](../../audit/pagination_audit_2026-06-13.md).
+
+Candidate / not implemented: advanced search, feed counts, saved views, **Execution Feed stable cross-type cursor pagination** (envelope exists; cursor round-trip missing).
 
 **Execution Feed page merge (implemented):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at`, `is_overdue`, `execution_source`, and optional `badge`; overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)). Labels **Flash To-do** / badge Process/To-do — not Partagée/Personnelle.
 
