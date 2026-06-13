@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
+from houston.establishments.tests.taxonomy_helpers import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 from houston.signals.models import SignalSourceObservation
 from houston.signals.tests.conftest import (
     auth_headers,
@@ -143,6 +146,54 @@ def test_owner_can_mutate_any_establishment_signal(api_client):
         ).status_code
         == 200
     )
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    ],
+)
+def test_scoped_member_can_read_out_of_scope_signal_detail(api_client, role):
+    membership = build_api_membership(role=role)
+    in_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="bar",
+        label="Bar",
+    )
+    out_of_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="kitchen",
+        label="Kitchen",
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=in_scope_bu,
+    )
+    out_of_scope_signal = create_minimal_v3_signal(
+        membership,
+        title="Kitchen signal outside personal scope",
+    )
+    out_of_scope_signal.affected_business_unit = out_of_scope_bu
+    out_of_scope_signal.responsible_business_unit = out_of_scope_bu
+    out_of_scope_signal.save(
+        update_fields=[
+            "affected_business_unit",
+            "responsible_business_unit",
+            "updated_at",
+        ]
+    )
+
+    token = login(api_client, user=membership.user)
+    response = api_client.get(
+        signal_detail_url(membership.establishment_id, out_of_scope_signal.id),
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(out_of_scope_signal.id)
+    assert response.json()["title"] == "Kitchen signal outside personal scope"
 
 
 def test_manager_urgency_requires_membership_scope(api_client):

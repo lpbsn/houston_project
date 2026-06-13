@@ -94,6 +94,57 @@ def test_personal_feed_empty_without_scope_for_staff(api_client):
     assert response.json()["items"] == []
 
 
+def test_scoped_manager_general_feed_includes_out_of_scope_signals(api_client):
+    from houston.establishments.models import EstablishmentMembership
+
+    membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
+    in_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="bar",
+        label="Bar",
+    )
+    out_of_scope_bu = create_business_unit(
+        establishment=membership.establishment,
+        key="kitchen",
+        label="Kitchen",
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=in_scope_bu,
+    )
+    in_scope_signal = _create_signal(
+        membership,
+        title="In-scope bar signal",
+        affected_business_unit=in_scope_bu,
+        responsible_business_unit=in_scope_bu,
+    )
+    out_of_scope_signal = _create_signal(
+        membership,
+        title="Out-of-scope kitchen signal",
+        affected_business_unit=out_of_scope_bu,
+        responsible_business_unit=out_of_scope_bu,
+    )
+    token = login(api_client, user=membership.user)
+
+    personal_response = api_client.get(
+        signal_feed_url(membership.establishment_id) + "?view_mode=personal",
+        **auth_headers(token),
+    )
+    assert personal_response.status_code == 200
+    personal_ids = {item["id"] for item in personal_response.json()["items"]}
+    assert str(in_scope_signal.id) in personal_ids
+    assert str(out_of_scope_signal.id) not in personal_ids
+
+    general_response = api_client.get(
+        signal_feed_url(membership.establishment_id) + "?view_mode=general",
+        **auth_headers(token),
+    )
+    assert general_response.status_code == 200
+    general_ids = {item["id"] for item in general_response.json()["items"]}
+    assert str(in_scope_signal.id) in general_ids
+    assert str(out_of_scope_signal.id) in general_ids
+
+
 def test_personal_feed_matches_scope(api_client):
     from houston.establishments.models import EstablishmentMembership
 

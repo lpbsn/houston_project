@@ -116,6 +116,66 @@ def test_create_requires_authentication(api_client):
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize(
+    "membership_status",
+    [
+        EstablishmentMembership.Status.INVITED,
+        EstablishmentMembership.Status.DEACTIVATED,
+    ],
+)
+def test_create_returns_403_for_inactive_membership(api_client, membership_status):
+    establishment = _establishment(name=f"Inactive Upload {membership_status}")
+    user, _ = _create_staff(
+        establishment=establishment,
+        username_prefix=f"inactive_upload_{membership_status}",
+    )
+    user_membership = EstablishmentMembership.objects.get(
+        user=user,
+        establishment=establishment,
+    )
+    user_membership.status = membership_status
+    user_membership.save(update_fields=["status", "updated_at"])
+    token = _login(api_client, user=user)
+
+    response = api_client.post(
+        uploads_url(establishment.id),
+        {"file": _jpeg_upload()},
+        format="multipart",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "membership_status",
+    [
+        EstablishmentMembership.Status.INVITED,
+        EstablishmentMembership.Status.DEACTIVATED,
+    ],
+)
+def test_delete_returns_403_for_inactive_membership(api_client, membership_status):
+    establishment = _establishment(name=f"Inactive Delete {membership_status}")
+    user, _ = _create_staff(
+        establishment=establishment,
+        username_prefix=f"inactive_delete_{membership_status}",
+    )
+    user_membership = EstablishmentMembership.objects.get(
+        user=user,
+        establishment=establishment,
+    )
+    user_membership.status = membership_status
+    user_membership.save(update_fields=["status", "updated_at"])
+    token = _login(api_client, user=user)
+
+    response = api_client.delete(
+        upload_detail_url(establishment.id, uuid.uuid4()),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 403
+
+
 def test_create_returns_403_for_foreign_establishment(api_client):
     home = _establishment(name="Home Hotel")
     foreign = _establishment(name="Foreign Hotel")

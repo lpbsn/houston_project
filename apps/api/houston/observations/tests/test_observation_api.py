@@ -168,3 +168,58 @@ def test_transcription_returns_editable_text_without_persisting_audio(
     body = response.json()
     assert body["text"].startswith("Il y a")
     assert "raw_text" not in body
+
+
+def test_submit_returns_403_for_foreign_establishment(api_client):
+    home = create_establishment(name="Home Hotel")
+    foreign = create_establishment(name="Foreign Hotel")
+    staff = create_user(username="obs_foreign")
+    create_membership(
+        establishment=home,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    token = login(api_client, user=staff)
+
+    response = api_client.post(
+        observations_url(foreign.id),
+        {
+            "text": "Tentative de soumission hors établissement autorisé.",
+            "temporary_upload_ids": [],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "membership_status",
+    [
+        EstablishmentMembership.Status.INVITED,
+        EstablishmentMembership.Status.DEACTIVATED,
+    ],
+)
+def test_submit_returns_403_for_inactive_membership(api_client, membership_status):
+    establishment = create_establishment(name="Inactive Member Hotel")
+    staff = create_user(username=f"obs_inactive_{membership_status}")
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+        status=membership_status,
+    )
+    token = login(api_client, user=staff)
+
+    response = api_client.post(
+        observations_url(establishment.id),
+        {
+            "text": "Soumission avec membership inactif ou invité.",
+            "temporary_upload_ids": [],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 403
