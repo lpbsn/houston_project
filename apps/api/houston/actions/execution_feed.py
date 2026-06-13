@@ -8,11 +8,11 @@ from django.utils import timezone
 
 from houston.actions.execution_feed_cursor import (
     ExecutionFeedCursor,
+    apply_action_feed_cursor,
+    apply_checklist_feed_cursor,
     encode_action_cursor,
     encode_action_phase_start,
     encode_checklist_cursor,
-    apply_action_feed_cursor,
-    apply_checklist_feed_cursor,
 )
 from houston.actions.models import Action
 from houston.actions.selectors import (

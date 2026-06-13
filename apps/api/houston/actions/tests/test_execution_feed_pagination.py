@@ -12,7 +12,7 @@ from houston.actions.tests.conftest import (
     execution_feed_url,
     login,
 )
-from houston.checklists.models import ChecklistExecution, ChecklistTemplate
+from houston.checklists.models import ChecklistTemplate
 from houston.checklists.services import create_checklist_assignment, create_checklist_template
 from houston.checklists.tests.conftest import add_task_template, stable_assignment_times
 from houston.establishments.models import EstablishmentMembership
@@ -313,7 +313,11 @@ def test_execution_feed_action_phase_start_returns_first_action(api_client):
         **auth_headers(token),
     )
     body_two = page_two.json()
-    action_ids = [item["action"]["id"] for item in body_two["items"] if item["item_type"] == "action"]
+    action_ids = [
+        item["action"]["id"]
+        for item in body_two["items"]
+        if item["item_type"] == "action"
+    ]
     assert str(first_action.id) in action_ids
     assert set(_item_ids(body_one)).isdisjoint(set(action_ids))
 

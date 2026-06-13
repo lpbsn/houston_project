@@ -1,12 +1,12 @@
-from __future__ import annotations
-
-"""
-Opaque cursor pagination for the polymorphic Execution Feed.
+"""Opaque cursor pagination for the polymorphic Execution Feed.
 
 Action cursors encode `as_of` so `is_overdue_rank` is stable across paginated
 requests. If an action becomes overdue/non-overdue between page fetches, order
 may diverge slightly until the feed is invalidated (mutations reset TanStack Query).
 """
+
+from __future__ import annotations
+
 import base64
 import uuid
 from dataclasses import dataclass
