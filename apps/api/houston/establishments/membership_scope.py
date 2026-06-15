@@ -97,7 +97,11 @@ def replace_membership_scopes(
                     )
                 )
         except IntegrityError:
-            pass
+            if not MembershipScope.objects.filter(
+                membership=membership,
+                business_unit=resolved.business_unit,
+            ).exists():
+                raise
         existing_bu_ids.add(resolved.business_unit.id)
 
     return created
