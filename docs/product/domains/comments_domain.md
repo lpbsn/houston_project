@@ -1,4 +1,3 @@
-```
 # Comments Domain — Signal & Action Comments
 
 Status: Draft validated for implementation  
