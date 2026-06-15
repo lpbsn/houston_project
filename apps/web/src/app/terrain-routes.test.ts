@@ -102,10 +102,11 @@ describe('getTerrainRouteConfig', () => {
       getTerrainRouteConfig({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
     ).toEqual({
       topbarVariant: 'detail',
-      title: 'Checklist',
+      detailTitleLayout: 'belowBack',
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
+      showTopbarBottomBorder: false,
     })
   })
 

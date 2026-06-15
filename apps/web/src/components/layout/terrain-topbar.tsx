@@ -49,7 +49,8 @@ export function TerrainTopbar({
     return (
       <header
         className={cn(
-          'shrink-0 border-b border-[#E8E6DF] bg-white',
+          'shrink-0 bg-white',
+          showBottomBorder && 'border-b border-[#E8E6DF]',
           'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3',
         )}
       >
@@ -76,7 +77,8 @@ export function TerrainTopbar({
   return (
     <header
       className={cn(
-        'shrink-0 border-b border-[#E8E6DF] bg-white',
+        'shrink-0 bg-white',
+        showBottomBorder && 'border-b border-[#E8E6DF]',
         'pt-[max(0.75rem,env(safe-area-inset-top))] pb-3',
       )}
     >

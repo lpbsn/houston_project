@@ -115,3 +115,43 @@ export function formatChecklistEndBeforeTimeLabel(endAt: string | null): string 
   const { hours, minutes } = formatTimePartsFromDate(date)
   return `Avant ${hours}:${minutes}`
 }
+
+export function formatChecklistDeadlinePillLabel(endAt: string | null): string | null {
+  if (!endAt) {
+    return null
+  }
+  const date = new Date(endAt)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  const { hours, minutes } = formatTimePartsFromDate(date)
+  return `avant ${hours}h${minutes}`
+}
+
+export function countChecklistTreatedTasks(tasks: ChecklistTaskExecution[]): number {
+  return tasks.filter((task) => task.status !== 'pending').length
+}
+
+export function getChecklistTaskProgressPercent(
+  treatedCount: number,
+  totalCount: number,
+): number {
+  if (totalCount <= 0) {
+    return 0
+  }
+  return Math.round((treatedCount / totalCount) * 100)
+}
+
+export function formatChecklistProgressPointsLabel(
+  treatedCount: number,
+  totalCount: number,
+): string {
+  return `${treatedCount} / ${totalCount} points`
+}
+
+export function formatChecklistProgressPercentLabel(
+  treatedCount: number,
+  totalCount: number,
+): string {
+  return `${getChecklistTaskProgressPercent(treatedCount, totalCount)}%`
+}

@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  countChecklistTreatedTasks,
+  formatChecklistDeadlinePillLabel,
   formatChecklistEndBeforeTimeLabel,
   formatChecklistExecutionStatusLabel,
   formatChecklistFeedBadgeLabel,
   formatChecklistProgressLabel,
+  formatChecklistProgressPercentLabel,
+  formatChecklistProgressPointsLabel,
   getChecklistFeedSection,
+  getChecklistTaskProgressPercent,
   isChecklistExecutionOverdue,
 } from './checklist-display'
 
@@ -76,6 +81,39 @@ describe('formatChecklistEndBeforeTimeLabel', () => {
     const label = formatChecklistEndBeforeTimeLabel('2026-06-30T11:07:00')
     expect(label).not.toContain('30/06/2026')
     expect(label).not.toContain('2026')
+  })
+})
+
+describe('formatChecklistDeadlinePillLabel', () => {
+  it('formats end time as avant HHhMM', () => {
+    expect(formatChecklistDeadlinePillLabel('2026-06-30T10:00:00')).toBe('avant 10h00')
+  })
+
+  it('returns null when end_at is absent', () => {
+    expect(formatChecklistDeadlinePillLabel(null)).toBeNull()
+  })
+})
+
+describe('checklist task progress helpers', () => {
+  it('counts treated tasks as non-pending', () => {
+    expect(
+      countChecklistTreatedTasks([
+        { id: '1', task: 'A', position: 0, status: 'pending', observation_id: null, skipped_reason: null, completed_at: null, skipped_at: null, observation_created_at: null },
+        { id: '2', task: 'B', position: 1, status: 'done', observation_id: null, skipped_reason: null, completed_at: null, skipped_at: null, observation_created_at: null },
+        { id: '3', task: 'C', position: 2, status: 'skipped', observation_id: null, skipped_reason: null, completed_at: null, skipped_at: null, observation_created_at: null },
+      ]),
+    ).toBe(2)
+  })
+
+  it('formats progress points and percent labels', () => {
+    expect(formatChecklistProgressPointsLabel(4, 12)).toBe('4 / 12 points')
+    expect(formatChecklistProgressPercentLabel(4, 12)).toBe('33%')
+    expect(getChecklistTaskProgressPercent(4, 12)).toBe(33)
+  })
+
+  it('returns zero percent when total is zero', () => {
+    expect(getChecklistTaskProgressPercent(0, 0)).toBe(0)
+    expect(formatChecklistProgressPercentLabel(0, 0)).toBe('0%')
   })
 })
 

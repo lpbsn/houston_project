@@ -23,6 +23,7 @@ export type TerrainRouteConfig = {
   showBottomNav: boolean
   activeNavPath?: TerrainNavPath
   mainScroll?: TerrainMainScroll
+  showTopbarBottomBorder?: boolean
 }
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
@@ -275,14 +276,34 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'checklist-execution-detail') {
     return {
       topbarVariant: 'detail',
-      title: 'Checklist',
+      detailTitleLayout: 'belowBack',
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
+      showTopbarBottomBorder: false,
     }
   }
 
   throw new Error('getTerrainRouteConfig called for a non-terrain route')
+}
+
+export function resolveTerrainTopbarShowBottomBorder(
+  route: AppRoute,
+  config: TerrainRouteConfig,
+): boolean {
+  if (config.showTopbarBottomBorder !== undefined) {
+    return config.showTopbarBottomBorder
+  }
+
+  return (
+    route.kind !== 'signal-action-create' &&
+    !(
+      route.kind === 'static' &&
+      (route.path === '/signals' ||
+        route.path === '/execution' ||
+        route.path === '/profile')
+    )
+  )
 }
 
 /** Stable key for terrain page transitions (AnimatePresence). Excludes viewMode and query state. */

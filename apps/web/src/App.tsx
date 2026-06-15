@@ -27,6 +27,7 @@ import {
   getTerrainRouteConfig,
   isProtectedRoute,
   requiresActiveMembership,
+  resolveTerrainTopbarShowBottomBorder,
   usesTerrainShell,
 } from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
@@ -580,15 +581,7 @@ function App() {
             title={terrainConfig.title}
             pageTitle={terrainConfig.pageTitle}
             detailTitleLayout={terrainConfig.detailTitleLayout}
-            showBottomBorder={
-              route.kind !== 'signal-action-create' &&
-              !(
-                route.kind === 'static' &&
-                (route.path === '/signals' ||
-                  route.path === '/execution' ||
-                  route.path === '/profile')
-              )
-            }
+            showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
             onBack={
               terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
             }
