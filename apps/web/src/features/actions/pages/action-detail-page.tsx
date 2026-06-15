@@ -6,7 +6,7 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
 import { ActionsApiError } from '../api'
-import { ActionDetailCommentsDisabledSection } from '../components/action-detail-disabled-section'
+import { CommentSection } from '@/features/comments/components/comment-section'
 import { ActionDetailDeadlineCard } from '../components/action-detail-deadline-card'
 import { ActionDetailInstructionCard } from '../components/action-detail-instruction-card'
 import { ActionDetailStickyFooter } from '../components/action-detail-sticky-footer'
@@ -102,7 +102,13 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
 
         <ActionDetailDeadlineCard action={action} />
 
-        <ActionDetailCommentsDisabledSection />
+        {establishmentId ? (
+          <CommentSection
+            establishmentId={establishmentId}
+            targetType="action"
+            targetId={actionId}
+          />
+        ) : null}
       </div>
 
       {showStickyFooter ? (
