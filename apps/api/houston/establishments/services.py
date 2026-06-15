@@ -515,7 +515,8 @@ def _create_onboarding_proposal(
     proposal.full_clean(validate_unique=False, validate_constraints=False)
 
     try:
-        proposal.save()
+        with transaction.atomic():
+            proposal.save()
     except IntegrityError as exc:
         raise ActiveOnboardingProposalExistsError(
             "A non-terminal onboarding proposal already exists for this session."
@@ -1028,8 +1029,19 @@ def start_onboarding_session(
     session.full_clean(validate_unique=False, validate_constraints=False)
 
     try:
-        session.save()
+        with transaction.atomic():
+            session.save()
     except IntegrityError as exc:
+        existing_session = (
+            OnboardingSession.objects.filter(
+                establishment=establishment,
+                status__in=OnboardingSession.NON_TERMINAL_STATUSES,
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if existing_session is not None:
+            return existing_session
         raise ActiveOnboardingSessionExistsError(
             "A non-terminal onboarding session already exists for this establishment."
         ) from exc
@@ -1240,11 +1252,11 @@ def invite_director_during_onboarding(
     if user.id in owner_user_ids:
         raise DirectorInvitationOwnerNotAllowedError
 
-    membership = EstablishmentMembership.objects.create(
+    membership = _create_invited_membership(
         user=user,
         establishment=establishment,
         role=EstablishmentMembership.Role.DIRECTOR,
-        status=EstablishmentMembership.Status.INVITED,
+        owner_user_ids=owner_user_ids,
     )
     return _issue_director_invitation_for_membership(membership)
 
@@ -1534,11 +1546,10 @@ def invite_membership_for_establishment(
         existing_user=existing_user,
     )
 
-    membership = EstablishmentMembership.objects.create(
+    membership = _create_invited_membership(
         user=user,
         establishment=establishment,
         role=role,
-        status=EstablishmentMembership.Status.INVITED,
     )
 
     assign_membership_scopes(membership=membership, scope_inputs=scopes)
@@ -2138,6 +2149,46 @@ def _count_non_owner_directors(
         .exclude(user_id__in=owner_user_ids)
         .count()
     )
+
+
+def _create_invited_membership(
+    *,
+    user: User,
+    establishment: Establishment,
+    role: str,
+    owner_user_ids: set | None = None,
+) -> EstablishmentMembership:
+    try:
+        with transaction.atomic():
+            return EstablishmentMembership.objects.create(
+                user=user,
+                establishment=establishment,
+                role=role,
+                status=EstablishmentMembership.Status.INVITED,
+            )
+    except IntegrityError as exc:
+        existing_membership = EstablishmentMembership.objects.filter(
+            user=user,
+            establishment=establishment,
+        ).first()
+        if existing_membership is not None:
+            if existing_membership.status in {
+                EstablishmentMembership.Status.INVITED,
+                EstablishmentMembership.Status.ACTIVE,
+            }:
+                raise DirectorInvitationDuplicateError from exc
+
+        if role == EstablishmentMembership.Role.DIRECTOR:
+            if (
+                _count_non_owner_directors(
+                    establishment_id=establishment.id,
+                    owner_user_ids=owner_user_ids,
+                )
+                >= 1
+            ):
+                raise DirectorInvitationAlreadyExistsError from exc
+
+        raise
 
 
 def _reload_membership_for_response(membership_id) -> EstablishmentMembership:

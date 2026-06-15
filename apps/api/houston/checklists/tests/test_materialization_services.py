@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
 
 from houston.checklists.exceptions import ChecklistValidationError
@@ -85,6 +88,50 @@ def test_materialize_requires_occurrence_date(owner_membership, staff_membership
             assignment=assignment,
             occurrence_date=None,
         )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_materialize_same_assignment_occurrence_is_idempotent(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_registered_template(owner_membership, business_unit)
+    now = timezone.now()
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=now.date(),
+        end_date=now.date(),
+        start_at=stable_assignment_times(duration_hours=2)[0],
+        end_at=stable_assignment_times(duration_hours=2)[1],
+    )
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+    occurrence_date = now.date()
+
+    def materialize(_: int) -> str:
+        close_old_connections()
+        try:
+            execution = materialize_execution_from_assignment(
+                assignment=assignment,
+                occurrence_date=occurrence_date,
+            )
+            return str(execution.id)
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(materialize, range(2)))
+
+    assert results[0] == results[1]
+    executions = ChecklistExecution.objects.filter(
+        checklist_assignment=assignment,
+        occurrence_date=occurrence_date,
+    )
+    assert executions.count() == 1
+    execution = executions.get()
+    assert execution.task_executions.count() == 1
 
 
 def test_materialize_is_idempotent(owner_membership, staff_membership, business_unit):

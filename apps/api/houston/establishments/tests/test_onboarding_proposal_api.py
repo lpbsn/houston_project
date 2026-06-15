@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from django.db import close_old_connections
 from rest_framework.test import APIClient
 
 from houston.establishments.models import (
@@ -75,6 +77,39 @@ def test_owner_can_list_and_retrieve_v3_proposals(api_client):
     assert body["id"] == str(proposal.id)
     assert body["source"] == OnboardingProposal.Source.MANUAL
     assert body["payload"]["schema_version"] == "onboarding_proposal_v3"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_create_proposal_returns_409_for_loser():
+    owner = create_user(username="proposal_concurrent_owner")
+    session = create_onboarding_session(actor=owner)
+    payload = valid_manual_v2_payload()
+
+    def create_proposal(_: int) -> tuple[int, str | None]:
+        close_old_connections()
+        try:
+            client = APIClient(enforce_csrf_checks=True)
+            access_token = login(client, user=owner)
+            response = client.post(
+                f"/api/v1/onboarding-sessions/{session.id}/proposals/",
+                {"payload": payload},
+                format="json",
+                **auth_headers(access_token),
+            )
+            body = response.json()
+            return response.status_code, body.get("code")
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(create_proposal, range(2)))
+
+    statuses = [status for status, _ in results]
+    codes = [code for _, code in results]
+    assert 201 in statuses
+    assert 409 in statuses
+    assert codes.count("active_onboarding_proposal_exists") == 1
+    assert OnboardingProposal.objects.filter(onboarding_session=session).count() == 1
 
 
 def test_manager_and_staff_are_denied_for_proposal_endpoints(api_client):

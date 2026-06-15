@@ -609,9 +609,10 @@ def resolve_or_create_pending_user_for_invite(
     user.set_unusable_password()
 
     try:
-        user.save()
-    except IntegrityError as exc:
-        raise ValueError("Unable to create invited user.") from exc
+        with transaction.atomic():
+            user.save()
+    except IntegrityError:
+        return User.objects.get(email__iexact=normalized_email)
 
     return user
 

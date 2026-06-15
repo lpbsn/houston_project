@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from django.db import close_old_connections
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
@@ -152,6 +154,52 @@ def test_owner_can_invite_staff_with_business_unit_scope(api_client):
     body = response.json()
     assert body["membership"]["role"] == EstablishmentMembership.Role.STAFF
     assert_business_unit_scope_response(body["membership"], business_unit=business_unit)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_membership_invitation_same_email_returns_409():
+    establishment = create_establishment(name="Concurrent Invite Hotel")
+    owner = create_user(username="concurrent_invite_owner")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    business_unit = create_business_unit(establishment=establishment, key="concurrent_hk")
+    payload = invite_payload(
+        email="concurrent-staff@example.com",
+        scopes=[business_unit_scope_payload(business_unit)],
+    )
+
+    def invite(_: int) -> tuple[int, str | None]:
+        close_old_connections()
+        try:
+            client = APIClient(enforce_csrf_checks=True)
+            access_token = login(client, identifier=owner.email)
+            csrf_token = ensure_csrf(client)
+            response = client.post(
+                f"/api/v1/establishments/{establishment.id}/membership-invitations/",
+                payload,
+                format="json",
+                HTTP_X_CSRFTOKEN=csrf_token,
+                **auth_headers(access_token),
+            )
+            body = response.json()
+            return response.status_code, body.get("code")
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(invite, range(2)))
+
+    statuses = [status for status, _ in results]
+    codes = [code for _, code in results]
+    assert 201 in statuses
+    assert 409 in statuses
+    assert codes.count("membership_invitation_duplicate") == 1
+    assert (
+        EstablishmentMembership.objects.filter(
+            establishment=establishment,
+            user__email__iexact="concurrent-staff@example.com",
+        ).count()
+        == 1
+    )
 
 
 def test_owner_can_invite_manager_with_business_unit_scope(api_client):

@@ -3327,6 +3327,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/memberships/:
     get:
       operationId: v1_establishments_memberships_list

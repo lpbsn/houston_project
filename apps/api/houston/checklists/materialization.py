@@ -187,24 +187,26 @@ def materialize_execution_from_assignment(
     visible_from = occurrence_start_at - VISIBLE_FROM_OFFSET
     now = timezone.now()
 
+    execution = None
     try:
-        execution = ChecklistExecution.objects.create(
-            checklist_template=template,
-            checklist_assignment=assignment,
-            execution_source=EXECUTION_SOURCE_ASSIGNMENT,
-            establishment_id=assignment.establishment_id,
-            assigned_to=assignment.assigned_to,
-            assigned_by=assignment.assigned_by,
-            business_unit_id=assignment.business_unit_id,
-            template_title=template.title,
-            template_description=template.description,
-            start_at=occurrence_start_at,
-            visible_from=visible_from,
-            end_at=occurrence_end_at,
-            occurrence_date=occurrence_date,
-            status=EXECUTION_STATUS_ASSIGNED,
-            last_activity_at=now,
-        )
+        with transaction.atomic():
+            execution = ChecklistExecution.objects.create(
+                checklist_template=template,
+                checklist_assignment=assignment,
+                execution_source=EXECUTION_SOURCE_ASSIGNMENT,
+                establishment_id=assignment.establishment_id,
+                assigned_to=assignment.assigned_to,
+                assigned_by=assignment.assigned_by,
+                business_unit_id=assignment.business_unit_id,
+                template_title=template.title,
+                template_description=template.description,
+                start_at=occurrence_start_at,
+                visible_from=visible_from,
+                end_at=occurrence_end_at,
+                occurrence_date=occurrence_date,
+                status=EXECUTION_STATUS_ASSIGNED,
+                last_activity_at=now,
+            )
     except IntegrityError:
         return ChecklistExecution.objects.get(
             checklist_assignment=assignment,
