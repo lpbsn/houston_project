@@ -21,7 +21,8 @@ import {
 import { useChatWebSocket } from '../hooks/use-chat-websocket'
 import type {
   ChatConnectionStatus,
-  ChatWsAccessRevokedEvent,
+  ChatWsConversationAccessRevokedEvent,
+  ChatWsGlobalAccessRevokedEvent,
   ChatWsMessageCreatedEvent,
   ChatWsMessageRejectedEvent,
   LocalChatMessage,
@@ -46,7 +47,8 @@ const ChatRealtimeContext = createContext<ChatRealtimeContextValue | null>(null)
 type ChatRealtimeProviderProps = PropsWithChildren<{
   establishmentId: string | null
   activeConversationId?: string | null
-  onAccessRevoked?: (event: ChatWsAccessRevokedEvent) => void
+  onGlobalAccessRevoked?: (event: ChatWsGlobalAccessRevokedEvent) => void
+  onConversationAccessRevoked?: (event: ChatWsConversationAccessRevokedEvent) => void
 }>
 
 function createClientMessageId(): string {
@@ -56,7 +58,8 @@ function createClientMessageId(): string {
 export function ChatRealtimeProvider({
   establishmentId,
   activeConversationId = null,
-  onAccessRevoked,
+  onGlobalAccessRevoked,
+  onConversationAccessRevoked,
   children,
 }: ChatRealtimeProviderProps) {
   const auth = useAuth()
@@ -155,7 +158,8 @@ export function ChatRealtimeProvider({
     enabled: chatEnabled,
     onMessageCreated: handleMessageCreated,
     onMessageRejected: handleMessageRejected,
-    onAccessRevoked,
+    onGlobalAccessRevoked,
+    onConversationAccessRevoked,
     onReconnect: handleReconnect,
   })
 
