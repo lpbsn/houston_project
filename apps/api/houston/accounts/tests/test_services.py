@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, close_old_connections
 from django.utils import timezone
 
 from houston.accounts import tokens
-from houston.accounts.models import AccessToken, SessionRefreshToken, User
+from houston.accounts.models import AccessToken, SessionRefreshToken, User, UserSession
 from houston.accounts.services import (
     InvalidRefreshTokenError,
     RefreshTokenReuseError,
@@ -91,12 +92,18 @@ def test_refresh_session_marks_rotated_token_used(user, request_factory):
     request = request_factory.get("/api/v1/auth/login/")
     session = create_user_session(request=request, user=user)
     issued_token = issue_refresh_token(session=session, family_id=session.refresh_token_family_id)
+    initial_access_count = AccessToken.objects.filter(session=session).count()
 
     bundle = refresh_session(raw_refresh_token=issued_token.raw_token)
 
     issued_token.record.refresh_from_db()
     assert issued_token.record.status == SessionRefreshToken.Status.USED
+    assert issued_token.record.used_at is not None
     assert bundle.refresh_token.record.family_id == issued_token.record.family_id
+    assert bundle.refresh_token.record.status == SessionRefreshToken.Status.ACTIVE
+    assert bundle.refresh_token.raw_token != issued_token.raw_token
+    assert bundle.access_token.record.session_id == session.id
+    assert AccessToken.objects.filter(session=session).count() == initial_access_count + 1
 
 
 def test_refresh_session_reuse_detection_revokes_session(user, request_factory):
@@ -112,6 +119,43 @@ def test_refresh_session_reuse_detection_revokes_session(user, request_factory):
     session.refresh_from_db()
     assert session.status == session.Status.REVOKED
     assert session.revoked_at is not None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_refresh_session_concurrent_rotation_only_one_succeeds(user, request_factory):
+    request = request_factory.get("/api/v1/auth/login/")
+    session = create_user_session(request=request, user=user)
+    issued_token = issue_refresh_token(session=session, family_id=session.refresh_token_family_id)
+    family_id = issued_token.record.family_id
+    raw_refresh_token = issued_token.raw_token
+
+    def try_refresh(_: int) -> str:
+        close_old_connections()
+        try:
+            refresh_session(raw_refresh_token=raw_refresh_token)
+            return "ok"
+        except RefreshTokenReuseError:
+            return "reuse"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(try_refresh, range(2)))
+
+    assert results.count("ok") == 1
+    assert results.count("reuse") == 1
+
+    session.refresh_from_db()
+    assert session.status == UserSession.Status.REVOKED
+
+    family_tokens = SessionRefreshToken.objects.filter(session=session, family_id=family_id)
+    assert family_tokens.count() == 2
+
+    original_token = family_tokens.get(token_digest=issued_token.record.token_digest)
+    assert original_token.used_at is not None
+    assert all(
+        token.status == SessionRefreshToken.Status.REVOKED for token in family_tokens
+    )
 
 
 def test_revoke_session_revokes_active_access_and_refresh_tokens(user, request_factory):

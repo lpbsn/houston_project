@@ -252,31 +252,41 @@ def create_login_session(*, request: HttpRequest, user: User) -> AuthSessionBund
 
 
 def refresh_session(*, raw_refresh_token: str) -> AuthSessionBundle:
-    refresh_token = validate_refresh_token(raw_refresh_token=raw_refresh_token)
+    reuse_detected = False
 
     with transaction.atomic():
-        mark_refresh_token_used(refresh_token)
+        refresh_token = _lock_refresh_token_for_rotation(raw_refresh_token=raw_refresh_token)
 
-        session = refresh_token.session
-        session.last_used_at = timezone.now()
-        session.refresh_expires_at = _build_refresh_expiry(
-            now=session.last_used_at,
-            session=session,
-        )
-        session.save(update_fields=["last_used_at", "refresh_expires_at", "updated_at"])
+        if _is_reused_refresh_token(refresh_token):
+            _handle_refresh_token_reuse(refresh_token)
+            reuse_detected = True
+        else:
+            _ensure_refresh_token_consumable(refresh_token)
+            mark_refresh_token_used(refresh_token)
 
-        access_token = issue_access_token(session=session)
-        rotated_refresh_token = issue_refresh_token(
-            session=session,
-            family_id=refresh_token.family_id,
-        )
+            session = refresh_token.session
+            session.last_used_at = timezone.now()
+            session.refresh_expires_at = _build_refresh_expiry(
+                now=session.last_used_at,
+                session=session,
+            )
+            session.save(update_fields=["last_used_at", "refresh_expires_at", "updated_at"])
 
-        return AuthSessionBundle(
-            session=session,
-            access_token=access_token,
-            refresh_token=rotated_refresh_token,
-            payload=build_auth_response_payload(session=session, access_token=access_token),
-        )
+            access_token = issue_access_token(session=session)
+            rotated_refresh_token = issue_refresh_token(
+                session=session,
+                family_id=refresh_token.family_id,
+            )
+
+            return AuthSessionBundle(
+                session=session,
+                access_token=access_token,
+                refresh_token=rotated_refresh_token,
+                payload=build_auth_response_payload(session=session, access_token=access_token),
+            )
+
+    if reuse_detected:
+        raise RefreshTokenReuseError
 
 
 def build_auth_response_payload(
@@ -359,6 +369,12 @@ def issue_refresh_token(*, session: UserSession, family_id: uuid.UUID) -> Issued
 
 
 def validate_refresh_token(*, raw_refresh_token: str) -> SessionRefreshToken:
+    """Validate a refresh token without row lock (read-only checks and reuse handling).
+
+    On reuse, revokes the token family then raises ``RefreshTokenReuseError``.
+    Do not call this inside a parent ``transaction.atomic()`` block: the exception
+    would roll back the revocation. Use ``refresh_session`` for rotation instead.
+    """
     refresh_token = (
         SessionRefreshToken.objects.select_related("session", "session__user")
         .filter(token_digest=tokens.digest_token(raw_refresh_token))
@@ -369,39 +385,10 @@ def validate_refresh_token(*, raw_refresh_token: str) -> SessionRefreshToken:
         raise InvalidRefreshTokenError
 
     if _is_reused_refresh_token(refresh_token):
-        _revoke_refresh_token_family_for_reuse(
-            session_id=refresh_token.session_id,
-            family_id=refresh_token.family_id,
-        )
-        logger.warning(
-            "refresh_token_reuse_detected",
-            extra=build_refresh_token_reuse_log_context(
-                session_id=refresh_token.session_id,
-                refresh_family_id=refresh_token.family_id,
-                refresh_record_id=refresh_token.id,
-                user_id=refresh_token.session.user_id,
-            ),
-        )
+        _handle_refresh_token_reuse(refresh_token)
         raise RefreshTokenReuseError
 
-    now = timezone.now()
-    session = refresh_token.session
-
-    if refresh_token.expires_at <= now:
-        _mark_refresh_token_expired(refresh_token, now)
-        raise InvalidRefreshTokenError
-
-    if session.absolute_expires_at <= now or session.refresh_expires_at <= now:
-        _mark_session_expired(session, now)
-        raise InvalidRefreshTokenError
-
-    if session.revoked_at is not None or session.status == UserSession.Status.REVOKED:
-        raise InvalidRefreshTokenError
-
-    if session.user.status != User.Status.ACTIVE:
-        revoke_session(session=session)
-        raise InvalidRefreshTokenError
-
+    _ensure_refresh_token_consumable(refresh_token)
     return refresh_token
 
 
@@ -517,6 +504,56 @@ def _create_token_record(create_record):
             continue
 
     raise RuntimeError("Unable to generate a unique token digest.")
+
+
+def _lock_refresh_token_for_rotation(*, raw_refresh_token: str) -> SessionRefreshToken:
+    refresh_token = (
+        SessionRefreshToken.objects.select_related("session", "session__user")
+        .select_for_update()
+        .filter(token_digest=tokens.digest_token(raw_refresh_token))
+        .first()
+    )
+
+    if refresh_token is None:
+        raise InvalidRefreshTokenError
+
+    return refresh_token
+
+
+def _ensure_refresh_token_consumable(refresh_token: SessionRefreshToken) -> None:
+    now = timezone.now()
+    session = refresh_token.session
+
+    if refresh_token.expires_at <= now:
+        _mark_refresh_token_expired(refresh_token, now)
+        raise InvalidRefreshTokenError
+
+    if session.absolute_expires_at <= now or session.refresh_expires_at <= now:
+        _mark_session_expired(session, now)
+        raise InvalidRefreshTokenError
+
+    if session.revoked_at is not None or session.status == UserSession.Status.REVOKED:
+        raise InvalidRefreshTokenError
+
+    if session.user.status != User.Status.ACTIVE:
+        revoke_session(session=session)
+        raise InvalidRefreshTokenError
+
+
+def _handle_refresh_token_reuse(refresh_token: SessionRefreshToken) -> None:
+    _revoke_refresh_token_family_for_reuse(
+        session_id=refresh_token.session_id,
+        family_id=refresh_token.family_id,
+    )
+    logger.warning(
+        "refresh_token_reuse_detected",
+        extra=build_refresh_token_reuse_log_context(
+            session_id=refresh_token.session_id,
+            refresh_family_id=refresh_token.family_id,
+            refresh_record_id=refresh_token.id,
+            user_id=refresh_token.session.user_id,
+        ),
+    )
 
 
 def _is_reused_refresh_token(refresh_token: SessionRefreshToken) -> bool:

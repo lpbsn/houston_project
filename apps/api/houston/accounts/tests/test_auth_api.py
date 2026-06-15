@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 import pytest
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -594,6 +596,51 @@ def test_old_refresh_token_reuse_revokes_family(api_client, active_user):
 
     assert response.status_code == 401
     assert response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value == ""
+
+    session = UserSession.objects.get(user=active_user)
+    session.refresh_from_db()
+    assert session.status == UserSession.Status.REVOKED
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_refresh_only_one_succeeds(active_user):
+    create_membership(user=active_user)
+    login_client = APIClient(enforce_csrf_checks=True)
+    login_csrf = ensure_csrf(login_client)
+    login_response = login(
+        login_client,
+        login_csrf,
+        identifier=active_user.email,
+        password="secret",
+    )
+    assert login_response.status_code == 200
+    raw_refresh_cookie = login_response.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME].value
+
+    def try_refresh(_: int) -> tuple[int, dict | None]:
+        close_old_connections()
+        try:
+            client = APIClient(enforce_csrf_checks=True)
+            client.cookies[settings.HOUSTON_AUTH_REFRESH_COOKIE_NAME] = raw_refresh_cookie
+            csrf_token = ensure_csrf(client)
+            response = client.post("/api/v1/auth/refresh/", **auth_headers(csrf_token))
+            body = response.json() if response.content else None
+            return response.status_code, body
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(try_refresh, range(2)))
+
+    statuses = [status for status, _ in results]
+    assert 200 in statuses
+    assert 401 in statuses
+    assert 500 not in statuses
+
+    failed_response = next(body for status, body in results if status == 401)
+    assert failed_response == {
+        "code": "not_authenticated",
+        "detail": "Authentication failed.",
+    }
 
     session = UserSession.objects.get(user=active_user)
     session.refresh_from_db()
