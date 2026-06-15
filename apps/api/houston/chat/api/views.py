@@ -21,7 +21,6 @@ from houston.chat.api.serializers import (
     ChatMessageListResponseSerializer,
     ChatRenameGroupRequestSerializer,
     ChatSettingsPatchRequestSerializer,
-    ChatSettingsResponseSerializer,
     ChatStatusSerializer,
     ChatWsTicketResponseSerializer,
     conversation_title,
@@ -830,7 +829,7 @@ class ChatSettingsView(EstablishmentScopedChatMixin, APIView):
         tags=["chat"],
         request=ChatSettingsPatchRequestSerializer,
         responses={
-            200: ChatSettingsResponseSerializer,
+            200: ChatStatusSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -845,13 +844,13 @@ class ChatSettingsView(EstablishmentScopedChatMixin, APIView):
         body = ChatSettingsPatchRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         try:
-            establishment = update_establishment_chat_enabled(
+            update_establishment_chat_enabled(
                 actor_membership=membership,
                 chat_enabled=body.validated_data["chat_enabled"],
             )
         except ChatError as exc:
             return _chat_error_response(exc)
 
-        return Response(
-            ChatSettingsResponseSerializer({"chat_enabled": establishment.chat_enabled}).data
-        )
+        membership.establishment.refresh_from_db(fields=["chat_enabled", "updated_at"])
+        payload = build_chat_status(membership=membership)
+        return Response(ChatStatusSerializer(payload.__dict__).data)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeRoutePath, parseAppRoute } from '@/app/app-routes'
+import { getAppRouteKey, normalizeRoutePath, parseAppRoute } from '@/app/app-routes'
 
 describe('normalizeRoutePath', () => {
   it('strips query strings before matching', () => {
@@ -93,5 +93,27 @@ describe('parseAppRoute', () => {
       kind: 'invitation',
       token: 'token-abc',
     })
+  })
+})
+
+describe('getAppRouteKey', () => {
+  it('builds stable readable keys for static routes', () => {
+    expect(getAppRouteKey({ kind: 'static', path: '/reporting' })).toBe('static:/reporting')
+    expect(getAppRouteKey({ kind: 'static', path: '/chat' })).toBe('static:/chat')
+  })
+
+  it('includes only route-identifying fields for detail routes', () => {
+    expect(getAppRouteKey({ kind: 'signal-detail', signalId: 'sig-1' })).toBe(
+      'signal-detail:sig-1',
+    )
+    expect(getAppRouteKey({ kind: 'chat-conversation-detail', conversationId: 'conv-1' })).toBe(
+      'chat-conversation-detail:conv-1',
+    )
+    expect(getAppRouteKey({ kind: 'unknown', pathname: '/foo/bar' })).toBe('unknown:/foo/bar')
+  })
+
+  it('matches parseAppRoute output', () => {
+    const route = parseAppRoute('/signals/abc-123')
+    expect(getAppRouteKey(route)).toBe('signal-detail:abc-123')
   })
 })

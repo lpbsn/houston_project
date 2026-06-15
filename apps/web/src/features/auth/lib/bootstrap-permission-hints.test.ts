@@ -38,7 +38,7 @@ describe('bootstrap-permission-hints', () => {
     })
   })
 
-  it('drives chat nav visibility from chat_available', () => {
+  it('reads chat_available as bootstrap fallback hint only', () => {
     expect(
       isChatNavAvailable({
         chat_available: true,

@@ -46,6 +46,35 @@ export function normalizeRoutePath(input: string): string {
   return withoutQuery.replace(/\/+$/, '') || '/'
 }
 
+export function getAppRouteKey(route: AppRoute): string {
+  switch (route.kind) {
+    case 'static':
+      return `static:${route.path}`
+    case 'signal-detail':
+      return `signal-detail:${route.signalId}`
+    case 'signal-action-create':
+      return `signal-action-create:${route.signalId}`
+    case 'action-create':
+      return 'action-create'
+    case 'action-detail':
+      return `action-detail:${route.actionId}`
+    case 'checklist-template-create':
+      return 'checklist-template-create'
+    case 'checklist-template-detail':
+      return `checklist-template-detail:${route.templateId}`
+    case 'checklist-execution-create':
+      return 'checklist-execution-create'
+    case 'checklist-execution-detail':
+      return `checklist-execution-detail:${route.executionId}`
+    case 'chat-conversation-detail':
+      return `chat-conversation-detail:${route.conversationId}`
+    case 'invitation':
+      return `invitation:${route.token}`
+    case 'unknown':
+      return `unknown:${route.pathname}`
+  }
+}
+
 function parseInvitationToken(pathname: string): string | null {
   const prefix = '/invitations/'
   if (!pathname.startsWith(prefix)) {

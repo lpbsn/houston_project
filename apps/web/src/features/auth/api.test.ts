@@ -60,6 +60,8 @@ describe('auth api cache isolation', () => {
     queryClient.setQueryData(['workspace', 'summary', 'est-a'], { name: 'A' })
     queryClient.setQueryData(['reporting', 'kpi', 'est-a'], { kpi: 1 })
     queryClient.setQueryData(['onboarding', 'sessions', 's-1'], { id: 's-1' })
+    queryClient.setQueryData(['chat', 'status', 'est-a'], { chat_enabled: true, can_access: true })
+    queryClient.setQueryData(['chat', 'conversations', 'est-a'], { items: [] })
     queryClient.setQueryData(bootstrapQueryKey, {
       ...bootstrapPayload,
       active_membership: {
@@ -81,6 +83,8 @@ describe('auth api cache isolation', () => {
     expect(queryClient.getQueryData(['workspace', 'summary', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(['reporting', 'kpi', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(['onboarding', 'sessions', 's-1'])).toBeUndefined()
+    expect(queryClient.getQueryData(['chat', 'status', 'est-a'])).toBeUndefined()
+    expect(queryClient.getQueryData(['chat', 'conversations', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(bootstrapPayload)
   })
 

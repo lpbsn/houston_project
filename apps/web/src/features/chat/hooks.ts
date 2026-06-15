@@ -5,6 +5,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 import {
   chatQueryKeys,
@@ -17,11 +18,25 @@ import {
   fetchEligibleChatMemberships,
   markConversationSeen,
 } from './api'
+import { applyChatAvailabilityFromStatus } from './lib/apply-chat-availability-cache'
+import {
+  isChatRuntimeAvailable,
+  resolveChatNavVisible,
+} from './lib/chat-availability'
 import { buildMessageCursor } from './lib/chat-display'
 import { patchConversationsOnMessageCreated } from './lib/chat-conversations-cache'
 import type { ChatConversationListResponse, ChatMessage, ChatMessageListResponse } from './types'
 
-export function useChatStatusQuery(establishmentId: string | null) {
+type ChatStatusQueryOptions = {
+  enabled?: boolean
+  refetchOnWindowFocus?: boolean
+  staleTime?: number
+}
+
+export function useChatStatusQuery(
+  establishmentId: string | null,
+  options: ChatStatusQueryOptions = {},
+) {
   return useQuery({
     queryKey: establishmentId ? chatQueryKeys.status(establishmentId) : ['chat', 'status', 'none'],
     queryFn: () => {
@@ -30,8 +45,64 @@ export function useChatStatusQuery(establishmentId: string | null) {
       }
       return fetchChatStatus(establishmentId)
     },
-    enabled: Boolean(establishmentId),
+    enabled: Boolean(establishmentId) && (options.enabled ?? true),
+    refetchOnWindowFocus: options.refetchOnWindowFocus,
+    staleTime: options.staleTime,
   })
+}
+
+type UseChatAvailabilityOptions = {
+  establishmentId: string | null
+  hasOperationalAccess: boolean
+  bootstrapChatAvailable: boolean
+  routeKey: string
+}
+
+export function useChatAvailability({
+  establishmentId,
+  hasOperationalAccess,
+  bootstrapChatAvailable,
+  routeKey,
+}: UseChatAvailabilityOptions) {
+  const queryClient = useQueryClient()
+  const statusQuery = useChatStatusQuery(establishmentId, {
+    enabled: Boolean(establishmentId) && hasOperationalAccess,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+  })
+
+  const statusResolved = statusQuery.isSuccess
+  const status = statusQuery.data
+  const isRuntimeAvailable = isChatRuntimeAvailable(status)
+  const isNavVisible = resolveChatNavVisible({
+    hasOperationalAccess,
+    status,
+    statusResolved,
+    bootstrapChatAvailable,
+  })
+
+  useEffect(() => {
+    if (!establishmentId || !status) {
+      return
+    }
+    applyChatAvailabilityFromStatus(queryClient, establishmentId, status)
+  }, [establishmentId, queryClient, status])
+
+  useEffect(() => {
+    if (!establishmentId) {
+      return
+    }
+    void queryClient.invalidateQueries({ queryKey: chatQueryKeys.status(establishmentId) })
+  }, [establishmentId, queryClient, routeKey])
+
+  return {
+    status,
+    isLoading: statusQuery.isLoading,
+    isError: statusQuery.isError,
+    isNavVisible,
+    isRuntimeAvailable,
+    statusResolved,
+  }
 }
 
 export function useChatConversationsQuery(

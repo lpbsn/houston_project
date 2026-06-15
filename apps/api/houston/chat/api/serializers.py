@@ -110,10 +110,6 @@ class ChatSettingsPatchRequestSerializer(serializers.Serializer):
     chat_enabled = serializers.BooleanField()
 
 
-class ChatSettingsResponseSerializer(serializers.Serializer):
-    chat_enabled = serializers.BooleanField()
-
-
 class ChatCreateConversationResponseSerializer(serializers.Serializer):
     conversation = ChatConversationDetailSerializer()
     created = serializers.BooleanField(required=False)

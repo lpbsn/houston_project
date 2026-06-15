@@ -1882,7 +1882,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChatSettingsResponse'
+                $ref: '#/components/schemas/ChatStatus'
           description: ''
         '400':
           content:
@@ -5934,13 +5934,6 @@ components:
       - participant_role
       - role
       - user_id
-    ChatSettingsResponse:
-      type: object
-      properties:
-        chat_enabled:
-          type: boolean
-      required:
-      - chat_enabled
     ChatStatus:
       type: object
       properties:

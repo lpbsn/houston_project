@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { useAppRoute } from '@/app/app-routes'
+import { getAppRouteKey, useAppRoute } from '@/app/app-routes'
 import {
   LazyActionCreatePage,
   LazyActionDetailPage,
@@ -53,11 +53,9 @@ import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishm
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
-import { useChatConversationsQuery } from '@/features/chat/hooks'
-import {
-  getBootstrapPermissionHints,
-  isChatNavAvailable,
-} from '@/features/auth/lib/bootstrap-permission-hints'
+import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/hooks'
+import { shouldRedirectFromUnavailableChat } from '@/features/chat/lib/chat-availability'
+import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
@@ -155,13 +153,39 @@ function App() {
 
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
-  const showChatNav = Boolean(
-    auth.hasOperationalAccess && isChatNavAvailable(permissionHints),
-  )
+  const routeKey = useMemo(() => getAppRouteKey(route), [route])
+  const isChatRoute =
+    route.kind === 'chat-conversation-detail' ||
+    (route.kind === 'static' && route.path === '/chat')
+  const chatAvailability = useChatAvailability({
+    establishmentId,
+    hasOperationalAccess: auth.hasOperationalAccess,
+    bootstrapChatAvailable: permissionHints.chat_available,
+    routeKey,
+  })
+  const showChatNav = chatAvailability.isNavVisible
   const chatConversationsQuery = useChatConversationsQuery(establishmentId, {
     enabled: showChatNav,
   })
   const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
+
+  useEffect(() => {
+    if (
+      !shouldRedirectFromUnavailableChat({
+        isChatRoute,
+        statusResolved: chatAvailability.statusResolved,
+        isRuntimeAvailable: chatAvailability.isRuntimeAvailable,
+      })
+    ) {
+      return
+    }
+    navigate('/reporting', { replace: true })
+  }, [
+    chatAvailability.isRuntimeAvailable,
+    chatAvailability.statusResolved,
+    isChatRoute,
+    navigate,
+  ])
 
   const routeContent = useMemo(() => {
     if (
@@ -458,10 +482,6 @@ function App() {
 
   const activeChatConversationId =
     route.kind === 'chat-conversation-detail' ? route.conversationId : null
-
-  const isChatRoute =
-    route.kind === 'chat-conversation-detail' ||
-    (route.kind === 'static' && route.path === '/chat')
 
   const wrapTerrainWithChatRealtime = (terrainShell: ReactNode) => {
     if (!showChatNav && !isChatRoute) {

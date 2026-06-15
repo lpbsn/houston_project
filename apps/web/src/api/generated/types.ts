@@ -1825,9 +1825,6 @@ export interface components {
             role: string;
             participant_role: string;
         };
-        ChatSettingsResponse: {
-            chat_enabled: boolean;
-        };
         ChatStatus: {
             chat_enabled: boolean;
             can_access: boolean;
@@ -4506,7 +4503,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChatSettingsResponse"];
+                    "application/json": components["schemas"]["ChatStatus"];
                 };
             };
             400: {

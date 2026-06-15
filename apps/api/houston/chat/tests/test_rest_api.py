@@ -20,6 +20,14 @@ def chat_url(establishment_id, suffix: str) -> str:
     return f"/api/v1/establishments/{establishment_id}/chat/{suffix}"
 
 
+def assert_owner_chat_status_payload(body: dict, *, chat_enabled: bool) -> None:
+    assert body["chat_enabled"] is chat_enabled
+    assert body["can_access"] is chat_enabled
+    assert body["can_create_dm"] is chat_enabled
+    assert body["can_create_group"] is chat_enabled
+    assert body["can_manage_settings"] is True
+
+
 def create_dm(api_client, *, token: str, establishment_id, target_membership_id):
     return api_client.post(
         chat_url(establishment_id, "conversations/dm/"),
@@ -652,9 +660,35 @@ def test_owner_can_toggle_chat_enabled(api_client):
     )
 
     assert response.status_code == 200
-    assert response.json()["chat_enabled"] is False
+    assert_owner_chat_status_payload(response.json(), chat_enabled=False)
     establishment.refresh_from_db()
     assert establishment.chat_enabled is False
+
+
+def test_patch_settings_matches_get_status_after_disable(api_client):
+    establishment = create_establishment(chat_enabled=True)
+    owner = create_user(username="chat_owner_patch_status_match")
+    create_membership(
+        user=owner,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    token = login(api_client, user=owner)
+
+    patch_response = api_client.patch(
+        chat_url(establishment.id, "settings/"),
+        {"chat_enabled": False},
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert patch_response.status_code == 200
+
+    status_response = api_client.get(
+        chat_url(establishment.id, "status/"),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert status_response.status_code == 200
+    assert status_response.json() == patch_response.json()
 
 
 def test_owner_can_re_enable_chat_after_disable(api_client):
@@ -675,7 +709,7 @@ def test_owner_can_re_enable_chat_after_disable(api_client):
     )
 
     assert response.status_code == 200
-    assert response.json()["chat_enabled"] is True
+    assert_owner_chat_status_payload(response.json(), chat_enabled=True)
     establishment.refresh_from_db()
     assert establishment.chat_enabled is True
 
@@ -698,7 +732,12 @@ def test_director_can_re_enable_chat_after_disable(api_client):
     )
 
     assert response.status_code == 200
-    assert response.json()["chat_enabled"] is True
+    body = response.json()
+    assert body["chat_enabled"] is True
+    assert body["can_access"] is True
+    assert body["can_create_dm"] is True
+    assert body["can_create_group"] is True
+    assert body["can_manage_settings"] is True
 
 
 def _chat_conversations_query_count(
