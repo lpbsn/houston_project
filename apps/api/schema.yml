@@ -644,6 +644,106 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/:
+    get:
+      operationId: v1_establishments_actions_comments_list
+      description: Lists comments on an Action, including inherited Signal comments,
+        oldest first.
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommentItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    post:
+      operationId: v1_establishments_actions_comments_create
+      description: Creates a comment on an Action.
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/actions/{action_id}/due-at/:
     patch:
       operationId: v1_establishments_actions_due_at_partial_update
@@ -3814,6 +3914,105 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/:
+    get:
+      operationId: v1_establishments_signals_comments_list
+      description: Lists comments on a Signal, oldest first.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommentItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    post:
+      operationId: v1_establishments_signals_comments_create
+      description: Creates a comment on a Signal.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: signal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/signals/{signal_id}/pin/:
     post:
       operationId: v1_establishments_signals_pin_create
@@ -6571,6 +6770,66 @@ components:
       - can_manage_tasks
       - can_update
       - can_use_template
+    CommentAuthor:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+      required:
+      - display_name
+      - membership_id
+    CommentCreateRequest:
+      type: object
+      properties:
+        body:
+          type: string
+        mentioned_membership_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - body
+    CommentItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        origin:
+          $ref: '#/components/schemas/OriginEnum'
+        body:
+          type: string
+        author:
+          $ref: '#/components/schemas/CommentAuthor'
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentMention'
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - author
+      - body
+      - created_at
+      - id
+      - mentions
+      - origin
+    CommentMention:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+      required:
+      - display_name
+      - membership_id
     CsrfResponse:
       type: object
       properties:
@@ -7272,6 +7531,14 @@ components:
       - started_by_id
       - status
       - updated_at
+    OriginEnum:
+      enum:
+      - signal
+      - action
+      type: string
+      description: |-
+        * `signal` - signal
+        * `action` - action
     PatchedActionDueAtRequest:
       type: object
       properties:

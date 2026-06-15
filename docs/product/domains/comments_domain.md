@@ -1,164 +1,355 @@
-# Comments Domain
+```
+# Comments Domain — Signal & Action Comments
 
-Status: authoritative
-Last reviewed: 2026-05-27
-Implementation status: not_started
+Status: Draft validated for implementation  
+Scope: MVP / V1  
+Related backlog:
+- HOU-BACKLOG-005 — Ajouter les commentaires sur les Signaux
+- HOU-BACKLOG-006 — Ajouter les commentaires sur les Actions
 
 ## 1. Purpose
 
-Comments owns contextual discussion attached to authorized business objects.
+Houston comments allow field and operational teams to add contextual written notes directly inside a Signal or an Action.
 
-- MVP comment subjects are `Signal` and `Action` only.
-- Comments owns subject-scoped discussion visibility, creation boundaries, and mention-target boundaries at the domain level.
-- Comments does not own Signal lifecycle, Action lifecycle, access grants, Notification routing, Realtime transport, Feed projections, Chat behavior, or Observation raw text.
+A comment is not a chat message.  
+A comment belongs to a business object context:
+- Signal
+- Action
 
-## 2. MVP Scope
+Comments are used to clarify, document, or coordinate around an operational item without changing its lifecycle, classification, assignment, or validation state.
 
-- Signal comments.
-- Action comments.
-- Subject-scoped comment read/create behavior in authorized Signal or Action context.
-- Comment visibility inherited from the parent subject.
-- Mention boundary for Signal and Action comments.
-- Signal comments may appear in linked Action context as contextual read-only information.
-- Action comments remain scoped to their specific Action.
-- Backend authorization and establishment scoping.
+## 2. Product scope V1
 
-## 3. Out of Scope
+V1 supports:
 
-- Comments on Checklist subjects in MVP.
-- Chat content.
-- Comments as workflow transitions or hidden operational commands.
-- Access grants through comments or mentions.
-- Comment editing, deletion, moderation, or reporting unless separately validated.
-- Replies, threading, reactions, attachments, comment search, or rich text complexity.
-- Public or cross-tenant comments.
-- AI-generated comments or AI comment summarization.
-- Complete comment bodies in notification or realtime payloads.
+- List comments on a Signal.
+- Add a comment on a Signal.
+- List comments on an Action.
+- Add a comment on an Action.
+- Display comment author.
+- Display comment creation date/time.
+- Display comments from oldest at the top to newest at the bottom.
+- Mention active users of the same establishment with `@`.
+- Display inherited Signal comments inside linked Actions.
 
-## 4. Core Invariants
+V1 does not support:
 
-- A comment is contextual discussion, not a workflow state transition.
-- Comment visibility and creation are subject-scoped.
-- Backend authorization is required for comment reads and writes.
-- Comments never create access.
-- Mentions never extend access or visibility in MVP (comments not implemented).
-- **Future exception (documented, not implemented):** mention on a Signal may grant narrow read + linked-Action create via `SignalAccessGrant` — see [`signal_access_grant_domain.md`](signal_access_grant_domain.md). Does not expand domain scope.
-- Signal comments and Action comments have different scopes.
-- Signal comments may be visible in linked Action context as read-only context.
-- Action comments do not automatically propagate to sibling Actions or the parent Signal.
-- System-generated comment behavior must not expose Observation raw text.
-- System-generated comment behavior must not inject raw Observation text. User-authored comment bodies remain user input and must follow normal content/privacy rules.
-- Full comment body is fetched only through authorized Signal or Action detail/comment APIs.
-- Notification payloads must not carry the complete comment body.
-- Realtime only invalidates or refetches authorized comment context.
-- Checklist subjects are outside MVP comment scope.
-- Chat remains separate from Comments.
+- Chat behavior.
+- Realtime updates.
+- Notifications.
+- Mention notifications.
+- Push notifications.
+- Unread counters.
+- Comment edit.
+- Comment delete.
+- Comment reactions.
+- Comment attachments.
+- Comment moderation.
+- Offline mutation queue.
+- AI processing of comments.
 
-## 5. Main Objects
+## 3. Core product rules
 
-- `Comment`
-  - Subject-scoped discussion entry on an authorized `Signal` or `Action`.
-  - Represents contextual discussion, not business workflow state.
+### 3.1 Signal comments
 
-- `CommentSubject`
-  - Parent business object such as `Signal` or `Action`.
-  - Determines visibility and comment permission boundaries.
+A Signal comment is created from the Signal detail page.
 
-- `CommentAuthor`
-  - Authenticated establishment member who created the comment.
-  - Must act through normal backend authorization.
+A Signal comment is stored once.
 
-- `Mention`
-  - Product target user reference inside a Signal or Action comment.
-  - Exact parsing and API request shape remain candidate until implemented.
-  - May trigger targeted attention behavior, but never grants access.
+If the Signal has linked Actions, the Signal comment is visible inside every linked Action.
 
-- `CommentContext`
-  - Safe comment view rendered inside authorized Signal or Action detail.
-  - May include parent Signal context in linked Action views when validated.
+Signal comments are inherited by linked Actions for visibility only. They must not be physically duplicated into each Action.
 
-- `CommentEvent`
-  - Candidate event emitted when a comment is added or mention handling occurs.
-  - Event payloads must stay minimal and non-sensitive.
+A Signal comment never changes:
+- Signal classification.
+- Signal status.
+- Signal urgency.
+- Signal responsible Business Unit.
+- Signal affected Business Unit.
+- Linked Actions.
 
-## 6. Lifecycle / Statuses
+### 3.2 Action comments
 
-- MVP lifecycle: `created`
+An Action comment is created from the Action detail page.
 
-Comment editing and deletion are out of MVP unless separately validated.
+An Action comment belongs only to that Action.
 
-Candidate mention flow:
-- parsed or validated
-- notification candidate generated
+An Action comment is not visible on the parent Signal.
 
-## 7. Permissions
+An Action comment is not visible on other Actions linked to the same Signal.
 
-- Comment access is establishment-scoped through the parent subject.
-- Reading comments requires authorized access to the parent `Signal` or `Action`.
-- Creating comments requires authorized comment permission on the parent `Signal` or `Action`.
-- Mentions do not grant subject visibility.
-- Opening a mention notification must re-fetch the parent subject through normal authorization.
-- Signal comment visibility follows Signal visibility.
-- Action comment visibility follows Action visibility.
-- Signal comments may appear in linked Action context only for authorized viewers of that linked context.
-- Action comments do not appear on sibling Actions or globally on the parent Signal by default.
-- Exact role-by-role comment rules are not validated yet in current code or `apps/api/schema.yml`.
+An Action comment never changes:
+- Action status.
+- Action assignment.
+- Action due date.
+- Action validation state.
+- Action classification.
+- Parent Signal.
 
-## 8. Events
+### 3.3 Action comment timeline
 
-No implemented Comments event contract is validated in current code or `apps/api/schema.yml`.
+When an Action is linked to a Signal, the Action comment section displays one combined timeline:
 
-Candidate events only:
-- `SignalCommentAdded`
-- `ActionCommentAdded`
-- `CommentMentionCreated`
-- `CommentUpdated` candidate only if editing is later validated
-- `CommentDeleted` candidate only if deletion is later validated
+- inherited comments from the linked Signal,
+- comments created directly on the Action.
 
-## 9. API Surface
+Each comment item must expose its origin:
+- `signal`
+- `action`
 
-Current API truth is `apps/api/schema.yml`.
+The UI may display this origin as a small badge or contextual label.
 
-Schema-confirmed routes today:
-- none
+Sorting rule:
 
-Candidate routes only:
-- list Signal comments
-- create Signal comment
-- list Action comments
-- create Action comment
-- include parent Signal comments as a contextual read-only section in Action detail
-- update or delete comment only if later validated
+```txt
+oldest comment at the top
+newest comment at the bottom
+```
 
-Candidate legacy API planning also referenced explicit mention inputs such as `mentioned_user_ids`, but no request shape is implemented in current schema truth.
+If two comments have the same creation time, ordering must remain deterministic.
 
-## 10. Frontend Expectations
+## 4. Mentions
 
-- Comments render only inside authorized Signal or Action detail surfaces.
-- Frontend must not treat comments as workflow commands.
-- Frontend must not inject or surface Observation raw text through system comment behavior.
-- Optional mentions should be supported only if backend/API support exists.
-- Frontend must not assume mentions create access.
-- Frontend must use generated OpenAPI clients only for routes present in `apps/api/schema.yml`.
-- TanStack Query owns comment server state when comment APIs exist.
-- Realtime should invalidate or refetch comment context only.
-- Chat UI must not reuse Comments behavior unless separately validated.
+Users can mention other users with `@`.
 
-## 11. AI Agent Notes
+Mention rule V1:
 
-- Inspect current comments code before claiming models, services, events, or APIs exist.
-- Inspect `apps/api/schema.yml` before listing any Comments API as implemented.
-- Inspect `signal_domain.md` before changing Signal comment behavior.
-- Inspect `action_domain.md` before changing Action comment behavior.
-- Inspect `notification_domain.md` before changing mention or comment attention behavior.
-- Inspect `rbac_permissions_domain.md` before changing comment visibility or creation rules.
-- Inspect `security_rgpd_domain.md` before changing body, payload, logging, or retention assumptions.
-- Inspect `feed_domain.md` before changing any feed-facing comment summary assumptions.
-- Do not make comments or mentions create access.
-- Do not turn comments into workflow state transitions.
-- Do not add comments to Checklist MVP scope.
-- Do not expose Observation raw text through comments, notifications, realtime payloads, or normal logs.
-- Do not send complete comment bodies in notification payloads.
-- Do not add editing, deletion, moderation, threading, reactions, attachments, or search unless separately validated.
-- When comment APIs are implemented later, update backend authorization, OpenAPI, generated clients, tests, notification boundaries, realtime invalidation, and this document together.
-- This active reference is synthesized from current code/schema truth and adjacent validated domain docs because no legacy `houston_comments_domain.md` source exists in the repository.
+```
+Any active member of an establishment can mention any active member of the same establishment.
+```
+
+There is no filtering by:
+
+- role,
+- Business Unit scope,
+- Manager/Staff scope,
+- Signal visibility,
+- Action visibility.
+
+Mention validation is server-side.
+
+A mentioned user must:
+
+- have an active membership in the same establishment,
+- be linked to an active user account.
+
+Invalid mentions must be rejected.
+
+Examples of invalid mentions:
+
+- membership from another establishment,
+- deactivated membership,
+- invited but not active membership,
+- inactive user account,
+- unknown membership id.
+
+Mentions in V1 do not trigger notifications.
+
+## 5. Permissions
+
+Comments follow the visibility of their parent business object.
+
+### 5.1 Signal comments
+
+A user can list Signal comments if they can view the Signal detail.
+
+A user can create a Signal comment if they can view the Signal detail.
+
+Signal comment permissions must be enforced by the backend.
+
+Frontend permission checks are UX only.
+
+### 5.2 Action comments
+
+A user can list Action comments if they can view the Action detail.
+
+A user can create an Action comment if they can view the Action detail.
+
+Action comment permissions must be enforced by the backend.
+
+Frontend permission checks are UX only.
+
+## 6. Content rules
+
+A comment body is plain text.
+
+V1 does not support rich text, markdown rendering, file attachments, or embedded media.
+
+Recommended constraints:
+
+- body is required,
+- body is trimmed server-side,
+- empty body is rejected,
+- max length: 2,000 characters.
+
+The comment body is user-generated operational content and must be treated as sensitive.
+
+Comment content must not be logged, sent to AI, exposed in technical events, or stored in frontend persistent storage.
+
+## 7. API behavior
+
+Expected endpoints:
+
+```
+GET  /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/
+POST /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/
+
+GET  /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/
+POST /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/
+```
+
+POST request:
+
+```
+{
+  "body": "Peux-tu regarder ce point ?",
+  "mentioned_membership_ids": ["uuid"]
+}
+```
+
+Comment response item:
+
+```
+{
+  "id": "uuid",
+  "origin": "signal",
+  "body": "Peux-tu regarder ce point ?",
+  "author": {
+    "membership_id": "uuid",
+    "display_name": "Alice Martin"
+  },
+  "mentions": [
+    {
+      "membership_id": "uuid",
+      "display_name": "Karim Dupont"
+    }
+  ],
+  "created_at": "2026-06-15T10:30:00Z"
+}
+```
+
+For Signal comments, `origin` is always `signal`.
+
+For Action comments:
+
+- inherited Signal comments return `origin = signal`,
+- direct Action comments return `origin = action`.
+
+## 8. UX contract
+
+The comments section appears in:
+
+- Signal detail page,
+- Action detail page.
+
+Default empty state:
+
+```
+Aucun commentaire pour l’instant.
+```
+
+Composer placeholder:
+
+```
+Ajouter un commentaire...
+```
+
+Submit behavior:
+
+- submit button is disabled while pending,
+- empty body cannot be submitted,
+- failed submission displays an explicit error,
+- successful submission refreshes the comment list.
+
+The UI must be mobile-first:
+
+- comfortable tap targets,
+- no hover-only interaction,
+- no horizontal scroll,
+- composer usable on phone keyboard,
+- loading, empty, error, and unauthorized states explicit.
+
+## 9. Non-goals V1
+
+The following are explicitly out of scope:
+
+- notifications,
+- mention notifications,
+- realtime invalidation,
+- WebSocket updates,
+- unread state,
+- chat integration,
+- AI analysis,
+- edit/delete,
+- attachments,
+- reactions,
+- moderation workflow,
+- audit export,
+- advanced pagination unless needed by implementation constraints.
+
+## 10. Acceptance criteria
+
+### Signal comments
+
+- A user who can view a Signal detail can list its comments.
+- A user who can view a Signal detail can create a comment.
+- A user who cannot view the Signal cannot access its comments.
+- Signal comments are visible inside linked Actions.
+- Signal comments are stored once and not duplicated per Action.
+- Signal comments do not modify Signal classification or lifecycle.
+- Mentions are limited to active memberships of the same establishment.
+- Invalid mentions are rejected.
+- No notification, realtime, or chat behavior is introduced.
+
+### Action comments
+
+- A user who can view an Action detail can list its comments.
+- A user who can view an Action detail can create a comment.
+- A user who cannot view the Action cannot access its comments.
+- Action comments remain linked only to the Action.
+- Action comments are not visible on the parent Signal.
+- Action detail displays inherited Signal comments and direct Action comments in one chronological timeline.
+- Action comments do not modify Action lifecycle or assignment.
+- Mentions are limited to active memberships of the same establishment.
+- Invalid mentions are rejected.
+- No notification, realtime, or chat behavior is introduced.
+
+## 11. Implementation guidance
+
+Implementation must follow Houston conventions:
+
+- Backend owns permissions, validation, visibility, and business rules.
+- Frontend uses backend API contracts and generated types.
+- Frontend must not duplicate authorization logic.
+- TanStack Query owns frontend server state.
+- No direct fetch calls from React components.
+- No manual edits to generated API files.
+- No sensitive comment body in logs, events, broker messages, WebSocket payloads, or persistent frontend storage.
+
+Recommended backend structure:
+
+```
+houston.comments
+  models.py
+  permissions.py
+  selectors.py
+  services.py
+  api/serializers.py
+  api/views.py
+  api/urls.py
+  tests/
+```
+
+Recommended frontend structure:
+
+```
+apps/web/src/features/comments/
+  api.ts
+  hooks.ts
+  types.ts
+  components/comment-section.tsx
+  components/comment-composer.tsx
+  components/comment-list.tsx
+```
+
+These structures are recommendations. The implementation may adapt them if the repository already contains a stronger convention.

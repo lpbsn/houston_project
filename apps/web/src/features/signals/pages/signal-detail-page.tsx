@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { ActionDetailCommentsDisabledSection } from '@/features/actions/components/action-detail-disabled-section'
+import { CommentSection } from '@/features/comments/components/comment-section'
 import { cn } from '@/lib/utils'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
@@ -138,7 +138,13 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
 
         <SignalDetailPhotoSection mediaCount={mediaCount} />
 
-        <ActionDetailCommentsDisabledSection description="Les échanges autour de ce signal seront disponibles bientôt." />
+        {establishmentId ? (
+          <CommentSection
+            establishmentId={establishmentId}
+            targetType="signal"
+            targetId={signalId}
+          />
+        ) : null}
       </div>
 
       {showStickyFooter ? (

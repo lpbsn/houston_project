@@ -260,6 +260,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists comments on an Action, including inherited Signal comments, oldest first. */
+        get: operations["v1_establishments_actions_comments_list"];
+        put?: never;
+        /** @description Creates a comment on an Action. */
+        post: operations["v1_establishments_actions_comments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/actions/{action_id}/due-at/": {
         parameters: {
             query?: never;
@@ -1099,6 +1117,24 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["v1_establishments_signals_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists comments on a Signal, oldest first. */
+        get: operations["v1_establishments_signals_comments_list"];
+        put?: never;
+        /** @description Creates a comment on a Signal. */
+        post: operations["v1_establishments_signals_comments_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2081,6 +2117,30 @@ export interface components {
             can_launch_execution: boolean;
             can_use_template: boolean;
         };
+        CommentAuthor: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
+        CommentCreateRequest: {
+            body: string;
+            mentioned_membership_ids?: string[];
+        };
+        CommentItem: {
+            /** Format: uuid */
+            id: string;
+            origin: components["schemas"]["OriginEnum"];
+            body: string;
+            author: components["schemas"]["CommentAuthor"];
+            mentions: components["schemas"]["CommentMention"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        CommentMention: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
         CsrfResponse: {
             detail: string;
         };
@@ -2356,6 +2416,12 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /**
+         * @description * `signal` - signal
+         *     * `action` - action
+         * @enum {string}
+         */
+        OriginEnum: "signal" | "action";
         PatchedActionDueAtRequest: {
             /** Format: date-time */
             due_at?: string;
@@ -3252,6 +3318,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_comments_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentItem"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_comments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CommentCreateRequest"];
+                "multipart/form-data": components["schemas"]["CommentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };
@@ -6442,6 +6598,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_comments_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentItem"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_signals_comments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                signal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CommentCreateRequest"];
+                "multipart/form-data": components["schemas"]["CommentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
                 };
             };
         };
