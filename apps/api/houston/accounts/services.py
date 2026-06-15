@@ -584,6 +584,9 @@ def _extract_client_ip(request: HttpRequest) -> str | None:
     return remote_addr or None
 
 
+_PENDING_USER_USERNAME_SAVE_MAX_ATTEMPTS = 3
+
+
 def resolve_or_create_pending_user_for_invite(
     *,
     email: str,
@@ -609,18 +612,33 @@ def resolve_or_create_pending_user_for_invite(
     user.set_unusable_password()
 
     try:
-        user.save()
+        with transaction.atomic():
+            user.save()
     except IntegrityError as exc:
-        raise ValueError("Unable to create invited user.") from exc
+        existing_user_by_email = User.objects.filter(email__iexact=normalized_email).first()
+        if existing_user_by_email is not None:
+            return existing_user_by_email
+
+        last_exc = exc
+        for _ in range(_PENDING_USER_USERNAME_SAVE_MAX_ATTEMPTS):
+            user.username = _build_registration_username(normalized_email, force_unique=True)
+            try:
+                with transaction.atomic():
+                    user.save()
+            except IntegrityError as retry_exc:
+                last_exc = retry_exc
+                continue
+            return user
+        raise last_exc
 
     return user
 
 
-def _build_registration_username(email: str) -> str:
+def _build_registration_username(email: str, *, force_unique: bool = False) -> str:
     local_part = email.split("@", 1)[0].strip().lower() or "owner"
     candidate = local_part[:150]
 
-    if not User.objects.filter(username=candidate).exists():
+    if not force_unique and not User.objects.filter(username=candidate).exists():
         return candidate
 
     suffix = uuid.uuid4().hex[:8]

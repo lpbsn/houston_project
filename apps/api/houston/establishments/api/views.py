@@ -666,6 +666,7 @@ class MembershipInvitationView(APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
         },
         description=(
             "Invites a staff or manager member to the active establishment. "
@@ -733,7 +734,7 @@ class MembershipInvitationView(APIView):
                     "code": "membership_invitation_duplicate",
                     "detail": "This user is already associated with the establishment.",
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_409_CONFLICT,
             )
         except InvalidMembershipInvitationInputError as exc:
             return Response(
@@ -1118,7 +1119,7 @@ class OnboardingSessionDirectorInvitationView(APIView):
                     "code": "director_invitation_duplicate",
                     "detail": "This user is already associated with the establishment.",
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_409_CONFLICT,
             )
         except DirectorInvitationAlreadyExistsError:
             return Response(
@@ -1126,7 +1127,7 @@ class OnboardingSessionDirectorInvitationView(APIView):
                     "code": "director_invitation_already_exists",
                     "detail": "This establishment already has an invited or active Director.",
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_409_CONFLICT,
             )
         except InvalidDirectorInvitationInputError as exc:
             return Response(

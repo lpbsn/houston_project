@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -132,6 +134,44 @@ def test_create_onboarding_session_allows_template_and_returns_existing_session(
     assert second_response.status_code == 200
     assert second_response.json()["created"] is False
     assert second_response.json()["session"]["id"] == first_response.json()["session"]["id"]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_create_onboarding_session_is_idempotent():
+    actor = create_user(username="onboarding_concurrent_owner")
+    organization = Organization.objects.create(name="Concurrent Group")
+    establishment = Establishment.objects.create(
+        name="Concurrent Draft Site",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    EstablishmentMembership.objects.create(
+        user=actor,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    def create_session(_: int) -> int:
+        close_old_connections()
+        try:
+            client = APIClient(enforce_csrf_checks=True)
+            access_token = login(client, user=actor)
+            response = client.post(
+                "/api/v1/onboarding-sessions/",
+                {"establishment_id": str(establishment.id)},
+                format="json",
+                **auth_headers(access_token),
+            )
+            return response.status_code
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        statuses = list(executor.map(create_session, range(2)))
+
+    assert all(status in {200, 201} for status in statuses)
+    assert OnboardingSession.objects.filter(establishment=establishment).count() == 1
 
 
 def test_create_onboarding_session_rejects_ai_source_mode(api_client):

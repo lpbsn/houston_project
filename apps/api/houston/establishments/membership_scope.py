@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
 
 from houston.establishments.models import (
@@ -63,6 +63,7 @@ def replace_membership_scopes(
     membership: EstablishmentMembership,
     scope_inputs: Iterable[MembershipScopeInput],
 ) -> list[MembershipScope]:
+    membership = EstablishmentMembership.objects.select_for_update().get(pk=membership.pk)
     establishment = membership.establishment
     normalized = normalize_membership_scope_inputs(
         establishment=establishment,
@@ -87,12 +88,20 @@ def replace_membership_scopes(
     for resolved in normalized:
         if resolved.business_unit.id in existing_bu_ids:
             continue
-        created.append(
-            MembershipScope.objects.create(
+        try:
+            with transaction.atomic():
+                created.append(
+                    MembershipScope.objects.create(
+                        membership=membership,
+                        business_unit=resolved.business_unit,
+                    )
+                )
+        except IntegrityError:
+            if not MembershipScope.objects.filter(
                 membership=membership,
                 business_unit=resolved.business_unit,
-            )
-        )
+            ).exists():
+                raise
         existing_bu_ids.add(resolved.business_unit.id)
 
     return created

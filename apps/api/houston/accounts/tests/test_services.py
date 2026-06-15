@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db import IntegrityError
 from django.utils import timezone
 
 from houston.accounts import tokens
@@ -14,6 +15,7 @@ from houston.accounts.services import (
     issue_access_token,
     issue_refresh_token,
     refresh_session,
+    resolve_or_create_pending_user_for_invite,
     revoke_session,
     validate_refresh_token,
 )
@@ -127,3 +129,70 @@ def test_revoke_session_revokes_active_access_and_refresh_tokens(user, request_f
     assert session.status == session.Status.REVOKED
     assert access_token.record.revoked_at is not None
     assert refresh_token.record.revoked_at is not None
+
+
+def test_resolve_or_create_pending_user_returns_existing_on_email_race():
+    existing_user = User.objects.create_user(
+        username="pending_staff",
+        email="pending-staff@example.com",
+        password="unused",
+        status=User.Status.PENDING,
+    )
+    existing_user.set_unusable_password()
+    existing_user.save(update_fields=["password"])
+
+    resolved_user = resolve_or_create_pending_user_for_invite(
+        email="pending-staff@example.com",
+        first_name="Updated",
+        last_name="Name",
+    )
+
+    assert resolved_user.id == existing_user.id
+    assert User.objects.filter(email__iexact="pending-staff@example.com").count() == 1
+
+
+def test_resolve_or_create_pending_user_succeeds_when_username_taken_by_other_email():
+    User.objects.create_user(
+        username="alice",
+        email="alice@other.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+
+    resolved_user = resolve_or_create_pending_user_for_invite(
+        email="alice@example.com",
+        first_name="Alice",
+        last_name="Example",
+    )
+
+    assert resolved_user.email == "alice@example.com"
+    assert resolved_user.username != "alice"
+    assert resolved_user.status == User.Status.PENDING
+    assert User.objects.filter(email__iexact="alice@example.com").count() == 1
+
+
+def test_resolve_or_create_pending_user_retries_after_save_integrity_error_without_email_match(
+    monkeypatch,
+):
+    save_calls = {"count": 0}
+    original_save = User.save
+
+    def patched_save(self, *args, **kwargs):
+        save_calls["count"] += 1
+        if save_calls["count"] == 1:
+            raise IntegrityError("simulated username race")
+        return original_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(User, "save", patched_save)
+
+    resolved_user = resolve_or_create_pending_user_for_invite(
+        email="alice@example.com",
+        first_name="Alice",
+        last_name="Example",
+    )
+
+    assert save_calls["count"] == 2
+    assert resolved_user.email == "alice@example.com"
+    assert resolved_user.username != "alice"
+    assert resolved_user.status == User.Status.PENDING
+    assert User.objects.filter(email__iexact="alice@example.com").count() == 1

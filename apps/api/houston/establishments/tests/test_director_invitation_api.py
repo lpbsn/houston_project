@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -85,7 +88,7 @@ def test_director_invitation_rejects_duplicate_email(api_client):
     )
 
     assert first_response.status_code == 201
-    assert second_response.status_code == 400
+    assert second_response.status_code == 409
     assert second_response.json()["code"] == "director_invitation_duplicate"
 
 
@@ -228,7 +231,7 @@ def test_director_invitation_rejects_second_director_with_different_email(api_cl
     )
 
     assert first_response.status_code == 201
-    assert second_response.status_code == 400
+    assert second_response.status_code == 409
     assert second_response.json()["code"] == "director_invitation_already_exists"
     assert (
         EstablishmentMembership.objects.filter(
@@ -268,8 +271,50 @@ def test_director_invitation_rejects_second_director_when_active_director_exists
         **auth_headers(access_token),
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.json()["code"] == "director_invitation_already_exists"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_director_invitations_second_director_returns_409():
+    owner = create_user(username="concurrent_multi_director_owner")
+    session = create_onboarding_session(actor=owner)
+
+    def invite_director(worker_id: int) -> tuple[int, str | None]:
+        close_old_connections()
+        try:
+            client = APIClient(enforce_csrf_checks=True)
+            access_token = login(client, user=owner)
+            response = client.post(
+                f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
+                invite_director_payload(email=f"director-{worker_id}@example.com"),
+                format="json",
+                **auth_headers(access_token),
+            )
+            body = response.json()
+            return response.status_code, body.get("code")
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(invite_director, range(2)))
+
+    statuses = [status for status, _ in results]
+    codes = [code for _, code in results]
+    assert 201 in statuses
+    assert 409 in statuses
+    assert codes.count("director_invitation_already_exists") == 1
+    assert (
+        EstablishmentMembership.objects.filter(
+            establishment=session.establishment,
+            role=EstablishmentMembership.Role.DIRECTOR,
+            status__in=[
+                EstablishmentMembership.Status.INVITED,
+                EstablishmentMembership.Status.ACTIVE,
+            ],
+        ).count()
+        == 1
+    )
 
 
 def test_director_invitation_succeeds_after_deactivated_director_with_new_email(api_client):

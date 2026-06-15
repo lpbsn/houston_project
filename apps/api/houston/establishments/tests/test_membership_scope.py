@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, close_old_connections, transaction
 
 from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
@@ -131,3 +133,49 @@ def test_replace_membership_scopes_persists_business_unit_row():
     scopes = list(MembershipScope.objects.filter(membership=membership))
     assert len(scopes) == 1
     assert scopes[0].business_unit_id == business_unit.id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_replace_membership_scopes_same_business_unit_is_idempotent():
+    establishment = create_establishment()
+    membership = create_membership(establishment=establishment)
+    business_unit = create_business_unit(establishment=establishment, key="concurrent_hotel")
+    scope_input = MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, business_unit.id)
+
+    def assign_scope(_: int) -> None:
+        close_old_connections()
+        try:
+            replace_membership_scopes(
+                membership=membership,
+                scope_inputs=[scope_input],
+            )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(assign_scope, range(2)))
+
+    scopes = list(MembershipScope.objects.filter(membership=membership))
+    assert len(scopes) == 1
+    assert scopes[0].business_unit_id == business_unit.id
+
+
+def test_replace_membership_scopes_reraises_unexpected_integrity_error(monkeypatch):
+    establishment = create_establishment()
+    membership = create_membership(establishment=establishment)
+    business_unit = create_business_unit(establishment=establishment, key="unexpected_integrity")
+
+    def raise_integrity_error(**_kwargs):
+        raise IntegrityError("unexpected constraint violation")
+
+    monkeypatch.setattr(MembershipScope.objects, "create", raise_integrity_error)
+
+    with pytest.raises(IntegrityError, match="unexpected constraint violation"):
+        replace_membership_scopes(
+            membership=membership,
+            scope_inputs=[
+                MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, business_unit.id),
+            ],
+        )
+
+    assert MembershipScope.objects.filter(membership=membership).count() == 0

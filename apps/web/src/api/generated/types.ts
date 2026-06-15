@@ -5973,6 +5973,14 @@ export interface operations {
                     "application/json": components["schemas"]["DetailResponse"];
                 };
             };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
         };
     };
     v1_establishments_memberships_list: {
