@@ -576,16 +576,18 @@ function App() {
         showChatNav={showChatNav}
         chatHasUnread={chatHasUnread}
         topbar={
-          <TerrainTopbar
-            variant={terrainConfig.topbarVariant}
-            title={terrainConfig.title}
-            pageTitle={terrainConfig.pageTitle}
-            detailTitleLayout={terrainConfig.detailTitleLayout}
-            showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-            onBack={
-              terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
-            }
-          />
+          terrainConfig.hideTopbar ? null : (
+            <TerrainTopbar
+              variant={terrainConfig.topbarVariant}
+              title={terrainConfig.title}
+              pageTitle={terrainConfig.pageTitle}
+              detailTitleLayout={terrainConfig.detailTitleLayout}
+              showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
+              onBack={
+                terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
+              }
+            />
+          )
         }
       >
         <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>

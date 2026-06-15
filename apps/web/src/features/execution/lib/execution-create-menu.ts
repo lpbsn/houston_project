@@ -1,6 +1,6 @@
 import type { BootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 
-export type ExecutionCreateMenuOptionId = 'action' | 'flash_todo' | 'checklist'
+export type ExecutionCreateMenuOptionId = 'action' | 'checklist'
 
 export type ChecklistCreateSubmenuOptionId = 'create_registered' | 'use_existing'
 
@@ -30,12 +30,6 @@ export function getExecutionCreateMenuOptions(
       disabled: false,
     })
   }
-
-  options.push({
-    id: 'flash_todo',
-    label: 'Flash To-do',
-    disabled: false,
-  })
 
   options.push({
     id: 'checklist',

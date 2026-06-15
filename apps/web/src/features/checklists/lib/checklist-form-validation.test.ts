@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   hasAssignmentFormErrors,
   validateAssignmentForm,
+  validateChecklistCreateForm,
   validateFlashTodoCreate,
   validateRegisteredTemplateCreate,
   validateTask,
@@ -65,32 +66,6 @@ describe('checklist-form-validation', () => {
     expect(errors.recurrenceDays).toBeTruthy()
   })
 
-  it('requires business unit and tasks for registered template create', () => {
-    expect(
-      validateRegisteredTemplateCreate({
-        title: 'Routine',
-        businessUnitId: '',
-        taskCount: 1,
-        assignNow: false,
-        assignedTo: '',
-      }),
-    ).toBeTruthy()
-    expect(
-      validateRegisteredTemplateCreate({
-        title: 'Routine',
-        businessUnitId: 'bu-1',
-        taskCount: 1,
-        assignNow: false,
-        assignedTo: '',
-      }),
-    ).toBeNull()
-  })
-
-  it('requires task', () => {
-    expect(validateTask('')).toBe('La tâche est obligatoire.')
-    expect(validateTask('Vérifier stock')).toBeNull()
-  })
-
   it('requires title, business unit, assignee, and tasks for flash to-do', () => {
     expect(
       validateFlashTodoCreate({
@@ -132,5 +107,90 @@ describe('checklist-form-validation', () => {
         taskCount: 2,
       }),
     ).toBeNull()
+  })
+
+  it('requires business unit and tasks for registered template create', () => {
+    expect(
+      validateRegisteredTemplateCreate({
+        title: 'Routine',
+        businessUnitId: '',
+        taskCount: 1,
+        assignNow: false,
+        assignedTo: '',
+      }),
+    ).toBeTruthy()
+    expect(
+      validateRegisteredTemplateCreate({
+        title: 'Routine',
+        businessUnitId: 'bu-1',
+        taskCount: 1,
+        assignNow: false,
+        assignedTo: '',
+      }),
+    ).toBeNull()
+  })
+
+  it('requires task', () => {
+    expect(validateTask('')).toBe('La tâche est obligatoire.')
+    expect(validateTask('Vérifier stock')).toBeNull()
+  })
+
+  it('validates unified create form for template, assignment, and flash modes', () => {
+    const base = {
+      title: 'Routine',
+      businessUnitId: 'bu-1',
+      taskValues: ['Vérifier stock'],
+      assignmentMode: 'none' as const,
+    }
+
+    expect(validateChecklistCreateForm({ ...base, flashEnabled: false })).toEqual({ ok: true })
+    expect(validateChecklistCreateForm({ ...base, flashEnabled: true })).toEqual({ ok: true })
+
+    expect(
+      validateChecklistCreateForm({
+        ...base,
+        flashEnabled: false,
+        businessUnitId: '',
+      }),
+    ).toMatchObject({
+      ok: false,
+      openBusinessUnitSheet: true,
+    })
+
+    expect(
+      validateChecklistCreateForm({
+        ...base,
+        flashEnabled: false,
+        assignmentMode: 'create_now',
+        assignmentValues: {
+          assignedTo: '',
+          startDate: '',
+          endDate: '',
+          startAt: '',
+          endAt: '',
+          recurrenceDays: [],
+        },
+      }),
+    ).toMatchObject({
+      ok: false,
+      openOptions: true,
+      assignmentErrors: expect.objectContaining({ assignedTo: expect.any(String) }),
+    })
+
+    expect(
+      validateChecklistCreateForm({
+        ...base,
+        flashEnabled: true,
+        assignmentMode: 'create_now',
+        assignmentValues: {
+          assignedTo: '',
+          startDate: '',
+          endDate: '',
+          startAt: '',
+          endAt: '',
+          recurrenceDays: [],
+        },
+      }),
+    ).toEqual({ ok: true })
   })
 })

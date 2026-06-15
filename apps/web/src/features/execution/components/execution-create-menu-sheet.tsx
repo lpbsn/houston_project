@@ -15,7 +15,6 @@ type ExecutionCreateMenuSheetProps = {
   permissionHints: BootstrapPermissionHints
   onClose: () => void
   onSelectAction: () => void
-  onSelectFlashTodo: () => void
   onSelectChecklistCreate: () => void
   onSelectChecklistUse: () => void
 }
@@ -27,7 +26,6 @@ export function ExecutionCreateMenuSheet({
   permissionHints,
   onClose,
   onSelectAction,
-  onSelectFlashTodo,
   onSelectChecklistCreate,
   onSelectChecklistUse,
 }: ExecutionCreateMenuSheetProps) {
@@ -47,12 +45,6 @@ export function ExecutionCreateMenuSheet({
   function handleMainSelect(id: ExecutionCreateMenuOptionId) {
     if (id === 'action') {
       onSelectAction()
-      handleClose()
-      return
-    }
-
-    if (id === 'flash_todo') {
-      onSelectFlashTodo()
       handleClose()
       return
     }

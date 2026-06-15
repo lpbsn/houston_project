@@ -92,10 +92,11 @@ describe('getTerrainRouteConfig', () => {
   it('configures checklist execution create and detail routes', () => {
     expect(getTerrainRouteConfig({ kind: 'checklist-execution-create' })).toEqual({
       topbarVariant: 'detail',
-      title: 'Flash To-do',
+      title: 'Nouvelle liste',
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     })
 
     expect(
@@ -113,10 +114,11 @@ describe('getTerrainRouteConfig', () => {
   it('configures checklist template create and detail routes', () => {
     expect(getTerrainRouteConfig({ kind: 'checklist-template-create' })).toEqual({
       topbarVariant: 'detail',
-      title: 'Nouvelle checklist',
+      title: 'Nouvelle liste',
       backPath: '/checklists',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     })
 
     expect(

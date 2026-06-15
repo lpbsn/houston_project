@@ -18,17 +18,15 @@ function hints(canCreateAction: boolean): BootstrapPermissionHints {
 }
 
 describe('execution create menu options', () => {
-  it('exposes Action, Flash To-do, and Checklist when can_create_action is true', () => {
+  it('exposes Action and Checklist when can_create_action is true', () => {
     expect(getExecutionCreateMenuOptions(hints(true))).toEqual([
       { id: 'action', label: 'Action', disabled: false },
-      { id: 'flash_todo', label: 'Flash To-do', disabled: false },
       { id: 'checklist', label: 'Checklist', disabled: false },
     ])
   })
 
-  it('exposes Flash To-do and Checklist without Action when can_create_action is false', () => {
+  it('exposes Checklist without Action when can_create_action is false', () => {
     expect(getExecutionCreateMenuOptions(hints(false))).toEqual([
-      { id: 'flash_todo', label: 'Flash To-do', disabled: false },
       { id: 'checklist', label: 'Checklist', disabled: false },
     ])
   })

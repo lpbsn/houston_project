@@ -264,6 +264,23 @@ export function useCreateChecklistAssignmentMutation(
   })
 }
 
+export function useCreateChecklistAssignmentForTemplateMutation(establishmentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      templateId,
+      body,
+    }: {
+      templateId: string
+      body: ChecklistAssignmentCreateRequest
+    }) => createChecklistAssignment(establishmentId, templateId, body),
+    onSuccess: (_data, variables) => {
+      invalidateChecklistSurfaces(queryClient, establishmentId, variables.templateId)
+    },
+  })
+}
+
 export function useUpdateChecklistAssignmentMutation(
   establishmentId: string,
   templateId: string,

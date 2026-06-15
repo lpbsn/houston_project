@@ -106,3 +106,60 @@ export function validateTask(task: string): string | null {
   }
   return null
 }
+
+export type ChecklistCreateValidationResult =
+  | { ok: true }
+  | {
+      ok: false
+      message: string
+      openOptions?: boolean
+      openBusinessUnitSheet?: boolean
+      assignmentErrors?: AssignmentFormErrors
+    }
+
+export function validateChecklistCreateForm(values: {
+  flashEnabled: boolean
+  title: string
+  businessUnitId: string
+  taskValues: string[]
+  assignmentMode: 'none' | 'create_now'
+  assignmentValues?: AssignmentFormValues
+}): ChecklistCreateValidationResult {
+  if (!values.title.trim()) {
+    return { ok: false, message: 'Le titre est obligatoire.' }
+  }
+
+  if (!values.businessUnitId.trim()) {
+    return {
+      ok: false,
+      message: 'Sélectionnez un pôle d’activité.',
+      openBusinessUnitSheet: true,
+    }
+  }
+
+  const normalizedTasks = values.taskValues.map((task) => task.trim()).filter(Boolean)
+  if (normalizedTasks.length === 0) {
+    return { ok: false, message: 'Ajoutez au moins une tâche.' }
+  }
+
+  for (const taskValue of normalizedTasks) {
+    const taskError = validateTask(taskValue)
+    if (taskError) {
+      return { ok: false, message: taskError }
+    }
+  }
+
+  if (!values.flashEnabled && values.assignmentMode === 'create_now' && values.assignmentValues) {
+    const assignmentErrors = validateAssignmentForm(values.assignmentValues)
+    if (hasAssignmentFormErrors(assignmentErrors)) {
+      return {
+        ok: false,
+        message: 'Complétez l’affectation dans Options.',
+        openOptions: true,
+        assignmentErrors,
+      }
+    }
+  }
+
+  return { ok: true }
+}

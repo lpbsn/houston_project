@@ -24,6 +24,7 @@ export type TerrainRouteConfig = {
   activeNavPath?: TerrainNavPath
   mainScroll?: TerrainMainScroll
   showTopbarBottomBorder?: boolean
+  hideTopbar?: boolean
 }
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
@@ -242,13 +243,13 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   }
 
   if (route.kind === 'checklist-template-create') {
-    const backPath = '/checklists'
     return {
       topbarVariant: 'detail',
-      title: 'Nouvelle checklist',
-      backPath,
+      title: 'Nouvelle liste',
+      backPath: '/checklists',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     }
   }
 
@@ -266,10 +267,11 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'checklist-execution-create') {
     return {
       topbarVariant: 'detail',
-      title: 'Flash To-do',
+      title: 'Nouvelle liste',
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
+      hideTopbar: true,
     }
   }
 
