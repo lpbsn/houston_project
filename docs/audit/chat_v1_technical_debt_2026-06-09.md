@@ -17,7 +17,7 @@
 | Observabilité / events | **Faible** | Pas d’`EventEnvelope` chat |
 | Frontend Terrain | **Moyenne** | Inbox + fil + WS ; pas de gestion groupe avancée ni settings Owner/Director |
 | Documentation produit | **Élevée** | `chat_domain.md`, README, build plan, realtime carve-out alignés (Lot 7) |
-| Tests frontend | **Faible–moyenne** | Pages/hooks manuels ; pas de tests Vitest hook WS |
+| Tests frontend | **Moyenne** | Hook WS Vitest `access.revoked` / reconnect ; pas de E2E Playwright |
 
 **Verdict** : **Core Chat V1 utilisable en dev/staging** (DM, groupes, envoi WS, purge 7j, inactivation, bootstrap `chat_available`). Post-core : events, UI gestion groupe, toggle `chat_enabled`, tests FE WS.
 
@@ -49,7 +49,6 @@
 | 12 | **Groupes conversation WS optionnels non rejoints** | Livraison OK via groupe personnel obligatoire | Complément `chat_est_*_conv_*` non implémenté ; documenté comme non fait |
 | 13 | **Recherche conversations côté client uniquement** | Pas de `q` serveur sur `GET conversations/` | Filtre local ; OK petits établissements |
 | 14 | **Unread nav = requête REST parallèle** | `App.tsx` charge `conversations` pour point bleu nav | Optimiser via bootstrap ou invalidation WS-only |
-| 15 | **Tests FE WS limités** | Pas de test Vitest du hook `useChatWebSocket` | Risque régression reconnect / retry |
 | 16 | **Smoke charge WS non automatisé en CI** | Plan Lot 6 : test léger 5 connexions en test backend | Pas de job CI dédié charge |
 | 17 | **`handleReconnect` retry failed dans callback WS** | Pattern sensible aux races | Fonctionnel ; couvrir par test ou refactor |
 | 18 | **Ruff / format dette repo-wide** | `ruff check .` échoue hors `houston/chat` | Dette transverse |
@@ -78,6 +77,8 @@
 | 11 | `chat_available` bootstrap absent | `permission_hints.chat_available` dans bootstrap ; FE `bootstrap-permission-hints.ts` — **2026-06-12** |
 | 9 | Promotion admin auto | `_ensure_group_has_admin()` on leave/remove/deactivate |
 | 10 | Suppression DM à l’inactivation | Service deactivate supprime DM impliquant le membership |
+| 15 | Tests FE WS `access.revoked` / reconnect | Vitest `use-chat-websocket.test.ts` couvre global revoke, reconnect réseau, conversation-level — **2026-06-15** |
+| 24 | Révocation live WS session / `chat_enabled` / switch établissement | `session_group_name`, `schedule_session_access_revoked`, revalidation `message.send`, tests backend/FE — **2026-06-15** |
 
 Écarts documentation ↔ code (section 4 ancienne version) : **fermés** Lot 7.
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from houston.accounts.models import User
 from houston.chat.exceptions import ChatNotFoundError, ChatPermissionError, ChatValidationError
 from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.chat.permissions import (
@@ -542,6 +543,22 @@ def update_establishment_chat_enabled(
     establishment = actor_membership.establishment
     establishment.chat_enabled = chat_enabled
     establishment.save(update_fields=["chat_enabled", "updated_at"])
+
+    if not chat_enabled:
+        active_membership_ids = list(
+            EstablishmentMembership.objects.filter(
+                establishment_id=establishment.id,
+                status=EstablishmentMembership.Status.ACTIVE,
+                user__status=User.Status.ACTIVE,
+            ).values_list("id", flat=True)
+        )
+        for membership_id in active_membership_ids:
+            schedule_membership_access_revoked(
+                establishment_id=establishment.id,
+                membership_id=membership_id,
+                reason="chat_disabled",
+            )
+
     return establishment
 
 

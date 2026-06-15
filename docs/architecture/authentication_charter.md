@@ -395,3 +395,10 @@ Authorization: Bearer <access_token>
 - inactive membership / suspended user / chat disabled rejected
 - missing or late auth message closes connection
 - origin/host rejection when invalid
+- live session revocation via `chat_session_{session_id}` group after auth (`access.revoked` + close)
+
+### Live session revocation (post-auth)
+
+- After successful WS auth, the consumer joins `chat_session_{session_id}` where `session_id` comes from the ws-ticket payload (same `UserSession` as the REST access token).
+- `revoke_session` and `switch_selected_establishment` schedule `access.revoked` to that session group only (establishment switch does **not** use membership-wide groups).
+- This is transport-only (Channels/Redis) ; `UserSession` in PostgreSQL remains the auth source of truth.
