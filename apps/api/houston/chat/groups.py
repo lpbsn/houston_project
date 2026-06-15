@@ -9,3 +9,7 @@ def membership_group_name(*, establishment_id: UUID, membership_id: UUID) -> str
 
 def conversation_group_name(*, establishment_id: UUID, conversation_id: UUID) -> str:
     return f"chat_est_{establishment_id}_conv_{conversation_id}"
+
+
+def session_group_name(*, session_id: UUID) -> str:
+    return f"chat_session_{session_id}"

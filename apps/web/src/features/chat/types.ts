@@ -43,15 +43,24 @@ export type ChatWsMessageRejectedEvent = {
   detail: string
 }
 
-export type ChatWsAccessRevokedEvent = {
+export type ChatWsGlobalAccessRevokedEvent = {
+  type: 'access.revoked'
+  reason: string
+}
+
+export type ChatWsConversationAccessRevokedEvent = {
   type: 'conversation.access_revoked'
   conversation_id: string
   reason: string
 }
 
+/** @deprecated Use ChatWsConversationAccessRevokedEvent */
+export type ChatWsAccessRevokedEvent = ChatWsConversationAccessRevokedEvent
+
 export type ChatWsServerEvent =
   | ChatWsMessageCreatedEvent
   | ChatWsMessageRejectedEvent
-  | ChatWsAccessRevokedEvent
+  | ChatWsGlobalAccessRevokedEvent
+  | ChatWsConversationAccessRevokedEvent
   | { type: 'auth.ok' }
   | { type: 'error'; code?: string; detail?: string }

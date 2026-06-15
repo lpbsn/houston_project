@@ -33,7 +33,7 @@ import { AppShell } from '@/components/app-shell'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
-import { bootstrapQueryKey } from '@/features/auth/api'
+import { bootstrapQueryKey, clearAuthState } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
@@ -54,7 +54,10 @@ import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
 import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/hooks'
+import { chatQueryKeys } from '@/features/chat/api'
 import { shouldRedirectFromUnavailableChat } from '@/features/chat/lib/chat-availability'
+import { purgeEstablishmentChatOperationalQueries } from '@/features/chat/lib/apply-chat-availability-cache'
+import type { ChatWsConversationAccessRevokedEvent, ChatWsGlobalAccessRevokedEvent } from '@/features/chat/types'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
@@ -362,6 +365,45 @@ function App() {
     route,
   ])
 
+  const handleChatGlobalAccessRevoked = useCallback(
+    (event: ChatWsGlobalAccessRevokedEvent) => {
+      if (!establishmentId) {
+        return
+      }
+
+      purgeEstablishmentChatOperationalQueries(queryClient, establishmentId)
+      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.status(establishmentId) })
+
+      if (event.reason === 'session_revoked') {
+        clearAuthState()
+        return
+      }
+
+      if (
+        (event.reason === 'membership_deactivated' ||
+          event.reason === 'chat_disabled' ||
+          event.reason === 'establishment_switched' ||
+          event.reason === 'access_denied') &&
+        isChatRoute
+      ) {
+        navigate('/reporting', { replace: true })
+      }
+    },
+    [establishmentId, isChatRoute, navigate],
+  )
+
+  const handleChatConversationAccessRevoked = useCallback(
+    (event: ChatWsConversationAccessRevokedEvent) => {
+      if (
+        route.kind === 'chat-conversation-detail' &&
+        event.conversation_id === route.conversationId
+      ) {
+        navigate('/chat')
+      }
+    },
+    [navigate, route],
+  )
+
   if (route.kind !== 'invitation' && shouldShowAuthRoutingLoading(route, auth)) {
     return <AuthRoutingLoading />
   }
@@ -493,14 +535,8 @@ function App() {
         <LazyChatRealtimeProvider
           establishmentId={establishmentId}
           activeConversationId={activeChatConversationId}
-          onAccessRevoked={(event) => {
-            if (
-              route.kind === 'chat-conversation-detail' &&
-              event.conversation_id === route.conversationId
-            ) {
-              navigate('/chat')
-            }
-          }}
+          onGlobalAccessRevoked={handleChatGlobalAccessRevoked}
+          onConversationAccessRevoked={handleChatConversationAccessRevoked}
         >
           {terrainShell}
         </LazyChatRealtimeProvider>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from django.db import IntegrityError, close_old_connections
@@ -18,8 +19,10 @@ from houston.accounts.services import (
     refresh_session,
     resolve_or_create_pending_user_for_invite,
     revoke_session,
+    switch_selected_establishment,
     validate_refresh_token,
 )
+from houston.testing.factories import create_establishment, create_membership, create_user
 
 pytestmark = pytest.mark.django_db
 
@@ -240,3 +243,31 @@ def test_resolve_or_create_pending_user_retries_after_save_integrity_error_witho
     assert resolved_user.username != "alice"
     assert resolved_user.status == User.Status.PENDING
     assert User.objects.filter(email__iexact="alice@example.com").count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_switch_selected_establishment_same_establishment_does_not_revoke_session(request_factory):
+    user = create_user(username="switch_same_establishment")
+    establishment = create_establishment(name="Same Establishment")
+    membership = create_membership(user=user, establishment=establishment)
+    request = request_factory.get("/api/v1/auth/login/")
+    session = create_user_session(request=request, user=user)
+    session.selected_establishment = membership.establishment
+    session.save(update_fields=["selected_establishment", "updated_at"])
+
+    with (
+        patch("houston.chat.ws_notify.schedule_session_access_revoked") as mock_schedule,
+        patch("houston.chat.ws_notify.notify_session_access_revoked") as mock_notify,
+    ):
+        payload = switch_selected_establishment(
+            session=session,
+            establishment_id=membership.establishment_id,
+        )
+
+    assert payload["authenticated"] is True
+    assert payload["active_membership"]["establishment_id"] == str(membership.establishment_id)
+    mock_schedule.assert_not_called()
+    mock_notify.assert_not_called()
+
+    session.refresh_from_db()
+    assert session.selected_establishment_id == membership.establishment_id

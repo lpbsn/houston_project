@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { issueChatWsTicket } from '../api'
 import type {
   ChatConnectionStatus,
-  ChatWsAccessRevokedEvent,
+  ChatWsConversationAccessRevokedEvent,
+  ChatWsGlobalAccessRevokedEvent,
   ChatWsMessageCreatedEvent,
   ChatWsMessageRejectedEvent,
   ChatWsServerEvent,
@@ -36,7 +37,8 @@ type UseChatWebSocketOptions = {
   enabled: boolean
   onMessageCreated?: (event: ChatWsMessageCreatedEvent) => void
   onMessageRejected?: (event: ChatWsMessageRejectedEvent) => void
-  onAccessRevoked?: (event: ChatWsAccessRevokedEvent) => void
+  onGlobalAccessRevoked?: (event: ChatWsGlobalAccessRevokedEvent) => void
+  onConversationAccessRevoked?: (event: ChatWsConversationAccessRevokedEvent) => void
   onReconnect?: () => void
 }
 
@@ -45,7 +47,8 @@ export function useChatWebSocket({
   enabled,
   onMessageCreated,
   onMessageRejected,
-  onAccessRevoked,
+  onGlobalAccessRevoked,
+  onConversationAccessRevoked,
   onReconnect,
 }: UseChatWebSocketOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ChatConnectionStatus>('idle')
@@ -58,15 +61,23 @@ export function useChatWebSocket({
 
   const onMessageCreatedRef = useRef(onMessageCreated)
   const onMessageRejectedRef = useRef(onMessageRejected)
-  const onAccessRevokedRef = useRef(onAccessRevoked)
+  const onGlobalAccessRevokedRef = useRef(onGlobalAccessRevoked)
+  const onConversationAccessRevokedRef = useRef(onConversationAccessRevoked)
   const onReconnectRef = useRef(onReconnect)
 
   useEffect(() => {
     onMessageCreatedRef.current = onMessageCreated
     onMessageRejectedRef.current = onMessageRejected
-    onAccessRevokedRef.current = onAccessRevoked
+    onGlobalAccessRevokedRef.current = onGlobalAccessRevoked
+    onConversationAccessRevokedRef.current = onConversationAccessRevoked
     onReconnectRef.current = onReconnect
-  }, [onAccessRevoked, onMessageCreated, onMessageRejected, onReconnect])
+  }, [
+    onConversationAccessRevoked,
+    onGlobalAccessRevoked,
+    onMessageCreated,
+    onMessageRejected,
+    onReconnect,
+  ])
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current !== null) {
@@ -162,8 +173,14 @@ export function useChatWebSocket({
           return
         }
 
+        if (parsed.type === 'access.revoked') {
+          intentionalCloseRef.current = true
+          onGlobalAccessRevokedRef.current?.(parsed)
+          return
+        }
+
         if (parsed.type === 'conversation.access_revoked') {
-          onAccessRevokedRef.current?.(parsed)
+          onConversationAccessRevokedRef.current?.(parsed)
         }
       }
 

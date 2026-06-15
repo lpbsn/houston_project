@@ -9,7 +9,9 @@ from houston.chat.tests.conftest import (
     create_establishment,
     create_membership,
     create_user,
+    login,
 )
+from houston.establishments.models import EstablishmentMembership
 
 
 @pytest.mark.django_db(transaction=True)
@@ -78,3 +80,57 @@ def test_access_revoked_emitted_after_transaction_commit():
             conversation_id=conversation.id,
             reason="participant_removed",
         )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_session_access_revoked_emitted_after_transaction_commit(api_client):
+    from houston.accounts.models import UserSession
+    from houston.accounts.services import revoke_session
+
+    establishment = create_establishment()
+    user = create_user(username="chat_on_commit_session")
+    create_membership(user=user, establishment=establishment)
+    login(api_client, user=user)
+    session = UserSession.objects.filter(user=user).order_by("-created_at").first()
+    assert session is not None
+
+    with patch("houston.chat.ws_notify.notify_session_access_revoked") as mock_notify:
+        with transaction.atomic():
+            revoke_session(session=session)
+
+        mock_notify.assert_called_once_with(
+            session_id=session.id,
+            reason="session_revoked",
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chat_disabled_access_revoked_emitted_after_transaction_commit():
+    establishment = create_establishment()
+    owner = create_user(username="chat_on_commit_disable_owner")
+    member = create_user(username="chat_on_commit_disable_member")
+    owner_membership = create_membership(
+        user=owner,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    member_membership = create_membership(user=member, establishment=establishment)
+
+    from houston.chat.services import update_establishment_chat_enabled
+
+    with patch("houston.chat.ws_notify.notify_membership_access_revoked") as mock_notify:
+        update_establishment_chat_enabled(
+            actor_membership=owner_membership,
+            chat_enabled=False,
+        )
+
+    mock_notify.assert_any_call(
+        establishment_id=establishment.id,
+        membership_id=member_membership.id,
+        reason="chat_disabled",
+    )
+    mock_notify.assert_any_call(
+        establishment_id=establishment.id,
+        membership_id=owner_membership.id,
+        reason="chat_disabled",
+    )

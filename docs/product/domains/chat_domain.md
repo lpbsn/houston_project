@@ -62,14 +62,39 @@ Chat V1 is **not** a single establishment-wide general chat room.
 - Allowed WS server events in V1 :
   - `message.created`
   - `message.rejected`
-  - `conversation.access_revoked` (targeted to the affected user only)
+  - `access.revoked` (global Chat WS access loss — closes socket)
+  - `conversation.access_revoked` (targeted to the affected user only — does **not** close global socket)
 - **Not allowed** in V1 : `conversation.updated` broadcast, typing, read/delivered events, notification events.
+
+#### `access.revoked` vs `conversation.access_revoked`
+
+| Event | Meaning | Client behavior |
+|-------|---------|-----------------|
+| `access.revoked` | Global Chat WS access is no longer valid | Stop auto-reconnect ; close current Chat socket ; purge/invalidate Chat queries |
+| `conversation.access_revoked` | Loss of access to one conversation only | Leave active conversation route if needed ; keep socket open |
+
+Supported `access.revoked` `reason` values :
+
+| `reason` | Trigger |
+|----------|---------|
+| `membership_deactivated` | membership deactivated |
+| `session_revoked` | logout / `revoke_session` |
+| `establishment_switched` | `switch_selected_establishment` on current `UserSession` |
+| `chat_disabled` | `update_establishment_chat_enabled(False)` |
+| `access_denied` | `message.send` revalidation failure |
+
+- Backend revalidates session, membership, establishment, organization, `chat_enabled`, and `selected_establishment` before each `message.send`.
+- On revalidation failure : send `access.revoked`, close socket, do **not** create `ChatMessage`.
+- Client must not auto-reconnect after `access.revoked` ; network reconnect remains normal for other close reasons.
+- `session_revoked` : frontend clears auth/cache and lets auth/bootstrap/login flow resume (no redirect to `/reporting`).
 
 ### WebSocket delivery — new conversations while connected
 
 - Do not rely only on conversation groups joined at auth time.
 - Each authenticated connection joins a **personal membership group** :
   - `chat_est_{establishment_id}_mbr_{membership_id}`
+- Each authenticated connection also joins a **session group** for live access revocation :
+  - `chat_session_{session_id}` (scoped to the REST `UserSession` that issued the ws-ticket)
 - Message broadcast targets each active participant's personal group so a connected member receives the first message of a newly created DM/group **without reconnecting**.
 - Optional conversation groups may be joined dynamically when a participant is added ; personal-group delivery remains mandatory.
 
@@ -213,6 +238,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 ### Channel groups
 
 - Personal (mandatory) : `chat_est_{establishment_id}_mbr_{membership_id}`
+- Session (mandatory for live revocation) : `chat_session_{session_id}`
 - Conversation (optional supplement) : `chat_est_{establishment_id}_conv_{conversation_id}`
 
 ## 10. Frontend Expectations

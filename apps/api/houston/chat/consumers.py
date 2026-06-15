@@ -16,11 +16,16 @@ from houston.chat.exceptions import (
     ChatPermissionError,
     ChatValidationError,
 )
-from houston.chat.groups import membership_group_name
+from houston.chat.groups import membership_group_name, session_group_name
 from houston.chat.permissions import can_access_chat
 from houston.chat.rate_limits import ChatMessageRateLimitExceeded, check_message_send_rate_limit
 from houston.chat.services import MessageSendResult, create_message
-from houston.chat.ws_payloads import build_message_created_payload, build_message_rejected_payload
+from houston.chat.ws_access import WsAccessValidation, validate_ws_connection_access
+from houston.chat.ws_payloads import (
+    build_membership_access_revoked_payload,
+    build_message_created_payload,
+    build_message_rejected_payload,
+)
 from houston.chat.ws_ticket import WsTicketError, WsTicketPayload, consume_ws_ticket
 from houston.core.observability import build_ws_auth_failure_log_context
 from houston.establishments.models import Establishment, EstablishmentMembership
@@ -39,6 +44,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     establishment_id: UUID
     authenticated = False
     membership_id: UUID | None = None
+    session_id: UUID | None = None
     auth_timeout_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
@@ -63,6 +69,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     establishment_id=self.establishment_id,
                     membership_id=self.membership_id,
                 ),
+                self.channel_name,
+            )
+
+        if self.authenticated and self.session_id is not None:
+            await self.channel_layer.group_discard(
+                session_group_name(session_id=self.session_id),
                 self.channel_name,
             )
 
@@ -102,9 +114,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event["payload"]))
 
     async def chat_membership_access_revoked(self, event: dict) -> None:
-        await self.send(text_data=json.dumps(event["payload"]))
-        self.authenticated = False
-        await self.close(code=WS_CLOSE_FORBIDDEN)
+        await self._revoke_access_and_close(event["payload"].get("reason", "access_denied"))
+
+    async def chat_session_access_revoked(self, event: dict) -> None:
+        await self._revoke_access_and_close(event["payload"].get("reason", "access_denied"))
 
     async def _enforce_auth_timeout(self) -> None:
         try:
@@ -176,6 +189,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         self.authenticated = True
         self.membership_id = membership.id
+        self.session_id = ticket_payload.session_id
         if self.auth_timeout_task is not None:
             self.auth_timeout_task.cancel()
             self.auth_timeout_task = None
@@ -185,6 +199,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 establishment_id=self.establishment_id,
                 membership_id=self.membership_id,
             ),
+            self.channel_name,
+        )
+        await self.channel_layer.group_add(
+            session_group_name(session_id=self.session_id),
             self.channel_name,
         )
 
@@ -200,8 +218,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
     async def _handle_message_send(self, payload: dict) -> None:
-        if self.membership_id is None:
+        if self.membership_id is None or self.session_id is None:
             await self.close(code=WS_CLOSE_FORBIDDEN)
+            return
+
+        access = await self._validate_ws_access()
+        if not access.ok:
+            await self._revoke_access_and_close(access.reason or "access_denied")
             return
 
         raw_conversation_id = payload.get("conversation_id")
@@ -290,6 +313,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "payload": payload,
                 },
             )
+
+    @database_sync_to_async
+    def _validate_ws_access(self):
+        if self.session_id is None or self.membership_id is None:
+            return WsAccessValidation(ok=False, reason="access_denied")
+
+        return validate_ws_connection_access(
+            session_id=self.session_id,
+            establishment_id=self.establishment_id,
+            membership_id=self.membership_id,
+        )
+
+    async def _revoke_access_and_close(self, reason: str) -> None:
+        await self.send(
+            text_data=json.dumps(build_membership_access_revoked_payload(reason=reason))
+        )
+        self.authenticated = False
+        await self.close(code=WS_CLOSE_FORBIDDEN)
 
     @database_sync_to_async
     def _persist_message(

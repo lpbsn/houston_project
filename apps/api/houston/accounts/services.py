@@ -406,6 +406,10 @@ def revoke_session(*, session: UserSession) -> None:
         status=SessionRefreshToken.Status.REVOKED,
     )
 
+    from houston.chat.ws_notify import schedule_session_access_revoked
+
+    schedule_session_access_revoked(session_id=session.id, reason="session_revoked")
+
 
 def revoke_refresh_token_family(*, session: UserSession, family_id: uuid.UUID) -> None:
     revoke_session(session=session)
@@ -435,8 +439,15 @@ def switch_selected_establishment(
     if membership is None:
         raise InvalidSelectedEstablishmentError
 
+    previous_establishment_id = session.selected_establishment_id
+
     session.selected_establishment = membership.establishment
     session.save(update_fields=["selected_establishment", "updated_at"])
+
+    if previous_establishment_id != membership.establishment_id:
+        from houston.chat.ws_notify import schedule_session_access_revoked
+
+        schedule_session_access_revoked(session_id=session.id, reason="establishment_switched")
 
     return build_bootstrap_payload(session.user, session=session)
 
