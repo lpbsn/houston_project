@@ -7,7 +7,11 @@ from houston.comments.models import Comment
 
 def _membership_display_name(membership) -> str:
     user = membership.user
-    return user.get_full_name() or user.email or user.username
+    full_name = user.get_full_name().strip()
+    if full_name:
+        return full_name
+
+    return user.username or user.email or str(user.id)
 
 
 def comment_origin(comment: Comment) -> str:

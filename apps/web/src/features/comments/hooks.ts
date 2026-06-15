@@ -81,6 +81,9 @@ export function useCreateSignalCommentMutation(
         void queryClient.invalidateQueries({
           queryKey: commentsQueryKeys.signalList(establishmentId, signalId),
         })
+        void queryClient.invalidateQueries({
+          queryKey: commentsQueryKeys.actionLists(establishmentId),
+        })
       }
     },
   })

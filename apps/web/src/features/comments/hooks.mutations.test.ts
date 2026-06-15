@@ -32,7 +32,7 @@ describe('useCreateSignalCommentMutation', () => {
     createSignalComment.mockClear()
   })
 
-  it('invalidates signal comment queries on success', async () => {
+  it('invalidates signal and action comment queries on success', async () => {
     const queryClient = createTestQueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
@@ -53,6 +53,9 @@ describe('useCreateSignalCommentMutation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: commentsQueryKeys.signalList('est-1', 'signal-1'),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: commentsQueryKeys.actionLists('est-1'),
     })
   })
 })

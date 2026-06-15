@@ -144,6 +144,7 @@ def test_signal_comments_with_valid_mention(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     mentioned_user = User.objects.create_user(
         username=f"m_{uuid.uuid4().hex[:8]}",
+        email=f"mention_{uuid.uuid4().hex[:8]}@example.com",
         password="secret",
         status=User.Status.ACTIVE,
     )
@@ -165,3 +166,4 @@ def test_signal_comments_with_valid_mention(api_client):
     )
     assert response.status_code == 201
     assert response.json()["mentions"][0]["membership_id"] == str(mentioned.id)
+    assert response.json()["mentions"][0]["display_name"] == mentioned_user.username

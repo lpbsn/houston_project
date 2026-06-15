@@ -8,6 +8,7 @@ export const commentsQueryKeys = {
   all: ['comments'] as const,
   signalList: (establishmentId: string, signalId: string) =>
     ['comments', 'signal', establishmentId, signalId] as const,
+  actionLists: (establishmentId: string) => ['comments', 'action', establishmentId] as const,
   actionList: (establishmentId: string, actionId: string) =>
     ['comments', 'action', establishmentId, actionId] as const,
 }
