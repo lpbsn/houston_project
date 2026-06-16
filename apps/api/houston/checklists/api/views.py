@@ -16,7 +16,6 @@ from houston.checklists.api.serializers import (
     ChecklistAssignmentSerializer,
     ChecklistAssignmentUpdateRequestSerializer,
     ChecklistExecutionDetailSerializer,
-    ChecklistFlashTodoCreateRequestSerializer,
     ChecklistTaskCreateObservationRequestSerializer,
     ChecklistTaskCreateObservationResponseSerializer,
     ChecklistTaskExecutionSerializer,
@@ -37,7 +36,6 @@ from houston.checklists.api.serializers import (
     serialize_template_detail,
     serialize_template_list_item,
 )
-from houston.checklists.constants import CHECKLIST_BADGE_DEFAULT, CHECKLIST_BADGES
 from houston.checklists.exceptions import (
     ChecklistConflictError,
     ChecklistPermissionError,
@@ -65,7 +63,6 @@ from houston.checklists.services import (
     create_checklist_assignment,
     create_checklist_template,
     create_execution_from_template,
-    create_flash_todo_execution,
     create_observation_from_task,
     create_registered_checklist_template,
     deactivate_checklist_assignment,
@@ -129,12 +126,6 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
         tags=["checklists"],
         parameters=[
             OpenApiParameter(name="created_by_me", required=False, type=bool),
-            OpenApiParameter(
-                name="badge",
-                required=False,
-                type=str,
-                enum=sorted(CHECKLIST_BADGES),
-            ),
             OpenApiParameter(name="business_unit_id", required=False, type=str),
         ],
         responses={
@@ -156,9 +147,6 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
             "true",
             "yes",
         }
-        badge = request.query_params.get("badge", "").strip().lower() or None
-        if badge == "":
-            badge = None
         business_unit_id = None
         business_unit_raw = request.query_params.get("business_unit_id", "").strip()
         if business_unit_raw:
@@ -175,7 +163,6 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
         queryset = registered_templates_for_catalogue(
             membership=membership,
             created_by_me=created_by_me,
-            badge=badge,
             business_unit_id=business_unit_id,
         )
 
@@ -221,7 +208,6 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
                     title=data["title"],
                     description=data.get("description", ""),
                     business_unit_id=data["business_unit_id"],
-                    badge=data.get("badge", CHECKLIST_BADGE_DEFAULT),
                     tasks=data["tasks"],
                     assign_now=data.get("assign_now", False),
                     assigned_to_id=data.get("assigned_to"),
@@ -234,7 +220,6 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
                     title=data["title"],
                     description=data.get("description", ""),
                     business_unit_id=data["business_unit_id"],
-                    badge=data.get("badge", CHECKLIST_BADGE_DEFAULT),
                 )
         except (ChecklistPermissionError, ChecklistValidationError) as exc:
             return _checklist_error_response(exc)
@@ -821,55 +806,6 @@ class ChecklistAssignmentDeactivateView(EstablishmentScopedChecklistMixin, APIVi
 
         payload = serialize_assignment(assignment, membership=membership)
         return Response(ChecklistAssignmentSerializer(payload).data)
-
-
-class ChecklistFlashTodoCreateView(EstablishmentScopedChecklistMixin, APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
-
-    @extend_schema(
-        tags=["checklists"],
-        request=ChecklistFlashTodoCreateRequestSerializer,
-        responses={
-            201: ChecklistExecutionDetailSerializer,
-            400: OpenApiResponse(response=ApiErrorResponseSerializer),
-            401: OpenApiResponse(response=ApiErrorResponseSerializer),
-            403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=ApiErrorResponseSerializer),
-        },
-    )
-    def post(self, request, establishment_id):
-        membership = _resolve_membership(request, self.establishment_id)
-        if isinstance(membership, Response):
-            return membership
-
-        body = ChecklistFlashTodoCreateRequestSerializer(data=request.data)
-        body.is_valid(raise_exception=True)
-        data = body.validated_data
-
-        try:
-            execution = create_flash_todo_execution(
-                establishment_id=self.establishment_id,
-                actor=membership,
-                title=data["title"],
-                description=data.get("description", ""),
-                business_unit_id=data["business_unit_id"],
-                assigned_to_id=data["assigned_to"],
-                tasks=data["tasks"],
-                end_at=data.get("end_at"),
-            )
-        except (ChecklistPermissionError, ChecklistValidationError) as exc:
-            return _checklist_error_response(exc)
-
-        execution = get_checklist_execution_for_detail(
-            membership=membership,
-            execution_id=execution.id,
-        )
-        payload = serialize_execution_detail(execution, membership=membership)
-        return Response(
-            ChecklistExecutionDetailSerializer(payload).data,
-            status=status.HTTP_201_CREATED,
-        )
 
 
 class ChecklistTemplateExecutionCreateView(EstablishmentScopedChecklistMixin, APIView):

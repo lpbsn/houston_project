@@ -10,7 +10,6 @@ import { ChecklistCreatePage } from './checklist-create-page'
 const navigate = vi.fn()
 const createTemplateMutateAsync = vi.fn()
 const createAssignmentMutateAsync = vi.fn()
-const createFlashMutateAsync = vi.fn()
 
 vi.mock('@/app/app-routes', () => ({
   useAppRoute: () => ({ navigate }),
@@ -56,13 +55,9 @@ vi.mock('@/features/checklists/hooks', () => ({
     mutateAsync: createAssignmentMutateAsync,
     isPending: false,
   }),
-  useCreateFlashTodoMutation: () => ({
-    mutateAsync: createFlashMutateAsync,
-    isPending: false,
-  }),
 }))
 
-function renderPage(initialFlashEnabled = false) {
+function renderPage() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -73,7 +68,6 @@ function renderPage(initialFlashEnabled = false) {
       { client: queryClient },
       createElement(ChecklistCreatePage, {
         backPath: '/checklists',
-        initialFlashEnabled,
       }),
     ),
   )
@@ -102,11 +96,9 @@ describe('ChecklistCreatePage', () => {
     navigate.mockReset()
     createTemplateMutateAsync.mockReset()
     createAssignmentMutateAsync.mockReset()
-    createFlashMutateAsync.mockReset()
 
     createTemplateMutateAsync.mockResolvedValue({ id: 'tpl-1' })
     createAssignmentMutateAsync.mockResolvedValue({ id: 'assign-1' })
-    createFlashMutateAsync.mockResolvedValue({ id: 'exec-1' })
   })
 
   afterEach(() => {
@@ -120,15 +112,11 @@ describe('ChecklistCreatePage', () => {
     expect(screen.getAllByRole('button', { name: 'Créer' })).toHaveLength(1)
   })
 
-  it('renders business unit field between flash toggle and title', () => {
+  it('renders business unit field before title', () => {
     renderPage()
-    const flashToggle = screen.getByRole('switch', { name: 'Flash to-do' })
     const businessUnitField = screen.getByRole('button', { name: "Pôle d'activité" })
     const titleInput = screen.getByPlaceholderText('To do ouverture')
 
-    expect(flashToggle.compareDocumentPosition(businessUnitField)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    )
     expect(businessUnitField.compareDocumentPosition(titleInput)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     )
@@ -144,7 +132,6 @@ describe('ChecklistCreatePage', () => {
         title: 'To do ouverture',
         description: '',
         business_unit_id: 'bu-1',
-        badge: 'todo',
         tasks: [{ task: 'Désactiver l’alarme' }],
         assign_now: false,
       })
@@ -153,41 +140,12 @@ describe('ChecklistCreatePage', () => {
     expect(navigate).toHaveBeenCalledWith('/checklists/tpl-1', { replace: true })
   })
 
-  it('submits flash todo without creating template', async () => {
-    renderPage(true)
-    await fillMinimumForm()
-    fireEvent.click(screen.getByRole('button', { name: 'Créer' }))
-
-    await waitFor(() => {
-      expect(createFlashMutateAsync).toHaveBeenCalledWith({
-        title: 'To do ouverture',
-        description: '',
-        business_unit_id: 'bu-1',
-        assigned_to: 'member-1',
-        tasks: [{ task: 'Désactiver l’alarme' }],
-      })
-    })
-    expect(createTemplateMutateAsync).not.toHaveBeenCalled()
-    expect(navigate).toHaveBeenCalledWith('/checklists/executions/exec-1', { replace: true })
-  })
-
   it('shows validation error when title is missing', async () => {
     renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Créer' }))
 
     expect(await screen.findByText('Le titre est obligatoire.')).toBeTruthy()
     expect(createTemplateMutateAsync).not.toHaveBeenCalled()
-  })
-
-  it('hides assignment section in options when flash is enabled', async () => {
-    renderPage()
-    fireEvent.click(screen.getByRole('switch', { name: 'Flash to-do' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Options' }))
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeTruthy()
-    })
-    expect(screen.queryByText('Sans affectation')).toBeNull()
   })
 
   it('handles partial assignment failure without recreating template', async () => {

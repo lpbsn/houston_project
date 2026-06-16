@@ -79,6 +79,7 @@ class PendingOnboardingMembershipSerializer(serializers.Serializer):
 class BootstrapPermissionHintsSerializer(serializers.Serializer):
     chat_available = serializers.BooleanField()
     can_create_action = serializers.BooleanField()
+    can_create_checklist_template = serializers.BooleanField()
     can_invite = serializers.BooleanField()
     can_manage_runtime_config = serializers.BooleanField()
 

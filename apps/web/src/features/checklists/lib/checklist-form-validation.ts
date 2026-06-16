@@ -79,27 +79,6 @@ export function validateRegisteredTemplateCreate(values: {
   return null
 }
 
-export function validateFlashTodoCreate(values: {
-  title: string
-  businessUnitId: string
-  assignedTo: string
-  taskCount: number
-}): string | null {
-  if (!values.title.trim()) {
-    return 'Le titre est obligatoire.'
-  }
-  if (!values.businessUnitId.trim()) {
-    return 'Le pôle est obligatoire.'
-  }
-  if (!values.assignedTo.trim()) {
-    return 'Sélectionnez un membre assigné.'
-  }
-  if (values.taskCount === 0) {
-    return 'Ajoutez au moins une tâche.'
-  }
-  return null
-}
-
 export function validateTask(task: string): string | null {
   if (!task.trim()) {
     return 'La tâche est obligatoire.'
@@ -118,7 +97,6 @@ export type ChecklistCreateValidationResult =
     }
 
 export function validateChecklistCreateForm(values: {
-  flashEnabled: boolean
   title: string
   businessUnitId: string
   taskValues: string[]
@@ -149,7 +127,7 @@ export function validateChecklistCreateForm(values: {
     }
   }
 
-  if (!values.flashEnabled && values.assignmentMode === 'create_now' && values.assignmentValues) {
+  if (values.assignmentMode === 'create_now' && values.assignmentValues) {
     const assignmentErrors = validateAssignmentForm(values.assignmentValues)
     if (hasAssignmentFormErrors(assignmentErrors)) {
       return {

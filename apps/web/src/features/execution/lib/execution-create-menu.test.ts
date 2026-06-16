@@ -8,13 +8,17 @@ import {
   getExecutionCreateMenuOptions,
 } from './execution-create-menu'
 
-function hints(canCreateAction: boolean): BootstrapPermissionHints {
+function hints(
+  canCreateAction: boolean,
+  canCreateChecklistTemplate = false,
+): BootstrapPermissionHints {
   return {
     chat_available: false,
     can_create_action: canCreateAction,
     can_invite: false,
     can_manage_runtime_config: false,
-  }
+    can_create_checklist_template: canCreateChecklistTemplate,
+  } as BootstrapPermissionHints
 }
 
 describe('execution create menu options', () => {
@@ -40,9 +44,12 @@ describe('execution create menu options', () => {
     }
   })
 
-  it('exposes checklist submenu entries for create and reuse flows', () => {
-    expect(getChecklistCreateSubmenuOptions()).toEqual([
+  it('exposes create entry only when can_create_checklist_template is true', () => {
+    expect(getChecklistCreateSubmenuOptions(hints(false, true))).toEqual([
       { id: 'create_registered', label: 'Créer une checklist' },
+      { id: 'use_existing', label: 'Utiliser une checklist existante' },
+    ])
+    expect(getChecklistCreateSubmenuOptions(hints(false, false))).toEqual([
       { id: 'use_existing', label: 'Utiliser une checklist existante' },
     ])
   })

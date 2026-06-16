@@ -7,6 +7,7 @@ def build_bootstrap_permission_hints(
     active_membership: EstablishmentMembership | None,
 ) -> dict:
     from houston.chat.permissions import can_access_chat
+    from houston.checklists.permissions import can_create_registered_template
     from houston.establishments.permissions import (
         can_create_action,
         can_invite_memberships,
@@ -16,6 +17,7 @@ def build_bootstrap_permission_hints(
     return {
         "chat_available": can_access_chat(active_membership),
         "can_create_action": can_create_action(active_membership),
+        "can_create_checklist_template": can_create_registered_template(active_membership),
         "can_invite": can_invite_memberships(active_membership),
         "can_manage_runtime_config": can_manage_runtime_context(active_membership),
     }

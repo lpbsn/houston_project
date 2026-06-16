@@ -66,7 +66,8 @@ describe('parseAppRoute', () => {
       pathname: '/checklists/personal',
     })
     expect(parseAppRoute('/checklists/executions/new')).toEqual({
-      kind: 'checklist-execution-create',
+      kind: 'checklist-execution-detail',
+      executionId: 'new',
     })
     expect(parseAppRoute('/checklists/executions/exec-1')).toEqual({
       kind: 'checklist-execution-detail',

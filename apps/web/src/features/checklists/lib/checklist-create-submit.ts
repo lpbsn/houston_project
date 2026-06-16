@@ -1,9 +1,6 @@
 import type { ScopedUserSearchResult } from '@/features/actions/types'
 
-import type {
-  ChecklistFlashTodoCreateRequest,
-  ChecklistTemplateCreateRequest,
-} from '@/features/checklists/types'
+import type { ChecklistTemplateCreateRequest } from '@/features/checklists/types'
 
 export type ChecklistCreateAssignmentMode = 'none' | 'create_now'
 
@@ -21,22 +18,8 @@ export function buildTemplateCreatePayload(
     title: input.title.trim(),
     description: input.description.trim(),
     business_unit_id: input.businessUnitId,
-    badge: 'todo',
     tasks: input.tasks.map((task) => ({ task: task.trim() })),
     assign_now: false,
-  }
-}
-
-export function buildFlashTodoPayload(
-  input: ChecklistCreateFormInput,
-  activeMembershipId: string,
-): ChecklistFlashTodoCreateRequest {
-  return {
-    title: input.title.trim(),
-    description: input.description.trim(),
-    business_unit_id: input.businessUnitId,
-    assigned_to: activeMembershipId,
-    tasks: input.tasks.map((task) => ({ task: task.trim() })),
   }
 }
 

@@ -33,7 +33,6 @@ describe('usesTerrainShell', () => {
         templateId: 'tpl-1',
       }),
     ).toBe(true)
-    expect(usesTerrainShell({ kind: 'checklist-execution-create' })).toBe(true)
     expect(
       usesTerrainShell({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
     ).toBe(true)
@@ -89,16 +88,7 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
-  it('configures checklist execution create and detail routes', () => {
-    expect(getTerrainRouteConfig({ kind: 'checklist-execution-create' })).toEqual({
-      topbarVariant: 'detail',
-      title: 'Nouvelle liste',
-      backPath: '/execution',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      hideTopbar: true,
-    })
-
+  it('configures checklist execution detail route', () => {
     expect(
       getTerrainRouteConfig({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
     ).toEqual({
@@ -297,7 +287,6 @@ describe('requiresActiveMembership', () => {
         templateId: 'tpl-1',
       }),
     ).toBe(true)
-    expect(requiresActiveMembership({ kind: 'checklist-execution-create' })).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
     ).toBe(true)

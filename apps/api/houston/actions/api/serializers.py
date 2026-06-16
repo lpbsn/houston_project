@@ -69,7 +69,6 @@ class ChecklistFeedItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
     execution_source = serializers.CharField()
-    badge = serializers.CharField(allow_null=True)
     status = serializers.CharField()
     end_at = serializers.DateTimeField(allow_null=True)
     is_overdue = serializers.BooleanField()

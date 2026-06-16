@@ -33,6 +33,7 @@ describe('bootstrap-permission-hints', () => {
     expect(getBootstrapPermissionHints(null)).toEqual({
       chat_available: false,
       can_create_action: false,
+      can_create_checklist_template: false,
       can_invite: false,
       can_manage_runtime_config: false,
     })

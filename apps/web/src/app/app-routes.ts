@@ -34,7 +34,6 @@ export type AppRoute =
   | { kind: 'action-detail'; actionId: string }
   | { kind: 'checklist-template-create' }
   | { kind: 'checklist-template-detail'; templateId: string }
-  | { kind: 'checklist-execution-create' }
   | { kind: 'checklist-execution-detail'; executionId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'invitation'; token: string }
@@ -62,8 +61,6 @@ export function getAppRouteKey(route: AppRoute): string {
       return 'checklist-template-create'
     case 'checklist-template-detail':
       return `checklist-template-detail:${route.templateId}`
-    case 'checklist-execution-create':
-      return 'checklist-execution-create'
     case 'checklist-execution-detail':
       return `checklist-execution-detail:${route.executionId}`
     case 'chat-conversation-detail':
@@ -106,10 +103,6 @@ function parseSignalDetailId(pathname: string): string | null {
 }
 
 function parseChecklistRoute(pathname: string): AppRoute | null {
-  if (pathname === '/checklists/executions/new') {
-    return { kind: 'checklist-execution-create' }
-  }
-
   const executionDetailMatch = pathname.match(/^\/checklists\/executions\/([^/]+)$/)
   if (executionDetailMatch?.[1]) {
     return {

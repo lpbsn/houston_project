@@ -55,7 +55,6 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'action-detail',
   'checklist-template-create',
   'checklist-template-detail',
-  'checklist-execution-create',
   'checklist-execution-detail',
   'chat-conversation-detail',
 ])
@@ -94,7 +93,6 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'action-detail' ||
     route.kind === 'checklist-template-create' ||
     route.kind === 'checklist-template-detail' ||
-    route.kind === 'checklist-execution-create' ||
     route.kind === 'checklist-execution-detail' ||
     route.kind === 'chat-conversation-detail'
   ) {
@@ -116,7 +114,6 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'action-detail' ||
     route.kind === 'checklist-template-create' ||
     route.kind === 'checklist-template-detail' ||
-    route.kind === 'checklist-execution-create' ||
     route.kind === 'checklist-execution-detail' ||
     route.kind === 'chat-conversation-detail'
   ) {
@@ -264,17 +261,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'checklist-execution-create') {
-    return {
-      topbarVariant: 'detail',
-      title: 'Nouvelle liste',
-      backPath: '/execution',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      hideTopbar: true,
-    }
-  }
-
   if (route.kind === 'checklist-execution-detail') {
     return {
       topbarVariant: 'detail',
@@ -332,10 +318,6 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'checklist-template-detail') {
     return `checklist-template-detail-${route.templateId}`
-  }
-
-  if (route.kind === 'checklist-execution-create') {
-    return 'checklist-execution-create'
   }
 
   if (route.kind === 'checklist-execution-detail') {

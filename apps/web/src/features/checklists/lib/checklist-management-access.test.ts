@@ -1,13 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
-import { canSeeChecklistLibrary } from './checklist-management-access'
+import { canAccessChecklistLibrary } from './checklist-management-access'
 
 describe('checklist-management-access', () => {
-  it('allows all active roles to see the checklist library', () => {
-    expect(canSeeChecklistLibrary('owner')).toBe(true)
-    expect(canSeeChecklistLibrary('director')).toBe(true)
-    expect(canSeeChecklistLibrary('manager')).toBe(true)
-    expect(canSeeChecklistLibrary('staff')).toBe(true)
-    expect(canSeeChecklistLibrary(null)).toBe(false)
+  it('allows catalogue access when establishment and membership are active', () => {
+    expect(
+      canAccessChecklistLibrary({
+        establishmentId: 'est-1',
+        activeMembershipId: 'member-1',
+      }),
+    ).toBe(true)
+    expect(
+      canAccessChecklistLibrary({
+        establishmentId: null,
+        activeMembershipId: 'member-1',
+      }),
+    ).toBe(false)
+    expect(
+      canAccessChecklistLibrary({
+        establishmentId: 'est-1',
+        activeMembershipId: null,
+      }),
+    ).toBe(false)
   })
 })

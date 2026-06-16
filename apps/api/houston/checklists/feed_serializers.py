@@ -28,7 +28,6 @@ class ChecklistFeedItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
     execution_source = serializers.CharField()
-    badge = serializers.CharField(allow_null=True)
     status = serializers.CharField()
     end_at = serializers.DateTimeField(allow_null=True)
     is_overdue = serializers.BooleanField()
@@ -56,11 +55,6 @@ def serialize_checklist_feed_item(
         "id": execution.id,
         "title": execution.template_title,
         "execution_source": execution.execution_source,
-        "badge": (
-            execution.checklist_template.badge
-            if execution.checklist_template_id is not None
-            else None
-        ),
         "status": execution.status,
         "end_at": execution.end_at,
         "is_overdue": overdue,

@@ -15,7 +15,6 @@ const LAZY_EXPORTS = [
   'LazyChecklistHubPage',
   'LazyChecklistTemplateCreatePage',
   'LazyChecklistTemplateDetailPage',
-  'LazyChecklistQuickCreatePage',
   'LazyChecklistExecutionDetailPage',
   'LazyChatRealtimeProvider',
 ] as const

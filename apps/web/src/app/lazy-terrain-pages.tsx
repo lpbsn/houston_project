@@ -72,12 +72,6 @@ export const LazyChecklistTemplateDetailPage = lazy(() =>
   })),
 )
 
-export const LazyChecklistQuickCreatePage = lazy(() =>
-  import('@/features/checklists/pages/checklist-quick-create-page').then((module) => ({
-    default: module.ChecklistQuickCreatePage,
-  })),
-)
-
 export const LazyChecklistExecutionDetailPage = lazy(() =>
   import('@/features/checklists/pages/checklist-execution-detail-page').then((module) => ({
     default: module.ChecklistExecutionDetailPage,

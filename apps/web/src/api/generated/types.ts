@@ -748,22 +748,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/establishments/{establishment_id}/checklist-executions/flash-todo/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["v1_establishments_checklist_executions_flash_todo_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/create-observation/": {
         parameters: {
             query?: never;
@@ -1726,15 +1710,10 @@ export interface components {
             /** Format: date-time */
             access_token_expires_at: string;
         };
-        /**
-         * @description * `process` - process
-         *     * `todo` - todo
-         * @enum {string}
-         */
-        BadgeEnum: "process" | "todo";
         BootstrapPermissionHints: {
             chat_available: boolean;
             can_create_action: boolean;
+            can_create_checklist_template: boolean;
             can_invite: boolean;
             can_manage_runtime_config: boolean;
         };
@@ -1979,7 +1958,6 @@ export interface components {
             id: string;
             title: string;
             execution_source: string;
-            badge: string | null;
             status: string;
             /** Format: date-time */
             end_at: string | null;
@@ -1993,18 +1971,6 @@ export interface components {
             created_at: string;
             progress_treated_count: number;
             progress_total_count: number;
-        };
-        ChecklistFlashTodoCreateRequest: {
-            title: string;
-            /** @default  */
-            description: string;
-            /** Format: uuid */
-            business_unit_id: string;
-            /** Format: uuid */
-            assigned_to: string;
-            /** Format: date-time */
-            end_at?: string | null;
-            tasks: components["schemas"]["ChecklistTaskInput"][];
         };
         ChecklistTaskCreateObservationRequest: {
             text: string;
@@ -2060,8 +2026,6 @@ export interface components {
             description: string;
             /** Format: uuid */
             business_unit_id: string;
-            /** @default todo */
-            badge: components["schemas"]["BadgeEnum"];
             tasks?: components["schemas"]["ChecklistTaskInput"][];
             /** @default false */
             assign_now: boolean;
@@ -2073,7 +2037,6 @@ export interface components {
         ChecklistTemplateDetail: {
             /** Format: uuid */
             id: string;
-            badge: string;
             title: string;
             description: string;
             status: string;
@@ -2095,7 +2058,6 @@ export interface components {
         ChecklistTemplateListItem: {
             /** Format: uuid */
             id: string;
-            badge: string;
             title: string;
             description: string;
             status: string;
@@ -2115,6 +2077,7 @@ export interface components {
             can_delete: boolean;
             can_create_assignment: boolean;
             can_launch_execution: boolean;
+            can_assign_to_others: boolean;
             can_use_template: boolean;
         };
         CommentAuthor: {
@@ -5074,65 +5037,6 @@ export interface operations {
             };
         };
     };
-    v1_establishments_checklist_executions_flash_todo_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                establishment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChecklistFlashTodoCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ChecklistFlashTodoCreateRequest"];
-                "multipart/form-data": components["schemas"]["ChecklistFlashTodoCreateRequest"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChecklistExecutionDetail"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
     v1_establishments_checklist_task_executions_create_observation_create: {
         parameters: {
             query?: never;
@@ -5415,7 +5319,6 @@ export interface operations {
     v1_establishments_checklist_templates_list: {
         parameters: {
             query?: {
-                badge?: "process" | "todo";
                 business_unit_id?: string;
                 created_by_me?: boolean;
             };

@@ -7,10 +7,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from houston.checklists.constants import (
-    CHECKLIST_BADGE_PROCESS,
-    CHECKLIST_BADGE_TODO,
     EXECUTION_SOURCE_ASSIGNMENT,
-    EXECUTION_SOURCE_FLASH_TODO,
     EXECUTION_SOURCE_TEMPLATE,
 )
 from houston.checklists.models import (
@@ -115,45 +112,6 @@ def test_template_execution_requires_template_without_assignment(
         )
 
 
-def test_flash_todo_execution_requires_no_template_or_assignment(
-    establishment,
-    business_unit,
-    staff_membership,
-):
-    now = timezone.now()
-    with pytest.raises(IntegrityError):
-        ChecklistExecution.objects.create(
-            checklist_template=None,
-            checklist_assignment=None,
-            execution_source=EXECUTION_SOURCE_FLASH_TODO,
-            establishment=establishment,
-            assigned_to=staff_membership,
-            business_unit=None,
-            template_title="Flash task",
-            last_activity_at=now,
-        )
-
-
-def test_flash_todo_execution_shape(
-    establishment,
-    business_unit,
-    staff_membership,
-):
-    now = timezone.now()
-    execution = ChecklistExecution.objects.create(
-        checklist_template=None,
-        checklist_assignment=None,
-        execution_source=EXECUTION_SOURCE_FLASH_TODO,
-        establishment=establishment,
-        assigned_to=staff_membership,
-        business_unit=business_unit,
-        template_title="Flash task",
-        last_activity_at=now,
-    )
-    assert execution.execution_source == EXECUTION_SOURCE_FLASH_TODO
-    assert execution.checklist_template_id is None
-
-
 def test_multiple_active_template_executions_allowed(
     establishment,
     registered_template,
@@ -252,27 +210,6 @@ def test_template_defaults_to_inactive(owner_membership, business_unit):
         title="Draft checklist",
     )
     assert template.status == ChecklistTemplate.Status.INACTIVE
-
-
-def test_template_badge_defaults_to_todo(owner_membership, business_unit):
-    template = ChecklistTemplate.objects.create(
-        establishment=owner_membership.establishment,
-        created_by=owner_membership,
-        business_unit=business_unit,
-        title="New checklist",
-    )
-    assert template.badge == CHECKLIST_BADGE_TODO
-
-
-def test_template_can_set_badge_process(owner_membership, business_unit):
-    template = ChecklistTemplate.objects.create(
-        establishment=owner_membership.establishment,
-        created_by=owner_membership,
-        business_unit=business_unit,
-        title="Process checklist",
-        badge=CHECKLIST_BADGE_PROCESS,
-    )
-    assert template.badge == CHECKLIST_BADGE_PROCESS
 
 
 def test_assignment_execution_stores_execution_source(

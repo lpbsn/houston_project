@@ -13,7 +13,6 @@ import { cn } from '@/lib/utils'
 
 type ChecklistCreateOptionsSheetProps = {
   open: boolean
-  flashEnabled: boolean
   establishmentId: string
   businessUnitId: string
   assignmentMode: ChecklistCreateAssignmentMode
@@ -46,7 +45,6 @@ function assignmentModeButtonClass(isSelected: boolean): string {
 
 export function ChecklistCreateOptionsSheet({
   open,
-  flashEnabled,
   establishmentId,
   businessUnitId,
   assignmentMode,
@@ -72,7 +70,7 @@ export function ChecklistCreateOptionsSheet({
   function handleSave() {
     const errors: Record<string, string> = {}
 
-    if (!flashEnabled && assignmentMode === 'create_now') {
+    if (assignmentMode === 'create_now') {
       const assignmentErrors = validateAssignmentForm({
         assignedTo,
         startDate,
@@ -114,66 +112,64 @@ export function ChecklistCreateOptionsSheet({
       }
     >
       <div className="space-y-4 pb-2">
-        {!flashEnabled ? (
-          <section className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-[#7D7B75]">
-              Affectation
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={assignmentModeButtonClass(assignmentMode === 'none')}
-                onClick={() => onAssignmentModeChange('none')}
-              >
-                Sans affectation
-              </button>
-              <button
-                type="button"
-                className={assignmentModeButtonClass(assignmentMode === 'create_now')}
-                onClick={() => onAssignmentModeChange('create_now')}
-              >
-                Créer une affectation maintenant
-              </button>
-            </div>
+        <section className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-[#7D7B75]">
+            Affectation
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={assignmentModeButtonClass(assignmentMode === 'none')}
+              onClick={() => onAssignmentModeChange('none')}
+            >
+              Sans affectation
+            </button>
+            <button
+              type="button"
+              className={assignmentModeButtonClass(assignmentMode === 'create_now')}
+              onClick={() => onAssignmentModeChange('create_now')}
+            >
+              Créer une affectation maintenant
+            </button>
+          </div>
 
-            {assignmentMode === 'create_now' ? (
-              <ChecklistAssignmentFormFields
-                idPrefix="create-options"
-                establishmentId={establishmentId}
-                businessUnitId={businessUnitId}
-                assignedTo={assignedTo}
-                selectedUser={selectedUser}
-                onAssignedToChange={(membershipId, user) => {
-                  onAssignedToChange(membershipId, user)
-                  onFieldErrorsChange({ ...fieldErrors, assignedTo: '' })
-                }}
-                startDate={startDate}
-                onStartDateChange={(value) => {
-                  onStartDateChange(value)
-                  onFieldErrorsChange({ ...fieldErrors, startDate: '' })
-                }}
-                endDate={endDate}
-                onEndDateChange={(value) => {
-                  onEndDateChange(value)
-                  onFieldErrorsChange({ ...fieldErrors, endDate: '' })
-                }}
-                startAt={startAt}
-                onStartAtChange={(value) => {
-                  onStartAtChange(value)
-                  onFieldErrorsChange({ ...fieldErrors, startAt: '' })
-                }}
-                endAt={endAt}
-                onEndAtChange={(value) => {
-                  onEndAtChange(value)
-                  onFieldErrorsChange({ ...fieldErrors, endAt: '' })
-                }}
-                recurrenceDays={recurrenceDays}
-                onRecurrenceDaysChange={onRecurrenceDaysChange}
-                fieldErrors={fieldErrors}
-              />
-            ) : null}
-          </section>
-        ) : null}
+          {assignmentMode === 'create_now' ? (
+            <ChecklistAssignmentFormFields
+              idPrefix="create-options"
+              establishmentId={establishmentId}
+              businessUnitId={businessUnitId}
+              assignedTo={assignedTo}
+              selectedUser={selectedUser}
+              onAssignedToChange={(membershipId, user) => {
+                onAssignedToChange(membershipId, user)
+                onFieldErrorsChange({ ...fieldErrors, assignedTo: '' })
+              }}
+              startDate={startDate}
+              onStartDateChange={(value) => {
+                onStartDateChange(value)
+                onFieldErrorsChange({ ...fieldErrors, startDate: '' })
+              }}
+              endDate={endDate}
+              onEndDateChange={(value) => {
+                onEndDateChange(value)
+                onFieldErrorsChange({ ...fieldErrors, endDate: '' })
+              }}
+              startAt={startAt}
+              onStartAtChange={(value) => {
+                onStartAtChange(value)
+                onFieldErrorsChange({ ...fieldErrors, startAt: '' })
+              }}
+              endAt={endAt}
+              onEndAtChange={(value) => {
+                onEndAtChange(value)
+                onFieldErrorsChange({ ...fieldErrors, endAt: '' })
+              }}
+              recurrenceDays={recurrenceDays}
+              onRecurrenceDaysChange={onRecurrenceDaysChange}
+              fieldErrors={fieldErrors}
+            />
+          ) : null}
+        </section>
       </div>
     </TerrainBottomSheet>
   )

@@ -21,7 +21,6 @@ from houston.checklists.services import (
     reorder_task_templates,
     update_checklist_template,
 )
-from houston.checklists.tests.conftest import add_task_template as _add_task_template
 from houston.establishments.tests.taxonomy_helpers import create_establishment
 
 pytestmark = pytest.mark.django_db
@@ -37,14 +36,14 @@ def test_create_registered_template_requires_business_unit(owner_membership):
         )
 
 
-def test_scoped_staff_can_create_registered_template(staff_membership, business_unit):
-    template = create_checklist_template(
-        establishment_id=staff_membership.establishment_id,
-        actor=staff_membership,
-        title="Mine",
-        business_unit_id=business_unit.id,
-    )
-    assert template.business_unit_id == business_unit.id
+def test_scoped_staff_cannot_create_registered_template(staff_membership, business_unit):
+    with pytest.raises(ChecklistPermissionError):
+        create_checklist_template(
+            establishment_id=staff_membership.establishment_id,
+            actor=staff_membership,
+            title="Mine",
+            business_unit_id=business_unit.id,
+        )
 
 
 def test_unscoped_staff_cannot_create_registered_template(establishment, business_unit):
@@ -78,16 +77,16 @@ def test_registered_template_rejects_cross_establishment_business_unit(
         )
 
 
-def test_add_task_template_auto_activates_inactive_template(staff_membership, business_unit):
+def test_add_task_template_auto_activates_inactive_template(owner_membership, business_unit):
     template = create_checklist_template(
-        establishment_id=staff_membership.establishment_id,
-        actor=staff_membership,
+        establishment_id=owner_membership.establishment_id,
+        actor=owner_membership,
         title="Mine",
         business_unit_id=business_unit.id,
     )
     assert template.status == ChecklistTemplate.Status.INACTIVE
 
-    add_task_template(template=template, actor=staff_membership, task="Task 1")
+    add_task_template(template=template, actor=owner_membership, task="Task 1")
 
     template.refresh_from_db()
     assert template.status == ChecklistTemplate.Status.ACTIVE
@@ -172,22 +171,20 @@ def test_update_checklist_template(owner_membership, business_unit):
     assert updated.description == "After"
 
 
-def test_registered_template_crud_for_staff(staff_membership, business_unit):
-    template = create_checklist_template(
-        establishment_id=staff_membership.establishment_id,
-        actor=staff_membership,
-        title="Mine",
-        business_unit_id=business_unit.id,
-    )
-    _add_task_template(template=template, task="Task")
-    activate_checklist_template(template=template, actor=staff_membership)
-    template.refresh_from_db()
-    assert template.status == ChecklistTemplate.Status.ACTIVE
+def test_staff_cannot_crud_registered_template(staff_membership, business_unit):
+    with pytest.raises(ChecklistPermissionError):
+        create_checklist_template(
+            establishment_id=staff_membership.establishment_id,
+            actor=staff_membership,
+            title="Mine",
+            business_unit_id=business_unit.id,
+        )
 
 
 def test_delete_registered_template_detaches_terminal_executions(
-    staff_membership,
+    owner_membership,
     staff_owned_template,
+    staff_membership,
 ):
     now = timezone.now()
     execution = ChecklistExecution.objects.create(
@@ -201,7 +198,7 @@ def test_delete_registered_template_detaches_terminal_executions(
         last_activity_at=now,
     )
 
-    delete_checklist_template(template=staff_owned_template, actor=staff_membership)
+    delete_checklist_template(template=staff_owned_template, actor=owner_membership)
 
     assert not ChecklistTemplate.objects.filter(id=staff_owned_template.id).exists()
     execution.refresh_from_db()
@@ -209,12 +206,12 @@ def test_delete_registered_template_detaches_terminal_executions(
 
 
 def test_delete_registered_template_blocks_active_execution(
-    staff_membership,
+    owner_membership,
     staff_template_execution,
 ):
     template = staff_template_execution.checklist_template
     with pytest.raises(ChecklistConflictError) as exc_info:
-        delete_checklist_template(template=template, actor=staff_membership)
+        delete_checklist_template(template=template, actor=owner_membership)
 
     assert exc_info.value.active_execution_id == staff_template_execution.id
     assert ChecklistTemplate.objects.filter(
@@ -223,29 +220,46 @@ def test_delete_registered_template_blocks_active_execution(
 
 
 def test_create_registered_checklist_template_composite_assign_now(
-    staff_membership,
+    owner_membership,
     business_unit,
-    other_staff_membership,
+    staff_membership,
 ):
     template, execution = create_registered_checklist_template(
-        establishment_id=staff_membership.establishment_id,
-        actor=staff_membership,
+        establishment_id=owner_membership.establishment_id,
+        actor=owner_membership,
         title="Composite",
         business_unit_id=business_unit.id,
         tasks=[{"title": "Step 1"}],
         assign_now=True,
-        assigned_to_id=other_staff_membership.id,
+        assigned_to_id=staff_membership.id,
     )
     assert template.status == ChecklistTemplate.Status.ACTIVE
     assert template.task_templates.count() == 1
     assert execution is not None
-    assert execution.assigned_to_id == other_staff_membership.id
+    assert execution.assigned_to_id == staff_membership.id
 
 
-def test_create_registered_checklist_template_rolls_back_on_execution_failure(
+def test_staff_cannot_assign_execution_to_others_on_create(
     staff_membership,
     business_unit,
     other_staff_membership,
+):
+    with pytest.raises(ChecklistPermissionError):
+        create_registered_checklist_template(
+            establishment_id=staff_membership.establishment_id,
+            actor=staff_membership,
+            title="Denied",
+            business_unit_id=business_unit.id,
+            tasks=[{"title": "Step 1"}],
+            assign_now=True,
+            assigned_to_id=other_staff_membership.id,
+        )
+
+
+def test_create_registered_checklist_template_rolls_back_on_execution_failure(
+    owner_membership,
+    business_unit,
+    staff_membership,
     monkeypatch,
 ):
     def _fail_execution(**kwargs):
@@ -258,13 +272,13 @@ def test_create_registered_checklist_template_rolls_back_on_execution_failure(
 
     with pytest.raises(ChecklistValidationError):
         create_registered_checklist_template(
-            establishment_id=staff_membership.establishment_id,
-            actor=staff_membership,
+            establishment_id=owner_membership.establishment_id,
+            actor=owner_membership,
             title="Composite rollback",
             business_unit_id=business_unit.id,
             tasks=[{"title": "Step 1"}],
             assign_now=True,
-            assigned_to_id=other_staff_membership.id,
+            assigned_to_id=staff_membership.id,
         )
 
     assert not ChecklistTemplate.objects.filter(title="Composite rollback").exists()

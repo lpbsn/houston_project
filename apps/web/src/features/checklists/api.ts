@@ -1,4 +1,5 @@
 import { apiClient, withAuthRetry } from '@/api/client'
+import type { components } from '@/api/generated/types'
 
 import { parseStandardApiError } from '@/lib/api-errors'
 
@@ -7,7 +8,6 @@ import type {
   ChecklistAssignmentCreateRequest,
   PatchedChecklistAssignmentUpdateRequest,
   ChecklistExecutionDetail,
-  ChecklistFlashTodoCreateRequest,
   ChecklistTaskCreateObservationRequest,
   ChecklistTaskCreateObservationResponse,
   ChecklistTaskExecution,
@@ -107,7 +107,6 @@ export async function fetchChecklistTemplates(
   filters: ChecklistTemplateListFilters = {},
 ): Promise<ChecklistTemplateListItem[]> {
   const query = {
-    ...(filters.badge ? { badge: filters.badge } : {}),
     ...(filters.business_unit_id ? { business_unit_id: filters.business_unit_id } : {}),
     ...(filters.created_by_me ? { created_by_me: true } : {}),
   }
@@ -143,6 +142,12 @@ export async function fetchChecklistTemplateDetail(
   return assertChecklistData<ChecklistTemplateDetail>(result)
 }
 
+function toChecklistTemplateCreateApiBody(
+  body: ChecklistTemplateCreateRequest,
+): components['schemas']['ChecklistTemplateCreateRequest'] {
+  return body as components['schemas']['ChecklistTemplateCreateRequest']
+}
+
 export async function createChecklistTemplate(
   establishmentId: string,
   body: ChecklistTemplateCreateRequest,
@@ -151,7 +156,7 @@ export async function createChecklistTemplate(
     (accessToken) =>
       apiClient.POST('/api/v1/establishments/{establishment_id}/checklist-templates/', {
         params: establishmentPath(establishmentId),
-        body,
+        body: toChecklistTemplateCreateApiBody(body),
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },
@@ -424,26 +429,6 @@ export async function deactivateChecklistAssignment(
   return assertChecklistData<ChecklistAssignment>(result)
 }
 
-export async function createFlashTodoExecution(
-  establishmentId: string,
-  body: ChecklistFlashTodoCreateRequest,
-): Promise<ChecklistExecutionDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/checklist-executions/flash-todo/',
-        {
-          params: establishmentPath(establishmentId),
-          body,
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  return assertChecklistData<ChecklistExecutionDetail>(result)
-}
-
 export async function createExecutionFromTemplate(
   establishmentId: string,
   templateId: string,
@@ -583,7 +568,6 @@ export type RegisteredChecklistTemplateInput = {
   title: string
   description: string
   business_unit_id: string
-  badge: 'process' | 'todo'
   tasks: Array<{ task: string }>
   assign_now?: boolean
   assigned_to?: string | null
@@ -598,16 +582,15 @@ export async function createRegisteredChecklistTemplate(
     (accessToken) =>
       apiClient.POST('/api/v1/establishments/{establishment_id}/checklist-templates/', {
         params: establishmentPath(establishmentId),
-        body: {
+        body: toChecklistTemplateCreateApiBody({
           title: input.title.trim(),
           description: input.description.trim(),
           business_unit_id: input.business_unit_id,
-          badge: input.badge,
           tasks: input.tasks.map((task) => ({ task: task.task.trim() })),
           assign_now: input.assign_now ?? false,
           assigned_to: input.assign_now ? (input.assigned_to ?? null) : undefined,
           end_at: input.assign_now ? (input.end_at ?? null) : undefined,
-        },
+        }),
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },

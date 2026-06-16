@@ -38,8 +38,7 @@ function makeChecklist(id: string, status: string) {
   return {
     id,
     title: 'Checklist',
-    execution_source: 'flash_todo',
-    badge: null,
+    execution_source: 'template',
     status,
     end_at: null,
     is_overdue: false,

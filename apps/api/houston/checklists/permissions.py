@@ -9,6 +9,7 @@ from houston.checklists.models import (
 )
 from houston.establishments.membership_scope import (
     _iter_membership_scopes,
+    membership_covers_business_unit_including_admins,
     membership_scope_covers_business_unit,
 )
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
@@ -68,7 +69,9 @@ def can_access_checklist_management(membership: EstablishmentMembership | None) 
 
 
 def can_create_registered_template(membership: EstablishmentMembership | None) -> bool:
-    return _is_valid_membership(membership)
+    if not _is_valid_membership(membership):
+        return False
+    return membership.role in _MANAGEMENT_ROLES
 
 
 def can_delete_registered_template(
@@ -83,8 +86,6 @@ def can_delete_registered_template(
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return membership_covers_checklist_business_unit(membership, template.business_unit)
-    if membership.role == EstablishmentMembership.Role.STAFF:
-        return template.created_by_id == membership.id
     return False
 
 
@@ -134,6 +135,14 @@ def can_create_checklist_assignment(
     )
 
 
+def can_assign_checklist_execution_to_others(
+    membership: EstablishmentMembership | None,
+) -> bool:
+    if not _is_valid_membership(membership):
+        return False
+    return membership.role in _MANAGEMENT_ROLES
+
+
 def checklist_assignment_visible_to_membership(
     membership: EstablishmentMembership | None,
     assignment: ChecklistAssignment,
@@ -158,17 +167,6 @@ def can_manage_checklist_assignment(
     return checklist_assignment_visible_to_membership(membership, assignment)
 
 
-def can_create_flash_todo(
-    membership: EstablishmentMembership | None,
-    business_unit: BusinessUnit,
-) -> bool:
-    if not _is_valid_membership(membership):
-        return False
-    if not _same_establishment(membership, business_unit.establishment_id):
-        return False
-    return membership_covers_checklist_business_unit(membership, business_unit)
-
-
 def can_launch_template_execution(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
@@ -178,6 +176,22 @@ def can_launch_template_execution(
     if membership.role in _ADMIN_ROLES:
         return True
     return membership_covers_checklist_business_unit(membership, template.business_unit)
+
+
+def can_launch_checklist_execution_for_assignee(
+    membership: EstablishmentMembership | None,
+    template: ChecklistTemplate,
+    assignee: EstablishmentMembership,
+) -> bool:
+    if not can_launch_template_execution(membership, template):
+        return False
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return assignee.id == membership.id
+    if assignee.establishment_id != template.establishment_id:
+        return False
+    if assignee.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+    return membership_covers_business_unit_including_admins(assignee, template.business_unit)
 
 
 def can_use_template(

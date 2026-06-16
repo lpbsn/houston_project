@@ -7,7 +7,6 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.checklists.constants import (
-    CHECKLIST_BADGE_PROCESS,
     EXECUTION_SOURCE_ASSIGNMENT,
     EXECUTION_SOURCE_TEMPLATE,
 )
@@ -123,15 +122,14 @@ def registered_template(establishment, owner_membership, business_unit):
         business_unit=business_unit,
         title="Opening checks",
         status=ChecklistTemplate.Status.ACTIVE,
-        badge=CHECKLIST_BADGE_PROCESS,
     )
 
 
 @pytest.fixture
-def staff_owned_template(establishment, staff_membership, business_unit):
+def staff_owned_template(establishment, owner_membership, business_unit):
     return ChecklistTemplate.objects.create(
         establishment=establishment,
-        created_by=staff_membership,
+        created_by=owner_membership,
         business_unit=business_unit,
         title="My routine",
         status=ChecklistTemplate.Status.ACTIVE,
@@ -224,10 +222,6 @@ def staff_template_execution(establishment, staff_owned_template, staff_membersh
         status=ChecklistExecution.Status.ASSIGNED,
         last_activity_at=now,
     )
-
-
-def checklist_flash_todo_url(establishment_id) -> str:
-    return f"/api/v1/establishments/{establishment_id}/checklist-executions/flash-todo/"
 
 
 def checklist_execution_url(establishment_id, execution_id, suffix: str = "") -> str:

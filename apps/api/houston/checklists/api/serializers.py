@@ -3,8 +3,6 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.checklists.constants import (
-    CHECKLIST_BADGE_DEFAULT,
-    CHECKLIST_BADGES,
     CHECKLIST_DESCRIPTION_MAX_LENGTH,
     CHECKLIST_SKIPPED_REASON_MAX_LENGTH,
     CHECKLIST_TASK_MAX_LENGTH,
@@ -59,6 +57,7 @@ class ChecklistTemplatePermissionHintsSerializer(serializers.Serializer):
     can_delete = serializers.BooleanField()
     can_create_assignment = serializers.BooleanField()
     can_launch_execution = serializers.BooleanField()
+    can_assign_to_others = serializers.BooleanField()
     can_use_template = serializers.BooleanField()
 
 
@@ -69,7 +68,6 @@ class ChecklistAssignmentPermissionHintsSerializer(serializers.Serializer):
 
 class ChecklistTemplateListItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    badge = serializers.CharField()
     title = serializers.CharField()
     description = serializers.CharField()
     status = serializers.CharField()
@@ -107,29 +105,10 @@ class ChecklistTemplateCreateRequestSerializer(serializers.Serializer):
         default="",
     )
     business_unit_id = serializers.UUIDField()
-    badge = serializers.ChoiceField(
-        choices=sorted(CHECKLIST_BADGES),
-        required=False,
-        default=CHECKLIST_BADGE_DEFAULT,
-    )
     tasks = ChecklistTaskInputSerializer(many=True, required=False)
     assign_now = serializers.BooleanField(required=False, default=False)
     assigned_to = serializers.UUIDField(required=False, allow_null=True)
     end_at = serializers.DateTimeField(required=False, allow_null=True)
-
-
-class ChecklistFlashTodoCreateRequestSerializer(serializers.Serializer):
-    title = serializers.CharField(max_length=CHECKLIST_TITLE_MAX_LENGTH)
-    description = serializers.CharField(
-        max_length=CHECKLIST_DESCRIPTION_MAX_LENGTH,
-        required=False,
-        allow_blank=True,
-        default="",
-    )
-    business_unit_id = serializers.UUIDField()
-    assigned_to = serializers.UUIDField()
-    end_at = serializers.DateTimeField(required=False, allow_null=True)
-    tasks = ChecklistTaskInputSerializer(many=True)
 
 
 class ChecklistTemplateExecutionCreateRequestSerializer(serializers.Serializer):
@@ -310,7 +289,6 @@ def serialize_template_list_item(
         task_count = template.task_templates.count()
     return {
         "id": template.id,
-        "badge": template.badge,
         "title": template.title,
         "description": template.description,
         "status": template.status,

@@ -67,6 +67,11 @@ def _build_checklist_template_permission_hints_core(
             and has_tasks
         )
 
+    can_assign_to_others = (
+        can_launch_execution
+        and checklist_permissions.can_assign_checklist_execution_to_others(membership)
+    )
+
     return {
         "can_update": can_manage,
         "can_manage_tasks": can_manage,
@@ -75,6 +80,7 @@ def _build_checklist_template_permission_hints_core(
         "can_delete": can_delete,
         "can_create_assignment": can_create_assignment,
         "can_launch_execution": can_launch_execution,
+        "can_assign_to_others": can_assign_to_others,
         "can_use_template": can_launch_execution,
     }
 

@@ -28,17 +28,12 @@ import {
   useChecklistAssignmentForm,
 } from '@/features/checklists/lib/checklist-assignment-form'
 import { validateChecklistCreateForm } from '@/features/checklists/lib/checklist-form-validation'
-import { cn } from '@/lib/utils'
 
 type ChecklistCreatePageProps = {
   backPath: string
-  initialFlashEnabled?: boolean
 }
 
-export function ChecklistCreatePage({
-  backPath,
-  initialFlashEnabled = false,
-}: ChecklistCreatePageProps) {
+export function ChecklistCreatePage({ backPath }: ChecklistCreatePageProps) {
   const { navigate } = useAppRoute()
   const { activeMembership, bootstrap } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
@@ -57,7 +52,6 @@ export function ChecklistCreatePage({
     [activeMembership?.role, bootstrap?.user?.username, membershipId],
   )
 
-  const [flashEnabled, setFlashEnabled] = useState(initialFlashEnabled)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [businessUnitSheetOpen, setBusinessUnitSheetOpen] = useState(false)
   const [businessUnitError, setBusinessUnitError] = useState<string | null>(null)
@@ -87,7 +81,6 @@ export function ChecklistCreatePage({
   const { submit, createdTemplateId, partialFailureMessage, isSubmitting } =
     useChecklistCreateSubmit({
       establishmentId: establishmentId ?? '',
-      activeMembershipId: membershipId,
       onNavigate: navigate,
     })
 
@@ -95,24 +88,18 @@ export function ChecklistCreatePage({
     return null
   }
 
-  const assignmentSummary = flashEnabled
-    ? 'Flash to-do'
-    : assignmentMode === 'create_now'
-      ? 'Affectation configurée'
-      : 'Sans affectation'
+  const assignmentSummary =
+    assignmentMode === 'create_now' ? 'Affectation configurée' : 'Sans affectation'
 
   async function handleSubmit() {
     const taskValues = tasks.map((task) => task.task)
     const validation = validateChecklistCreateForm({
-      flashEnabled,
       title,
       businessUnitId,
       taskValues,
       assignmentMode,
       assignmentValues:
-        assignmentMode === 'create_now'
-          ? assignmentForm.getFormValues()
-          : undefined,
+        assignmentMode === 'create_now' ? assignmentForm.getFormValues() : undefined,
     })
 
     if (validation.ok === false) {
@@ -131,7 +118,6 @@ export function ChecklistCreatePage({
     }
 
     setBusinessUnitError(null)
-
     setFeedback(null)
 
     try {
@@ -140,12 +126,9 @@ export function ChecklistCreatePage({
         description,
         businessUnitId,
         tasks: taskValues.map((task) => task.trim()).filter(Boolean),
-        flashEnabled,
-        assignmentMode: flashEnabled ? 'none' : assignmentMode,
+        assignmentMode,
         assignmentValues:
-          !flashEnabled && assignmentMode === 'create_now'
-            ? assignmentForm.getFormValues()
-            : undefined,
+          assignmentMode === 'create_now' ? assignmentForm.getFormValues() : undefined,
       })
     } catch (error) {
       const message =
@@ -193,33 +176,6 @@ export function ChecklistCreatePage({
               </div>
             </TerrainCard>
           ) : null}
-
-          <TerrainCard className="flex items-center justify-between gap-3 px-3 py-2.5">
-            <div>
-              <p className="text-sm font-medium text-[#1a1a1a]">Flash to-do</p>
-              <p className="text-xs text-[#7D7B75]">
-                Démarrer immédiatement sans enregistrer de modèle.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={flashEnabled}
-              aria-label="Flash to-do"
-              className={cn(
-                'relative h-7 w-12 shrink-0 rounded-full transition-colors',
-                flashEnabled ? 'bg-[#1B4FD8]' : 'bg-[#D8D6CF]',
-              )}
-              onClick={() => setFlashEnabled((current) => !current)}
-            >
-              <span
-                className={cn(
-                  'absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform',
-                  flashEnabled ? 'translate-x-5' : 'translate-x-0.5',
-                )}
-              />
-            </button>
-          </TerrainCard>
 
           <ChecklistCreateBusinessUnitField
             establishmentId={establishmentId}
@@ -283,7 +239,6 @@ export function ChecklistCreatePage({
 
       <ChecklistCreateOptionsSheet
         open={optionsOpen}
-        flashEnabled={flashEnabled}
         establishmentId={establishmentId}
         businessUnitId={businessUnitId}
         assignmentMode={assignmentMode}

@@ -7,7 +7,6 @@ from houston.checklists.api.views import (
     ChecklistAssignmentListView,
     ChecklistExecutionCancelView,
     ChecklistExecutionDetailView,
-    ChecklistFlashTodoCreateView,
     ChecklistTaskExecutionCreateObservationView,
     ChecklistTaskExecutionMarkDoneView,
     ChecklistTaskExecutionSkipView,
@@ -76,11 +75,6 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/checklist-assignments/<uuid:assignment_id>/deactivate/",
         ChecklistAssignmentDeactivateView.as_view(),
         name="checklist-assignment-deactivate",
-    ),
-    path(
-        "establishments/<uuid:establishment_id>/checklist-executions/flash-todo/",
-        ChecklistFlashTodoCreateView.as_view(),
-        name="checklist-flash-todo-create",
     ),
     path(
         "establishments/<uuid:establishment_id>/checklist-templates/<uuid:template_id>/executions/",

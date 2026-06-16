@@ -42,29 +42,7 @@ export function isChecklistTaskPending(task: ChecklistTaskExecution): boolean {
   return task.status === 'pending'
 }
 
-export function formatChecklistBadgeLabel(badge: string): string {
-  if (badge === 'process') {
-    return 'Process'
-  }
-  if (badge === 'todo') {
-    return 'To-do'
-  }
-  return badge
-}
-
-export function formatChecklistFeedBadgeLabel(
-  executionSource: string,
-  badge: string | null,
-): string {
-  if (executionSource === 'flash_todo') {
-    return 'Flash To-do'
-  }
-  if (badge === 'process') {
-    return 'Process'
-  }
-  if (badge === 'todo') {
-    return 'To-do'
-  }
+export function formatChecklistFeedBadgeLabel(): string {
   return 'Checklist'
 }
 

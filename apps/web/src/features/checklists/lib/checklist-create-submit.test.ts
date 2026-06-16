@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  buildFlashTodoPayload,
   buildInitialAssigneeFromMembership,
   buildTemplateCreatePayload,
 } from './checklist-create-submit'
@@ -19,19 +18,8 @@ describe('checklist-create-submit', () => {
       title: 'To do ouverture',
       description: 'Vérifications matinales',
       business_unit_id: 'bu-1',
-      badge: 'todo',
       tasks: [{ task: 'Désactiver l’alarme' }, { task: 'Vérifier la terrasse' }],
       assign_now: false,
-    })
-  })
-
-  it('builds flash todo payload with active membership assignee', () => {
-    expect(buildFlashTodoPayload(baseInput, 'member-1')).toEqual({
-      title: 'To do ouverture',
-      description: 'Vérifications matinales',
-      business_unit_id: 'bu-1',
-      assigned_to: 'member-1',
-      tasks: [{ task: 'Désactiver l’alarme' }, { task: 'Vérifier la terrasse' }],
     })
   })
 

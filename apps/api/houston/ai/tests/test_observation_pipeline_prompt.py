@@ -147,6 +147,7 @@ def test_build_pipeline_input_includes_checklist_context_for_checklist_task_orig
     from houston.checklists.tests.conftest import add_task_template
     from houston.establishments.models import EstablishmentMembership
     from houston.establishments.tests.taxonomy_helpers import (
+        create_membership,
         create_membership_with_business_unit_scope,
     )
     from houston.observations.models import Observation
@@ -163,9 +164,14 @@ def test_build_pipeline_input_includes_checklist_context_for_checklist_task_orig
         business_unit=business_unit,
     )
 
+    owner_membership = create_membership(
+        establishment=staff_membership.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+
     template = create_checklist_template(
         establishment_id=staff_membership.establishment_id,
-        actor=staff_membership,
+        actor=owner_membership,
         business_unit_id=business_unit.id,
         title="Morning routine",
     )

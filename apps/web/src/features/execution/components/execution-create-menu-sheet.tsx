@@ -34,7 +34,7 @@ export function ExecutionCreateMenuSheet({
   const options =
     view === 'main'
       ? getExecutionCreateMenuOptions(permissionHints)
-      : getChecklistCreateSubmenuOptions()
+      : getChecklistCreateSubmenuOptions(permissionHints)
   const title = view === 'main' ? 'Créer' : 'Checklist'
 
   function handleClose() {

@@ -8,66 +8,105 @@ from houston.checklists.tests.conftest import (
     assignment_api_payload,
     checklist_execution_url,
     checklist_template_url,
-    checklist_templates_url,
 )
 from houston.establishments.models import EstablishmentMembership
 
 pytestmark = pytest.mark.django_db
 
 
-def _staff_owned_template_with_task(api_client, staff, business_unit):
-    token = login(api_client, user=staff.user)
-    template = api_client.post(
-        checklist_templates_url(staff.establishment_id),
-        {
-            "title": "Mine",
-            "business_unit_id": str(business_unit.id),
-        },
-        format="json",
-        **auth_headers(token),
-    )
-    assert template.status_code == 201
-    task = api_client.post(
-        checklist_template_url(staff.establishment_id, template.json()["id"], "tasks/"),
-        {"task": "Task"},
-        format="json",
-        **auth_headers(token),
-    )
-    assert task.status_code == 201
-    activate = api_client.post(
-        checklist_template_url(staff.establishment_id, template.json()["id"], "activate/"),
-        **auth_headers(token),
-    )
-    assert activate.status_code == 200
-    return template.json(), token
+def _active_template_for_staff(api_client, owner, staff, business_unit):
+    from houston.checklists.tests.test_assignment_api import _active_registered_template
+
+    template, owner_token = _active_registered_template(api_client, owner, business_unit)
+    staff_token = login(api_client, user=staff.user)
+    return template, staff_token
 
 
 def test_template_execution_create_allows_multiple_active(
     api_client,
+    owner_membership,
     staff_membership,
     business_unit,
 ):
-    template, token = _staff_owned_template_with_task(api_client, staff_membership, business_unit)
-    first = api_client.post(
-        checklist_template_url(
-            staff_membership.establishment_id,
-            template["id"],
-            "executions/",
-        ),
-        **auth_headers(token),
+    template, staff_token = _active_template_for_staff(
+        api_client,
+        owner_membership,
+        staff_membership,
+        business_unit,
+    )
+    first = _start_template_execution(
+        api_client,
+        staff_membership,
+        template["id"],
+        staff_token,
     )
     assert first.status_code == 201
 
-    second = api_client.post(
-        checklist_template_url(
-            staff_membership.establishment_id,
-            template["id"],
-            "executions/",
-        ),
-        **auth_headers(token),
+    second = _start_template_execution(
+        api_client,
+        staff_membership,
+        template["id"],
+        staff_token,
     )
     assert second.status_code == 201
     assert first.json()["id"] != second.json()["id"]
+
+
+def _start_template_execution(api_client, membership, template_id, token, *, assigned_to_id=None):
+    payload = {}
+    if assigned_to_id is not None:
+        payload["assigned_to"] = str(assigned_to_id)
+    return api_client.post(
+        checklist_template_url(membership.establishment_id, template_id, "executions/"),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+
+
+def test_staff_launch_for_self_succeeds(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template, staff_token = _active_template_for_staff(
+        api_client,
+        owner_membership,
+        staff_membership,
+        business_unit,
+    )
+    response = _start_template_execution(
+        api_client,
+        staff_membership,
+        template["id"],
+        staff_token,
+    )
+    assert response.status_code == 201
+    assert response.json()["assigned_to_id"] == str(staff_membership.id)
+
+
+def test_staff_launch_for_other_assignee_denied(
+    api_client,
+    owner_membership,
+    staff_membership,
+    other_staff_membership,
+    business_unit,
+):
+    template, staff_token = _active_template_for_staff(
+        api_client,
+        owner_membership,
+        staff_membership,
+        business_unit,
+    )
+    response = _start_template_execution(
+        api_client,
+        staff_membership,
+        template["id"],
+        staff_token,
+        assigned_to_id=other_staff_membership.id,
+    )
+    assert response.status_code == 403
 
 
 def test_execution_detail_rbac(api_client, owner_membership, staff_membership, business_unit):

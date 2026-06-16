@@ -10,13 +10,10 @@ from houston.checklists.constants import (
     ACTIVE_EXECUTION_STATUSES,
     ASSIGNMENT_STATUS_ACTIVE,
     ASSIGNMENT_STATUS_INACTIVE,
-    CHECKLIST_BADGE_DEFAULT,
-    CHECKLIST_BADGES,
     CHECKLIST_DESCRIPTION_MAX_LENGTH,
     CHECKLIST_SKIPPED_REASON_MAX_LENGTH,
     CHECKLIST_TASK_MAX_LENGTH,
     CHECKLIST_TITLE_MAX_LENGTH,
-    EXECUTION_SOURCE_FLASH_TODO,
     EXECUTION_SOURCE_TEMPLATE,
     EXECUTION_STATUS_ASSIGNED,
     EXECUTION_STATUS_CANCELED,
@@ -55,10 +52,10 @@ from houston.checklists.models import (
 from houston.checklists.permissions import (
     can_cancel_checklist_execution,
     can_create_checklist_assignment,
-    can_create_flash_todo,
     can_create_registered_template,
     can_delete_registered_template,
     can_execute_checklist_tasks,
+    can_launch_checklist_execution_for_assignee,
     can_launch_template_execution,
     can_manage_checklist_assignment,
     can_manage_registered_template,
@@ -232,13 +229,6 @@ def _maybe_deactivate_template_without_tasks(template: ChecklistTemplate) -> Che
     return template
 
 
-def _normalize_badge(badge: str) -> str:
-    normalized = (badge or CHECKLIST_BADGE_DEFAULT).strip().lower()
-    if normalized not in CHECKLIST_BADGES:
-        raise ChecklistValidationError("Invalid badge.")
-    return normalized
-
-
 def _normalize_task_input(task_item: dict, *, index: int) -> str:
     if not isinstance(task_item, dict):
         raise ChecklistValidationError("Each task must be an object.")
@@ -246,27 +236,6 @@ def _normalize_task_input(task_item: dict, *, index: int) -> str:
     if task_text is None:
         raise ChecklistValidationError(f"Task at index {index} requires task or title.")
     return _normalize_task(str(task_text))
-
-
-def _create_ad_hoc_task_executions(
-    *,
-    execution: ChecklistExecution,
-    tasks: list[dict],
-) -> list[ChecklistTaskExecution]:
-    if not tasks:
-        raise ChecklistValidationError("At least one task is required.")
-    return ChecklistTaskExecution.objects.bulk_create(
-        [
-            ChecklistTaskExecution(
-                checklist_execution=execution,
-                checklist_task_template=None,
-                task=_normalize_task_input(task_item, index=index),
-                position=index,
-                status=ChecklistTaskExecution.Status.PENDING,
-            )
-            for index, task_item in enumerate(tasks, start=1)
-        ]
-    )
 
 
 def _activate_template_if_has_tasks(template: ChecklistTemplate) -> ChecklistTemplate:
@@ -284,7 +253,6 @@ def create_checklist_template(
     title: str,
     description: str = "",
     business_unit_id: uuid.UUID,
-    badge: str = CHECKLIST_BADGE_DEFAULT,
 ) -> ChecklistTemplate:
     if not can_create_registered_template(actor):
         raise ChecklistPermissionError("Not allowed to create a checklist template.")
@@ -294,10 +262,10 @@ def create_checklist_template(
         establishment_id=establishment_id,
         business_unit_id=business_unit_id,
     )
-    if actor.role in {
-        EstablishmentMembership.Role.MANAGER,
-        EstablishmentMembership.Role.STAFF,
-    } and not membership_covers_checklist_business_unit(actor, business_unit):
+    if (
+        actor.role == EstablishmentMembership.Role.MANAGER
+        and not membership_covers_checklist_business_unit(actor, business_unit)
+    ):
         raise ChecklistPermissionError("Not allowed to create a checklist template.")
 
     return ChecklistTemplate.objects.create(
@@ -307,7 +275,6 @@ def create_checklist_template(
         title=_normalize_title(title),
         description=_normalize_description(description),
         status=TEMPLATE_STATUS_INACTIVE,
-        badge=badge,
     )
 
 
@@ -790,6 +757,8 @@ def create_execution_from_template(
         assigned_to=assigned_to,
         business_unit=template.business_unit,
     )
+    if not can_launch_checklist_execution_for_assignee(actor, template, assigned_to):
+        raise ChecklistPermissionError("Not allowed to create a checklist execution.")
 
     now = timezone.now()
     execution = ChecklistExecution.objects.create(
@@ -814,56 +783,6 @@ def create_execution_from_template(
 
 
 @transaction.atomic
-def create_flash_todo_execution(
-    *,
-    establishment_id: uuid.UUID,
-    actor: EstablishmentMembership,
-    title: str,
-    business_unit_id: uuid.UUID,
-    assigned_to_id: uuid.UUID,
-    tasks: list[dict],
-    description: str = "",
-    end_at: datetime | None = None,
-) -> ChecklistExecution:
-    business_unit = _validate_business_unit_in_establishment(
-        establishment_id=establishment_id,
-        business_unit_id=business_unit_id,
-    )
-    if not can_create_flash_todo(actor, business_unit):
-        raise ChecklistPermissionError("Not allowed to create a flash to-do.")
-
-    assigned_to = _validate_membership_in_establishment(
-        establishment_id=establishment_id,
-        membership_id=assigned_to_id,
-    )
-    _validate_assignee_covers_business_unit(
-        assigned_to=assigned_to,
-        business_unit=business_unit,
-    )
-
-    now = timezone.now()
-    execution = ChecklistExecution.objects.create(
-        checklist_template=None,
-        checklist_assignment=None,
-        execution_source=EXECUTION_SOURCE_FLASH_TODO,
-        establishment_id=establishment_id,
-        assigned_to=assigned_to,
-        assigned_by=actor if assigned_to.id != actor.id else None,
-        business_unit=business_unit,
-        template_title=_normalize_title(title),
-        template_description=_normalize_description(description),
-        start_at=None,
-        visible_from=None,
-        end_at=end_at,
-        occurrence_date=None,
-        status=EXECUTION_STATUS_ASSIGNED,
-        last_activity_at=now,
-    )
-    _create_ad_hoc_task_executions(execution=execution, tasks=tasks)
-    return execution
-
-
-@transaction.atomic
 def create_registered_checklist_template(
     *,
     establishment_id: uuid.UUID,
@@ -871,7 +790,6 @@ def create_registered_checklist_template(
     title: str,
     description: str = "",
     business_unit_id: uuid.UUID,
-    badge: str = CHECKLIST_BADGE_DEFAULT,
     tasks: list[dict],
     assign_now: bool = False,
     assigned_to_id: uuid.UUID | None = None,
@@ -883,7 +801,6 @@ def create_registered_checklist_template(
         title=title,
         description=description,
         business_unit_id=business_unit_id,
-        badge=_normalize_badge(badge),
     )
 
     for index, task_item in enumerate(tasks, start=1):

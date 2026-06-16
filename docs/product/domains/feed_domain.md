@@ -1,8 +1,8 @@
 # Feed Domain
 
 Status: authoritative  
-Last reviewed: 2026-06-13
-Implementation status: implemented (Signal Feed Phase 4 + Execution Feed Phase 5/7 — polymorphic Actions + Checklists unifiées). Checklist feed rules alignées sur [`checklist_domain.md`](checklist_domain.md) (Lots 2–7 clos).
+Last reviewed: 2026-06-16
+Implementation status: implemented (Signal Feed Phase 4 + Execution Feed Phase 5/7 — polymorphic Actions + Checklists). Checklist feed rules alignées sur [`checklist_domain.md`](checklist_domain.md) (Lot 0 doc closure).
 
 ## 1. Purpose
 
@@ -39,8 +39,8 @@ Current truth:
 - Response envelope: `items`, `next_cursor`, `has_more`; each item has `item_type: "action" | "checklist"`.
 - Execution Feed merge: visible checklist items are **prioritized** — up to `page_size` checklists first (sorted by `last_activity_at desc`), then Actions fill remaining slots (Action sort unchanged). Not a single cross-type `last_activity_at` interleave.
 - Lazy checklist materialization runs on feed read (`ensure_visible_executions_materialized`) before querying checklist items.
-- Execution Feed **Vue globale** for Staff: created/assigned Actions only (not scope-based); **Ma vue** uses the same rule for Staff. Checklist visibility follows [`checklist_domain.md`](checklist_domain.md) §9 (cible : exécutions assignées + scope ; Flash To-do et lancements depuis modèle selon RBAC).
-- **Feed Exécution `+` (cible)** : menu Action / Flash To-do / Checklist — voir [`checklist_domain.md`](checklist_domain.md) §5.16. Flash To-do n'utilise pas la bibliothèque.
+- Execution Feed **Vue globale** for Staff: created/assigned Actions only (not scope-based); **Ma vue** uses the same rule for Staff. Checklist visibility follows [`checklist_domain.md`](checklist_domain.md) §9 (exécutions assignées + scope ; lancements depuis modèle selon RBAC).
+- **Feed Exécution `+` (cible)** : menu **Action** / **Checklist** — voir [`checklist_domain.md`](checklist_domain.md) §5.16. Staff : Checklist → « Lancer pour moi » uniquement.
 
 ## 3. Out of Scope
 
@@ -141,9 +141,9 @@ Frontend display states may include:
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
 | **Signal Feed** | Active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes. | All active establishment Signals. RBAC feed access only. |
-| **Execution Feed** (Actions + Checklists — implemented) | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **Ma vue** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. **Checklist items (cible)** : exécutions où l'utilisateur est **`assigned_to`**, plus visibilité élargie Owner/Director/Manager selon [`checklist_domain.md`](checklist_domain.md) §9 (Flash To-do, `template`, `assignment`). | **Owner/Director:** all active establishment Actions + all visible checklist executions. **Manager:** own Actions plus Actions in **`MembershipScope`**, plus checklist executions in scoped BU (+ own assignments). **Staff:** created/assigned Actions + checklist executions **assigned to them** (and scope-visible catalogue usage does not add feed items unless assigned). **Not** subscription-based. |
+| **Execution Feed** (Actions + Checklists — implemented) | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **Ma vue** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. **Checklist items (cible)** : exécutions où l'utilisateur est **`assigned_to`**, plus visibilité élargie Owner/Director/Manager selon [`checklist_domain.md`](checklist_domain.md) §9 (`template`, `assignment`). | **Owner/Director:** all active establishment Actions + all visible checklist executions. **Manager:** own Actions plus Actions in **`MembershipScope`**, plus checklist executions in scoped BU (+ own assignments). **Staff:** created/assigned Actions + checklist executions **assigned to them** (scope-visible catalogue usage does not add feed items unless assigned). **Not** subscription-based. |
 
-**Execution Feed — Checklist items (cible post-refonte):** rules in [`checklist_domain.md`](checklist_domain.md) §5.6 and §9. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. **`execution_source = assignment`** : `visible_from = start_at - 1 hour`. **`flash_todo` and `template`** : `visible_from` null (immediate). Terminal `done` / `canceled` excluded from active feed — including Flash To-do. `end_at` overdue does not remove items (`is_overdue` indicator only). Feed cards expose `execution_source` and optional template `badge` (Process/To-do) — **not** shared/personal labels.
+**Execution Feed — Checklist items (cible Lot 0):** rules in [`checklist_domain.md`](checklist_domain.md) §5.6 and §9. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. **`execution_source = assignment`** : `visible_from = start_at - 1 hour`. **`template`** : `visible_from` null (immediate). Terminal `done` / `canceled` excluded from active feed. `end_at` overdue does not remove items (`is_overdue` indicator only). Feed cards expose `execution_source` — no Flash To-do label, no badge Process/To-do.
 
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
@@ -171,9 +171,9 @@ Pagination standard and audit: [`api_pagination_standard.md`](../../engineering/
 
 Candidate / not implemented: advanced search, feed counts, saved views, global cross-type sort interleaving (checklist-first merge remains).
 
-**Execution Feed page merge (implemented):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at`, `is_overdue`, `execution_source`, and optional `badge`; overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)). Labels **Flash To-do** / badge Process/To-do — not Partagée/Personnelle.
+**Execution Feed page merge (implemented):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at`, `is_overdue`, `execution_source`; overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)).
 
-**Execution Feed `+` menu (cible, Lot 4):** mobile-first bottom sheet with **Action** (Owner/Director/Manager), **Flash To-do** (all roles in scope), **Checklist** (créer ou utiliser enregistrée). See [`checklist_domain.md`](checklist_domain.md) §5.16.
+**Execution Feed `+` menu (cible, Lot 0):** mobile-first bottom sheet with **Action** (Owner/Director/Manager) and **Checklist** (Owner/Director/Manager : créer ou utiliser enregistrée ; Staff : utiliser enregistrée — « Lancer pour moi » uniquement). See [`checklist_domain.md`](checklist_domain.md) §5.16.
 
 Detail routes belong to owning domains, not Feed.
 
@@ -243,4 +243,4 @@ Vue générale for each role above must still return **all** active establishmen
 - Feed items expose safe structured summaries only (no raw Observation text).
 - Signal Feed items expose BusinessUnit / ActivitySubject labels and keys for UI badges.
 - Execution Feed Action items expose BU/AS fields per `action_domain.md`.
-- Execution Feed Checklist items expose safe summary: title, progress, `execution_source`, optional `badge`, `end_at`, `is_overdue`, `business_unit` label, status per [`checklist_domain.md`](checklist_domain.md) §12.
+- Execution Feed Checklist items expose safe summary: title, progress, `execution_source`, `end_at`, `is_overdue`, `business_unit` label, status per [`checklist_domain.md`](checklist_domain.md) §12.

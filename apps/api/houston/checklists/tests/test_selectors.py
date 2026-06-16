@@ -88,27 +88,24 @@ def test_manager_catalogue_is_scoped_to_membership_scope(
 
 
 def test_created_by_me_catalogue_is_own_only(
+    owner_membership,
     staff_membership,
-    other_staff_membership,
     staff_owned_template,
 ):
-    own_ids = set(
+    owner_ids = set(
+        registered_templates_for_catalogue(
+            membership=owner_membership,
+            created_by_me=True,
+        ).values_list("id", flat=True)
+    )
+    staff_ids = set(
         registered_templates_for_catalogue(
             membership=staff_membership,
             created_by_me=True,
         ).values_list("id", flat=True)
     )
-    other_ids = set(
-        registered_templates_for_catalogue(
-            membership=other_staff_membership,
-            created_by_me=True,
-        ).values_list(
-            "id",
-            flat=True,
-        )
-    )
-    assert staff_owned_template.id in own_ids
-    assert staff_owned_template.id not in other_ids
+    assert staff_owned_template.id in owner_ids
+    assert staff_owned_template.id not in staff_ids
 
 
 def test_assignments_for_management_scoped_for_manager(

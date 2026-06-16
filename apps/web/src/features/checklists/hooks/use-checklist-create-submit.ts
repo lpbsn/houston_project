@@ -3,7 +3,6 @@ import { useCallback, useState } from 'react'
 import type { AssignmentFormValues } from '@/features/checklists/lib/checklist-assignment-create-payload'
 import { buildChecklistAssignmentCreatePayload } from '@/features/checklists/lib/checklist-assignment-create-payload'
 import {
-  buildFlashTodoPayload,
   buildTemplateCreatePayload,
   type ChecklistCreateAssignmentMode,
   type ChecklistCreateFormInput,
@@ -12,24 +11,20 @@ import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklis
 import {
   useCreateChecklistAssignmentForTemplateMutation,
   useCreateChecklistTemplateMutation,
-  useCreateFlashTodoMutation,
 } from '@/features/checklists/hooks'
 
 export type ChecklistCreateSubmitInput = ChecklistCreateFormInput & {
-  flashEnabled: boolean
   assignmentMode: ChecklistCreateAssignmentMode
   assignmentValues?: AssignmentFormValues
 }
 
 type UseChecklistCreateSubmitOptions = {
   establishmentId: string
-  activeMembershipId: string
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
 }
 
 export function useChecklistCreateSubmit({
   establishmentId,
-  activeMembershipId,
   onNavigate,
 }: UseChecklistCreateSubmitOptions) {
   const [createdTemplateId, setCreatedTemplateId] = useState<string | null>(null)
@@ -37,12 +32,9 @@ export function useChecklistCreateSubmit({
 
   const createTemplateMutation = useCreateChecklistTemplateMutation(establishmentId)
   const createAssignmentMutation = useCreateChecklistAssignmentForTemplateMutation(establishmentId)
-  const createFlashMutation = useCreateFlashTodoMutation(establishmentId)
 
   const isSubmitting =
-    createTemplateMutation.isPending ||
-    createAssignmentMutation.isPending ||
-    createFlashMutation.isPending
+    createTemplateMutation.isPending || createAssignmentMutation.isPending
 
   const createAssignmentForTemplate = useCallback(
     async (templateId: string, assignmentValues: AssignmentFormValues) => {
@@ -58,21 +50,6 @@ export function useChecklistCreateSubmit({
   const submit = useCallback(
     async (input: ChecklistCreateSubmitInput) => {
       setPartialFailureMessage(null)
-
-      if (input.flashEnabled) {
-        try {
-          const execution = await createFlashMutation.mutateAsync(
-            buildFlashTodoPayload(input, activeMembershipId),
-          )
-          onNavigate(`/checklists/executions/${execution.id}`, { replace: true })
-        } catch (error) {
-          throw new Error(
-            resolveChecklistErrorMessage(error, 'Le Flash To-do n’a pas pu être créé.'),
-            { cause: error },
-          )
-        }
-        return
-      }
 
       if (
         createdTemplateId &&
@@ -129,9 +106,7 @@ export function useChecklistCreateSubmit({
       onNavigate(`/checklists/${templateId}`, { replace: true })
     },
     [
-      activeMembershipId,
       createAssignmentForTemplate,
-      createFlashMutation,
       createTemplateMutation,
       createdTemplateId,
       onNavigate,
