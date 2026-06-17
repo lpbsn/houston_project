@@ -83,3 +83,12 @@ def relaxed_auth_throttling_for_standard_tests(request, monkeypatch):
         finally:
             caches["default"].clear()
             drf_api_settings.reload()
+
+
+@pytest.fixture(autouse=True)
+def reset_channel_layers_between_tests():
+    from channels.layers import channel_layers
+
+    channel_layers.backends.clear()
+    yield
+    channel_layers.backends.clear()

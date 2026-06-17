@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canAssignChecklistExecutionToOthers,
   canShowChecklistTemplateDelete,
   canShowChecklistTemplateLaunchExecution,
   canShowChecklistTemplateManageTasks,
   canShowChecklistTemplateUpdate,
+  getChecklistTemplateLaunchButtonLabel,
 } from './checklist-template-permission-hints'
 
 const fullHints = {
@@ -16,6 +18,7 @@ const fullHints = {
   can_create_assignment: true,
   can_launch_execution: false,
   can_use_template: true,
+  can_assign_to_others: false,
 }
 
 describe('checklist-template-permission-hints', () => {
@@ -36,5 +39,15 @@ describe('checklist-template-permission-hints', () => {
     const hints = { ...fullHints, can_update: false, can_delete: false }
     expect(canShowChecklistTemplateUpdate(hints)).toBe(false)
     expect(canShowChecklistTemplateDelete(hints)).toBe(false)
+  })
+
+  it('derives launch labels from assign-to-others hint', () => {
+    expect(getChecklistTemplateLaunchButtonLabel(fullHints)).toBe('Lancer pour moi')
+    expect(
+      getChecklistTemplateLaunchButtonLabel({ ...fullHints, can_assign_to_others: true }),
+    ).toBe('Lancer une exécution')
+    expect(canAssignChecklistExecutionToOthers({ ...fullHints, can_assign_to_others: true })).toBe(
+      true,
+    )
   })
 })

@@ -45,3 +45,20 @@ export function canShowChecklistTemplateDelete(
 ): boolean {
   return hasCompleteChecklistTemplatePermissionHints(hints) && hints.can_delete
 }
+
+export function canAssignChecklistExecutionToOthers(
+  hints: ChecklistTemplatePermissionHints | null | undefined,
+): boolean {
+  return (
+    hasCompleteChecklistTemplatePermissionHints(hints) &&
+    hints.can_assign_to_others === true
+  )
+}
+
+export function getChecklistTemplateLaunchButtonLabel(
+  hints: ChecklistTemplatePermissionHints | null | undefined,
+): string {
+  return canAssignChecklistExecutionToOthers(hints)
+    ? 'Lancer une exécution'
+    : 'Lancer pour moi'
+}

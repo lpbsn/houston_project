@@ -32,7 +32,7 @@ export function ExecutionChecklistCard({ item, onSelect }: ExecutionChecklistCar
     item.progress_treated_count,
     item.progress_total_count,
   )
-  const badgeLabel = formatChecklistFeedBadgeLabel(item.execution_source, item.badge)
+  const badgeLabel = formatChecklistFeedBadgeLabel()
   const borderColor = item.is_overdue ? '#E24B4A' : '#E69138'
   const progressBarColor = item.is_overdue ? '#E24B4A' : '#E69138'
 

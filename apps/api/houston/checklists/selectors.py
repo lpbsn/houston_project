@@ -9,7 +9,6 @@ from houston.actions.selectors import ExecutionFeedViewMode
 from houston.checklists.constants import (
     ACTIVE_EXECUTION_STATUSES,
     ASSIGNMENT_STATUS_ACTIVE,
-    CHECKLIST_BADGES,
     EXECUTION_FEED_STATUSES,
     EXECUTION_STATUS_IN_PROGRESS,
     TREATED_TASK_STATUSES,
@@ -68,7 +67,6 @@ def registered_templates_for_catalogue(
     *,
     membership: EstablishmentMembership,
     created_by_me: bool = False,
-    badge: str | None = None,
     business_unit_id: uuid.UUID | None = None,
 ) -> QuerySet[ChecklistTemplate]:
     if not can_view_registered_catalogue(membership):
@@ -96,10 +94,6 @@ def registered_templates_for_catalogue(
 
     if created_by_me:
         filtered = filtered.filter(created_by_id=membership.id)
-    if badge is not None:
-        if badge not in CHECKLIST_BADGES:
-            return ChecklistTemplate.objects.none()
-        filtered = filtered.filter(badge=badge)
     if business_unit_id is not None:
         filtered = filtered.filter(business_unit_id=business_unit_id)
     return filtered

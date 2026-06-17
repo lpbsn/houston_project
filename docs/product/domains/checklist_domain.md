@@ -1,8 +1,8 @@
 # Checklist Domain
 
 Status: authoritative
-Last reviewed: 2026-06-09
-Implementation status: **Lots 2–7 implemented** — modèle unifié, bibliothèque unique, feed `+`, cleanup personal/shared, hardening global validé (2026-06-09).
+Last reviewed: 2026-06-16
+Implementation status: **Lot 0 (doc closure)** — modèle produit cible : checklist = processus opérationnel enregistré uniquement (`ChecklistTemplate`) ; Flash To-do et badge Process/To-do retirés du produit.
 
 Historical reference only (not active product truth): [`docs/archive/codex/houston_checklist_domain.md`](../../archive/codex/houston_checklist_domain.md).
 
@@ -10,8 +10,7 @@ Historical reference only (not active product truth): [`docs/archive/codex/houst
 
 Checklist owns Houston's routine execution structure:
 
-- **Checklists enregistrées** — modèles réutilisables (`ChecklistTemplate` + tâches), visibles dans la **Bibliothèque de checklists**
-- **Flash To-do** — listes ponctuelles terrain sans modèle (`ChecklistExecution` seule)
+- **Checklists enregistrées** — processus opérationnels réutilisables (`ChecklistTemplate` + tâches), visibles dans la **Bibliothèque de checklists**
 - **Affectations planifiées** — `ChecklistAssignment` (récurrence, matérialisation) pour routines récurrentes
 - Exécutions runtime et tâches runtime avec snapshots
 - Complétion, skip et handoff Observation côté backend
@@ -34,29 +33,22 @@ Checklist does not own:
 
 | Terme | Signification |
 | --- | --- |
-| **Checklist** | Domaine unique ; pas de sous-type produit |
+| **Checklist** | Processus opérationnel enregistré ; un seul type produit (`ChecklistTemplate`) |
 | **Checklist enregistrée** | Modèle réutilisable en bibliothèque (`ChecklistTemplate`) |
-| **Flash To-do** | Exécution ponctuelle sans modèle |
 | **Bibliothèque de checklists** | Liste des checklists enregistrées accessibles (une seule bibliothèque) |
-| **Badge Process** | Label UX : checklist plus officielle / process interne |
-| **Badge To-do** | Label UX : checklist plus souple / terrain / réutilisable |
+| **Lancer pour moi** | Lancement ponctuel d'une exécution depuis un modèle existant, assigné à soi-même (Staff) |
 
 ### Termes interdits (produit actif)
 
 Ne plus utiliser comme concept courant :
 
+- Flash To-do / flash todo / `flash_todo`
 - checklist personnelle / personal checklist
 - checklist partagée / shared checklist
 - `checklist_type` = personal | shared (concept produit ; champ technique en cours de suppression)
 - deux bibliothèques (Process vs To-do, shared vs personal)
-- onglets structurels lourds Process / To-do (un **badge + filtre** suffit)
-
-### Règle badge
-
-- `Process` et `To-do` sont le **même objet métier** (`ChecklistTemplate`).
-- Le badge est **uniquement UX** ; il ne crée pas deux modèles, permissions, flows, tables ou endpoints.
-- Le badge **ne modifie jamais le RBAC**.
-- Badge par défaut à la création d'une checklist enregistrée : **`todo`**.
+- badge Process / badge To-do / distinction process vs todo
+- onglets structurels lourds Process / To-do
 
 ## 3. Concepts produit
 
@@ -65,23 +57,23 @@ Ne plus utiliser comme concept courant :
 - Stockée comme `ChecklistTemplate` + `ChecklistTaskTemplate`
 - Visible dans la bibliothèque
 - Réutilisable et assignable (exécution ponctuelle ou via `ChecklistAssignment`)
-- Badge `process` ou `todo`
 - `business_unit` **obligatoire**
-- Modifiable / supprimable selon RBAC (§9)
+- Modifiable / supprimable selon RBAC (§9) — **Staff : lecture seule**
 
-### 3.2 Flash To-do
+### 3.2 Flow produit
 
-- Créé rapidement depuis le **Feed Exécution `+`**
-- Crée **uniquement** une `ChecklistExecution` (et snapshots de tâches)
-- **Ne crée aucun** `ChecklistTemplate`
-- **N'apparaît jamais** dans la bibliothèque
-- Visible dans le Feed Exécution tant que `status IN (assigned, in_progress)`
-- Disparaît du feed principal une fois terminal : `done` ou `canceled`
-- Peut rester en base pour audit minimal ; pas visible comme checklist active ni modèle réutilisable
-- `execution_source = flash_todo`
-- `checklist_template = null`
-- `visible_from = null` (visible immédiatement)
-- `end_at` optionnel
+```txt
+Créer le processus → enregistrer → lancer / assigner → exécuter
+```
+
+| Étape | Description | Qui |
+| --- | --- | --- |
+| **Créer** | Définir titre, description, tâches (≥1), pôle (`business_unit`) | Owner / Director / Manager (scope BU) |
+| **Enregistrer** | `POST .../checklist-templates/` — modèle `active` ou `inactive` | Idem |
+| **Lancer / assigner** | Exécution ponctuelle (`template`) ou planification (`ChecklistAssignment`) | Owner / Director / Manager : pour soi ou pour autrui ; **Staff : « Lancer pour moi » uniquement** |
+| **Exécuter** | Tâches runtime sur l'exécution assignée | Assigné |
+
+Staff ne crée, ne modifie et ne supprime **aucun** processus. Staff ne crée **aucune** `ChecklistAssignment`.
 
 ### 3.3 Séparation Template → Assignment → Execution
 
@@ -93,23 +85,25 @@ Sources d'exécution (`execution_source`) :
 
 | Valeur | Origine |
 | --- | --- |
-| `flash_todo` | Flash To-do ; pas de template |
 | `template` | Lancement ponctuel depuis checklist enregistrée (`POST .../templates/{id}/executions/` ou `assign_now` à la création) |
 | `assignment` | Occurrence matérialisée depuis `ChecklistAssignment` |
 
+Toute exécution est liée à un `ChecklistTemplate` (`checklist_template_id` requis).
+
 ## 4. MVP Scope
 
-- Un seul domaine Checklist (plus de personal/shared).
-- `ChecklistTemplate` : checklist enregistrée ; `badge` `process` | `todo` ; `business_unit` requis ; `status` `active` | `inactive`.
+- Un seul domaine Checklist (plus de personal/shared, plus de Flash To-do).
+- `ChecklistTemplate` : checklist enregistrée ; `business_unit` requis ; `status` `active` | `inactive`.
 - `ChecklistAssignment` : `active` | `inactive` ; planification + récurrence hebdomadaire simple (conservé).
-- `ChecklistExecution` : `assigned` | `in_progress` | `done` | `canceled` ; `execution_source` ; template nullable.
+- `ChecklistExecution` : `assigned` | `in_progress` | `done` | `canceled` ; `execution_source` `template` | `assignment` ; template requis.
 - `ChecklistTaskExecution` : `pending` | `done` | `skipped` | `observation_created`.
 - Snapshots obligatoires à la création / matérialisation d'exécution.
 - Pas d'endpoint `start` — passage `assigned` → `in_progress` au premier événement tâche.
 - Handoff Observation depuis tâche (pipeline async existant).
 - Exécutions checklist dans Execution Feed (`item_type: checklist`).
-- **Profil → Gérer les checklists** : bibliothèque unique + gestion assignments sur les modèles.
-- **Feed Exécution `+`** : Action / Flash To-do / Checklist (voir §3.19).
+- **Profil → Gérer les checklists** : bibliothèque unique + gestion assignments sur les modèles (Owner/Director/Manager).
+- **Feed Exécution `+`** : Action / Checklist (voir §5.16).
+- Permission hints backend pour piloter l'UI ; backend enforce la sécurité.
 - Pas de commentaires checklist en MVP.
 
 **Migration DEV/test (Lots 2A–2B)** : suppression **destructive** de toutes les données `personal` legacy (`checklist_type = personal`) — pas de conversion, pas de préservation pilot. Environnement DEV/test uniquement.
@@ -119,7 +113,7 @@ Current code truth :
 - Backend: [`apps/api/houston/checklists/`](../../../apps/api/houston/checklists/)
 - OpenAPI: [`apps/api/schema.yml`](../../../apps/api/schema.yml)
 - Frontend bibliothèque : [`apps/web/src/features/checklists/`](../../../apps/web/src/features/checklists/) — routes `/checklists`, `/checklists/new`, `/checklists/{id}`
-- Feed card : [`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx) — `execution_source` + `badge`
+- Feed card : [`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx) — `execution_source`
 
 ## 5. Décisions définitives MVP
 
@@ -144,7 +138,7 @@ A task is **treated** when its status is `done`, `skipped`, or `observation_crea
 
 `ChecklistExecution` passes from `assigned` to `in_progress` on the **first** user task event: `mark_done`, `skip`, or `create_observation_from_task`.
 
-### 5.4 Modèle cible (post-refonte)
+### 5.4 Modèle cible (Lot 0)
 
 ```txt
 ChecklistTemplate                    # checklist enregistrée uniquement
@@ -152,7 +146,6 @@ ChecklistTemplate                    # checklist enregistrée uniquement
   created_by
   business_unit                      # required
   title, description
-  badge = process | todo               # UX only; default todo
   status = active | inactive
 
 ChecklistTaskTemplate
@@ -169,19 +162,19 @@ ChecklistAssignment                  # planification / récurrence (conservé)
   status = active | inactive
 
 ChecklistExecution
-  checklist_template_id              # nullable (flash_todo)
-  checklist_assignment_id            # nullable (template / flash_todo)
-  execution_source = flash_todo | template | assignment
+  checklist_template_id              # required
+  checklist_assignment_id            # nullable (template only)
+  execution_source = template | assignment
   establishment_id
   assigned_to, assigned_by
   business_unit                      # required (snapshot)
   occurrence_date                    # nullable; idempotence assignment
-  start_at, end_at, visible_from     # snapshots; flash: visible_from null
+  start_at, end_at, visible_from     # snapshots
   template_title, template_description
   status, last_activity_at
 ```
 
-**Champs supprimés (cible)** : `checklist_type` sur template et execution.
+**Champs supprimés (cible)** : `checklist_type` sur template et execution ; `badge` sur template ; `execution_source = flash_todo`.
 
 ### 5.5 BusinessUnit / RBAC
 
@@ -215,7 +208,7 @@ Voir §9 pour la matrice complète.
 - Feed inclusion: `status IN (assigned, in_progress)` AND `now >= visible_from`
 - `end_at` overdue does **not** remove from feed — only `done` / `canceled`
 
-**Executions `flash_todo` et `template`** :
+**Executions `template`** :
 
 - `visible_from = null` (immédiat)
 - `start_at` nullable sauf si défini à la création
@@ -241,7 +234,7 @@ Horizon 14 jours :
 
 ### 5.10 Exécutions concurrentes
 
-- Plusieurs exécutions actives par template (assignments / lancements ponctuels / flash distincts).
+- Plusieurs exécutions actives par template (assignments / lancements ponctuels distincts).
 - Plus de règle « une seule exécution active par template personal » (concept supprimé).
 
 ### 5.11 Template / Assignment inactive (conservé)
@@ -256,14 +249,14 @@ Horizon 14 jours :
 
 | `execution_source` | Qui peut cancel |
 | --- | --- |
-| `flash_todo`, `template` | **Assigné** ; Owner/Director (établissement) ; Manager si `business_unit` dans scope |
+| `template` | **Assigné** ; Owner/Director (établissement) ; Manager si `business_unit` dans scope |
 | `assignment` | Idem (exécution matérialisée) |
 
 **Staff** : peut cancel si **assigné** ; ne peut pas cancel l'exécution d'un **tiers**.
 
 ### 5.13 Snapshots (conservé)
 
-À la création d'exécution (flash, template, ou matérialisation) :
+À la création d'exécution (template ou matérialisation) :
 
 - `template_title`, `template_description`
 - `business_unit`, `assigned_to`, `assigned_by`
@@ -282,38 +275,43 @@ Checklists among themselves : `last_activity_at desc`. Page merge : checklists f
 
 ### 5.16 UX — Profil vs Feed Exécution `+`
 
-**Profil → Gérer les checklists** (tous rôles actifs) :
+**Profil → Gérer les checklists** :
 
-- **Bibliothèque de checklists** unique — checklists enregistrées accessibles selon RBAC
-- Filtres : badge (Tous / Process / To-do), pôle, créées par moi
-- Détail modèle : tâches, assignments planifiés, utiliser / assigner
-- **Jamais** de Flash To-do dans la bibliothèque
+| Rôle | Accès |
+| --- | --- |
+| Owner / Director / Manager | Bibliothèque complète selon scope ; CRUD processus ; gestion assignments |
+| Staff | Bibliothèque en **lecture seule** ; lancer exécution pour soi depuis un modèle accessible (« Lancer pour moi ») |
+
+- Filtres bibliothèque : pôle, créées par moi
+- Détail modèle : tâches, assignments planifiés (si autorisé), utiliser / assigner selon RBAC
 
 **Feed Exécution `+`** (mobile-first) :
 
 | Entrée | Comportement |
 | --- | --- |
 | **Action** | Inchangé (Owner/Director/Manager) |
-| **Flash To-do** | Flow court → `POST .../checklist-executions/flash-todo/` |
-| **Checklist** | Choix : **Créer une checklist** / **Utiliser une checklist existante** |
+| **Checklist** | Owner/Director/Manager : **Créer une checklist** / **Utiliser une checklist existante** (pour soi ou autrui). Staff : **Utiliser une checklist existante** — **Lancer pour moi** uniquement |
 
-**Créer une checklist enregistrée** (depuis `+` ou bibliothèque) :
+**Créer une checklist enregistrée** (Owner/Director/Manager — depuis `+` ou bibliothèque) :
 
-- Titre, description optionnelle, tâches (≥1), BU, badge (default `todo`)
+- Titre, description optionnelle, tâches (≥1), BU
 - Assigner maintenant : oui/non ; si oui : assigné + `end_at` optionnel
 - `POST .../checklist-templates/` transactionnel (`assign_now` crée aussi exécution)
 
 **Utiliser une checklist existante** :
 
 - Choisir modèle accessible, assigné, `end_at` optionnel
+- Staff : assigné forcé à soi-même
 - `POST .../checklist-templates/{id}/executions/`
 
 ## 6. Hors MVP
 
 - Endpoint `start` pour executions
 - Statuts `draft`, `archived`, `completed`, `open` pour exécutions
+- Flash To-do et endpoint `flash-todo/`
+- Badge Process/To-do et filtre badge
 - Modèle ou domaine `PersonalChecklist` / distinction shared/personal
-- Deux bibliothèques ou permissions selon badge Process/To-do
+- Deux bibliothèques ou permissions selon type de checklist
 - Approbation modèles, marketplace, commentaires checklist, preuve photo obligatoire
 - Validation manager à la complétion
 - RRULE avancé, notifications checklist (Phase 6+)
@@ -322,8 +320,7 @@ Checklists among themselves : `last_activity_at desc`. Page merge : checklists f
 
 ## 7. Core Invariants
 
-- Badge ne pilote jamais RBAC.
-- Flash To-do ne crée jamais de template.
+- Une checklist = un `ChecklistTemplate` enregistré ; pas d'exécution sans modèle.
 - Bibliothèque = templates enregistrés uniquement.
 - Recurrence vit sur `ChecklistAssignment`, pas sur `ChecklistExecution`.
 - Backend owns all lifecycle transitions via explicit service methods.
@@ -331,8 +328,9 @@ Checklists among themselves : `last_activity_at desc`. Page merge : checklists f
 - `end_at` ne retire pas du feed actif — seuls `done` / `canceled`.
 - Establishment scoping mandatory.
 - No raw Observation text on checklist surfaces.
+- Permission hints pilotent l'UI ; le backend est l'autorité de sécurité.
 
-## 8. Main Objects (cible post-refonte)
+## 8. Main Objects (cible Lot 0)
 
 Voir §5.4. Inspect [`models.py`](../../../apps/api/houston/checklists/models.py) before claiming field names match production code during migration.
 
@@ -340,22 +338,22 @@ Voir §5.4. Inspect [`models.py`](../../../apps/api/houston/checklists/models.py
 
 Establishment-scoped, backend-enforced. Helpers: [`permissions.py`](../../../apps/api/houston/checklists/permissions.py). UX hints: [`permission_hints.py`](../../../apps/api/houston/checklists/permission_hints.py) — **not authorization authority**.
 
-### 9.1 Matrice cible
+### 9.1 Matrice cible (Lot 0)
 
 | Capability | Owner / Director | Manager | Staff |
 | --- | --- | --- | --- |
-| Profil — Bibliothèque de checklists | yes | yes | yes |
-| Créer Flash To-do (scope BU) | yes (all BU) | yes, scoped BU | yes, scoped BU |
-| Créer checklist enregistrée | yes (all BU) | yes, scoped BU | yes, scoped BU |
+| Profil — Bibliothèque de checklists | yes | yes | yes (lecture) |
+| Créer checklist enregistrée | yes (all BU) | yes, scoped BU | **no** |
 | Voir bibliothèque (modèles accessibles) | all establishment | scoped BU | scoped BU |
-| Modifier checklist enregistrée | all | scoped BU | **own `created_by` only** |
-| Supprimer checklist enregistrée | all | scoped BU | **own `created_by` only** |
-| Utiliser / lancer exécution depuis modèle | all | scoped BU | scoped BU (même si autre auteur) |
-| Gérer assignments (créer / PATCH / deactivate) | yes | scoped BU | no |
+| Modifier checklist enregistrée | all | scoped BU | **no** |
+| Supprimer checklist enregistrée | all | scoped BU | **no** |
+| Lancer exécution depuis modèle — pour soi | yes | yes, scoped BU | yes, scoped BU (**Lancer pour moi**) |
+| Lancer exécution depuis modèle — pour autrui | yes (all BU) | yes, scoped BU | **no** |
+| Gérer assignments (créer / PATCH / deactivate) | yes | scoped BU | **no** |
 | Exécuter tâches (assigné) | if assignee | if assignee | if assignee |
 | Annuler exécution | yes ; Manager scoped | scoped BU ; assigné | **assigné only** |
 | Feed `+` — Action | yes | yes | no |
-| Feed `+` — Flash To-do / Checklist | yes | yes | yes |
+| Feed `+` — Checklist | yes | yes | yes (**Lancer pour moi** uniquement) |
 
 **Assigné** :
 
@@ -364,13 +362,15 @@ Establishment-scoped, backend-enforced. Helpers: [`permissions.py`](../../../app
 
 ### 9.2 Permission hints (cible)
 
+Les hints pilotent l'affichage des boutons et actions UI. Le backend rejette toute commande non autorisée (`403`).
+
 | Resource | Hint keys (cible) |
 | --- | --- |
-| Template | `can_update`, `can_manage_tasks`, `can_activate`, `can_deactivate`, `can_delete`, `can_create_assignment`, `can_launch_execution` |
+| Template | `can_update`, `can_manage_tasks`, `can_activate`, `can_deactivate`, `can_delete`, `can_create_assignment`, `can_launch_execution`, `can_launch_execution_for_others` |
 | Assignment | `can_update`, `can_deactivate` |
 | Execution | `can_execute_tasks`, `can_cancel` |
 
-Legacy hint `can_create_personal_execution` — **supprimé** (remplacé par `can_launch_execution`).
+Legacy hints supprimés : `can_create_personal_execution` ; tout hint lié à Flash To-do ou badge.
 
 RBAC reference: [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 
@@ -378,14 +378,13 @@ RBAC reference: [`rbac_permissions_domain.md`](rbac_permissions_domain.md).
 
 Inspect [`apps/api/schema.yml`](../../../apps/api/schema.yml) before claiming endpoints exist.
 
-### 10.1 Endpoints cibles (refonte Lot 3)
+### 10.1 Endpoints cibles (Lot 0)
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET, POST | `checklist-templates/` | Bibliothèque (filtres `badge`, `business_unit_id`, `created_by_me`) / création enregistrée composite |
+| GET, POST | `checklist-templates/` | Bibliothèque (filtres `business_unit_id`, `created_by_me`) / création enregistrée composite |
 | GET, PATCH, DELETE | `checklist-templates/{id}/` | Detail / update / delete |
 | POST | `checklist-templates/{id}/executions/` | Lancer exécution depuis modèle |
-| POST | `checklist-executions/flash-todo/` | Créer Flash To-do (exécution seule) |
 | POST | `checklist-templates/{id}/activate/` | Activate (≥1 task) |
 | POST | `checklist-templates/{id}/deactivate/` | Deactivate |
 | POST | `checklist-templates/{id}/tasks/` | Add task |
@@ -408,7 +407,6 @@ Inspect [`apps/api/schema.yml`](../../../apps/api/schema.yml) before claiming en
   "title": "Fermeture restaurant",
   "description": "",
   "business_unit_id": "uuid",
-  "badge": "process",
   "tasks": [{ "title": "Fermer caisse" }],
   "assign_now": true,
   "assigned_to": "uuid",
@@ -416,24 +414,13 @@ Inspect [`apps/api/schema.yml`](../../../apps/api/schema.yml) before claiming en
 }
 ```
 
-**POST `checklist-executions/flash-todo/` payload cible** :
-
-```json
-{
-  "title": "Vérifier la terrasse",
-  "business_unit_id": "uuid",
-  "assigned_to": "uuid",
-  "end_at": "2026-06-09T18:00:00+02:00",
-  "tasks": [{ "title": "Nettoyer les tables" }]
-}
-```
-
-### 10.2 Endpoints legacy (supprimés Lot 6)
+### 10.2 Endpoints legacy (supprimés)
 
 | Endpoint | Statut |
 | --- | --- |
 | `GET/POST checklist-templates/?type=shared\|personal` | **Supprimé** |
 | `POST .../personal-executions/` | **Supprimé** |
+| `POST .../checklist-executions/flash-todo/` | **Supprimé** (Flash To-do retiré du produit) |
 
 Aucun comportement actif ne dépend de ces endpoints.
 
@@ -441,18 +428,18 @@ Execution Feed : `GET execution-feed/` — `item_type: action | checklist`.
 
 ## 11. Frontend Expectations (cible)
 
-- **Bibliothèque unique** ; badge Process/To-do ; pas de sections personal/shared
-- **Feed `+`** : Action / Flash To-do / Checklist
-- Flash : un seul appel API `flash-todo/` — **pas** `quickCreatePersonalChecklistExecution` ni `personal-executions/`
-- Feed card : label **Flash To-do** ou badge Process/To-do — **pas** Partagée/Personnelle
+- **Bibliothèque unique** ; pas de sections personal/shared ; pas de badge Process/To-do
+- **Feed `+`** : Action / Checklist
+- Staff : pas de création processus ; « Lancer pour moi » depuis modèle existant
+- Feed card : titre, progression, `execution_source` — pas de label Flash To-do ni badge Process/To-do
 - TanStack Query + client OpenAPI généré
-- Permission hints backend pour boutons modifier/supprimer/utiliser
+- Permission hints backend pour boutons modifier/supprimer/utiliser/lancer
 - Lifecycle via commandes backend uniquement
 
 ## 12. Execution Feed integration
 
 - Polymorphism `item_type: checklist`
-- Feed item expose : title, progress, `execution_source`, `badge` (si template lié), `end_at`, `is_overdue`, BU label, status
+- Feed item expose : title, progress, `execution_source`, `end_at`, `is_overdue`, BU label, status
 - Inclusion : `status IN (assigned, in_progress)` AND visibility rules §5.6
 - Terminal `done`/`canceled` excluded from active feed
 - See [`feed_domain.md`](feed_domain.md)
@@ -472,15 +459,16 @@ Execution Feed : `GET execution-feed/` — `item_type: action | checklist`.
 
 - **Autorisé** : suppression destructive de toutes les checklists `personal` (templates, exécutions, tâches)
 - **Pas** de conversion personal → enregistrée
-- Templates shared existants : `badge = process` par convention data migration ; nouvelles créations default `todo`
-- Exécutions shared existantes : `execution_source = assignment` ou `template` selon présence d'assignment
+- Exécutions existantes : `execution_source = assignment` ou `template` selon présence d'assignment
+- Données Flash To-do legacy : à purger en DEV/test lors de la fermeture Lot 0
 
 ## 15. AI Agent Notes
 
-- Do not use `checklist_type` shared/personal as product truth after Lot 1.
-- Do not branch RBAC on `badge`.
+- Do not use `checklist_type` shared/personal as product truth.
+- Do not use `badge`, Flash To-do, or `execution_source = flash_todo` as product truth.
 - Do not create separate Process/To-do models or endpoints.
-- Flash To-do must not create `ChecklistTemplate`.
+- Every execution must reference a `ChecklistTemplate`.
+- Staff cannot CRUD templates or create assignments — only « Lancer pour moi ».
 - Keep `ChecklistAssignment` + materialization unless explicitly removed in a future lot.
 - Inspect `schema.yml` before claiming API shape.
 - When changing APIs: update permissions, OpenAPI, generated clients, tests, and this document together.

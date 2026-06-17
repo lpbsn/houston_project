@@ -85,7 +85,7 @@ Future phases may add lightweight invalidation for Signal Feed, Execution Feed, 
 - Missed or dropped realtime delivery must not corrupt business state.
 - Reconnect should trigger safe refetch of relevant active queries.
 - Feed remains a backend-authorized projection; realtime only helps refresh it.
-- Terminal checklist executions (`done` / `canceled`, including Flash To-do) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
+- Terminal checklist executions (`done` / `canceled`) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
 - Notifications remain persisted attention messages; realtime only helps refresh their UI.
 - Generic Realtime invalidation must not transport raw Chat messages.
 - Chat V1 message transport is defined only in [`chat_domain.md`](chat_domain.md) and is not a precedent for generic invalidation payloads.

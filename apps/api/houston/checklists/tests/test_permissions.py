@@ -3,16 +3,16 @@ from __future__ import annotations
 import pytest
 
 from houston.accounts.models import User
-from houston.checklists.constants import CHECKLIST_BADGE_PROCESS, CHECKLIST_BADGE_TODO
 from houston.checklists.models import ChecklistTemplate
 from houston.checklists.permissions import (
     can_access_checklist_management,
+    can_assign_checklist_execution_to_others,
     can_cancel_checklist_execution,
     can_create_checklist_assignment,
-    can_create_flash_todo,
     can_create_registered_template,
     can_delete_registered_template,
     can_execute_checklist_tasks,
+    can_launch_checklist_execution_for_assignee,
     can_launch_template_execution,
     can_manage_registered_template,
     can_use_template,
@@ -180,18 +180,25 @@ def test_staff_can_launch_execution_from_other_authors_template_in_scope(
     assert can_launch_template_execution(other_staff_membership, registered_template)
 
 
-def test_staff_can_manage_only_own_template(
+def test_staff_cannot_manage_template(
     staff_owned_template,
     staff_membership,
     other_staff_membership,
 ):
-    assert can_manage_registered_template(staff_membership, staff_owned_template)
+    assert not can_manage_registered_template(staff_membership, staff_owned_template)
     assert not can_manage_registered_template(other_staff_membership, staff_owned_template)
 
 
-def test_all_roles_can_create_registered_template(staff_membership, manager_membership):
-    assert can_create_registered_template(staff_membership)
+def test_management_roles_can_create_registered_template(
+    owner_membership,
+    manager_membership,
+):
+    assert can_create_registered_template(owner_membership)
     assert can_create_registered_template(manager_membership)
+
+
+def test_staff_cannot_create_registered_template(staff_membership):
+    assert not can_create_registered_template(staff_membership)
 
 
 def test_manager_can_manage_registered_template_in_scope(
@@ -217,39 +224,36 @@ def test_manager_cannot_manage_registered_template_out_of_scope(
     assert not can_manage_registered_template(manager_membership, template)
 
 
-def test_staff_can_create_flash_todo_in_scope(staff_membership, business_unit):
-    assert can_create_flash_todo(staff_membership, business_unit)
-
-
-def test_staff_denied_flash_todo_out_of_scope(establishment, staff_membership):
-    other_bu = create_business_unit(establishment=establishment, key="spa")
-    assert not can_create_flash_todo(staff_membership, other_bu)
-
-
-def test_badge_does_not_change_launch_permission(
-    establishment,
+def test_staff_can_launch_for_self_only(
+    registered_template,
     staff_membership,
-    business_unit,
-    owner_membership,
+    other_staff_membership,
 ):
-    process_template = ChecklistTemplate.objects.create(
-        establishment=establishment,
-        created_by=owner_membership,
-        business_unit=business_unit,
-        title="Process",
-        badge=CHECKLIST_BADGE_PROCESS,
-        status=ChecklistTemplate.Status.ACTIVE,
+    assert can_launch_template_execution(staff_membership, registered_template)
+    assert can_launch_checklist_execution_for_assignee(
+        staff_membership,
+        registered_template,
+        staff_membership,
     )
-    todo_template = ChecklistTemplate.objects.create(
-        establishment=establishment,
-        created_by=owner_membership,
-        business_unit=business_unit,
-        title="Todo",
-        badge=CHECKLIST_BADGE_TODO,
-        status=ChecklistTemplate.Status.ACTIVE,
+    assert not can_launch_checklist_execution_for_assignee(
+        staff_membership,
+        registered_template,
+        other_staff_membership,
     )
-    assert can_launch_template_execution(staff_membership, process_template)
-    assert can_launch_template_execution(staff_membership, todo_template)
+    assert not can_assign_checklist_execution_to_others(staff_membership)
+
+
+def test_management_can_assign_execution_to_others(
+    registered_template,
+    owner_membership,
+    staff_membership,
+):
+    assert can_assign_checklist_execution_to_others(owner_membership)
+    assert can_launch_checklist_execution_for_assignee(
+        owner_membership,
+        registered_template,
+        staff_membership,
+    )
 
 
 def test_staff_can_execute_assigned_assignment_execution(
@@ -325,8 +329,8 @@ def test_manager_can_delete_registered_template_in_scope(
     assert can_delete_registered_template(manager_membership, registered_template)
 
 
-def test_staff_can_delete_own_template(staff_membership, staff_owned_template):
-    assert can_delete_registered_template(staff_membership, staff_owned_template)
+def test_staff_cannot_delete_template(staff_membership, staff_owned_template):
+    assert not can_delete_registered_template(staff_membership, staff_owned_template)
 
 
 def test_staff_cannot_delete_other_authors_template(

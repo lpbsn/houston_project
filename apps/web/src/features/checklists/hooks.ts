@@ -13,7 +13,6 @@ import {
   createChecklistTaskObservation,
   createChecklistTemplate,
   createExecutionFromTemplate,
-  createFlashTodoExecution,
   createRegisteredChecklistTemplate,
   deactivateChecklistAssignment,
   deactivateChecklistTemplate,
@@ -33,7 +32,6 @@ import {
 } from './api'
 import type {
   ChecklistAssignmentCreateRequest,
-  ChecklistFlashTodoCreateRequest,
   ChecklistTemplateExecutionCreateRequest,
   ChecklistTemplateListFilters,
   PatchedChecklistAssignmentUpdateRequest,
@@ -347,18 +345,6 @@ export function useChecklistExecutionDetailQuery(
       return fetchChecklistExecutionDetail(establishmentId, executionId)
     },
     enabled: Boolean(establishmentId && executionId),
-  })
-}
-
-export function useCreateFlashTodoMutation(establishmentId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (body: ChecklistFlashTodoCreateRequest) =>
-      createFlashTodoExecution(establishmentId, body),
-    onSuccess: (data) => {
-      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, data.id)
-    },
   })
 }
 

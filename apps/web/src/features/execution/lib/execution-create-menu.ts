@@ -40,11 +40,18 @@ export function getExecutionCreateMenuOptions(
   return options
 }
 
-export function getChecklistCreateSubmenuOptions(): ChecklistCreateSubmenuOption[] {
-  return [
-    { id: 'create_registered', label: 'Créer une checklist' },
-    { id: 'use_existing', label: 'Utiliser une checklist existante' },
-  ]
+export function getChecklistCreateSubmenuOptions(
+  permissionHints: BootstrapPermissionHints | null | undefined,
+): ChecklistCreateSubmenuOption[] {
+  const options: ChecklistCreateSubmenuOption[] = []
+
+  if (permissionHints?.can_create_checklist_template === true) {
+    options.push({ id: 'create_registered', label: 'Créer une checklist' })
+  }
+
+  options.push({ id: 'use_existing', label: 'Utiliser une checklist existante' })
+
+  return options
 }
 
 export function canOpenExecutionCreateMenu(role: string | null | undefined): boolean {

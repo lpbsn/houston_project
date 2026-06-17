@@ -107,7 +107,7 @@ def test_manager_out_of_bu_cannot_view_registered_template_detail(
     assert response.status_code == 404
 
 
-def test_staff_owned_template_list_omits_dynamic_launch_execution_hint(
+def test_staff_scoped_template_list_omits_launch_execution_hint(
     api_client,
     staff_membership,
     staff_owned_template,
@@ -115,7 +115,7 @@ def test_staff_owned_template_list_omits_dynamic_launch_execution_hint(
     add_task_template(template=staff_owned_template)
     token = login(api_client, user=staff_membership.user)
     response = api_client.get(
-        checklist_templates_url(staff_membership.establishment_id, "?created_by_me=true"),
+        checklist_templates_url(staff_membership.establishment_id),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -123,7 +123,7 @@ def test_staff_owned_template_list_omits_dynamic_launch_execution_hint(
     assert item["permission_hints"]["can_launch_execution"] is False
 
 
-def test_staff_owned_template_detail_can_launch_execution_when_no_active(
+def test_staff_scoped_template_detail_can_launch_for_self_only(
     api_client,
     staff_membership,
     staff_owned_template,
@@ -131,6 +131,7 @@ def test_staff_owned_template_detail_can_launch_execution_when_no_active(
     add_task_template(template=staff_owned_template)
     hints = _template_detail_hints(api_client, staff_membership, staff_owned_template.id)
     assert hints["can_launch_execution"] is True
+    assert hints["can_assign_to_others"] is False
 
 
 def test_assignment_deactivate_hint_false_when_in_progress_execution(

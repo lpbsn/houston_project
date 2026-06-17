@@ -4,15 +4,11 @@ from django.db import models
 from django.db.models import Q
 
 from houston.checklists.constants import (
-    CHECKLIST_BADGE_DEFAULT,
-    CHECKLIST_BADGE_PROCESS,
-    CHECKLIST_BADGE_TODO,
     CHECKLIST_DESCRIPTION_MAX_LENGTH,
     CHECKLIST_SKIPPED_REASON_MAX_LENGTH,
     CHECKLIST_TASK_MAX_LENGTH,
     CHECKLIST_TITLE_MAX_LENGTH,
     EXECUTION_SOURCE_ASSIGNMENT,
-    EXECUTION_SOURCE_FLASH_TODO,
     EXECUTION_SOURCE_TEMPLATE,
     TERMINAL_EXECUTION_STATUSES,
 )
@@ -20,10 +16,6 @@ from houston.core.models import BaseModel
 
 
 class ChecklistTemplate(BaseModel):
-    class Badge(models.TextChoices):
-        PROCESS = CHECKLIST_BADGE_PROCESS, "Process"
-        TODO = CHECKLIST_BADGE_TODO, "To-do"
-
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         INACTIVE = "inactive", "Inactive"
@@ -54,16 +46,10 @@ class ChecklistTemplate(BaseModel):
         choices=Status.choices,
         default=Status.INACTIVE,
     )
-    badge = models.CharField(
-        max_length=16,
-        choices=Badge.choices,
-        default=CHECKLIST_BADGE_DEFAULT,
-    )
 
     class Meta:
         indexes = [
             models.Index(fields=["establishment", "created_by"]),
-            models.Index(fields=["establishment", "badge", "status"]),
         ]
         constraints = [
             models.CheckConstraint(
@@ -158,7 +144,6 @@ class ChecklistAssignment(BaseModel):
 
 class ChecklistExecution(BaseModel):
     class ExecutionSource(models.TextChoices):
-        FLASH_TODO = EXECUTION_SOURCE_FLASH_TODO, "Flash to-do"
         TEMPLATE = EXECUTION_SOURCE_TEMPLATE, "Template"
         ASSIGNMENT = EXECUTION_SOURCE_ASSIGNMENT, "Assignment"
 
@@ -257,12 +242,6 @@ class ChecklistExecution(BaseModel):
                         checklist_template__isnull=True,
                         checklist_assignment__isnull=True,
                         status__in=TERMINAL_EXECUTION_STATUSES,
-                    )
-                    | Q(
-                        execution_source=EXECUTION_SOURCE_FLASH_TODO,
-                        business_unit__isnull=False,
-                        checklist_template__isnull=True,
-                        checklist_assignment__isnull=True,
                     )
                 ),
                 name="checklist_execution_source_shape",

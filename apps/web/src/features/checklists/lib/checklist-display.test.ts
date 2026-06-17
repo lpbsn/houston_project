@@ -20,8 +20,7 @@ describe('checklist-display', () => {
       getChecklistFeedSection({
         id: '1',
         title: 'Routine',
-        execution_source: 'flash_todo',
-        badge: null,
+        execution_source: 'template',
         status: 'assigned',
         end_at: null,
         is_overdue: false,
@@ -40,7 +39,6 @@ describe('checklist-display', () => {
         id: '2',
         title: 'Routine',
         execution_source: 'template',
-        badge: 'process',
         status: 'in_progress',
         end_at: null,
         is_overdue: false,
@@ -55,11 +53,8 @@ describe('checklist-display', () => {
     ).toBe('in_progress')
   })
 
-  it('maps execution_source and badge to feed badge labels', () => {
-    expect(formatChecklistFeedBadgeLabel('flash_todo', null)).toBe('Flash To-do')
-    expect(formatChecklistFeedBadgeLabel('template', 'process')).toBe('Process')
-    expect(formatChecklistFeedBadgeLabel('template', 'todo')).toBe('To-do')
-    expect(formatChecklistFeedBadgeLabel('assignment', 'process')).toBe('Process')
+  it('uses Checklist as feed badge label', () => {
+    expect(formatChecklistFeedBadgeLabel()).toBe('Checklist')
   })
 
   it('formats status and progress labels in French', () => {

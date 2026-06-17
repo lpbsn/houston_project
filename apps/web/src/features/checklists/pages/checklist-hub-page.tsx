@@ -5,7 +5,7 @@ import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { toRoleEnum } from '@/features/auth/lib/role'
+import { canCreateChecklistTemplateFromBootstrapHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { ChecklistTemplateSection } from '@/features/checklists/components/checklist-template-section'
 import {
   useChecklistTemplatesQuery,
@@ -15,16 +15,14 @@ import {
   getActiveExecutionIdFromDeleteError,
   resolveChecklistDeleteErrorMessage,
 } from '@/features/checklists/lib/checklist-delete-flow'
-import { canSeeChecklistLibrary } from '@/features/checklists/lib/checklist-management-access'
-import type { ChecklistBadge, ChecklistTemplateListFilters } from '@/features/checklists/types'
+import { canAccessChecklistLibrary } from '@/features/checklists/lib/checklist-management-access'
+import type { ChecklistTemplateListFilters } from '@/features/checklists/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ChecklistHubPageProps = {
   onNavigate?: (pathname: string) => void
 }
-
-type BadgeFilter = 'all' | ChecklistBadge
 
 function filterButtonClass(isSelected: boolean): string {
   return cn(
@@ -38,29 +36,31 @@ function filterButtonClass(isSelected: boolean): string {
 export function ChecklistHubPage({ onNavigate }: ChecklistHubPageProps) {
   const { navigate } = useAppRoute()
   const navigateTo = onNavigate ?? navigate
-  const { activeMembership, isBootstrapping, isReady } = useAuth()
-  const role = toRoleEnum(activeMembership?.role)
+  const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
-  const canSeeLibrary = canSeeChecklistLibrary(role)
+  const membershipId = activeMembership?.id ?? null
+  const canAccessLibrary = canAccessChecklistLibrary({
+    establishmentId,
+    activeMembershipId: membershipId,
+  })
+  const canCreateTemplate = canCreateChecklistTemplateFromBootstrapHints(
+    bootstrap?.permission_hints,
+  )
 
-  const [badgeFilter, setBadgeFilter] = useState<BadgeFilter>('all')
   const [createdByMe, setCreatedByMe] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null)
 
   const filters = useMemo<ChecklistTemplateListFilters>(() => {
     const next: ChecklistTemplateListFilters = {}
-    if (badgeFilter !== 'all') {
-      next.badge = badgeFilter
-    }
     if (createdByMe) {
       next.created_by_me = true
     }
     return next
-  }, [badgeFilter, createdByMe])
+  }, [createdByMe])
 
   const templatesQuery = useChecklistTemplatesQuery(
-    canSeeLibrary ? establishmentId : null,
+    canAccessLibrary ? establishmentId : null,
     filters,
   )
   const deleteMutation = useDeleteChecklistTemplateMutation(establishmentId ?? '')
@@ -69,7 +69,7 @@ export function ChecklistHubPage({ onNavigate }: ChecklistHubPageProps) {
     return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement...</p>
   }
 
-  if (!activeMembership || !role || !establishmentId || !canSeeLibrary) {
+  if (!canAccessLibrary) {
     return (
       <div className="px-3 py-4">
         <TerrainCard>
@@ -79,6 +79,21 @@ export function ChecklistHubPage({ onNavigate }: ChecklistHubPageProps) {
         </TerrainCard>
       </div>
     )
+  }
+
+  if (templatesQuery.isError && templatesQuery.error && 'status' in templatesQuery.error) {
+    const status = (templatesQuery.error as { status?: number }).status
+    if (status === 403) {
+      return (
+        <div className="px-3 py-4">
+          <TerrainCard>
+            <p className={cn('text-sm', terrain.muted)}>
+              Vous n&apos;avez pas accès à la bibliothèque de checklists.
+            </p>
+          </TerrainCard>
+        </div>
+      )
+    }
   }
 
   async function handleDelete(templateId: string) {
@@ -94,7 +109,7 @@ export function ChecklistHubPage({ onNavigate }: ChecklistHubPageProps) {
     }
   }
 
-  const createAction = (
+  const createAction = canCreateTemplate ? (
     <Button
       type="button"
       variant="ghost"
@@ -105,7 +120,7 @@ export function ChecklistHubPage({ onNavigate }: ChecklistHubPageProps) {
     >
       <Plus className="h-5 w-5" />
     </Button>
-  )
+  ) : null
 
   return (
     <div className="space-y-4 px-3 pb-24 pt-3">
@@ -117,16 +132,6 @@ export function ChecklistHubPage({ onNavigate }: ChecklistHubPageProps) {
       <section className="space-y-2">
         <TerrainSectionLabel>Filtres</TerrainSectionLabel>
         <div className="flex flex-wrap gap-2">
-          {(['all', 'process', 'todo'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={filterButtonClass(badgeFilter === value)}
-              onClick={() => setBadgeFilter(value)}
-            >
-              {value === 'all' ? 'Tous' : value === 'process' ? 'Process' : 'To-do'}
-            </button>
-          ))}
           <button
             type="button"
             className={filterButtonClass(createdByMe)}

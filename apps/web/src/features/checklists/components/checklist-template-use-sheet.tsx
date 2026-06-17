@@ -15,12 +15,18 @@ import type { ScopedUserSearchResult } from '@/features/actions/types'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
 import { useCreateTemplateExecutionMutation } from '@/features/checklists/hooks'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
+import {
+  canAssignChecklistExecutionToOthers,
+  getChecklistTemplateLaunchButtonLabel,
+  type ChecklistTemplatePermissionHints,
+} from '@/features/checklists/lib/checklist-template-permission-hints'
 
 type ChecklistTemplateUseSheetProps = {
   open: boolean
   establishmentId: string
   templateId: string
   businessUnitId: string
+  permissionHints: ChecklistTemplatePermissionHints
   defaultAssignedTo?: string
   onClose: () => void
   onSuccess: (executionId: string) => void
@@ -31,11 +37,15 @@ export function ChecklistTemplateUseSheet({
   establishmentId,
   templateId,
   businessUnitId,
+  permissionHints,
   defaultAssignedTo = '',
   onClose,
   onSuccess,
 }: ChecklistTemplateUseSheetProps) {
-  const [assignedTo, setAssignedTo] = useState(defaultAssignedTo)
+  const canAssignToOthers = canAssignChecklistExecutionToOthers(permissionHints)
+  const submitLabel = getChecklistTemplateLaunchButtonLabel(permissionHints)
+
+  const [assignedTo, setAssignedTo] = useState('')
   const [selectedUser, setSelectedUser] = useState<ScopedUserSearchResult | null>(null)
   const [hasDeadline, setHasDeadline] = useState(false)
   const [selectedPreset, setSelectedPreset] = useState<DeadlinePreset | null>('2h')
@@ -67,7 +77,9 @@ export function ChecklistTemplateUseSheet({
   }
 
   async function handleSubmit() {
-    if (!assignedTo.trim()) {
+    const effectiveAssignedTo = canAssignToOthers ? assignedTo : defaultAssignedTo
+
+    if (!effectiveAssignedTo.trim()) {
       setFeedback('Sélectionnez un membre assigné.')
       return
     }
@@ -88,7 +100,7 @@ export function ChecklistTemplateUseSheet({
 
     try {
       const execution = await launchMutation.mutateAsync({
-        assigned_to: assignedTo,
+        assigned_to: effectiveAssignedTo,
         end_at: endAt,
       })
       handleClose()
@@ -104,18 +116,22 @@ export function ChecklistTemplateUseSheet({
     <TerrainBottomSheet title="Utiliser cette checklist" open={open} onClose={handleClose}>
       <div className="space-y-3 pb-2">
         <p className="text-xs leading-5 text-[#7D7B75]">
-          Choisissez un assigné pour lancer une exécution depuis ce modèle.
+          {canAssignToOthers
+            ? 'Choisissez un assigné pour lancer une exécution depuis ce modèle.'
+            : 'Lancez une exécution pour vous depuis ce modèle.'}
         </p>
 
         {feedback ? <ChecklistFeedback variant="error" message={feedback} /> : null}
 
-        <ActionCreateAssigneeSection
-          establishmentId={establishmentId}
-          businessUnitId={businessUnitId}
-          assignedTo={assignedTo}
-          selectedUser={selectedUser}
-          onAssignedToChange={handleAssigneeChange}
-        />
+        {canAssignToOthers ? (
+          <ActionCreateAssigneeSection
+            establishmentId={establishmentId}
+            businessUnitId={businessUnitId}
+            assignedTo={assignedTo}
+            selectedUser={selectedUser}
+            onAssignedToChange={handleAssigneeChange}
+          />
+        ) : null}
 
         {!hasDeadline ? (
           <Button
@@ -171,7 +187,7 @@ export function ChecklistTemplateUseSheet({
           {launchMutation.isPending ? (
             <LoaderCircle className="mr-2 h-4 w-4 animate-spin" aria-hidden />
           ) : null}
-          Lancer l&apos;exécution
+          {submitLabel}
         </Button>
       </div>
     </TerrainBottomSheet>

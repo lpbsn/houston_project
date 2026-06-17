@@ -10,7 +10,6 @@ import {
   LazyChatRealtimeProvider,
   LazyChecklistExecutionDetailPage,
   LazyChecklistHubPage,
-  LazyChecklistQuickCreatePage,
   LazyChecklistTemplateCreatePage,
   LazyChecklistTemplateDetailPage,
   LazyExecutionFeedPage,
@@ -262,10 +261,6 @@ function App() {
 
     if (route.kind === 'checklist-template-detail') {
       return <LazyChecklistTemplateDetailPage templateId={route.templateId} />
-    }
-
-    if (route.kind === 'checklist-execution-create') {
-      return <LazyChecklistQuickCreatePage />
     }
 
     if (route.kind === 'checklist-execution-detail') {

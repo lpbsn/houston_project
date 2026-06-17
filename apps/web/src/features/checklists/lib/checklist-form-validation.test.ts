@@ -4,7 +4,6 @@ import {
   hasAssignmentFormErrors,
   validateAssignmentForm,
   validateChecklistCreateForm,
-  validateFlashTodoCreate,
   validateRegisteredTemplateCreate,
   validateTask,
 } from './checklist-form-validation'
@@ -66,49 +65,6 @@ describe('checklist-form-validation', () => {
     expect(errors.recurrenceDays).toBeTruthy()
   })
 
-  it('requires title, business unit, assignee, and tasks for flash to-do', () => {
-    expect(
-      validateFlashTodoCreate({
-        title: '',
-        businessUnitId: 'bu-1',
-        assignedTo: 'member-1',
-        taskCount: 1,
-      }),
-    ).toBeTruthy()
-    expect(
-      validateFlashTodoCreate({
-        title: 'Terrasse',
-        businessUnitId: '',
-        assignedTo: 'member-1',
-        taskCount: 1,
-      }),
-    ).toBeTruthy()
-    expect(
-      validateFlashTodoCreate({
-        title: 'Terrasse',
-        businessUnitId: 'bu-1',
-        assignedTo: '',
-        taskCount: 1,
-      }),
-    ).toBeTruthy()
-    expect(
-      validateFlashTodoCreate({
-        title: 'Terrasse',
-        businessUnitId: 'bu-1',
-        assignedTo: 'member-1',
-        taskCount: 0,
-      }),
-    ).toBeTruthy()
-    expect(
-      validateFlashTodoCreate({
-        title: 'Terrasse',
-        businessUnitId: 'bu-1',
-        assignedTo: 'member-1',
-        taskCount: 2,
-      }),
-    ).toBeNull()
-  })
-
   it('requires business unit and tasks for registered template create', () => {
     expect(
       validateRegisteredTemplateCreate({
@@ -135,7 +91,7 @@ describe('checklist-form-validation', () => {
     expect(validateTask('Vérifier stock')).toBeNull()
   })
 
-  it('validates unified create form for template, assignment, and flash modes', () => {
+  it('validates unified create form for template and assignment modes', () => {
     const base = {
       title: 'Routine',
       businessUnitId: 'bu-1',
@@ -143,13 +99,11 @@ describe('checklist-form-validation', () => {
       assignmentMode: 'none' as const,
     }
 
-    expect(validateChecklistCreateForm({ ...base, flashEnabled: false })).toEqual({ ok: true })
-    expect(validateChecklistCreateForm({ ...base, flashEnabled: true })).toEqual({ ok: true })
+    expect(validateChecklistCreateForm(base)).toEqual({ ok: true })
 
     expect(
       validateChecklistCreateForm({
         ...base,
-        flashEnabled: false,
         businessUnitId: '',
       }),
     ).toMatchObject({
@@ -160,7 +114,6 @@ describe('checklist-form-validation', () => {
     expect(
       validateChecklistCreateForm({
         ...base,
-        flashEnabled: false,
         assignmentMode: 'create_now',
         assignmentValues: {
           assignedTo: '',
@@ -176,21 +129,5 @@ describe('checklist-form-validation', () => {
       openOptions: true,
       assignmentErrors: expect.objectContaining({ assignedTo: expect.any(String) }),
     })
-
-    expect(
-      validateChecklistCreateForm({
-        ...base,
-        flashEnabled: true,
-        assignmentMode: 'create_now',
-        assignmentValues: {
-          assignedTo: '',
-          startDate: '',
-          endDate: '',
-          startAt: '',
-          endAt: '',
-          recurrenceDays: [],
-        },
-      }),
-    ).toEqual({ ok: true })
   })
 })

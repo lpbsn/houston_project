@@ -6,7 +6,6 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { HoustonBadge } from '@/components/ui/terrain'
 import { ChecklistAssignmentCreateStickyFooter } from '@/features/checklists/components/checklist-assignment-create-sticky-footer'
 import { ChecklistAssignmentSection } from '@/features/checklists/components/checklist-assignment-section'
 import { ChecklistBusinessUnitSelect } from '@/features/checklists/components/checklist-business-unit-select'
@@ -14,13 +13,13 @@ import { ChecklistFeedback } from '@/features/checklists/components/checklist-fe
 import { ChecklistTaskEditor } from '@/features/checklists/components/checklist-task-editor'
 import { ChecklistTemplateUseSheet } from '@/features/checklists/components/checklist-template-use-sheet'
 import { useChecklistTemplateDetailQuery, useUpdateChecklistTemplateMutation } from '@/features/checklists/hooks'
-import { formatChecklistBadgeLabel } from '@/features/checklists/lib/checklist-display'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
 import {
   canShowChecklistTemplateCreateAssignment,
   canShowChecklistTemplateLaunchExecution,
   canShowChecklistTemplateManageTasks,
   canShowChecklistTemplateUpdate,
+  getChecklistTemplateLaunchButtonLabel,
 } from '@/features/checklists/lib/checklist-template-permission-hints'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -101,14 +100,9 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
   }
 
   const taskCountLabel = (
-    <div className="flex flex-wrap items-center gap-2">
-      <p className={cn('text-xs', terrain.mutedLight)}>
-        {template.tasks.length} tâche{template.tasks.length > 1 ? 's' : ''}
-      </p>
-      <HoustonBadge variant="amber" className="text-[8px]">
-        {formatChecklistBadgeLabel(template.badge)}
-      </HoustonBadge>
-    </div>
+    <p className={cn('text-xs', terrain.mutedLight)}>
+      {template.tasks.length} tâche{template.tasks.length > 1 ? 's' : ''}
+    </p>
   )
 
   const feedbackBanner = feedback ? (
@@ -195,6 +189,8 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
     </section>
   )
 
+  const launchButtonLabel = getChecklistTemplateLaunchButtonLabel(permissionHints)
+
   const launchButton = canLaunchExecution ? (
     <Button
       type="button"
@@ -202,7 +198,7 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
       disabled={isBusy}
       onClick={() => setIsUseSheetOpen(true)}
     >
-      Utiliser cette checklist
+      {launchButtonLabel}
     </Button>
   ) : null
 
@@ -213,6 +209,7 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
         establishmentId={establishmentId}
         templateId={templateId}
         businessUnitId={template.business_unit.id}
+        permissionHints={permissionHints}
         defaultAssignedTo={activeMembership?.id ?? ''}
         onClose={() => setIsUseSheetOpen(false)}
         onSuccess={(executionId) => navigate(`/checklists/executions/${executionId}`, { replace: true })}

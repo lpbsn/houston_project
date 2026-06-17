@@ -184,19 +184,21 @@ Additional implemented establishment-scoped endpoints with backend RBAC (confirm
 
 Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`action_domain.md`](action_domain.md), [`checklist_domain.md`](checklist_domain.md) §9, [`feed_domain.md`](feed_domain.md) §7.
 
-### Checklist RBAC (cible — refonte unifiée)
+### Checklist RBAC (cible — Lot 0)
 
-Le domaine Checklist n'utilise plus les concepts **personal/shared**. Une seule bibliothèque de **checklists enregistrées** ; badge Process/To-do = UX only (jamais RBAC).
+Le domaine Checklist = **processus opérationnel enregistré** (`ChecklistTemplate`) uniquement. Plus de Flash To-do, plus de badge Process/To-do, plus de concepts personal/shared.
 
 | Rôle | Résumé |
 | --- | --- |
-| **Owner / Director** | Flash To-do, création/modification/suppression/utilisation de toutes les checklists enregistrées de l'établissement ; assigner à tout membre actif |
-| **Manager** | Même capacités dans son **`MembershipScope`** BU ; assigné compatible scope |
-| **Staff** | Flash To-do et création enregistrée dans scope ; **voir et utiliser** modèles accessibles (y compris créés par d'autres) ; **modifier/supprimer uniquement** si `created_by = self` ; pas de gestion assignments ; cancel exécution si assigné |
+| **Owner / Director** | CRUD de toutes les checklists enregistrées de l'établissement ; lancer exécutions pour soi ou autrui ; créer et gérer `ChecklistAssignment` ; assigner à tout membre actif |
+| **Manager** | CRUD dans son **`MembershipScope`** BU ; lancer exécutions pour soi ou autrui dans scope ; créer et gérer assignments dans scope ; assigné compatible scope |
+| **Staff** | **Lecture seule** sur la bibliothèque (modèles accessibles dans scope) ; **pas** de création, modification ou suppression de processus ; **pas** de `ChecklistAssignment` ; lancer exécution ponctuelle **pour soi uniquement** (« Lancer pour moi ») ; exécuter et annuler si assigné |
+
+Les permission hints pilotent l'UI ; le backend enforce toute commande (`403` si non autorisé).
 
 Helpers existants à réutiliser : `membership_scope_covers_business_unit`, `membership_covers_checklist_business_unit` ([`checklists/permissions.py`](../../../apps/api/houston/checklists/permissions.py)). Matrice détaillée : [`checklist_domain.md`](checklist_domain.md) §9.1.
 
-**Supprimé (produit)** : catalogue Staff « personal only » ; distinction RBAC shared vs personal ; permissions dérivées du badge Process/To-do.
+**Supprimé (produit)** : Flash To-do ; badge Process/To-do ; catalogue Staff « personal only » ; distinction RBAC shared vs personal ; Staff CRUD sur `created_by = self`.
 
 Candidate endpoints only:
 
