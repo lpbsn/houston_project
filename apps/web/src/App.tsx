@@ -14,6 +14,7 @@ import {
   LazyChecklistTemplateDetailPage,
   LazyExecutionFeedPage,
   LazyProfilePage,
+  LazyTeamPage,
   LazyReportPage,
   LazySignalDetailPage,
   LazySignalFeedPage,
@@ -315,6 +316,10 @@ function App() {
           isLoggingOut={auth.isLoggingOut}
         />
       )
+    }
+
+    if (route.path === '/team') {
+      return <LazyTeamPage onNavigate={navigate} />
     }
 
     if (route.path === '/team/invite') {
