@@ -28,6 +28,8 @@ from houston.checklists.api.serializers import (
     ChecklistTemplateDetailSerializer,
     ChecklistTemplateExecutionCreateRequestSerializer,
     ChecklistTemplateListItemSerializer,
+    ChecklistTemplateScheduleRequestSerializer,
+    ChecklistTemplateScheduleResponseSerializer,
     ChecklistTemplateUpdateRequestSerializer,
     serialize_assignment,
     serialize_execution_detail,
@@ -71,6 +73,7 @@ from houston.checklists.services import (
     delete_task_template,
     mark_task_done,
     reorder_task_templates,
+    schedule_checklist_from_template,
     skip_task,
     update_checklist_assignment,
     update_checklist_template,
@@ -806,6 +809,86 @@ class ChecklistAssignmentDeactivateView(EstablishmentScopedChecklistMixin, APIVi
 
         payload = serialize_assignment(assignment, membership=membership)
         return Response(ChecklistAssignmentSerializer(payload).data)
+
+
+class ChecklistTemplateScheduleView(EstablishmentScopedChecklistMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["checklists"],
+        request=ChecklistTemplateScheduleRequestSerializer,
+        responses={
+            201: ChecklistTemplateScheduleResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, template_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        template = get_checklist_template_for_detail(
+            membership=membership,
+            template_id=uuid.UUID(str(template_id)),
+        )
+        if template is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        body = ChecklistTemplateScheduleRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+
+        try:
+            result = schedule_checklist_from_template(
+                template=template,
+                actor=membership,
+                assigned_to_id=data.get("assigned_to"),
+                start_date=data.get("start_date"),
+                start_at=data["start_at"],
+                end_at=data["end_at"],
+                recurrence_days=data.get("recurrence_days"),
+                recurrence_end_date=data.get("recurrence_end_date"),
+            )
+        except (ChecklistPermissionError, ChecklistValidationError) as exc:
+            return _checklist_error_response(exc)
+
+        if result.result_type == "execution":
+            if result.execution is None:
+                return _checklist_error_response(
+                    ChecklistValidationError("Schedule result is incomplete."),
+                )
+            execution = get_checklist_execution_for_detail(
+                membership=membership,
+                execution_id=result.execution.id,
+            )
+            payload = {
+                "result_type": "execution",
+                "execution": serialize_execution_detail(execution, membership=membership),
+                "assignment": None,
+            }
+        else:
+            if result.assignment is None:
+                return _checklist_error_response(
+                    ChecklistValidationError("Schedule result is incomplete."),
+                )
+            assignment = get_checklist_assignment_for_detail(
+                membership=membership,
+                assignment_id=result.assignment.id,
+            )
+            payload = {
+                "result_type": "assignment",
+                "execution": None,
+                "assignment": serialize_assignment(assignment, membership=membership),
+            }
+
+        return Response(
+            ChecklistTemplateScheduleResponseSerializer(payload).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ChecklistTemplateExecutionCreateView(EstablishmentScopedChecklistMixin, APIView):

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   hasAssignmentFormErrors,
+  hasTemplateScheduleFormErrors,
   validateAssignmentForm,
   validateChecklistCreateForm,
   validateRegisteredTemplateCreate,
   validateTask,
+  validateTemplateScheduleForm,
 } from './checklist-form-validation'
 
 describe('checklist-form-validation', () => {
@@ -129,5 +131,53 @@ describe('checklist-form-validation', () => {
       openOptions: true,
       assignmentErrors: expect.objectContaining({ assignedTo: expect.any(String) }),
     })
+  })
+
+  it('validates template schedule form end after start', () => {
+    const errors = validateTemplateScheduleForm({
+      assignedTo: 'member-1',
+      startAt: '09:30',
+      endAt: '09:00',
+      recurrenceDays: [],
+      recurrenceEndDate: '',
+      canLaunchExecution: true,
+      canCreateAssignment: true,
+    })
+
+    expect(hasTemplateScheduleFormErrors(errors)).toBe(true)
+    expect(errors.endAt).toBeTruthy()
+  })
+
+  it('requires recurrence end date when recurring', () => {
+    const errors = validateTemplateScheduleForm({
+      assignedTo: 'member-1',
+      startAt: '09:00',
+      endAt: '10:00',
+      recurrenceDays: ['monday'],
+      recurrenceEndDate: '',
+      canLaunchExecution: true,
+      canCreateAssignment: true,
+    })
+
+    expect(errors.recurrenceEndDate).toBeTruthy()
+  })
+
+  it('rejects recurrence end date before reference date', () => {
+    const errors = validateTemplateScheduleForm(
+      {
+        assignedTo: 'member-1',
+        startAt: '09:00',
+        endAt: '10:00',
+        recurrenceDays: ['monday'],
+        recurrenceEndDate: '2026-06-10',
+        canLaunchExecution: true,
+        canCreateAssignment: true,
+      },
+      { referenceDateIso: '2026-06-17' },
+    )
+
+    expect(errors.recurrenceEndDate).toBe(
+      'La fin de la récurrence ne peut pas être dans le passé.',
+    )
   })
 })

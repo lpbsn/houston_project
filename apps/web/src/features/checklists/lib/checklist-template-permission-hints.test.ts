@@ -6,7 +6,6 @@ import {
   canShowChecklistTemplateLaunchExecution,
   canShowChecklistTemplateManageTasks,
   canShowChecklistTemplateUpdate,
-  getChecklistTemplateLaunchButtonLabel,
 } from './checklist-template-permission-hints'
 
 const fullHints = {
@@ -41,13 +40,10 @@ describe('checklist-template-permission-hints', () => {
     expect(canShowChecklistTemplateDelete(hints)).toBe(false)
   })
 
-  it('derives launch labels from assign-to-others hint', () => {
-    expect(getChecklistTemplateLaunchButtonLabel(fullHints)).toBe('Lancer pour moi')
-    expect(
-      getChecklistTemplateLaunchButtonLabel({ ...fullHints, can_assign_to_others: true }),
-    ).toBe('Lancer une exécution')
+  it('derives assign-to-others hint', () => {
     expect(canAssignChecklistExecutionToOthers({ ...fullHints, can_assign_to_others: true })).toBe(
       true,
     )
+    expect(canAssignChecklistExecutionToOthers(fullHints)).toBe(false)
   })
 })

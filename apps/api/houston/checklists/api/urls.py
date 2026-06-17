@@ -18,6 +18,7 @@ from houston.checklists.api.views import (
     ChecklistTemplateDetailView,
     ChecklistTemplateExecutionCreateView,
     ChecklistTemplateListCreateView,
+    ChecklistTemplateScheduleView,
 )
 
 urlpatterns = [
@@ -75,6 +76,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/checklist-assignments/<uuid:assignment_id>/deactivate/",
         ChecklistAssignmentDeactivateView.as_view(),
         name="checklist-assignment-deactivate",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/checklist-templates/<uuid:template_id>/schedule/",
+        ChecklistTemplateScheduleView.as_view(),
+        name="checklist-template-schedule",
     ),
     path(
         "establishments/<uuid:establishment_id>/checklist-templates/<uuid:template_id>/executions/",

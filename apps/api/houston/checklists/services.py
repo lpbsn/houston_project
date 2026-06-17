@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, time
 
 from django.db import transaction
@@ -69,6 +70,7 @@ from houston.establishments.membership_scope import (
     membership_covers_business_unit_including_admins,
 )
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
+from houston.establishments.timezone_utils import establishment_local_date, establishment_timezone
 from houston.observations.exceptions import ObservationValidationError
 from houston.observations.models import Observation
 from houston.observations.services import submit_observation
@@ -729,12 +731,84 @@ def deactivate_checklist_assignment(
     return assignment
 
 
+@dataclass(frozen=True)
+class ChecklistTemplateScheduleResult:
+    result_type: str
+    execution: ChecklistExecution | None = None
+    assignment: ChecklistAssignment | None = None
+
+
+@transaction.atomic
+def schedule_checklist_from_template(
+    *,
+    template: ChecklistTemplate,
+    actor: EstablishmentMembership,
+    assigned_to_id: uuid.UUID | None = None,
+    start_date: date | None = None,
+    start_at: time,
+    end_at: time,
+    recurrence_days=None,
+    recurrence_end_date: date | None = None,
+) -> ChecklistTemplateScheduleResult:
+    schedule_date = start_date or establishment_local_date(establishment=template.establishment)
+    normalized_recurrence_days = normalize_recurrence_days(recurrence_days)
+
+    if normalized_recurrence_days:
+        if recurrence_end_date is None:
+            raise ChecklistValidationError(
+                "recurrence_end_date is required for a recurring schedule.",
+            )
+        _validate_assignment_schedule(
+            start_date=schedule_date,
+            end_date=recurrence_end_date,
+            start_at=start_at,
+            end_at=end_at,
+        )
+        effective_assigned_to_id = assigned_to_id or actor.id
+        assignment = create_checklist_assignment(
+            template=template,
+            actor=actor,
+            assigned_to_id=effective_assigned_to_id,
+            start_date=schedule_date,
+            end_date=recurrence_end_date,
+            start_at=start_at,
+            end_at=end_at,
+            recurrence_days=normalized_recurrence_days,
+        )
+        return ChecklistTemplateScheduleResult(
+            result_type="assignment",
+            assignment=assignment,
+        )
+
+    _validate_assignment_schedule(
+        start_date=schedule_date,
+        end_date=schedule_date,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    tz = establishment_timezone(template.establishment)
+    occurrence_start_at = datetime.combine(schedule_date, start_at, tzinfo=tz)
+    occurrence_end_at = datetime.combine(schedule_date, end_at, tzinfo=tz)
+    execution = create_execution_from_template(
+        template=template,
+        actor=actor,
+        assigned_to_id=assigned_to_id,
+        start_at=occurrence_start_at,
+        end_at=occurrence_end_at,
+    )
+    return ChecklistTemplateScheduleResult(
+        result_type="execution",
+        execution=execution,
+    )
+
+
 @transaction.atomic
 def create_execution_from_template(
     *,
     template: ChecklistTemplate,
     actor: EstablishmentMembership,
     assigned_to_id: uuid.UUID | None = None,
+    start_at: datetime | None = None,
     end_at: datetime | None = None,
 ) -> ChecklistExecution:
     if not can_launch_template_execution(actor, template):
@@ -761,6 +835,7 @@ def create_execution_from_template(
         raise ChecklistPermissionError("Not allowed to create a checklist execution.")
 
     now = timezone.now()
+    visible_from = start_at - VISIBLE_FROM_OFFSET if start_at is not None else None
     execution = ChecklistExecution.objects.create(
         checklist_template=template,
         checklist_assignment=None,
@@ -771,8 +846,8 @@ def create_execution_from_template(
         business_unit=template.business_unit,
         template_title=template.title,
         template_description=template.description,
-        start_at=None,
-        visible_from=None,
+        start_at=start_at,
+        visible_from=visible_from,
         end_at=end_at,
         occurrence_date=None,
         status=EXECUTION_STATUS_ASSIGNED,

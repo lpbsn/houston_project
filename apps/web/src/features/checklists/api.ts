@@ -20,6 +20,8 @@ import type {
   ChecklistTemplateExecutionCreateRequest,
   ChecklistTemplateListFilters,
   ChecklistTemplateListItem,
+  ChecklistTemplateScheduleRequest,
+  ChecklistTemplateScheduleResponse,
   PatchedChecklistTaskTemplateUpdateRequest,
   PatchedChecklistTemplateUpdateRequest,
 } from './types'
@@ -448,6 +450,27 @@ export async function createExecutionFromTemplate(
   )
 
   return assertChecklistData<ChecklistExecutionDetail>(result)
+}
+
+export async function scheduleChecklistFromTemplate(
+  establishmentId: string,
+  templateId: string,
+  body: ChecklistTemplateScheduleRequest,
+): Promise<ChecklistTemplateScheduleResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/schedule/',
+        {
+          params: templatePath(establishmentId, templateId),
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertChecklistData<ChecklistTemplateScheduleResponse>(result)
 }
 
 function executionPath(establishmentId: string, executionId: string) {

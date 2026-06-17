@@ -1,7 +1,7 @@
 # Checklist Domain
 
 Status: authoritative
-Last reviewed: 2026-06-16
+Last reviewed: 2026-06-17
 Implementation status: **Lot 0 (doc closure)** — modèle produit cible : checklist = processus opérationnel enregistré uniquement (`ChecklistTemplate`) ; Flash To-do et badge Process/To-do retirés du produit.
 
 Historical reference only (not active product truth): [`docs/archive/codex/houston_checklist_domain.md`](../../archive/codex/houston_checklist_domain.md).
@@ -71,6 +71,7 @@ Créer le processus → enregistrer → lancer / assigner → exécuter
 | **Créer** | Définir titre, description, tâches (≥1), pôle (`business_unit`) | Owner / Director / Manager (scope BU) |
 | **Enregistrer** | `POST .../checklist-templates/` — modèle `active` ou `inactive` | Idem |
 | **Lancer / assigner** | Exécution ponctuelle (`template`) ou planification (`ChecklistAssignment`) | Owner / Director / Manager : pour soi ou pour autrui ; **Staff : « Lancer pour moi » uniquement** |
+| **Planifier (détail modèle)** | Bloc « Planification » sur la page détail : assigné, horaires, récurrence optionnelle ; CTA dynamique | Owner / Director / Manager : ponctuel ou récurrent ; Staff : ponctuel pour soi uniquement |
 | **Exécuter** | Tâches runtime sur l'exécution assignée | Assigné |
 
 Staff ne crée, ne modifie et ne supprime **aucun** processus. Staff ne crée **aucune** `ChecklistAssignment`.
@@ -212,6 +213,16 @@ Voir §9 pour la matrice complète.
 
 - `visible_from = null` (immédiat)
 - `start_at` nullable sauf si défini à la création
+
+**POST `checklist-templates/{id}/schedule/` (planification unifiée — page détail)** :
+
+- Endpoint unique pour le bloc « Planification » sur le détail modèle.
+- `start_date` optionnel : défaut = **date calendaire locale de l'établissement** (`establishment_local_date`), pas la date UTC serveur.
+- Branche **ponctuelle** : `recurrence_days` absent, null ou `[]` → crée une `ChecklistExecution` (`execution_source = template`) ; réponse `result_type = execution`.
+- Branche **récurrente** : `recurrence_days` non vide → crée une `ChecklistAssignment` ; réponse `result_type = assignment`.
+- **Side effect récurrent** : à la création d'assignment, matérialisation eager de la 1ère occurrence (§5.7). Une `ChecklistExecution` peut exister en DB **sans** être retournée dans la réponse `/schedule/` (`execution: null` dans le JSON).
+- CTA frontend (UX only ; backend enforce RBAC) : ponctuel → « Exécution » ; récurrent → « Créer l'affectation ».
+- Les endpoints `POST .../executions/` et `POST .../assignments/` restent valides pour les autres flows (création composite, etc.).
 
 ### 5.7 Récurrence et matérialisation (conservé)
 
@@ -385,6 +396,7 @@ Inspect [`apps/api/schema.yml`](../../../apps/api/schema.yml) before claiming en
 | GET, POST | `checklist-templates/` | Bibliothèque (filtres `business_unit_id`, `created_by_me`) / création enregistrée composite |
 | GET, PATCH, DELETE | `checklist-templates/{id}/` | Detail / update / delete |
 | POST | `checklist-templates/{id}/executions/` | Lancer exécution depuis modèle |
+| POST | `checklist-templates/{id}/schedule/` | Planifier depuis détail modèle (ponctuel ou récurrent) |
 | POST | `checklist-templates/{id}/activate/` | Activate (≥1 task) |
 | POST | `checklist-templates/{id}/deactivate/` | Deactivate |
 | POST | `checklist-templates/{id}/tasks/` | Add task |
@@ -423,6 +435,19 @@ Inspect [`apps/api/schema.yml`](../../../apps/api/schema.yml) before claiming en
 | `POST .../checklist-executions/flash-todo/` | **Supprimé** (Flash To-do retiré du produit) |
 
 Aucun comportement actif ne dépend de ces endpoints.
+
+### 10.3 POST `checklist-templates/{id}/schedule/` (réponse)
+
+```json
+{
+  "result_type": "execution | assignment",
+  "execution": { "...ChecklistExecutionDetail..." } | null,
+  "assignment": { "...ChecklistAssignment..." } | null
+}
+```
+
+- Branche ponctuelle : `result_type = execution`, `assignment = null`.
+- Branche récurrente : `result_type = assignment`, `execution = null` dans la réponse **même si** une exécution est matérialisée en DB pour la 1ère occurrence (§5.7).
 
 Execution Feed : `GET execution-feed/` — `item_type: action | checklist`.
 
@@ -470,6 +495,8 @@ Execution Feed : `GET execution-feed/` — `item_type: action | checklist`.
 - Every execution must reference a `ChecklistTemplate`.
 - Staff cannot CRUD templates or create assignments — only « Lancer pour moi ».
 - Keep `ChecklistAssignment` + materialization unless explicitly removed in a future lot.
+- `/schedule/` branches on `recurrence_days`: empty → template execution ; non-empty → assignment (+ eager first occurrence materialization, not in schedule response).
+- Do not assume `execution: null` in schedule response means no execution row exists for recurring schedules.
 - Inspect `schema.yml` before claiming API shape.
 - When changing APIs: update permissions, OpenAPI, generated clients, tests, and this document together.
 - Archive [`houston_checklist_domain.md`](../../archive/codex/houston_checklist_domain.md) is historical only.

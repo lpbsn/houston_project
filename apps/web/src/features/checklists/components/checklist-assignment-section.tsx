@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { forwardRef, useMemo, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
@@ -48,15 +48,19 @@ function formatTimeLabel(value: string): string {
   return value.slice(0, 5)
 }
 
-export function ChecklistAssignmentSection({
-  establishmentId,
-  templateId,
-  canCreateAssignment,
-  businessUnitId,
-  createButtonPlacement = 'inline',
-  isCreateSheetOpen: isCreateSheetOpenProp,
-  onCreateSheetOpenChange,
-}: ChecklistAssignmentSectionProps) {
+export const ChecklistAssignmentSection = forwardRef<HTMLElement, ChecklistAssignmentSectionProps>(
+  function ChecklistAssignmentSection(
+    {
+      establishmentId,
+      templateId,
+      canCreateAssignment,
+      businessUnitId,
+      createButtonPlacement = 'inline',
+      isCreateSheetOpen: isCreateSheetOpenProp,
+      onCreateSheetOpenChange,
+    },
+    ref,
+  ) {
   const { navigate } = useAppRoute()
   const assignmentsQuery = useChecklistAssignmentsQuery(establishmentId)
   const deactivateMutation = useDeactivateChecklistAssignmentMutation(establishmentId, templateId)
@@ -103,7 +107,7 @@ export function ChecklistAssignmentSection({
   }
 
   return (
-    <section className="space-y-3">
+    <section ref={ref} className="space-y-3">
       <TerrainSectionLabel>Affectations</TerrainSectionLabel>
 
       {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
@@ -225,4 +229,5 @@ export function ChecklistAssignmentSection({
       ) : null}
     </section>
   )
-}
+},
+)

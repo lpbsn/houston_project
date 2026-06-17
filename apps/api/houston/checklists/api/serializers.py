@@ -116,6 +116,20 @@ class ChecklistTemplateExecutionCreateRequestSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class ChecklistTemplateScheduleRequestSerializer(serializers.Serializer):
+    assigned_to = serializers.UUIDField(required=False, allow_null=True)
+    start_date = serializers.DateField(required=False, allow_null=True)
+    start_at = serializers.TimeField()
+    end_at = serializers.TimeField()
+    recurrence_days = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_null=True,
+        default=None,
+    )
+    recurrence_end_date = serializers.DateField(required=False, allow_null=True)
+
+
 class ChecklistTemplateUpdateRequestSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=CHECKLIST_TITLE_MAX_LENGTH, required=False)
     description = serializers.CharField(
@@ -230,6 +244,12 @@ class ChecklistExecutionDetailSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField()
     task_executions = ChecklistTaskExecutionSerializer(many=True)
     permission_hints = ChecklistExecutionPermissionHintsSerializer()
+
+
+class ChecklistTemplateScheduleResponseSerializer(serializers.Serializer):
+    result_type = serializers.ChoiceField(choices=["execution", "assignment"])
+    execution = ChecklistExecutionDetailSerializer(allow_null=True, required=False)
+    assignment = ChecklistAssignmentSerializer(allow_null=True, required=False)
 
 
 class ChecklistTaskSkipRequestSerializer(serializers.Serializer):

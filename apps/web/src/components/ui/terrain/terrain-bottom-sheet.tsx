@@ -51,7 +51,9 @@ export function TerrainBottomSheet({
           {children}
         </div>
         {footer ? (
-          <div className="shrink-0 border-t border-[#E8E6DF] px-4 py-3">{footer}</div>
+          <div className="shrink-0 border-t border-[#E8E6DF] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {footer}
+          </div>
         ) : null}
       </div>
     </div>

@@ -12,7 +12,6 @@ import {
   createChecklistTask,
   createChecklistTaskObservation,
   createChecklistTemplate,
-  createExecutionFromTemplate,
   createRegisteredChecklistTemplate,
   deactivateChecklistAssignment,
   deactivateChecklistTemplate,
@@ -25,6 +24,7 @@ import {
   markChecklistTaskDone,
   reorderChecklistTasks,
   type RegisteredChecklistTemplateInput,
+  scheduleChecklistFromTemplate,
   skipChecklistTask,
   updateChecklistAssignment,
   updateChecklistTask,
@@ -32,8 +32,8 @@ import {
 } from './api'
 import type {
   ChecklistAssignmentCreateRequest,
-  ChecklistTemplateExecutionCreateRequest,
   ChecklistTemplateListFilters,
+  ChecklistTemplateScheduleRequest,
   PatchedChecklistAssignmentUpdateRequest,
   ChecklistTaskCreateObservationRequest,
   ChecklistTaskReorderRequest,
@@ -314,17 +314,21 @@ export function useDeactivateChecklistAssignmentMutation(
   })
 }
 
-export function useCreateTemplateExecutionMutation(
+export function useScheduleChecklistFromTemplateMutation(
   establishmentId: string,
   templateId: string,
 ) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (body: ChecklistTemplateExecutionCreateRequest) =>
-      createExecutionFromTemplate(establishmentId, templateId, body),
+    mutationFn: (body: ChecklistTemplateScheduleRequest) =>
+      scheduleChecklistFromTemplate(establishmentId, templateId, body),
     onSuccess: (data) => {
-      invalidateChecklistExecutionSurfaces(queryClient, establishmentId, data.id)
+      if (data.result_type === 'execution' && data.execution?.id) {
+        invalidateChecklistExecutionSurfaces(queryClient, establishmentId, data.execution.id)
+        return
+      }
+      invalidateChecklistSurfaces(queryClient, establishmentId, templateId)
     },
   })
 }

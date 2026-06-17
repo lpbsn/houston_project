@@ -1,11 +1,6 @@
-export type AssignmentFormValues = {
-  assignedTo: string
-  startDate: string
-  endDate: string
-  startAt: string
-  endAt: string
-  recurrenceDays: string[]
-}
+import type { AssignmentFormValues } from '@/features/checklists/lib/checklist-assignment-create-payload'
+
+export type { AssignmentFormValues }
 
 export type AssignmentFormErrors = Partial<
   Record<
@@ -13,6 +8,72 @@ export type AssignmentFormErrors = Partial<
     string
   >
 >
+
+export type TemplateScheduleFormErrors = Partial<
+  Record<
+    'assignedTo' | 'startAt' | 'endAt' | 'recurrenceDays' | 'recurrenceEndDate' | 'submit',
+    string
+  >
+>
+
+export function validateTemplateScheduleForm(
+  values: {
+    assignedTo: string
+    startAt: string
+    endAt: string
+    recurrenceDays: string[]
+    recurrenceEndDate: string
+    canLaunchExecution: boolean
+    canCreateAssignment: boolean
+  },
+  options?: { referenceDateIso?: string },
+): TemplateScheduleFormErrors {
+  const errors: TemplateScheduleFormErrors = {}
+  const isRecurring = values.recurrenceDays.length > 0
+
+  if (!values.assignedTo.trim()) {
+    errors.assignedTo = 'Sélectionnez un membre assigné.'
+  }
+
+  if (!values.startAt.trim()) {
+    errors.startAt = 'L’heure de début est obligatoire.'
+  }
+
+  if (!values.endAt.trim()) {
+    errors.endAt = 'L’heure de fin est obligatoire.'
+  }
+
+  if (values.startAt && values.endAt && values.endAt <= values.startAt) {
+    errors.endAt = 'L’heure de fin doit être postérieure à l’heure de début.'
+  }
+
+  if (isRecurring) {
+    if (!values.canCreateAssignment) {
+      errors.submit = 'Vous ne pouvez pas créer une affectation récurrente.'
+    }
+    if (!values.recurrenceEndDate.trim()) {
+      errors.recurrenceEndDate = 'La fin de la récurrence est obligatoire.'
+    } else if (
+      options?.referenceDateIso &&
+      values.recurrenceEndDate < options.referenceDateIso
+    ) {
+      errors.recurrenceEndDate = 'La fin de la récurrence ne peut pas être dans le passé.'
+    }
+  } else if (!values.canLaunchExecution) {
+    errors.submit = 'Vous ne pouvez pas lancer une exécution ponctuelle.'
+  }
+
+  const uniqueDays = new Set(values.recurrenceDays)
+  if (uniqueDays.size !== values.recurrenceDays.length) {
+    errors.recurrenceDays = 'Chaque jour ne peut être sélectionné qu’une fois.'
+  }
+
+  return errors
+}
+
+export function hasTemplateScheduleFormErrors(errors: TemplateScheduleFormErrors): boolean {
+  return Object.keys(errors).length > 0
+}
 
 export function validateAssignmentForm(values: AssignmentFormValues): AssignmentFormErrors {
   const errors: AssignmentFormErrors = {}

@@ -908,6 +908,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/schedule/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_checklist_templates_schedule_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/tasks/": {
         parameters: {
             query?: never;
@@ -2080,6 +2096,24 @@ export interface components {
             can_assign_to_others: boolean;
             can_use_template: boolean;
         };
+        ChecklistTemplateScheduleRequest: {
+            /** Format: uuid */
+            assigned_to?: string | null;
+            /** Format: date */
+            start_date?: string | null;
+            /** Format: time */
+            start_at: string;
+            /** Format: time */
+            end_at: string;
+            recurrence_days?: string[] | null;
+            /** Format: date */
+            recurrence_end_date?: string | null;
+        };
+        ChecklistTemplateScheduleResponse: {
+            result_type: components["schemas"]["ResultTypeEnum"];
+            execution?: components["schemas"]["ChecklistExecutionDetail"] | null;
+            assignment?: components["schemas"]["ChecklistAssignment"] | null;
+        };
         CommentAuthor: {
             /** Format: uuid */
             membership_id: string;
@@ -2522,6 +2556,12 @@ export interface components {
             /** Format: uuid */
             onboarding_session_id: string;
         };
+        /**
+         * @description * `execution` - execution
+         *     * `assignment` - assignment
+         * @enum {string}
+         */
+        ResultTypeEnum: "execution" | "assignment";
         /**
          * @description * `owner` - Owner
          *     * `director` - Director
@@ -5766,6 +5806,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistExecutionDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_checklist_templates_schedule_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChecklistTemplateScheduleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChecklistTemplateScheduleRequest"];
+                "multipart/form-data": components["schemas"]["ChecklistTemplateScheduleRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistTemplateScheduleResponse"];
                 };
             };
             400: {

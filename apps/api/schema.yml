@@ -3120,6 +3120,69 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/schedule/:
+    post:
+      operationId: v1_establishments_checklist_templates_schedule_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: template_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - checklists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateScheduleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateScheduleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChecklistTemplateScheduleRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistTemplateScheduleResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/tasks/:
     post:
       operationId: v1_establishments_checklist_templates_tasks_create
@@ -6661,6 +6724,50 @@ components:
       - can_manage_tasks
       - can_update
       - can_use_template
+    ChecklistTemplateScheduleRequest:
+      type: object
+      properties:
+        assigned_to:
+          type: string
+          format: uuid
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+          nullable: true
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - end_at
+      - start_at
+    ChecklistTemplateScheduleResponse:
+      type: object
+      properties:
+        result_type:
+          $ref: '#/components/schemas/ResultTypeEnum'
+        execution:
+          allOf:
+          - $ref: '#/components/schemas/ChecklistExecutionDetail'
+          nullable: true
+        assignment:
+          allOf:
+          - $ref: '#/components/schemas/ChecklistAssignment'
+          nullable: true
+      required:
+      - result_type
     CommentAuthor:
       type: object
       properties:
@@ -7747,6 +7854,14 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
+    ResultTypeEnum:
+      enum:
+      - execution
+      - assignment
+      type: string
+      description: |-
+        * `execution` - execution
+        * `assignment` - assignment
     RoleEnum:
       enum:
       - owner

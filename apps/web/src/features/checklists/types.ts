@@ -7,6 +7,10 @@ export type ChecklistTemplateListFilters = {
 export type ChecklistFeedItem = components['schemas']['ChecklistFeedItem']
 export type ChecklistTemplateExecutionCreateRequest =
   components['schemas']['ChecklistTemplateExecutionCreateRequest']
+export type ChecklistTemplateScheduleRequest =
+  components['schemas']['ChecklistTemplateScheduleRequest']
+export type ChecklistTemplateScheduleResponse =
+  components['schemas']['ChecklistTemplateScheduleResponse']
 
 export type ChecklistTemplateListItem = components['schemas']['ChecklistTemplateListItem']
 export type ChecklistTemplateDetail = components['schemas']['ChecklistTemplateDetail']

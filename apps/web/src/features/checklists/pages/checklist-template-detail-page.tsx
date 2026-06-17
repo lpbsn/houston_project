@@ -1,17 +1,16 @@
 import { LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ChecklistAssignmentCreateStickyFooter } from '@/features/checklists/components/checklist-assignment-create-sticky-footer'
 import { ChecklistAssignmentSection } from '@/features/checklists/components/checklist-assignment-section'
 import { ChecklistBusinessUnitSelect } from '@/features/checklists/components/checklist-business-unit-select'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
 import { ChecklistTaskEditor } from '@/features/checklists/components/checklist-task-editor'
-import { ChecklistTemplateUseSheet } from '@/features/checklists/components/checklist-template-use-sheet'
+import { ChecklistTemplateScheduleOptions } from '@/features/checklists/components/checklist-template-schedule-options'
 import { useChecklistTemplateDetailQuery, useUpdateChecklistTemplateMutation } from '@/features/checklists/hooks'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
 import {
@@ -19,7 +18,6 @@ import {
   canShowChecklistTemplateLaunchExecution,
   canShowChecklistTemplateManageTasks,
   canShowChecklistTemplateUpdate,
-  getChecklistTemplateLaunchButtonLabel,
 } from '@/features/checklists/lib/checklist-template-permission-hints'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -30,19 +28,20 @@ type ChecklistTemplateDetailPageProps = {
 
 export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDetailPageProps) {
   const { navigate } = useAppRoute()
-  const { activeMembership } = useAuth()
+  const { activeMembership, bootstrap } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
 
   const detailQuery = useChecklistTemplateDetailQuery(establishmentId, templateId)
   const updateMutation = useUpdateChecklistTemplateMutation(establishmentId ?? '', templateId)
+
+  const assignmentsSectionRef = useRef<HTMLElement>(null)
+  const [scheduleFooterHost, setScheduleFooterHost] = useState<HTMLDivElement | null>(null)
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null)
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
-  const [isCreateAssignmentOpen, setIsCreateAssignmentOpen] = useState(false)
-  const [isUseSheetOpen, setIsUseSheetOpen] = useState(false)
 
   if (!establishmentId) {
     return null
@@ -78,8 +77,8 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
   const canManageTasks = canShowChecklistTemplateManageTasks(permissionHints)
   const canLaunchExecution = canShowChecklistTemplateLaunchExecution(permissionHints)
   const canCreateAssignment = canShowChecklistTemplateCreateAssignment(permissionHints)
+  const showScheduleOptions = canLaunchExecution || canCreateAssignment
   const isBusy = updateMutation.isPending
-  const showStickyCreateFooter = canCreateAssignment
 
   async function handleSaveMetadata() {
     setFeedback(null)
@@ -99,6 +98,11 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
     }
   }
 
+  function handleAssignmentCreated() {
+    setFeedback({ variant: 'success', message: 'Affectation créée.' })
+    assignmentsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const taskCountLabel = (
     <p className={cn('text-xs', terrain.mutedLight)}>
       {template.tasks.length} tâche{template.tasks.length > 1 ? 's' : ''}
@@ -111,15 +115,30 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
 
   const assignmentSection = template.business_unit ? (
     <ChecklistAssignmentSection
+      ref={assignmentsSectionRef}
       establishmentId={establishmentId}
       templateId={templateId}
-      canCreateAssignment={canCreateAssignment}
+      canCreateAssignment={false}
       businessUnitId={template.business_unit.id}
-      createButtonPlacement="sticky"
-      isCreateSheetOpen={isCreateAssignmentOpen}
-      onCreateSheetOpenChange={setIsCreateAssignmentOpen}
     />
   ) : null
+
+  const scheduleOptions =
+    showScheduleOptions && template.business_unit ? (
+      <ChecklistTemplateScheduleOptions
+        establishmentId={establishmentId}
+        templateId={templateId}
+        businessUnitId={template.business_unit.id}
+        permissionHints={permissionHints}
+        activeMembershipId={activeMembership?.id ?? ''}
+        activeMembershipDisplayName={bootstrap?.user?.username ?? null}
+        footerHost={scheduleFooterHost}
+        onExecutionCreated={(executionId) =>
+          navigate(`/checklists/executions/${executionId}`, { replace: true })
+        }
+        onAssignmentCreated={handleAssignmentCreated}
+      />
+    ) : null
 
   const metadataSection = (
     <>
@@ -189,53 +208,19 @@ export function ChecklistTemplateDetailPage({ templateId }: ChecklistTemplateDet
     </section>
   )
 
-  const launchButtonLabel = getChecklistTemplateLaunchButtonLabel(permissionHints)
-
-  const launchButton = canLaunchExecution ? (
-    <Button
-      type="button"
-      className="h-11 w-full rounded-xl bg-[#1D9E75] text-white hover:bg-[#1D9E75]/95"
-      disabled={isBusy}
-      onClick={() => setIsUseSheetOpen(true)}
-    >
-      {launchButtonLabel}
-    </Button>
-  ) : null
-
   return (
-    <>
-      <ChecklistTemplateUseSheet
-        open={isUseSheetOpen}
-        establishmentId={establishmentId}
-        templateId={templateId}
-        businessUnitId={template.business_unit.id}
-        permissionHints={permissionHints}
-        defaultAssignedTo={activeMembership?.id ?? ''}
-        onClose={() => setIsUseSheetOpen(false)}
-        onSuccess={(executionId) => navigate(`/checklists/executions/${executionId}`, { replace: true })}
-      />
-
-      <div className="flex min-h-full flex-col">
-        <div
-          className={cn(
-            'flex flex-1 flex-col space-y-3 px-3 pt-3',
-            showStickyCreateFooter ? 'pb-40' : 'pb-28',
-          )}
-        >
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pt-3 pb-3">
+        <div className="space-y-3">
           {taskCountLabel}
           {feedbackBanner}
-          {launchButton}
-          {assignmentSection}
           {metadataSection}
           {tasksSection}
+          {assignmentSection}
+          {scheduleOptions}
         </div>
-
-        {showStickyCreateFooter ? (
-          <ChecklistAssignmentCreateStickyFooter
-            onClick={() => setIsCreateAssignmentOpen(true)}
-          />
-        ) : null}
       </div>
-    </>
+      {showScheduleOptions ? <div ref={setScheduleFooterHost} className="shrink-0" /> : null}
+    </div>
   )
 }
