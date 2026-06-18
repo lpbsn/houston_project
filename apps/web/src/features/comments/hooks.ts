@@ -7,7 +7,9 @@ import {
   fetchActionComments,
   fetchSignalComments,
   mentionUserSearchQueryKey,
+  resolveActionComment,
   searchEstablishmentUsersForMentions,
+  unresolveActionComment,
 } from './api'
 import type { CommentCreateRequest } from './types'
 
@@ -98,6 +100,52 @@ export function useCreateActionCommentMutation(
         throw new Error('Action introuvable.')
       }
       return createActionComment(establishmentId, actionId, payload)
+    },
+    onSuccess: () => {
+      if (establishmentId && actionId) {
+        void queryClient.invalidateQueries({
+          queryKey: commentsQueryKeys.actionList(establishmentId, actionId),
+        })
+      }
+    },
+  })
+}
+
+export function useResolveActionCommentMutation(
+  establishmentId: string | null,
+  actionId: string | null,
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: string) => {
+      if (!establishmentId || !actionId) {
+        throw new Error('Action introuvable.')
+      }
+      return resolveActionComment(establishmentId, actionId, commentId)
+    },
+    onSuccess: () => {
+      if (establishmentId && actionId) {
+        void queryClient.invalidateQueries({
+          queryKey: commentsQueryKeys.actionList(establishmentId, actionId),
+        })
+      }
+    },
+  })
+}
+
+export function useUnresolveActionCommentMutation(
+  establishmentId: string | null,
+  actionId: string | null,
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: string) => {
+      if (!establishmentId || !actionId) {
+        throw new Error('Action introuvable.')
+      }
+      return unresolveActionComment(establishmentId, actionId, commentId)
     },
     onSuccess: () => {
       if (establishmentId && actionId) {

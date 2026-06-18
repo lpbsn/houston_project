@@ -5,6 +5,7 @@ import uuid
 import pytest
 
 from houston.accounts.models import User
+from houston.comments.constants import SIGNAL_COMMENT_PARENT_NOT_ALLOWED_ERROR_DETAIL
 from houston.comments.tests.conftest import (
     auth_headers,
     build_api_membership,
@@ -165,3 +166,19 @@ def test_signal_comments_with_valid_mention(api_client):
     )
     assert response.status_code == 201
     assert response.json()["mentions"][0]["membership_id"] == str(mentioned.id)
+
+
+def test_signal_comments_rejects_parent_comment_id(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(owner)
+    token = login(api_client, user=owner.user)
+    url = signal_comments_url(owner.establishment_id, signal.id)
+
+    response = api_client.post(
+        url,
+        {"body": "reply attempt", "parent_comment_id": str(uuid.uuid4())},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == SIGNAL_COMMENT_PARENT_NOT_ALLOWED_ERROR_DETAIL

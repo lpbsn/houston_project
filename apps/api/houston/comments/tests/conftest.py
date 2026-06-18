@@ -19,3 +19,17 @@ def signal_comments_url(establishment_id, signal_id) -> str:
 
 def action_comments_url(establishment_id, action_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
+
+
+def action_comment_resolve_url(establishment_id, action_id, comment_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
+        f"{comment_id}/resolve/"
+    )
+
+
+def action_comment_unresolve_url(establishment_id, action_id, comment_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
+        f"{comment_id}/unresolve/"
+    )

@@ -2,7 +2,13 @@ import { apiClient, withAuthRetry } from '@/api/client'
 
 import { parseStandardApiError } from '@/lib/api-errors'
 
-import type { CommentCreateRequest, CommentItem, MentionUserSearchResult } from './types'
+import type {
+  ActionCommentListItem,
+  ActionCommentThreadItem,
+  CommentCreateRequest,
+  CommentItem,
+  MentionUserSearchResult,
+} from './types'
 
 export const commentsQueryKeys = {
   all: ['comments'] as const,
@@ -78,7 +84,7 @@ export async function fetchSignalComments(
 export async function fetchActionComments(
   establishmentId: string,
   actionId: string,
-): Promise<CommentItem[]> {
+): Promise<ActionCommentListItem[]> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/', {
@@ -93,7 +99,7 @@ export async function fetchActionComments(
     { refreshable: true },
   )
 
-  return assertCommentsData<CommentItem[]>(result)
+  return assertCommentsData<ActionCommentListItem[]>(result)
 }
 
 export async function createSignalComment(
@@ -140,6 +146,58 @@ export async function createActionComment(
   )
 
   return assertCommentsData<CommentItem>(result)
+}
+
+export async function resolveActionComment(
+  establishmentId: string,
+  actionId: string,
+  commentId: string,
+): Promise<ActionCommentThreadItem> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/resolve/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              action_id: actionId,
+              comment_id: commentId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertCommentsData<ActionCommentThreadItem>(result)
+}
+
+export async function unresolveActionComment(
+  establishmentId: string,
+  actionId: string,
+  commentId: string,
+): Promise<ActionCommentThreadItem> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/unresolve/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              action_id: actionId,
+              comment_id: commentId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertCommentsData<ActionCommentThreadItem>(result)
 }
 
 export async function searchEstablishmentUsersForMentions(
