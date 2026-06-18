@@ -9,12 +9,16 @@ from django.db import migrations, models
 def copy_assigned_to_assignees(apps, schema_editor):
     Action = apps.get_model("actions", "Action")
     ActionAssignee = apps.get_model("actions", "ActionAssignee")
+    in_progress = "in_progress"
     for action in Action.objects.exclude(assigned_to_id__isnull=True).iterator():
         ActionAssignee.objects.create(
             id=uuid.uuid4(),
             action_id=action.id,
             membership_id=action.assigned_to_id,
         )
+        if action.status == in_progress:
+            action.accepted_by_id = action.assigned_to_id
+            action.save(update_fields=["accepted_by_id"])
 
 
 class Migration(migrations.Migration):

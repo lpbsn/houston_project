@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from houston.actions.exceptions import ActionStateError, ActionValidationError
 from houston.actions.models import Action, ActionAssignee
+from houston.actions.permissions import can_mark_action_done
 from houston.actions.services import (
     accept_action,
     cancel_action,
@@ -89,6 +90,23 @@ def test_accept_action_transitions_open_to_in_progress():
     assert action.status == Action.Status.IN_PROGRESS
     assert action.accepted_at is not None
     assert action.accepted_by_id == staff.id
+
+
+def test_in_progress_accepted_by_backfill_unlocks_mark_done():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+
+    action.accepted_by = None
+    action.save(update_fields=["accepted_by"])
+    assert can_mark_action_done(staff, action) is False
+
+    # Simulates 0005 backfill: accepted_by_id = legacy assigned_to (single assignee).
+    action.accepted_by_id = staff.id
+    action.save(update_fields=["accepted_by_id"])
+    assert can_mark_action_done(staff, action) is True
 
 
 def test_accept_action_rejects_done_state():
