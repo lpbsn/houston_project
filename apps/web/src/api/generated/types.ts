@@ -267,11 +267,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lists comments on an Action, including inherited Signal comments, oldest first. */
+        /** @description Lists comments on an Action, including inherited Signal comments and action threads, oldest first. */
         get: operations["v1_establishments_actions_comments_list"];
         put?: never;
         /** @description Creates a comment on an Action. */
         post: operations["v1_establishments_actions_comments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/resolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Marks an action root comment as resolved. */
+        post: operations["v1_establishments_actions_comments_resolve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/unresolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Marks an action root comment as unresolved. */
+        post: operations["v1_establishments_actions_comments_unresolve_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1555,6 +1589,51 @@ export interface components {
             membership_id: string;
             display_name: string;
         };
+        ActionCommentListItem: {
+            item_type: components["schemas"]["ActionCommentListItemItemTypeEnum"];
+            /** Format: uuid */
+            id: string;
+            origin: components["schemas"]["OriginEnum"];
+            body: string;
+            author: components["schemas"]["CommentAuthor"];
+            mentions: components["schemas"]["CommentMention"][];
+            /** Format: date-time */
+            created_at: string;
+            replies?: components["schemas"]["CommentItem"][];
+            is_resolved?: boolean;
+            /** Format: date-time */
+            resolved_at?: string | null;
+            resolved_by?: components["schemas"]["CommentAuthor"] | null;
+            permission_hints?: components["schemas"]["CommentPermissionHints"];
+        };
+        /**
+         * @description * `inherited_signal` - inherited_signal
+         *     * `action_thread` - action_thread
+         * @enum {string}
+         */
+        ActionCommentListItemItemTypeEnum: "inherited_signal" | "action_thread";
+        ActionCommentThreadItem: {
+            item_type: components["schemas"]["ActionCommentThreadItemItemTypeEnum"];
+            /** Format: uuid */
+            id: string;
+            origin: components["schemas"]["OriginEnum"];
+            body: string;
+            author: components["schemas"]["CommentAuthor"];
+            mentions: components["schemas"]["CommentMention"][];
+            /** Format: date-time */
+            created_at: string;
+            replies: components["schemas"]["CommentItem"][];
+            is_resolved: boolean;
+            /** Format: date-time */
+            resolved_at: string | null;
+            resolved_by: components["schemas"]["CommentAuthor"] | null;
+            permission_hints: components["schemas"]["CommentPermissionHints"];
+        };
+        /**
+         * @description * `action_thread` - action_thread
+         * @enum {string}
+         */
+        ActionCommentThreadItemItemTypeEnum: "action_thread";
         ActionCreateRequest: {
             title: string;
             instruction: string;
@@ -2139,6 +2218,8 @@ export interface components {
         CommentCreateRequest: {
             body: string;
             mentioned_membership_ids?: string[];
+            /** Format: uuid */
+            parent_comment_id?: string | null;
         };
         CommentItem: {
             /** Format: uuid */
@@ -2154,6 +2235,10 @@ export interface components {
             /** Format: uuid */
             membership_id: string;
             display_name: string;
+        };
+        CommentPermissionHints: {
+            can_reply: boolean;
+            can_resolve: boolean;
         };
         CsrfResponse: {
             detail: string;
@@ -3359,7 +3444,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CommentItem"][];
+                    "application/json": components["schemas"]["ActionCommentListItem"][];
                 };
             };
             401: {
@@ -3404,6 +3489,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommentItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_comments_resolve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                comment_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionCommentThreadItem"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_actions_comments_unresolve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+                comment_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionCommentThreadItem"];
                 };
             };
             400: {

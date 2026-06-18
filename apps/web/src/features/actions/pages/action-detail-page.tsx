@@ -1,16 +1,18 @@
+import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainErrorState } from '@/components/ui/terrain'
+import { CommentSection } from '@/features/comments/components/comment-section'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
 import { ActionsApiError } from '../api'
-import { CommentSection } from '@/features/comments/components/comment-section'
 import { ActionDetailDeadlineCard } from '../components/action-detail-deadline-card'
 import { ActionDetailInstructionCard } from '../components/action-detail-instruction-card'
 import { ActionDetailStickyFooter } from '../components/action-detail-sticky-footer'
 import { ActionDetailSummaryCard } from '../components/action-detail-summary-card'
+import { ActionDetailTabs, type ActionDetailTab } from '../components/action-detail-tabs'
 import { ActionLinkedSignalCard } from '../components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '../components/action-linked-signal-strip'
 import { getActionLocationText } from '../lib/action-display'
@@ -31,6 +33,9 @@ type ActionDetailPageProps = {
 export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps) {
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+
+  const [activeTab, setActiveTab] = useState<ActionDetailTab>('details')
+  const [hasOpenedComments, setHasOpenedComments] = useState(false)
 
   const detailQuery = useActionDetailQuery(establishmentId, actionId)
   const acceptMutation = useAcceptActionMutation(establishmentId, actionId)
@@ -74,40 +79,52 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
 
   const action = detailQuery.data
   const hints = action.permission_hints
-
   const signalSummary = action.signal_summary
-  const showStickyFooter = true
+  const showStickyFooter = activeTab === 'details'
+
+  const handleTabChange = (tab: ActionDetailTab) => {
+    if (tab === 'comments') {
+      setHasOpenedComments(true)
+    }
+    setActiveTab(tab)
+  }
 
   return (
     <div className="flex min-h-full flex-col">
-      {signalSummary ? (
-        <ActionLinkedSignalStrip>
-          <ActionLinkedSignalCard
-            title={signalSummary.title}
-            locationText={getActionLocationText(signalSummary)}
-            onPress={() => onNavigate(`/signals/${signalSummary.id}`)}
-          />
-        </ActionLinkedSignalStrip>
-      ) : null}
+      <div className="px-3 pt-2">
+        <ActionDetailTabs activeTab={activeTab} onChange={handleTabChange} />
+      </div>
 
       <div
         className={cn(
-          'flex flex-1 flex-col gap-2.5 px-3 pt-2',
+          'flex flex-1 flex-col gap-2.5 px-3 pt-2.5',
           showStickyFooter ? 'pb-40' : 'pb-4',
         )}
       >
-        <ActionDetailSummaryCard action={action} />
+        <div className={cn('flex flex-col gap-2.5', activeTab !== 'details' && 'hidden')}>
+          {signalSummary ? (
+            <ActionLinkedSignalStrip>
+              <ActionLinkedSignalCard
+                title={signalSummary.title}
+                locationText={getActionLocationText(signalSummary)}
+                onPress={() => onNavigate(`/signals/${signalSummary.id}`)}
+              />
+            </ActionLinkedSignalStrip>
+          ) : null}
 
-        <ActionDetailInstructionCard instruction={action.instruction} />
+          <ActionDetailSummaryCard action={action} />
+          <ActionDetailInstructionCard instruction={action.instruction} />
+          <ActionDetailDeadlineCard action={action} />
+        </div>
 
-        <ActionDetailDeadlineCard action={action} />
-
-        {establishmentId ? (
-          <CommentSection
-            establishmentId={establishmentId}
-            targetType="action"
-            targetId={actionId}
-          />
+        {hasOpenedComments && establishmentId ? (
+          <div className={cn(activeTab !== 'comments' && 'hidden')}>
+            <CommentSection
+              establishmentId={establishmentId}
+              targetType="action"
+              targetId={actionId}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -115,7 +132,11 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
         <ActionDetailStickyFooter
           hints={hints}
           isPending={isPending}
-          mutationErrorMessage={mutationError ? resolveApiErrorMessage(mutationError, ActionsApiError, 'Une erreur est survenue.') : null}
+          mutationErrorMessage={
+            mutationError
+              ? resolveApiErrorMessage(mutationError, ActionsApiError, 'Une erreur est survenue.')
+              : null
+          }
           onAccept={() => void acceptMutation.mutate()}
           onMarkDone={() => void markDoneMutation.mutate()}
           onValidate={() => void validateMutation.mutate()}

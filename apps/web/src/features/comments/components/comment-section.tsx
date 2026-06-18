@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
@@ -9,7 +9,9 @@ import {
   useActionCommentsQuery,
   useCreateActionCommentMutation,
   useCreateSignalCommentMutation,
+  useResolveActionCommentMutation,
   useSignalCommentsQuery,
+  useUnresolveActionCommentMutation,
 } from '../hooks'
 import { CommentComposer, type CommentComposerHandle } from './comment-composer'
 import { CommentList } from './comment-list'
@@ -22,6 +24,8 @@ type CommentSectionProps = {
 
 export function CommentSection({ establishmentId, targetType, targetId }: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
+  const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
+
   const signalQuery = useSignalCommentsQuery(
     targetType === 'signal' ? establishmentId : null,
     targetType === 'signal' ? targetId : null,
@@ -38,9 +42,19 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
     targetType === 'action' ? establishmentId : null,
     targetType === 'action' ? targetId : null,
   )
+  const resolveMutation = useResolveActionCommentMutation(
+    targetType === 'action' ? establishmentId : null,
+    targetType === 'action' ? targetId : null,
+  )
+  const unresolveMutation = useUnresolveActionCommentMutation(
+    targetType === 'action' ? establishmentId : null,
+    targetType === 'action' ? targetId : null,
+  )
 
   const commentsQuery = targetType === 'signal' ? signalQuery : actionQuery
   const createMutation = targetType === 'signal' ? createSignalMutation : createActionMutation
+  const isThreadActionPending =
+    createActionMutation.isPending || resolveMutation.isPending || unresolveMutation.isPending
 
   return (
     <TerrainCard>
@@ -64,10 +78,41 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
         />
       ) : null}
 
-      {commentsQuery.isSuccess ? (
+      {commentsQuery.isSuccess && targetType === 'signal' ? (
+        <CommentList mode="signal" comments={commentsQuery.data} />
+      ) : null}
+
+      {actionQuery.isSuccess && targetType === 'action' ? (
         <CommentList
-          comments={commentsQuery.data}
-          showOrigin={targetType === 'action'}
+          mode="action"
+          comments={actionQuery.data}
+          establishmentId={establishmentId}
+          disabled={isThreadActionPending || commentsQuery.isLoading || commentsQuery.isError}
+          replyErrorMessage={
+            replyErrorCommentId && createActionMutation.error
+              ? resolveApiErrorMessage(
+                  createActionMutation.error,
+                  CommentsApiError,
+                  'Impossible d’envoyer la réponse.',
+                )
+              : null
+          }
+          isReplyPending={createActionMutation.isPending}
+          isResolvePending={resolveMutation.isPending || unresolveMutation.isPending}
+          onReply={(payload) => {
+            setReplyErrorCommentId(payload.parent_comment_id ?? null)
+            createActionMutation.mutate(payload, {
+              onSuccess: () => {
+                setReplyErrorCommentId(null)
+              },
+            })
+          }}
+          onResolve={(commentId) => {
+            resolveMutation.mutate(commentId)
+          }}
+          onUnresolve={(commentId) => {
+            unresolveMutation.mutate(commentId)
+          }}
         />
       ) : null}
 

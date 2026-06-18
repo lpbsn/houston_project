@@ -23,12 +23,23 @@ type CommentComposerProps = {
   establishmentId: string
   disabled?: boolean
   errorMessage?: string | null
+  placeholder?: string
+  showCancel?: boolean
+  onCancel?: () => void
   onSubmit: (payload: { body: string; mentionedMembershipIds: string[] }) => void
 }
 
 export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposerProps>(
   function CommentComposer(
-    { establishmentId, disabled = false, errorMessage = null, onSubmit },
+    {
+      establishmentId,
+      disabled = false,
+      errorMessage = null,
+      placeholder = 'Ajouter un commentaire...',
+      showCancel = false,
+      onCancel,
+      onSubmit,
+    },
     ref,
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -114,7 +125,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     }
 
     return (
-      <div className="mt-3">
+      <div className={showCancel ? undefined : 'mt-3'}>
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
@@ -126,7 +137,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             onClick={updateCursorPosition}
             onKeyUp={updateCursorPosition}
             onSelect={updateCursorPosition}
-            placeholder="Ajouter un commentaire..."
+            placeholder={placeholder}
             rows={3}
             disabled={disabled}
             aria-label="Ajouter un commentaire"
@@ -146,6 +157,20 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             <SendHorizonal className="h-5 w-5" />
           </Button>
         </div>
+
+        {showCancel ? (
+          <div className="mt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-11 px-2 text-[12px] text-[#7D7B75]"
+              disabled={disabled}
+              onClick={onCancel}
+            >
+              Annuler
+            </Button>
+          </div>
+        ) : null}
 
         <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">
           {draft.length}/{MAX_COMMENT_LENGTH}

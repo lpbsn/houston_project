@@ -3,12 +3,20 @@ from __future__ import annotations
 import uuid
 
 from django.db import transaction
+from django.utils import timezone
 
 from houston.accounts.models import User
 from houston.actions.models import Action
 from houston.comments.constants import (
+    ALREADY_RESOLVED_ERROR_DETAIL,
+    CANNOT_REPLY_TO_REPLY_ERROR_DETAIL,
+    CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL,
     COMMENT_BODY_MAX_LENGTH,
     INVALID_MENTIONS_ERROR_DETAIL,
+    INVALID_PARENT_COMMENT_ERROR_DETAIL,
+    NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL,
+    NOT_RESOLVED_ERROR_DETAIL,
+    SIGNAL_COMMENT_PARENT_NOT_ALLOWED_ERROR_DETAIL,
 )
 from houston.comments.exceptions import CommentValidationError
 from houston.comments.models import Comment, CommentMention
@@ -89,6 +97,52 @@ def _create_mentions(
     )
 
 
+def _get_parent_comment_for_reply(
+    *,
+    establishment_id: uuid.UUID,
+    action: Action,
+    parent_comment_id: uuid.UUID,
+) -> Comment:
+    parent = (
+        Comment.objects.filter(
+            id=parent_comment_id,
+            establishment_id=establishment_id,
+        )
+        .select_related("parent_comment")
+        .first()
+    )
+    if parent is None:
+        raise CommentValidationError(INVALID_PARENT_COMMENT_ERROR_DETAIL)
+    if parent.signal_id is not None:
+        raise CommentValidationError(CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL)
+    if parent.action_id != action.id:
+        raise CommentValidationError(INVALID_PARENT_COMMENT_ERROR_DETAIL)
+    if parent.parent_comment_id is not None:
+        raise CommentValidationError(CANNOT_REPLY_TO_REPLY_ERROR_DETAIL)
+    return parent
+
+
+def _get_action_root_comment(
+    *,
+    establishment_id: uuid.UUID,
+    action: Action,
+    comment_id: uuid.UUID,
+) -> Comment:
+    comment = Comment.objects.filter(
+        id=comment_id,
+        establishment_id=establishment_id,
+    ).first()
+    if comment is None:
+        raise CommentValidationError(INVALID_PARENT_COMMENT_ERROR_DETAIL)
+    if comment.signal_id is not None:
+        raise CommentValidationError(NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL)
+    if comment.parent_comment_id is not None:
+        raise CommentValidationError(NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL)
+    if comment.action_id != action.id:
+        raise CommentValidationError(INVALID_PARENT_COMMENT_ERROR_DETAIL)
+    return comment
+
+
 @transaction.atomic
 def create_signal_comment(
     *,
@@ -96,7 +150,11 @@ def create_signal_comment(
     signal: Signal,
     body: str,
     mentioned_membership_ids: list[uuid.UUID] | None = None,
+    parent_comment_id: uuid.UUID | None = None,
 ) -> Comment:
+    if parent_comment_id is not None:
+        raise CommentValidationError(SIGNAL_COMMENT_PARENT_NOT_ALLOWED_ERROR_DETAIL)
+
     normalized_body = normalize_comment_body(body)
     deduped_ids = _dedupe_membership_ids(mentioned_membership_ids)
     mentioned_memberships = _validate_mention_memberships(
@@ -121,6 +179,7 @@ def create_action_comment(
     action: Action,
     body: str,
     mentioned_membership_ids: list[uuid.UUID] | None = None,
+    parent_comment_id: uuid.UUID | None = None,
 ) -> Comment:
     normalized_body = normalize_comment_body(body)
     deduped_ids = _dedupe_membership_ids(mentioned_membership_ids)
@@ -129,13 +188,63 @@ def create_action_comment(
         mentioned_membership_ids=deduped_ids,
     )
 
+    parent_comment = None
+    if parent_comment_id is not None:
+        parent_comment = _get_parent_comment_for_reply(
+            establishment_id=action.establishment_id,
+            action=action,
+            parent_comment_id=parent_comment_id,
+        )
+
     comment = Comment.objects.create(
         establishment_id=action.establishment_id,
         action=action,
         author_membership=author_membership,
+        parent_comment=parent_comment,
         body=normalized_body,
     )
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
+    return _reload_comment(establishment_id=action.establishment_id, comment_id=comment.id)
+
+
+@transaction.atomic
+def resolve_action_comment(
+    *,
+    action: Action,
+    comment_id: uuid.UUID,
+    resolved_by_membership: EstablishmentMembership,
+) -> Comment:
+    comment = _get_action_root_comment(
+        establishment_id=action.establishment_id,
+        action=action,
+        comment_id=comment_id,
+    )
+    if comment.resolved_at is not None:
+        raise CommentValidationError(ALREADY_RESOLVED_ERROR_DETAIL)
+
+    comment.resolved_at = timezone.now()
+    comment.resolved_by_membership = resolved_by_membership
+    comment.save(update_fields=["resolved_at", "resolved_by_membership", "updated_at"])
+    return _reload_comment(establishment_id=action.establishment_id, comment_id=comment.id)
+
+
+@transaction.atomic
+def unresolve_action_comment(
+    *,
+    action: Action,
+    comment_id: uuid.UUID,
+) -> Comment:
+    comment = _get_action_root_comment(
+        establishment_id=action.establishment_id,
+        action=action,
+        comment_id=comment_id,
+    )
+    if comment.resolved_at is None:
+        raise CommentValidationError(NOT_RESOLVED_ERROR_DETAIL)
+
+    comment.resolved_at = None
+    comment.resolved_by_membership = None
+    comment.save(update_fields=["resolved_at", "resolved_by_membership", "updated_at"])
     return _reload_comment(establishment_id=action.establishment_id, comment_id=comment.id)
 
 

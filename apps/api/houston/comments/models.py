@@ -32,6 +32,21 @@ class Comment(BaseModel):
         on_delete=models.PROTECT,
         related_name="comments_authored",
     )
+    parent_comment = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="replies",
+        null=True,
+        blank=True,
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="comments_resolved",
+        null=True,
+        blank=True,
+    )
     body = models.TextField(max_length=COMMENT_BODY_MAX_LENGTH)
 
     class Meta:
@@ -39,6 +54,7 @@ class Comment(BaseModel):
         indexes = [
             models.Index(fields=["establishment", "signal", "created_at", "id"]),
             models.Index(fields=["establishment", "action", "created_at", "id"]),
+            models.Index(fields=["parent_comment", "created_at", "id"]),
         ]
         constraints = [
             models.CheckConstraint(

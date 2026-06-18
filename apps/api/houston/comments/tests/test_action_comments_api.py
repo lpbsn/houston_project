@@ -8,8 +8,14 @@ from django.utils import timezone
 from houston.actions.models import Action
 from houston.actions.services import create_action
 from houston.actions.tests.conftest import build_api_membership_on_establishment
+from houston.comments.constants import (
+    CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL,
+    NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL,
+)
 from houston.comments.services import create_action_comment, create_signal_comment
 from houston.comments.tests.conftest import (
+    action_comment_resolve_url,
+    action_comment_unresolve_url,
     action_comments_url,
     auth_headers,
     build_api_membership,
@@ -61,10 +67,14 @@ def test_action_comments_include_inherited_signal_comments(api_client):
 
     items = response.json()
     assert len(items) == 2
+    assert items[0]["item_type"] == "inherited_signal"
     assert items[0]["origin"] == "signal"
     assert items[0]["body"] == "signal note"
+    assert items[1]["item_type"] == "action_thread"
     assert items[1]["origin"] == "action"
     assert items[1]["body"] == "action note"
+    assert items[1]["replies"] == []
+    assert items[1]["is_resolved"] is False
 
 
 def test_action_comments_include_inherited_when_signal_archived(api_client):
@@ -86,6 +96,7 @@ def test_action_comments_include_inherited_when_signal_archived(api_client):
     assert response.status_code == 200
     items = response.json()
     assert len(items) == 1
+    assert items[0]["item_type"] == "inherited_signal"
     assert items[0]["origin"] == "signal"
     assert items[0]["body"] == "signal note before archive"
 
@@ -123,4 +134,139 @@ def test_action_comments_404_for_out_of_scope_user(api_client):
     url = action_comments_url(outsider.establishment_id, action.id)
 
     response = api_client.get(url, **auth_headers(token))
+    assert response.status_code == 404
+
+
+def test_action_comment_reply_to_action_root(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    root = create_action_comment(author_membership=owner, action=action, body="root")
+    token = login(api_client, user=staff.user)
+    url = action_comments_url(staff.establishment_id, action.id)
+
+    response = api_client.post(
+        url,
+        {"body": "reply", "parent_comment_id": str(root.id)},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201
+    assert response.json()["body"] == "reply"
+
+    listed = api_client.get(url, **auth_headers(token))
+    thread = next(item for item in listed.json() if item["item_type"] == "action_thread")
+    assert len(thread["replies"]) == 1
+    assert thread["replies"][0]["body"] == "reply"
+
+
+def test_action_comment_reply_to_signal_comment_rejected(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    signal_comment = create_signal_comment(
+        author_membership=owner,
+        signal=signal,
+        body="signal",
+    )
+    token = login(api_client, user=staff.user)
+    url = action_comments_url(staff.establishment_id, action.id)
+
+    response = api_client.post(
+        url,
+        {"body": "nope", "parent_comment_id": str(signal_comment.id)},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL
+
+
+def test_action_comment_reply_to_reply_rejected(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    root = create_action_comment(author_membership=owner, action=action, body="root")
+    reply = create_action_comment(
+        author_membership=staff,
+        action=action,
+        body="reply",
+        parent_comment_id=root.id,
+    )
+    token = login(api_client, user=owner.user)
+    url = action_comments_url(owner.establishment_id, action.id)
+
+    response = api_client.post(
+        url,
+        {"body": "nested", "parent_comment_id": str(reply.id)},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert "réponse" in response.json()["detail"].lower()
+
+
+def test_action_comment_resolve_root(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    root = create_action_comment(author_membership=staff, action=action, body="root")
+    token = login(api_client, user=staff.user)
+    url = action_comment_resolve_url(staff.establishment_id, action.id, root.id)
+
+    response = api_client.post(url, format="json", **auth_headers(token))
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_resolved"] is True
+    assert payload["resolved_by"]["membership_id"] == str(staff.id)
+
+
+def test_action_comment_unresolve_root(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    root = create_action_comment(author_membership=staff, action=action, body="root")
+    token = login(api_client, user=staff.user)
+    resolve_url = action_comment_resolve_url(staff.establishment_id, action.id, root.id)
+    unresolve_url = action_comment_unresolve_url(staff.establishment_id, action.id, root.id)
+
+    assert api_client.post(resolve_url, format="json", **auth_headers(token)).status_code == 200
+    response = api_client.post(unresolve_url, format="json", **auth_headers(token))
+    assert response.status_code == 200
+    assert response.json()["is_resolved"] is False
+
+
+def test_action_comment_resolve_signal_comment_rejected(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    signal_comment = create_signal_comment(
+        author_membership=owner,
+        signal=signal,
+        body="signal",
+    )
+    token = login(api_client, user=owner.user)
+    url = action_comment_resolve_url(owner.establishment_id, action.id, signal_comment.id)
+
+    response = api_client.post(url, format="json", **auth_headers(token))
+    assert response.status_code == 400
+    assert response.json()["detail"] == NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL
+
+
+def test_action_comment_resolve_reply_rejected(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    root = create_action_comment(author_membership=owner, action=action, body="root")
+    reply = create_action_comment(
+        author_membership=staff,
+        action=action,
+        body="reply",
+        parent_comment_id=root.id,
+    )
+    token = login(api_client, user=staff.user)
+    url = action_comment_resolve_url(staff.establishment_id, action.id, reply.id)
+
+    response = api_client.post(url, format="json", **auth_headers(token))
+    assert response.status_code == 400
+    assert response.json()["detail"] == NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL
+
+
+def test_action_comment_resolve_404_for_unauthorized_staff(api_client):
+    owner, staff, signal, action = _setup_linked_action()
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    root = create_action_comment(author_membership=staff, action=action, body="root")
+    token = login(api_client, user=outsider.user)
+    url = action_comment_resolve_url(owner.establishment_id, action.id, root.id)
+
+    response = api_client.post(url, format="json", **auth_headers(token))
     assert response.status_code == 404

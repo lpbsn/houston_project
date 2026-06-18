@@ -12,6 +12,7 @@ from houston.comments.selectors import (
     get_action_for_comments,
     get_signal_for_comments,
     list_action_comments,
+    list_action_comments_for_detail,
     list_signal_comments,
 )
 from houston.comments.services import create_action_comment, create_signal_comment
@@ -128,3 +129,43 @@ def test_list_signal_comments_sorted_oldest_first():
 
     comments = list_signal_comments(signal=signal)
     assert [comment.id for comment in comments] == [first.id, second.id]
+
+
+def test_list_action_comments_for_detail_groups_action_replies():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    signal = _signal(owner)
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Task",
+        instruction="Do",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timedelta(days=1),
+        signal_id=signal.id,
+    )
+
+    signal_comment = create_signal_comment(
+        author_membership=owner,
+        signal=signal,
+        body="from signal",
+    )
+    root = create_action_comment(
+        author_membership=staff,
+        action=action,
+        body="from action",
+    )
+    reply = create_action_comment(
+        author_membership=owner,
+        action=action,
+        body="reply",
+        parent_comment_id=root.id,
+    )
+
+    entries = list_action_comments_for_detail(action=action)
+    assert len(entries) == 2
+    assert entries[0].kind == "inherited_signal"
+    assert entries[0].comment.id == signal_comment.id
+    assert entries[1].kind == "action_thread"
+    assert entries[1].root.id == root.id
+    assert [item.id for item in entries[1].replies] == [reply.id]

@@ -13,9 +13,13 @@ vi.mock('@/api/client', () => ({
 }))
 
 import {
+  createActionComment,
   createSignalComment,
+  fetchActionComments,
   fetchSignalComments,
+  resolveActionComment,
   searchEstablishmentUsersForMentions,
+  unresolveActionComment,
 } from '@/features/comments/api'
 
 describe('comments api', () => {
@@ -50,6 +54,22 @@ describe('comments api', () => {
     )
   })
 
+  it('fetches action comments with nested path params', async () => {
+    await fetchActionComments('est-1', 'action-1')
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/',
+      expect.objectContaining({
+        params: {
+          path: {
+            establishment_id: 'est-1',
+            action_id: 'action-1',
+          },
+        },
+      }),
+    )
+  })
+
   it('creates signal comments with body and mentions', async () => {
     await createSignalComment('est-1', 'signal-1', {
       body: 'hello',
@@ -62,6 +82,59 @@ describe('comments api', () => {
         body: {
           body: 'hello',
           mentioned_membership_ids: ['member-1'],
+        },
+      }),
+    )
+  })
+
+  it('creates action comments with parent_comment_id', async () => {
+    await createActionComment('est-1', 'action-1', {
+      body: 'reply',
+      mentioned_membership_ids: [],
+      parent_comment_id: 'root-1',
+    })
+
+    expect(postMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/',
+      expect.objectContaining({
+        body: {
+          body: 'reply',
+          mentioned_membership_ids: [],
+          parent_comment_id: 'root-1',
+        },
+      }),
+    )
+  })
+
+  it('resolves action comments', async () => {
+    await resolveActionComment('est-1', 'action-1', 'comment-1')
+
+    expect(postMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/resolve/',
+      expect.objectContaining({
+        params: {
+          path: {
+            establishment_id: 'est-1',
+            action_id: 'action-1',
+            comment_id: 'comment-1',
+          },
+        },
+      }),
+    )
+  })
+
+  it('unresolves action comments', async () => {
+    await unresolveActionComment('est-1', 'action-1', 'comment-1')
+
+    expect(postMock).toHaveBeenCalledWith(
+      '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/unresolve/',
+      expect.objectContaining({
+        params: {
+          path: {
+            establishment_id: 'est-1',
+            action_id: 'action-1',
+            comment_id: 'comment-1',
+          },
         },
       }),
     )

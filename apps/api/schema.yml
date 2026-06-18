@@ -647,8 +647,8 @@ paths:
   /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/:
     get:
       operationId: v1_establishments_actions_comments_list
-      description: Lists comments on an Action, including inherited Signal comments,
-        oldest first.
+      description: Lists comments on an Action, including inherited Signal comments
+        and action threads, oldest first.
       parameters:
       - in: path
         name: action_id
@@ -673,7 +673,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CommentItem'
+                  $ref: '#/components/schemas/ActionCommentListItem'
           description: ''
         '401':
           content:
@@ -725,6 +725,110 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommentItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/resolve/:
+    post:
+      operationId: v1_establishments_actions_comments_resolve_create
+      description: Marks an action root comment as resolved.
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: comment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionCommentThreadItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/unresolve/:
+    post:
+      operationId: v1_establishments_actions_comments_unresolve_create
+      description: Marks an action root comment as unresolved.
+      parameters:
+      - in: path
+        name: action_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: comment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - comments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionCommentThreadItem'
           description: ''
         '400':
           content:
@@ -5326,6 +5430,114 @@ components:
       required:
       - display_name
       - membership_id
+    ActionCommentListItem:
+      type: object
+      properties:
+        item_type:
+          $ref: '#/components/schemas/ActionCommentListItemItemTypeEnum'
+        id:
+          type: string
+          format: uuid
+        origin:
+          $ref: '#/components/schemas/OriginEnum'
+        body:
+          type: string
+        author:
+          $ref: '#/components/schemas/CommentAuthor'
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentMention'
+        created_at:
+          type: string
+          format: date-time
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentItem'
+        is_resolved:
+          type: boolean
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by:
+          allOf:
+          - $ref: '#/components/schemas/CommentAuthor'
+          nullable: true
+        permission_hints:
+          $ref: '#/components/schemas/CommentPermissionHints'
+      required:
+      - author
+      - body
+      - created_at
+      - id
+      - item_type
+      - mentions
+      - origin
+    ActionCommentListItemItemTypeEnum:
+      enum:
+      - inherited_signal
+      - action_thread
+      type: string
+      description: |-
+        * `inherited_signal` - inherited_signal
+        * `action_thread` - action_thread
+    ActionCommentThreadItem:
+      type: object
+      properties:
+        item_type:
+          $ref: '#/components/schemas/ActionCommentThreadItemItemTypeEnum'
+        id:
+          type: string
+          format: uuid
+        origin:
+          $ref: '#/components/schemas/OriginEnum'
+        body:
+          type: string
+        author:
+          $ref: '#/components/schemas/CommentAuthor'
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentMention'
+        created_at:
+          type: string
+          format: date-time
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentItem'
+        is_resolved:
+          type: boolean
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolved_by:
+          allOf:
+          - $ref: '#/components/schemas/CommentAuthor'
+          nullable: true
+        permission_hints:
+          $ref: '#/components/schemas/CommentPermissionHints'
+      required:
+      - author
+      - body
+      - created_at
+      - id
+      - is_resolved
+      - item_type
+      - mentions
+      - origin
+      - permission_hints
+      - replies
+      - resolved_at
+      - resolved_by
+    ActionCommentThreadItemItemTypeEnum:
+      enum:
+      - action_thread
+      type: string
+      description: '* `action_thread` - action_thread'
     ActionCreateRequest:
       type: object
       properties:
@@ -6849,6 +7061,10 @@ components:
           items:
             type: string
             format: uuid
+        parent_comment_id:
+          type: string
+          format: uuid
+          nullable: true
       required:
       - body
     CommentItem:
@@ -6888,6 +7104,16 @@ components:
       required:
       - display_name
       - membership_id
+    CommentPermissionHints:
+      type: object
+      properties:
+        can_reply:
+          type: boolean
+        can_resolve:
+          type: boolean
+      required:
+      - can_reply
+      - can_resolve
     CsrfResponse:
       type: object
       properties:
