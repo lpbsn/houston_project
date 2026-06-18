@@ -54,6 +54,12 @@ export const LazyProfilePage = lazy(() =>
   })),
 )
 
+export const LazyTeamPage = lazy(() =>
+  import('@/features/auth/pages/team-page').then((module) => ({
+    default: module.TeamPage,
+  })),
+)
+
 export const LazyChecklistHubPage = lazy(() =>
   import('@/features/checklists/pages/checklist-hub-page').then((module) => ({
     default: module.ChecklistHubPage,

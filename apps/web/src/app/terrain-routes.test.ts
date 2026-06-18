@@ -26,6 +26,7 @@ describe('usesTerrainShell', () => {
 
   it('returns true for checklist management routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/checklists' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/team' })).toBe(true)
     expect(usesTerrainShell({ kind: 'checklist-template-create' })).toBe(true)
     expect(
       usesTerrainShell({
@@ -81,9 +82,18 @@ describe('getTerrainRouteConfig', () => {
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/profile' })).toEqual({
       topbarVariant: 'hub',
-      pageTitle: 'Profil',
       showBottomNav: true,
       activeNavPath: '/profile',
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures team route as detail shell without bottom nav', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/team' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Équipe',
+      backPath: '/profile',
+      showBottomNav: false,
       mainScroll: 'auto',
     })
   })
@@ -204,6 +214,7 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
     expect(getTerrainContentKey({ kind: 'static', path: '/profile' })).toBe('profile')
     expect(getTerrainContentKey({ kind: 'static', path: '/checklists' })).toBe('checklists-hub')
+    expect(getTerrainContentKey({ kind: 'static', path: '/team' })).toBe('team')
   })
 
   it('includes signal id for detail routes', () => {
@@ -269,6 +280,7 @@ describe('requiresActiveMembership', () => {
       '/execution',
       '/chat',
       '/profile',
+      '/team',
       '/team/invite',
       '/checklists',
     ] as const) {

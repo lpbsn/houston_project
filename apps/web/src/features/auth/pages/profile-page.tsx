@@ -1,13 +1,15 @@
+import { useId, useState, type ComponentType } from 'react'
+import { Building2, ChevronRight, ClipboardCheck, Users } from 'lucide-react'
+
 import { useAuth } from '@/app/auth-provider'
 import {
+  HoustonBadge,
   TerrainCard,
-  TerrainFieldLabel,
   TerrainSectionLabel,
 } from '@/components/ui/terrain'
-import { Button } from '@/components/ui/button'
 import {
   canAccessManagementSpace,
-  canInviteFromBootstrapHints,
+  canManageRuntimeConfigFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { toRoleEnum } from '@/features/auth/lib/role'
@@ -20,19 +22,6 @@ const ROLE_DISPLAY_LABELS: Record<RoleEnum, string> = {
   director: 'Directeur',
   manager: 'Manager',
   staff: 'Équipe',
-}
-
-const MEMBERSHIP_STATUS_LABELS: Record<string, string> = {
-  active: 'Actif',
-  inactive: 'Inactif',
-}
-
-function formatRoleDisplay(role: RoleEnum): string {
-  return ROLE_DISPLAY_LABELS[role]
-}
-
-function formatMembershipStatusDisplay(status: string): string {
-  return MEMBERSHIP_STATUS_LABELS[status] ?? status
 }
 
 type ProfilePageProps = {
@@ -50,32 +39,8 @@ function readOptionalUserName(user: unknown, key: 'first_name' | 'last_name') {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 }
 
-function toScopeSummaryText(
-  scopeSummary: unknown,
-  role: RoleEnum | null,
-) {
-  if (role === 'owner' || role === 'director') {
-    return 'Périmètre complet'
-  }
-
-  if (!scopeSummary || typeof scopeSummary !== 'object') {
-    return null
-  }
-
-  const summary = scopeSummary as Record<string, unknown>
-  const businessUnitCount =
-    typeof summary.business_unit_count === 'number' ? summary.business_unit_count : null
-
-  if (businessUnitCount === null) {
-    return null
-  }
-
-  if (businessUnitCount > 0) {
-    const label = businessUnitCount === 1 ? 'pôle' : 'pôles'
-    return `${businessUnitCount} ${label}`
-  }
-
-  return 'Aucun périmètre'
+function formatRoleDisplay(role: RoleEnum): string {
+  return ROLE_DISPLAY_LABELS[role]
 }
 
 function buildDisplayName(
@@ -107,12 +72,100 @@ function buildInitials(
   return '?'
 }
 
-function ProfileField({ label, value }: { label: string; value: string }) {
+function buildRoleEstablishmentLine(
+  role: RoleEnum | null,
+  establishmentName: string | null | undefined,
+) {
+  if (!role && !establishmentName) {
+    return null
+  }
+
+  const roleLabel = role ? formatRoleDisplay(role) : null
+  if (roleLabel && establishmentName) {
+    return `${roleLabel} · ${establishmentName}`
+  }
+
+  return roleLabel ?? establishmentName ?? null
+}
+
+// placeholder — no API persistence
+function ProfilePlaceholderSwitch({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  const labelId = useId()
+
   return (
-    <div className="space-y-1">
-      <TerrainFieldLabel>{label}</TerrainFieldLabel>
-      <p className="text-sm font-medium text-[#1a1a1a]">{value}</p>
+    <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-3.5">
+      <span id={labelId} className="text-sm text-[#1a1a1a]">
+        {label}
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-labelledby={labelId}
+        className={cn(
+          'relative h-7 w-12 shrink-0 rounded-full transition-colors',
+          checked ? 'bg-[#1D9E75]' : 'bg-[#E8E6DF]',
+        )}
+        onClick={() => onCheckedChange(!checked)}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0',
+          )}
+        />
+      </button>
     </div>
+  )
+}
+
+type ProfileManagementNavCardProps = {
+  icon: ComponentType<{ className?: string }>
+  iconClassName: string
+  title: string
+  subtitle: string
+  onClick: () => void
+}
+
+function ProfileManagementNavCard({
+  icon: Icon,
+  iconClassName,
+  title,
+  subtitle,
+  onClick,
+}: ProfileManagementNavCardProps) {
+  return (
+    <button
+      type="button"
+      className="w-full text-left active:opacity-90"
+      onClick={onClick}
+    >
+      <TerrainCard className="flex min-h-11 items-center gap-3 p-4">
+        <span
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+            iconClassName,
+          )}
+          aria-hidden
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-[#1a1a1a]">{title}</span>
+          <span className={cn('mt-0.5 block text-xs', terrain.muted)}>{subtitle}</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-[#a3a19a]" aria-hidden />
+      </TerrainCard>
+    </button>
   )
 }
 
@@ -125,10 +178,18 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const identityLabel = user ? (user.email ?? user.username) : null
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
-  const canInviteMember = canInviteFromBootstrapHints(permissionHints)
-  const scopeSummary = toScopeSummaryText(activeMembership?.scope_summary, role)
+  const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
+  const canShowChecklistsNav = Boolean(activeMembership && role)
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)
+  const roleEstablishmentLine = buildRoleEstablishmentLine(
+    role,
+    activeMembership?.establishment_name,
+  )
+
+  // placeholder — no API persistence
+  const [signalNotificationsEnabled, setSignalNotificationsEnabled] = useState(true)
+  const [executionNotificationsEnabled, setExecutionNotificationsEnabled] = useState(true)
 
   if (!isReady || isBootstrapping) {
     return (
@@ -137,104 +198,105 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col pb-4">
-      <header className="flex flex-col items-center gap-2 border-b border-[#E8E6DF] bg-white px-4 py-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
+      <TerrainCard className="flex items-center gap-3 p-4">
         <div
-          className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-[#BFCFFF] text-[26px] font-bold text-[#1B4FD8]"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#BFCFFF] text-lg font-bold text-[#1B4FD8]"
           aria-hidden
         >
           {initials}
         </div>
-        <h1 className="text-lg font-semibold text-[#1a1a1a]">{displayName}</h1>
-        {role ? (
-          <p className={cn('text-sm', terrain.muted)}>{formatRoleDisplay(role)}</p>
-        ) : null}
-        {activeMembership?.establishment_name ? (
-          <span className="rounded-full bg-[#EEF2FF] px-2.5 py-1 text-[11px] font-medium text-[#1B4FD8]">
-            {activeMembership.establishment_name}
-          </span>
-        ) : null}
-      </header>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-[#1a1a1a]">{displayName}</p>
+          {roleEstablishmentLine ? (
+            <p className={cn('mt-0.5 truncate text-sm', terrain.muted)}>{roleEstablishmentLine}</p>
+          ) : null}
+          {role ? (
+            <HoustonBadge variant="blue" className="mt-2">
+              {formatRoleDisplay(role).toUpperCase()}
+            </HoustonBadge>
+          ) : null}
+        </div>
+      </TerrainCard>
 
-      <div className="space-y-3 px-3 pt-3">
-        <TerrainSectionLabel>Compte</TerrainSectionLabel>
-        <TerrainCard className="space-y-3">
-          {firstName ? <ProfileField label="Prénom" value={firstName} /> : null}
-          {lastName ? <ProfileField label="Nom" value={lastName} /> : null}
-          {identityLabel ? <ProfileField label="Identifiant" value={identityLabel} /> : null}
+      <div className="space-y-2">
+        <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
+        <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+          <ProfilePlaceholderSwitch
+            label="Notifications signaux"
+            checked={signalNotificationsEnabled}
+            onCheckedChange={setSignalNotificationsEnabled}
+          />
+          <ProfilePlaceholderSwitch
+            label="Notifications exécutions"
+            checked={executionNotificationsEnabled}
+            onCheckedChange={setExecutionNotificationsEnabled}
+          />
+          <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-3.5">
+            <span className="text-sm text-[#1a1a1a]">Langue</span>
+            <span className={cn('text-sm', terrain.muted)}>Français</span>
+          </div>
         </TerrainCard>
-
-        <TerrainSectionLabel>Établissement</TerrainSectionLabel>
-        <TerrainCard className="space-y-3">
-          {role ? <ProfileField label="Rôle" value={formatRoleDisplay(role)} /> : null}
-          {activeMembership?.establishment_name ? (
-            <ProfileField label="Établissement" value={activeMembership.establishment_name} />
-          ) : null}
-          {activeMembership?.organization_name ? (
-            <ProfileField label="Organisation" value={activeMembership.organization_name} />
-          ) : null}
-          {activeMembership?.status ? (
-            <ProfileField
-              label="Statut"
-              value={formatMembershipStatusDisplay(activeMembership.status)}
-            />
-          ) : null}
-          {scopeSummary ? (
-            <ProfileField label="Périmètre opérationnel" value={scopeSummary} />
-          ) : null}
-
-          {canAccessManagement ? (
-            <Button
-              type="button"
-              className="mt-1 h-11 w-full rounded-xl bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
-              onClick={() => onNavigate?.('/app')}
-            >
-              Espace gestion
-            </Button>
-          ) : null}
-
-          {activeMembership && canInviteMember ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl border-[#E8E6DF]"
-              onClick={() => onNavigate?.('/team/invite')}
-            >
-              Inviter un membre
-            </Button>
-          ) : null}
-
-          {activeMembership && role ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl border-[#E8E6DF]"
-              onClick={() => onNavigate?.('/checklists')}
-            >
-              Gérer les checklists
-            </Button>
-          ) : null}
-        </TerrainCard>
-
-        {onSignOut ? (
-          <>
-            <TerrainSectionLabel className="mt-2">Session</TerrainSectionLabel>
-            <TerrainCard padding="sm">
-              <button
-                type="button"
-                className={cn(
-                  'w-full py-2 text-left text-sm font-medium text-[#E24B4A]',
-                  isLoggingOut && 'opacity-60',
-                )}
-                disabled={isLoggingOut}
-                onClick={onSignOut}
-              >
-                {isLoggingOut ? 'Déconnexion...' : 'Déconnexion'}
-              </button>
-            </TerrainCard>
-          </>
-        ) : null}
       </div>
+
+      {canAccessManagement ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <TerrainSectionLabel dotVariant="primary" className="py-0">
+              Gestion de l&apos;établissement
+            </TerrainSectionLabel>
+            {role ? (
+              <HoustonBadge variant="blue">{formatRoleDisplay(role).toUpperCase()}</HoustonBadge>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            {canManageRuntimeConfig ? (
+              <ProfileManagementNavCard
+                icon={Building2}
+                iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+                title="Établissement"
+                subtitle="Pôles d'activités et sujets"
+                onClick={() => onNavigate?.('/app/operational-config')}
+              />
+            ) : null}
+
+            {canShowChecklistsNav ? (
+              <ProfileManagementNavCard
+                icon={ClipboardCheck}
+                iconClassName="bg-[#FFF4E0] text-[#EF9F27]"
+                title="Listes"
+                subtitle="Gérer, modifier, désactiver"
+                onClick={() => onNavigate?.('/checklists')}
+              />
+            ) : null}
+
+            <ProfileManagementNavCard
+              icon={Users}
+              iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
+              title="Équipe"
+              subtitle="Ajouter, supprimer, gérer les autorisations"
+              onClick={() => onNavigate?.('/team')}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {onSignOut ? (
+        <TerrainCard padding="sm">
+          <button
+            type="button"
+            className={cn(
+              'flex min-h-11 w-full items-center justify-center text-sm font-medium text-[#E24B4A]',
+              isLoggingOut && 'opacity-60',
+            )}
+            disabled={isLoggingOut}
+            onClick={onSignOut}
+          >
+            {isLoggingOut ? 'Déconnexion...' : 'Se déconnecter'}
+          </button>
+        </TerrainCard>
+      ) : null}
     </div>
   )
 }

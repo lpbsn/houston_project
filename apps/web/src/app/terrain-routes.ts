@@ -36,6 +36,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/execution',
   '/chat',
   '/profile',
+  '/team',
   '/team/invite',
   '/checklists',
 ])
@@ -60,6 +61,8 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
 ])
 
 const CHECKLIST_TERRAIN_PATHS = new Set<string>(['/checklists'])
+
+const TEAM_TERRAIN_PATHS = new Set<string>(['/team'])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
   '/reporting',
@@ -123,6 +126,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && CHECKLIST_TERRAIN_PATHS.has(route.path)) {
+    return true
+  }
+  if (route.kind === 'static' && TEAM_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   return false
@@ -222,9 +228,18 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/profile') {
     return {
       topbarVariant: 'hub',
-      pageTitle: 'Profil',
       showBottomNav: true,
       activeNavPath: '/profile',
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/team') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Équipe',
+      backPath: '/profile',
+      showBottomNav: false,
       mainScroll: 'auto',
     }
   }
@@ -342,6 +357,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'profile'
       case '/checklists':
         return 'checklists-hub'
+      case '/team':
+        return 'team'
       default:
         break
     }

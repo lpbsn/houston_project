@@ -38,6 +38,13 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses team route', () => {
+    expect(parseAppRoute('/team')).toEqual({
+      kind: 'static',
+      path: '/team',
+    })
+  })
+
   it('parses operational config route', () => {
     expect(parseAppRoute('/app/operational-config')).toEqual({
       kind: 'static',
