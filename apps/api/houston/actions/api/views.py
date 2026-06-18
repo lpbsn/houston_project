@@ -237,8 +237,9 @@ class ActionCreateView(EstablishmentScopedActionMixin, APIView):
                 created_by=membership,
                 title=data["title"],
                 instruction=data["instruction"],
-                assigned_to_id=data["assigned_to"],
+                assignee_ids=data["assignee_ids"],
                 due_at=data["due_at"],
+                requires_validation=data.get("requires_validation", True),
                 signal_id=data.get("signal"),
                 responsible_business_unit_id=data.get("responsible_business_unit_id"),
             )
@@ -312,7 +313,10 @@ class ActionAcceptView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_accept_action,
-            service_fn=accept_action,
+            execute_transition=lambda locked_action_id, actor: accept_action(
+                action_id=locked_action_id,
+                accepted_by=actor,
+            ),
         )
 
 
@@ -336,7 +340,9 @@ class ActionMarkDoneView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_mark_action_done,
-            service_fn=mark_action_done,
+            execute_transition=lambda locked_action_id, _actor: mark_action_done(
+                action_id=locked_action_id,
+            ),
         )
 
 
@@ -360,7 +366,9 @@ class ActionValidateView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_validate_action_on_object,
-            service_fn=validate_action,
+            execute_transition=lambda locked_action_id, _actor: validate_action(
+                action_id=locked_action_id,
+            ),
         )
 
 
@@ -384,7 +392,9 @@ class ActionReopenView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_reopen_action,
-            service_fn=reopen_action,
+            execute_transition=lambda locked_action_id, _actor: reopen_action(
+                action_id=locked_action_id,
+            ),
         )
 
 
@@ -408,7 +418,9 @@ class ActionCancelView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_cancel_action,
-            service_fn=cancel_action,
+            execute_transition=lambda locked_action_id, _actor: cancel_action(
+                action_id=locked_action_id,
+            ),
         )
 
 
@@ -438,8 +450,8 @@ class ActionReassignView(EstablishmentScopedActionMixin, APIView):
         body.is_valid(raise_exception=True)
         try:
             action = reassign_action(
-                action=action,
-                assigned_to_id=body.validated_data["assigned_to"],
+                action_id=action.id,
+                assignee_ids=body.validated_data["assignee_ids"],
             )
         except (ActionStateError, ActionValidationError) as exc:
             return _action_command_error_response(exc)
@@ -478,7 +490,7 @@ class ActionDueAtView(EstablishmentScopedActionMixin, APIView):
         body.is_valid(raise_exception=True)
         try:
             action = update_action_due_at(
-                action=action,
+                action_id=action.id,
                 due_at=body.validated_data["due_at"],
             )
         except ActionStateError as exc:
@@ -521,7 +533,7 @@ def _action_transition_response(
     establishment_id,
     action_id,
     permission_check,
-    service_fn,
+    execute_transition,
 ) -> Response:
     membership, action, error = _load_action_for_command(
         request=request,
@@ -536,7 +548,7 @@ def _action_transition_response(
             status=status.HTTP_403_FORBIDDEN,
         )
     try:
-        action = service_fn(action=action)
+        action = execute_transition(action.id, membership)
     except (ActionStateError, ActionValidationError) as exc:
         return _action_command_error_response(exc)
     action = get_action_for_detail(membership=membership, action_id=action.id)

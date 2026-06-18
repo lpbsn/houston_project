@@ -58,7 +58,7 @@ def _create_free_action_for(
         created_by=owner,
         title=title,
         instruction="Instruction text",
-        assigned_to_id=assigned_to.id,
+        assignee_ids=[assigned_to.id],
         due_at=timezone.now() + timezone.timedelta(days=2),
         responsible_business_unit_id=responsible_business_unit.id,
     )
@@ -208,7 +208,7 @@ def test_manager_sees_linked_action_via_affected_scope(api_client):
         created_by=owner,
         title="Linked scoped",
         instruction="Work",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         signal_id=signal.id,
     )
@@ -240,7 +240,7 @@ def test_manager_sees_own_created_action_in_personal_view(api_client):
         created_by=manager,
         title="Created by manager",
         instruction="Instruction text",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=2),
         responsible_business_unit_id=maintenance.id,
     )
@@ -296,9 +296,9 @@ def test_detail_shows_done_action_not_in_feed(api_client):
     )
     from houston.actions.services import accept_action, mark_action_done, validate_action
 
-    action = accept_action(action=action)
-    action = mark_action_done(action=action)
-    action = validate_action(action=action)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
+    action = validate_action(action_id=action.id)
 
     token = login(api_client, user=staff.user)
     feed = api_client.get(
@@ -314,6 +314,33 @@ def test_detail_shows_done_action_not_in_feed(api_client):
     )
     assert detail.status_code == 200
     assert detail.json()["status"] == Action.Status.DONE
+
+
+def test_multi_assignee_action_appears_once_in_feed(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff_a = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    staff_b = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Shared task",
+        instruction="Instruction text",
+        assignee_ids=[staff_a.id, staff_b.id],
+        due_at=timezone.now() + timezone.timedelta(days=2),
+        responsible_business_unit_id=hotel.id,
+    )
+
+    for staff in (staff_a, staff_b):
+        token = login(api_client, user=staff.user)
+        response = api_client.get(
+            execution_feed_url(staff.establishment_id) + _feed_query("personal"),
+            **auth_headers(token),
+        )
+        assert response.status_code == 200
+        action_ids = [item["action"]["id"] for item in response.json()["items"]]
+        assert action_ids.count(str(action.id)) == 1
 
 
 def test_execution_feed_query_count_baseline_empty(api_client):

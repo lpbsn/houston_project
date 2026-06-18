@@ -34,8 +34,8 @@ function PendingValidationExecutionActionCard({
 }: ExecutionActionCardProps) {
   const showUrgentBadge = shouldShowActionUrgentBadge(item.signal_summary)
   const locationText = getActionLocationText(item.signal_summary)
-  const assigneeInitials = getDisplayNameInitials(item.assigned_to_display_name)
-  const completedByLabel = formatActionCompletedByLabel(item.assigned_to_display_name)
+  const assigneeInitials = getDisplayNameInitials(item.accepted_by?.display_name ?? '')
+  const completedByLabel = formatActionCompletedByLabel(item.accepted_by?.display_name ?? '')
   const relativeTimeLabel = formatActionValidationRelativeTime(
     resolveActionValidationRelativeTimeIso(item),
   )

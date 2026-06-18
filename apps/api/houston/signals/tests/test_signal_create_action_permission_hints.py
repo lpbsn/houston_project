@@ -49,6 +49,34 @@ def test_staff_open_signal_can_create_action_hint_false(api_client):
     assert hints["can_create_action"] is False
 
 
+def test_staff_scoped_signal_can_create_action_hint_false(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(owner, status=Signal.Status.OPEN)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+
+    user = User.objects.create_user(
+        username=f"staff_{uuid.uuid4().hex[:6]}",
+        email=f"staff_{uuid.uuid4().hex[:6]}@example.com",
+        password=TEST_PASSWORD,
+        status=User.Status.ACTIVE,
+    )
+    staff = EstablishmentMembership.objects.create(
+        user=user,
+        establishment=owner.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=staff,
+        business_unit=taxonomy.maintenance,
+    )
+
+    hints = _fetch_hints(api_client, staff, signal)
+
+    assert hints["can_create_action"] is False
+
+
 def test_resolved_signal_can_create_action_hint_false(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, status=Signal.Status.RESOLVED)

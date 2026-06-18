@@ -8,12 +8,16 @@ type ActionCreateBusinessUnitSectionProps = {
   establishmentId: string
   selectedBusinessUnitId: string
   onBusinessUnitChange: (businessUnitId: string) => void
+  membershipRole?: string
+  membershipScopes?: Array<{ scope_type: string; scope_id: string }>
 }
 
 export function ActionCreateBusinessUnitSection({
   establishmentId,
   selectedBusinessUnitId,
   onBusinessUnitChange,
+  membershipRole,
+  membershipScopes = [],
 }: ActionCreateBusinessUnitSectionProps) {
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
 
@@ -35,15 +39,28 @@ export function ActionCreateBusinessUnitSection({
   }
 
   const businessUnits = businessUnitQuery.data.business_units
+  const hasScopedRole = membershipRole === 'manager' || membershipRole === 'staff'
+  const visibleBusinessUnits =
+    hasScopedRole && membershipScopes.length > 0
+      ? businessUnits.filter((unit) =>
+          membershipScopes.some(
+            (scope) => scope.scope_type === 'business_unit' && scope.scope_id === unit.id,
+          ),
+        )
+      : businessUnits
 
   return (
     <section className="flex flex-col gap-1.5">
       <TerrainSectionLabel>Pôle d&apos;activité responsable</TerrainSectionLabel>
       <TerrainCard className="flex flex-col gap-1 p-1">
-        {businessUnits.length === 0 ? (
-          <p className="px-2 py-2 text-sm text-[#888]">Aucun pôle disponible.</p>
+        {visibleBusinessUnits.length === 0 ? (
+          <p className="px-2 py-2 text-sm text-[#888]">
+            {hasScopedRole
+              ? 'Aucun pôle disponible dans votre périmètre.'
+              : 'Aucun pôle disponible.'}
+          </p>
         ) : (
-          businessUnits.map((unit) => {
+          visibleBusinessUnits.map((unit) => {
             const isSelected = selectedBusinessUnitId === unit.id
             return (
               <button

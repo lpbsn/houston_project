@@ -11,6 +11,10 @@ describe('shouldShowSignalCreateActionPlan', () => {
     expect(shouldShowSignalCreateActionPlan({ can_create_action: false })).toBe(false)
   })
 
+  it('returns false for staff signal hints even when bootstrap allows free create', () => {
+    expect(shouldShowSignalCreateActionPlan({ can_create_action: false })).toBe(false)
+  })
+
   it('returns false when hints are absent or indeterminate', () => {
     expect(shouldShowSignalCreateActionPlan({})).toBe(false)
     expect(shouldShowSignalCreateActionPlan({ can_create_action: undefined })).toBe(false)

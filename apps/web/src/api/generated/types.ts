@@ -1550,13 +1550,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActionAcceptedBy: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
         ActionCreateRequest: {
             title: string;
             instruction: string;
-            /** Format: uuid */
-            assigned_to: string;
+            assignee_ids: string[];
             /** Format: date-time */
             due_at: string;
+            /** @default true */
+            requires_validation: boolean;
             /** Format: uuid */
             signal?: string | null;
             /** Format: uuid */
@@ -1578,7 +1584,9 @@ export interface components {
             activity_subject_normalized_name: string | null;
             activity_subject_label: string | null;
             signal_summary: components["schemas"]["ActionSignalSummary"] | null;
-            assigned_to_display_name: string;
+            assignees: components["schemas"]["ActionMembershipRef"][];
+            accepted_by: components["schemas"]["ActionAcceptedBy"] | null;
+            requires_validation: boolean;
             created_by_display_name: string;
             /** Format: date-time */
             last_activity_at: string;
@@ -1609,13 +1617,21 @@ export interface components {
             activity_subject_normalized_name: string | null;
             activity_subject_label: string | null;
             signal_summary: components["schemas"]["ActionSignalSummary"] | null;
-            assigned_to_display_name: string;
+            assignees: components["schemas"]["ActionMembershipRef"][];
+            accepted_by: components["schemas"]["ActionAcceptedBy"] | null;
+            requires_validation: boolean;
             created_by_display_name: string;
             /** Format: date-time */
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
             permission_hints: components["schemas"]["ActionPermissionHints"];
+        };
+        ActionMembershipRef: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+            role: string;
         };
         ActionPermissionHints: {
             can_accept: boolean;
@@ -1625,10 +1641,11 @@ export interface components {
             can_cancel: boolean;
             can_reassign: boolean;
             can_update_due_at: boolean;
+            is_assignee: boolean;
+            accepted_by_me: boolean;
         };
         ActionReassignRequest: {
-            /** Format: uuid */
-            assigned_to: string;
+            assignee_ids: string[];
         };
         ActionSignalSummary: {
             /** Format: uuid */

@@ -13,6 +13,7 @@ import { ActionsApiError } from '@/features/actions/api'
 import { ActionCreateAssigneeSection } from '@/features/actions/components/action-create-assignee-section'
 import { ActionCreateBusinessUnitSection } from '@/features/actions/components/action-create-business-unit-section'
 import { ActionCreateDeadlineSection } from '@/features/actions/components/action-create-deadline-section'
+import { ActionCreateValidationToggle } from '@/features/actions/components/action-create-validation-toggle'
 import { ActionLinkedSignalCard } from '@/features/actions/components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '@/features/actions/components/action-linked-signal-strip'
 import { useCreateActionMutation } from '@/features/actions/hooks'
@@ -39,8 +40,21 @@ type ActionCreatePageProps = {
 
 export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePageProps) {
   const auth = useAuth()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+  const activeMembership = auth.activeMembership
+  const establishmentId = activeMembership?.establishment_id ?? null
   const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
+  const isStaff = activeMembership?.role === 'staff'
+  const staffSelfUser: ScopedUserSearchResult | null =
+    isStaff && activeMembership
+      ? {
+          id: auth.bootstrap?.user?.id ?? activeMembership.id,
+          membership_id: activeMembership.id,
+          display_name: auth.bootstrap?.user?.username ?? 'Moi',
+          role: 'staff',
+          username: auth.bootstrap?.user?.username ?? '',
+          email: null,
+        }
+      : null
 
   const initialDue = applyDeadlinePreset('2h', new Date())
   const initialDeadline = syncDeadlineFieldsFromDueAt(initialDue)
@@ -52,8 +66,13 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
   const [limitDate, setLimitDate] = useState(initialDeadline.limitDate)
   const [limitHours, setLimitHours] = useState(initialDeadline.limitHours)
   const [limitMinutes, setLimitMinutes] = useState(initialDeadline.limitMinutes)
-  const [assignedTo, setAssignedTo] = useState('')
-  const [selectedUser, setSelectedUser] = useState<ScopedUserSearchResult | null>(null)
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(() =>
+    isStaff && activeMembership ? [activeMembership.id] : [],
+  )
+  const [selectedUsers, setSelectedUsers] = useState<ScopedUserSearchResult[]>(() =>
+    staffSelfUser ? [staffSelfUser] : [],
+  )
+  const [requiresValidation, setRequiresValidation] = useState(true)
   const [responsibleBusinessUnitId, setResponsibleBusinessUnitId] = useState('')
 
   const detailQuery = useSignalDetailQuery(
@@ -99,15 +118,15 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
     applyDueAtFromFields(limitDate, hours, minutes)
   }
 
-  const handleAssigneeChange = (membershipId: string, user: ScopedUserSearchResult) => {
-    setAssignedTo(membershipId)
-    setSelectedUser(user)
+  const handleAssigneesChange = (nextAssigneeIds: string[], users: ScopedUserSearchResult[]) => {
+    setAssigneeIds(nextAssigneeIds)
+    setSelectedUsers(users)
   }
 
   const canSubmit =
     title.trim().length > 0 &&
     instruction.trim().length > 0 &&
-    assignedTo.length > 0 &&
+    assigneeIds.length > 0 &&
     (mode === 'linked'
       ? Boolean(signalId)
       : responsibleBusinessUnitId.trim().length > 0)
@@ -117,20 +136,22 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
       return
     }
 
+    const sharedFields = {
+      title: title.trim(),
+      instruction: instruction.trim(),
+      assignee_ids: assigneeIds,
+      requires_validation: requiresValidation,
+      due_at: dueAt.toISOString(),
+    }
+
     const body: ActionCreateRequest =
       mode === 'linked' && signalId
         ? {
-            title: title.trim(),
-            instruction: instruction.trim(),
-            assigned_to: assignedTo,
-            due_at: dueAt.toISOString(),
+            ...sharedFields,
             signal: signalId,
           }
         : {
-            title: title.trim(),
-            instruction: instruction.trim(),
-            assigned_to: assignedTo,
-            due_at: dueAt.toISOString(),
+            ...sharedFields,
             signal: null,
             responsible_business_unit_id: responsibleBusinessUnitId,
           }
@@ -238,15 +259,36 @@ export function ActionCreatePage({ mode, signalId, onNavigate }: ActionCreatePag
               establishmentId={establishmentId}
               selectedBusinessUnitId={responsibleBusinessUnitId}
               onBusinessUnitChange={setResponsibleBusinessUnitId}
+              membershipRole={activeMembership?.role}
+              membershipScopes={activeMembership?.scopes}
             />
           ) : null}
 
-          <ActionCreateAssigneeSection
-            establishmentId={establishmentId}
-            assignedTo={assignedTo}
-            selectedUser={selectedUser}
-            onAssignedToChange={handleAssigneeChange}
-          />
+          {isStaff && staffSelfUser && activeMembership ? (
+            <ActionCreateAssigneeSection
+              mode="single"
+              readOnly
+              establishmentId={establishmentId}
+              assignedTo={activeMembership.id}
+              selectedUser={staffSelfUser}
+              onAssignedToChange={() => {}}
+            />
+          ) : (
+            <ActionCreateAssigneeSection
+              mode="multiple"
+              establishmentId={establishmentId}
+              assigneeIds={assigneeIds}
+              selectedUsers={selectedUsers}
+              onAssigneesChange={handleAssigneesChange}
+            />
+          )}
+
+          <section className="flex flex-col gap-1.5">
+            <ActionCreateValidationToggle
+              checked={requiresValidation}
+              onCheckedChange={setRequiresValidation}
+            />
+          </section>
 
           <ActionCreateDeadlineSection
             selectedPreset={selectedPreset}

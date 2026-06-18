@@ -62,7 +62,7 @@ def _create_action(owner, *, assigned_to, business_unit, title: str):
         created_by=owner,
         title=title,
         instruction="Instruction text",
-        assigned_to_id=assigned_to.id,
+        assignee_ids=[assigned_to.id],
         due_at=timezone.now(),
         responsible_business_unit_id=business_unit.id,
     )

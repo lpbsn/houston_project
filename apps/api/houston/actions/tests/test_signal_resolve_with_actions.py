@@ -56,11 +56,11 @@ def test_resolve_signal_blocked_with_active_linked_action(api_client):
         created_by=owner,
         title="Linked",
         instruction="Work",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         signal_id=signal.id,
     )
-    accept_action(action=action)
+    accept_action(action_id=action.id, accepted_by=staff)
 
     token = login(api_client, user=owner.user)
     response = api_client.post(

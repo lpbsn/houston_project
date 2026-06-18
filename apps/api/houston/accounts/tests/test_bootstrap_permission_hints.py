@@ -68,7 +68,7 @@ def fetch_bootstrap_hints(
         (EstablishmentMembership.Role.OWNER, True, True, True, True),
         (EstablishmentMembership.Role.DIRECTOR, True, True, True, True),
         (EstablishmentMembership.Role.MANAGER, True, True, False, True),
-        (EstablishmentMembership.Role.STAFF, False, False, False, False),
+        (EstablishmentMembership.Role.STAFF, True, False, False, False),
     ],
 )
 def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(

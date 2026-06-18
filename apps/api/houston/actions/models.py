@@ -63,11 +63,14 @@ class Action(BaseModel):
         on_delete=models.PROTECT,
         related_name="actions_created",
     )
-    assigned_to = models.ForeignKey(
+    accepted_by = models.ForeignKey(
         "establishments.EstablishmentMembership",
         on_delete=models.PROTECT,
-        related_name="actions_assigned",
+        related_name="actions_accepted",
+        null=True,
+        blank=True,
     )
+    requires_validation = models.BooleanField(default=True)
     due_at = models.DateTimeField()
     last_activity_at = models.DateTimeField()
     accepted_at = models.DateTimeField(null=True, blank=True)
@@ -85,10 +88,6 @@ class Action(BaseModel):
                 name="action_signal_status_idx",
             ),
             models.Index(
-                fields=["establishment", "assigned_to"],
-                name="action_est_assignee_idx",
-            ),
-            models.Index(
                 fields=["establishment", "created_by"],
                 name="action_est_creator_idx",
             ),
@@ -96,3 +95,33 @@ class Action(BaseModel):
 
     def __str__(self) -> str:
         return f"Action {self.id} [{self.status}]"
+
+
+class ActionAssignee(BaseModel):
+    action = models.ForeignKey(
+        Action,
+        on_delete=models.CASCADE,
+        related_name="assignee_links",
+    )
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="action_assignments",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["action", "membership"],
+                name="action_assignee_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["membership", "action"],
+                name="action_assignee_member_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"ActionAssignee action={self.action_id} membership={self.membership_id}"

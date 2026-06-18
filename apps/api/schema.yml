@@ -5315,6 +5315,17 @@ paths:
           description: ''
 components:
   schemas:
+    ActionAcceptedBy:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+      required:
+      - display_name
+      - membership_id
     ActionCreateRequest:
       type: object
       properties:
@@ -5324,12 +5335,18 @@ components:
         instruction:
           type: string
           maxLength: 2000
-        assigned_to:
-          type: string
-          format: uuid
+        assignee_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
         due_at:
           type: string
           format: date-time
+        requires_validation:
+          type: boolean
+          default: true
         signal:
           type: string
           format: uuid
@@ -5339,7 +5356,7 @@ components:
           format: uuid
           nullable: true
       required:
-      - assigned_to
+      - assignee_ids
       - due_at
       - instruction
       - title
@@ -5382,8 +5399,16 @@ components:
           allOf:
           - $ref: '#/components/schemas/ActionSignalSummary'
           nullable: true
-        assigned_to_display_name:
-          type: string
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionMembershipRef'
+        accepted_by:
+          allOf:
+          - $ref: '#/components/schemas/ActionAcceptedBy'
+          nullable: true
+        requires_validation:
+          type: boolean
         created_by_display_name:
           type: string
         last_activity_at:
@@ -5410,11 +5435,12 @@ components:
           nullable: true
       required:
       - accepted_at
+      - accepted_by
       - activity_subject_label
       - activity_subject_normalized_name
       - affected_business_unit_key
       - affected_business_unit_label
-      - assigned_to_display_name
+      - assignees
       - created_at
       - created_by_display_name
       - due_at
@@ -5425,6 +5451,7 @@ components:
       - last_activity_at
       - marked_done_at
       - permission_hints
+      - requires_validation
       - responsible_business_unit_key
       - responsible_business_unit_label
       - signal_summary
@@ -5470,8 +5497,16 @@ components:
           allOf:
           - $ref: '#/components/schemas/ActionSignalSummary'
           nullable: true
-        assigned_to_display_name:
-          type: string
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionMembershipRef'
+        accepted_by:
+          allOf:
+          - $ref: '#/components/schemas/ActionAcceptedBy'
+          nullable: true
+        requires_validation:
+          type: boolean
         created_by_display_name:
           type: string
         last_activity_at:
@@ -5483,11 +5518,12 @@ components:
         permission_hints:
           $ref: '#/components/schemas/ActionPermissionHints'
       required:
+      - accepted_by
       - activity_subject_label
       - activity_subject_normalized_name
       - affected_business_unit_key
       - affected_business_unit_label
-      - assigned_to_display_name
+      - assignees
       - created_at
       - created_by_display_name
       - due_at
@@ -5496,11 +5532,26 @@ components:
       - is_overdue
       - last_activity_at
       - permission_hints
+      - requires_validation
       - responsible_business_unit_key
       - responsible_business_unit_label
       - signal_summary
       - status
       - title
+    ActionMembershipRef:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        role:
+          type: string
+      required:
+      - display_name
+      - membership_id
+      - role
     ActionPermissionHints:
       type: object
       properties:
@@ -5518,7 +5569,12 @@ components:
           type: boolean
         can_update_due_at:
           type: boolean
+        is_assignee:
+          type: boolean
+        accepted_by_me:
+          type: boolean
       required:
+      - accepted_by_me
       - can_accept
       - can_cancel
       - can_mark_done
@@ -5526,14 +5582,18 @@ components:
       - can_reopen
       - can_update_due_at
       - can_validate
+      - is_assignee
     ActionReassignRequest:
       type: object
       properties:
-        assigned_to:
-          type: string
-          format: uuid
+        assignee_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
       required:
-      - assigned_to
+      - assignee_ids
     ActionSignalSummary:
       type: object
       properties:

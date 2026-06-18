@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ExecutionFeedItem } from '@/features/actions/types'
+import { buildActionFeedItem } from '@/features/actions/test-fixtures'
 
 import { ExecutionFeedPage } from './execution-feed-page'
 
@@ -14,24 +15,24 @@ const fetchNextPage = vi.fn()
 function buildActionItem(id: string): ExecutionFeedItem {
   return {
     item_type: 'action',
-    action: {
+    action: buildActionFeedItem({
       id,
       title: `Action ${id}`,
-      instruction_short: 'Instruction',
-      status: 'open',
-      is_overdue: false,
-      due_at: '2026-06-13T12:00:00Z',
-      last_activity_at: '2026-06-13T12:00:00Z',
-      created_at: '2026-06-13T12:00:00Z',
-      assigned_to_display_name: 'Staff',
+      assignees: [
+        {
+          membership_id: 'member-staff',
+          display_name: 'Staff',
+          role: 'staff',
+        },
+      ],
       created_by_display_name: 'Owner',
       affected_business_unit_key: 'restaurant',
       affected_business_unit_label: 'Restaurant',
       responsible_business_unit_key: 'restaurant',
       responsible_business_unit_label: 'Restaurant',
-      activity_subject_label: null,
-      activity_subject_normalized_name: null,
-      signal_summary: null,
+      due_at: '2026-06-13T12:00:00Z',
+      last_activity_at: '2026-06-13T12:00:00Z',
+      created_at: '2026-06-13T12:00:00Z',
       permission_hints: {
         can_accept: true,
         can_mark_done: true,
@@ -40,8 +41,10 @@ function buildActionItem(id: string): ExecutionFeedItem {
         can_cancel: false,
         can_reassign: false,
         can_update_due_at: false,
+        is_assignee: true,
+        accepted_by_me: false,
       },
-    },
+    }),
     checklist: null,
   }
 }

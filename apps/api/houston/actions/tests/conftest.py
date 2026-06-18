@@ -80,16 +80,23 @@ def create_linked_action_payload(
     membership: EstablishmentMembership,
     signal: Signal,
     assigned_to: EstablishmentMembership | None = None,
+    assignees: list[EstablishmentMembership] | None = None,
     title: str = "Clean area",
     instruction: str = "Mop the floor near the entrance.",
+    requires_validation: bool = True,
 ) -> dict:
     due = timezone.now() + timezone.timedelta(days=1)
+    if assignees is not None:
+        assignee_ids = [str(item.id) for item in assignees]
+    else:
+        assignee_ids = [str((assigned_to or membership).id)]
     return {
         "title": title,
         "instruction": instruction,
-        "assigned_to": str((assigned_to or membership).id),
+        "assignee_ids": assignee_ids,
         "due_at": due.isoformat(),
         "signal": str(signal.id),
+        "requires_validation": requires_validation,
     }
 
 
@@ -98,17 +105,24 @@ def create_free_action_payload(
     membership: EstablishmentMembership,
     responsible_business_unit: BusinessUnit,
     assigned_to: EstablishmentMembership | None = None,
+    assignees: list[EstablishmentMembership] | None = None,
     title: str = "Routine check",
     instruction: str = "Inspect the storage area.",
+    requires_validation: bool = True,
 ) -> dict:
     due = timezone.now() + timezone.timedelta(days=1)
+    if assignees is not None:
+        assignee_ids = [str(item.id) for item in assignees]
+    else:
+        assignee_ids = [str((assigned_to or membership).id)]
     return {
         "title": title,
         "instruction": instruction,
-        "assigned_to": str((assigned_to or membership).id),
+        "assignee_ids": assignee_ids,
         "due_at": due.isoformat(),
         "signal": None,
         "responsible_business_unit_id": str(responsible_business_unit.id),
+        "requires_validation": requires_validation,
     }
 
 

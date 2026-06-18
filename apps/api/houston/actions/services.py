@@ -16,7 +16,7 @@ from houston.actions.constants import (
     TERMINAL_ACTION_STATUSES,
 )
 from houston.actions.exceptions import ActionStateError, ActionValidationError
-from houston.actions.models import Action
+from houston.actions.models import Action, ActionAssignee
 from houston.actions.permissions import can_create_free_action, can_create_linked_action
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
@@ -46,6 +46,57 @@ def _validate_membership_in_establishment(
     if membership is None:
         raise ActionValidationError("Invalid assignee membership.")
     return membership
+
+
+def _validate_assignee_ids(
+    *,
+    establishment_id: uuid.UUID,
+    assignee_ids: list[uuid.UUID],
+) -> list[EstablishmentMembership]:
+    if not assignee_ids:
+        raise ActionValidationError("At least one assignee is required.")
+    if len(set(assignee_ids)) != len(assignee_ids):
+        raise ActionValidationError("Duplicate assignees are not allowed.")
+
+    memberships: list[EstablishmentMembership] = []
+    for assignee_id in assignee_ids:
+        memberships.append(
+            _validate_membership_in_establishment(
+                establishment_id=establishment_id,
+                membership_id=assignee_id,
+            )
+        )
+    return memberships
+
+
+def _validate_staff_create_constraints(
+    *,
+    created_by: EstablishmentMembership,
+    assignee_ids: list[uuid.UUID],
+    signal_id: uuid.UUID | None,
+) -> None:
+    if created_by.role != EstablishmentMembership.Role.STAFF:
+        return
+    if signal_id is not None:
+        raise ActionValidationError("Staff members cannot create linked actions.")
+    if len(assignee_ids) != 1 or assignee_ids[0] != created_by.id:
+        raise ActionValidationError(
+            "Staff members can only create actions assigned to themselves."
+        )
+
+
+def _replace_action_assignees(
+    *,
+    action: Action,
+    memberships: list[EstablishmentMembership],
+) -> None:
+    ActionAssignee.objects.filter(action_id=action.id).delete()
+    ActionAssignee.objects.bulk_create(
+        [
+            ActionAssignee(action_id=action.id, membership=membership)
+            for membership in memberships
+        ]
+    )
 
 
 def _normalize_title(title: str) -> str:
@@ -108,8 +159,9 @@ def create_action(
     created_by: EstablishmentMembership,
     title: str,
     instruction: str,
-    assigned_to_id: uuid.UUID,
+    assignee_ids: list[uuid.UUID],
     due_at,
+    requires_validation: bool = True,
     signal_id: uuid.UUID | None = None,
     responsible_business_unit_id: uuid.UUID | None = None,
 ) -> Action:
@@ -118,9 +170,14 @@ def create_action(
     if signal_id is None and responsible_business_unit_id is None:
         raise ActionValidationError("Either signal or responsible_business_unit_id is required.")
 
-    assigned_to = _validate_membership_in_establishment(
+    assignees = _validate_assignee_ids(
         establishment_id=establishment_id,
-        membership_id=assigned_to_id,
+        assignee_ids=assignee_ids,
+    )
+    _validate_staff_create_constraints(
+        created_by=created_by,
+        assignee_ids=assignee_ids,
+        signal_id=signal_id,
     )
     now = timezone.now()
 
@@ -154,10 +211,11 @@ def create_action(
             instruction=_normalize_instruction(instruction),
             status=Action.Status.OPEN,
             created_by=created_by,
-            assigned_to=assigned_to,
+            requires_validation=requires_validation,
             due_at=due_at,
             last_activity_at=now,
         )
+        _replace_action_assignees(action=action, memberships=assignees)
 
         if signal.status == Signal.Status.OPEN:
             signal.status = Signal.Status.IN_PROGRESS
@@ -178,7 +236,7 @@ def create_action(
     ):
         raise ActionValidationError("Not allowed to create this action.")
 
-    return Action.objects.create(
+    action = Action.objects.create(
         establishment_id=establishment_id,
         signal=None,
         affected_business_unit=None,
@@ -188,38 +246,79 @@ def create_action(
         instruction=_normalize_instruction(instruction),
         status=Action.Status.OPEN,
         created_by=created_by,
-        assigned_to=assigned_to,
+        requires_validation=requires_validation,
         due_at=due_at,
         last_activity_at=now,
     )
+    _replace_action_assignees(action=action, memberships=assignees)
+    return action
 
 
 def _lock_action_for_transition(*, action_id: uuid.UUID) -> Action:
     return Action.objects.select_for_update().get(pk=action_id)
 
 
+def _assert_assignee_membership(*, action_id: uuid.UUID, membership_id: uuid.UUID) -> None:
+    if not ActionAssignee.objects.filter(
+        action_id=action_id,
+        membership_id=membership_id,
+    ).exists():
+        raise ActionStateError("Action cannot be accepted in its current state.")
+
+
 @transaction.atomic
-def accept_action(*, action: Action) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
+def accept_action(
+    *,
+    action_id: uuid.UUID,
+    accepted_by: EstablishmentMembership,
+) -> Action:
+    action = _lock_action_for_transition(action_id=action_id)
     if action.status not in {Action.Status.OPEN, Action.Status.REOPENED}:
         raise ActionStateError("Action cannot be accepted in its current state.")
+    _assert_assignee_membership(action_id=action.id, membership_id=accepted_by.id)
+
     now = timezone.now()
     action.status = Action.Status.IN_PROGRESS
+    action.accepted_by = accepted_by
     action.accepted_at = now
     action.last_activity_at = now
-    action.save(update_fields=["status", "accepted_at", "last_activity_at", "updated_at"])
+    action.save(
+        update_fields=[
+            "status",
+            "accepted_by",
+            "accepted_at",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
     return action
 
 
 @transaction.atomic
-def mark_action_done(*, action: Action) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
+def mark_action_done(*, action_id: uuid.UUID) -> Action:
+    action = _lock_action_for_transition(action_id=action_id)
     if action.status != Action.Status.IN_PROGRESS:
         raise ActionStateError("Action cannot be marked done in its current state.")
     now = timezone.now()
-    action.status = Action.Status.PENDING_VALIDATION
     action.marked_done_at = now
     action.last_activity_at = now
+
+    if action.requires_validation:
+        action.status = Action.Status.PENDING_VALIDATION
+        action.save(
+            update_fields=[
+                "status",
+                "marked_done_at",
+                "last_activity_at",
+                "updated_at",
+            ]
+        )
+        if action.signal_id is not None:
+            signal = Signal.objects.get(pk=action.signal_id)
+            touch_signal_activity(signal=signal)
+        return action
+
+    action.status = Action.Status.DONE
     action.save(
         update_fields=[
             "status",
@@ -229,14 +328,13 @@ def mark_action_done(*, action: Action) -> Action:
         ]
     )
     if action.signal_id is not None:
-        signal = Signal.objects.get(pk=action.signal_id)
-        touch_signal_activity(signal=signal)
+        sync_signal_after_action_change(signal=action.signal)
     return action
 
 
 @transaction.atomic
-def validate_action(*, action: Action) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
+def validate_action(*, action_id: uuid.UUID) -> Action:
+    action = _lock_action_for_transition(action_id=action_id)
     if action.status != Action.Status.PENDING_VALIDATION:
         raise ActionStateError("Action cannot be validated in its current state.")
     now = timezone.now()
@@ -250,14 +348,23 @@ def validate_action(*, action: Action) -> Action:
 
 
 @transaction.atomic
-def reopen_action(*, action: Action) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
+def reopen_action(*, action_id: uuid.UUID) -> Action:
+    action = _lock_action_for_transition(action_id=action_id)
     if action.status not in {Action.Status.PENDING_VALIDATION, Action.Status.DONE}:
         raise ActionStateError("Action cannot be reopened in its current state.")
     action.status = Action.Status.REOPENED
+    action.accepted_by = None
     action.accepted_at = None
     touch_action_activity(action=action)
-    action.save(update_fields=["status", "accepted_at", "last_activity_at", "updated_at"])
+    action.save(
+        update_fields=[
+            "status",
+            "accepted_by",
+            "accepted_at",
+            "last_activity_at",
+            "updated_at",
+        ]
+    )
     if action.signal_id is not None:
         signal = action.signal
         if signal.status == Signal.Status.RESOLVED:
@@ -268,8 +375,8 @@ def reopen_action(*, action: Action) -> Action:
 
 
 @transaction.atomic
-def cancel_action(*, action: Action) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
+def cancel_action(*, action_id: uuid.UUID) -> Action:
+    action = _lock_action_for_transition(action_id=action_id)
     if action.status not in ACTIVE_ACTION_STATUSES:
         raise ActionStateError("Action cannot be canceled in its current state.")
     action.status = Action.Status.CANCELED
@@ -283,29 +390,38 @@ def cancel_action(*, action: Action) -> Action:
 @transaction.atomic
 def reassign_action(
     *,
-    action: Action,
-    assigned_to_id: uuid.UUID,
+    action_id: uuid.UUID,
+    assignee_ids: list[uuid.UUID],
 ) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
-    if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
+    action = _lock_action_for_transition(action_id=action_id)
+    if action.status in {
+        Action.Status.PENDING_VALIDATION,
+        Action.Status.DONE,
+        Action.Status.CANCELED,
+    }:
         raise ActionStateError("Action cannot be reassigned in its current state.")
-    assigned_to = _validate_membership_in_establishment(
+
+    assignees = _validate_assignee_ids(
         establishment_id=action.establishment_id,
-        membership_id=assigned_to_id,
+        assignee_ids=assignee_ids,
     )
-    action.assigned_to = assigned_to
+    _replace_action_assignees(action=action, memberships=assignees)
+
+    update_fields = ["last_activity_at", "updated_at"]
     if action.status == Action.Status.IN_PROGRESS:
         action.status = Action.Status.OPEN
+        action.accepted_by = None
         action.accepted_at = None
+        update_fields.extend(["status", "accepted_by", "accepted_at"])
+
     touch_action_activity(action=action)
-    update_fields = ["assigned_to", "status", "accepted_at", "last_activity_at", "updated_at"]
     action.save(update_fields=update_fields)
     return action
 
 
 @transaction.atomic
-def update_action_due_at(*, action: Action, due_at) -> Action:
-    action = _lock_action_for_transition(action_id=action.id)
+def update_action_due_at(*, action_id: uuid.UUID, due_at) -> Action:
+    action = _lock_action_for_transition(action_id=action_id)
     if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
         raise ActionStateError("Due date cannot be updated in the current state.")
     action.due_at = due_at

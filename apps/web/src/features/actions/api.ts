@@ -178,13 +178,13 @@ export const cancelAction = (establishmentId: string, actionId: string) =>
 export async function reassignAction(
   establishmentId: string,
   actionId: string,
-  assignedTo: string,
+  assigneeIds: string[],
 ): Promise<ActionDetail> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.POST('/api/v1/establishments/{establishment_id}/actions/{action_id}/reassign/', {
         params: actionPathParams(establishmentId, actionId),
-        body: { assigned_to: assignedTo },
+        body: { assignee_ids: assigneeIds },
         headers: getAuthHeaders(accessToken),
       }),
     { refreshable: true },

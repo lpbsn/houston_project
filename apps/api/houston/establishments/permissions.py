@@ -51,7 +51,9 @@ def can_create_observation(membership: EstablishmentMembership | None) -> bool:
 
 
 def can_create_action(membership: EstablishmentMembership | None) -> bool:
-    return _has_role(membership, _ACTION_ROLES)
+    if not _is_valid_membership(membership):
+        return False
+    return membership.role in _ACTION_ROLES or membership.role == EstablishmentMembership.Role.STAFF
 
 
 def can_validate_action(membership: EstablishmentMembership | None) -> bool:

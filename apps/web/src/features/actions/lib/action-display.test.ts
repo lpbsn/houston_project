@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ACTION_CARD_LEFT_ACCENT_COLOR,
+  formatActionAcceptedByFooterLabel,
+  formatActionAcceptedByLabel,
+  formatActionAssigneesLabel,
   formatActionCompletedByLabel,
   formatActionCreatorFooterLabel,
   formatCompactDisplayName,
@@ -319,5 +322,68 @@ describe('formatActionCompletedByLabel', () => {
   it('falls back when assignee name is empty', () => {
     expect(formatActionCompletedByLabel('')).toBe('Action terminée')
     expect(formatActionCompletedByLabel('   ')).toBe('Action terminée')
+  })
+})
+
+describe('formatActionAssigneesLabel', () => {
+  it('returns dash when no assignees', () => {
+    expect(formatActionAssigneesLabel([])).toBe('—')
+  })
+
+  it('formats one assignee', () => {
+    expect(
+      formatActionAssigneesLabel([
+        { membership_id: '1', display_name: 'Marie Dupont', role: 'staff' },
+      ]),
+    ).toBe('Marie D.')
+  })
+
+  it('formats two assignees', () => {
+    expect(
+      formatActionAssigneesLabel([
+        { membership_id: '1', display_name: 'Marie Dupont', role: 'staff' },
+        { membership_id: '2', display_name: 'Jean Martin', role: 'manager' },
+      ]),
+    ).toBe('Marie D., Jean M.')
+  })
+
+  it('truncates three or more assignees', () => {
+    expect(
+      formatActionAssigneesLabel([
+        { membership_id: '1', display_name: 'Marie Dupont', role: 'staff' },
+        { membership_id: '2', display_name: 'Jean Martin', role: 'manager' },
+        { membership_id: '3', display_name: 'Paul Durand', role: 'staff' },
+      ]),
+    ).toBe('Marie D. +2')
+  })
+})
+
+describe('formatActionAcceptedByLabel', () => {
+  it('returns dash when accepted_by is null', () => {
+    expect(formatActionAcceptedByLabel(null)).toBe('—')
+  })
+
+  it('formats accepted_by display name', () => {
+    expect(
+      formatActionAcceptedByLabel({
+        membership_id: 'member-1',
+        display_name: 'Marie Dupont',
+      }),
+    ).toBe('Marie D.')
+  })
+})
+
+describe('formatActionAcceptedByFooterLabel', () => {
+  it('returns En cours when accepted_by is absent', () => {
+    expect(formatActionAcceptedByFooterLabel(null)).toBe('En cours')
+  })
+
+  it('prefixes accepted_by short name', () => {
+    expect(
+      formatActionAcceptedByFooterLabel({
+        membership_id: 'member-1',
+        display_name: 'Marie Dupont',
+      }),
+    ).toBe('En cours · Marie D.')
   })
 })

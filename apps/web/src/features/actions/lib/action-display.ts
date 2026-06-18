@@ -1,3 +1,4 @@
+import type { ActionAcceptedBy, ActionMembershipRef } from '@/features/actions/types'
 import type { SignalClassificationInput } from '@/lib/signal-classification'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -313,10 +314,38 @@ export function formatActionValidationRelativeTime(
   return `il y a ${days} j`
 }
 
-export function formatActionCompletedByLabel(assignedToDisplayName: string): string {
-  const shortName = formatCompactDisplayName(assignedToDisplayName)
+export function formatActionCompletedByLabel(displayName: string): string {
+  const shortName = formatCompactDisplayName(displayName)
   if (!shortName) {
     return 'Action terminée'
   }
   return `${shortName} a terminé`
+}
+
+export function formatActionAssigneesLabel(assignees: ActionMembershipRef[]): string {
+  if (assignees.length === 0) {
+    return '—'
+  }
+
+  const compactNames = assignees.map((assignee) => formatCompactDisplayName(assignee.display_name))
+  if (assignees.length <= 2) {
+    return compactNames.join(', ')
+  }
+
+  return `${compactNames[0]} +${assignees.length - 1}`
+}
+
+export function formatActionAcceptedByLabel(acceptedBy: ActionAcceptedBy | null): string {
+  if (!acceptedBy?.display_name) {
+    return '—'
+  }
+  return formatCompactDisplayName(acceptedBy.display_name) || '—'
+}
+
+export function formatActionAcceptedByFooterLabel(acceptedBy: ActionAcceptedBy | null): string {
+  const shortName = formatActionAcceptedByLabel(acceptedBy)
+  if (shortName === '—') {
+    return 'En cours'
+  }
+  return `En cours · ${shortName}`
 }

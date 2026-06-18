@@ -130,14 +130,19 @@ export function useCancelActionMutation(establishmentId: string | null, actionId
   return useActionCommandMutation(establishmentId, actionId, cancelAction)
 }
 
-export function useReassignActionMutation(establishmentId: string | null, actionId: string | null) {
+export type ReassignActionInput = {
+  actionId: string
+  assigneeIds: string[]
+}
+
+export function useReassignActionMutation(establishmentId: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (assignedTo: string) => {
-      if (!establishmentId || !actionId) {
-        throw new Error('Action introuvable.')
+    mutationFn: async ({ actionId, assigneeIds }: ReassignActionInput) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
       }
-      return reassignAction(establishmentId, actionId, assignedTo)
+      return reassignAction(establishmentId, actionId, assigneeIds)
     },
     onSuccess: () => {
       if (establishmentId) {

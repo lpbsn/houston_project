@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 
 from houston.actions.exceptions import ActionValidationError
+from houston.actions.models import Action
 from houston.establishments.models import ActivitySubject, BusinessUnit
 from houston.signals.models import Signal
 from houston.signals.signal_classification import validate_signal_classification
@@ -52,6 +53,14 @@ def classification_from_signal(*, signal: Signal) -> LinkedActionClassification:
         responsible_business_unit=responsible,
         activity_subject=activity_subject,
     )
+
+
+def resolve_action_responsible_business_unit(*, action: Action) -> BusinessUnit | None:
+    if action.responsible_business_unit_id is not None:
+        return action.responsible_business_unit
+    if action.signal_id is not None and action.signal.responsible_business_unit_id is not None:
+        return action.signal.responsible_business_unit
+    return None
 
 
 def resolve_responsible_business_unit(

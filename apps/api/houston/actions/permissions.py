@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from houston.actions.action_classification import resolve_action_responsible_business_unit
 from houston.actions.constants import ACTIVE_ACTION_STATUSES
-from houston.actions.models import Action
+from houston.actions.models import Action, ActionAssignee
 from houston.establishments.membership_scope import membership_scope_covers_business_unit
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.permissions import (
@@ -17,6 +18,18 @@ from houston.signals.permissions import (
     signal_actionable_by_membership,
     signal_matches_membership_scope,
 )
+
+
+def is_action_assignee(
+    membership: EstablishmentMembership | None,
+    action: Action,
+) -> bool:
+    if membership is None:
+        return False
+    return ActionAssignee.objects.filter(
+        action_id=action.id,
+        membership_id=membership.id,
+    ).exists()
 
 
 def can_access_signal_for_linked_action(
@@ -89,7 +102,7 @@ def action_visible_to_membership(
         return False
     if membership.role in _ADMIN_ROLES:
         return True
-    if action.assigned_to_id == membership.id:
+    if is_action_assignee(membership, action):
         return True
     if action.created_by_id == membership.id:
         return True
@@ -111,7 +124,10 @@ def can_create_free_action(
         return False
     if membership.role in _ADMIN_ROLES:
         return True
-    if membership.role == EstablishmentMembership.Role.MANAGER:
+    if membership.role in {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    }:
         return membership_scope_covers_business_unit(membership, business_unit)
     return False
 
@@ -124,6 +140,8 @@ def can_create_linked_action(
     if not establishment_can_create_action(membership):
         return False
     if membership is None:
+        return False
+    if membership.role == EstablishmentMembership.Role.STAFF:
         return False
     if membership.role in _ADMIN_ROLES:
         return can_access_signal_for_linked_action(membership, signal)
@@ -142,7 +160,7 @@ def can_accept_action(
         return False
     if action.status not in {Action.Status.OPEN, Action.Status.REOPENED}:
         return False
-    return action.assigned_to_id == membership.id
+    return is_action_assignee(membership, action)
 
 
 def can_mark_action_done(
@@ -155,7 +173,7 @@ def can_mark_action_done(
         return False
     if action.status != Action.Status.IN_PROGRESS:
         return False
-    return action.assigned_to_id == membership.id
+    return action.accepted_by_id == membership.id
 
 
 def can_validate_action_on_object(
@@ -166,6 +184,8 @@ def can_validate_action_on_object(
         return False
     if membership is None:
         return False
+    if not action.requires_validation:
+        return False
     if action.establishment_id != membership.establishment_id:
         return False
     if action.status != Action.Status.PENDING_VALIDATION:
@@ -173,7 +193,10 @@ def can_validate_action_on_object(
     if membership.role in _ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
-        return action.created_by_id == membership.id
+        responsible_business_unit = resolve_action_responsible_business_unit(action=action)
+        if responsible_business_unit is None:
+            return False
+        return membership_scope_covers_business_unit(membership, responsible_business_unit)
     return False
 
 
@@ -225,7 +248,11 @@ def can_reassign_action(
         return False
     if action.establishment_id != membership.establishment_id:
         return False
-    if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
+    if action.status in {
+        Action.Status.PENDING_VALIDATION,
+        Action.Status.DONE,
+        Action.Status.CANCELED,
+    }:
         return False
     if membership.role in _ADMIN_ROLES:
         return True

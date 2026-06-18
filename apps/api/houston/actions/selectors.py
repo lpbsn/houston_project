@@ -4,11 +4,21 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
+from django.db.models import (
+    Case,
+    Exists,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Value,
+    When,
+)
 from django.utils import timezone
 
 from houston.actions.constants import EXECUTION_FEED_STATUSES
-from houston.actions.models import Action
+from houston.actions.models import Action, ActionAssignee
 from houston.actions.permissions import action_visible_to_membership
 from houston.establishments.membership_scope import build_action_visibility_scope_q
 from houston.establishments.models import EstablishmentMembership
@@ -20,24 +30,40 @@ _ACTION_LIST_SELECT_RELATED = (
     "responsible_business_unit",
     "activity_subject",
     "created_by__user",
-    "assigned_to__user",
+    "accepted_by__user",
     "signal",
     "signal__affected_business_unit",
     "signal__responsible_business_unit",
     "signal__activity_subject",
 )
 
+_ACTION_ASSIGNEE_PREFETCH = Prefetch(
+    "assignee_links",
+    queryset=ActionAssignee.objects.select_related("membership__user").order_by(
+        "created_at",
+        "id",
+    ),
+)
+
+
+def _assignee_exists_subquery(*, membership_id: uuid.UUID):
+    return ActionAssignee.objects.filter(
+        action_id=OuterRef("pk"),
+        membership_id=membership_id,
+    )
+
 
 def actions_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[Action]:
     return Action.objects.filter(establishment_id=establishment_id).select_related(
         *_ACTION_LIST_SELECT_RELATED
-    )
+    ).prefetch_related(_ACTION_ASSIGNEE_PREFETCH)
 
 
 def action_personal_feed_q(*, membership: EstablishmentMembership) -> Q:
-    return (Q(created_by_id=membership.id) | Q(assigned_to_id=membership.id)) & Q(
-        establishment_id=membership.establishment_id
-    )
+    assignee_exists = _assignee_exists_subquery(membership_id=membership.id)
+    return (
+        Q(created_by_id=membership.id) | Q(Exists(assignee_exists))
+    ) & Q(establishment_id=membership.establishment_id)
 
 
 def action_general_feed_visibility_q(*, membership: EstablishmentMembership) -> Q:
@@ -47,7 +73,8 @@ def action_general_feed_visibility_q(*, membership: EstablishmentMembership) -> 
     }:
         return Q(establishment_id=membership.establishment_id)
 
-    personal_q = Q(created_by_id=membership.id) | Q(assigned_to_id=membership.id)
+    assignee_exists = _assignee_exists_subquery(membership_id=membership.id)
+    personal_q = Q(created_by_id=membership.id) | Q(Exists(assignee_exists))
 
     if membership.role == EstablishmentMembership.Role.STAFF:
         return personal_q & Q(establishment_id=membership.establishment_id)
@@ -83,6 +110,7 @@ def apply_execution_feed_sorting(
     as_of: datetime | None = None,
 ) -> QuerySet[Action]:
     reference_time = as_of or timezone.now()
+    assignee_exists = _assignee_exists_subquery(membership_id=membership.id)
     is_overdue = Case(
         When(
             due_at__lt=reference_time,
@@ -99,7 +127,7 @@ def apply_execution_feed_sorting(
     )
     requires_me_rank = Case(
         When(
-            assigned_to_id=membership.id,
+            Exists(assignee_exists),
             status__in=[Action.Status.OPEN, Action.Status.REOPENED, Action.Status.IN_PROGRESS],
             then=Value(0),
         ),
