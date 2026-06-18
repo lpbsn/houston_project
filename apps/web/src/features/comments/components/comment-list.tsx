@@ -18,10 +18,14 @@ type CommentListProps =
       comments: ActionCommentListItem[]
       establishmentId: string
       disabled?: boolean
+      replyErrorCommentId?: string | null
       replyErrorMessage?: string | null
-      isReplyPending?: boolean
+      pendingReplyCommentId?: string | null
       isResolvePending?: boolean
-      onReply: (payload: CommentCreateRequest) => void
+      onReply: (
+        payload: CommentCreateRequest,
+        callbacks?: { onSuccess?: () => void },
+      ) => void
       onResolve: (commentId: string) => void
       onUnresolve: (commentId: string) => void
     }
@@ -76,8 +80,9 @@ function ActionCommentList({
   comments,
   establishmentId,
   disabled,
+  replyErrorCommentId,
   replyErrorMessage,
-  isReplyPending,
+  pendingReplyCommentId,
   isResolvePending,
   onReply,
   onResolve,
@@ -100,8 +105,10 @@ function ActionCommentList({
               item={item}
               establishmentId={establishmentId}
               disabled={disabled}
-              replyErrorMessage={replyErrorMessage}
-              isReplyPending={isReplyPending}
+              replyErrorMessage={
+                replyErrorCommentId === item.id ? replyErrorMessage : null
+              }
+              isReplyPending={pendingReplyCommentId === item.id}
               isResolvePending={isResolvePending}
               onReply={onReply}
               onResolve={onResolve}

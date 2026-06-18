@@ -224,4 +224,41 @@ describe('ActionDetailPage tabs', () => {
 
     expect(acceptMutate).toHaveBeenCalledTimes(1)
   })
+
+  it('resets to Détails and unmounts CommentSection when actionId changes', () => {
+    const view = renderPage()
+
+    fireEvent.click(getCommentsTab())
+    expect(screen.getByTestId('comment-section')).toBeTruthy()
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'action-1' }),
+      undefined,
+    )
+
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildAction({ id: 'action-2', title: 'Autre action' }),
+      error: null,
+      refetch: vi.fn(),
+    })
+    view.rerender(
+      createElement(ActionDetailPage, {
+        actionId: 'action-2',
+        onNavigate: navigate,
+      }),
+    )
+
+    expect(getDetailsTab().getAttribute('aria-pressed')).toBe('true')
+    expect(getCommentsTab().getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByTestId('comment-section')).toBeNull()
+
+    fireEvent.click(getCommentsTab())
+
+    expect(screen.getByTestId('comment-section')).toBeTruthy()
+    expect(CommentSectionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ targetId: 'action-2' }),
+      undefined,
+    )
+  })
 })

@@ -10,6 +10,10 @@ import type { ActionCommentListItem, CommentCreateRequest } from '../types'
 import { isActionThreadItem } from '../types'
 import { CommentComposer } from './comment-composer'
 
+type ReplySubmitCallbacks = {
+  onSuccess?: () => void
+}
+
 type CommentThreadItemProps = {
   item: ActionCommentListItem
   establishmentId: string
@@ -17,7 +21,7 @@ type CommentThreadItemProps = {
   replyErrorMessage?: string | null
   isReplyPending?: boolean
   isResolvePending?: boolean
-  onReply: (payload: CommentCreateRequest) => void
+  onReply: (payload: CommentCreateRequest, callbacks?: ReplySubmitCallbacks) => void
   onResolve: (commentId: string) => void
   onUnresolve: (commentId: string) => void
 }
@@ -174,12 +178,18 @@ export function ActionCommentThreadCard({
             showCancel
             onCancel={() => setIsReplying(false)}
             onSubmit={({ body, mentionedMembershipIds }) => {
-              onReply({
-                body,
-                mentioned_membership_ids: mentionedMembershipIds,
-                parent_comment_id: item.id,
-              })
-              setIsReplying(false)
+              onReply(
+                {
+                  body,
+                  mentioned_membership_ids: mentionedMembershipIds,
+                  parent_comment_id: item.id,
+                },
+                {
+                  onSuccess: () => {
+                    setIsReplying(false)
+                  },
+                },
+              )
             }}
           />
         </div>

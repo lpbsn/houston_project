@@ -25,6 +25,7 @@ type CommentSectionProps = {
 export function CommentSection({ establishmentId, targetType, targetId }: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
+  const [pendingReplyCommentId, setPendingReplyCommentId] = useState<string | null>(null)
 
   const signalQuery = useSignalCommentsQuery(
     targetType === 'signal' ? establishmentId : null,
@@ -38,7 +39,11 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
     targetType === 'signal' ? establishmentId : null,
     targetType === 'signal' ? targetId : null,
   )
-  const createActionMutation = useCreateActionCommentMutation(
+  const createRootCommentMutation = useCreateActionCommentMutation(
+    targetType === 'action' ? establishmentId : null,
+    targetType === 'action' ? targetId : null,
+  )
+  const createReplyMutation = useCreateActionCommentMutation(
     targetType === 'action' ? establishmentId : null,
     targetType === 'action' ? targetId : null,
   )
@@ -52,9 +57,12 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
   )
 
   const commentsQuery = targetType === 'signal' ? signalQuery : actionQuery
-  const createMutation = targetType === 'signal' ? createSignalMutation : createActionMutation
+  const createMutation = targetType === 'signal' ? createSignalMutation : createRootCommentMutation
   const isThreadActionPending =
-    createActionMutation.isPending || resolveMutation.isPending || unresolveMutation.isPending
+    createRootCommentMutation.isPending ||
+    createReplyMutation.isPending ||
+    resolveMutation.isPending ||
+    unresolveMutation.isPending
 
   return (
     <TerrainCard>
@@ -88,22 +96,30 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
           comments={actionQuery.data}
           establishmentId={establishmentId}
           disabled={isThreadActionPending || commentsQuery.isLoading || commentsQuery.isError}
+          replyErrorCommentId={replyErrorCommentId}
           replyErrorMessage={
-            replyErrorCommentId && createActionMutation.error
+            replyErrorCommentId && createReplyMutation.error
               ? resolveApiErrorMessage(
-                  createActionMutation.error,
+                  createReplyMutation.error,
                   CommentsApiError,
                   'Impossible d’envoyer la réponse.',
                 )
               : null
           }
-          isReplyPending={createActionMutation.isPending}
+          pendingReplyCommentId={pendingReplyCommentId}
           isResolvePending={resolveMutation.isPending || unresolveMutation.isPending}
-          onReply={(payload) => {
-            setReplyErrorCommentId(payload.parent_comment_id ?? null)
-            createActionMutation.mutate(payload, {
+          onReply={(payload, callbacks) => {
+            const parentCommentId = payload.parent_comment_id ?? null
+            setPendingReplyCommentId(parentCommentId)
+            setReplyErrorCommentId(parentCommentId)
+            createReplyMutation.mutate(payload, {
               onSuccess: () => {
+                setPendingReplyCommentId(null)
                 setReplyErrorCommentId(null)
+                callbacks?.onSuccess?.()
+              },
+              onError: () => {
+                setPendingReplyCommentId(null)
               },
             })
           }}

@@ -24,20 +24,29 @@ import {
   useReopenActionMutation,
   useValidateActionMutation,
 } from '../hooks'
+import type { ActionDetail } from '../types'
 
 type ActionDetailPageProps = {
   actionId: string
   onNavigate: (pathname: string) => void
 }
 
-export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps) {
-  const auth = useAuth()
-  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+type ActionDetailPageContentProps = {
+  actionId: string
+  establishmentId: string | null
+  action: ActionDetail
+  onNavigate: (pathname: string) => void
+}
 
+function ActionDetailPageContent({
+  actionId,
+  establishmentId,
+  action,
+  onNavigate,
+}: ActionDetailPageContentProps) {
   const [activeTab, setActiveTab] = useState<ActionDetailTab>('details')
   const [hasOpenedComments, setHasOpenedComments] = useState(false)
 
-  const detailQuery = useActionDetailQuery(establishmentId, actionId)
   const acceptMutation = useAcceptActionMutation(establishmentId, actionId)
   const markDoneMutation = useMarkActionDoneMutation(establishmentId, actionId)
   const validateMutation = useValidateActionMutation(establishmentId, actionId)
@@ -59,25 +68,6 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
     cancelMutation.error ??
     null
 
-  if (detailQuery.isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-[#7D7B75]">
-        <LoaderCircle className="h-6 w-6 animate-spin" />
-      </div>
-    )
-  }
-
-  if (detailQuery.isError || !detailQuery.data) {
-    return (
-      <TerrainErrorState
-        className="mx-3 mt-3"
-        message={resolveApiErrorMessage(detailQuery.error, ActionsApiError, 'Une erreur est survenue.')}
-        onRetry={() => void detailQuery.refetch()}
-      />
-    )
-  }
-
-  const action = detailQuery.data
   const hints = action.permission_hints
   const signalSummary = action.signal_summary
   const showStickyFooter = activeTab === 'details'
@@ -145,5 +135,40 @@ export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps
         />
       ) : null}
     </div>
+  )
+}
+
+export function ActionDetailPage({ actionId, onNavigate }: ActionDetailPageProps) {
+  const auth = useAuth()
+  const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
+
+  const detailQuery = useActionDetailQuery(establishmentId, actionId)
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-[#7D7B75]">
+        <LoaderCircle className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (detailQuery.isError || !detailQuery.data) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message={resolveApiErrorMessage(detailQuery.error, ActionsApiError, 'Une erreur est survenue.')}
+        onRetry={() => void detailQuery.refetch()}
+      />
+    )
+  }
+
+  return (
+    <ActionDetailPageContent
+      key={actionId}
+      actionId={actionId}
+      establishmentId={establishmentId}
+      action={detailQuery.data}
+      onNavigate={onNavigate}
+    />
   )
 }
