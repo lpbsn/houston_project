@@ -487,7 +487,7 @@ def test_execution_feed_keeps_checklists_when_actions_fill_page(api_client):
             created_by=owner,
             title=f"Action {index}",
             instruction="Instruction text",
-            assigned_to_id=staff.id,
+            assignee_ids=[staff.id],
             due_at=SCENARIO_NOW,
             responsible_business_unit_id=business_unit.id,
         )
@@ -541,7 +541,7 @@ def test_execution_feed_has_more_when_checklists_fill_page_and_actions_exist(api
         created_by=owner,
         title="Overflow action",
         instruction="Instruction text",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now(),
         responsible_business_unit_id=business_unit.id,
     )

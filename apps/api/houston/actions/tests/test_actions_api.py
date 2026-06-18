@@ -82,13 +82,14 @@ def test_manager_update_due_at_only_own_created(api_client):
     assert patch_other.status_code == 403
 
 
-def test_staff_cannot_create_action(api_client):
+def test_staff_can_create_self_assigned_free_action_in_scope(api_client):
     staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
     hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, maintenance)
     token = login(api_client, user=staff.user)
     payload = create_free_action_payload(
         membership=staff,
-        responsible_business_unit=hotel,
+        responsible_business_unit=maintenance,
     )
     response = api_client.post(
         actions_url(staff.establishment_id),
@@ -96,7 +97,131 @@ def test_staff_cannot_create_action(api_client):
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 403
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == Action.Status.OPEN
+    assert len(body["assignees"]) == 1
+    assert body["assignees"][0]["membership_id"] == str(staff.id)
+
+
+def test_staff_cannot_create_free_action_out_of_scope(api_client):
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, hotel)
+    token = login(api_client, user=staff.user)
+    payload = create_free_action_payload(
+        membership=staff,
+        responsible_business_unit=maintenance,
+    )
+    response = api_client.post(
+        actions_url(staff.establishment_id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Not allowed to create this action."
+
+
+def test_staff_cannot_create_linked_action_even_in_scope(api_client):
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    signal = create_signal_v3_for_membership(
+        staff,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+        status=Signal.Status.OPEN,
+    )
+    token = login(api_client, user=staff.user)
+    payload = create_linked_action_payload(
+        membership=staff,
+        signal=signal,
+    )
+    response = api_client.post(
+        actions_url(staff.establishment_id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Staff members cannot create linked actions."
+
+
+def test_staff_cannot_create_free_action_assigned_to_other(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    token = login(api_client, user=staff.user)
+    payload = create_free_action_payload(
+        membership=staff,
+        responsible_business_unit=maintenance,
+        assigned_to=other_staff,
+    )
+    response = api_client.post(
+        actions_url(staff.establishment_id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "Staff members can only create actions assigned to themselves."
+    )
+
+
+def test_staff_cannot_create_multi_assignee_free_action(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    token = login(api_client, user=staff.user)
+    payload = create_free_action_payload(
+        membership=staff,
+        responsible_business_unit=maintenance,
+        assignees=[staff, other_staff],
+    )
+    response = api_client.post(
+        actions_url(staff.establishment_id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "Staff members can only create actions assigned to themselves."
+    )
+
+
+def test_staff_cannot_create_free_action_without_assignees(api_client):
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    token = login(api_client, user=staff.user)
+    payload = create_free_action_payload(
+        membership=staff,
+        responsible_business_unit=maintenance,
+    )
+    payload["assignee_ids"] = []
+    response = api_client.post(
+        actions_url(staff.establishment_id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
 
 
 def test_create_free_action(api_client):

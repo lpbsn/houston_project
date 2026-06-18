@@ -121,7 +121,7 @@ def test_staff_permissions():
     assert can_manage_runtime_context(membership) is False
     assert can_view_signal_feed(membership) is True
     assert can_create_observation(membership) is True
-    assert can_create_action(membership) is False
+    assert can_create_action(membership) is True
     assert can_validate_action(membership) is False
 
 

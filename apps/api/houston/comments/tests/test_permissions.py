@@ -46,7 +46,7 @@ def test_assignee_can_access_done_action_comments():
         created_by=owner,
         title="Task",
         instruction="Do",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timedelta(days=1),
         signal_id=signal.id,
     )

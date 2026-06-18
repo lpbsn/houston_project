@@ -7,7 +7,7 @@ from django.db import close_old_connections
 from django.utils import timezone
 
 from houston.actions.exceptions import ActionStateError, ActionValidationError
-from houston.actions.models import Action
+from houston.actions.models import Action, ActionAssignee
 from houston.actions.services import (
     accept_action,
     cancel_action,
@@ -30,40 +30,51 @@ from houston.testing.taxonomy import hotel_maintenance_setup
 pytestmark = pytest.mark.django_db
 
 
-def _open_action(*, owner, staff, maintenance):
+def _open_action(*, owner, staff, maintenance, requires_validation: bool = True):
     return create_action(
         establishment_id=owner.establishment_id,
         created_by=owner,
         title="Task",
         instruction="Do it",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         responsible_business_unit_id=maintenance.id,
+        requires_validation=requires_validation,
     )
 
 
 @pytest.mark.django_db(transaction=True)
 def test_concurrent_accept_only_one_succeeds():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    staff_a = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    staff_b = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Task",
+        instruction="Do it",
+        assignee_ids=[staff_a.id, staff_b.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        responsible_business_unit_id=maintenance.id,
+    )
 
-    def try_accept(_: int) -> str:
+    def try_accept(membership: EstablishmentMembership) -> str:
         close_old_connections()
         try:
-            accept_action(action=action)
+            accept_action(action_id=action.id, accepted_by=membership)
             return "ok"
         except ActionStateError:
             return "error"
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(try_accept, range(2)))
+        results = list(executor.map(try_accept, [staff_a, staff_b]))
 
     assert results.count("ok") == 1
     assert results.count("error") == 1
     action.refresh_from_db()
     assert action.status == Action.Status.IN_PROGRESS
+    assert action.accepted_by_id in {staff_a.id, staff_b.id}
 
 
 def test_accept_action_transitions_open_to_in_progress():
@@ -72,11 +83,12 @@ def test_accept_action_transitions_open_to_in_progress():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
 
-    action = accept_action(action=action)
+    action = accept_action(action_id=action.id, accepted_by=staff)
 
     action.refresh_from_db()
     assert action.status == Action.Status.IN_PROGRESS
     assert action.accepted_at is not None
+    assert action.accepted_by_id == staff.id
 
 
 def test_accept_action_rejects_done_state():
@@ -88,7 +100,7 @@ def test_accept_action_rejects_done_state():
     action.save(update_fields=["status", "updated_at"])
 
     with pytest.raises(ActionStateError, match="cannot be accepted"):
-        accept_action(action=action)
+        accept_action(action_id=action.id, accepted_by=staff)
 
 
 def test_reopen_action_from_pending_validation():
@@ -96,14 +108,15 @@ def test_reopen_action_from_pending_validation():
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
-    action = accept_action(action=action)
-    action = mark_action_done(action=action)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
 
-    action = reopen_action(action=action)
+    action = reopen_action(action_id=action.id)
 
     action.refresh_from_db()
     assert action.status == Action.Status.REOPENED
     assert action.accepted_at is None
+    assert action.accepted_by_id is None
 
 
 def test_cancel_action_from_open():
@@ -112,7 +125,7 @@ def test_cancel_action_from_open():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
 
-    action = cancel_action(action=action)
+    action = cancel_action(action_id=action.id)
 
     action.refresh_from_db()
     assert action.status == Action.Status.CANCELED
@@ -127,10 +140,10 @@ def test_cancel_action_rejects_done_state():
     action.save(update_fields=["status", "updated_at"])
 
     with pytest.raises(ActionStateError, match="cannot be canceled"):
-        cancel_action(action=action)
+        cancel_action(action_id=action.id)
 
 
-def test_reassign_action_updates_assignee():
+def test_reassign_action_updates_assignees_open():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     other_staff = build_api_membership_on_establishment(
@@ -140,11 +153,67 @@ def test_reassign_action_updates_assignee():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
 
-    action = reassign_action(action=action, assigned_to_id=other_staff.id)
+    action = reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
 
     action.refresh_from_db()
-    assert action.assigned_to_id == other_staff.id
+    assignee_ids = set(
+        ActionAssignee.objects.filter(action_id=action.id).values_list("membership_id", flat=True)
+    )
+    assert assignee_ids == {other_staff.id}
     assert action.status == Action.Status.OPEN
+
+
+def test_reassign_action_keeps_reopened_status():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action.status = Action.Status.REOPENED
+    action.save(update_fields=["status", "updated_at"])
+
+    action = reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+
+    action.refresh_from_db()
+    assert action.status == Action.Status.REOPENED
+
+
+def test_reassign_in_progress_resets_acceptance():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+
+    action = reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+
+    action.refresh_from_db()
+    assert action.status == Action.Status.OPEN
+    assert action.accepted_by_id is None
+    assert action.accepted_at is None
+
+
+def test_reassign_rejects_pending_validation():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
+
+    with pytest.raises(ActionStateError, match="cannot be reassigned"):
+        reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
 
 
 def test_reassign_rejects_done_state():
@@ -160,7 +229,24 @@ def test_reassign_rejects_done_state():
     action.save(update_fields=["status", "updated_at"])
 
     with pytest.raises(ActionStateError, match="cannot be reassigned"):
-        reassign_action(action=action, assigned_to_id=other_staff.id)
+        reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+
+
+def test_create_action_rejects_duplicate_assignees():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+
+    with pytest.raises(ActionValidationError, match="Duplicate assignees"):
+        create_action(
+            establishment_id=owner.establishment_id,
+            created_by=owner,
+            title="Task",
+            instruction="Do it",
+            assignee_ids=[staff.id, staff.id],
+            due_at=timezone.now() + timezone.timedelta(days=1),
+            responsible_business_unit_id=maintenance.id,
+        )
 
 
 def test_mark_action_done_sets_marked_done_at_not_validated():
@@ -172,17 +258,64 @@ def test_mark_action_done_sets_marked_done_at_not_validated():
         created_by=owner,
         title="Task",
         instruction="Do it",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         responsible_business_unit_id=maintenance.id,
     )
-    action = accept_action(action=action)
-    action = mark_action_done(action=action)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
 
     action.refresh_from_db()
     assert action.status == Action.Status.PENDING_VALIDATION
     assert action.marked_done_at is not None
     assert action.validated_at is None
+
+
+def test_mark_action_done_without_validation_goes_directly_done():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(
+        owner=owner,
+        staff=staff,
+        maintenance=maintenance,
+        requires_validation=False,
+    )
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
+
+    action.refresh_from_db()
+    assert action.status == Action.Status.DONE
+    assert action.marked_done_at is not None
+    assert action.validated_at is None
+
+
+def test_linked_action_without_validation_resolves_signal_on_mark_done():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+        status=Signal.Status.IN_PROGRESS,
+    )
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Linked",
+        instruction="Work",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+        requires_validation=False,
+    )
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    mark_action_done(action_id=action.id)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
 
 
 def test_validate_action_sets_validated_at():
@@ -194,13 +327,13 @@ def test_validate_action_sets_validated_at():
         created_by=owner,
         title="Task",
         instruction="Do it",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         responsible_business_unit_id=maintenance.id,
     )
-    action = accept_action(action=action)
-    action = mark_action_done(action=action)
-    action = validate_action(action=action)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
+    action = validate_action(action_id=action.id)
 
     action.refresh_from_db()
     assert action.status == Action.Status.DONE
@@ -223,7 +356,7 @@ def test_linked_action_copies_classification_from_signal():
         created_by=owner,
         title="Linked",
         instruction="Work",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         signal_id=signal.id,
     )
@@ -251,7 +384,7 @@ def test_linked_action_rejects_signal_without_classification():
             created_by=owner,
             title="Linked",
             instruction="Work",
-            assigned_to_id=staff.id,
+            assignee_ids=[staff.id],
             due_at=timezone.now() + timezone.timedelta(days=1),
             signal_id=signal.id,
         )
@@ -267,7 +400,7 @@ def test_free_action_stores_responsible_only():
         created_by=owner,
         title="Free task",
         instruction="Inspect",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         responsible_business_unit_id=hotel.id,
     )
@@ -276,6 +409,112 @@ def test_free_action_stores_responsible_only():
     assert action.responsible_business_unit_id == hotel.id
     assert action.affected_business_unit_id is None
     assert action.activity_subject_id is None
+
+
+def test_staff_can_create_self_assigned_free_action_in_scope():
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, maintenance)
+
+    action = create_action(
+        establishment_id=staff.establishment_id,
+        created_by=staff,
+        title="Free task",
+        instruction="Inspect",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        responsible_business_unit_id=maintenance.id,
+    )
+
+    assert action.created_by_id == staff.id
+    assert list(
+        ActionAssignee.objects.filter(action_id=action.id).values_list("membership_id", flat=True)
+    ) == [staff.id]
+
+
+def test_staff_cannot_create_free_action_out_of_scope():
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, hotel)
+
+    with pytest.raises(ActionValidationError, match="Not allowed"):
+        create_action(
+            establishment_id=staff.establishment_id,
+            created_by=staff,
+            title="Free task",
+            instruction="Inspect",
+            assignee_ids=[staff.id],
+            due_at=timezone.now() + timezone.timedelta(days=1),
+            responsible_business_unit_id=maintenance.id,
+        )
+
+
+def test_staff_cannot_create_linked_action_even_in_scope():
+    staff = build_api_membership(role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(staff.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    signal = create_signal_v3_for_membership(
+        staff,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+        status=Signal.Status.OPEN,
+    )
+
+    with pytest.raises(ActionValidationError, match="cannot create linked actions"):
+        create_action(
+            establishment_id=staff.establishment_id,
+            created_by=staff,
+            title="Linked",
+            instruction="Work",
+            assignee_ids=[staff.id],
+            due_at=timezone.now() + timezone.timedelta(days=1),
+            signal_id=signal.id,
+        )
+
+
+def test_staff_cannot_create_free_action_assigned_to_other():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+
+    with pytest.raises(ActionValidationError, match="only create actions assigned to themselves"):
+        create_action(
+            establishment_id=owner.establishment_id,
+            created_by=staff,
+            title="Free task",
+            instruction="Inspect",
+            assignee_ids=[other_staff.id],
+            due_at=timezone.now() + timezone.timedelta(days=1),
+            responsible_business_unit_id=maintenance.id,
+        )
+
+
+def test_staff_cannot_create_multi_assignee_free_action():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+
+    with pytest.raises(ActionValidationError, match="only create actions assigned to themselves"):
+        create_action(
+            establishment_id=owner.establishment_id,
+            created_by=staff,
+            title="Free task",
+            instruction="Inspect",
+            assignee_ids=[staff.id, other_staff.id],
+            due_at=timezone.now() + timezone.timedelta(days=1),
+            responsible_business_unit_id=maintenance.id,
+        )
 
 
 def test_free_action_rejects_manager_out_of_scope():
@@ -294,7 +533,7 @@ def test_free_action_rejects_manager_out_of_scope():
             created_by=manager,
             title="Free task",
             instruction="Inspect",
-            assigned_to_id=staff.id,
+            assignee_ids=[staff.id],
             due_at=timezone.now() + timezone.timedelta(days=1),
             responsible_business_unit_id=maintenance.id,
         )
@@ -321,7 +560,7 @@ def test_first_linked_action_moves_signal_to_in_progress_and_unpins():
         created_by=owner,
         title="Linked",
         instruction="Work",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         signal_id=signal.id,
     )
@@ -347,13 +586,13 @@ def test_linked_action_auto_resolves_signal_when_all_done():
         created_by=owner,
         title="Linked",
         instruction="Work",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timezone.timedelta(days=1),
         signal_id=signal.id,
     )
-    action = accept_action(action=action)
-    action = mark_action_done(action=action)
-    validate_action(action=action)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id)
+    validate_action(action_id=action.id)
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED

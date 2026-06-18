@@ -55,7 +55,7 @@ def test_get_action_for_comments_includes_done_status():
         created_by=owner,
         title="Task",
         instruction="Do",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timedelta(days=1),
         signal_id=signal.id,
     )
@@ -75,7 +75,7 @@ def test_list_action_comments_merges_inherited_signal_comments():
         created_by=owner,
         title="Task",
         instruction="Do",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timedelta(days=1),
         signal_id=signal.id,
     )
@@ -104,7 +104,7 @@ def test_list_action_comments_without_signal_link():
         created_by=owner,
         title="Free",
         instruction="Do",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timedelta(days=1),
         responsible_business_unit_id=maintenance.id,
     )

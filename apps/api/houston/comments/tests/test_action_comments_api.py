@@ -39,7 +39,7 @@ def _setup_linked_action(*, status=Action.Status.OPEN):
         created_by=owner,
         title="Linked",
         instruction="Do it",
-        assigned_to_id=staff.id,
+        assignee_ids=[staff.id],
         due_at=timezone.now() + timedelta(days=1),
         signal_id=signal.id,
     )

@@ -1,37 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ActionFeedItem, ExecutionFeedItem } from '@/features/actions/types'
+import type { ExecutionFeedItem } from '@/features/actions/types'
+import { buildActionFeedItem } from '@/features/actions/test-fixtures'
 
 import { splitExecutionFeedItems } from './execution-feed-sections'
 
-function makeAction(id: string, status: string): ActionFeedItem {
-  return {
-    id,
-    title: 'Action',
-    instruction_short: 'Instruction',
-    status,
-    end_at: new Date().toISOString(),
-    is_overdue: false,
-    affected_business_unit_key: null,
-    affected_business_unit_label: null,
-    responsible_business_unit_key: null,
-    responsible_business_unit_label: null,
-    activity_subject_normalized_name: null,
-    activity_subject_label: null,
-    signal_summary: null,
-    assigned_to_display_name: 'Assignee',
-    created_by_display_name: 'Creator',
-    last_activity_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    permission_hints: {
-      can_accept: false,
-      can_mark_done: false,
-      can_validate: false,
-      can_reopen: false,
-      can_cancel: false,
-      can_reassign: false,
-    },
-  }
+function makeAction(id: string, status: string) {
+  return buildActionFeedItem({ id, status })
 }
 
 function makeChecklist(id: string, status: string) {

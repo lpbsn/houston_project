@@ -20,6 +20,17 @@ def _membership_display_name(membership) -> str:
     return user.get_full_name() or user.email or user.username
 
 
+class ActionMembershipRefSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    display_name = serializers.CharField()
+    role = serializers.CharField()
+
+
+class ActionAcceptedBySerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    display_name = serializers.CharField()
+
+
 class ActionPermissionHintsSerializer(serializers.Serializer):
     can_accept = serializers.BooleanField()
     can_mark_done = serializers.BooleanField()
@@ -28,6 +39,8 @@ class ActionPermissionHintsSerializer(serializers.Serializer):
     can_cancel = serializers.BooleanField()
     can_reassign = serializers.BooleanField()
     can_update_due_at = serializers.BooleanField()
+    is_assignee = serializers.BooleanField()
+    accepted_by_me = serializers.BooleanField()
 
 
 class ActionSignalSummarySerializer(serializers.Serializer):
@@ -58,7 +71,9 @@ class ActionFeedItemSerializer(serializers.Serializer):
     activity_subject_normalized_name = serializers.CharField(allow_null=True)
     activity_subject_label = serializers.CharField(allow_null=True)
     signal_summary = ActionSignalSummarySerializer(allow_null=True)
-    assigned_to_display_name = serializers.CharField()
+    assignees = ActionMembershipRefSerializer(many=True)
+    accepted_by = ActionAcceptedBySerializer(allow_null=True)
+    requires_validation = serializers.BooleanField()
     created_by_display_name = serializers.CharField()
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
@@ -103,8 +118,12 @@ class ActionDetailSerializer(ActionFeedItemSerializer):
 class ActionCreateRequestSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=200)
     instruction = serializers.CharField(max_length=ACTION_INSTRUCTION_MAX_LENGTH)
-    assigned_to = serializers.UUIDField()
+    assignee_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+    )
     due_at = serializers.DateTimeField()
+    requires_validation = serializers.BooleanField(required=False, default=True)
     signal = serializers.UUIDField(required=False, allow_null=True, default=None)
     responsible_business_unit_id = serializers.UUIDField(
         required=False,
@@ -115,6 +134,10 @@ class ActionCreateRequestSerializer(serializers.Serializer):
     def validate(self, attrs):
         signal = attrs.get("signal")
         responsible_business_unit_id = attrs.get("responsible_business_unit_id")
+        assignee_ids = attrs.get("assignee_ids", [])
+
+        if len(set(assignee_ids)) != len(assignee_ids):
+            raise serializers.ValidationError("Duplicate assignee_ids are not allowed.")
 
         if signal is not None:
             if responsible_business_unit_id is not None:
@@ -131,11 +154,39 @@ class ActionCreateRequestSerializer(serializers.Serializer):
 
 
 class ActionReassignRequestSerializer(serializers.Serializer):
-    assigned_to = serializers.UUIDField()
+    assignee_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+    )
+
+    def validate_assignee_ids(self, value):
+        if len(set(value)) != len(value):
+            raise serializers.ValidationError("Duplicate assignee_ids are not allowed.")
+        return value
 
 
 class ActionDueAtRequestSerializer(serializers.Serializer):
     due_at = serializers.DateTimeField()
+
+
+def serialize_membership_ref(*, membership) -> dict:
+    return {
+        "membership_id": membership.id,
+        "display_name": _membership_display_name(membership),
+        "role": membership.role,
+    }
+
+
+def serialize_accepted_by(*, membership) -> dict:
+    return {
+        "membership_id": membership.id,
+        "display_name": _membership_display_name(membership),
+    }
+
+
+def serialize_action_assignees(*, action: Action) -> list[dict]:
+    links = list(action.assignee_links.all())
+    return [serialize_membership_ref(membership=link.membership) for link in links]
 
 
 def serialize_action_permission_hints(*, action: Action, membership) -> dict:
@@ -147,6 +198,7 @@ def serialize_action_permission_hints(*, action: Action, membership) -> dict:
         can_reopen_action,
         can_update_action_due_at,
         can_validate_action_on_object,
+        is_action_assignee,
     )
 
     return {
@@ -157,6 +209,8 @@ def serialize_action_permission_hints(*, action: Action, membership) -> dict:
         "can_cancel": can_cancel_action(membership, action),
         "can_reassign": can_reassign_action(membership, action),
         "can_update_due_at": can_update_action_due_at(membership, action),
+        "is_assignee": is_action_assignee(membership, action),
+        "accepted_by_me": action.accepted_by_id == membership.id if membership else False,
     }
 
 
@@ -213,6 +267,9 @@ def serialize_signal_summary(action: Action) -> dict | None:
 
 def serialize_action_feed_item(*, action: Action, membership, is_overdue: bool = False) -> dict:
     classification = serialize_action_classification(action=action)
+    accepted_by_payload = None
+    if action.accepted_by_id is not None and action.accepted_by is not None:
+        accepted_by_payload = serialize_accepted_by(membership=action.accepted_by)
     return {
         "id": action.id,
         "title": action.title,
@@ -222,7 +279,9 @@ def serialize_action_feed_item(*, action: Action, membership, is_overdue: bool =
         "is_overdue": is_overdue,
         **classification,
         "signal_summary": serialize_signal_summary(action),
-        "assigned_to_display_name": _membership_display_name(action.assigned_to),
+        "assignees": serialize_action_assignees(action=action),
+        "accepted_by": accepted_by_payload,
+        "requires_validation": action.requires_validation,
         "created_by_display_name": _membership_display_name(action.created_by),
         "last_activity_at": action.last_activity_at,
         "created_at": action.created_at,

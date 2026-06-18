@@ -5,8 +5,9 @@ import type { ActionDetail } from '../types'
 import { ActionStatusBadge } from './action-status-badge'
 import {
   actionClassificationInput,
+  formatActionAcceptedByFooterLabel,
+  formatActionAssigneesLabel,
   formatActionCreatorFooterLabel,
-  formatCompactDisplayName,
   getActionLocationText,
   getDisplayNameInitials,
   shouldShowActionUrgentBadge,
@@ -19,10 +20,15 @@ type ActionDetailSummaryCardProps = {
 export function ActionDetailSummaryCard({ action }: ActionDetailSummaryCardProps) {
   const showUrgentBadge = shouldShowActionUrgentBadge(action.signal_summary)
   const locationText = getActionLocationText(action.signal_summary)
-  const assigneeInitials = getDisplayNameInitials(action.assigned_to_display_name)
-  const assigneeLabel =
-    formatCompactDisplayName(action.assigned_to_display_name) || '—'
   const creatorLabel = formatActionCreatorFooterLabel(action.created_by_display_name)
+
+  const assigneeDisplayName = action.accepted_by
+    ? action.accepted_by.display_name
+    : formatActionAssigneesLabel(action.assignees)
+  const assigneeInitials = getDisplayNameInitials(assigneeDisplayName)
+  const assigneeLabel = action.accepted_by
+    ? formatActionAcceptedByFooterLabel(action.accepted_by)
+    : formatActionAssigneesLabel(action.assignees)
 
   return (
     <TerrainCard>
@@ -40,7 +46,7 @@ export function ActionDetailSummaryCard({ action }: ActionDetailSummaryCardProps
           >
             {assigneeInitials}
           </div>
-          <span className="max-w-[72px] truncate text-center text-[10px] text-[#888]">
+          <span className="max-w-[88px] truncate text-center text-[10px] text-[#888]">
             {assigneeLabel}
           </span>
         </div>
@@ -48,6 +54,9 @@ export function ActionDetailSummaryCard({ action }: ActionDetailSummaryCardProps
 
       <div className="mt-2 flex flex-wrap items-start gap-1.5">
         {showUrgentBadge ? <HoustonBadge variant="red">URGENT</HoustonBadge> : null}
+        {!action.requires_validation ? (
+          <HoustonBadge variant="gray">Sans validation</HoustonBadge>
+        ) : null}
         <SignalClassificationBadges signal={actionClassificationInput(action)} />
         <ActionStatusBadge status={action.status} labelVariant="feed" />
       </div>

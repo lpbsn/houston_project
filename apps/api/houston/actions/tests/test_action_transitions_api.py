@@ -59,6 +59,9 @@ def test_assignee_lifecycle_accept_mark_done_validate(api_client):
     )
     assert mark_done.status_code == 200
     assert mark_done.json()["status"] == Action.Status.PENDING_VALIDATION
+    staff_hints = mark_done.json()["permission_hints"]
+    assert staff_hints["is_assignee"] is True
+    assert staff_hints["accepted_by_me"] is True
 
     owner_token = login(api_client, user=owner.user)
     validate = api_client.post(
@@ -70,6 +73,11 @@ def test_assignee_lifecycle_accept_mark_done_validate(api_client):
     hints = validate.json()["permission_hints"]
     assert hints["can_validate"] is False
     assert hints["can_reopen"] is True
+    assert hints["is_assignee"] is False
+    assert hints["accepted_by_me"] is False
+    assert validate.json()["accepted_by"]["membership_id"] == str(staff.id)
+    assert len(validate.json()["assignees"]) == 1
+    assert validate.json()["assignees"][0]["membership_id"] == str(staff.id)
 
 
 def test_staff_cannot_accept_action_assigned_to_peer(api_client):
@@ -150,12 +158,52 @@ def test_owner_can_reassign_open_action(api_client):
     owner_token = login(api_client, user=owner.user)
     response = api_client.post(
         action_url(owner.establishment_id, action_id, "reassign/"),
-        {"assigned_to": str(other_staff.id)},
+        {"assignee_ids": [str(other_staff.id)]},
         format="json",
         **auth_headers(owner_token),
     )
     assert response.status_code == 200
-    assert response.json()["assigned_to_display_name"] == other_staff.user.username
+    body = response.json()
+    assert body["assignees"][0]["membership_id"] == str(other_staff.id)
+
+
+def test_mark_done_without_validation_skips_validate(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    token = login(api_client, user=owner.user)
+    create = api_client.post(
+        f"/api/v1/establishments/{owner.establishment_id}/actions/",
+        create_free_action_payload(
+            membership=owner,
+            responsible_business_unit=maintenance,
+            assigned_to=staff,
+            requires_validation=False,
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    assert create.status_code == 201
+    action_id = create.json()["id"]
+
+    staff_token = login(api_client, user=staff.user)
+    api_client.post(
+        action_url(owner.establishment_id, action_id, "accept/"),
+        **auth_headers(staff_token),
+    )
+    mark_done = api_client.post(
+        action_url(owner.establishment_id, action_id, "mark-done/"),
+        **auth_headers(staff_token),
+    )
+    assert mark_done.status_code == 200
+    assert mark_done.json()["status"] == Action.Status.DONE
+    assert mark_done.json()["permission_hints"]["can_validate"] is False
+
+    validate = api_client.post(
+        action_url(owner.establishment_id, action_id, "validate/"),
+        **auth_headers(token),
+    )
+    assert validate.status_code == 403
 
 
 def test_foreign_establishment_returns_not_found(api_client):
