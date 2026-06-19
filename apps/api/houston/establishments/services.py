@@ -31,6 +31,7 @@ from houston.establishments.models import (
     EstablishmentActivityDescription,
     EstablishmentInvitation,
     EstablishmentMembership,
+    MembershipScope,
     OnboardingProposal,
     OnboardingSession,
 )
@@ -1792,6 +1793,8 @@ def update_membership_for_management(
         raise MembershipManagementForbiddenError
 
     update_fields: list[str] = []
+    role_changed = False
+    scopes_changed = False
 
     if update_input.role is not None and membership.role != update_input.role:
         if not _can_actor_manage_target_role(
@@ -1808,6 +1811,7 @@ def update_membership_for_management(
 
         membership.role = update_input.role
         update_fields.append("role")
+        role_changed = True
 
     if update_fields:
         membership.save(update_fields=[*update_fields, "updated_at"])
@@ -1823,9 +1827,20 @@ def update_membership_for_management(
             raise InvalidMembershipScopeAssignmentError(
                 "At least one operational scope is required for staff and manager memberships."
             )
+        previous_scope_ids = _membership_business_unit_scope_ids(membership.id)
         assign_membership_scopes(
             membership=membership,
             scope_inputs=update_input.scopes,
+        )
+        scopes_changed = previous_scope_ids != _membership_business_unit_scope_ids(membership.id)
+
+    if role_changed or scopes_changed:
+        from houston.realtime.broadcast import schedule_access_event
+
+        schedule_access_event(
+            reason="membership.updated",
+            establishment_id=membership.establishment_id,
+            membership_id=membership.id,
         )
 
     membership.refresh_from_db()
@@ -1867,6 +1882,14 @@ def deactivate_membership_for_management(
     from houston.chat.services import handle_membership_chat_deactivation
 
     handle_membership_chat_deactivation(membership=membership)
+
+    from houston.realtime.broadcast import schedule_access_event
+
+    schedule_access_event(
+        reason="membership.deactivated",
+        establishment_id=membership.establishment_id,
+        membership_id=membership.id,
+    )
 
     _clear_selected_establishment_for_membership(membership)
 
@@ -2189,6 +2212,15 @@ def _create_invited_membership(
                 raise DirectorInvitationAlreadyExistsError from exc
 
         raise
+
+
+def _membership_business_unit_scope_ids(membership_id) -> set:
+    return set(
+        MembershipScope.objects.filter(membership_id=membership_id).values_list(
+            "business_unit_id",
+            flat=True,
+        )
+    )
 
 
 def _reload_membership_for_response(membership_id) -> EstablishmentMembership:
