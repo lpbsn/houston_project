@@ -249,6 +249,9 @@ def aggregate_candidate_into_signal(
         observation=observation,
         link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
     )
+    from houston.observations.media_services import delete_all_observation_media
+
+    delete_all_observation_media(observation_id=observation.id)
     return signal
 
 
@@ -1255,6 +1258,41 @@ def resolve_signal(*, signal: Signal) -> Signal:
     )
 
 
+def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
+    from houston.observations.media_services import delete_all_observation_media
+
+    link = (
+        signal.source_observation_links.filter(
+            link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+        )
+        .order_by("observation__created_at", "observation__id")
+        .first()
+    )
+    if link is None:
+        return
+
+    observation_id = link.observation_id
+    has_other_active = (
+        Signal.objects.filter(
+            source_observation_links__observation_id=observation_id,
+            source_observation_links__link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+            status__in=ACTIVE_SIGNAL_STATUSES,
+        )
+        .exclude(id=signal.id)
+        .exists()
+    )
+    if has_other_active:
+        return
+    delete_all_observation_media(observation_id=observation_id)
+    prefetched_links = getattr(signal, "created_from_source_links", None)
+    if prefetched_links:
+        for prefetched_link in prefetched_links:
+            observation = prefetched_link.observation
+            cache = getattr(observation, "_prefetched_objects_cache", None)
+            if cache is not None:
+                cache["media_items"] = []
+
+
 def _transition_active_signal_to_terminal(
     *,
     signal: Signal,
@@ -1263,6 +1301,7 @@ def _transition_active_signal_to_terminal(
 ) -> Signal:
     if signal.status not in ACTIVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be canceled or resolved.")
+    _delete_created_from_media_for_signal_terminal(signal=signal)
     signal.status = target_status
     signal.is_pinned = False
     signal.pinned_at = None

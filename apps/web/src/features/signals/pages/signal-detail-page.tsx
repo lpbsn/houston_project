@@ -23,7 +23,6 @@ import {
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
 import { formatSignalRelativeTime } from '../lib/signal-display'
-import type { SignalDetail } from '../types'
 
 type SignalDetailPageProps = {
   signalId: string
@@ -33,13 +32,6 @@ type SignalDetailPageProps = {
 function formatDescriptionContent(structuredSummary: string): string {
   const trimmed = structuredSummary.trim()
   return trimmed.length > 0 ? trimmed : 'Description indisponible.'
-}
-
-function resolveMediaCount(signal: SignalDetail): number {
-  if (signal.media_count > 0) {
-    return signal.media_count
-  }
-  return signal.source_context.media_count ?? 0
 }
 
 export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps) {
@@ -89,7 +81,6 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
 
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
-  const mediaCount = resolveMediaCount(signal)
   const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
   const hasLifecycleSticky =
     signal.permission_hints.can_resolve || signal.permission_hints.can_cancel
@@ -136,7 +127,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           onSetUrgency={(urgency) => void urgencyMutation.mutate(urgency)}
         />
 
-        <SignalDetailPhotoSection mediaCount={mediaCount} />
+        <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
 
         {establishmentId ? (
           <CommentSection

@@ -1075,6 +1075,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/observation-media/{media_id}/preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_observation_media_preview_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/observations/": {
         parameters: {
             query?: never;
@@ -2736,6 +2752,18 @@ export interface components {
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
             source_context: components["schemas"]["SourceContext"];
+            media_items: components["schemas"]["SignalDetailMediaItem"][];
+        };
+        SignalDetailMediaItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uri */
+            preview_url: string;
+            content_type: string;
+            size_bytes: number;
+            position: number;
+            /** Format: uuid */
+            observation_id: string;
         };
         SignalFeedItem: {
             /** Format: uuid */
@@ -6537,6 +6565,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
                 };
+            };
+        };
+    };
+    v1_establishments_observation_media_preview_retrieve: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+                media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Binary media preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

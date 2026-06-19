@@ -3742,6 +3742,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/observation-media/{media_id}/preview/:
+    get:
+      operationId: v1_establishments_observation_media_preview_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: media_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - observations
+      security:
+      - {}
+      responses:
+        '200':
+          description: Binary media preview.
+        '404':
+          description: Not found.
   /api/v1/establishments/{establishment_id}/observations/:
     post:
       operationId: v1_establishments_observations_create
@@ -8308,6 +8338,10 @@ components:
           type: string
         source_context:
           $ref: '#/components/schemas/SourceContext'
+        media_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalDetailMediaItem'
       required:
       - created_at
       - id
@@ -8315,6 +8349,7 @@ components:
       - last_activity_at
       - location_text
       - media_count
+      - media_items
       - operational_unit_key
       - permission_hints
       - source_context
@@ -8323,6 +8358,31 @@ components:
       - structured_summary_short
       - title
       - urgency
+    SignalDetailMediaItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        preview_url:
+          type: string
+          format: uri
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        position:
+          type: integer
+        observation_id:
+          type: string
+          format: uuid
+      required:
+      - content_type
+      - id
+      - observation_id
+      - position
+      - preview_url
+      - size_bytes
     SignalFeedItem:
       type: object
       properties:
