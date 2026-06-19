@@ -1204,6 +1204,7 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
             "updated_at",
         ]
     )
+    _schedule_signal_updated_invalidation(signal=signal)
     return signal
 
 
@@ -1222,6 +1223,7 @@ def unpin_signal(*, signal: Signal) -> Signal:
             "updated_at",
         ]
     )
+    _schedule_signal_updated_invalidation(signal=signal)
     return signal
 
 
@@ -1234,6 +1236,7 @@ def set_signal_urgency(*, signal: Signal, urgency: str) -> Signal:
     signal.urgency = urgency
     touch_signal_activity(signal=signal)
     signal.save(update_fields=["urgency", "last_activity_at", "updated_at"])
+    _schedule_signal_updated_invalidation(signal=signal)
     return signal
 
 
@@ -1327,4 +1330,16 @@ def _transition_active_signal_to_terminal(
         update_fields.append("urgency")
     touch_signal_activity(signal=signal)
     signal.save(update_fields=update_fields)
+    _schedule_signal_updated_invalidation(signal=signal)
     return signal
+
+
+def _schedule_signal_updated_invalidation(*, signal: Signal) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=signal.establishment_id,
+        subject_type="signal",
+        reason="signal.updated",
+        entity_id=signal.id,
+    )

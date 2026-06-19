@@ -407,8 +407,14 @@ def revoke_session(*, session: UserSession) -> None:
     )
 
     from houston.chat.ws_notify import schedule_session_access_revoked
+    from houston.realtime.broadcast import schedule_access_event
 
     schedule_session_access_revoked(session_id=session.id, reason="session_revoked")
+    schedule_access_event(
+        reason="session.revoked",
+        establishment_id=session.selected_establishment_id,
+        session_id=session.id,
+    )
 
 
 def revoke_refresh_token_family(*, session: UserSession, family_id: uuid.UUID) -> None:
@@ -446,8 +452,14 @@ def switch_selected_establishment(
 
     if previous_establishment_id != membership.establishment_id:
         from houston.chat.ws_notify import schedule_session_access_revoked
+        from houston.realtime.broadcast import schedule_access_event
 
         schedule_session_access_revoked(session_id=session.id, reason="establishment_switched")
+        schedule_access_event(
+            reason="establishment.switched",
+            establishment_id=previous_establishment_id or membership.establishment_id,
+            session_id=session.id,
+        )
 
     return build_bootstrap_payload(session.user, session=session)
 
@@ -595,6 +607,14 @@ def _revoke_refresh_token_family_for_reuse(*, session_id, family_id: uuid.UUID) 
             revoked_at=now,
             status=SessionRefreshToken.Status.REVOKED,
         )
+
+    from houston.realtime.broadcast import schedule_access_event
+
+    schedule_access_event(
+        reason="session.revoked",
+        establishment_id=session.selected_establishment_id,
+        session_id=session.id,
+    )
 
 
 def _build_refresh_expiry(*, now: datetime, session: UserSession) -> datetime:

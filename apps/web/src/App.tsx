@@ -58,6 +58,7 @@ import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/
 import { chatQueryKeys } from '@/features/chat/api'
 import { shouldRedirectFromUnavailableChat } from '@/features/chat/lib/chat-availability'
 import { purgeEstablishmentChatOperationalQueries } from '@/features/chat/lib/apply-chat-availability-cache'
+import { OperationalRealtimeProvider } from '@/features/realtime/components/operational-realtime-provider'
 import type { ChatWsConversationAccessRevokedEvent, ChatWsGlobalAccessRevokedEvent } from '@/features/chat/types'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
@@ -526,6 +527,25 @@ function App() {
   const activeChatConversationId =
     route.kind === 'chat-conversation-detail' ? route.conversationId : null
 
+  const wrapTerrainWithOperationalRealtime = (terrainShell: ReactNode) => {
+    if (!auth.isAuthenticated || !establishmentId || !auth.hasOperationalAccess) {
+      return terrainShell
+    }
+
+    return (
+      <OperationalRealtimeProvider
+        establishmentId={establishmentId}
+        activeMembershipId={auth.bootstrap?.active_membership?.id ?? null}
+        enabled={true}
+        onActiveMembershipDeactivated={() => {
+          navigate('/reporting', { replace: true })
+        }}
+      >
+        {terrainShell}
+      </OperationalRealtimeProvider>
+    )
+  }
+
   const wrapTerrainWithChatRealtime = (terrainShell: ReactNode) => {
     if (!showChatNav && !isChatRoute) {
       return terrainShell
@@ -546,7 +566,8 @@ function App() {
   }
 
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
-    return wrapTerrainWithChatRealtime(
+    return wrapTerrainWithOperationalRealtime(
+      wrapTerrainWithChatRealtime(
       <TerrainShell
         contentKey="not-found"
         showBottomNav={true}
@@ -561,12 +582,14 @@ function App() {
       >
         <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </TerrainShell>,
+      ),
     )
   }
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    return wrapTerrainWithChatRealtime(
+    return wrapTerrainWithOperationalRealtime(
+      wrapTerrainWithChatRealtime(
       <TerrainShell
         contentKey={getTerrainContentKey(route)}
         showBottomNav={terrainConfig.showBottomNav}
@@ -592,6 +615,7 @@ function App() {
       >
         <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </TerrainShell>,
+      ),
     )
   }
 
