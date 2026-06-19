@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatSignalAggregationBadge,
+  formatSignalAggregationLabel,
   getPinnedSignalCardClassName,
   getSignalCardLeftAccentClass,
   getSignalCardLeftAccentColor,
@@ -23,6 +25,7 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     operational_unit_key: null,
     location_text: '',
     media_count: 0,
+    aggregation_count: 0,
     last_activity_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
     permission_hints: {
@@ -220,6 +223,24 @@ describe('getSignalCardLeftAccentColor', () => {
     expect(
       getSignalCardLeftAccentColor(item({ id: '3', status: 'draft' })),
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.neutral)
+  })
+})
+
+describe('formatSignalAggregationBadge', () => {
+  it('prefixes count with x', () => {
+    expect(formatSignalAggregationBadge(1)).toBe('x1')
+    expect(formatSignalAggregationBadge(2)).toBe('x2')
+  })
+})
+
+describe('formatSignalAggregationLabel', () => {
+  it('uses singular for one aggregation', () => {
+    expect(formatSignalAggregationLabel(1)).toBe('1 agrégation')
+  })
+
+  it('uses plural for multiple aggregations', () => {
+    expect(formatSignalAggregationLabel(2)).toBe('2 agrégations')
+    expect(formatSignalAggregationLabel(3)).toBe('3 agrégations')
   })
 })
 

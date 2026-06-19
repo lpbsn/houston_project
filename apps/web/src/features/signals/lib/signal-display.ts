@@ -2,6 +2,14 @@ import type { HoustonBadgeVariant, TerrainSectionDotVariant } from '@/lib/terrai
 
 import type { SignalFeedItem } from '../types'
 
+export function formatSignalAggregationBadge(count: number): string {
+  return `x${count}`
+}
+
+export function formatSignalAggregationLabel(count: number): string {
+  return count === 1 ? '1 agrégation' : `${count} agrégations`
+}
+
 export function formatSignalRelativeTime(iso: string): string {
   const date = new Date(iso)
   const diffMs = Date.now() - date.getTime()

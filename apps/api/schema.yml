@@ -8332,6 +8332,8 @@ components:
         reporter_display_name:
           type: string
           nullable: true
+        aggregation_count:
+          type: integer
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
         structured_summary:
@@ -8343,6 +8345,7 @@ components:
           items:
             $ref: '#/components/schemas/SignalDetailMediaItem'
       required:
+      - aggregation_count
       - created_at
       - id
       - is_pinned
@@ -8433,9 +8436,12 @@ components:
         reporter_display_name:
           type: string
           nullable: true
+        aggregation_count:
+          type: integer
         permission_hints:
           $ref: '#/components/schemas/PermissionHints'
       required:
+      - aggregation_count
       - created_at
       - id
       - is_pinned
