@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from houston.accounts.models import User
-from houston.signals.models import Signal
+from houston.signals.models import Signal, SignalSourceObservation
 
 
 def format_reporter_display_name(user: User) -> str | None:
@@ -21,7 +21,7 @@ def format_reporter_display_name(user: User) -> str | None:
 
 
 def reporter_display_name_for_signal(signal: Signal) -> str | None:
-    link = oldest_source_observation_link(signal)
+    link = created_from_source_observation_link(signal)
     if link is None:
         return None
     user = link.observation.submitted_by_membership.user
@@ -29,7 +29,7 @@ def reporter_display_name_for_signal(signal: Signal) -> str | None:
 
 
 def media_count_for_signal(signal: Signal) -> int:
-    link = oldest_source_observation_link(signal)
+    link = created_from_source_observation_link(signal)
     if link is None:
         return 0
     return observation_media_count(link.observation)
@@ -40,6 +40,34 @@ def observation_media_count(observation) -> int:
     if prefetched is not None and "media_items" in prefetched:
         return len(prefetched["media_items"])
     return observation.media_items.count()
+
+
+def created_from_source_observation_link(signal: Signal):
+    prefetched = getattr(signal, "created_from_source_links", None)
+    if prefetched is not None:
+        return prefetched[0] if prefetched else None
+
+    return (
+        signal.source_observation_links.filter(
+            link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+        )
+        .select_related(
+            "observation__submitted_by_membership__user",
+        )
+        .order_by("observation__created_at", "observation__id")
+        .first()
+    )
+
+
+def created_from_observation_media_items(signal: Signal):
+    link = created_from_source_observation_link(signal)
+    if link is None:
+        return []
+    observation = link.observation
+    prefetched = getattr(observation, "_prefetched_objects_cache", None)
+    if prefetched is not None and "media_items" in prefetched:
+        return sorted(prefetched["media_items"], key=lambda item: item.position)
+    return list(observation.media_items.order_by("position"))
 
 
 def oldest_source_observation_link(signal: Signal):

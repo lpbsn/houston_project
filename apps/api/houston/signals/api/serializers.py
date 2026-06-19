@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from houston.observations.media_access import build_observation_media_preview_url
 from houston.signals.models import Signal
 from houston.signals.reporter_display import (
+    created_from_observation_media_items,
+    created_from_source_observation_link,
     media_count_for_signal,
     observation_media_count,
-    oldest_source_observation_link,
     reporter_display_name_for_signal,
 )
 from houston.signals.services import structured_summary_short
@@ -55,9 +57,19 @@ class SourceContextSerializer(serializers.Serializer):
     media_count = serializers.IntegerField()
 
 
+class SignalDetailMediaItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    preview_url = serializers.URLField()
+    content_type = serializers.CharField()
+    size_bytes = serializers.IntegerField()
+    position = serializers.IntegerField()
+    observation_id = serializers.UUIDField()
+
+
 class SignalDetailSerializer(SignalFeedItemSerializer):
     structured_summary = serializers.CharField()
     source_context = SourceContextSerializer()
+    media_items = SignalDetailMediaItemSerializer(many=True)
 
 
 class SignalUrgencyRequestSerializer(serializers.Serializer):
@@ -114,17 +126,41 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
     }
 
 
-def serialize_signal_detail(*, signal: Signal, membership) -> dict:
+def _serialize_signal_detail_media_items(*, signal: Signal, request) -> list[dict]:
+    link = created_from_source_observation_link(signal)
+    if link is None:
+        return []
+
+    observation_id = link.observation_id
+    return [
+        {
+            "id": media.id,
+            "preview_url": build_observation_media_preview_url(
+                request=request,
+                establishment_id=signal.establishment_id,
+                media_id=media.id,
+            ),
+            "content_type": media.content_type,
+            "size_bytes": media.size_bytes,
+            "position": media.position,
+            "observation_id": observation_id,
+        }
+        for media in created_from_observation_media_items(signal)
+    ]
+
+
+def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
     payload = serialize_signal_feed_item(signal=signal, membership=membership)
     payload["structured_summary"] = signal.structured_summary
 
-    link = oldest_source_observation_link(signal)
+    link = created_from_source_observation_link(signal)
     if link is None:
         payload["source_context"] = {
             "submitted_at": None,
             "reporter_display_name": "",
             "media_count": 0,
         }
+        payload["media_items"] = []
     else:
         observation = link.observation
         user = observation.submitted_by_membership.user
@@ -134,4 +170,8 @@ def serialize_signal_detail(*, signal: Signal, membership) -> dict:
             "reporter_display_name": display,
             "media_count": observation_media_count(observation),
         }
+        payload["media_items"] = _serialize_signal_detail_media_items(
+            signal=signal,
+            request=request,
+        )
     return payload

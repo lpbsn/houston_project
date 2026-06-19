@@ -7,6 +7,7 @@ from django.db.models import Prefetch, QuerySet
 
 from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
+from houston.observations.models import ObservationMedia
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUSES
 from houston.signals.feed_cursor import feed_sort_case_expressions
 from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
@@ -27,8 +28,25 @@ _SIGNAL_REPORTER_PREFETCH = Prefetch(
     ).order_by("observation__created_at", "observation__id"),
     to_attr="source_links_by_observation_chronology",
 )
+_SIGNAL_CREATED_FROM_PREFETCH = Prefetch(
+    "source_observation_links",
+    queryset=(
+        SignalSourceObservation.objects.filter(
+            link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+        )
+        .select_related("observation__submitted_by_membership__user")
+        .prefetch_related(
+            Prefetch(
+                "observation__media_items",
+                queryset=ObservationMedia.objects.order_by("position"),
+            ),
+        )
+        .order_by("observation__created_at", "observation__id")
+    ),
+    to_attr="created_from_source_links",
+)
 _SIGNAL_LIST_PREFETCH = (
-    "source_observation_links__observation__media_items",
+    _SIGNAL_CREATED_FROM_PREFETCH,
     _SIGNAL_REPORTER_PREFETCH,
 )
 

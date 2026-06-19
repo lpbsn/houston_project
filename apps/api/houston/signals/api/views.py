@@ -222,7 +222,7 @@ class SignalDetailView(EstablishmentScopedSignalMixin, APIView):
         if signal is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        payload = serialize_signal_detail(signal=signal, membership=membership)
+        payload = serialize_signal_detail(signal=signal, membership=membership, request=request)
         return Response(SignalDetailSerializer(payload).data)
 
 
@@ -385,7 +385,7 @@ class SignalUrgencyView(EstablishmentScopedSignalMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        payload = serialize_signal_detail(signal=signal, membership=membership)
+        payload = serialize_signal_detail(signal=signal, membership=membership, request=request)
         return Response(SignalDetailSerializer(payload).data)
 
 
@@ -441,7 +441,7 @@ def _signal_lifecycle_command_response(
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    payload = serialize_signal_detail(signal=signal, membership=membership)
+    payload = serialize_signal_detail(signal=signal, membership=membership, request=request)
     return Response(SignalDetailSerializer(payload).data)
 
 
@@ -483,7 +483,7 @@ def _signal_command_response(
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    payload = serialize_signal_detail(signal=signal, membership=membership)
+    payload = serialize_signal_detail(signal=signal, membership=membership, request=request)
     return Response(SignalDetailSerializer(payload).data)
 
 

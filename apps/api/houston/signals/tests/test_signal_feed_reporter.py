@@ -4,6 +4,7 @@ import uuid
 from datetime import timedelta
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
 from houston.accounts.models import User
@@ -154,10 +155,6 @@ def test_feed_reporter_tiebreaker_observation_id(api_client):
     Observation = obs_a.__class__
     Observation.objects.filter(id__in=[obs_a.id, obs_b.id]).update(created_at=now)
 
-    first_obs, second_obs = (obs_a, obs_b) if obs_a.id < obs_b.id else (obs_b, obs_a)
-    first_membership = membership if first_obs.id == obs_a.id else alice_membership
-    expected_name = "Marie R." if first_membership.user.last_name == "Renaud" else "Alice L."
-
     SignalSourceObservation.objects.create(
         signal=signal,
         observation=obs_a,
@@ -170,7 +167,7 @@ def test_feed_reporter_tiebreaker_observation_id(api_client):
     )
 
     item = _feed_item_for_signal(api_client, membership, signal)
-    assert item["reporter_display_name"] == expected_name
+    assert item["reporter_display_name"] == "Marie R."
 
 
 @pytest.mark.django_db
@@ -232,3 +229,76 @@ def test_feed_reporter_never_leaks_raw_observation_text(api_client):
     body = response.content.decode()
     assert _LEAK_MARKER not in body
     assert "raw_text" not in body
+
+
+@pytest.mark.django_db
+def test_feed_reporter_and_media_count_use_created_from(api_client):
+    marie_membership = build_api_membership()
+    establishment = marie_membership.establishment
+    marie_membership.user.first_name = "Marie"
+    marie_membership.user.last_name = "Renaud"
+    marie_membership.user.save(update_fields=["first_name", "last_name"])
+    alice_user = User.objects.create_user(
+        username=f"alice_{uuid.uuid4().hex[:6]}",
+        email=f"alice_{uuid.uuid4().hex[:6]}@example.com",
+        password=TEST_PASSWORD,
+        first_name="Alice",
+        last_name="Lambert",
+        status=User.Status.ACTIVE,
+    )
+    alice_membership = EstablishmentMembership.objects.create(
+        user=alice_user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    signal = _create_signal(marie_membership)
+    now = timezone.now()
+    created_obs = create_observation(membership=marie_membership, text="C" * 20)
+    aggregated_obs = create_observation(membership=alice_membership, text="D" * 20)
+    Observation = created_obs.__class__
+    Observation.objects.filter(id=aggregated_obs.id).update(created_at=now - timedelta(hours=2))
+    Observation.objects.filter(id=created_obs.id).update(created_at=now - timedelta(hours=1))
+
+    from houston.observations.models import ObservationMedia
+    from houston.uploads.models import TemporaryUpload
+
+    upload = TemporaryUpload(
+        establishment=establishment,
+        uploaded_by=marie_membership.user,
+        content_type="image/png",
+        stored_extension="png",
+        size_bytes=128,
+        status=TemporaryUpload.Status.LINKED,
+        expires_at=timezone.now() + timedelta(hours=24),
+    )
+    upload.file.save(
+        "reporter-photo.png",
+        SimpleUploadedFile("reporter-photo.png", b"\x89PNG\r\n\x1a\n", content_type="image/png"),
+        save=False,
+    )
+    upload.save()
+    ObservationMedia.objects.create(
+        observation=created_obs,
+        temporary_upload=upload,
+        content_type="image/png",
+        size_bytes=128,
+        position=1,
+        storage_key=upload.file.name,
+    )
+
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=aggregated_obs,
+        link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
+    )
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=created_obs,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
+
+    item = _feed_item_for_signal(api_client, marie_membership, signal)
+    assert item["media_count"] == 1
+    assert item["reporter_display_name"] == "Marie R."
