@@ -7,6 +7,7 @@ import {
   membershipListQueryKey,
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
+import { purgeNonAuthQueries } from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeAccessEvent } from '../types'
 
@@ -33,6 +34,8 @@ export function applyRealtimeAccessEvent(
       clearAuthState()
       return
     case 'establishment.switched':
+      purgeNonAuthQueries(queryClient)
+      void queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
       onIntentionalClose()
       return
     case 'membership.deactivated':

@@ -18,9 +18,25 @@ vi.mock('@/features/auth/api', async () => {
   }
 })
 
+const staleBootstrap = {
+  authenticated: true,
+  user: { id: 'u1', username: 'owner', email: 'owner@example.com' },
+  memberships: [],
+  active_membership: {
+    id: 'm1',
+    establishment_id: 'est-a',
+    establishment_name: 'Establishment A',
+    role: 'manager',
+    status: 'active',
+  },
+  pending_onboarding_memberships: [],
+  permission_hints: {},
+}
+
 describe('applyRealtimeAccessEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    queryClient.clear()
   })
 
   it('clears auth state on session.revoked', () => {
@@ -95,6 +111,40 @@ describe('applyRealtimeAccessEvent', () => {
 
     expect(onIntentionalClose).toHaveBeenCalledTimes(1)
     expect(onActiveMembershipDeactivated).toHaveBeenCalledTimes(1)
+  })
+
+  it('resyncs when another tab receives establishment.switched', () => {
+    const onIntentionalClose = vi.fn()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    queryClient.setQueryData(['signals', 'feed', 'est-a', 'general', {}], { items: ['stale'] })
+    queryClient.setQueryData(['workspace', 'summary', 'est-a'], { name: 'A' })
+    queryClient.setQueryData(['reporting', 'kpi', 'est-a'], { kpi: 1 })
+    queryClient.setQueryData(bootstrapQueryKey, staleBootstrap)
+
+    applyRealtimeAccessEvent(
+      {
+        type: 'access',
+        reason: 'establishment.switched',
+        establishment_id: 'est-a',
+        occurred_at: '2026-06-19T12:00:00Z',
+      },
+      {
+        queryClient,
+        establishmentId: 'est-a',
+        activeMembershipId: 'm1',
+        onIntentionalClose,
+        onActiveMembershipDeactivated: vi.fn(),
+      },
+    )
+
+    expect(queryClient.getQueryData(['signals', 'feed', 'est-a', 'general', {}])).toBeUndefined()
+    expect(queryClient.getQueryData(['workspace', 'summary', 'est-a'])).toBeUndefined()
+    expect(queryClient.getQueryData(['reporting', 'kpi', 'est-a'])).toBeUndefined()
+    expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(staleBootstrap)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
+    expect(onIntentionalClose).toHaveBeenCalledTimes(1)
+    invalidateSpy.mockRestore()
   })
 
   it('invalidates bootstrap and workspace on membership.updated without team roster keys', () => {
