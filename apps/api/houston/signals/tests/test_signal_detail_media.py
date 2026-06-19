@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import io
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import close_old_connections
 from django.test import Client
 from PIL import Image
 
@@ -290,3 +292,72 @@ def test_feed_media_count_uses_created_from_not_aggregated(api_client):
     )
     assert response.status_code == 200
     assert response.json()["media_count"] == 1
+
+
+def test_aggregate_keeps_media_when_observation_has_active_created_from(api_client):
+    membership = build_api_membership()
+    observation, token = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    created_signal = create_minimal_v3_signal(membership, title="Created from")
+    aggregate_target = create_minimal_v3_signal(membership, title="Aggregate target")
+    _link_created_from(signal=created_signal, observation=observation)
+
+    aggregate_candidate_into_signal(signal=aggregate_target, observation=observation)
+
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
+    response = api_client.get(
+        signal_detail_url(membership.establishment_id, created_signal.id),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["media_count"] == 1
+    assert len(body["media_items"]) == 1
+    assert body["media_items"][0]["observation_id"] == str(observation.id)
+
+
+def test_shared_created_from_resolve_first_keeps_media_second_deletes(api_client):
+    membership = build_api_membership()
+    observation, _ = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    first_signal = create_minimal_v3_signal(membership, title="First shared")
+    second_signal = create_minimal_v3_signal(membership, title="Second shared")
+    _link_created_from(signal=first_signal, observation=observation)
+    _link_created_from(signal=second_signal, observation=observation)
+
+    resolve_signal(signal=first_signal)
+    assert ObservationMedia.objects.filter(observation_id=observation.id).exists()
+
+    resolve_signal(signal=second_signal)
+    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_resolve_shared_created_from_deletes_media(api_client):
+    membership = build_api_membership()
+    observation, _ = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    first_signal = create_minimal_v3_signal(membership, title="Concurrent first")
+    second_signal = create_minimal_v3_signal(membership, title="Concurrent second")
+    _link_created_from(signal=first_signal, observation=observation)
+    _link_created_from(signal=second_signal, observation=observation)
+
+    def try_resolve(signal_id):
+        close_old_connections()
+        signal = Signal.objects.get(id=signal_id)
+        resolve_signal(signal=signal)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(try_resolve, [first_signal.id, second_signal.id]))
+
+    first_signal.refresh_from_db()
+    second_signal.refresh_from_db()
+    assert first_signal.status == Signal.Status.RESOLVED
+    assert second_signal.status == Signal.Status.RESOLVED
+    assert not ObservationMedia.objects.filter(observation_id=observation.id).exists()

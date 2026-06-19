@@ -21,7 +21,7 @@ def format_reporter_display_name(user: User) -> str | None:
 
 
 def reporter_display_name_for_signal(signal: Signal) -> str | None:
-    link = oldest_source_observation_link(signal)
+    link = created_from_source_observation_link(signal)
     if link is None:
         return None
     user = link.observation.submitted_by_membership.user

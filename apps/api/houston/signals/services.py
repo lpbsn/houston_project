@@ -251,7 +251,13 @@ def aggregate_candidate_into_signal(
     )
     from houston.observations.media_services import delete_all_observation_media
 
-    delete_all_observation_media(observation_id=observation.id)
+    has_active_created_from = Signal.objects.filter(
+        source_observation_links__observation_id=observation.id,
+        source_observation_links__link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+        status__in=ACTIVE_SIGNAL_STATUSES,
+    ).exists()
+    if not has_active_created_from:
+        delete_all_observation_media(observation_id=observation.id)
     return signal
 
 
@@ -1272,16 +1278,18 @@ def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
         return
 
     observation_id = link.observation_id
-    has_other_active = (
+    related_signals = list(
         Signal.objects.filter(
             source_observation_links__observation_id=observation_id,
             source_observation_links__link_type=SignalSourceObservation.LinkType.CREATED_FROM,
-            status__in=ACTIVE_SIGNAL_STATUSES,
         )
-        .exclude(id=signal.id)
-        .exists()
+        .select_for_update()
+        .order_by("id")
     )
-    if has_other_active:
+    active_count = sum(
+        1 for related in related_signals if related.status in ACTIVE_SIGNAL_STATUSES
+    )
+    if active_count > 1:
         return
     delete_all_observation_media(observation_id=observation_id)
     prefetched_links = getattr(signal, "created_from_source_links", None)
