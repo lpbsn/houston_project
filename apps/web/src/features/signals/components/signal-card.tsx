@@ -6,6 +6,8 @@ import { terrainFeedCardBaseClassName, terrainFeedInteractiveCardClassName } fro
 
 import {
   formatSignalRelativeTime,
+  formatSignalAggregationBadge,
+  formatSignalAggregationLabel,
   getPinnedSignalCardClassName,
   PINNED_SIGNAL_CARD_BANNER_LABEL,
   PINNED_SIGNAL_CARD_DETAIL_CTA,
@@ -76,7 +78,17 @@ function FeedSignalCard({ item, onSelect }: SignalCardProps) {
             {reporterName ? <span className="truncate">{reporterName}</span> : '\u00a0'}
           </span>
         </div>
-        <SignalStatusBadge status={item.status} variant="feed" />
+        <div className="flex shrink-0 items-center gap-2">
+          {item.aggregation_count > 0 ? (
+            <span
+              className="text-[11px] font-medium tabular-nums text-[#888]"
+              aria-label={formatSignalAggregationLabel(item.aggregation_count)}
+            >
+              {formatSignalAggregationBadge(item.aggregation_count)}
+            </span>
+          ) : null}
+          <SignalStatusBadge status={item.status} variant="feed" />
+        </div>
       </div>
     </article>
   )

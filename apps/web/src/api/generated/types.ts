@@ -2749,6 +2749,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             reporter_display_name?: string | null;
+            aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
             structured_summary: string;
             source_context: components["schemas"]["SourceContext"];
@@ -2787,6 +2788,7 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             reporter_display_name?: string | null;
+            aggregation_count: number;
             permission_hints: components["schemas"]["PermissionHints"];
         };
         SignalFeedResponse: {

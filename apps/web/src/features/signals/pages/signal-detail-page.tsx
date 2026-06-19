@@ -22,7 +22,7 @@ import {
 } from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
-import { formatSignalRelativeTime } from '../lib/signal-display'
+import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
 
 type SignalDetailPageProps = {
   signalId: string
@@ -103,8 +103,17 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <p className="mt-2 text-[11px] text-[#aaa]">
             il y a {formatSignalRelativeTime(signal.last_activity_at)}
           </p>
-          {reporterName ? (
-            <p className="mt-1 text-[11px] text-[#aaa]">Signalé par {reporterName}</p>
+          {(reporterName || signal.aggregation_count > 0) ? (
+            <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
+              <span className="min-w-0 truncate">
+                {reporterName ? `Signalé par ${reporterName}` : '\u00a0'}
+              </span>
+              {signal.aggregation_count > 0 ? (
+                <span className="shrink-0">
+                  {formatSignalAggregationLabel(signal.aggregation_count)}
+                </span>
+              ) : null}
+            </div>
           ) : null}
         </TerrainCard>
 

@@ -41,6 +41,7 @@ class SignalFeedItemSerializer(serializers.Serializer):
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
     reporter_display_name = serializers.CharField(allow_null=True, required=False)
+    aggregation_count = serializers.IntegerField()
     permission_hints = PermissionHintsSerializer()
 
 
@@ -116,6 +117,7 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "last_activity_at": signal.last_activity_at,
         "created_at": signal.created_at,
         "reporter_display_name": reporter_display_name_for_signal(signal),
+        "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
         "permission_hints": {
             "can_pin": can_pin_signal(membership, signal),
             "can_set_urgency": can_set_signal_urgency(membership, signal),

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 
 from houston.establishments.membership_scope import build_signal_feed_scope_q_v2
 from houston.establishments.models import EstablishmentMembership
@@ -49,6 +49,15 @@ _SIGNAL_LIST_PREFETCH = (
     _SIGNAL_CREATED_FROM_PREFETCH,
     _SIGNAL_REPORTER_PREFETCH,
 )
+_SIGNAL_AGGREGATION_COUNT_ANNOTATION = {
+    "aggregation_count": Count(
+        "source_observation_links",
+        filter=Q(
+            source_observation_links__link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
+        ),
+        distinct=True,
+    ),
+}
 
 
 def active_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[Signal]:
@@ -68,6 +77,7 @@ def feed_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[S
             establishment_id=establishment_id,
             status__in=FEED_SIGNAL_STATUSES,
         )
+        .annotate(**_SIGNAL_AGGREGATION_COUNT_ANNOTATION)
         .select_related(*_SIGNAL_LIST_SELECT_RELATED)
         .prefetch_related(*_SIGNAL_LIST_PREFETCH)
     )
