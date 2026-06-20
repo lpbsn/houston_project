@@ -1,6 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query'
 
-import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
+import {
+  invalidateActionMutationSurfaces,
+  invalidateEstablishmentActionQueries,
+  invalidateEstablishmentSignalQueries,
+} from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeInvalidateEvent } from '../types'
 
@@ -15,6 +19,10 @@ export function applyOperationalInvalidation(
 ) {
   if (event.subject_type === 'signal') {
     invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    return
+  }
+  if (event.subject_type === 'action') {
+    invalidateActionMutationSurfaces(queryClient, establishmentId)
   }
 }
 
@@ -23,4 +31,5 @@ export function applyOperationalReconnectInvalidation(
   establishmentId: string,
 ) {
   invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+  invalidateEstablishmentActionQueries(queryClient, establishmentId)
 }
