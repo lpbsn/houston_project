@@ -247,7 +247,10 @@ def _activate_template_if_has_tasks(template: ChecklistTemplate) -> ChecklistTem
     return template
 
 
-def _schedule_checklist_invalidation(*, template: ChecklistTemplate) -> None:
+def _schedule_checklist_invalidation(*, template: ChecklistTemplate | None) -> None:
+    if template is None:
+        return
+
     from houston.realtime.broadcast import schedule_establishment_invalidation
 
     schedule_establishment_invalidation(
@@ -592,31 +595,35 @@ def _execution_still_matches_assignment_schedule(
 def _cancel_assigned_executions_outside_assignment_schedule(
     *,
     assignment: ChecklistAssignment,
-) -> int:
+) -> list[ChecklistExecution]:
     now = timezone.now()
     assigned_executions = list(
         assignment.executions.filter(status=EXECUTION_STATUS_ASSIGNED).only(
             "id",
+            "establishment_id",
             "occurrence_date",
         ),
     )
-    to_cancel_ids = [
-        execution.id
+    executions_to_cancel = [
+        execution
         for execution in assigned_executions
         if not _execution_still_matches_assignment_schedule(
             execution=execution,
             assignment=assignment,
         )
     ]
-    if not to_cancel_ids:
-        return 0
+    if not executions_to_cancel:
+        return []
 
-    return ChecklistExecution.objects.filter(id__in=to_cancel_ids).update(
+    ChecklistExecution.objects.filter(
+        id__in=[execution.id for execution in executions_to_cancel],
+    ).update(
         status=EXECUTION_STATUS_CANCELED,
         canceled_at=now,
         last_activity_at=now,
         updated_at=now,
     )
+    return executions_to_cancel
 
 
 def _sync_assigned_executions_from_assignment(
@@ -733,7 +740,11 @@ def update_checklist_assignment(
         update_fields.append("recurrence_days")
 
     assignment.save(update_fields=update_fields)
-    _cancel_assigned_executions_outside_assignment_schedule(assignment=assignment)
+    cancelled_executions = _cancel_assigned_executions_outside_assignment_schedule(
+        assignment=assignment,
+    )
+    for execution in cancelled_executions:
+        _schedule_execution_invalidation(execution=execution, reason="execution.updated")
     _sync_assigned_executions_from_assignment(assignment=assignment)
     _schedule_checklist_invalidation(template=assignment.checklist_template)
     return assignment
@@ -762,11 +773,22 @@ def deactivate_checklist_assignment(
         return None
 
     now = timezone.now()
-    assignment.executions.filter(status=EXECUTION_STATUS_ASSIGNED).update(
-        status=EXECUTION_STATUS_CANCELED,
-        canceled_at=now,
-        last_activity_at=now,
+    executions_to_cancel = list(
+        assignment.executions.filter(status=EXECUTION_STATUS_ASSIGNED).only(
+            "id",
+            "establishment_id",
+        ),
     )
+    if executions_to_cancel:
+        ChecklistExecution.objects.filter(
+            id__in=[execution.id for execution in executions_to_cancel],
+        ).update(
+            status=EXECUTION_STATUS_CANCELED,
+            canceled_at=now,
+            last_activity_at=now,
+        )
+        for execution in executions_to_cancel:
+            _schedule_execution_invalidation(execution=execution, reason="execution.updated")
 
     assignment.status = ASSIGNMENT_STATUS_INACTIVE
     assignment.save(update_fields=["status", "updated_at"])

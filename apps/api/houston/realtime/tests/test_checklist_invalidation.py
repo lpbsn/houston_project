@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date, time
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from houston.checklists.constants import EXECUTION_SOURCE_ASSIGNMENT
 from houston.checklists.exceptions import ChecklistPermissionError
+from houston.checklists.materialization import materialize_execution_from_assignment
 from houston.checklists.models import ChecklistAssignment, ChecklistExecution, ChecklistTemplate
 from houston.checklists.services import (
     add_task_template,
@@ -16,7 +18,9 @@ from houston.checklists.services import (
     create_execution_from_template,
     create_observation_from_task,
     create_registered_checklist_template,
+    deactivate_checklist_assignment,
     mark_task_done,
+    update_checklist_assignment,
     update_checklist_template,
 )
 from houston.checklists.tests.conftest import add_task_template as add_task_fixture
@@ -370,6 +374,347 @@ def test_create_observation_from_task_emits_single_execution_updated(
             execution=execution,
             reason="execution.updated",
         )
+
+
+def test_deactivate_assignment_emits_execution_updated_for_cancelled_executions(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    assignment = ChecklistAssignment.objects.get(checklist_template=template)
+    execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        deactivated = deactivate_checklist_assignment(
+            assignment=assignment,
+            actor=owner_membership,
+        )
+
+        assert deactivated is not None
+        assert deactivated.status == ChecklistAssignment.Status.INACTIVE
+        assert mock_notify.call_count == 2
+        _assert_execution_invalidation(
+            mock_notify,
+            execution=execution,
+            reason="execution.updated",
+            call_index=0,
+        )
+        _assert_checklist_invalidation(mock_notify, template=template, call_index=1)
+
+
+def test_update_assignment_emits_execution_updated_for_cancelled_executions(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=date(2026, 6, 9),
+        end_date=date(2026, 6, 19),
+        start_at=time(10, 0),
+        end_at=time(11, 0),
+        recurrence_days=["monday", "tuesday", "thursday"],
+    )
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+    materialize_execution_from_assignment(
+        assignment=assignment,
+        occurrence_date=date(2026, 6, 9),
+    )
+    thursday_execution = materialize_execution_from_assignment(
+        assignment=assignment,
+        occurrence_date=date(2026, 6, 11),
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        update_checklist_assignment(
+            assignment=assignment,
+            actor=owner_membership,
+            recurrence_days=["monday", "tuesday"],
+        )
+
+        assert mock_notify.call_count == 2
+        _assert_execution_invalidation(
+            mock_notify,
+            execution=thursday_execution,
+            reason="execution.updated",
+            call_index=0,
+        )
+        _assert_checklist_invalidation(mock_notify, template=template, call_index=1)
+
+
+def test_update_assignment_skips_execution_updated_when_no_execution_cancelled(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    assignment = ChecklistAssignment.objects.get(checklist_template=template)
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        update_checklist_assignment(
+            assignment=assignment,
+            actor=owner_membership,
+            start_at=time(9, 0),
+            end_at=time(10, 0),
+        )
+
+        mock_notify.assert_called_once()
+        _assert_checklist_invalidation(mock_notify, template=template)
+
+
+def test_update_assignment_invalidation_not_emitted_on_permission_error(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        with pytest.raises(ChecklistPermissionError):
+            update_checklist_assignment(
+                assignment=assignment,
+                actor=staff_membership,
+                start_at=time(9, 0),
+                end_at=time(10, 0),
+            )
+
+        mock_notify.assert_not_called()
+
+
+def test_update_assignment_invalidation_not_emitted_on_transaction_rollback(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=date(2026, 6, 9),
+        end_date=date(2026, 6, 19),
+        start_at=time(10, 0),
+        end_at=time(11, 0),
+        recurrence_days=["monday", "tuesday", "thursday"],
+    )
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+    materialize_execution_from_assignment(
+        assignment=assignment,
+        occurrence_date=date(2026, 6, 11),
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        with pytest.raises(RuntimeError, match="force rollback"):
+            with transaction.atomic():
+                update_checklist_assignment(
+                    assignment=assignment,
+                    actor=owner_membership,
+                    recurrence_days=["monday", "tuesday"],
+                )
+                raise RuntimeError("force rollback")
+
+        mock_notify.assert_not_called()
+
+
+def test_deactivate_assignment_skips_execution_updated_when_no_execution_modified(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    assignment = ChecklistAssignment.objects.get(checklist_template=template)
+    execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
+    execution.status = ChecklistExecution.Status.DONE
+    execution.done_at = timezone.now()
+    execution.save(update_fields=["status", "done_at", "updated_at"])
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        deactivated = deactivate_checklist_assignment(
+            assignment=assignment,
+            actor=owner_membership,
+        )
+
+        assert deactivated is not None
+        assert deactivated.status == ChecklistAssignment.Status.INACTIVE
+        mock_notify.assert_called_once()
+        _assert_checklist_invalidation(mock_notify, template=template)
+
+
+def test_deactivate_assignment_without_template_skips_checklist_invalidation(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    execution = ChecklistExecution.objects.get(checklist_assignment=assignment)
+    assignment.checklist_template = None
+    assignment.status = ChecklistAssignment.Status.INACTIVE
+    assignment.save(update_fields=["checklist_template", "status", "updated_at"])
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        deactivated = deactivate_checklist_assignment(
+            assignment=assignment,
+            actor=owner_membership,
+        )
+
+        assert deactivated is not None
+        assert deactivated.status == ChecklistAssignment.Status.INACTIVE
+        mock_notify.assert_called_once()
+        _assert_execution_invalidation(
+            mock_notify,
+            execution=execution,
+            reason="execution.updated",
+        )
+
+
+def test_deactivate_assignment_invalidation_not_emitted_on_permission_error(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        with pytest.raises(ChecklistPermissionError):
+            deactivate_checklist_assignment(
+                assignment=assignment,
+                actor=staff_membership,
+            )
+
+        mock_notify.assert_not_called()
+
+
+def test_deactivate_assignment_invalidation_not_emitted_on_transaction_rollback(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        with pytest.raises(RuntimeError, match="force rollback"):
+            with transaction.atomic():
+                deactivate_checklist_assignment(
+                    assignment=assignment,
+                    actor=owner_membership,
+                )
+                raise RuntimeError("force rollback")
+
+        mock_notify.assert_not_called()
+
+
+def test_deactivate_assignment_without_template_and_without_executions_skips_invalidation(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    template = _active_template_with_task(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    today = timezone.now().date()
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=today,
+        end_date=today,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+    assignment.checklist_template = None
+    assignment.save(update_fields=["checklist_template", "updated_at"])
+    assignment_id = assignment.id
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        result = deactivate_checklist_assignment(
+            assignment=assignment,
+            actor=owner_membership,
+        )
+
+        assert result is None
+        assert not ChecklistAssignment.objects.filter(id=assignment_id).exists()
+        mock_notify.assert_not_called()
 
 
 def test_checklist_invalidation_not_emitted_on_permission_error(
