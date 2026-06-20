@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   clearAuthenticatedQueryCache,
   invalidateActionMutationSurfaces,
+  invalidateChecklistExecutionSurfaces,
   invalidateEstablishmentActionQueries,
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentSignalQueries,
@@ -161,5 +162,21 @@ describe('query-invalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['actions'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals'] })
+  })
+
+  it('invalidates checklist execution surfaces without global keys', () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    invalidateChecklistExecutionSurfaces(queryClient, 'est-1', 'exec-1')
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['checklists', 'execution-detail', 'est-1', 'exec-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['checklists', 'templates', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['actions', 'execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['checklists'] })
   })
 })

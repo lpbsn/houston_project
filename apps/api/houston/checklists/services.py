@@ -247,6 +247,28 @@ def _activate_template_if_has_tasks(template: ChecklistTemplate) -> ChecklistTem
     return template
 
 
+def _schedule_checklist_invalidation(*, template: ChecklistTemplate) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=template.establishment_id,
+        subject_type="checklist",
+        reason="checklist.updated",
+        entity_id=template.id,
+    )
+
+
+def _schedule_execution_invalidation(*, execution: ChecklistExecution, reason: str) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=execution.establishment_id,
+        subject_type="execution",
+        reason=reason,
+        entity_id=execution.id,
+    )
+
+
 @transaction.atomic
 def create_checklist_template(
     *,
@@ -255,6 +277,7 @@ def create_checklist_template(
     title: str,
     description: str = "",
     business_unit_id: uuid.UUID,
+    _emit_invalidation: bool = True,
 ) -> ChecklistTemplate:
     if not can_create_registered_template(actor):
         raise ChecklistPermissionError("Not allowed to create a checklist template.")
@@ -270,7 +293,7 @@ def create_checklist_template(
     ):
         raise ChecklistPermissionError("Not allowed to create a checklist template.")
 
-    return ChecklistTemplate.objects.create(
+    template = ChecklistTemplate.objects.create(
         establishment_id=establishment_id,
         created_by=actor,
         business_unit=business_unit,
@@ -278,6 +301,9 @@ def create_checklist_template(
         description=_normalize_description(description),
         status=TEMPLATE_STATUS_INACTIVE,
     )
+    if _emit_invalidation:
+        _schedule_checklist_invalidation(template=template)
+    return template
 
 
 @transaction.atomic
@@ -302,6 +328,7 @@ def update_checklist_template(
         template.description = _normalize_description(description)
         update_fields.append("description")
     template.save(update_fields=update_fields)
+    _schedule_checklist_invalidation(template=template)
     return template
 
 
@@ -327,6 +354,7 @@ def add_task_template(
         position=position,
     )
     _activate_template_if_has_tasks(template)
+    _schedule_checklist_invalidation(template=template)
     return task_template
 
 
@@ -349,6 +377,7 @@ def update_task_template(
         task_template.position = position
         update_fields.append("position")
     task_template.save(update_fields=update_fields)
+    _schedule_checklist_invalidation(template=template)
     return task_template
 
 
@@ -363,6 +392,7 @@ def delete_task_template(
 
     task_template.delete()
     _maybe_deactivate_template_without_tasks(template)
+    _schedule_checklist_invalidation(template=template)
 
 
 @transaction.atomic
@@ -391,7 +421,9 @@ def reorder_task_templates(
         task.position = position
         task.save(update_fields=["position", "updated_at"])
 
-    return list(template.task_templates.order_by("position", "created_at"))
+    reordered = list(template.task_templates.order_by("position", "created_at"))
+    _schedule_checklist_invalidation(template=template)
+    return reordered
 
 
 @transaction.atomic
@@ -409,6 +441,7 @@ def activate_checklist_template(
     _validate_active_template_has_tasks(template)
     template.status = TEMPLATE_STATUS_ACTIVE
     template.save(update_fields=["status", "updated_at"])
+    _schedule_checklist_invalidation(template=template)
     return template
 
 
@@ -426,6 +459,7 @@ def deactivate_checklist_template(
 
     template.status = TEMPLATE_STATUS_INACTIVE
     template.save(update_fields=["status", "updated_at"])
+    _schedule_checklist_invalidation(template=template)
     return template
 
 
@@ -450,6 +484,7 @@ def delete_checklist_template(
 ) -> None:
     if not can_delete_registered_template(actor, template):
         raise ChecklistPermissionError("Not allowed to delete this checklist template.")
+    _schedule_checklist_invalidation(template=template)
     _delete_registered_checklist_template(template=template)
 
 
@@ -527,12 +562,16 @@ def create_checklist_assignment(
     )
 
     first_occurrence_date = _first_occurrence_date(assignment)
-    materialize_execution_from_assignment(
+    execution_ids_before = set(assignment.executions.values_list("id", flat=True))
+    execution = materialize_execution_from_assignment(
         assignment=assignment,
         occurrence_date=first_occurrence_date,
     )
     assignment.last_materialized_at = timezone.now()
     assignment.save(update_fields=["last_materialized_at", "updated_at"])
+    _schedule_checklist_invalidation(template=template)
+    if execution.id not in execution_ids_before:
+        _schedule_execution_invalidation(execution=execution, reason="execution.created")
     return assignment
 
 
@@ -696,6 +735,7 @@ def update_checklist_assignment(
     assignment.save(update_fields=update_fields)
     _cancel_assigned_executions_outside_assignment_schedule(assignment=assignment)
     _sync_assigned_executions_from_assignment(assignment=assignment)
+    _schedule_checklist_invalidation(template=assignment.checklist_template)
     return assignment
 
 
@@ -715,8 +755,10 @@ def deactivate_checklist_assignment(
             active_execution_id=in_progress.id,
         )
 
+    template = assignment.checklist_template
     if not assignment.executions.exists():
         assignment.delete()
+        _schedule_checklist_invalidation(template=template)
         return None
 
     now = timezone.now()
@@ -728,6 +770,7 @@ def deactivate_checklist_assignment(
 
     assignment.status = ASSIGNMENT_STATUS_INACTIVE
     assignment.save(update_fields=["status", "updated_at"])
+    _schedule_checklist_invalidation(template=template)
     return assignment
 
 
@@ -854,6 +897,7 @@ def create_execution_from_template(
         last_activity_at=now,
     )
     _create_task_execution_snapshots(execution=execution, template=template)
+    _schedule_execution_invalidation(execution=execution, reason="execution.created")
     return execution
 
 
@@ -876,6 +920,7 @@ def create_registered_checklist_template(
         title=title,
         description=description,
         business_unit_id=business_unit_id,
+        _emit_invalidation=False,
     )
 
     for index, task_item in enumerate(tasks, start=1):
@@ -898,6 +943,7 @@ def create_registered_checklist_template(
             assigned_to_id=assigned_to_id,
             end_at=end_at,
         )
+    _schedule_checklist_invalidation(template=template)
     return template, execution
 
 
@@ -922,6 +968,7 @@ def cancel_checklist_execution(
     execution.save(
         update_fields=["status", "canceled_at", "last_activity_at", "updated_at"],
     )
+    _schedule_execution_invalidation(execution=execution, reason="execution.updated")
     return execution
 
 
@@ -974,6 +1021,7 @@ def mark_task_done(
     task_execution.save(update_fields=["status", "completed_at", "updated_at"])
     touch_checklist_execution_activity(execution=execution, at=now)
     _maybe_complete_execution(execution=execution, at=now)
+    _schedule_execution_invalidation(execution=execution, reason="execution.updated")
     return task_execution
 
 
@@ -1002,6 +1050,7 @@ def skip_task(
     )
     touch_checklist_execution_activity(execution=execution, at=now)
     _maybe_complete_execution(execution=execution, at=now)
+    _schedule_execution_invalidation(execution=execution, reason="execution.updated")
     return task_execution
 
 
@@ -1031,6 +1080,7 @@ def record_task_observation_created(
     )
     touch_checklist_execution_activity(execution=execution, at=now)
     _maybe_complete_execution(execution=execution, at=now)
+    _schedule_execution_invalidation(execution=execution, reason="execution.updated")
     return task_execution
 
 

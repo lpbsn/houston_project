@@ -69,3 +69,14 @@ export function invalidateChecklistMutationSurfaces(
   }
   invalidateEstablishmentActionQueries(queryClient, establishmentId)
 }
+
+export function invalidateChecklistExecutionSurfaces(
+  queryClient: QueryClient,
+  establishmentId: string,
+  executionId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['checklists', 'execution-detail', establishmentId, executionId],
+  })
+  invalidateChecklistMutationSurfaces(queryClient, establishmentId)
+}

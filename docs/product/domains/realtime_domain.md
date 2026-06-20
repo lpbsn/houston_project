@@ -1,8 +1,8 @@
 # Realtime Domain
 
 Status: authoritative
-Last reviewed: 2026-06-09
-Implementation status: partial foundation only (generic Signal/Action/Notification invalidation not implemented ; Chat V1 WS lives in `houston/chat/` — see Chat V1 section below)
+Last reviewed: 2026-06-20
+Implementation status: operational WebSocket invalidation implemented for Signal, Action, and Checklist (templates / assignments / executions) ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`. Comments, Notifications, and async observation-pipeline invalidation are not implemented.
 
 ## 1. Purpose
 
@@ -17,24 +17,25 @@ Realtime owns Houston's live transport boundary for keeping authorized operation
 - Backend-capable realtime foundation through Django Channels configuration and the `houston.realtime` app.
 - Authenticated connection boundary with backend-owned subscription authorization before any establishment, user, or detail scope is joined.
 - Minimal non-sensitive invalidation messages only.
-- Establishment-scoped feed invalidation direction.
-- User-scoped execution and notification invalidation direction.
-- Detail-scoped invalidation direction for Signal and Action views.
-- Candidate checklist and comment invalidation only when those surfaces are implemented.
+- Establishment-scoped operational invalidation for Signal feed/detail, Action execution-feed/detail, and Checklist templates / assignments / execution detail / execution feed.
+- Access/session messages for logout, establishment switch, and membership changes affecting bootstrap or workspace.
+- Comment and Notification invalidation not implemented.
 - Frontend query invalidation and REST refetch through TanStack Query after relevant realtime messages.
 - Safe reconnect behavior: refetch active authorized queries after reconnect or missed delivery.
 
 Current code truth:
 
 - Channels is installed and channel-layer configuration exists.
-- `houston.realtime` exists as a backend app.
-- Partial means infrastructure foundation only; **generic** Signal/Action/Notification realtime is not implemented yet.
-- Chat V1 WebSocket (routing, consumer, channel groups, frontend client) is implemented under `houston/chat/` — see Chat V1 section below.
-- No **generic** realtime-specific HTTP route is confirmed in `apps/api/schema.yml`.
+- `houston/realtime` provides operational WS consumer, ws-ticket REST, broadcast after commit, and access events.
+- Operational invalidation is emitted from domain services (Signal lifecycle, Action lifecycle, Checklist sync writers) — not from Celery materialization or observation async pipeline.
+- Chat V1 WebSocket is implemented under `houston/chat/` — see Chat V1 section below.
+- Operational REST ws-ticket: `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/` (see `apps/api/schema.yml`).
+- Operational WS path: `/ws/v1/establishments/{establishment_id}/realtime/`.
+- Frontend operational client: `apps/web/src/features/realtime/` (`OperationalRealtimeProvider`, `applyOperationalInvalidation`, `applyRealtimeAccessEvent`).
 
 ### Chat V1 realtime (separate contract — see [`chat_domain.md`](chat_domain.md))
 
-Chat V1 is implemented **before** generic Signal/Action/Notification realtime invalidation.
+Chat V1 is a **separate** WebSocket contract from operational invalidation (same ASGI stack, different path and protocol).
 
 - Chat uses its own WebSocket path, ticket auth, and message protocol under `houston/chat/`.
 - Chat V1 realtime is **messages-only** over WebSocket : `message.created`, `message.rejected`, plus targeted `conversation.access_revoked`.
@@ -54,9 +55,33 @@ Auth stack for Chat WebSocket :
 - **no** `AuthMiddlewareStack` ;
 - ticket REST one-time in first WS message (see [`authentication_charter.md`](../../architecture/authentication_charter.md)).
 
-### Global realtime invalidation (deferred — post Chat V1)
+### Operational WebSocket invalidation (implemented — separate from Chat)
 
-Future phases may add lightweight invalidation for Signal Feed, Execution Feed, notifications, and detail views. That work follows the rules in sections 3–4 below and must not reuse the Chat message protocol.
+Establishment-scoped invalidation uses `type: "invalidate"` with stable `subject_type` / `reason` pairs. Payload allowlist: `type`, `subject_type`, `reason`, `establishment_id`, `entity_id`, `occurred_at` — never resource bodies or snapshots.
+
+Server message types on the operational socket: `auth.ok` (handshake), `invalidate`, `access`.
+
+Access / session messages use `type: "access"` with reasons: `session.revoked`, `establishment.switched`, `membership.deactivated`, `membership.updated`.
+
+Implemented `invalidate` reasons (verify in domain `services.py` before extending):
+
+| `subject_type` | `reason` | `entity_id` | Emitted today | Frontend surfaces |
+|---|---|---|---|---|
+| `signal` | `signal.updated` | signal id | yes — sync lifecycle (pin, urgency, cancel, resolve, …) | signal feed, signal detail |
+| `signal` | `signal.created` | signal id | **no** — not emitted by current backend writers | — |
+| `action` | `action.created` | action id | yes | action execution-feed, action detail, signal queries |
+| `action` | `action.updated` | action id | yes | same as `action.created` |
+| `checklist` | `checklist.updated` | checklist template id | yes — sync template / assignment writers | templates, template detail, assignments, execution-detail prefix, execution feed |
+| `execution` | `execution.created` | checklist execution id | yes — sync execution creation | execution detail, checklist mutation surfaces, execution feed |
+| `execution` | `execution.updated` | checklist execution id | yes — cancel, task done/skip, observation-from-task handoff | same as `execution.created` |
+| `comment` | `comment.*` | — | **no** | — |
+| `notification` | — | — | **no** | — |
+
+`execution.updated` includes sync checklist task transitions that change execution detail and may start or complete an execution visible on the execution feed.
+
+Async checklist materialization (Celery / read-path) does **not** emit operational invalidation in current code.
+
+Observation async pipeline does **not** emit `signal.created` in current code.
 
 ## 3. Out of Scope
 
@@ -79,27 +104,31 @@ Future phases may add lightweight invalidation for Signal Feed, Execution Feed, 
 - Connection and subscription must be authenticated and backend-authorized.
 - Realtime stays establishment-, user-, or resource-scoped.
 - Payloads are minimal, technical, and non-sensitive.
-- `affected_query_keys` are optional invalidation hints only; frontend must not treat them as authorization or complete query truth.
+- `affected_query_keys` are not used in operational V1 payloads; frontend dispatches by `subject_type` / `reason` via shared invalidation helpers.
 - Full resource state must be fetched through normal authorized APIs.
 - Frontend must invalidate or refetch relevant queries after matching realtime messages.
 - Missed or dropped realtime delivery must not corrupt business state.
 - Reconnect should trigger safe refetch of relevant active queries.
 - Feed remains a backend-authorized projection; realtime only helps refresh it.
 - Terminal checklist executions (`done` / `canceled`) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
-- Notifications remain persisted attention messages; realtime only helps refresh their UI.
+- Notifications remain persisted attention messages; operational realtime notification refresh is not implemented.
 - Generic Realtime invalidation must not transport raw Chat messages.
 - Chat V1 message transport is defined only in [`chat_domain.md`](chat_domain.md) and is not a precedent for generic invalidation payloads.
 - Events remain immutable traces; realtime is selective transport around view-changing changes.
 
-Safe payload examples:
+Safe payload fields (operational `invalidate` — implemented allowlist):
 
-- `event_type`
+- `type` (`invalidate`)
 - `subject_type`
-- `subject_id`
+- `reason`
 - `establishment_id`
+- `entity_id`
 - `occurred_at`
+
+Candidate fields not used in operational V1 payloads:
+
 - `correlation_id`
-- candidate `affected_query_keys`
+- `affected_query_keys`
 
 Unsafe payload examples:
 
@@ -122,7 +151,7 @@ Unsafe payload examples:
 
 - `RealtimeChannel`
   - Authorized subscription target for invalidation and lightweight refresh hints.
-  - Implemented names are not validated today; current channel names below remain candidate.
+  - Operational groups: `realtime_est_{establishment_id}` (invalidation broadcast), plus session/membership groups for access events (see `houston/realtime/groups.py`).
 
 - `RealtimeMessage`
   - Minimal safe payload describing that something changed.
@@ -133,22 +162,19 @@ Unsafe payload examples:
   - TanStack Query owns the resulting server-state refresh.
 
 - `RealtimeConsumer`
-  - Candidate backend transport handler when websocket handling is implemented.
-  - Exact class names and modules are not validated in current code.
+  - Operational WebSocket handler: `houston/realtime/consumers.py` (`RealtimeConsumer`).
 
 ## 6. Lifecycle / Statuses
 
-Current code does not validate a concrete realtime lifecycle implementation.
+Frontend operational connection status (implemented in `apps/web/src/features/realtime/types.ts`):
 
-Candidate connection lifecycle:
-
+- `idle`
 - `connecting`
 - `connected`
-- `disconnected`
 - `reconnecting`
-- `unauthorized`
+- `disconnected`
 
-Candidate subscription lifecycle:
+Candidate subscription lifecycle (not exposed as a separate product model):
 
 - `requested`
 - `authorized`
@@ -177,19 +203,26 @@ Candidate message handling flow:
 
 ## 8. Events
 
-No implemented realtime event contract is confirmed in current code or `apps/api/schema.yml`.
+Operational WebSocket contract is implemented in `houston/realtime/` (payload builders in `ws_payloads.py`, emission via `broadcast.schedule_establishment_invalidation` / `schedule_access_event` after commit).
 
-Realtime should consume selected domain/application events and publish transport messages only for view-changing changes. It should not become the primary business-event catalog.
+Domain services publish transport messages for view-changing sync writes. Realtime is not the primary business-event catalog.
 
-Candidate source event families for invalidation:
+Source domains with invalidation emission today:
 
-- Signal changes such as create, aggregate, status, urgency, pin, or domain updates
-- Action changes such as create, assign, accept, pending validation, validate, reopen, or cancel
-- Checklist execution changes such as assign, progress, done, or cancel
-- Comment-added changes on authorized Signal or Action context
-- Notification create, read, or archive changes for the authorized recipient
+- Signal — sync lifecycle → `signal.updated`
+- Action — create and lifecycle → `action.created`, `action.updated`
+- Checklist — sync template / assignment / execution writers → `checklist.updated`, `execution.created`, `execution.updated`
 
-Candidate transport-level events:
+Not emitted today:
+
+- `signal.created` (observation async pipeline)
+- Comment create / resolve on Signal or Action context
+- Notification create / read / archive
+- Checklist executions created by async materialization only
+
+See **Operational WebSocket invalidation** under section 2 for the reason matrix.
+
+Candidate transport-level events (internal / not product WS types):
 
 - `RealtimeSubscriptionAccepted`
 - `RealtimeSubscriptionRejected`
@@ -210,15 +243,28 @@ Current WebSocket/channel truth is current backend code.
 - App : `houston/chat/` (consumer, routing, ws-ticket REST)
 - Not part of generic invalidation channels below
 
-Implemented HTTP routes confirmed today (generic realtime):
+**Operational WebSocket** (implemented — invalidation/refetch only):
 
-- none for realtime
+- Path : `/ws/v1/establishments/{establishment_id}/realtime/`
+- REST ticket : `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/`
+- App : `houston/realtime/` (consumer, routing, ws-ticket, broadcast)
+- Channel group (invalidation) : `realtime_est_{establishment_id}`
 
-Implemented channels confirmed today (generic realtime):
+Implemented HTTP routes (operational realtime):
 
-- none
+- `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/`
 
-Candidate channels only:
+Implemented WebSocket routes (operational realtime):
+
+- `/ws/v1/establishments/{establishment_id}/realtime/`
+
+Not implemented (operational):
+
+- Notification-scoped invalidation channels
+- Comment-scoped invalidation channels
+- Per-resource detail channels (detail refresh uses establishment-scoped invalidation + TanStack Query prefixes)
+
+Candidate channels (not implemented — historical naming):
 
 - `EstablishmentFeedChannel`
 - `UserExecutionChannel`
@@ -228,38 +274,37 @@ Candidate channels only:
 - candidate `ChecklistExecutionChannel`
 - candidate `CommentContextChannel`
 
-Current implementation note (generic realtime):
+Current implementation note (operational realtime):
 
-- Backend settings include Channels and a channel layer.
-- `apps/api/config/asgi.py` exposes HTTP and **Chat V1 WebSocket** (`AllowedHostsOriginValidator` + `houston/chat/` routing).
-- **Generic** invalidation websocket routes, consumers, and channel groups are not implemented in `houston/realtime/`.
+- `apps/api/config/asgi.py` merges Chat V1 and operational realtime WebSocket routing (`AllowedHostsOriginValidator` + `URLRouter`).
+- Invalidation is establishment-broadcast; access events may target session or membership groups.
 
 ## 10. Frontend Expectations
 
 - Frontend treats realtime messages as invalidation/refetch hints, not authoritative state.
 - TanStack Query owns server state.
 - On relevant message, invalidate or refetch matching query keys and update UI from API responses.
-- On reconnect, refetch active feed, detail, execution, and notification queries that are still visible and authorized.
 - Frontend must not treat realtime payloads as complete resource state.
 - Frontend must not render sensitive business content directly from realtime payloads.
 - Frontend must not infer authorization from channel names or local subscription state.
 - Feed order, insertion, removal, and filtering remain backend-owned through Feed refetch.
-- Open Signal and Action detail views should refetch when matching subject messages arrive.
-- Notification Center should refetch when matching recipient-scoped notification messages arrive.
-- Comment surfaces should refetch only their authorized parent context when later implemented.
-- Checklist execution surfaces should refetch through their owning APIs when later implemented.
+- Open Signal and Action detail views refetch when matching operational invalidation messages arrive.
+- On reconnect, refetch active signal, action, and checklist queries that are still visible and authorized (operational provider).
+- Notification Center refetch via realtime not implemented.
+- Comment surfaces refetch via operational realtime not implemented.
+- Checklist execution surfaces refetch via operational `execution` / `checklist` invalidation (implemented).
 - Chat V1 follows [`chat_domain.md`](chat_domain.md) ; do not apply generic invalidation-only rules to Chat message WebSocket delivery.
-- Global Signal/Action/Notification realtime (when implemented) follows invalidation/refetch rules in this document.
+- Operational Signal / Action / Checklist invalidation follows invalidation/refetch rules in this document.
 
 Current code truth:
 
-- Chat V1 frontend WebSocket client exists in `apps/web/src/features/chat/` (`useChatWebSocket`, `ChatRealtimeProvider`).
-- No **generic** Signal/Action/Notification realtime query invalidation hook is confirmed in current frontend code.
+- Chat V1 frontend WebSocket client: `apps/web/src/features/chat/` (`useChatWebSocket`, `ChatRealtimeProvider`).
+- Operational frontend WebSocket client: `apps/web/src/features/realtime/` (`useOperationalRealtimeWebSocket`, `OperationalRealtimeProvider`, `applyOperationalInvalidation`, `applyRealtimeAccessEvent`).
 
 ## 11. AI Agent Notes
 
-- Inspect current backend realtime code before claiming consumers, routes, groups, or channel names are implemented.
-- Inspect `apps/api/schema.yml` before claiming any realtime HTTP route exists.
+- Inspect `houston/realtime/` and domain `services.py` emitters before claiming which `reason` values are live.
+- Inspect `apps/api/schema.yml` for the operational ws-ticket route before claiming HTTP surface.
 - Inspect Feed documentation before changing feed invalidation behavior.
 - Inspect Notification documentation before changing notification refresh behavior.
 - Inspect Signal, Action, and Checklist documentation before changing detail invalidation triggers.
@@ -272,5 +317,6 @@ Current code truth:
 - Do not send Observation text/body, comment bodies, media links, signed media links, credentials, or AI request/model-input content in **generic** realtime payloads.
 - Do not send chat message bodies outside the Chat V1 WebSocket protocol defined in [`chat_domain.md`](chat_domain.md).
 - Do not implement client-side lifecycle mutation based only on realtime payloads.
-- Do not claim candidate channels are implemented without code proof.
-- When realtime transport is added later, update backend authorization, frontend invalidation hooks, tests, docs, and this document together.
+- Do not claim candidate channel names (section 9) are implemented without code proof.
+- Do not claim `signal.created`, comment, or notification invalidation is live unless domain emitters exist.
+- When adding new operational invalidation, update domain services, frontend invalidation helpers, tests, and this document together.
