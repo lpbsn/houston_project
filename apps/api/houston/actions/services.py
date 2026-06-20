@@ -224,6 +224,7 @@ def create_action(
         if signal.is_pinned:
             unpin_signal(signal=signal)
 
+        _schedule_action_invalidation(action=action, reason="action.created")
         return action
 
     responsible_business_unit = resolve_responsible_business_unit(
@@ -251,6 +252,7 @@ def create_action(
         last_activity_at=now,
     )
     _replace_action_assignees(action=action, memberships=assignees)
+    _schedule_action_invalidation(action=action, reason="action.created")
     return action
 
 
@@ -291,6 +293,7 @@ def accept_action(
             "updated_at",
         ]
     )
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -316,6 +319,7 @@ def mark_action_done(*, action_id: uuid.UUID) -> Action:
         if action.signal_id is not None:
             signal = Signal.objects.get(pk=action.signal_id)
             touch_signal_activity(signal=signal)
+        _schedule_action_invalidation(action=action, reason="action.updated")
         return action
 
     action.status = Action.Status.DONE
@@ -329,6 +333,7 @@ def mark_action_done(*, action_id: uuid.UUID) -> Action:
     )
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -344,6 +349,7 @@ def validate_action(*, action_id: uuid.UUID) -> Action:
     action.save(update_fields=["status", "validated_at", "last_activity_at", "updated_at"])
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -371,6 +377,7 @@ def reopen_action(*, action_id: uuid.UUID) -> Action:
             signal.status = Signal.Status.IN_PROGRESS
             touch_signal_activity(signal=signal)
             signal.save(update_fields=["status", "last_activity_at", "updated_at"])
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -384,6 +391,7 @@ def cancel_action(*, action_id: uuid.UUID) -> Action:
     action.save(update_fields=["status", "last_activity_at", "updated_at"])
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -416,6 +424,7 @@ def reassign_action(
 
     touch_action_activity(action=action)
     action.save(update_fields=update_fields)
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -427,4 +436,16 @@ def update_action_due_at(*, action_id: uuid.UUID, due_at) -> Action:
     action.due_at = due_at
     touch_action_activity(action=action)
     action.save(update_fields=["due_at", "last_activity_at", "updated_at"])
+    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
+
+
+def _schedule_action_invalidation(*, action: Action, reason: str) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=action.establishment_id,
+        subject_type="action",
+        reason=reason,
+        entity_id=action.id,
+    )
