@@ -2,7 +2,10 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import {
   invalidateActionMutationSurfaces,
+  invalidateChecklistExecutionSurfaces,
+  invalidateChecklistMutationSurfaces,
   invalidateEstablishmentActionQueries,
+  invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentSignalQueries,
 } from '@/lib/query-invalidation'
 
@@ -23,6 +26,14 @@ export function applyOperationalInvalidation(
   }
   if (event.subject_type === 'action') {
     invalidateActionMutationSurfaces(queryClient, establishmentId)
+    return
+  }
+  if (event.subject_type === 'checklist') {
+    invalidateChecklistMutationSurfaces(queryClient, establishmentId, event.entity_id)
+    return
+  }
+  if (event.subject_type === 'execution') {
+    invalidateChecklistExecutionSurfaces(queryClient, establishmentId, event.entity_id)
   }
 }
 
@@ -32,4 +43,5 @@ export function applyOperationalReconnectInvalidation(
 ) {
   invalidateEstablishmentSignalQueries(queryClient, establishmentId)
   invalidateEstablishmentActionQueries(queryClient, establishmentId)
+  invalidateEstablishmentChecklistQueries(queryClient, establishmentId)
 }

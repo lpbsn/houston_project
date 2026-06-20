@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  invalidateChecklistExecutionSurfaces,
   invalidateChecklistMutationSurfaces,
 } from '@/lib/query-invalidation'
 
@@ -50,17 +51,6 @@ function invalidateChecklistSurfaces(
   templateId?: string,
 ) {
   invalidateChecklistMutationSurfaces(queryClient, establishmentId, templateId)
-}
-
-function invalidateChecklistExecutionSurfaces(
-  queryClient: ReturnType<typeof useQueryClient>,
-  establishmentId: string,
-  executionId: string,
-) {
-  void queryClient.invalidateQueries({
-    queryKey: checklistsQueryKeys.executionDetail(establishmentId, executionId),
-  })
-  invalidateChecklistMutationSurfaces(queryClient, establishmentId)
 }
 
 export function useChecklistTemplatesQuery(
