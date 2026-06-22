@@ -326,8 +326,9 @@ Checklists among themselves : `last_activity_at desc`. Page merge : checklists f
 - Approbation modèles, marketplace, commentaires checklist, preuve photo obligatoire
 - Validation manager à la complétion
 - RRULE avancé, notifications checklist (Phase 6+)
-- Realtime checklist (deferred)
 - Historique UI des exécutions terminées (accès par ID seulement aujourd'hui)
+
+**Operational realtime (implemented — not hors MVP):** checklist template/assignment and execution surfaces refresh via establishment-scoped WebSocket **invalidation** (`checklist.updated`, `execution.created`, `execution.updated`) emitted from `checklists/services.py` and `materialization.py`. Invalidation/refetch only — Checklist does not own realtime transport. Authoritative contract: [`realtime_domain.md`](realtime_domain.md). Catalogue entries: [`event_catalogue_v0.1.md`](../event_catalogue_v0.1.md).
 
 ## 7. Core Invariants
 

@@ -30,11 +30,11 @@ V1 supports:
 - Display comments from oldest at the top to newest at the bottom.
 - Mention active users of the same establishment with `@`.
 - Display inherited Signal comments inside linked Actions.
+- Live refresh of comment lists via operational WebSocket **invalidation** (authorized refetch after `comment.*` messages — no comment body on the socket). See [`realtime_domain.md`](realtime_domain.md) and §9.
 
 V1 does not support:
 
 - Chat behavior.
-- Realtime updates.
 - Notifications.
 - Mention notifications.
 - Push notifications.
@@ -274,8 +274,6 @@ The following are explicitly out of scope:
 
 - notifications,
 - mention notifications,
-- realtime invalidation,
-- WebSocket updates,
 - unread state,
 - chat integration,
 - AI analysis,
@@ -285,6 +283,8 @@ The following are explicitly out of scope:
 - moderation workflow,
 - audit export,
 - advanced pagination unless needed by implementation constraints.
+
+**Operational realtime (in scope — not a non-goal):** comment list refresh via establishment-scoped WebSocket **invalidation** is implemented. Backend emits `comment.*` reasons from `comments/services.py` after sync writes; the frontend refetches authorized comment queries — no comment body over the socket. Authoritative transport contract: [`realtime_domain.md`](realtime_domain.md). Business-fact and notification boundaries: [`event_catalogue_v0.1.md`](../event_catalogue_v0.1.md).
 
 ## 10. Acceptance criteria
 
@@ -298,7 +298,7 @@ The following are explicitly out of scope:
 - Signal comments do not modify Signal classification or lifecycle.
 - Mentions are limited to active memberships of the same establishment.
 - Invalid mentions are rejected.
-- No notification, realtime, or chat behavior is introduced.
+- No notification or chat behavior is introduced; comment lists refresh via operational realtime invalidation (see §9).
 
 ### Action comments
 
@@ -311,7 +311,7 @@ The following are explicitly out of scope:
 - Action comments do not modify Action lifecycle or assignment.
 - Mentions are limited to active memberships of the same establishment.
 - Invalid mentions are rejected.
-- No notification, realtime, or chat behavior is introduced.
+- No notification or chat behavior is introduced; comment lists refresh via operational realtime invalidation (see §9).
 
 ## 11. Implementation guidance
 
