@@ -136,6 +136,54 @@ def test_create_linked_action_emits_action_created_after_commit():
         }
 
 
+def test_create_linked_action_emits_single_invalidation_for_unpinned_signal():
+    """Document contract: unpinned linked create emits action.created only (no signal.updated)."""
+    owner, staff, hotel, maintenance, electricite = _owner_staff_maintenance()
+    signal = _linked_signal(
+        owner=owner,
+        hotel=hotel,
+        maintenance=maintenance,
+        electricite=electricite,
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        _create_linked_action(owner=owner, staff=staff, signal=signal)
+
+        mock_notify.assert_called_once()
+        call = mock_notify.call_args.kwargs
+        assert call["subject_type"] == "action"
+        assert call["reason"] == "action.created"
+
+
+def test_cancel_last_linked_action_reopen_refreshes_via_action_updated_only():
+    """Signal reopen side-effect is covered by action.updated for frontend refetch."""
+    owner, staff, hotel, maintenance, electricite = _owner_staff_maintenance()
+    signal = _linked_signal(
+        owner=owner,
+        hotel=hotel,
+        maintenance=maintenance,
+        electricite=electricite,
+    )
+    action = _create_linked_action(owner=owner, staff=staff, signal=signal)
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        cancel_action(action_id=action.id)
+
+        mock_notify.assert_called_once()
+        _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
+        signal_calls = [
+            call.kwargs
+            for call in mock_notify.call_args_list
+            if call.kwargs.get("subject_type") == "signal"
+        ]
+        assert signal_calls == []
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.OPEN
+
+
 def test_accept_action_emits_action_updated_after_commit():
     owner, staff, _, maintenance, _ = _owner_staff_maintenance()
     action = _create_free_action(owner=owner, staff=staff, maintenance=maintenance)

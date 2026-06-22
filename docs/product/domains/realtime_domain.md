@@ -1,8 +1,8 @@
 # Realtime Domain
 
 Status: authoritative
-Last reviewed: 2026-06-20
-Implementation status: operational WebSocket invalidation implemented for Signal, Action, and Checklist (templates / assignments / executions) ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`. Comments, Notifications, and async observation-pipeline invalidation are not implemented.
+Last reviewed: 2026-06-22
+Implementation status: operational WebSocket invalidation implemented for Signal, Action, Checklist (templates / assignments / executions), Comment, and async observation-pipeline downstream invalidation ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`. Notification invalidation is not implemented.
 
 ## 1. Purpose
 
@@ -19,7 +19,7 @@ Realtime owns Houston's live transport boundary for keeping authorized operation
 - Minimal non-sensitive invalidation messages only.
 - Establishment-scoped operational invalidation for Signal feed/detail, Action execution-feed/detail, and Checklist templates / assignments / execution detail / execution feed.
 - Access/session messages for logout, establishment switch, and membership changes affecting bootstrap or workspace.
-- Comment and Notification invalidation not implemented.
+- Comment invalidation implemented ; Notification invalidation not implemented.
 - Frontend query invalidation and REST refetch through TanStack Query after relevant realtime messages.
 - Safe reconnect behavior: refetch active authorized queries after reconnect or missed delivery.
 
@@ -27,7 +27,7 @@ Current code truth:
 
 - Channels is installed and channel-layer configuration exists.
 - `houston/realtime` provides operational WS consumer, ws-ticket REST, broadcast after commit, and access events.
-- Operational invalidation is emitted from domain services (Signal lifecycle, Action lifecycle, Checklist sync writers) — not from Celery materialization or observation async pipeline.
+- Operational invalidation is emitted from domain services (Signal lifecycle, Action lifecycle, Checklist sync writers, Comment sync writers) and async downstream paths (observation pipeline → `signal.created` / `signal.updated` ; checklist materialization → `execution.created`).
 - Chat V1 WebSocket is implemented under `houston/chat/` — see Chat V1 section below.
 - Operational REST ws-ticket: `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/` (see `apps/api/schema.yml`).
 - Operational WS path: `/ws/v1/establishments/{establishment_id}/realtime/`.
@@ -218,6 +218,14 @@ Not emitted today:
 
 - Notification create / read / archive
 
+### Action lifecycle side-effects on Signal (refetch contract)
+
+When an Action lifecycle write also mutates a linked Signal (for example `OPEN → IN_PROGRESS` on linked action create, signal reopen after last linked action cancel, or `RESOLVED → IN_PROGRESS` on action reopen), the backend may emit only `action.created` or `action.updated` — not a separate `signal.updated`.
+
+Frontend refetch still covers Signal feed/detail because `action.created` / `action.updated` dispatch through `invalidateActionMutationSurfaces`, which also calls `invalidateEstablishmentSignalQueries`.
+
+Direct `signal.updated` / `signal.created` emissions remain owned by `signals/services.py` writers and the observation async pipeline.
+
 See **Operational WebSocket invalidation** under section 2 for the reason matrix.
 
 Candidate transport-level events (internal / not product WS types):
@@ -286,9 +294,9 @@ Current implementation note (operational realtime):
 - Frontend must not infer authorization from channel names or local subscription state.
 - Feed order, insertion, removal, and filtering remain backend-owned through Feed refetch.
 - Open Signal and Action detail views refetch when matching operational invalidation messages arrive.
-- On reconnect, refetch active signal, action, and checklist queries that are still visible and authorized (operational provider).
+- On reconnect, refetch active signal, action, and checklist queries that are still visible and authorized (operational provider). Comment lists are not refetched on reconnect — a known limitation ; live comment threads still refresh via `comment.*` invalidation during the session.
 - Notification Center refetch via realtime not implemented.
-- Comment surfaces refetch via operational realtime not implemented.
+- Comment surfaces refetch via operational `comment` invalidation (implemented).
 - Checklist execution surfaces refetch via operational `execution` / `checklist` invalidation (implemented).
 - Chat V1 follows [`chat_domain.md`](chat_domain.md) ; do not apply generic invalidation-only rules to Chat message WebSocket delivery.
 - Operational Signal / Action / Checklist invalidation follows invalidation/refetch rules in this document.
@@ -315,5 +323,5 @@ Current code truth:
 - Do not send chat message bodies outside the Chat V1 WebSocket protocol defined in [`chat_domain.md`](chat_domain.md).
 - Do not implement client-side lifecycle mutation based only on realtime payloads.
 - Do not claim candidate channel names (section 9) are implemented without code proof.
-- Do not claim `signal.created`, comment, or notification invalidation is live unless domain emitters exist.
+- Do not claim notification invalidation is live unless domain emitters exist.
 - When adding new operational invalidation, update domain services, frontend invalidation helpers, tests, and this document together.
