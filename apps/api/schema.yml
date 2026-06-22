@@ -3742,6 +3742,173 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/notifications/:
+    get:
+      operationId: v1_establishments_notifications_retrieve
+      description: Lists in-app notifications for the authenticated recipient.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - archived
+          - read
+          - unread
+      tags:
+      - notifications
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/notifications/{notification_id}/archive/:
+    post:
+      operationId: v1_establishments_notifications_archive_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: notification_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/notifications/{notification_id}/mark-read/:
+    post:
+      operationId: v1_establishments_notifications_mark_read_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: notification_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/notifications/mark-all-read/:
+    post:
+      operationId: v1_establishments_notifications_mark_all_read_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkAllNotificationsReadResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/observation-media/{media_id}/preview/:
     get:
       operationId: v1_establishments_observation_media_preview_retrieve
@@ -7439,6 +7606,13 @@ components:
       required:
       - identifier
       - password
+    MarkAllNotificationsReadResponse:
+      type: object
+      properties:
+        updated_count:
+          type: integer
+      required:
+      - updated_count
     MarkReadyResponse:
       type: object
       properties:
@@ -7527,6 +7701,113 @@ components:
       - email
       - id
       - username
+    NotificationActor:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+      required:
+      - display_name
+      - membership_id
+    NotificationItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_key:
+          type: string
+        subject_type:
+          $ref: '#/components/schemas/SubjectTypeEnum'
+        subject_id:
+          type: string
+          format: uuid
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        status:
+          $ref: '#/components/schemas/NotificationItemStatusEnum'
+        title:
+          type: string
+        body:
+          type: string
+        actor:
+          allOf:
+          - $ref: '#/components/schemas/NotificationActor'
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        archived_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - actor
+      - archived_at
+      - body
+      - created_at
+      - event_key
+      - id
+      - priority
+      - read_at
+      - status
+      - subject_id
+      - subject_type
+      - title
+    NotificationItemStatusEnum:
+      enum:
+      - unread
+      - read
+      - archived
+      type: string
+      description: |-
+        * `unread` - Unread
+        * `read` - Read
+        * `archived` - Archived
+    NotificationListAppliedFilters:
+      type: object
+      properties:
+        status:
+          type: string
+          nullable: true
+      required:
+      - status
+    NotificationListCounts:
+      type: object
+      properties:
+        unread:
+          type: integer
+      required:
+      - unread
+    NotificationListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+        applied_filters:
+          $ref: '#/components/schemas/NotificationListAppliedFilters'
+        counts:
+          $ref: '#/components/schemas/NotificationListCounts'
+      required:
+      - applied_filters
+      - counts
+      - has_more
+      - items
+      - next_cursor
     ObservationProcessingSignalSummary:
       type: object
       properties:
@@ -8033,6 +8314,18 @@ components:
       - can_pin
       - can_resolve
       - can_set_urgency
+    PriorityEnum:
+      enum:
+      - info
+      - action_required
+      - urgent
+      - system
+      type: string
+      description: |-
+        * `info` - Info
+        * `action_required` - Action required
+        * `urgent` - Urgent
+        * `system` - System
     ProposalActivitySubjectItem:
       type: object
       properties:
@@ -8538,14 +8831,18 @@ components:
       - media_count
       - reporter_display_name
       - submitted_at
-    StatusEnum:
+    SubjectTypeEnum:
       enum:
-      - active
-      - invited
+      - action
+      - checklist_execution
+      - comment
+      - signal
       type: string
       description: |-
-        * `active` - active
-        * `invited` - invited
+        * `action` - Action
+        * `checklist_execution` - Checklist execution
+        * `comment` - Comment
+        * `signal` - Signal
     SwitchEstablishmentRequest:
       type: object
       properties:
@@ -8638,10 +8935,18 @@ components:
         display_name:
           type: string
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/WorkspaceSummaryDirectorStatusEnum'
       required:
       - display_name
       - status
+    WorkspaceSummaryDirectorStatusEnum:
+      enum:
+      - active
+      - invited
+      type: string
+      description: |-
+        * `active` - active
+        * `invited` - invited
     WorkspaceSummaryEstablishment:
       type: object
       properties:
