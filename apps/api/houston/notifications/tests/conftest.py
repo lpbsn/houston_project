@@ -3,10 +3,11 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from rest_framework.test import APIClient
+
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.testing.auth import auth_headers, build_api_membership, login
-from rest_framework.test import APIClient
 
 __all__ = ["api_client", "auth_headers", "build_api_membership", "login"]
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import pytest
+
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
+from houston.notifications.selectors import notifications_queryset_for_recipient
 from houston.notifications.tests.conftest import (
     NOTIFICATION_RESPONSE_ALLOWLIST,
     create_test_notification,
@@ -178,3 +180,67 @@ def test_invalid_status_filter_returns_400(api_client):
 
     assert response.status_code == 400
     assert response.json()["code"] == "validation_error"
+
+
+def test_list_notifications_cursor_pagination(api_client):
+    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    create_test_notification(recipient=recipient, title="Third")
+    create_test_notification(recipient=recipient, title="Second")
+    create_test_notification(recipient=recipient, title="First")
+    ordered = list(notifications_queryset_for_recipient(recipient))
+    assert len(ordered) == 3
+    token = login(api_client, user=recipient.user)
+
+    page_one = api_client.get(
+        notifications_url(recipient.establishment_id, "?page_size=2"),
+        **auth_headers(token),
+    )
+    assert page_one.status_code == 200
+    body_one = page_one.json()
+    assert body_one["has_more"] is True
+    assert body_one["next_cursor"] is not None
+    assert "+" not in body_one["next_cursor"]
+    assert "/" not in body_one["next_cursor"]
+    assert "=" not in body_one["next_cursor"]
+    assert [item["id"] for item in body_one["items"]] == [
+        str(ordered[0].id),
+        str(ordered[1].id),
+    ]
+
+    page_two = api_client.get(
+        notifications_url(
+            recipient.establishment_id,
+            f"?page_size=2&cursor={body_one['next_cursor']}",
+        ),
+        **auth_headers(token),
+    )
+    assert page_two.status_code == 200
+    body_two = page_two.json()
+    assert body_two["has_more"] is False
+    assert [item["id"] for item in body_two["items"]] == [str(ordered[2].id)]
+
+
+def test_cursor_status_filter_mismatch_returns_400(api_client):
+    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    create_test_notification(recipient=recipient, status=Notification.Status.UNREAD)
+    create_test_notification(recipient=recipient, status=Notification.Status.UNREAD)
+    token = login(api_client, user=recipient.user)
+
+    unread_page = api_client.get(
+        notifications_url(recipient.establishment_id, "?status=unread&page_size=1"),
+        **auth_headers(token),
+    )
+    assert unread_page.status_code == 200
+    cursor = unread_page.json()["next_cursor"]
+    assert cursor is not None
+
+    mismatched = api_client.get(
+        notifications_url(
+            recipient.establishment_id,
+            f"?status=read&cursor={cursor}",
+        ),
+        **auth_headers(token),
+    )
+
+    assert mismatched.status_code == 400
+    assert mismatched.json()["code"] == "validation_error"

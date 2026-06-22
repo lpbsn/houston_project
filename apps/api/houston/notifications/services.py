@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.permissions import _is_valid_membership
 from houston.notifications.constants import (
     DEDUPE_WINDOW,
     LOT1_EVENT_KEYS,
@@ -59,6 +60,12 @@ def create_in_app_notification(
     if recipient_membership.establishment_id != establishment_id:
         raise NotificationValidationError("Invalid recipient membership.")
 
+    if actor_membership is not None and (
+        actor_membership.establishment_id != establishment_id
+        or not _is_valid_membership(actor_membership)
+    ):
+        raise NotificationValidationError("Invalid actor membership.")
+
     if (
         exclude_actor_if_recipient
         and actor_membership is not None
@@ -79,11 +86,17 @@ def create_in_app_notification(
         subject_type=subject_type,
         subject_id=subject_id,
     )
-    if _is_duplicate_notification(
-        recipient_membership_id=recipient_membership.id,
-        dedupe_key=effective_dedupe_key,
-    ):
-        return None
+
+    if effective_dedupe_key:
+        EstablishmentMembership.objects.select_for_update().get(
+            pk=recipient_membership.pk,
+            establishment_id=establishment_id,
+        )
+        if _is_duplicate_notification(
+            recipient_membership_id=recipient_membership.id,
+            dedupe_key=effective_dedupe_key,
+        ):
+            return None
 
     title, body = render_notification_copy(
         event_key,

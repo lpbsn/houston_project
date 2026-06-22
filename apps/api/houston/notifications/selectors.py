@@ -86,12 +86,14 @@ def build_notifications_page(
         status=status,
     )
 
-    cursor_values = decode_notification_cursor(cursor)
+    cursor_values = decode_notification_cursor(
+        cursor,
+        expected_status_filter=applied_status,
+    )
     if cursor_values is not None:
-        cursor_created_at, cursor_id = cursor_values
         queryset = queryset.filter(
-            Q(created_at__lt=cursor_created_at)
-            | Q(created_at=cursor_created_at, id__lt=cursor_id)
+            Q(created_at__lt=cursor_values.created_at)
+            | Q(created_at=cursor_values.created_at, id__lt=cursor_values.notification_id)
         )
 
     rows = list(queryset[: page_size + 1])
@@ -104,6 +106,7 @@ def build_notifications_page(
         next_cursor = encode_notification_cursor(
             created_at=last.created_at,
             notification_id=last.id,
+            status_filter=applied_status,
         )
 
     return NotificationsPage(

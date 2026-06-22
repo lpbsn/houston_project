@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.notifications.selectors import (
@@ -71,3 +72,33 @@ def test_count_unread_notifications():
     create_test_notification(recipient=recipient, status=Notification.Status.ARCHIVED)
 
     assert count_unread_notifications(membership=recipient) == 1
+
+
+def test_build_notifications_page_cursor_pagination():
+    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    create_test_notification(recipient=recipient, title="Third")
+    create_test_notification(recipient=recipient, title="Second")
+    create_test_notification(recipient=recipient, title="First")
+    ordered = list(notifications_queryset_for_recipient(recipient))
+    assert len(ordered) == 3
+
+    page_one = build_notifications_page(
+        membership=recipient,
+        status=None,
+        cursor=None,
+        page_size=2,
+    )
+
+    assert page_one.has_more is True
+    assert page_one.next_cursor is not None
+    assert [item.id for item in page_one.items] == [ordered[0].id, ordered[1].id]
+
+    page_two = build_notifications_page(
+        membership=recipient,
+        status=None,
+        cursor=page_one.next_cursor,
+        page_size=2,
+    )
+
+    assert page_two.has_more is False
+    assert [item.id for item in page_two.items] == [ordered[2].id]

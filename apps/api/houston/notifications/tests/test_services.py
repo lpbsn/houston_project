@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from django.db import close_old_connections
 from django.utils import timezone
+
 from houston.actions.services import create_action
 from houston.actions.tests.conftest import build_api_membership_on_establishment
 from houston.checklists.constants import EXECUTION_SOURCE_TEMPLATE
@@ -11,9 +14,11 @@ from houston.checklists.models import ChecklistExecution, ChecklistTemplate
 from houston.comments.services import create_signal_comment
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.constants import (
+    DEDUPE_WINDOW,
     build_default_dedupe_key,
     build_mention_dedupe_key,
 )
+from houston.notifications.exceptions import NotificationValidationError
 from houston.notifications.models import Notification
 from houston.notifications.services import (
     archive_notification,
@@ -77,6 +82,69 @@ def test_actor_exclusion_skips_self_notification():
     )
 
     assert notification is None
+
+
+def test_actor_from_other_establishment_raises():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    outsider = build_api_membership()
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+
+    with pytest.raises(NotificationValidationError, match="Invalid actor membership."):
+        create_in_app_notification(
+            establishment_id=owner.establishment_id,
+            recipient_membership=staff,
+            event_key=Notification.EventKey.ACTION_CREATED,
+            subject_type=Notification.SubjectType.ACTION,
+            subject_id=action.id,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            actor_membership=outsider,
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_create_same_dedupe_only_one_notification():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    dedupe_key = build_default_dedupe_key(
+        event_key=Notification.EventKey.ACTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action.id,
+    )
+
+    def create_notification(_: int) -> Notification | None:
+        close_old_connections()
+        try:
+            return create_in_app_notification(
+                establishment_id=owner.establishment_id,
+                recipient_membership=staff,
+                event_key=Notification.EventKey.ACTION_CREATED,
+                subject_type=Notification.SubjectType.ACTION,
+                subject_id=action.id,
+                priority=Notification.Priority.ACTION_REQUIRED,
+                actor_membership=owner,
+                dedupe_key=dedupe_key,
+            )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(create_notification, range(2)))
+
+    created = [result for result in results if result is not None]
+    assert len(created) == 1
+    assert results.count(None) == 1
+    assert (
+        Notification.objects.filter(
+            recipient_membership_id=staff.id,
+            dedupe_key=dedupe_key,
+            created_at__gte=timezone.now() - DEDUPE_WINDOW,
+        ).count()
+        == 1
+    )
 
 
 def test_default_dedupe_key_prevents_duplicate_within_window():

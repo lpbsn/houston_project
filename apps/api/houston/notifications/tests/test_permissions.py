@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+
 from houston.actions.services import create_action
 from houston.actions.tests.conftest import build_api_membership_on_establishment
 from houston.establishments.models import EstablishmentMembership
