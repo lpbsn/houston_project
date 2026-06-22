@@ -122,6 +122,32 @@ def _get_parent_comment_for_reply(
     return parent
 
 
+def _schedule_comment_invalidation(
+    *, establishment_id: uuid.UUID, reason: str, entity_id: uuid.UUID
+) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=establishment_id,
+        subject_type="comment",
+        reason=reason,
+        entity_id=entity_id,
+    )
+
+
+def _schedule_inherited_signal_comment_invalidations(*, signal: Signal) -> None:
+    linked_action_ids = Action.objects.filter(
+        establishment_id=signal.establishment_id,
+        signal_id=signal.id,
+    ).values_list("id", flat=True)
+    for action_id in linked_action_ids:
+        _schedule_comment_invalidation(
+            establishment_id=signal.establishment_id,
+            reason="comment.signal.inherited",
+            entity_id=action_id,
+        )
+
+
 def _get_action_root_comment(
     *,
     establishment_id: uuid.UUID,
@@ -169,6 +195,12 @@ def create_signal_comment(
         body=normalized_body,
     )
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
+    _schedule_comment_invalidation(
+        establishment_id=signal.establishment_id,
+        reason="comment.signal.created",
+        entity_id=signal.id,
+    )
+    _schedule_inherited_signal_comment_invalidations(signal=signal)
     return _reload_comment(establishment_id=signal.establishment_id, comment_id=comment.id)
 
 
@@ -204,6 +236,11 @@ def create_action_comment(
         body=normalized_body,
     )
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
+    _schedule_comment_invalidation(
+        establishment_id=action.establishment_id,
+        reason="comment.action.created",
+        entity_id=action.id,
+    )
     return _reload_comment(establishment_id=action.establishment_id, comment_id=comment.id)
 
 
@@ -225,6 +262,11 @@ def resolve_action_comment(
     comment.resolved_at = timezone.now()
     comment.resolved_by_membership = resolved_by_membership
     comment.save(update_fields=["resolved_at", "resolved_by_membership", "updated_at"])
+    _schedule_comment_invalidation(
+        establishment_id=action.establishment_id,
+        reason="comment.action.resolved",
+        entity_id=action.id,
+    )
     return _reload_comment(establishment_id=action.establishment_id, comment_id=comment.id)
 
 
@@ -245,6 +287,11 @@ def unresolve_action_comment(
     comment.resolved_at = None
     comment.resolved_by_membership = None
     comment.save(update_fields=["resolved_at", "resolved_by_membership", "updated_at"])
+    _schedule_comment_invalidation(
+        establishment_id=action.establishment_id,
+        reason="comment.action.unresolved",
+        entity_id=action.id,
+    )
     return _reload_comment(establishment_id=action.establishment_id, comment_id=comment.id)
 
 

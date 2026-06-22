@@ -74,7 +74,11 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `checklist` | `checklist.updated` | checklist template id | yes — sync template / assignment writers | templates, template detail, assignments, execution-detail prefix, execution feed |
 | `execution` | `execution.created` | checklist execution id | yes — sync execution creation | execution detail, checklist mutation surfaces, execution feed |
 | `execution` | `execution.updated` | checklist execution id | yes — cancel, task done/skip, observation-from-task handoff | same as `execution.created` |
-| `comment` | `comment.*` | — | **no** | — |
+| `comment` | `comment.signal.created` | signal id | yes — sync signal comment create | signal comment list |
+| `comment` | `comment.signal.inherited` | linked action id | yes — sync signal comment create when action is linked | action comment list (inherited signal comments) |
+| `comment` | `comment.action.created` | action id | yes — sync action comment create (root or reply) | action comment list |
+| `comment` | `comment.action.resolved` | action id | yes — sync action comment resolve | action comment list |
+| `comment` | `comment.action.unresolved` | action id | yes — sync action comment unresolve | action comment list |
 | `notification` | — | — | **no** | — |
 
 `execution.updated` includes sync checklist task transitions that change execution detail and may start or complete an execution visible on the execution feed.

@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   clearAuthenticatedQueryCache,
+  invalidateActionCommentQueries,
   invalidateActionMutationSurfaces,
   invalidateChecklistExecutionSurfaces,
   invalidateEstablishmentActionQueries,
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentSignalQueries,
+  invalidateSignalCommentQueries,
   purgeNonAuthQueries,
 } from '@/lib/query-invalidation'
 import { createTestQueryClient } from '@/test-utils'
@@ -178,5 +180,31 @@ describe('query-invalidation', () => {
       queryKey: ['actions', 'execution-feed', 'est-1'],
     })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['checklists'] })
+  })
+
+  it('invalidates signal comment queries without global keys', () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    invalidateSignalCommentQueries(queryClient, 'est-1', 'sig-1')
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['comments', 'signal', 'est-1', 'sig-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments', 'signal', 'est-1'] })
+  })
+
+  it('invalidates action comment queries without global keys', () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    invalidateActionCommentQueries(queryClient, 'est-1', 'act-1')
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['comments', 'action', 'est-1', 'act-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments', 'action', 'est-1'] })
   })
 })
