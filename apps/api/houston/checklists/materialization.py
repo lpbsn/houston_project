@@ -142,6 +142,17 @@ def _assert_can_materialize_from_assignment(
         raise ChecklistValidationError("Checklist template must have at least one task.")
 
 
+def _schedule_execution_created_invalidation(*, execution: ChecklistExecution) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=execution.establishment_id,
+        subject_type="execution",
+        reason="execution.created",
+        entity_id=execution.id,
+    )
+
+
 @transaction.atomic
 def materialize_execution_from_assignment(
     *,
@@ -214,6 +225,8 @@ def materialize_execution_from_assignment(
         )
 
     _create_task_execution_snapshots(execution=execution, template=template)
+    # Realtime invalidation only after a real create + snapshots; not on idempotent/race paths.
+    _schedule_execution_created_invalidation(execution=execution)
     return execution
 
 

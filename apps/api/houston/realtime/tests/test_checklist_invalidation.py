@@ -190,14 +190,14 @@ def test_create_checklist_assignment_emits_checklist_and_execution_created(
         )
 
         assert mock_notify.call_count == 2
-        _assert_checklist_invalidation(mock_notify, template=template, call_index=0)
         execution = ChecklistExecution.objects.get(checklist_template=template)
         _assert_execution_invalidation(
             mock_notify,
             execution=execution,
             reason="execution.created",
-            call_index=1,
+            call_index=0,
         )
+        _assert_checklist_invalidation(mock_notify, template=template, call_index=1)
 
 
 def test_create_checklist_assignment_skips_execution_created_when_already_materialized(

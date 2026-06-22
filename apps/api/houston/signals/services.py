@@ -227,6 +227,7 @@ def create_signal_from_candidate(
         observation=observation,
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
     )
+    _schedule_signal_invalidation(signal=signal, reason="signal.created")
     return signal
 
 
@@ -258,6 +259,7 @@ def aggregate_candidate_into_signal(
     ).exists()
     if not has_active_created_from:
         delete_all_observation_media(observation_id=observation.id)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     return signal
 
 
@@ -1204,7 +1206,7 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
             "updated_at",
         ]
     )
-    _schedule_signal_updated_invalidation(signal=signal)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     return signal
 
 
@@ -1223,7 +1225,7 @@ def unpin_signal(*, signal: Signal) -> Signal:
             "updated_at",
         ]
     )
-    _schedule_signal_updated_invalidation(signal=signal)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     return signal
 
 
@@ -1236,7 +1238,7 @@ def set_signal_urgency(*, signal: Signal, urgency: str) -> Signal:
     signal.urgency = urgency
     touch_signal_activity(signal=signal)
     signal.save(update_fields=["urgency", "last_activity_at", "updated_at"])
-    _schedule_signal_updated_invalidation(signal=signal)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     return signal
 
 
@@ -1330,16 +1332,16 @@ def _transition_active_signal_to_terminal(
         update_fields.append("urgency")
     touch_signal_activity(signal=signal)
     signal.save(update_fields=update_fields)
-    _schedule_signal_updated_invalidation(signal=signal)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
     return signal
 
 
-def _schedule_signal_updated_invalidation(*, signal: Signal) -> None:
+def _schedule_signal_invalidation(*, signal: Signal, reason: str) -> None:
     from houston.realtime.broadcast import schedule_establishment_invalidation
 
     schedule_establishment_invalidation(
         establishment_id=signal.establishment_id,
         subject_type="signal",
-        reason="signal.updated",
+        reason=reason,
         entity_id=signal.id,
     )

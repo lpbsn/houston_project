@@ -68,11 +68,11 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `subject_type` | `reason` | `entity_id` | Emitted today | Frontend surfaces |
 |---|---|---|---|---|
 | `signal` | `signal.updated` | signal id | yes — sync lifecycle (pin, urgency, cancel, resolve, …) | signal feed, signal detail |
-| `signal` | `signal.created` | signal id | **no** — not emitted by current backend writers | — |
+| `signal` | `signal.created` | signal id | yes — observation async pipeline | signal feed, signal detail |
 | `action` | `action.created` | action id | yes | action execution-feed, action detail, signal queries |
 | `action` | `action.updated` | action id | yes | same as `action.created` |
 | `checklist` | `checklist.updated` | checklist template id | yes — sync template / assignment writers | templates, template detail, assignments, execution-detail prefix, execution feed |
-| `execution` | `execution.created` | checklist execution id | yes — sync execution creation | execution detail, checklist mutation surfaces, execution feed |
+| `execution` | `execution.created` | checklist execution id | yes — sync execution creation and async/read-path materialization | execution detail, checklist mutation surfaces, execution feed |
 | `execution` | `execution.updated` | checklist execution id | yes — cancel, task done/skip, observation-from-task handoff | same as `execution.created` |
 | `comment` | `comment.signal.created` | signal id | yes — sync signal comment create | signal comment list |
 | `comment` | `comment.signal.inherited` | linked action id | yes — sync signal comment create when action is linked | action comment list (inherited signal comments) |
@@ -82,10 +82,6 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `notification` | — | — | **no** | — |
 
 `execution.updated` includes sync checklist task transitions that change execution detail and may start or complete an execution visible on the execution feed.
-
-Async checklist materialization (Celery / read-path) does **not** emit operational invalidation in current code.
-
-Observation async pipeline does **not** emit `signal.created` in current code.
 
 ## 3. Out of Scope
 
@@ -213,16 +209,14 @@ Domain services publish transport messages for view-changing sync writes. Realti
 
 Source domains with invalidation emission today:
 
-- Signal — sync lifecycle → `signal.updated`
+- Signal — sync lifecycle → `signal.updated`; observation async pipeline → `signal.created`, `signal.updated`
 - Action — create and lifecycle → `action.created`, `action.updated`
-- Checklist — sync template / assignment / execution writers → `checklist.updated`, `execution.created`, `execution.updated`
+- Checklist — sync template / assignment writers → `checklist.updated`; execution writers (sync + async materialization) → `execution.created`, `execution.updated`
+- Comment — sync create / resolve → `comment.signal.*`, `comment.action.*`
 
 Not emitted today:
 
-- `signal.created` (observation async pipeline)
-- Comment create / resolve on Signal or Action context
 - Notification create / read / archive
-- Checklist executions created by async materialization only
 
 See **Operational WebSocket invalidation** under section 2 for the reason matrix.
 
@@ -265,7 +259,6 @@ Implemented WebSocket routes (operational realtime):
 Not implemented (operational):
 
 - Notification-scoped invalidation channels
-- Comment-scoped invalidation channels
 - Per-resource detail channels (detail refresh uses establishment-scoped invalidation + TanStack Query prefixes)
 
 Candidate channels (not implemented — historical naming):

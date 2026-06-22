@@ -565,16 +565,13 @@ def create_checklist_assignment(
     )
 
     first_occurrence_date = _first_occurrence_date(assignment)
-    execution_ids_before = set(assignment.executions.values_list("id", flat=True))
-    execution = materialize_execution_from_assignment(
+    materialize_execution_from_assignment(
         assignment=assignment,
         occurrence_date=first_occurrence_date,
     )
     assignment.last_materialized_at = timezone.now()
     assignment.save(update_fields=["last_materialized_at", "updated_at"])
     _schedule_checklist_invalidation(template=template)
-    if execution.id not in execution_ids_before:
-        _schedule_execution_invalidation(execution=execution, reason="execution.created")
     return assignment
 
 
