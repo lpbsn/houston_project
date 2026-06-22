@@ -1075,6 +1075,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/notifications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists in-app notifications for the authenticated recipient. */
+        get: operations["v1_establishments_notifications_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/notifications/{notification_id}/archive/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_notifications_archive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/notifications/{notification_id}/mark-read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_notifications_mark_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/notifications/mark-all-read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_notifications_mark_all_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/observation-media/{media_id}/preview/": {
         parameters: {
             query?: never;
@@ -2371,6 +2436,9 @@ export interface components {
             identifier: string;
             password: string;
         };
+        MarkAllNotificationsReadResponse: {
+            updated_count: number;
+        };
         MarkReadyResponse: {
             session: components["schemas"]["OnboardingSessionResponse"];
             activation_summary: components["schemas"]["ActivationSummaryResponse"];
@@ -2404,6 +2472,50 @@ export interface components {
             username: string;
             /** Format: email */
             email: string | null;
+        };
+        NotificationActor: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
+        NotificationItem: {
+            /** Format: uuid */
+            id: string;
+            event_key: string;
+            subject_type: components["schemas"]["SubjectTypeEnum"];
+            /** Format: uuid */
+            subject_id: string;
+            priority: components["schemas"]["PriorityEnum"];
+            status: components["schemas"]["NotificationItemStatusEnum"];
+            title: string;
+            body: string;
+            actor: components["schemas"]["NotificationActor"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            read_at: string | null;
+            /** Format: date-time */
+            archived_at: string | null;
+        };
+        /**
+         * @description * `unread` - Unread
+         *     * `read` - Read
+         *     * `archived` - Archived
+         * @enum {string}
+         */
+        NotificationItemStatusEnum: "unread" | "read" | "archived";
+        NotificationListAppliedFilters: {
+            status: string | null;
+        };
+        NotificationListCounts: {
+            unread: number;
+        };
+        NotificationListResponse: {
+            items: components["schemas"]["NotificationItem"][];
+            next_cursor: string | null;
+            has_more: boolean;
+            applied_filters: components["schemas"]["NotificationListAppliedFilters"];
+            counts: components["schemas"]["NotificationListCounts"];
         };
         ObservationProcessingSignalSummary: {
             /** Format: uuid */
@@ -2621,6 +2733,14 @@ export interface components {
             can_resolve: boolean;
             can_create_action: boolean;
         };
+        /**
+         * @description * `info` - Info
+         *     * `action_required` - Action required
+         *     * `urgent` - Urgent
+         *     * `system` - System
+         * @enum {string}
+         */
+        PriorityEnum: "info" | "action_required" | "urgent" | "system";
         ProposalActivitySubjectItem: {
             client_key: string;
             label: string;
@@ -2826,11 +2946,13 @@ export interface components {
             media_count: number;
         };
         /**
-         * @description * `active` - active
-         *     * `invited` - invited
+         * @description * `action` - Action
+         *     * `checklist_execution` - Checklist execution
+         *     * `comment` - Comment
+         *     * `signal` - Signal
          * @enum {string}
          */
-        StatusEnum: "active" | "invited";
+        SubjectTypeEnum: "action" | "checklist_execution" | "comment" | "signal";
         SwitchEstablishmentRequest: {
             /** Format: uuid */
             establishment_id: string;
@@ -2877,8 +2999,14 @@ export interface components {
         };
         WorkspaceSummaryDirector: {
             display_name: string;
-            status: components["schemas"]["StatusEnum"];
+            status: components["schemas"]["WorkspaceSummaryDirectorStatusEnum"];
         };
+        /**
+         * @description * `active` - active
+         *     * `invited` - invited
+         * @enum {string}
+         */
+        WorkspaceSummaryDirectorStatusEnum: "active" | "invited";
         WorkspaceSummaryEstablishment: {
             /** Format: uuid */
             id: string;
@@ -6573,6 +6701,168 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_notifications_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                page_size?: number;
+                status?: "archived" | "read" | "unread";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_notifications_archive_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationItem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_notifications_mark_read_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationItem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_notifications_mark_all_read_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllNotificationsReadResponse"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
