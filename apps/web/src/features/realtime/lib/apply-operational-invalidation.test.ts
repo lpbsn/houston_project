@@ -109,12 +109,37 @@ describe('applyOperationalInvalidation', () => {
     },
   )
 
-  it('ignores comment subject_type until PR4', () => {
+  it.each([
+    ['comment.signal.created', ['comments', 'signal', 'est-1', 'sig-1']],
+    ['comment.signal.inherited', ['comments', 'action', 'est-1', 'act-1']],
+    ['comment.action.created', ['comments', 'action', 'est-1', 'act-1']],
+    ['comment.action.resolved', ['comments', 'action', 'est-1', 'act-1']],
+    ['comment.action.unresolved', ['comments', 'action', 'est-1', 'act-1']],
+  ] as const)('invalidates comment queries for %s', (reason, queryKey) => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const entityId = reason === 'comment.signal.created' ? 'sig-1' : 'act-1'
+    const event: OperationalRealtimeInvalidateEvent = {
+      type: 'invalidate',
+      subject_type: 'comment',
+      reason,
+      establishment_id: 'est-1',
+      entity_id: entityId,
+      occurred_at: '2026-06-19T12:00:00Z',
+    }
+
+    applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey })
+    expect(invalidateSpy).toHaveBeenCalledOnce()
+    invalidateSpy.mockRestore()
+  })
+
+  it('ignores unknown comment reason', () => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'comment',
-      reason: 'comment.signal.created',
+      reason: 'comment.unknown',
       establishment_id: 'est-1',
       entity_id: 'sig-1',
       occurred_at: '2026-06-19T12:00:00Z',

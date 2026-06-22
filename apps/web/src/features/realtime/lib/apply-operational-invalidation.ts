@@ -1,12 +1,14 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import {
+  invalidateActionCommentQueries,
   invalidateActionMutationSurfaces,
   invalidateChecklistExecutionSurfaces,
   invalidateChecklistMutationSurfaces,
   invalidateEstablishmentActionQueries,
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentSignalQueries,
+  invalidateSignalCommentQueries,
 } from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeInvalidateEvent } from '../types'
@@ -34,6 +36,22 @@ export function applyOperationalInvalidation(
   }
   if (event.subject_type === 'execution') {
     invalidateChecklistExecutionSurfaces(queryClient, establishmentId, event.entity_id)
+    return
+  }
+  if (event.subject_type === 'comment') {
+    switch (event.reason) {
+      case 'comment.signal.created':
+        invalidateSignalCommentQueries(queryClient, establishmentId, event.entity_id)
+        break
+      case 'comment.signal.inherited':
+      case 'comment.action.created':
+      case 'comment.action.resolved':
+      case 'comment.action.unresolved':
+        invalidateActionCommentQueries(queryClient, establishmentId, event.entity_id)
+        break
+      default:
+        break
+    }
   }
 }
 

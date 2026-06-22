@@ -80,3 +80,23 @@ export function invalidateChecklistExecutionSurfaces(
   })
   invalidateChecklistMutationSurfaces(queryClient, establishmentId)
 }
+
+export function invalidateSignalCommentQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+  signalId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['comments', 'signal', establishmentId, signalId],
+  })
+}
+
+export function invalidateActionCommentQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+  actionId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['comments', 'action', establishmentId, actionId],
+  })
+}
