@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -150,25 +151,27 @@ def test_ensure_visible_executions_materialized_emits_execution_created(
     business_unit,
 ):
     template = _active_registered_template(owner_membership, business_unit)
-    start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
-    assignment = create_checklist_assignment(
-        template=template,
-        actor=owner_membership,
-        assigned_to_id=staff_membership.id,
-        recurrence_days=["monday", "wednesday", "friday"],
-        **assignment_schedule_from_datetime(start_at, duration_hours=1, period_days=14),
-    )
-    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
-    assignment.last_materialized_at = None
-    assignment.save(update_fields=["last_materialized_at", "updated_at"])
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        ensure_visible_executions_materialized(
-            membership=staff_membership,
-            view_mode="personal",
+    fixed_now = timezone.make_aware(datetime(2026, 6, 24, 10, 0, 0))
+    with patch.object(timezone, "now", return_value=fixed_now):
+        start_at = fixed_now.replace(hour=9, minute=0, second=0, microsecond=0)
+        assignment = create_checklist_assignment(
+            template=template,
+            actor=owner_membership,
+            assigned_to_id=staff_membership.id,
+            recurrence_days=["monday", "wednesday", "friday"],
+            **assignment_schedule_from_datetime(start_at, duration_hours=1, period_days=14),
         )
+        ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+        assignment.last_materialized_at = None
+        assignment.save(update_fields=["last_materialized_at", "updated_at"])
 
-        assert _count_execution_created_calls(mock_notify) >= 1
+        with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+            ensure_visible_executions_materialized(
+                membership=staff_membership,
+                view_mode="personal",
+            )
+
+            assert _count_execution_created_calls(mock_notify) >= 1
 
 
 def test_execution_created_invalidate_payload_allowlist():
