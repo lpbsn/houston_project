@@ -97,6 +97,9 @@ def create_in_app_notification(
     ):
         return None
 
+    if not recipient_membership.notifications_enabled:
+        return None
+
     if not skip_subject_visibility_recheck and not recipient_can_view_notification_subject(
         recipient=recipient_membership,
         establishment_id=establishment_id,
@@ -277,3 +280,19 @@ def mark_all_notifications_read(
             entity_id=membership.id,
         )
     return updated_count
+
+
+def get_notification_preferences(*, membership: EstablishmentMembership) -> dict:
+    return {"notifications_enabled": membership.notifications_enabled}
+
+
+@transaction.atomic
+def update_notification_preferences(
+    *,
+    membership: EstablishmentMembership,
+    notifications_enabled: bool,
+) -> dict:
+    if membership.notifications_enabled != notifications_enabled:
+        membership.notifications_enabled = notifications_enabled
+        membership.save(update_fields=["notifications_enabled", "updated_at"])
+    return get_notification_preferences(membership=membership)

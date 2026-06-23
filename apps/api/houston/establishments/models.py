@@ -364,6 +364,7 @@ class EstablishmentMembership(BaseModel):
         choices=Status.choices,
         default=Status.INVITED,
     )
+    notifications_enabled = models.BooleanField(default=True)
 
     class Meta:
         constraints = [

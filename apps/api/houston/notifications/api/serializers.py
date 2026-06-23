@@ -74,3 +74,11 @@ class NotificationListResponseSerializer(serializers.Serializer):
 
 class MarkAllNotificationsReadResponseSerializer(serializers.Serializer):
     updated_count = serializers.IntegerField()
+
+
+class NotificationPreferencesSerializer(serializers.Serializer):
+    notifications_enabled = serializers.BooleanField()
+
+
+class NotificationPreferencesUpdateSerializer(serializers.Serializer):
+    notifications_enabled = serializers.BooleanField(required=True)

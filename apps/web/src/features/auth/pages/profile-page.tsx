@@ -1,4 +1,4 @@
-import { useId, useState, type ComponentType } from 'react'
+import { useId, type ComponentType } from 'react'
 import { Building2, ChevronRight, ClipboardCheck, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -14,6 +14,10 @@ import {
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
+import {
+  useNotificationPreferencesQuery,
+  useUpdateNotificationPreferencesMutation,
+} from '@/features/notifications/hooks'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -88,14 +92,15 @@ function buildRoleEstablishmentLine(
   return roleLabel ?? establishmentName ?? null
 }
 
-// placeholder — no API persistence
-function ProfilePlaceholderSwitch({
+function ProfileSettingSwitch({
   label,
   checked,
+  disabled = false,
   onCheckedChange,
 }: {
   label: string
   checked: boolean
+  disabled?: boolean
   onCheckedChange: (checked: boolean) => void
 }) {
   const labelId = useId()
@@ -110,9 +115,11 @@ function ProfilePlaceholderSwitch({
         role="switch"
         aria-checked={checked}
         aria-labelledby={labelId}
+        disabled={disabled}
         className={cn(
           'relative h-7 w-12 shrink-0 rounded-full transition-colors',
           checked ? 'bg-[#1D9E75]' : 'bg-[#E8E6DF]',
+          disabled && 'opacity-60',
         )}
         onClick={() => onCheckedChange(!checked)}
       >
@@ -186,10 +193,13 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     role,
     activeMembership?.establishment_name,
   )
-
-  // placeholder — no API persistence
-  const [signalNotificationsEnabled, setSignalNotificationsEnabled] = useState(true)
-  const [executionNotificationsEnabled, setExecutionNotificationsEnabled] = useState(true)
+  const establishmentId = activeMembership?.establishment_id ?? null
+  const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
+  const updateNotificationPreferencesMutation =
+    useUpdateNotificationPreferencesMutation(establishmentId)
+  const notificationsEnabled = notificationPreferencesQuery.data?.notifications_enabled ?? true
+  const isNotificationTogglePending =
+    notificationPreferencesQuery.isLoading || updateNotificationPreferencesMutation.isPending
 
   if (!isReady || isBootstrapping) {
     return (
@@ -222,16 +232,24 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
       <div className="space-y-2">
         <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
-          <ProfilePlaceholderSwitch
-            label="Notifications signaux"
-            checked={signalNotificationsEnabled}
-            onCheckedChange={setSignalNotificationsEnabled}
+          <ProfileSettingSwitch
+            label="Notifications"
+            checked={notificationsEnabled}
+            disabled={isNotificationTogglePending}
+            onCheckedChange={(checked) => {
+              updateNotificationPreferencesMutation.mutate(checked)
+            }}
           />
-          <ProfilePlaceholderSwitch
-            label="Notifications exécutions"
-            checked={executionNotificationsEnabled}
-            onCheckedChange={setExecutionNotificationsEnabled}
-          />
+          {notificationPreferencesQuery.isError ? (
+            <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
+              Les préférences de notifications n&apos;ont pas pu être chargées.
+            </p>
+          ) : null}
+          {updateNotificationPreferencesMutation.isError ? (
+            <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
+              La mise à jour des notifications a échoué.
+            </p>
+          ) : null}
           <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-3.5">
             <span className="text-sm text-[#1a1a1a]">Langue</span>
             <span className={cn('text-sm', terrain.muted)}>Français</span>

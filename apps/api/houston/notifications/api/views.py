@@ -14,6 +14,8 @@ from houston.notifications.api.serializers import (
     MarkAllNotificationsReadResponseSerializer,
     NotificationItemSerializer,
     NotificationListResponseSerializer,
+    NotificationPreferencesSerializer,
+    NotificationPreferencesUpdateSerializer,
     serialize_notification,
 )
 from houston.notifications.constants import (
@@ -25,8 +27,10 @@ from houston.notifications.models import Notification
 from houston.notifications.selectors import build_notifications_page, count_unread_notifications
 from houston.notifications.services import (
     archive_notification,
+    get_notification_preferences,
     mark_all_notifications_read,
     mark_notification_read,
+    update_notification_preferences,
 )
 from houston.uploads.access import resolve_observation_actor_membership
 from houston.uploads.api.views import EstablishmentScopedObservationMixin
@@ -215,3 +219,60 @@ class NotificationsMarkAllReadView(EstablishmentScopedObservationMixin, APIView)
             establishment_id=self.establishment_id,
         )
         return Response({"updated_count": updated_count})
+
+
+class NotificationPreferencesView(EstablishmentScopedObservationMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["notifications"],
+        responses={
+            200: NotificationPreferencesSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns in-app notification preferences for the authenticated recipient.",
+    )
+    def get(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = get_notification_preferences(membership=membership)
+        return Response(NotificationPreferencesSerializer(payload).data)
+
+    @extend_schema(
+        tags=["notifications"],
+        request=NotificationPreferencesUpdateSerializer,
+        responses={
+            200: NotificationPreferencesSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Updates in-app notification preferences for the authenticated recipient.",
+    )
+    def patch(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = NotificationPreferencesUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"code": "validation_error", "detail": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = update_notification_preferences(
+            membership=membership,
+            notifications_enabled=serializer.validated_data["notifications_enabled"],
+        )
+        return Response(NotificationPreferencesSerializer(payload).data)

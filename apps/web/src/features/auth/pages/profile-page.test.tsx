@@ -9,6 +9,8 @@ import { ProfilePage } from './profile-page'
 const onNavigate = vi.fn()
 const onSignOut = vi.fn()
 
+const mutate = vi.fn()
+
 const { authState } = vi.hoisted(() => ({
   authState: {
     current: {
@@ -43,10 +45,24 @@ vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState.current,
 }))
 
+vi.mock('@/features/notifications/hooks', () => ({
+  useNotificationPreferencesQuery: () => ({
+    data: { notifications_enabled: true },
+    isLoading: false,
+    isError: false,
+  }),
+  useUpdateNotificationPreferencesMutation: () => ({
+    mutate,
+    isPending: false,
+    isError: false,
+  }),
+}))
+
 afterEach(() => {
   cleanup()
   onNavigate.mockReset()
   onSignOut.mockReset()
+  mutate.mockReset()
 })
 
 describe('ProfilePage', () => {
@@ -86,7 +102,7 @@ describe('ProfilePage', () => {
     expect(screen.getAllByText('DIRECTEUR').length).toBeGreaterThan(0)
   })
 
-  it('toggles notification placeholders locally', () => {
+  it('updates notification preferences through the global toggle', () => {
     render(
       createElement(ProfilePage, {
         onNavigate,
@@ -94,15 +110,11 @@ describe('ProfilePage', () => {
       }),
     )
 
-    const signalSwitch = screen.getByRole('switch', { name: 'Notifications signaux' })
-    expect(signalSwitch.getAttribute('aria-checked')).toBe('true')
+    const notificationSwitch = screen.getByRole('switch', { name: 'Notifications' })
+    expect(notificationSwitch.getAttribute('aria-checked')).toBe('true')
 
-    fireEvent.click(signalSwitch)
-    expect(signalSwitch.getAttribute('aria-checked')).toBe('false')
-
-    const executionSwitch = screen.getByRole('switch', { name: 'Notifications exécutions' })
-    fireEvent.click(executionSwitch)
-    expect(executionSwitch.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(notificationSwitch)
+    expect(mutate).toHaveBeenCalledWith(false)
   })
 
   it('hides management section when permission hints deny access', () => {

@@ -84,6 +84,27 @@ def test_actor_exclusion_skips_self_notification():
     assert notification is None
 
 
+def test_create_notification_skips_when_notifications_disabled():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    staff.notifications_enabled = False
+    staff.save(update_fields=["notifications_enabled", "updated_at"])
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+
+    notification = create_in_app_notification(
+        establishment_id=owner.establishment_id,
+        recipient_membership=staff,
+        event_key=Notification.EventKey.ACTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action.id,
+        priority=Notification.Priority.ACTION_REQUIRED,
+        actor_membership=owner,
+    )
+
+    assert notification is None
+
+
 def test_actor_from_other_establishment_raises():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)

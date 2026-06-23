@@ -1140,6 +1140,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/notifications/preferences/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns in-app notification preferences for the authenticated recipient. */
+        get: operations["v1_establishments_notifications_preferences_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Updates in-app notification preferences for the authenticated recipient. */
+        patch: operations["v1_establishments_notifications_preferences_partial_update"];
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/observation-media/{media_id}/preview/": {
         parameters: {
             query?: never;
@@ -2517,6 +2535,9 @@ export interface components {
             applied_filters: components["schemas"]["NotificationListAppliedFilters"];
             counts: components["schemas"]["NotificationListCounts"];
         };
+        NotificationPreferences: {
+            notifications_enabled: boolean;
+        };
         ObservationProcessingSignalSummary: {
             /** Format: uuid */
             id: string;
@@ -2702,6 +2723,9 @@ export interface components {
         PatchedMembershipUpdateRequest: {
             role?: components["schemas"]["RoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
+        };
+        PatchedNotificationPreferencesUpdate: {
+            notifications_enabled?: boolean;
         };
         PatchedOnboardingProposalUpdateRequest: {
             payload?: components["schemas"]["OnboardingProposalPayload"];
@@ -6860,6 +6884,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarkAllNotificationsReadResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_notifications_preferences_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_notifications_preferences_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedNotificationPreferencesUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedNotificationPreferencesUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedNotificationPreferencesUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {

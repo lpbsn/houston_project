@@ -6,6 +6,8 @@ import type {
   MarkAllNotificationsReadResponse,
   NotificationItem,
   NotificationListResponse,
+  NotificationPreferences,
+  NotificationPreferencesUpdate,
 } from './types'
 
 export type NotificationListStatus = 'inbox'
@@ -15,6 +17,8 @@ export const notificationsQueryKeys = {
   lists: (establishmentId: string) => ['notifications', 'list', establishmentId] as const,
   list: (establishmentId: string, status: NotificationListStatus = 'inbox') =>
     ['notifications', 'list', establishmentId, status] as const,
+  preferences: (establishmentId: string) =>
+    ['notifications', 'preferences', establishmentId] as const,
 }
 
 export class NotificationsApiError extends Error {
@@ -126,4 +130,36 @@ export async function markAllNotificationsRead(
   )
 
   return assertNotificationsData<MarkAllNotificationsReadResponse>(result)
+}
+
+export async function fetchNotificationPreferences(
+  establishmentId: string,
+): Promise<NotificationPreferences> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/notifications/preferences/', {
+        params: establishmentPath(establishmentId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertNotificationsData<NotificationPreferences>(result)
+}
+
+export async function updateNotificationPreferences(
+  establishmentId: string,
+  input: NotificationPreferencesUpdate,
+): Promise<NotificationPreferences> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/establishments/{establishment_id}/notifications/preferences/', {
+        params: establishmentPath(establishmentId),
+        body: input,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  return assertNotificationsData<NotificationPreferences>(result)
 }

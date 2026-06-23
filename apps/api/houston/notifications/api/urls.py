@@ -3,6 +3,7 @@ from django.urls import path
 from houston.notifications.api.views import (
     NotificationArchiveView,
     NotificationMarkReadView,
+    NotificationPreferencesView,
     NotificationsListView,
     NotificationsMarkAllReadView,
 )
@@ -12,6 +13,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/notifications/",
         NotificationsListView.as_view(),
         name="notifications-list",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/notifications/preferences/",
+        NotificationPreferencesView.as_view(),
+        name="notifications-preferences",
     ),
     path(
         "establishments/<uuid:establishment_id>/notifications/mark-all-read/",

@@ -1,10 +1,12 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  fetchNotificationPreferences,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
   notificationsQueryKeys,
+  updateNotificationPreferences,
   type NotificationListStatus,
 } from './api'
 
@@ -73,6 +75,44 @@ export function useMarkAllNotificationsReadMutation(establishmentId: string | nu
       }
       void queryClient.invalidateQueries({
         queryKey: notificationsQueryKeys.lists(establishmentId),
+      })
+    },
+  })
+}
+
+export function useNotificationPreferencesQuery(establishmentId: string | null) {
+  return useQuery({
+    queryKey: establishmentId
+      ? notificationsQueryKeys.preferences(establishmentId)
+      : ['notifications', 'preferences', 'none'],
+    queryFn: () => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return fetchNotificationPreferences(establishmentId)
+    },
+    enabled: Boolean(establishmentId),
+  })
+}
+
+export function useUpdateNotificationPreferencesMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (notificationsEnabled: boolean) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return updateNotificationPreferences(establishmentId, {
+        notifications_enabled: notificationsEnabled,
+      })
+    },
+    onSuccess: () => {
+      if (!establishmentId) {
+        return
+      }
+      void queryClient.invalidateQueries({
+        queryKey: notificationsQueryKeys.preferences(establishmentId),
       })
     },
   })

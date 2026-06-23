@@ -40,6 +40,10 @@ def notifications_mark_all_read_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/notifications/mark-all-read/"
 
 
+def notifications_preferences_url(establishment_id) -> str:
+    return f"/api/v1/establishments/{establishment_id}/notifications/preferences/"
+
+
 def create_test_notification(
     *,
     recipient: EstablishmentMembership,
