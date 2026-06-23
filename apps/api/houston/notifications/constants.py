@@ -88,6 +88,14 @@ def build_mention_dedupe_key(
     )
 
 
+def build_action_reassigned_dedupe_key(
+    *,
+    action_id: uuid.UUID,
+    reassignment_id: uuid.UUID,
+) -> str:
+    return f"action.reassigned:action:{action_id}:{reassignment_id}"
+
+
 def render_notification_copy(
     event_key: str,
     *,

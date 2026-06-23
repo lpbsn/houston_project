@@ -67,6 +67,8 @@ def test_concurrent_accept_only_one_succeeds():
             return "ok"
         except ActionStateError:
             return "error"
+        finally:
+            close_old_connections()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(try_accept, [staff_a, staff_b]))

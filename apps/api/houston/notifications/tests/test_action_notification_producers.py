@@ -170,6 +170,89 @@ def test_action_pending_validation_notifies_in_scope_validators_only():
     )
 
 
+def test_pending_validation_notifies_validators_when_accepted_by_inactive():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    manager_in_scope = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(manager_in_scope, maintenance)
+
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Sensitive task title",
+        instruction="Sensitive task instruction",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        responsible_business_unit_id=maintenance.id,
+    )
+
+    with transaction.atomic():
+        accept_action(action_id=action.id, accepted_by=staff)
+        mark_action_done(action_id=action.id)
+        staff.status = EstablishmentMembership.Status.DEACTIVATED
+        staff.save(update_fields=["status", "updated_at"])
+
+    notifications = [
+        item
+        for item in _notifications_for_action(action_id=action.id)
+        if item.event_key == Notification.EventKey.ACTION_PENDING_VALIDATION
+    ]
+    recipient_ids = _recipient_ids(notifications)
+    assert owner.id in recipient_ids
+    assert manager_in_scope.id in recipient_ids
+    assert staff.id not in recipient_ids
+
+
+def test_action_reassigned_notifies_on_second_reassignment_within_dedupe_window():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    third_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Sensitive task title",
+        instruction="Sensitive task instruction",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        responsible_business_unit_id=maintenance.id,
+    )
+    Notification.objects.filter(subject_id=action.id).delete()
+
+    reassign_action(
+        action_id=action.id,
+        assignee_ids=[other_staff.id],
+        actor=owner,
+    )
+    reassign_action(
+        action_id=action.id,
+        assignee_ids=[third_staff.id],
+        actor=owner,
+    )
+
+    other_staff_notifications = [
+        item
+        for item in _notifications_for_action(action_id=action.id)
+        if item.recipient_membership_id == other_staff.id
+        and item.event_key == Notification.EventKey.ACTION_REASSIGNED
+    ]
+    assert len(other_staff_notifications) == 2
+    dedupe_keys = {item.dedupe_key for item in other_staff_notifications}
+    assert len(dedupe_keys) == 2
+    assert all(item.dedupe_key for item in other_staff_notifications)
+
+
 def test_action_reopened_notifies_assignees_and_creator_deduped_excludes_actor():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)

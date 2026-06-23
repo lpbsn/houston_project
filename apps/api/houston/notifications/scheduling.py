@@ -8,6 +8,7 @@ from django.db import transaction
 
 from houston.actions.models import Action
 from houston.establishments.models import EstablishmentMembership
+from houston.notifications.constants import build_action_reassigned_dedupe_key
 from houston.notifications.models import Notification
 from houston.notifications.recipients import (
     resolve_action_canceled_recipients,
@@ -66,6 +67,7 @@ def _deliver_action_notifications(
     actor_membership: EstablishmentMembership | None,
     exclude_actor_if_recipient: bool = True,
     skip_subject_visibility_recheck: bool = False,
+    dedupe_key: str | None = None,
 ) -> None:
     if not recipients:
         return
@@ -79,6 +81,7 @@ def _deliver_action_notifications(
         actor_membership=actor_membership,
         exclude_actor_if_recipient=exclude_actor_if_recipient,
         skip_subject_visibility_recheck=skip_subject_visibility_recheck,
+        dedupe_key=dedupe_key,
     )
 
 
@@ -115,6 +118,14 @@ def schedule_action_reassigned_notification(
 ) -> None:
     frozen_previous = frozenset(previous_assignee_ids)
     frozen_new = frozenset(new_assignee_ids)
+    # One uuid per schedule() call: dedupes accidental double-delivery of the
+    # same on_commit callback (e.g. added + removed batches, or a retried deliver).
+    # It does NOT dedupe two distinct reassign_action calls — each call gets its own uuid.
+    reassignment_id = uuid.uuid4()
+    dedupe_key = build_action_reassigned_dedupe_key(
+        action_id=action_id,
+        reassignment_id=reassignment_id,
+    )
 
     def deliver() -> None:
         action = _load_action(action_id=action_id)
@@ -135,6 +146,7 @@ def schedule_action_reassigned_notification(
             priority=Notification.Priority.ACTION_REQUIRED,
             recipients=added_recipients,
             actor_membership=actor,
+            dedupe_key=dedupe_key,
         )
         _deliver_action_notifications(
             action=action,
@@ -143,6 +155,7 @@ def schedule_action_reassigned_notification(
             recipients=removed_recipients,
             actor_membership=actor,
             skip_subject_visibility_recheck=True,
+            dedupe_key=dedupe_key,
         )
 
     _run_notification_after_commit(deliver=deliver)
@@ -154,13 +167,15 @@ def schedule_action_pending_validation_notification(*, action_id: uuid.UUID) -> 
         if action is None:
             return
         recipients = resolve_action_pending_validation_recipients(action=action)
-        accepted_by = action.accepted_by
         _deliver_action_notifications(
             action=action,
             event_key=Notification.EventKey.ACTION_PENDING_VALIDATION,
             priority=Notification.Priority.ACTION_REQUIRED,
             recipients=recipients,
-            actor_membership=accepted_by,
+            actor_membership=_load_actor(
+                establishment_id=action.establishment_id,
+                actor_membership_id=action.accepted_by_id,
+            ),
         )
 
     _run_notification_after_commit(deliver=deliver)
