@@ -228,6 +228,9 @@ def create_signal_from_candidate(
         link_type=SignalSourceObservation.LinkType.CREATED_FROM,
     )
     _schedule_signal_invalidation(signal=signal, reason="signal.created")
+    from houston.notifications.scheduling import schedule_signal_created_notification
+
+    schedule_signal_created_notification(signal_id=signal.id)
     return signal
 
 
@@ -1190,6 +1193,8 @@ def _mark_processing_retry_or_failed(*, processing_id: uuid.UUID, error_code: st
 
 @transaction.atomic
 def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal:
+    if signal.is_pinned:
+        return signal
     if signal.status != Signal.Status.OPEN:
         raise SignalStateError("Only open signals can be pinned.")
     now = timezone.now()
@@ -1207,6 +1212,12 @@ def pin_signal(*, signal: Signal, membership: EstablishmentMembership) -> Signal
         ]
     )
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+    from houston.notifications.scheduling import schedule_signal_pinned_notification
+
+    schedule_signal_pinned_notification(
+        signal_id=signal.id,
+        actor_membership_id=membership.id,
+    )
     return signal
 
 
@@ -1230,28 +1241,56 @@ def unpin_signal(*, signal: Signal) -> Signal:
 
 
 @transaction.atomic
-def set_signal_urgency(*, signal: Signal, urgency: str) -> Signal:
+def set_signal_urgency(
+    *,
+    signal: Signal,
+    urgency: str,
+    actor_membership: EstablishmentMembership | None = None,
+) -> Signal:
     if signal.status not in ACTIVE_SIGNAL_STATUSES:
         raise SignalStateError("Urgency can only be changed for active signals.")
     if urgency not in {Signal.Urgency.NORMAL, Signal.Urgency.HIGH}:
         raise SignalValidationError("Invalid urgency value.")
+    previous_urgency = signal.urgency
     signal.urgency = urgency
     touch_signal_activity(signal=signal)
     signal.save(update_fields=["urgency", "last_activity_at", "updated_at"])
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+    if previous_urgency != Signal.Urgency.HIGH and urgency == Signal.Urgency.HIGH:
+        from houston.notifications.scheduling import schedule_signal_urgency_changed_notification
+
+        schedule_signal_urgency_changed_notification(
+            signal_id=signal.id,
+            actor_membership_id=actor_membership.id if actor_membership is not None else None,
+        )
     return signal
 
 
 @transaction.atomic
-def cancel_signal(*, signal: Signal) -> Signal:
-    return _transition_active_signal_to_terminal(
+def cancel_signal(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+) -> Signal:
+    result = _transition_active_signal_to_terminal(
         signal=signal,
         target_status=Signal.Status.CANCELED,
     )
+    from houston.notifications.scheduling import schedule_signal_canceled_notification
+
+    schedule_signal_canceled_notification(
+        signal_id=result.id,
+        actor_membership_id=actor_membership.id if actor_membership is not None else None,
+    )
+    return result
 
 
 @transaction.atomic
-def resolve_signal(*, signal: Signal) -> Signal:
+def resolve_signal(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+) -> Signal:
     from houston.actions.constants import ACTIVE_ACTION_STATUSES as ACTIVE_LINKED_ACTION_STATUSES
     from houston.actions.models import Action
 
@@ -1262,11 +1301,18 @@ def resolve_signal(*, signal: Signal) -> Signal:
         raise SignalBusinessConflictError(
             "Cannot resolve signal while linked actions are still active."
         )
-    return _transition_active_signal_to_terminal(
+    result = _transition_active_signal_to_terminal(
         signal=signal,
         target_status=Signal.Status.RESOLVED,
         reset_high_urgency=True,
     )
+    from houston.notifications.scheduling import schedule_signal_resolved_notification
+
+    schedule_signal_resolved_notification(
+        signal_id=result.id,
+        actor_membership_id=actor_membership.id if actor_membership is not None else None,
+    )
+    return result
 
 
 def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:

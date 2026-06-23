@@ -100,3 +100,10 @@ export function invalidateActionCommentQueries(
     queryKey: ['comments', 'action', establishmentId, actionId],
   })
 }
+
+export function invalidateEstablishmentNotificationQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: ['notifications', 'list', establishmentId] })
+}

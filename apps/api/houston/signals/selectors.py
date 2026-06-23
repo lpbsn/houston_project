@@ -134,11 +134,32 @@ def get_signal_for_detail(
         .select_related("pinned_by_membership__user")
         .first()
     )
-    if signal is None:
+    if signal is not None:
+        if not _can_view_signal_detail(membership, signal):
+            return None
+        return signal
+
+    canceled_signal = (
+        Signal.objects.filter(
+            establishment_id=membership.establishment_id,
+            id=signal_id,
+            status=Signal.Status.CANCELED,
+        )
+        .select_related(
+            "pinned_by_membership__user",
+            "affected_business_unit",
+            "responsible_business_unit",
+        )
+        .first()
+    )
+    if canceled_signal is None:
         return None
-    if not _can_view_signal_detail(membership, signal):
+
+    from houston.signals.permissions import signal_pole_visible_to_membership
+
+    if not signal_pole_visible_to_membership(membership, canceled_signal):
         return None
-    return signal
+    return canceled_signal
 
 
 def _can_view_signal_detail(

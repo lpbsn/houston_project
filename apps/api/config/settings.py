@@ -283,7 +283,8 @@ def _auth_throttle_rates() -> dict[str, str]:
 
 CACHES = _build_default_caches()
 
-if DEBUG:
+# InMemory is single-process only; Docker api (Daphne) + celery need a shared layer.
+if env_bool("HOUSTON_CHANNELS_USE_IN_MEMORY", default=False):
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels.layers.InMemoryChannelLayer",

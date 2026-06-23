@@ -7,6 +7,7 @@ from houston.actions.permissions import can_validate_action_on_object
 from houston.checklists.models import ChecklistExecution
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.models import Signal
 
 
 def _dedupe_memberships(
@@ -183,3 +184,32 @@ def resolve_comment_mention_recipients(
         ):
             recipients.append(membership)
     return _dedupe_memberships(recipients)
+
+
+def _signal_pole_business_unit_ids(signal: Signal) -> set[uuid.UUID]:
+    bu_ids: set[uuid.UUID] = set()
+    if signal.responsible_business_unit_id is not None:
+        bu_ids.add(signal.responsible_business_unit_id)
+    if (
+        signal.affected_business_unit_id is not None
+        and signal.affected_business_unit_id != signal.responsible_business_unit_id
+    ):
+        bu_ids.add(signal.affected_business_unit_id)
+    return bu_ids
+
+
+def resolve_signal_pole_recipients(*, signal: Signal) -> list[EstablishmentMembership]:
+    bu_ids = _signal_pole_business_unit_ids(signal)
+    if not bu_ids:
+        return []
+    return _dedupe_memberships(
+        list(
+            EstablishmentMembership.objects.filter(
+                establishment_id=signal.establishment_id,
+                status=EstablishmentMembership.Status.ACTIVE,
+                scope_links__business_unit_id__in=bu_ids,
+            )
+            .select_related("user")
+            .distinct()
+        )
+    )

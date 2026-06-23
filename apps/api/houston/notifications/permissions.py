@@ -88,6 +88,10 @@ def recipient_can_view_notification_subject(
         return False
 
     if subject_type == Notification.SubjectType.SIGNAL:
-        return False
+        from houston.signals.selectors import get_signal_for_detail
+
+        return (
+            get_signal_for_detail(membership=recipient, signal_id=subject_id) is not None
+        )
 
     return False

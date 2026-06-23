@@ -21,6 +21,11 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "checklist.execution.created",
         "checklist.execution.canceled",
         "comment.mention.created",
+        "signal.created",
+        "signal.urgency_changed",
+        "signal.pinned",
+        "signal.resolved",
+        "signal.canceled",
     }
 )
 
@@ -57,6 +62,26 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "comment.mention.created": (
         "Mention",
         "Vous avez été mentionné dans un commentaire.",
+    ),
+    "signal.created": (
+        "Nouveau signal",
+        "Un signal a été créé sur votre pôle.",
+    ),
+    "signal.urgency_changed": (
+        "Signal urgent",
+        "Un signal est passé en urgence élevée.",
+    ),
+    "signal.pinned": (
+        "Signal épinglé",
+        "Un signal a été épinglé.",
+    ),
+    "signal.resolved": (
+        "Signal résolu",
+        "Un signal a été résolu.",
+    ),
+    "signal.canceled": (
+        "Signal annulé",
+        "Un signal a été annulé.",
     ),
 }
 

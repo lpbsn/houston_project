@@ -150,10 +150,49 @@ describe('applyOperationalInvalidation', () => {
     expect(invalidateSpy).not.toHaveBeenCalled()
     invalidateSpy.mockRestore()
   })
+
+  it.each([
+    'notification.created',
+    'notification.updated',
+    'notification.bulk_updated',
+  ] as const)('invalidates notification list queries for %s', (reason) => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const event: OperationalRealtimeInvalidateEvent = {
+      type: 'invalidate',
+      subject_type: 'notification',
+      reason,
+      establishment_id: 'est-1',
+      entity_id: 'notif-1',
+      occurred_at: '2026-06-19T12:00:00Z',
+    }
+
+    applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledOnce()
+    invalidateSpy.mockRestore()
+  })
+
+  it('ignores unknown notification reason', () => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const event: OperationalRealtimeInvalidateEvent = {
+      type: 'invalidate',
+      subject_type: 'notification',
+      reason: 'notification.unknown',
+      establishment_id: 'est-1',
+      entity_id: 'notif-1',
+      occurred_at: '2026-06-19T12:00:00Z',
+    }
+
+    applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
+    invalidateSpy.mockRestore()
+  })
 })
 
 describe('applyOperationalReconnectInvalidation', () => {
-  it('invalidates signal, action, and checklist queries', () => {
+  it('invalidates signal, action, checklist, and notification queries', () => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
     applyOperationalReconnectInvalidation(queryClient, 'est-1')
@@ -166,6 +205,7 @@ describe('applyOperationalReconnectInvalidation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['checklists', 'template-detail', 'est-1'],
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
     invalidateSpy.mockRestore()
   })
 })

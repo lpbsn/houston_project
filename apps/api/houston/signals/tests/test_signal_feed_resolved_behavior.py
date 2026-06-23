@@ -191,20 +191,6 @@ def test_detail_resolved_returns_200(api_client):
     assert response.json()["status"] == Signal.Status.RESOLVED
 
 
-def test_detail_canceled_returns_404(api_client):
-    membership = build_api_membership()
-    signal = _create_signal(membership, status=Signal.Status.CANCELED)
-    token = login(api_client, user=membership.user)
-
-    response = api_client.get(
-        signal_detail_url(membership.establishment_id, signal.id),
-        **auth_headers(token),
-    )
-
-    assert response.status_code == 404
-
-
-def test_detail_resolved_permission_hints_all_false(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _create_signal(
         membership,

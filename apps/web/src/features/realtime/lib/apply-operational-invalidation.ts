@@ -7,11 +7,18 @@ import {
   invalidateChecklistMutationSurfaces,
   invalidateEstablishmentActionQueries,
   invalidateEstablishmentChecklistQueries,
+  invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
   invalidateSignalCommentQueries,
 } from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeInvalidateEvent } from '../types'
+
+const NOTIFICATION_INVALIDATION_REASONS = new Set([
+  'notification.created',
+  'notification.updated',
+  'notification.bulk_updated',
+])
 
 export type ApplyOperationalInvalidationOptions = {
   queryClient: QueryClient
@@ -52,6 +59,13 @@ export function applyOperationalInvalidation(
       default:
         break
     }
+    return
+  }
+  if (event.subject_type === 'notification') {
+    if (!NOTIFICATION_INVALIDATION_REASONS.has(event.reason)) {
+      return
+    }
+    invalidateEstablishmentNotificationQueries(queryClient, establishmentId)
   }
 }
 
@@ -62,4 +76,5 @@ export function applyOperationalReconnectInvalidation(
   invalidateEstablishmentSignalQueries(queryClient, establishmentId)
   invalidateEstablishmentActionQueries(queryClient, establishmentId)
   invalidateEstablishmentChecklistQueries(queryClient, establishmentId)
+  invalidateEstablishmentNotificationQueries(queryClient, establishmentId)
 }
