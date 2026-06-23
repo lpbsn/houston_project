@@ -392,8 +392,9 @@ class ActionReopenView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_reopen_action,
-            execute_transition=lambda locked_action_id, _actor: reopen_action(
+            execute_transition=lambda locked_action_id, actor: reopen_action(
                 action_id=locked_action_id,
+                actor=actor,
             ),
         )
 
@@ -418,8 +419,9 @@ class ActionCancelView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_cancel_action,
-            execute_transition=lambda locked_action_id, _actor: cancel_action(
+            execute_transition=lambda locked_action_id, actor: cancel_action(
                 action_id=locked_action_id,
+                actor=actor,
             ),
         )
 
@@ -452,6 +454,7 @@ class ActionReassignView(EstablishmentScopedActionMixin, APIView):
             action = reassign_action(
                 action_id=action.id,
                 assignee_ids=body.validated_data["assignee_ids"],
+                actor=membership,
             )
         except (ActionStateError, ActionValidationError) as exc:
             return _action_command_error_response(exc)

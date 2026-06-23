@@ -53,6 +53,7 @@ def create_in_app_notification(
     actor_membership: EstablishmentMembership | None = None,
     dedupe_key: str | None = None,
     exclude_actor_if_recipient: bool = True,
+    skip_subject_visibility_recheck: bool = False,
 ) -> Notification | None:
     if event_key not in LOT1_EVENT_KEYS:
         raise NotificationValidationError("Invalid event_key.")
@@ -73,7 +74,7 @@ def create_in_app_notification(
     ):
         return None
 
-    if not recipient_can_view_notification_subject(
+    if not skip_subject_visibility_recheck and not recipient_can_view_notification_subject(
         recipient=recipient_membership,
         establishment_id=establishment_id,
         subject_type=subject_type,
@@ -130,6 +131,7 @@ def create_in_app_notifications_for_recipients(
     actor_membership: EstablishmentMembership | None = None,
     dedupe_key: str | None = None,
     exclude_actor_if_recipient: bool = True,
+    skip_subject_visibility_recheck: bool = False,
 ) -> list[Notification]:
     seen_recipient_ids: set[uuid.UUID] = set()
     created: list[Notification] = []
@@ -149,6 +151,7 @@ def create_in_app_notifications_for_recipients(
             actor_membership=actor_membership,
             dedupe_key=dedupe_key,
             exclude_actor_if_recipient=exclude_actor_if_recipient,
+            skip_subject_visibility_recheck=skip_subject_visibility_recheck,
         )
         if notification is not None:
             created.append(notification)

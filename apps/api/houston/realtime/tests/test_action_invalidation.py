@@ -169,7 +169,7 @@ def test_cancel_last_linked_action_reopen_refreshes_via_action_updated_only():
     assert signal.status == Signal.Status.IN_PROGRESS
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        cancel_action(action_id=action.id)
+        cancel_action(action_id=action.id, actor=owner)
 
         mock_notify.assert_called_once()
         _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
@@ -251,7 +251,7 @@ def test_reopen_action_emits_action_updated_after_commit():
     mark_action_done(action_id=action.id)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        reopen_action(action_id=action.id)
+        reopen_action(action_id=action.id, actor=owner)
 
         mock_notify.assert_called_once()
         _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
@@ -262,7 +262,7 @@ def test_cancel_action_emits_action_updated_after_commit():
     action = _create_free_action(owner=owner, staff=staff, maintenance=maintenance)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        cancel_action(action_id=action.id)
+        cancel_action(action_id=action.id, actor=owner)
 
         mock_notify.assert_called_once()
         _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
@@ -277,7 +277,11 @@ def test_reassign_action_emits_action_updated_after_commit():
     action = _create_free_action(owner=owner, staff=staff, maintenance=maintenance)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+        reassign_action(
+            action_id=action.id,
+            assignee_ids=[other_staff.id],
+            actor=owner,
+        )
 
         mock_notify.assert_called_once()
         _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
@@ -315,7 +319,7 @@ def test_action_invalidation_not_emitted_on_cancel_rollback():
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
         with pytest.raises(RuntimeError, match="force rollback"):
             with transaction.atomic():
-                cancel_action(action_id=action.id)
+                cancel_action(action_id=action.id, actor=owner)
                 raise RuntimeError("force rollback")
 
         mock_notify.assert_not_called()

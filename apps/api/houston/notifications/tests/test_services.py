@@ -114,6 +114,10 @@ def test_concurrent_create_same_dedupe_only_one_notification():
         subject_type=Notification.SubjectType.ACTION,
         subject_id=action.id,
     )
+    Notification.objects.filter(
+        recipient_membership_id=staff.id,
+        dedupe_key=dedupe_key,
+    ).delete()
 
     def create_notification(_: int) -> Notification | None:
         close_old_connections()

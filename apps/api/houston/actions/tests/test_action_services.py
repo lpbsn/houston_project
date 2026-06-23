@@ -67,6 +67,8 @@ def test_concurrent_accept_only_one_succeeds():
             return "ok"
         except ActionStateError:
             return "error"
+        finally:
+            close_old_connections()
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = list(executor.map(try_accept, [staff_a, staff_b]))
@@ -129,7 +131,7 @@ def test_reopen_action_from_pending_validation():
     action = accept_action(action_id=action.id, accepted_by=staff)
     action = mark_action_done(action_id=action.id)
 
-    action = reopen_action(action_id=action.id)
+    action = reopen_action(action_id=action.id, actor=owner)
 
     action.refresh_from_db()
     assert action.status == Action.Status.REOPENED
@@ -143,7 +145,7 @@ def test_cancel_action_from_open():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
 
-    action = cancel_action(action_id=action.id)
+    action = cancel_action(action_id=action.id, actor=owner)
 
     action.refresh_from_db()
     assert action.status == Action.Status.CANCELED
@@ -158,7 +160,7 @@ def test_cancel_action_rejects_done_state():
     action.save(update_fields=["status", "updated_at"])
 
     with pytest.raises(ActionStateError, match="cannot be canceled"):
-        cancel_action(action_id=action.id)
+        cancel_action(action_id=action.id, actor=owner)
 
 
 def test_reassign_action_updates_assignees_open():
@@ -171,7 +173,11 @@ def test_reassign_action_updates_assignees_open():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
 
-    action = reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+    action = reassign_action(
+        action_id=action.id,
+        assignee_ids=[other_staff.id],
+        actor=owner,
+    )
 
     action.refresh_from_db()
     assignee_ids = set(
@@ -193,7 +199,11 @@ def test_reassign_action_keeps_reopened_status():
     action.status = Action.Status.REOPENED
     action.save(update_fields=["status", "updated_at"])
 
-    action = reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+    action = reassign_action(
+        action_id=action.id,
+        assignee_ids=[other_staff.id],
+        actor=owner,
+    )
 
     action.refresh_from_db()
     assert action.status == Action.Status.REOPENED
@@ -210,7 +220,11 @@ def test_reassign_in_progress_resets_acceptance():
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
     action = accept_action(action_id=action.id, accepted_by=staff)
 
-    action = reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+    action = reassign_action(
+        action_id=action.id,
+        assignee_ids=[other_staff.id],
+        actor=owner,
+    )
 
     action.refresh_from_db()
     assert action.status == Action.Status.OPEN
@@ -231,7 +245,11 @@ def test_reassign_rejects_pending_validation():
     action = mark_action_done(action_id=action.id)
 
     with pytest.raises(ActionStateError, match="cannot be reassigned"):
-        reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+        reassign_action(
+            action_id=action.id,
+            assignee_ids=[other_staff.id],
+            actor=owner,
+        )
 
 
 def test_reassign_rejects_done_state():
@@ -247,7 +265,11 @@ def test_reassign_rejects_done_state():
     action.save(update_fields=["status", "updated_at"])
 
     with pytest.raises(ActionStateError, match="cannot be reassigned"):
-        reassign_action(action_id=action.id, assignee_ids=[other_staff.id])
+        reassign_action(
+            action_id=action.id,
+            assignee_ids=[other_staff.id],
+            actor=owner,
+        )
 
 
 def test_create_action_rejects_duplicate_assignees():
