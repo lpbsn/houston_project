@@ -4,6 +4,7 @@ import uuid
 
 from houston.actions.models import Action, ActionAssignee
 from houston.actions.permissions import can_validate_action_on_object
+from houston.checklists.models import ChecklistExecution
 from houston.establishments.models import EstablishmentMembership
 
 
@@ -109,6 +110,54 @@ def resolve_action_reopened_recipients(*, action: Action) -> list[EstablishmentM
 
 def resolve_action_canceled_recipients(*, action: Action) -> list[EstablishmentMembership]:
     return resolve_action_reopened_recipients(action=action)
+
+
+def _active_execution_membership(
+    membership: EstablishmentMembership | None,
+    *,
+    establishment_id: uuid.UUID,
+) -> EstablishmentMembership | None:
+    if membership is None:
+        return None
+    if (
+        membership.status == EstablishmentMembership.Status.ACTIVE
+        and membership.establishment_id == establishment_id
+    ):
+        return membership
+    return None
+
+
+def resolve_checklist_execution_created_recipients(
+    *,
+    execution: ChecklistExecution,
+) -> list[EstablishmentMembership]:
+    assignee = _active_execution_membership(
+        execution.assigned_to,
+        establishment_id=execution.establishment_id,
+    )
+    if assignee is None:
+        return []
+    return [assignee]
+
+
+def resolve_checklist_execution_canceled_recipients(
+    *,
+    execution: ChecklistExecution,
+) -> list[EstablishmentMembership]:
+    recipients: list[EstablishmentMembership] = []
+    assignee = _active_execution_membership(
+        execution.assigned_to,
+        establishment_id=execution.establishment_id,
+    )
+    if assignee is not None:
+        recipients.append(assignee)
+    assigner = _active_execution_membership(
+        execution.assigned_by,
+        establishment_id=execution.establishment_id,
+    )
+    if assigner is not None:
+        recipients.append(assigner)
+    return _dedupe_memberships(recipients)
 
 
 def snapshot_action_assignee_ids(*, action_id: uuid.UUID) -> set[uuid.UUID]:

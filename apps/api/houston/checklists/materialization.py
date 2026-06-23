@@ -227,6 +227,12 @@ def materialize_execution_from_assignment(
     _create_task_execution_snapshots(execution=execution, template=template)
     # Realtime invalidation only after a real create + snapshots; not on idempotent/race paths.
     _schedule_execution_created_invalidation(execution=execution)
+    from houston.notifications.scheduling import schedule_checklist_execution_created_notification
+
+    schedule_checklist_execution_created_notification(
+        execution_id=execution.id,
+        actor_membership_id=None,
+    )
     return execution
 
 

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from django.db import transaction
 
 from houston.actions.models import Action
+from houston.checklists.models import ChecklistExecution
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.constants import build_action_reassigned_dedupe_key
 from houston.notifications.models import Notification
@@ -16,6 +17,8 @@ from houston.notifications.recipients import (
     resolve_action_pending_validation_recipients,
     resolve_action_reassigned_recipient_groups,
     resolve_action_reopened_recipients,
+    resolve_checklist_execution_canceled_recipients,
+    resolve_checklist_execution_created_recipients,
 )
 from houston.notifications.services import create_in_app_notifications_for_recipients
 
@@ -222,6 +225,85 @@ def schedule_action_canceled_notification(
             recipients=recipients,
             actor_membership=_load_actor(
                 establishment_id=action.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def _load_execution(*, execution_id: uuid.UUID) -> ChecklistExecution | None:
+    return (
+        ChecklistExecution.objects.filter(id=execution_id)
+        .select_related("assigned_to", "assigned_by")
+        .first()
+    )
+
+
+def _deliver_execution_notifications(
+    *,
+    execution: ChecklistExecution,
+    event_key: str,
+    priority: str,
+    recipients: list[EstablishmentMembership],
+    actor_membership: EstablishmentMembership | None,
+    exclude_actor_if_recipient: bool = True,
+) -> None:
+    if not recipients:
+        return
+    create_in_app_notifications_for_recipients(
+        establishment_id=execution.establishment_id,
+        recipient_memberships=recipients,
+        event_key=event_key,
+        subject_type=Notification.SubjectType.CHECKLIST_EXECUTION,
+        subject_id=execution.id,
+        priority=priority,
+        actor_membership=actor_membership,
+        exclude_actor_if_recipient=exclude_actor_if_recipient,
+    )
+
+
+def schedule_checklist_execution_created_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        execution = _load_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_checklist_execution_created_recipients(execution=execution)
+        _deliver_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.CHECKLIST_EXECUTION_CREATED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def schedule_checklist_execution_canceled_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        execution = _load_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_checklist_execution_canceled_recipients(execution=execution)
+        _deliver_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.CHECKLIST_EXECUTION_CANCELED,
+            priority=Notification.Priority.INFO,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
                 actor_membership_id=actor_membership_id,
             ),
         )
