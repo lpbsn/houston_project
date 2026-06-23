@@ -64,6 +64,7 @@ import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permi
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
+import { NotificationCenter } from '@/features/notifications/components/notification-center'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -173,6 +174,16 @@ function App() {
     enabled: showChatNav,
   })
   const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
+
+  const terrainTopbarTrailing = useMemo(() => {
+    if (!establishmentId || !auth.hasOperationalAccess) {
+      return null
+    }
+
+    return (
+      <NotificationCenter establishmentId={establishmentId} onNavigate={navigate} />
+    )
+  }, [auth.hasOperationalAccess, establishmentId, navigate])
 
   useEffect(() => {
     if (
@@ -577,7 +588,12 @@ function App() {
         showChatNav={showChatNav}
         chatHasUnread={chatHasUnread}
         topbar={
-          <TerrainTopbar variant="hub" pageTitle="Page introuvable" showBottomBorder={true} />
+          <TerrainTopbar
+            variant="hub"
+            pageTitle="Page introuvable"
+            showBottomBorder={true}
+            trailing={terrainTopbarTrailing}
+          />
         }
       >
         <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
@@ -609,6 +625,7 @@ function App() {
               onBack={
                 terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
               }
+              trailing={terrainTopbarTrailing}
             />
           )
         }

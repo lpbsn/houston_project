@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
 import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
@@ -12,6 +13,23 @@ type TerrainTopbarProps = {
   detailTitleLayout?: TerrainDetailTitleLayout
   onBack?: () => void
   showBottomBorder?: boolean
+  trailing?: ReactNode
+}
+
+function TrailingSlot({ trailing }: { trailing?: ReactNode }) {
+  if (!trailing) {
+    return <span className="w-10" aria-hidden />
+  }
+
+  return <div className="flex w-10 justify-end">{trailing}</div>
+}
+
+function DetailTrailingSlot({ trailing }: { trailing?: ReactNode }) {
+  if (!trailing) {
+    return <span className="w-16" aria-hidden />
+  }
+
+  return <div className="flex w-16 justify-end">{trailing}</div>
 }
 
 export function TerrainTopbar({
@@ -21,6 +39,7 @@ export function TerrainTopbar({
   detailTitleLayout = 'centered',
   onBack,
   showBottomBorder = true,
+  trailing,
 }: TerrainTopbarProps) {
   if (variant === 'hub') {
     return (
@@ -32,8 +51,12 @@ export function TerrainTopbar({
         )}
       >
         <div className="flex flex-col gap-0.5 px-3">
-          <div className="flex h-16 items-center justify-center">
-            <HoustonLogo />
+          <div className="grid h-16 grid-cols-[2.5rem_1fr_2.5rem] items-center">
+            <span aria-hidden />
+            <div className="flex justify-center">
+              <HoustonLogo />
+            </div>
+            <TrailingSlot trailing={trailing} />
           </div>
           {pageTitle ? (
             <h1 className="text-left text-xl font-semibold leading-tight text-[#1a1a1a]">
@@ -55,20 +78,25 @@ export function TerrainTopbar({
         )}
       >
         <div className="px-4">
-          {onBack ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-auto px-0 text-sm font-medium text-[#1B4FD8] hover:bg-transparent hover:text-[#1B4FD8]/90"
-              onClick={onBack}
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Retour
-            </Button>
-          ) : null}
-          {title ? (
-            <h1 className="mt-2 text-xl font-semibold text-[#1a1a1a]">{title}</h1>
-          ) : null}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {onBack ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto px-0 text-sm font-medium text-[#1B4FD8] hover:bg-transparent hover:text-[#1B4FD8]/90"
+                  onClick={onBack}
+                >
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Retour
+                </Button>
+              ) : null}
+              {title ? (
+                <h1 className="mt-2 text-xl font-semibold text-[#1a1a1a]">{title}</h1>
+              ) : null}
+            </div>
+            <DetailTrailingSlot trailing={trailing} />
+          </div>
         </div>
       </header>
     )
@@ -97,7 +125,7 @@ export function TerrainTopbar({
           <span className="w-16" aria-hidden />
         )}
         <span className="text-sm font-medium text-[#1a1a1a]">{title ?? 'Signal'}</span>
-        <span className="w-16" aria-hidden />
+        <DetailTrailingSlot trailing={trailing} />
       </div>
     </header>
   )
