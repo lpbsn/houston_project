@@ -195,6 +195,13 @@ def create_signal_comment(
         body=normalized_body,
     )
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
+    if mentioned_memberships:
+        from houston.notifications.scheduling import schedule_comment_mention_created_notification
+
+        schedule_comment_mention_created_notification(
+            comment_id=comment.id,
+            actor_membership_id=author_membership.id,
+        )
     _schedule_comment_invalidation(
         establishment_id=signal.establishment_id,
         reason="comment.signal.created",
@@ -236,6 +243,13 @@ def create_action_comment(
         body=normalized_body,
     )
     _create_mentions(comment=comment, mentioned_memberships=mentioned_memberships)
+    if mentioned_memberships:
+        from houston.notifications.scheduling import schedule_comment_mention_created_notification
+
+        schedule_comment_mention_created_notification(
+            comment_id=comment.id,
+            actor_membership_id=author_membership.id,
+        )
     _schedule_comment_invalidation(
         establishment_id=action.establishment_id,
         reason="comment.action.created",

@@ -5,6 +5,7 @@ import uuid
 from houston.actions.models import Action, ActionAssignee
 from houston.actions.permissions import can_validate_action_on_object
 from houston.checklists.models import ChecklistExecution
+from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
 
 
@@ -167,3 +168,18 @@ def snapshot_action_assignee_ids(*, action_id: uuid.UUID) -> set[uuid.UUID]:
             flat=True,
         )
     )
+
+
+def resolve_comment_mention_recipients(
+    *,
+    comment: Comment,
+) -> list[EstablishmentMembership]:
+    recipients: list[EstablishmentMembership] = []
+    for link in comment.mention_links.all():
+        membership = link.mentioned_membership
+        if (
+            membership.status == EstablishmentMembership.Status.ACTIVE
+            and membership.establishment_id == comment.establishment_id
+        ):
+            recipients.append(membership)
+    return _dedupe_memberships(recipients)
