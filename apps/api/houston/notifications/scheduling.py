@@ -5,11 +5,16 @@ import uuid
 from collections.abc import Callable
 
 from django.db import transaction
+from django.db.models import Prefetch
 
 from houston.actions.models import Action
 from houston.checklists.models import ChecklistExecution
+from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import EstablishmentMembership
-from houston.notifications.constants import build_action_reassigned_dedupe_key
+from houston.notifications.constants import (
+    build_action_reassigned_dedupe_key,
+    build_mention_dedupe_key,
+)
 from houston.notifications.models import Notification
 from houston.notifications.recipients import (
     resolve_action_canceled_recipients,
@@ -19,8 +24,12 @@ from houston.notifications.recipients import (
     resolve_action_reopened_recipients,
     resolve_checklist_execution_canceled_recipients,
     resolve_checklist_execution_created_recipients,
+    resolve_comment_mention_recipients,
 )
-from houston.notifications.services import create_in_app_notifications_for_recipients
+from houston.notifications.services import (
+    create_in_app_notification,
+    create_in_app_notifications_for_recipients,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +313,63 @@ def schedule_checklist_execution_canceled_notification(
             recipients=recipients,
             actor_membership=_load_actor(
                 establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def _load_comment(*, comment_id: uuid.UUID) -> Comment | None:
+    return (
+        Comment.objects.filter(id=comment_id)
+        .prefetch_related(
+            Prefetch(
+                "mention_links",
+                queryset=CommentMention.objects.select_related(
+                    "mentioned_membership__user",
+                ).order_by("id"),
+            )
+        )
+        .first()
+    )
+
+
+def _deliver_comment_mention_notifications(
+    *,
+    comment: Comment,
+    actor_membership: EstablishmentMembership | None,
+) -> None:
+    recipients = resolve_comment_mention_recipients(comment=comment)
+    for recipient in recipients:
+        create_in_app_notification(
+            establishment_id=comment.establishment_id,
+            recipient_membership=recipient,
+            event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
+            subject_type=Notification.SubjectType.COMMENT,
+            subject_id=comment.id,
+            priority=Notification.Priority.INFO,
+            actor_membership=actor_membership,
+            dedupe_key=build_mention_dedupe_key(
+                comment_id=comment.id,
+                mentioned_membership_id=recipient.id,
+            ),
+        )
+
+
+def schedule_comment_mention_created_notification(
+    *,
+    comment_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        comment = _load_comment(comment_id=comment_id)
+        if comment is None:
+            return
+        _deliver_comment_mention_notifications(
+            comment=comment,
+            actor_membership=_load_actor(
+                establishment_id=comment.establishment_id,
                 actor_membership_id=actor_membership_id,
             ),
         )
