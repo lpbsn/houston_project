@@ -272,6 +272,20 @@ def _schedule_execution_invalidation(*, execution: ChecklistExecution, reason: s
     )
 
 
+def _schedule_execution_canceled_notifications(
+    *,
+    execution_ids: list[uuid.UUID],
+    actor_membership_id: uuid.UUID,
+) -> None:
+    from houston.notifications.scheduling import schedule_checklist_execution_canceled_notification
+
+    for execution_id in execution_ids:
+        schedule_checklist_execution_canceled_notification(
+            execution_id=execution_id,
+            actor_membership_id=actor_membership_id,
+        )
+
+
 @transaction.atomic
 def create_checklist_template(
     *,
@@ -742,6 +756,10 @@ def update_checklist_assignment(
     )
     for execution in cancelled_executions:
         _schedule_execution_invalidation(execution=execution, reason="execution.updated")
+    _schedule_execution_canceled_notifications(
+        execution_ids=[execution.id for execution in cancelled_executions],
+        actor_membership_id=actor.id,
+    )
     _sync_assigned_executions_from_assignment(assignment=assignment)
     _schedule_checklist_invalidation(template=assignment.checklist_template)
     return assignment
@@ -786,6 +804,10 @@ def deactivate_checklist_assignment(
         )
         for execution in executions_to_cancel:
             _schedule_execution_invalidation(execution=execution, reason="execution.updated")
+        _schedule_execution_canceled_notifications(
+            execution_ids=[execution.id for execution in executions_to_cancel],
+            actor_membership_id=actor.id,
+        )
 
     assignment.status = ASSIGNMENT_STATUS_INACTIVE
     assignment.save(update_fields=["status", "updated_at"])
@@ -917,6 +939,12 @@ def create_execution_from_template(
     )
     _create_task_execution_snapshots(execution=execution, template=template)
     _schedule_execution_invalidation(execution=execution, reason="execution.created")
+    from houston.notifications.scheduling import schedule_checklist_execution_created_notification
+
+    schedule_checklist_execution_created_notification(
+        execution_id=execution.id,
+        actor_membership_id=actor.id,
+    )
     return execution
 
 
@@ -988,6 +1016,12 @@ def cancel_checklist_execution(
         update_fields=["status", "canceled_at", "last_activity_at", "updated_at"],
     )
     _schedule_execution_invalidation(execution=execution, reason="execution.updated")
+    from houston.notifications.scheduling import schedule_checklist_execution_canceled_notification
+
+    schedule_checklist_execution_canceled_notification(
+        execution_id=execution.id,
+        actor_membership_id=actor.id,
+    )
     return execution
 
 
