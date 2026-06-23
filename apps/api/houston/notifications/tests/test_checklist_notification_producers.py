@@ -21,13 +21,64 @@ from houston.checklists.tests.conftest import (
     assignment_schedule_from_datetime,
     stable_assignment_times,
 )
+from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
-
-pytest_plugins = ["houston.checklists.tests.conftest"]
+from houston.testing.factories import create_establishment, create_membership
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 SENSITIVE_TEMPLATE_TITLE = "Secret checklist title"
+
+
+@pytest.fixture
+def establishment():
+    return create_establishment(name="Checklist Hotel", timezone="UTC")
+
+
+@pytest.fixture
+def business_unit(establishment):
+    return create_business_unit(establishment=establishment, key="restaurant")
+
+
+@pytest.fixture
+def owner_membership(establishment):
+    return create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+
+
+@pytest.fixture
+def manager_membership(establishment, business_unit):
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_unit,
+    )
+    membership = EstablishmentMembership.objects.prefetch_related("scope_links").get(
+        pk=membership.pk
+    )
+    return membership
+
+
+@pytest.fixture
+def staff_membership(establishment, business_unit):
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_unit,
+    )
+    return EstablishmentMembership.objects.prefetch_related("scope_links").get(pk=membership.pk)
 
 
 def _notifications_for_execution(*, execution_id) -> list[Notification]:
