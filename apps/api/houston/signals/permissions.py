@@ -14,6 +14,23 @@ def can_view_signal_feed(membership: EstablishmentMembership | None) -> bool:
     return establishment_can_view_signal_feed(membership)
 
 
+def signal_pole_visible_to_membership(
+    membership: EstablishmentMembership,
+    signal: Signal,
+) -> bool:
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+    if signal.establishment_id != membership.establishment_id:
+        return False
+    if signal.responsible_business_unit_id is not None:
+        if membership_scope_covers_business_unit(membership, signal.responsible_business_unit):
+            return True
+    if signal.affected_business_unit_id is not None:
+        if membership_scope_covers_business_unit(membership, signal.affected_business_unit):
+            return True
+    return False
+
+
 def signal_visible_in_membership_scope(
     membership: EstablishmentMembership,
     signal: Signal,

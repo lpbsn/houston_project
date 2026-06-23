@@ -26,6 +26,11 @@ class Notification(BaseModel):
             "Checklist execution canceled",
         )
         COMMENT_MENTION_CREATED = "comment.mention.created", "Comment mention created"
+        SIGNAL_CREATED = "signal.created", "Signal created"
+        SIGNAL_URGENCY_CHANGED = "signal.urgency_changed", "Signal urgency changed"
+        SIGNAL_PINNED = "signal.pinned", "Signal pinned"
+        SIGNAL_RESOLVED = "signal.resolved", "Signal resolved"
+        SIGNAL_CANCELED = "signal.canceled", "Signal canceled"
 
     class SubjectType(models.TextChoices):
         ACTION = "action", "Action"

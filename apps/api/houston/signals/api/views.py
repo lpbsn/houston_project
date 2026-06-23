@@ -378,6 +378,7 @@ class SignalUrgencyView(EstablishmentScopedSignalMixin, APIView):
             signal = set_signal_urgency(
                 signal=signal,
                 urgency=body.validated_data["urgency"],
+                actor_membership=membership,
             )
         except (SignalStateError, SignalValidationError) as exc:
             return Response(
@@ -427,9 +428,9 @@ def _signal_lifecycle_command_response(
 
     try:
         if action == "cancel":
-            signal = cancel_signal(signal=signal)
+            signal = cancel_signal(signal=signal, actor_membership=membership)
         else:
-            signal = resolve_signal(signal=signal)
+            signal = resolve_signal(signal=signal, actor_membership=membership)
     except SignalBusinessConflictError as exc:
         return Response(
             {"code": exc.error_code, "detail": "Cannot resolve signal with active linked actions."},

@@ -5,7 +5,10 @@ import uuid
 import pytest
 
 from houston.actions.services import create_action
-from houston.actions.tests.conftest import build_api_membership_on_establishment
+from houston.actions.tests.conftest import (
+    assign_business_unit_scope,
+    build_api_membership_on_establishment,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.notifications.permissions import (
@@ -13,6 +16,8 @@ from houston.notifications.permissions import (
     recipient_can_view_notification_subject,
 )
 from houston.notifications.tests.conftest import create_test_notification
+from houston.signals.models import Signal
+from houston.signals.tests.conftest import create_minimal_v3_signal
 from houston.testing.auth import build_api_membership
 from houston.testing.taxonomy import hotel_maintenance_setup
 
@@ -87,20 +92,41 @@ def test_recipient_cannot_view_action_subject_out_of_scope():
     )
 
 
-def test_signal_subject_type_returns_false():
+def test_recipient_can_view_signal_subject_open_resolved_canceled_scoped():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+
+    open_signal = create_minimal_v3_signal(owner, status=Signal.Status.OPEN)
+    resolved_signal = create_minimal_v3_signal(owner, status=Signal.Status.RESOLVED)
+    canceled_signal = create_minimal_v3_signal(owner, status=Signal.Status.CANCELED)
+
+    for subject_id in (open_signal.id, resolved_signal.id, canceled_signal.id):
+        assert recipient_can_view_notification_subject(
+            recipient=staff,
+            establishment_id=owner.establishment_id,
+            subject_type=Notification.SubjectType.SIGNAL,
+            subject_id=subject_id,
+        )
+
+
+def test_recipient_cannot_view_canceled_signal_without_pole_scope():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    canceled_signal = create_minimal_v3_signal(owner, status=Signal.Status.CANCELED)
+
     assert (
         recipient_can_view_notification_subject(
             recipient=owner,
             establishment_id=owner.establishment_id,
             subject_type=Notification.SubjectType.SIGNAL,
-            subject_id=uuid.uuid4(),
+            subject_id=canceled_signal.id,
         )
         is False
     )
 
 
-def test_unsupported_subject_type_returns_false():
+def test_signal_subject_unknown_id_returns_false():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     assert (
         recipient_can_view_notification_subject(

@@ -34,7 +34,7 @@ Realtime/feed handles visibility.
 
 ## 1. Notifications Lot 1 scope
 
-### 1.1 Strict event subset (8 only)
+### 1.1 Strict event subset (13 in-app events)
 
 ```txt
 action.created
@@ -45,17 +45,30 @@ action.canceled
 checklist.execution.created
 checklist.execution.canceled
 comment.mention.created
+signal.created
+signal.urgency_changed
+signal.pinned
+signal.resolved
+signal.canceled
 ```
 
-All other catalogue entries: `notification_lot: later` or `no` — **zero** Lot 1 notifications.
+All other catalogue entries: `notification_lot: later` or `no` — **zero** notifications.
 
-### 1.2 Signal — explicitly out of Lot 1
+### 1.2 Signal V1 — pole-scoped recipients
 
-No Signal event produces a Lot 1 notification. Signal visibility is handled by:
-- Signal Feed (authorized REST)
-- Realtime `signal.created` / `signal.updated`
+Signal notifications (V1) notify **active memberships** with `MembershipScope` on the signal's **responsible** and/or **affected** business unit (union when different).
 
-Signal notification rules are deferred to `notification_lot: later` in the catalogue.
+```txt
+Recipients = active memberships scoped on responsible_business_unit ∪ affected_business_unit (if ≠)
+Owner/Director without MembershipScope on those poles → excluded (feed access ≠ notification recipient)
+Staff/Manager → included only when scoped on a pole
+```
+
+- `signal.created` — actor = system (pipeline); no actor exclusion
+- `signal.urgency_changed` — only when urgency transitions to `high`; actor exclusion when manual
+- `signal.pinned` / `signal.resolved` / `signal.canceled` — actor exclusion when manual; auto-resolve (`actor=None`) notifies all scoped pole members
+- `signal.canceled` detail remains navigable: read-only GET detail for pole-scoped members (feed still excludes canceled)
+- Copy is generic FR — never signal title, structured_summary, or observation text
 
 ### 1.3 Channels Lot 1
 
@@ -234,19 +247,21 @@ For `action.pending_validation`:
 | `checklist.execution.created` | action_required | in_app | assignee | system actor OK |
 | `checklist.execution.canceled` | info | in_app | ∪(assignee, assigned_by) | −actor |
 | `comment.mention.created` | info | in_app | mentioned (if access) | skip without visibility |
+| `signal.created` | action_required | in_app | pole-scoped memberships | system actor; no exclusion |
+| `signal.urgency_changed` | urgent | in_app | pole-scoped memberships | only → high; −actor if membership |
+| `signal.pinned` | action_required | in_app | pole-scoped memberships | −actor if membership |
+| `signal.resolved` | info | in_app | pole-scoped memberships | −actor if membership; auto-resolve notifies all |
+| `signal.canceled` | info | in_app | pole-scoped memberships | −actor if membership; detail read-only scopé |
 
 ---
 
 ## 6. Deferred (`notification_lot: later`)
 
-Not in Lot 1 implementation. Documented in catalogue for future lots.
+Not in current implementation. Documented in catalogue for future lots.
 
 | event_key | Direction (draft) | Channel (future) |
 |---|---|---|
-| `signal.created` | Managers with BU scope; Owner/Director targeted | in_app (push post-MVP) |
 | `signal.aggregated` | Conditional — high urgency / pinned | in_app |
-| `signal.urgency_changed` | Managers BU scope when → high | in_app + push (post-MVP) |
-| `signal.resolved` / `signal.canceled` | Linked action stakeholders | in_app |
 | `action.accepted` | Creator | in_app |
 | `action.completed` / `action.validated` | Creator / assignee | in_app |
 | `checklist.execution.completed` | assigned_by | in_app |
@@ -258,7 +273,7 @@ Not in Lot 1 implementation. Documented in catalogue for future lots.
 
 | Item | Reason |
 |---|---|
-| `signal.pinned` / `signal.unpinned` | Feed + realtime only |
+| `signal.pinned` / `signal.unpinned` | `signal.unpinned` — feed + realtime only (`signal.pinned` implemented V1) |
 | `action.due_at_changed` | Feed + realtime only |
 | Checklist template/assignment CRUD | Library noise |
 | `comment.action.resolved` / `unresolved` | No attention message |

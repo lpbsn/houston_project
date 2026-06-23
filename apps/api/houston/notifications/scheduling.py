@@ -25,11 +25,13 @@ from houston.notifications.recipients import (
     resolve_checklist_execution_canceled_recipients,
     resolve_checklist_execution_created_recipients,
     resolve_comment_mention_recipients,
+    resolve_signal_pole_recipients,
 )
 from houston.notifications.services import (
     create_in_app_notification,
     create_in_app_notifications_for_recipients,
 )
+from houston.signals.models import Signal
 
 logger = logging.getLogger(__name__)
 
@@ -372,6 +374,153 @@ def schedule_comment_mention_created_notification(
                 establishment_id=comment.establishment_id,
                 actor_membership_id=actor_membership_id,
             ),
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def _load_signal(*, signal_id: uuid.UUID) -> Signal | None:
+    return (
+        Signal.objects.filter(id=signal_id)
+        .select_related("affected_business_unit", "responsible_business_unit")
+        .first()
+    )
+
+
+def _deliver_signal_notifications(
+    *,
+    signal: Signal,
+    event_key: str,
+    priority: str,
+    recipients: list[EstablishmentMembership],
+    actor_membership: EstablishmentMembership | None,
+    exclude_actor_if_recipient: bool = True,
+) -> None:
+    if not recipients:
+        return
+    create_in_app_notifications_for_recipients(
+        establishment_id=signal.establishment_id,
+        recipient_memberships=recipients,
+        event_key=event_key,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal.id,
+        priority=priority,
+        actor_membership=actor_membership,
+        exclude_actor_if_recipient=exclude_actor_if_recipient,
+    )
+
+
+def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
+    def deliver() -> None:
+        signal = _load_signal(signal_id=signal_id)
+        if signal is None:
+            return
+        recipients = resolve_signal_pole_recipients(signal=signal)
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_CREATED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=None,
+            exclude_actor_if_recipient=False,
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def schedule_signal_urgency_changed_notification(
+    *,
+    signal_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        signal = _load_signal(signal_id=signal_id)
+        if signal is None:
+            return
+        recipients = resolve_signal_pole_recipients(signal=signal)
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_URGENCY_CHANGED,
+            priority=Notification.Priority.URGENT,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def schedule_signal_pinned_notification(
+    *,
+    signal_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        signal = _load_signal(signal_id=signal_id)
+        if signal is None:
+            return
+        recipients = resolve_signal_pole_recipients(signal=signal)
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_PINNED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def schedule_signal_resolved_notification(
+    *,
+    signal_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        signal = _load_signal(signal_id=signal_id)
+        if signal is None:
+            return
+        recipients = resolve_signal_pole_recipients(signal=signal)
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_RESOLVED,
+            priority=Notification.Priority.INFO,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=actor_membership_id is not None,
+        )
+
+    _run_notification_after_commit(deliver=deliver)
+
+
+def schedule_signal_canceled_notification(
+    *,
+    signal_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        signal = _load_signal(signal_id=signal_id)
+        if signal is None:
+            return
+        recipients = resolve_signal_pole_recipients(signal=signal)
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_CANCELED,
+            priority=Notification.Priority.INFO,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=signal.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=actor_membership_id is not None,
         )
 
     _run_notification_after_commit(deliver=deliver)
