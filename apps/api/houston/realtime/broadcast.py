@@ -68,6 +68,49 @@ def schedule_establishment_invalidation(
     )
 
 
+def notify_membership_invalidation(
+    *,
+    establishment_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    subject_type: str,
+    reason: str,
+    entity_id: uuid.UUID,
+) -> None:
+    payload = build_invalidate_payload(
+        subject_type=subject_type,
+        reason=reason,
+        establishment_id=establishment_id,
+        entity_id=entity_id,
+    )
+    _send_to_group(
+        group_name=membership_group_name(
+            establishment_id=establishment_id,
+            membership_id=membership_id,
+        ),
+        handler_type="realtime.invalidation",
+        payload=payload,
+    )
+
+
+def schedule_membership_invalidation(
+    *,
+    establishment_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    subject_type: str,
+    reason: str,
+    entity_id: uuid.UUID,
+) -> None:
+    transaction.on_commit(
+        lambda: notify_membership_invalidation(
+            establishment_id=establishment_id,
+            membership_id=membership_id,
+            subject_type=subject_type,
+            reason=reason,
+            entity_id=entity_id,
+        )
+    )
+
+
 def notify_access_event(
     *,
     reason: str,

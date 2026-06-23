@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-22
-Implementation status: operational WebSocket invalidation implemented for Signal, Action, Checklist (templates / assignments / executions), Comment, and async observation-pipeline downstream invalidation ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`. Notification invalidation is not implemented.
+Implementation status: operational WebSocket invalidation implemented for Signal, Action, Checklist (templates / assignments / executions), Comment, Notification (membership-scoped), and async observation-pipeline downstream invalidation ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`.
 
 ## 1. Purpose
 
@@ -19,7 +19,7 @@ Realtime owns Houston's live transport boundary for keeping authorized operation
 - Minimal non-sensitive invalidation messages only.
 - Establishment-scoped operational invalidation for Signal feed/detail, Action execution-feed/detail, and Checklist templates / assignments / execution detail / execution feed.
 - Access/session messages for logout, establishment switch, and membership changes affecting bootstrap or workspace.
-- Comment invalidation implemented ; Notification invalidation not implemented.
+- Comment invalidation implemented ; Notification invalidation implemented (membership-scoped broadcast).
 - Frontend query invalidation and REST refetch through TanStack Query after relevant realtime messages.
 - Safe reconnect behavior: refetch active authorized queries after reconnect or missed delivery.
 
@@ -27,7 +27,7 @@ Current code truth:
 
 - Channels is installed and channel-layer configuration exists.
 - `houston/realtime` provides operational WS consumer, ws-ticket REST, broadcast after commit, and access events.
-- Operational invalidation is emitted from domain services (Signal lifecycle, Action lifecycle, Checklist sync writers, Comment sync writers) and async downstream paths (observation pipeline → `signal.created` / `signal.updated` ; checklist materialization → `execution.created`).
+- Operational invalidation is emitted from domain services (Signal lifecycle, Action lifecycle, Checklist sync writers, Comment sync writers, Notification lifecycle writers) and async downstream paths (observation pipeline → `signal.created` / `signal.updated` ; checklist materialization → `execution.created`).
 - Chat V1 WebSocket is implemented under `houston/chat/` — see Chat V1 section below.
 - Operational REST ws-ticket: `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/` (see `apps/api/schema.yml`).
 - Operational WS path: `/ws/v1/establishments/{establishment_id}/realtime/`.
@@ -79,7 +79,11 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `comment` | `comment.action.created` | action id | yes — sync action comment create (root or reply) | action comment list |
 | `comment` | `comment.action.resolved` | action id | yes — sync action comment resolve | action comment list |
 | `comment` | `comment.action.unresolved` | action id | yes — sync action comment unresolve | action comment list |
-| `notification` | — | — | **no** | — |
+| `notification` | `notification.created` | notification id | yes — membership-scoped | notification list + badge |
+| `notification` | `notification.updated` | notification id | yes — mark-read / archive | notification list + badge |
+| `notification` | `notification.bulk_updated` | recipient membership id (bulk) | yes — mark-all-read | notification list + badge |
+
+`notification.bulk_updated` is a membership-level bulk event: `entity_id` is the recipient membership id, not an individual notification id. Delivery uses the membership Channels group (`realtime_est_{establishment_id}_mbr_{membership_id}`), not the establishment-wide invalidation group.
 
 `execution.updated` includes sync checklist task transitions that change execution detail and may start or complete an execution visible on the execution feed.
 
@@ -111,7 +115,7 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 - Reconnect should trigger safe refetch of relevant active queries.
 - Feed remains a backend-authorized projection; realtime only helps refresh it.
 - Terminal checklist executions (`done` / `canceled`) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
-- Notifications remain persisted attention messages; operational realtime notification refresh is not implemented.
+- Notifications remain persisted attention messages; operational realtime notification refresh invalidates the recipient's notification list and unread badge via membership-scoped `invalidate` events.
 - Generic Realtime invalidation must not transport raw Chat messages.
 - Chat V1 message transport is defined only in [`chat_domain.md`](chat_domain.md) and is not a precedent for generic invalidation payloads.
 - Events remain immutable traces; realtime is selective transport around view-changing changes.

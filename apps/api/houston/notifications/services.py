@@ -18,6 +18,29 @@ from houston.notifications.models import Notification
 from houston.notifications.permissions import recipient_can_view_notification_subject
 from houston.notifications.selectors import get_notification_for_recipient
 
+NOTIFICATION_INVALIDATION_SUBJECT_TYPE = "notification"
+NOTIFICATION_CREATED_REASON = "notification.created"
+NOTIFICATION_UPDATED_REASON = "notification.updated"
+NOTIFICATION_BULK_UPDATED_REASON = "notification.bulk_updated"
+
+
+def _schedule_notification_invalidation(
+    *,
+    establishment_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    reason: str,
+    entity_id: uuid.UUID,
+) -> None:
+    from houston.realtime.broadcast import schedule_membership_invalidation
+
+    schedule_membership_invalidation(
+        establishment_id=establishment_id,
+        membership_id=membership_id,
+        subject_type=NOTIFICATION_INVALIDATION_SUBJECT_TYPE,
+        reason=reason,
+        entity_id=entity_id,
+    )
+
 
 def _membership_display_name(membership: EstablishmentMembership | None) -> str | None:
     if membership is None:
@@ -104,7 +127,7 @@ def create_in_app_notification(
         actor_display_name=_membership_display_name(actor_membership),
     )
 
-    return Notification.objects.create(
+    notification = Notification.objects.create(
         establishment_id=establishment_id,
         recipient_membership=recipient_membership,
         actor_membership=actor_membership,
@@ -117,6 +140,13 @@ def create_in_app_notification(
         body=body,
         dedupe_key=effective_dedupe_key,
     )
+    _schedule_notification_invalidation(
+        establishment_id=establishment_id,
+        membership_id=recipient_membership.id,
+        reason=NOTIFICATION_CREATED_REASON,
+        entity_id=notification.id,
+    )
+    return notification
 
 
 @transaction.atomic
@@ -177,6 +207,12 @@ def mark_notification_read(
         notification.status = Notification.Status.READ
         notification.read_at = now
         notification.save(update_fields=["status", "read_at", "updated_at"])
+        _schedule_notification_invalidation(
+            establishment_id=notification.establishment_id,
+            membership_id=membership.id,
+            reason=NOTIFICATION_UPDATED_REASON,
+            entity_id=notification.id,
+        )
 
     return notification
 
@@ -205,6 +241,12 @@ def archive_notification(
     notification.save(
         update_fields=["status", "archived_at", "read_at", "updated_at"],
     )
+    _schedule_notification_invalidation(
+        establishment_id=notification.establishment_id,
+        membership_id=membership.id,
+        reason=NOTIFICATION_UPDATED_REASON,
+        entity_id=notification.id,
+    )
     return notification
 
 
@@ -218,7 +260,7 @@ def mark_all_notifications_read(
         return 0
 
     now = timezone.now()
-    return Notification.objects.filter(
+    updated_count = Notification.objects.filter(
         establishment_id=establishment_id,
         recipient_membership_id=membership.id,
         status=Notification.Status.UNREAD,
@@ -227,3 +269,11 @@ def mark_all_notifications_read(
         read_at=now,
         updated_at=now,
     )
+    if updated_count > 0:
+        _schedule_notification_invalidation(
+            establishment_id=establishment_id,
+            membership_id=membership.id,
+            reason=NOTIFICATION_BULK_UPDATED_REASON,
+            entity_id=membership.id,
+        )
+    return updated_count
