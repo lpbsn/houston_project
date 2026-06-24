@@ -21,6 +21,7 @@ import {
   getDisplayNameInitials,
   isActionDeadlineCritical,
   isActionPendingValidationCard,
+  resolveActionFeedFooterDisplay,
   resolveActionValidationRelativeTimeIso,
   shouldShowActionUrgentBadge,
 } from './action-display'
@@ -385,5 +386,64 @@ describe('formatActionAcceptedByFooterLabel', () => {
         display_name: 'Marie Dupont',
       }),
     ).toBe('En cours · Marie D.')
+  })
+})
+
+describe('resolveActionFeedFooterDisplay', () => {
+  it('prefers accepted_by over assignees and creator', () => {
+    expect(
+      resolveActionFeedFooterDisplay({
+        status: 'in_progress',
+        created_by_display_name: 'Creator',
+        assignees: [
+          {
+            membership_id: 'member-1',
+            display_name: 'Assignee',
+            role: 'staff',
+          },
+        ],
+        accepted_by: {
+          membership_id: 'member-2',
+          display_name: 'Executor',
+        },
+      }),
+    ).toEqual({
+      initials: 'EX',
+      label: 'En cours · Executor',
+    })
+  })
+
+  it('uses assignees when accepted_by is absent', () => {
+    expect(
+      resolveActionFeedFooterDisplay({
+        status: 'open',
+        created_by_display_name: 'Creator',
+        assignees: [
+          {
+            membership_id: 'member-1',
+            display_name: 'Alice',
+            role: 'staff',
+          },
+        ],
+        accepted_by: null,
+      }),
+    ).toEqual({
+      initials: 'AL',
+      label: 'Alice',
+    })
+  })
+
+  it('falls back to creator label when assignees are empty', () => {
+    expect(
+      resolveActionFeedFooterDisplay({
+        status: 'open',
+        created_by_display_name: 'Creator',
+        assignees: [],
+        accepted_by: null,
+      }),
+    ).toEqual({
+      initials: 'CR',
+      label: 'Créé par Creator',
+    })
   })
 })

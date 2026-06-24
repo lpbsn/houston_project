@@ -1,4 +1,8 @@
-import type { ActionAcceptedBy, ActionMembershipRef } from '@/features/actions/types'
+import type {
+  ActionAcceptedBy,
+  ActionFeedItem,
+  ActionMembershipRef,
+} from '@/features/actions/types'
 import type { SignalClassificationInput } from '@/lib/signal-classification'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -348,4 +352,37 @@ export function formatActionAcceptedByFooterLabel(acceptedBy: ActionAcceptedBy |
     return 'En cours'
   }
   return `En cours · ${shortName}`
+}
+
+export type ActionFeedFooterInput = Pick<
+  ActionFeedItem,
+  'accepted_by' | 'assignees' | 'created_by_display_name' | 'status'
+>
+
+export function resolveActionFeedFooterDisplay(
+  item: ActionFeedFooterInput,
+): { initials: string; label: string } {
+  if (item.accepted_by) {
+    const displayName = item.accepted_by.display_name ?? ''
+    return {
+      initials: getDisplayNameInitials(displayName),
+      label:
+        item.status === 'done'
+          ? formatActionCompletedByLabel(displayName)
+          : formatActionAcceptedByFooterLabel(item.accepted_by),
+    }
+  }
+
+  if (item.assignees.length > 0) {
+    const primaryName = item.assignees[0]?.display_name ?? ''
+    return {
+      initials: getDisplayNameInitials(primaryName),
+      label: formatActionAssigneesLabel(item.assignees),
+    }
+  }
+
+  return {
+    initials: getDisplayNameInitials(item.created_by_display_name),
+    label: formatActionCreatorFooterLabel(item.created_by_display_name),
+  }
 }

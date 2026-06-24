@@ -6,7 +6,11 @@ import pytest
 from django.db import close_old_connections
 from django.utils import timezone
 
-from houston.actions.exceptions import ActionStateError, ActionValidationError
+from houston.actions.exceptions import (
+    ActionPermissionError,
+    ActionStateError,
+    ActionValidationError,
+)
 from houston.actions.models import Action, ActionAssignee
 from houston.actions.permissions import can_mark_action_done
 from houston.actions.services import (
@@ -129,7 +133,7 @@ def test_reopen_action_from_pending_validation():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
 
     action = reopen_action(action_id=action.id, actor=owner)
 
@@ -242,7 +246,7 @@ def test_reassign_rejects_pending_validation():
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
     action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
 
     with pytest.raises(ActionStateError, match="cannot be reassigned"):
         reassign_action(
@@ -303,7 +307,7 @@ def test_mark_action_done_sets_marked_done_at_not_validated():
         responsible_business_unit_id=maintenance.id,
     )
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
 
     action.refresh_from_db()
     assert action.status == Action.Status.PENDING_VALIDATION
@@ -322,7 +326,7 @@ def test_mark_action_done_without_validation_goes_directly_done():
         requires_validation=False,
     )
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
 
     action.refresh_from_db()
     assert action.status == Action.Status.DONE
@@ -352,7 +356,7 @@ def test_linked_action_without_validation_resolves_signal_on_mark_done():
         requires_validation=False,
     )
     action = accept_action(action_id=action.id, accepted_by=staff)
-    mark_action_done(action_id=action.id)
+    mark_action_done(action_id=action.id, actor_membership=staff)
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
@@ -372,8 +376,8 @@ def test_validate_action_sets_validated_at():
         responsible_business_unit_id=maintenance.id,
     )
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
-    action = validate_action(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
+    action = validate_action(action_id=action.id, actor_membership=owner)
 
     action.refresh_from_db()
     assert action.status == Action.Status.DONE
@@ -631,8 +635,123 @@ def test_linked_action_auto_resolves_signal_when_all_done():
         signal_id=signal.id,
     )
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
-    validate_action(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
+    validate_action(action_id=action.id, actor_membership=owner)
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
+
+
+def test_mark_action_done_rejects_non_accepted_assignee():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    other_staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Task",
+        instruction="Do it",
+        assignee_ids=[staff.id, other_staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        responsible_business_unit_id=maintenance.id,
+    )
+    action = accept_action(action_id=action.id, accepted_by=staff)
+
+    with pytest.raises(ActionPermissionError, match="Not allowed to mark this action done"):
+        mark_action_done(action_id=action.id, actor_membership=other_staff)
+
+
+def test_validate_action_rejects_staff():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
+
+    with pytest.raises(ActionPermissionError, match="Not allowed to validate this action"):
+        validate_action(action_id=action.id, actor_membership=staff)
+
+
+def test_sync_signal_resolves_when_one_done_one_canceled():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+        status=Signal.Status.IN_PROGRESS,
+    )
+    done_action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Done linked",
+        instruction="Work",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+    )
+    canceled_action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Canceled linked",
+        instruction="Work",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+    )
+    done_action = accept_action(action_id=done_action.id, accepted_by=staff)
+    done_action = mark_action_done(action_id=done_action.id, actor_membership=staff)
+    validate_action(action_id=done_action.id, actor_membership=owner)
+    cancel_action(action_id=canceled_action.id, actor=owner)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+
+
+def test_sync_signal_reopens_when_all_linked_actions_canceled():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+        status=Signal.Status.IN_PROGRESS,
+    )
+    signal.is_pinned = True
+    signal.pinned_at = timezone.now()
+    signal.pinned_by_membership = owner
+    signal.save()
+
+    action_a = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Linked A",
+        instruction="Work",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+    )
+    action_b = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Linked B",
+        instruction="Work",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+    )
+    cancel_action(action_id=action_a.id, actor=owner)
+    cancel_action(action_id=action_b.id, actor=owner)
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.OPEN
+    assert signal.is_pinned is False

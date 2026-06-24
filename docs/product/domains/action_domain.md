@@ -63,7 +63,9 @@ An Action is classified by **BusinessUnit / ActivitySubject** (v2, authoritative
 - Historical data backfill
 - **Recurrence** (independent occurrences — later phase)
 - **Validator groups** in V1 (validation uses existing RBAC only)
-- Frontend Phase 1 (API contract changed; regenerate types in a later phase)
+- **Reassign / due-at UI** and **proof/evidence** on action detail (backend APIs exist; frontend deferred — see §5)
+
+**Frontend (implemented):** free/linked create, detail lifecycle (accept, mark-done, validate, reopen, cancel), execution feed cards, action comments. OpenAPI types generated via `make web-api-generate`.
 
 Checklist executions in the polymorphic Execution Feed are **in scope** — see [`checklist_domain.md`](checklist_domain.md) §5.6 and [`feed_domain.md`](feed_domain.md) §7.
 

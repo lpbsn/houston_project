@@ -26,6 +26,11 @@ def is_action_assignee(
 ) -> bool:
     if membership is None:
         return False
+    prefetched = getattr(action, "_prefetched_objects_cache", None)
+    if prefetched is not None and "assignee_links" in prefetched:
+        return any(
+            link.membership_id == membership.id for link in action.assignee_links.all()
+        )
     return ActionAssignee.objects.filter(
         action_id=action.id,
         membership_id=membership.id,

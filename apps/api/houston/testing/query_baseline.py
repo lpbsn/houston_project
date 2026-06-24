@@ -22,6 +22,8 @@ EXECUTION_FEED_EMPTY_MAX_QUERIES = 8
 # GET .../execution-feed/?view_mode=personal — staff, 1 visible checklist execution
 # Phase L: 13 queries; Phase G: 11 (has_more without dual count() + scoped materialization)
 EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 11
+# GET .../execution-feed/?view_mode=general — owner, 3 active actions (post ACT-01 prefetch fix)
+EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES = 9
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 # Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)

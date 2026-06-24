@@ -20,7 +20,11 @@ from houston.actions.api.serializers import (
     serialize_action_detail,
     serialize_action_feed_item,
 )
-from houston.actions.exceptions import ActionStateError, ActionValidationError
+from houston.actions.exceptions import (
+    ActionPermissionError,
+    ActionStateError,
+    ActionValidationError,
+)
 from houston.actions.execution_feed import build_execution_feed_page
 from houston.actions.execution_feed_cursor import (
     ExecutionFeedCursorError,
@@ -86,6 +90,11 @@ def _action_command_error_response(exc: Exception) -> Response:
         return Response(
             {"code": exc.error_code, "detail": "Invalid action state."},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+    if isinstance(exc, ActionPermissionError):
+        return Response(
+            {"code": exc.error_code, "detail": "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
         )
     return Response(
         {"code": "api_error", "detail": "Request failed."},
@@ -340,8 +349,9 @@ class ActionMarkDoneView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_mark_action_done,
-            execute_transition=lambda locked_action_id, _actor: mark_action_done(
+            execute_transition=lambda locked_action_id, actor: mark_action_done(
                 action_id=locked_action_id,
+                actor_membership=actor,
             ),
         )
 
@@ -366,8 +376,9 @@ class ActionValidateView(EstablishmentScopedActionMixin, APIView):
             establishment_id=self.establishment_id,
             action_id=action_id,
             permission_check=can_validate_action_on_object,
-            execute_transition=lambda locked_action_id, _actor: validate_action(
+            execute_transition=lambda locked_action_id, actor: validate_action(
                 action_id=locked_action_id,
+                actor_membership=actor,
             ),
         )
 

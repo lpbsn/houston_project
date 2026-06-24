@@ -15,9 +15,18 @@ from houston.actions.constants import (
     ACTIVE_ACTION_STATUSES,
     TERMINAL_ACTION_STATUSES,
 )
-from houston.actions.exceptions import ActionStateError, ActionValidationError
+from houston.actions.exceptions import (
+    ActionPermissionError,
+    ActionStateError,
+    ActionValidationError,
+)
 from houston.actions.models import Action, ActionAssignee
-from houston.actions.permissions import can_create_free_action, can_create_linked_action
+from houston.actions.permissions import (
+    can_create_free_action,
+    can_create_linked_action,
+    can_mark_action_done,
+    can_validate_action_on_object,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.recipients import snapshot_action_assignee_ids
 from houston.notifications.scheduling import (
@@ -314,10 +323,16 @@ def accept_action(
 
 
 @transaction.atomic
-def mark_action_done(*, action_id: uuid.UUID) -> Action:
+def mark_action_done(
+    *,
+    action_id: uuid.UUID,
+    actor_membership: EstablishmentMembership,
+) -> Action:
     action = _lock_action_for_transition(action_id=action_id)
     if action.status != Action.Status.IN_PROGRESS:
         raise ActionStateError("Action cannot be marked done in its current state.")
+    if not can_mark_action_done(actor_membership, action):
+        raise ActionPermissionError("Not allowed to mark this action done.")
     now = timezone.now()
     action.marked_done_at = now
     action.last_activity_at = now
@@ -355,10 +370,16 @@ def mark_action_done(*, action_id: uuid.UUID) -> Action:
 
 
 @transaction.atomic
-def validate_action(*, action_id: uuid.UUID) -> Action:
+def validate_action(
+    *,
+    action_id: uuid.UUID,
+    actor_membership: EstablishmentMembership,
+) -> Action:
     action = _lock_action_for_transition(action_id=action_id)
     if action.status != Action.Status.PENDING_VALIDATION:
         raise ActionStateError("Action cannot be validated in its current state.")
+    if not can_validate_action_on_object(actor_membership, action):
+        raise ActionPermissionError("Not allowed to validate this action.")
     now = timezone.now()
     action.status = Action.Status.DONE
     action.validated_at = now

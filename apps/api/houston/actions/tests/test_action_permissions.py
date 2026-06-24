@@ -40,7 +40,7 @@ def _action_for_permissions(*, owner, staff, maintenance, status=Action.Status.O
         action = accept_action(action_id=action.id, accepted_by=staff)
     elif status == Action.Status.PENDING_VALIDATION:
         action = accept_action(action_id=action.id, accepted_by=staff)
-        action = mark_action_done(action_id=action.id)
+        action = mark_action_done(action_id=action.id, actor_membership=staff)
     elif status != Action.Status.OPEN:
         action.status = status
         action.save(update_fields=["status", "updated_at"])

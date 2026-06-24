@@ -7,13 +7,13 @@ import { ActionDeadlineProgressBar } from '@/components/domain/action-deadline-p
 import {
   actionClassificationInput,
   formatActionCompletedByLabel,
-  formatActionCreatorFooterLabel,
   formatActionValidationRelativeTime,
   formatActionValidationWaitingLabel,
   getActionCardLeftAccentColor,
   getActionLocationText,
   getDisplayNameInitials,
   isActionPendingValidationCard,
+  resolveActionFeedFooterDisplay,
   resolveActionValidationRelativeTimeIso,
   shouldShowActionUrgentBadge,
 } from '@/features/actions/lib/action-display'
@@ -98,8 +98,7 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
   const leftAccentColor = getActionCardLeftAccentColor(item.status)
   const showUrgentBadge = shouldShowActionUrgentBadge(item.signal_summary)
   const locationText = getActionLocationText(item.signal_summary)
-  const creatorInitials = getDisplayNameInitials(item.created_by_display_name)
-  const creatorLabel = formatActionCreatorFooterLabel(item.created_by_display_name)
+  const footerDisplay = resolveActionFeedFooterDisplay(item)
 
   return (
     <article
@@ -142,9 +141,9 @@ function ClassicExecutionActionCard({ item, onSelect }: ExecutionActionCardProps
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#1B4FD8]"
             aria-hidden
           >
-            {creatorInitials}
+            {footerDisplay.initials}
           </div>
-          <span className="truncate text-[11px] text-[#888]">{creatorLabel}</span>
+          <span className="truncate text-[11px] text-[#888]">{footerDisplay.label}</span>
         </div>
         <ActionStatusBadge status={item.status} labelVariant="feed" className="shrink-0" />
       </div>

@@ -152,7 +152,7 @@ def test_action_pending_validation_notifies_in_scope_validators_only():
         responsible_business_unit_id=maintenance.id,
     )
     accept_action(action_id=action.id, accepted_by=staff)
-    mark_action_done(action_id=action.id)
+    mark_action_done(action_id=action.id, actor_membership=staff)
 
     notifications = [
         item
@@ -192,7 +192,7 @@ def test_pending_validation_notifies_validators_when_accepted_by_inactive():
 
     with transaction.atomic():
         accept_action(action_id=action.id, accepted_by=staff)
-        mark_action_done(action_id=action.id)
+        mark_action_done(action_id=action.id, actor_membership=staff)
         staff.status = EstablishmentMembership.Status.DEACTIVATED
         staff.save(update_fields=["status", "updated_at"])
 
@@ -267,7 +267,7 @@ def test_action_reopened_notifies_assignees_and_creator_deduped_excludes_actor()
         responsible_business_unit_id=maintenance.id,
     )
     accept_action(action_id=action.id, accepted_by=owner)
-    mark_action_done(action_id=action.id)
+    mark_action_done(action_id=action.id, actor_membership=owner)
     Notification.objects.filter(subject_id=action.id).delete()
 
     reopen_action(action_id=action.id, actor=owner)

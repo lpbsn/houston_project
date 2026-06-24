@@ -206,7 +206,7 @@ def test_mark_action_done_pending_validation_emits_action_updated():
     accept_action(action_id=action.id, accepted_by=staff)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        updated = mark_action_done(action_id=action.id)
+        updated = mark_action_done(action_id=action.id, actor_membership=staff)
 
         assert updated.status == Action.Status.PENDING_VALIDATION
         mock_notify.assert_called_once()
@@ -224,7 +224,7 @@ def test_mark_action_done_direct_done_emits_action_updated():
     accept_action(action_id=action.id, accepted_by=staff)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        updated = mark_action_done(action_id=action.id)
+        updated = mark_action_done(action_id=action.id, actor_membership=staff)
 
         assert updated.status == Action.Status.DONE
         mock_notify.assert_called_once()
@@ -235,10 +235,10 @@ def test_validate_action_emits_action_updated_after_commit():
     owner, staff, _, maintenance, _ = _owner_staff_maintenance()
     action = _create_free_action(owner=owner, staff=staff, maintenance=maintenance)
     accept_action(action_id=action.id, accepted_by=staff)
-    mark_action_done(action_id=action.id)
+    mark_action_done(action_id=action.id, actor_membership=staff)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        validate_action(action_id=action.id)
+        validate_action(action_id=action.id, actor_membership=owner)
 
         mock_notify.assert_called_once()
         _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
@@ -248,7 +248,7 @@ def test_reopen_action_emits_action_updated_after_commit():
     owner, staff, _, maintenance, _ = _owner_staff_maintenance()
     action = _create_free_action(owner=owner, staff=staff, maintenance=maintenance)
     accept_action(action_id=action.id, accepted_by=staff)
-    mark_action_done(action_id=action.id)
+    mark_action_done(action_id=action.id, actor_membership=staff)
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
         reopen_action(action_id=action.id, actor=owner)

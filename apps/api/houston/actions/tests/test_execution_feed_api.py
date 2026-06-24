@@ -297,8 +297,8 @@ def test_detail_shows_done_action_not_in_feed(api_client):
     from houston.actions.services import accept_action, mark_action_done, validate_action
 
     action = accept_action(action_id=action.id, accepted_by=staff)
-    action = mark_action_done(action_id=action.id)
-    action = validate_action(action_id=action.id)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
+    action = validate_action(action_id=action.id, actor_membership=owner)
 
     token = login(api_client, user=staff.user)
     feed = api_client.get(
@@ -364,4 +364,39 @@ def test_execution_feed_query_count_baseline_empty(api_client):
         context,
         max_queries=EXECUTION_FEED_EMPTY_MAX_QUERIES,
         label="execution_feed_general_empty",
+    )
+
+
+def test_execution_feed_query_count_with_three_actions(api_client):
+    """Post ACT-01: permission hints should not N+1 assignee exists queries."""
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    for index in range(3):
+        _create_free_action_for(
+            owner,
+            assigned_to=staff,
+            responsible_business_unit=hotel,
+            title=f"Feed query action {index}",
+        )
+
+    token = login(api_client, user=owner.user)
+    url = execution_feed_url(owner.establishment_id) + _feed_query("general")
+
+    from houston.testing.query_baseline import (
+        EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    action_items = [item for item in response.json()["items"] if item["item_type"] == "action"]
+    assert len(action_items) == 3
+    assert_query_count_at_most(
+        context,
+        max_queries=EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES,
+        label="execution_feed_general_three_actions",
     )

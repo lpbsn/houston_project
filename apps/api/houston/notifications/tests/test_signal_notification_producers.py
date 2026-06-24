@@ -400,8 +400,8 @@ def test_auto_resolve_with_actor_none_notifies_pole_members():
     Notification.objects.filter(subject_id=signal.id).delete()
 
     accept_action(action_id=action.id, accepted_by=staff)
-    mark_action_done(action_id=action.id)
-    validate_action(action_id=action.id)
+    mark_action_done(action_id=action.id, actor_membership=staff)
+    validate_action(action_id=action.id, actor_membership=owner)
 
     notifications = [
         item
