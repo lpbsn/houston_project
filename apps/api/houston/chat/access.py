@@ -5,7 +5,7 @@ from typing import Any
 
 from houston.establishments.access import get_api_access_context
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.permissions import _is_valid_membership
+from houston.establishments.permissions import is_valid_membership
 
 from .permissions import can_access_chat
 
@@ -21,7 +21,7 @@ def _resolve_establishment_membership(
         return None
     if membership.establishment_id != establishment_id:
         return None
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return None
     return membership
 

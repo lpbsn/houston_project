@@ -27,8 +27,8 @@ from houston.chat.selectors import (
     get_latest_message,
 )
 from houston.establishments.models import Establishment, EstablishmentMembership
-from houston.establishments.permissions import _is_valid_membership
-from houston.establishments.role_constants import _ADMIN_ROLES
+from houston.establishments.permissions import is_valid_membership
+from houston.establishments.role_constants import ADMIN_ROLES
 
 from .constants import CHAT_GROUP_TITLE_MAX_LENGTH, CHAT_MESSAGE_BODY_MAX_LENGTH
 from .ws_notify import (
@@ -91,7 +91,7 @@ def _ensure_group_has_admin(*, conversation: ChatConversation) -> None:
         return
 
     for participant in active_participants:
-        if participant.membership.role in _ADMIN_ROLES:
+        if participant.membership.role in ADMIN_ROLES:
             participant.role = ChatParticipant.Role.ADMIN
             participant.save(update_fields=["role", "updated_at"])
             return
@@ -166,7 +166,7 @@ def _require_chat_membership(
         .filter(id=target_membership_id)
         .first()
     )
-    if target is None or not _is_valid_membership(target):
+    if target is None or not is_valid_membership(target):
         raise ChatValidationError("Target membership is not eligible for chat.")
     if target.establishment_id != membership.establishment_id:
         raise ChatValidationError("Target membership must belong to the same establishment.")

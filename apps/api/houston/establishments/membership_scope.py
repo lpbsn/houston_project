@@ -13,7 +13,7 @@ from houston.establishments.models import (
     EstablishmentMembership,
     MembershipScope,
 )
-from houston.establishments.role_constants import _ADMIN_ROLES
+from houston.establishments.role_constants import ADMIN_ROLES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -133,7 +133,7 @@ def membership_covers_business_unit_including_admins(
         return False
     if membership.establishment_id != business_unit.establishment_id:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role in {
         EstablishmentMembership.Role.MANAGER,

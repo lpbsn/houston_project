@@ -13,8 +13,8 @@ from houston.establishments.membership_scope import (
     membership_scope_covers_business_unit,
 )
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
-from houston.establishments.permissions import _is_valid_membership
-from houston.establishments.role_constants import _ADMIN_ROLES, _MANAGEMENT_ROLES
+from houston.establishments.permissions import is_valid_membership
+from houston.establishments.role_constants import _MANAGEMENT_ROLES, ADMIN_ROLES
 
 
 def _same_establishment(
@@ -38,7 +38,7 @@ def membership_covers_checklist_business_unit(
 ) -> bool:
     if business_unit is None:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return business_unit.establishment_id == membership.establishment_id
     if membership.role in {
         EstablishmentMembership.Role.MANAGER,
@@ -50,7 +50,7 @@ def membership_covers_checklist_business_unit(
 
 def build_checklist_visibility_scope_q(*, membership: EstablishmentMembership) -> Q | None:
     """Manager/Staff feed: executions whose snapshot BU is in MembershipScope."""
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return Q(establishment_id=membership.establishment_id)
     if membership.role not in {
         EstablishmentMembership.Role.MANAGER,
@@ -65,11 +65,11 @@ def build_checklist_visibility_scope_q(*, membership: EstablishmentMembership) -
 
 
 def can_access_checklist_management(membership: EstablishmentMembership | None) -> bool:
-    return _is_valid_membership(membership)
+    return is_valid_membership(membership)
 
 
 def can_create_registered_template(membership: EstablishmentMembership | None) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     return membership.role in _MANAGEMENT_ROLES
 
@@ -78,11 +78,11 @@ def can_delete_registered_template(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if not _same_establishment(membership, template.establishment_id):
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return membership_covers_checklist_business_unit(membership, template.business_unit)
@@ -104,11 +104,11 @@ def registered_template_visible_to_membership(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if not _same_establishment(membership, template.establishment_id):
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     bu_ids = _scope_business_unit_ids(membership)
     if not bu_ids:
@@ -127,7 +127,7 @@ def can_create_checklist_assignment(
     membership: EstablishmentMembership | None,
     template: ChecklistTemplate,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     return membership.role in _MANAGEMENT_ROLES and can_manage_registered_template(
         membership,
@@ -138,7 +138,7 @@ def can_create_checklist_assignment(
 def can_assign_checklist_execution_to_others(
     membership: EstablishmentMembership | None,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     return membership.role in _MANAGEMENT_ROLES
 
@@ -147,13 +147,13 @@ def checklist_assignment_visible_to_membership(
     membership: EstablishmentMembership | None,
     assignment: ChecklistAssignment,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
     if not _same_establishment(membership, assignment.establishment_id):
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return membership_covers_checklist_business_unit(membership, assignment.business_unit)
@@ -173,7 +173,7 @@ def can_launch_template_execution(
 ) -> bool:
     if not checklist_template_visible_to_membership(membership, template):
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     return membership_covers_checklist_business_unit(membership, template.business_unit)
 
@@ -205,7 +205,7 @@ def can_execute_checklist_tasks(
     membership: EstablishmentMembership | None,
     execution: ChecklistExecution,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if not _same_establishment(membership, execution.establishment_id):
         return False
@@ -216,14 +216,14 @@ def checklist_execution_visible_to_membership(
     membership: EstablishmentMembership | None,
     execution: ChecklistExecution,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if not _same_establishment(membership, execution.establishment_id):
         return False
 
     if execution.assigned_to_id == membership.id:
         return True
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return membership_covers_checklist_business_unit(membership, execution.business_unit)
@@ -234,13 +234,13 @@ def can_cancel_checklist_execution(
     membership: EstablishmentMembership | None,
     execution: ChecklistExecution,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if not _same_establishment(membership, execution.establishment_id):
         return False
     if execution.assigned_to_id == membership.id:
         return True
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return membership_covers_checklist_business_unit(membership, execution.business_unit)

@@ -4,6 +4,7 @@ import pytest
 from django.utils import timezone
 
 from houston.accounts.models import User
+from houston.actions.tests.conftest import build_api_membership_on_establishment
 from houston.establishments.models import EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
@@ -15,8 +16,10 @@ from houston.signals.permissions import (
     can_view_signal,
     can_view_signal_feed,
     signal_actionable_by_membership,
+    signal_pole_visible_to_membership,
     signal_visible_in_membership_scope,
 )
+from houston.testing.auth import build_api_membership
 from houston.testing.factories import build_membership
 from houston.testing.taxonomy import (
     create_business_unit,
@@ -108,3 +111,38 @@ def test_staff_cannot_cancel_or_resolve_signal():
     assert not can_cancel_signal(membership, signal)
     assert not can_resolve_signal(membership, signal)
     assert not can_pin_signal(membership, signal)
+
+
+def test_signal_pole_visible_admin_without_scope():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    business_unit = create_business_unit(establishment=owner.establishment, key="bar")
+    signal = _build_signal(membership=owner, business_unit=business_unit)
+    signal.status = Signal.Status.CANCELED
+    signal.save(update_fields=["status", "updated_at"])
+
+    assert signal_pole_visible_to_membership(owner, signal)
+    assert signal_pole_visible_to_membership(director, signal)
+
+
+def test_signal_pole_visible_staff_requires_scope():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    in_scope_bu = create_business_unit(establishment=owner.establishment, key="bar")
+    out_of_scope_bu = create_business_unit(establishment=owner.establishment, key="kitchen")
+    create_membership_with_business_unit_scope(membership=staff, business_unit=in_scope_bu)
+    in_scope_signal = _build_signal(membership=owner, business_unit=in_scope_bu)
+    in_scope_signal.status = Signal.Status.CANCELED
+    in_scope_signal.save(update_fields=["status", "updated_at"])
+    out_of_scope_signal = _build_signal(membership=owner, business_unit=out_of_scope_bu)
+    out_of_scope_signal.status = Signal.Status.CANCELED
+    out_of_scope_signal.save(update_fields=["status", "updated_at"])
+
+    assert signal_pole_visible_to_membership(staff, in_scope_signal)
+    assert not signal_pole_visible_to_membership(staff, out_of_scope_signal)

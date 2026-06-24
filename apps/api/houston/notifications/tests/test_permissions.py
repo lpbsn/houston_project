@@ -111,18 +111,31 @@ def test_recipient_can_view_signal_subject_open_resolved_canceled_scoped():
         )
 
 
-def test_recipient_cannot_view_canceled_signal_without_pole_scope():
+def test_recipient_can_view_canceled_signal_admin_without_pole_scope():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     canceled_signal = create_minimal_v3_signal(owner, status=Signal.Status.CANCELED)
 
-    assert (
-        recipient_can_view_notification_subject(
-            recipient=owner,
-            establishment_id=owner.establishment_id,
-            subject_type=Notification.SubjectType.SIGNAL,
-            subject_id=canceled_signal.id,
-        )
-        is False
+    assert recipient_can_view_notification_subject(
+        recipient=owner,
+        establishment_id=owner.establishment_id,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=canceled_signal.id,
+    )
+
+
+def test_recipient_can_view_canceled_signal_director_without_pole_scope():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    canceled_signal = create_minimal_v3_signal(owner, status=Signal.Status.CANCELED)
+
+    assert recipient_can_view_notification_subject(
+        recipient=director,
+        establishment_id=owner.establishment_id,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=canceled_signal.id,
     )
 
 

@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.permissions import _is_valid_membership
+from houston.establishments.permissions import is_valid_membership
 from houston.notifications.constants import (
     DEDUPE_WINDOW,
     LOT1_EVENT_KEYS,
@@ -86,7 +86,7 @@ def create_in_app_notification(
 
     if actor_membership is not None and (
         actor_membership.establishment_id != establishment_id
-        or not _is_valid_membership(actor_membership)
+        or not is_valid_membership(actor_membership)
     ):
         raise NotificationValidationError("Invalid actor membership.")
 

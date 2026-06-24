@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from houston.establishments.models import EstablishmentMembership
 
-_ADMIN_ROLES = frozenset(
+ADMIN_ROLES = frozenset(
     {
         EstablishmentMembership.Role.OWNER,
         EstablishmentMembership.Role.DIRECTOR,

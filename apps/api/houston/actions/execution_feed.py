@@ -28,7 +28,7 @@ from houston.checklists.selectors import (
 )
 from houston.establishments.membership_scope import membership_scope_prefetch
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import _ADMIN_ROLES
+from houston.establishments.role_constants import ADMIN_ROLES
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,7 @@ class ExecutionFeedPageItem:
 def _membership_for_execution_feed(
     membership: EstablishmentMembership,
 ) -> EstablishmentMembership:
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return membership
     return (
         EstablishmentMembership.objects.filter(pk=membership.pk)

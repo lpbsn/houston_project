@@ -84,13 +84,9 @@ def test_signal_comments_400_on_empty_body(api_client):
     assert response.json()["code"] == "validation_error"
 
 
-@pytest.mark.parametrize(
-    "status",
-    [Signal.Status.ARCHIVED, Signal.Status.CANCELED],
-)
-def test_signal_comments_404_when_signal_detail_would_404(api_client, status):
+def test_signal_comments_404_when_signal_detail_would_404(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = _signal(owner, status=status)
+    signal = _signal(owner, status=Signal.Status.ARCHIVED)
     token = login(api_client, user=owner.user)
     detail_url = signal_detail_url(owner.establishment_id, signal.id)
     comments_url = signal_comments_url(owner.establishment_id, signal.id)
@@ -108,6 +104,20 @@ def test_signal_comments_404_when_signal_detail_would_404(api_client, status):
         **auth_headers(token),
     )
     assert post_resp.status_code == 404
+
+
+def test_signal_comments_allowed_for_canceled_signal_admin(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(owner, status=Signal.Status.CANCELED)
+    token = login(api_client, user=owner.user)
+    detail_url = signal_detail_url(owner.establishment_id, signal.id)
+    comments_url = signal_comments_url(owner.establishment_id, signal.id)
+
+    detail_resp = api_client.get(detail_url, **auth_headers(token))
+    assert detail_resp.status_code == 200
+
+    get_resp = api_client.get(comments_url, **auth_headers(token))
+    assert get_resp.status_code == 200
 
 
 def test_signal_comments_on_resolved_signal(api_client):

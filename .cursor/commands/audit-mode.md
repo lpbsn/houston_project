@@ -1,7 +1,13 @@
 ## Socle commun — Audit Houston
 
-Mode audit only. Do not edit files.
+Mode audit only.
 
+Do not edit source code.
+Do not modify app behavior.
+You may create or update Markdown audit reports only under:
+docs/audits/
+
+Never edit source files during audit mode.
 Context:
 Houston is in dev phase only. No staging/prod compatibility requirement. No defensive migration strategy unless it protects data integrity or architecture.
 

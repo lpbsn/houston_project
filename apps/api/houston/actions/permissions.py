@@ -11,7 +11,7 @@ from houston.establishments.permissions import (
 from houston.establishments.permissions import (
     can_validate_action as establishment_can_validate_action,
 )
-from houston.establishments.role_constants import _ADMIN_ROLES
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
 from houston.signals.permissions import (
@@ -42,7 +42,7 @@ def can_access_signal_for_linked_action(
         return False
     if signal.status not in ACTIVE_SIGNAL_STATUSES:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     return signal_matches_membership_scope(membership, signal)
 
@@ -51,7 +51,7 @@ def action_visible_in_membership_scope(
     membership: EstablishmentMembership,
     action: Action,
 ) -> bool:
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
 
     if action.signal_id is not None:
@@ -82,7 +82,7 @@ def action_actionable_by_membership(
     membership: EstablishmentMembership,
     action: Action,
 ) -> bool:
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if action.responsible_business_unit_id is None:
         return False
@@ -100,7 +100,7 @@ def action_visible_to_membership(
         return False
     if action.establishment_id != membership.establishment_id:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if is_action_assignee(membership, action):
         return True
@@ -122,7 +122,7 @@ def can_create_free_action(
         return False
     if membership is None:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role in {
         EstablishmentMembership.Role.MANAGER,
@@ -143,7 +143,7 @@ def can_create_linked_action(
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return can_access_signal_for_linked_action(membership, signal)
     if not can_access_signal_for_linked_action(membership, signal):
         return False
@@ -190,7 +190,7 @@ def can_validate_action_on_object(
         return False
     if action.status != Action.Status.PENDING_VALIDATION:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         responsible_business_unit = resolve_action_responsible_business_unit(action=action)
@@ -212,7 +212,7 @@ def can_reopen_action(
         return False
     if action.status not in {Action.Status.PENDING_VALIDATION, Action.Status.DONE}:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return action.created_by_id == membership.id
@@ -231,7 +231,7 @@ def can_cancel_action(
         return False
     if action.status not in ACTIVE_ACTION_STATUSES:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return action.created_by_id == membership.id
@@ -254,7 +254,7 @@ def can_reassign_action(
         Action.Status.CANCELED,
     }:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return action_actionable_by_membership(membership, action)
@@ -271,7 +271,7 @@ def can_update_action_due_at(
         return False
     if action.status in {Action.Status.DONE, Action.Status.CANCELED}:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return action.created_by_id == membership.id

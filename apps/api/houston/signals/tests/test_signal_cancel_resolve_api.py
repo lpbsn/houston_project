@@ -155,7 +155,7 @@ def test_cancel_terminal_signal_returns_invalid_state(api_client):
         **auth_headers(token),
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 def test_resolve_terminal_signal_returns_permission_denied(api_client):

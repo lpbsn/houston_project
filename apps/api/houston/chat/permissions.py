@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from houston.chat.models import ChatConversation, ChatParticipant
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.permissions import _is_valid_membership
-from houston.establishments.role_constants import _ACTION_ROLES, _ADMIN_ROLES
+from houston.establishments.permissions import is_valid_membership
+from houston.establishments.role_constants import _ACTION_ROLES, ADMIN_ROLES
 
 
 def can_access_chat(membership: EstablishmentMembership | None) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     return bool(membership.establishment.chat_enabled)
 
@@ -23,9 +23,9 @@ def can_create_group(membership: EstablishmentMembership | None) -> bool:
 
 
 def can_manage_establishment_chat_settings(membership: EstablishmentMembership | None) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
-    return membership.role in _ADMIN_ROLES
+    return membership.role in ADMIN_ROLES
 
 
 def _is_active_participant(

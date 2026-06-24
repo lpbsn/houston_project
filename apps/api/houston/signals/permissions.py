@@ -5,7 +5,7 @@ from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import (
     can_view_signal_feed as establishment_can_view_signal_feed,
 )
-from houston.establishments.role_constants import _ADMIN_ROLES
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
 
@@ -22,6 +22,8 @@ def signal_pole_visible_to_membership(
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
+    if membership.role in ADMIN_ROLES:
+        return True
     if signal.responsible_business_unit_id is not None:
         if membership_scope_covers_business_unit(membership, signal.responsible_business_unit):
             return True
@@ -35,7 +37,7 @@ def signal_visible_in_membership_scope(
     membership: EstablishmentMembership,
     signal: Signal,
 ) -> bool:
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
 
     if signal.affected_business_unit_id is not None:
@@ -52,7 +54,7 @@ def signal_actionable_by_membership(
     membership: EstablishmentMembership,
     signal: Signal,
 ) -> bool:
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
 
     if signal.responsible_business_unit_id is not None:
@@ -93,7 +95,7 @@ def can_pin_signal(
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     return signal_actionable_by_membership(membership, signal)
 
@@ -131,6 +133,6 @@ def _can_cancel_or_resolve_signal(
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     return signal_actionable_by_membership(membership, signal)

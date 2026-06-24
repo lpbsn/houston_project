@@ -9,7 +9,7 @@ from houston.checklists.permissions import checklist_execution_visible_to_member
 from houston.comments.models import Comment
 from houston.comments.selectors import get_action_for_comments, get_signal_for_comments
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.permissions import _is_valid_membership
+from houston.establishments.permissions import is_valid_membership
 from houston.notifications.models import Notification
 
 
@@ -17,7 +17,7 @@ def notification_visible_to_membership(
     notification: Notification,
     membership: EstablishmentMembership | None,
 ) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     if notification.establishment_id != membership.establishment_id:
         return False
@@ -31,7 +31,7 @@ def recipient_can_view_notification_subject(
     subject_type: str,
     subject_id: uuid.UUID,
 ) -> bool:
-    if not _is_valid_membership(recipient):
+    if not is_valid_membership(recipient):
         return False
     if recipient.establishment_id != establishment_id:
         return False

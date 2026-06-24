@@ -10,7 +10,7 @@ from houston.actions.permissions import (
 from houston.comments.models import Comment
 from houston.comments.selectors import get_action_for_comments, get_signal_for_comments
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.role_constants import _ADMIN_ROLES
+from houston.establishments.role_constants import ADMIN_ROLES
 
 
 def can_access_signal_comments(
@@ -67,7 +67,7 @@ def can_resolve_action_comment(
         return True
     if action.created_by_id == membership.id:
         return True
-    if membership.role in _ADMIN_ROLES:
+    if membership.role in ADMIN_ROLES:
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return action_visible_to_membership(membership, action)

@@ -37,7 +37,7 @@ def _signal(owner, *, status=Signal.Status.OPEN):
 
 @pytest.mark.parametrize(
     "status",
-    [Signal.Status.CANCELED, Signal.Status.ARCHIVED],
+    [Signal.Status.ARCHIVED],
 )
 def test_get_signal_for_comments_returns_none_for_non_detail_statuses(status):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
@@ -45,6 +45,15 @@ def test_get_signal_for_comments_returns_none_for_non_detail_statuses(status):
 
     loaded = get_signal_for_comments(membership=owner, signal_id=signal.id)
     assert loaded is None
+
+
+def test_get_signal_for_comments_returns_canceled_signal_for_admin():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(owner, status=Signal.Status.CANCELED)
+
+    loaded = get_signal_for_comments(membership=owner, signal_id=signal.id)
+    assert loaded is not None
+    assert loaded.status == Signal.Status.CANCELED
 
 
 def test_get_action_for_comments_includes_done_status():

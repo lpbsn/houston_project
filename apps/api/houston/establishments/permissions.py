@@ -10,23 +10,23 @@ from houston.establishments.models import (
 )
 from houston.establishments.role_constants import (
     _ACTION_ROLES,
-    _ADMIN_ROLES,
     _INVITATION_ROLES,
     _VALID_ROLES,
+    ADMIN_ROLES,
 )
 from houston.organizations.models import Organization
 
 
 def can_access_app(membership: EstablishmentMembership | None) -> bool:
-    return _is_valid_membership(membership)
+    return is_valid_membership(membership)
 
 
 def can_manage_establishment_settings(membership: EstablishmentMembership | None) -> bool:
-    return _has_role(membership, _ADMIN_ROLES)
+    return _has_role(membership, ADMIN_ROLES)
 
 
 def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
-    return _has_role(membership, _ADMIN_ROLES)
+    return _has_role(membership, ADMIN_ROLES)
 
 
 def can_invite_memberships(membership: EstablishmentMembership | None) -> bool:
@@ -39,19 +39,19 @@ def can_manage_runtime_context(membership: EstablishmentMembership | None) -> bo
     Intended for post-activation runtime administration APIs. Onboarding-session routes use
     ``get_onboarding_access_context`` instead (path-scoped session, draft/active establishment).
     """
-    return _has_role(membership, _ADMIN_ROLES)
+    return _has_role(membership, ADMIN_ROLES)
 
 
 def can_view_signal_feed(membership: EstablishmentMembership | None) -> bool:
-    return _is_valid_membership(membership)
+    return is_valid_membership(membership)
 
 
 def can_create_observation(membership: EstablishmentMembership | None) -> bool:
-    return _is_valid_membership(membership)
+    return is_valid_membership(membership)
 
 
 def can_create_action(membership: EstablishmentMembership | None) -> bool:
-    if not _is_valid_membership(membership):
+    if not is_valid_membership(membership):
         return False
     return membership.role in _ACTION_ROLES or membership.role == EstablishmentMembership.Role.STAFF
 
@@ -64,7 +64,7 @@ def _has_role(
     membership: EstablishmentMembership | None,
     allowed_roles: frozenset[str],
 ) -> bool:
-    return _is_valid_membership(membership) and membership.role in allowed_roles
+    return is_valid_membership(membership) and membership.role in allowed_roles
 
 
 def _is_valid_invitation_membership(membership: EstablishmentMembership | None) -> bool:
@@ -95,7 +95,7 @@ def _is_valid_invitation_membership(membership: EstablishmentMembership | None) 
     return True
 
 
-def _is_valid_membership(membership: EstablishmentMembership | None) -> bool:
+def is_valid_membership(membership: EstablishmentMembership | None) -> bool:
     if not _is_valid_invitation_membership(membership):
         return False
 

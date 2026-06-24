@@ -116,7 +116,7 @@ def test_detail_canceled_staff_out_of_scope_returns_404(api_client):
     assert response.status_code == 404
 
 
-def test_detail_canceled_owner_without_pole_scope_returns_404(api_client):
+def test_detail_canceled_owner_without_pole_scope_returns_200(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _canceled_signal_for_membership(owner)
     token = login(api_client, user=owner.user)
@@ -126,10 +126,11 @@ def test_detail_canceled_owner_without_pole_scope_returns_404(api_client):
         **auth_headers(token),
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["status"] == Signal.Status.CANCELED
 
 
-def test_detail_canceled_director_without_pole_scope_returns_404(api_client):
+def test_detail_canceled_director_without_pole_scope_returns_200(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
@@ -143,7 +144,8 @@ def test_detail_canceled_director_without_pole_scope_returns_404(api_client):
         **auth_headers(token),
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["status"] == Signal.Status.CANCELED
 
 
 def test_detail_canceled_cross_establishment_returns_404(api_client):
