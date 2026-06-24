@@ -13,7 +13,7 @@ from houston.signals.permissions import (
     can_cancel_signal,
     can_pin_signal,
     can_resolve_signal,
-    can_view_signal,
+    can_view_signal_detail,
     can_view_signal_feed,
     signal_actionable_by_membership,
     signal_pole_visible_to_membership,
@@ -46,7 +46,7 @@ def test_deactivated_membership_denies_signal_permissions():
     signal = _build_signal(membership=membership)
 
     assert not can_view_signal_feed(membership)
-    assert not can_view_signal(membership, signal)
+    assert not can_view_signal_detail(membership, signal)
     assert not can_pin_signal(membership, signal)
 
 
@@ -82,8 +82,46 @@ def test_signal_visibility_requires_same_establishment():
     outsider = build_membership()
     signal = _build_signal(membership=owner)
 
-    assert can_view_signal(owner, signal)
-    assert not can_view_signal(outsider, signal)
+    assert can_view_signal_detail(owner, signal)
+    assert not can_view_signal_detail(outsider, signal)
+
+
+def test_can_view_signal_detail_allows_resolved():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _build_signal(membership=owner)
+    signal.status = Signal.Status.RESOLVED
+    signal.save(update_fields=["status", "updated_at"])
+
+    assert can_view_signal_detail(owner, signal)
+
+
+def test_can_view_signal_detail_denies_archived():
+    owner = build_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _build_signal(membership=owner)
+    signal.status = Signal.Status.ARCHIVED
+    signal.save(update_fields=["status", "updated_at"])
+
+    assert not can_view_signal_detail(owner, signal)
+
+
+def test_can_view_signal_detail_canceled_delegates_to_pole_visibility():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    in_scope_bu = create_business_unit(establishment=owner.establishment, key="bar")
+    out_of_scope_bu = create_business_unit(establishment=owner.establishment, key="kitchen")
+    create_membership_with_business_unit_scope(membership=staff, business_unit=in_scope_bu)
+    in_scope_signal = _build_signal(membership=owner, business_unit=in_scope_bu)
+    in_scope_signal.status = Signal.Status.CANCELED
+    in_scope_signal.save(update_fields=["status", "updated_at"])
+    out_of_scope_signal = _build_signal(membership=owner, business_unit=out_of_scope_bu)
+    out_of_scope_signal.status = Signal.Status.CANCELED
+    out_of_scope_signal.save(update_fields=["status", "updated_at"])
+
+    assert can_view_signal_detail(staff, in_scope_signal)
+    assert not can_view_signal_detail(staff, out_of_scope_signal)
 
 
 def test_manager_scope_limits_signal_visibility():

@@ -227,11 +227,16 @@ def create_v3_signal(
     structured_summary: str = "Structured summary safe.",
     status: str = Signal.Status.OPEN,
     location_text: str = "",
-    issue_focus: str = "",
+    issue_focus: str | None = None,
 ) -> Signal:
     from django.utils import timezone
 
+    from houston.signals.services import normalize_issue_focus
+
     now = timezone.now()
+    stored_issue_focus = (
+        normalize_issue_focus(title) if issue_focus is None else issue_focus
+    )
     return Signal.objects.create(
         establishment=establishment,
         affected_business_unit=affected_business_unit,
@@ -240,7 +245,7 @@ def create_v3_signal(
         title=title,
         structured_summary=structured_summary,
         location_text=location_text,
-        issue_focus=issue_focus,
+        issue_focus=stored_issue_focus,
         status=status,
         last_activity_at=now,
     )
@@ -274,18 +279,15 @@ def create_signal_v3_for_membership(
     status: str = Signal.Status.OPEN,
     title: str = "Signal title",
     location_text: str = "chambre 102",
+    issue_focus: str | None = None,
 ) -> Signal:
-    from django.utils import timezone
-
-    now = timezone.now()
-    return Signal.objects.create(
-        establishment=membership.establishment,
+    return create_v3_signal(
+        membership.establishment,
         affected_business_unit=affected_business_unit,
         responsible_business_unit=responsible_business_unit,
         activity_subject=activity_subject,
         title=title,
-        structured_summary="Summary",
         location_text=location_text,
+        issue_focus=issue_focus,
         status=status,
-        last_activity_at=now,
     )

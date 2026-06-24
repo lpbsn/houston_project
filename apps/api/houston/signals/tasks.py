@@ -16,7 +16,7 @@ from houston.core.observability import (
 )
 from houston.observations.models import ObservationProcessing
 from houston.signals.services import (
-    recover_stuck_observation_processing_batch,
+    recover_observation_processing_batch,
     run_observation_pipeline,
 )
 
@@ -74,11 +74,14 @@ def process_observation_task(self, observation_id: str) -> None:
     time_limit=settings.HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS,
 )
 def recover_stuck_observation_processing_task() -> int:
-    recovered_count = recover_stuck_observation_processing_batch()
+    batch_result = recover_observation_processing_batch()
+    recovered_count = batch_result["stuck_acted_on"] + batch_result["orphan_enqueued"]
     logger.info(
         "observation_pipeline_stuck_recovery_sweep_completed",
         extra={
             "recovered_count": recovered_count,
+            "stuck_acted_on": batch_result["stuck_acted_on"],
+            "orphan_enqueued": batch_result["orphan_enqueued"],
             "event": "observation_pipeline_stuck_recovery_sweep_completed",
         },
     )

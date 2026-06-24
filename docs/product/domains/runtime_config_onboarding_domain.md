@@ -1,7 +1,7 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-06-07
+Last reviewed: 2026-06-24
 Implementation status: **implemented** — **Manual onboarding V2 only** (`onboarding_proposal_v3`, BusinessUnit / ActivitySubject). Legacy Module→Domain→Subject proposals are rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
 
 ## 1. Purpose
@@ -18,7 +18,7 @@ Domain boundaries:
 ## 2. MVP Scope
 
 - Initialize the initial `Organization` and `Establishment` context required before operational use, while their core lifecycle remains owned by Identity / Membership.
-- Capture a required free-text `EstablishmentActivityDescription` rich enough to guide runtime setup.
+- Capture an **optional but recommended** free-text `EstablishmentActivityDescription` to enrich runtime and AI context when provided.
 - Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual V2 wizard).
 - Product activation accepts **`onboarding_proposal_v3`** payloads only.
 - Legacy proposals (`onboarding_proposal_v2`) are rejected at validation/apply.
@@ -47,17 +47,14 @@ Domain boundaries:
 - Runtime config is establishment-scoped and must not leak across establishments.
 - Business units are required for activation minimum.
 - **Activity subjects** are required at activation minimum: at least one active subject linked to active business units in the applied proposal.
-- Runtime vocabulary, runtime tags, and routing hints may be skipped if activation minimum is still met.
-- Skipping them must not block establishment activation if the activation minimum is met.
-- Runtime tags never grant permissions.
-- Routing hints never grant permissions.
+- Activity description is **optional** at activation; when submitted via `POST .../description/`, it enriches AI/runtime context but does not gate activation.
+- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); proposal v3 is BusinessUnit / ActivitySubject only.
 - Frontend cannot activate or mutate authoritative runtime state by itself.
 - Post-activation destructive runtime changes must be explicit and authorized.
 
 Activation minimum:
 - organization created
 - establishment created
-- establishment activity description validated
 - at least 1 business unit validated
 - at least 1 activity subject validated in applied proposal
 - at least 1 active Owner or Director
@@ -78,8 +75,8 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
   - Belongs to exactly one organization.
 
 - `EstablishmentActivityDescription`
-  - Required free-text onboarding input describing the establishment's operational reality.
-  - Used to guide manual setup.
+  - Optional free-text onboarding input describing the establishment's operational reality.
+  - Useful context for manual setup and downstream AI routing when submitted; not required to activate.
 
 - `BusinessUnit`
   - High-level operational scope for runtime structure and RBAC assignment.
@@ -94,21 +91,13 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
   - **Orthogonal** to BusinessUnit / ActivitySubject classification; optional on Signals.
   - **Not** used for feed subscriptions in MVP.
 
-- `RuntimeVocabulary`
-  - Local terms and aliases that improve interpretation and routing.
-  - Optional at activation minimum.
-
-- `RuntimeTag`
-  - Flexible contextual labels that enrich runtime interpretation and downstream workflows.
-  - Must not be used as a permission mechanism.
-
-- `RoutingHint`
-  - Optional guidance that helps later proposal or routing logic interpret recurring patterns.
-  - Must not be treated as access control.
+- `RuntimeVocabulary`, `RuntimeTag`, `RoutingHint` (removed)
+  - Legacy product concepts dropped in migration `0016_drop_legacy_taxonomy`.
+  - Not part of onboarding proposal v3 or activation minimum.
 
 - `OnboardingProposal`
   - Candidate runtime structure proposed manually before activation.
-  - Target payload: `schema_version: onboarding_proposal_v3` with BU/AS runtime sections plus optional units/vocabulary/tags/routing_hints.
+  - Target payload: `schema_version: onboarding_proposal_v3` with BusinessUnit and ActivitySubject sections only.
 
 - `OnboardingProposalItemMutation` (implemented API)
   - Proposal create/update/apply via `/api/v1/onboarding-sessions/{session_id}/proposals/` — add/remove BusinessUnit and ActivitySubject entries with parent/child coherence per [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).

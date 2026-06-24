@@ -26,6 +26,16 @@ def _valid_candidate(**overrides):
     return base
 
 
+def test_rejects_wrong_schema_version():
+    with pytest.raises(ValidationError):
+        ObservationPipelineOutput.model_validate(
+            {
+                "schema_version": "ai_observation_pipeline_v3",
+                "candidates": [_valid_candidate()],
+            }
+        )
+
+
 def test_accepts_valid_payload():
     output = ObservationPipelineOutput.model_validate(
         {

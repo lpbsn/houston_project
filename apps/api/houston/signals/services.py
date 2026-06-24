@@ -68,6 +68,7 @@ logger = logging.getLogger(__name__)
 
 _STUCK_PROCESSING_RECOVERY_ERROR_CODE = "stuck_processing_recovered"
 _MAX_OBSERVATION_PIPELINE_ATTEMPTS = 3
+_ACTIVE_AGGREGATION_UNIQUE_CONSTRAINT = "signal_unique_active_aggregation_key"
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,16 @@ def require_normalized_issue_focus(value: str | None) -> str:
     if not normalized:
         raise SignalPipelineCandidateError("issue_focus is required after normalization.")
     return normalized
+
+
+def _is_active_aggregation_unique_violation(exc: IntegrityError) -> bool:
+    cause = exc.__cause__
+    if cause is None:
+        return False
+    diag = getattr(cause, "diag", None)
+    if diag is None:
+        return False
+    return getattr(diag, "constraint_name", None) == _ACTIVE_AGGREGATION_UNIQUE_CONSTRAINT
 
 
 def validate_pipeline_output_issue_focus(
@@ -737,13 +748,47 @@ def apply_pipeline_output(
             normalized_issue_focus=normalized_issue_focus,
             include_peer_count=True,
         )
-        signal = create_signal_from_candidate(
-            observation=observation,
-            candidate=candidate,
-            resolved=resolved,
-            title=candidate.title,
-            structured_summary=candidate.structured_summary,
-        )
+        try:
+            with transaction.atomic():
+                signal = create_signal_from_candidate(
+                    observation=observation,
+                    candidate=candidate,
+                    resolved=resolved,
+                    title=candidate.title,
+                    structured_summary=candidate.structured_summary,
+                )
+        except IntegrityError as exc:
+            if not _is_active_aggregation_unique_violation(exc):
+                raise
+            existing = find_active_signal_for_aggregation(
+                establishment_id=observation.establishment_id,
+                resolved=resolved,
+                issue_focus=normalized_issue_focus,
+                for_update=True,
+            )
+            if existing is None:
+                raise
+            signal = aggregate_candidate_into_signal(
+                signal=existing,
+                observation=observation,
+                normalized_issue_focus=normalized_issue_focus,
+            )
+            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+            row.result_signal = signal
+            row.save(update_fields=["outcome", "result_signal", "updated_at"])
+            aggregated_count += 1
+            _log_pipeline_candidate_applied(
+                observation=observation,
+                aggregation_key=format_aggregation_key(dedupe_key),
+                hint_used=False,
+                hint_rejected_reason=hint_rejected_reason or "",
+                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+                issue_focus=str(create_eval_log_fields["issue_focus"]),
+                taxonomy_bucket_key=str(create_eval_log_fields["taxonomy_bucket_key"]),
+                aggregation_match_mode="exact",
+            )
+            continue
+
         row.outcome = CandidateSignal.Outcome.CREATED_SIGNAL
         row.result_signal = signal
         row.save(update_fields=["outcome", "result_signal", "updated_at"])
@@ -779,7 +824,44 @@ def apply_pipeline_output(
     )
 
 
-def recover_stuck_observation_processing_batch() -> int:
+def _enqueue_observation_pipeline_task(
+    observation_id: uuid.UUID,
+    *,
+    already_enqueued: set[uuid.UUID],
+) -> bool:
+    if observation_id in already_enqueued:
+        return False
+    already_enqueued.add(observation_id)
+    try:
+        from houston.signals.tasks import process_observation_task
+
+        process_observation_task.delay(str(observation_id))
+    except Exception:
+        logger.error(
+            "observation_pipeline_recovery_enqueue_failed",
+            extra={
+                "observation_id": str(observation_id),
+                "event": "observation_pipeline_recovery_enqueue_failed",
+            },
+            exc_info=True,
+        )
+        already_enqueued.discard(observation_id)
+        return False
+    logger.info(
+        "observation_pipeline_recovery_enqueued",
+        extra={
+            "observation_id": str(observation_id),
+            "event": "observation_pipeline_recovery_enqueued",
+        },
+    )
+    return True
+
+
+def recover_stuck_observation_processing_batch(
+    *,
+    already_enqueued: set[uuid.UUID] | None = None,
+) -> int:
+    enqueued_ids = already_enqueued if already_enqueued is not None else set()
     stuck_threshold = settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS
     cutoff = timezone.now() - timedelta(seconds=stuck_threshold)
     stuck_ids = list(
@@ -793,13 +875,73 @@ def recover_stuck_observation_processing_batch() -> int:
         processing = ObservationProcessing.objects.filter(id=processing_id).first()
         if processing is None:
             continue
+        observation_id = processing.observation_id
         if _try_recover_stuck_processing(processing=processing):
             acted_on += 1
+            processing.refresh_from_db()
+            if processing.status == ObservationProcessing.Status.RETRYING:
+                _enqueue_observation_pipeline_task(
+                    observation_id,
+                    already_enqueued=enqueued_ids,
+                )
             continue
         processing.refresh_from_db()
         if processing.status == ObservationProcessing.Status.FAILED:
             acted_on += 1
     return acted_on
+
+
+def recover_orphaned_observation_processing_batch(
+    *,
+    already_enqueued: set[uuid.UUID] | None = None,
+) -> int:
+    enqueued_ids = already_enqueued if already_enqueued is not None else set()
+    stuck_threshold = settings.HOUSTON_OBSERVATION_PROCESSING_STUCK_WARNING_SECONDS
+    cutoff = timezone.now() - timedelta(seconds=stuck_threshold)
+    enqueued_count = 0
+
+    queued_observation_ids = list(
+        ObservationProcessing.objects.filter(
+            status=ObservationProcessing.Status.QUEUED,
+            queued_at__lt=cutoff,
+        ).values_list("observation_id", flat=True)
+    )
+    for observation_id in queued_observation_ids:
+        if _enqueue_observation_pipeline_task(
+            observation_id,
+            already_enqueued=enqueued_ids,
+        ):
+            enqueued_count += 1
+
+    retrying_observation_ids = list(
+        ObservationProcessing.objects.filter(
+            status=ObservationProcessing.Status.RETRYING,
+            processing_started_at__isnull=True,
+            updated_at__lt=cutoff,
+        ).values_list("observation_id", flat=True)
+    )
+    for observation_id in retrying_observation_ids:
+        if _enqueue_observation_pipeline_task(
+            observation_id,
+            already_enqueued=enqueued_ids,
+        ):
+            enqueued_count += 1
+
+    return enqueued_count
+
+
+def recover_observation_processing_batch() -> dict[str, int]:
+    already_enqueued: set[uuid.UUID] = set()
+    stuck_acted_on = recover_stuck_observation_processing_batch(
+        already_enqueued=already_enqueued,
+    )
+    orphan_enqueued = recover_orphaned_observation_processing_batch(
+        already_enqueued=already_enqueued,
+    )
+    return {
+        "stuck_acted_on": stuck_acted_on,
+        "orphan_enqueued": orphan_enqueued,
+    }
 
 
 def run_observation_pipeline(

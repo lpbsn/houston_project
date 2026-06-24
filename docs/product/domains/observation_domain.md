@@ -135,6 +135,7 @@ See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)
 - Any exceptional raw Observation access must remain backend-authorized and follow Security / RGPD constraints.
 - No anonymous Observation submission is allowed.
 - Checklist MVP: checklist-origin Observation requires authorized access to the originating checklist task execution (see [`checklist_domain.md`](checklist_domain.md) §3.8).
+- `GET .../observations/{id}/processing-status/` is visible to the submitter and establishment admins (owner/director) only; other submit-capable peers receive 404.
 
 ## 8. Events
 
@@ -159,13 +160,13 @@ Current API truth is `apps/api/schema.yml`.
 
 Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/establishments/{establishment_id}/observations/` — submit with `text` (maps to internal `raw_text`) and optional `temporary_upload_ids`; response includes `id`, `submitted_at`, `media_count`, `processing_status` only (no raw text).
+- `GET /api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/` — pipeline status projection for submitter or establishment admin (owner/director); no raw text.
 
 Implemented checklist-origin endpoint (see `schema.yml`):
 - `POST /api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/create-observation/` — task command only; do not extend public `POST observations/`
 
 Candidate API capabilities only:
-- `GET` processing status (deferred; submit returns `processing_status=queued` in Phase 3)
-- internal or admin retry processing command (Phase 4+)
+- internal or admin retry processing command (future)
 
 Upload, transcription, and media endpoints are documented in [`upload_media_domain.md`](upload_media_domain.md).
 

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import pytest
 from houston.ai.observation_pipeline import FakeObservationPipelineProvider
+from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
 )
 from houston.observations.models import ObservationProcessing
+from houston.observations.permissions import can_view_observation_processing_status
 from houston.observations.selectors import (
     get_observation_processing_status,
     signal_ids_for_observation,
@@ -14,7 +16,7 @@ from houston.observations.selectors import (
 from houston.signals.models import CandidateSignal, Signal
 from houston.signals.services import run_observation_pipeline
 from houston.signals.tests.conftest import create_observation
-from houston.testing.factories import build_membership
+from houston.testing.factories import build_membership, create_membership
 
 
 def _setup_pipeline_taxonomy(establishment):
@@ -36,7 +38,7 @@ def test_get_observation_processing_status_none_when_wrong_establishment():
 
     assert (
         get_observation_processing_status(
-            establishment_id=membership.establishment_id,
+            membership=membership,
             observation_id=observation.id,
         )
         is None
@@ -51,7 +53,7 @@ def test_get_observation_processing_status_collects_signal_ids():
     run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
 
     projection = get_observation_processing_status(
-        establishment_id=membership.establishment_id,
+        membership=membership,
         observation_id=observation.id,
     )
 
@@ -91,7 +93,7 @@ def test_processing_status_does_not_return_unrelated_signal():
     )
 
     projection_a = get_observation_processing_status(
-        establishment_id=membership.establishment_id,
+        membership=membership,
         observation_id=observation_a.id,
     )
     assert projection_a is not None
@@ -116,3 +118,37 @@ def test_processing_status_does_not_return_cross_establishment_signal():
     signal_ids = signal_ids_for_observation(observation_id=observation.id)
     assert other_signal_id not in signal_ids
     assert signal_ids == []
+
+
+def test_manager_cannot_view_peer_processing_status():
+    submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
+    manager = create_membership(
+        establishment=submitter.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    observation = create_observation(membership=submitter)
+
+    assert not can_view_observation_processing_status(manager, observation)
+    assert (
+        get_observation_processing_status(
+            membership=manager,
+            observation_id=observation.id,
+        )
+        is None
+    )
+
+
+def test_owner_can_view_peer_processing_status():
+    submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
+    owner = create_membership(
+        establishment=submitter.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    observation = create_observation(membership=submitter)
+
+    assert can_view_observation_processing_status(owner, observation)
+    projection = get_observation_processing_status(
+        membership=owner,
+        observation_id=observation.id,
+    )
+    assert projection is not None

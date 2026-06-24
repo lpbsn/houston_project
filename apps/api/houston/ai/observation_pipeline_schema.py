@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from houston.signals.constants import (
     AI_ISSUE_FOCUS_MAX_LENGTH,
     AI_LOCATION_TEXT_MAX_LENGTH,
+    AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
     MAX_CANDIDATES_PER_OBSERVATION,
 )
 
@@ -31,3 +32,13 @@ class ObservationPipelineOutput(_StrictModel):
         default_factory=list,
         max_length=MAX_CANDIDATES_PER_OBSERVATION,
     )
+
+    @field_validator("schema_version")
+    @classmethod
+    def validate_schema_version(cls, value: str) -> str:
+        if value != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION:
+            raise ValueError(
+                f"schema_version must be {AI_OBSERVATION_PIPELINE_SCHEMA_VERSION!r}, "
+                f"got {value!r}"
+            )
+        return value

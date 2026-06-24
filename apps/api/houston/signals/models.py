@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from django.db import models
+from django.db.models import Q
 
 from houston.core.models import BaseModel
 from houston.signals.constants import (
+    ACTIVE_SIGNAL_STATUSES,
     AI_ISSUE_FOCUS_MAX_LENGTH,
     SIGNAL_LOCATION_TEXT_MAX_LENGTH,
     SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH,
@@ -112,6 +114,21 @@ class Signal(BaseModel):
             models.Index(
                 fields=["establishment", "activity_subject"],
                 name="signal_est_act_subject_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "establishment",
+                    "affected_business_unit",
+                    "responsible_business_unit",
+                    "activity_subject",
+                    "operational_unit",
+                    "issue_focus",
+                ],
+                condition=Q(status__in=ACTIVE_SIGNAL_STATUSES),
+                name="signal_unique_active_aggregation_key",
+                nulls_distinct=False,
             ),
         ]
 

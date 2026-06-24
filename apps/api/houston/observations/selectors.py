@@ -6,7 +6,9 @@ from typing import Literal
 
 from django.db.models import F
 
+from houston.establishments.models import EstablishmentMembership
 from houston.observations.models import Observation, ObservationProcessing
+from houston.observations.permissions import can_view_observation_processing_status
 from houston.signals.models import CandidateSignal, Signal
 
 UxStatus = Literal[
@@ -146,14 +148,16 @@ def get_observation_for_establishment(
 
 def get_observation_processing_status(
     *,
-    establishment_id: uuid.UUID,
+    membership: EstablishmentMembership,
     observation_id: uuid.UUID,
 ) -> ObservationProcessingStatusProjection | None:
     observation = get_observation_for_establishment(
-        establishment_id=establishment_id,
+        establishment_id=membership.establishment_id,
         observation_id=observation_id,
     )
     if observation is None:
+        return None
+    if not can_view_observation_processing_status(membership, observation):
         return None
 
     try:

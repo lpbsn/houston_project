@@ -19,6 +19,18 @@ Do not upgrade backend framework versions unless explicitly requested.
 
 Do not put business workflows in views, serializers, models, Django signals, Celery tasks, or `core/`.
 
+### Observation → AI → Signal pipeline
+
+Current ownership (intentional; do not move without explicit refactor):
+
+| App | Owns |
+|-----|------|
+| `observations` | Intake (`submit_observation`), `ObservationProcessing` state, processing-status read API |
+| `ai` | Provider adapter, prompt/input build, Pydantic parse, `AIUsageLog` metadata |
+| `signals` | Celery task entry (`process_observation_task`), `run_observation_pipeline` orchestration, validation, `apply_pipeline_output`, signal create/aggregate, stuck/orphan recovery sweeps |
+
+`observations/services.py` enqueues `signals.tasks.process_observation_task` on commit after submit — cross-app coupling by design in MVP.
+
 ## Business rules
 
 Backend owns:

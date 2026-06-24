@@ -12,6 +12,7 @@ from houston.signals.constants import ACTIVE_SIGNAL_STATUSES, FEED_SIGNAL_STATUS
 from houston.signals.feed_cursor import feed_sort_case_expressions
 from houston.signals.feed_filters import SignalFeedFilters, apply_feed_filters
 from houston.signals.models import Signal, SignalSourceObservation
+from houston.signals.permissions import can_view_signal_detail
 
 ViewMode = Literal["personal", "general"]
 
@@ -135,7 +136,7 @@ def get_signal_for_detail(
         .first()
     )
     if signal is not None:
-        if not _can_view_signal_detail(membership, signal):
+        if not can_view_signal_detail(membership, signal):
             return None
         return signal
 
@@ -155,19 +156,6 @@ def get_signal_for_detail(
     if canceled_signal is None:
         return None
 
-    from houston.signals.permissions import signal_pole_visible_to_membership
-
-    if not signal_pole_visible_to_membership(membership, canceled_signal):
+    if not can_view_signal_detail(membership, canceled_signal):
         return None
     return canceled_signal
-
-
-def _can_view_signal_detail(
-    membership: EstablishmentMembership,
-    signal: Signal,
-) -> bool:
-    # Personal feed applies MembershipScope; any feed-capable member may read
-    # feed-visible signal detail (pin/urgency gated separately).
-    from houston.signals.permissions import can_view_signal_feed
-
-    return can_view_signal_feed(membership)

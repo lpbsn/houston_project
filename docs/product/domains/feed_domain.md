@@ -1,7 +1,7 @@
 # Feed Domain
 
 Status: authoritative  
-Last reviewed: 2026-06-16
+Last reviewed: 2026-06-24
 Implementation status: implemented (Signal Feed Phase 4 + Execution Feed Phase 5/7 — polymorphic Actions + Checklists). Checklist feed rules alignées sur [`checklist_domain.md`](checklist_domain.md) (Lot 0 doc closure).
 
 ## 1. Purpose
@@ -31,7 +31,7 @@ Feed is a read/projection domain. It is not business truth.
 - Optional permission hints as UX helpers only.
 - Realtime invalidation/refetch boundary only.
 - Media summary only; no raw media URLs or signed URLs in feed items.
-- Target Signal Feed behavior keeps archived Signals out of active results by default.
+- Target Signal Feed behavior keeps archived Signals out of feed-visible results by default (`open`, `in_progress`, `resolved`; see [`signal_domain.md`](signal_domain.md) §7).
 
 Current truth:
 - `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
@@ -126,10 +126,10 @@ Frontend display states may include:
 ## 7. Permissions
 
 - Feed access is establishment-scoped and backend-authorized.
-- Current code proves active members can view Signal Feed through `can_view_signal_feed(...)`.
+- Current code proves active members can view Signal Feed through `can_view_signal_feed(...)`. See [`signal_domain.md`](signal_domain.md) §7 for detail access and command scope rules.
 - `ExecutionFeed` applies `view_mode` in selectors before returning items.
-- **Ma vue** (`view_mode=personal`): active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes.
-- **Vue générale** (`view_mode=general`): all active establishment Signals.
+- **Ma vue** (`view_mode=personal`): feed-visible Signals (`open`, `in_progress`, `resolved`) matching **`MembershipScope`** (Owner/Director: all feed-visible). Empty if manager/staff has no scopes.
+- **Vue générale** (`view_mode=general`): all feed-visible establishment Signals (`open`, `in_progress`, `resolved`).
 - Feed subscription is **deferred** (future: BU-only first, then ActivitySubject subscribe/unsubscribe) — see [`feed_subscription_domain.md`](feed_subscription_domain.md). **Today:** Ma vue uses `MembershipScope` only.
 - RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering.
 - Visibility does not imply actionability.
@@ -140,7 +140,7 @@ Frontend display states may include:
 
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
-| **Signal Feed** | Active Signals matching **`MembershipScope`** (Owner/Director: all active). Empty if manager/staff has no scopes. | All active establishment Signals. RBAC feed access only. |
+| **Signal Feed** | Feed-visible Signals (`open`, `in_progress`, `resolved`) matching **`MembershipScope`** (Owner/Director: all feed-visible). Empty if manager/staff has no scopes. | All feed-visible establishment Signals (`open`, `in_progress`, `resolved`). RBAC feed access only. |
 | **Execution Feed** (Actions + Checklists — implemented) | Active Actions where the user is **`created_by` or `assigned_to`** (all roles). Owner/Director **Ma vue** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. **Checklist items (cible)** : exécutions où l'utilisateur est **`assigned_to`**, plus visibilité élargie Owner/Director/Manager selon [`checklist_domain.md`](checklist_domain.md) §9 (`template`, `assignment`). | **Owner/Director:** all active establishment Actions + all visible checklist executions. **Manager:** own Actions plus Actions in **`MembershipScope`**, plus checklist executions in scoped BU (+ own assignments). **Staff:** created/assigned Actions + checklist executions **assigned to them** (scope-visible catalogue usage does not add feed items unless assigned). **Not** subscription-based. |
 
 **Execution Feed — Checklist items (cible Lot 0):** rules in [`checklist_domain.md`](checklist_domain.md) §5.6 and §9. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. **`execution_source = assignment`** : `visible_from = start_at - 1 hour`. **`template`** : `visible_from` null (immediate). Terminal `done` / `canceled` excluded from active feed. `end_at` overdue does not remove items (`is_overdue` indicator only). Feed cards expose `execution_source` — no Flash To-do label, no badge Process/To-do.
@@ -220,11 +220,12 @@ Detail routes belong to owning domains, not Feed.
 
 | Scenario | Expected behavior |
 | --- | --- |
-| Active member requests `view_mode=personal` with BusinessUnit scopes | Returns active Signals where affected or responsible BusinessUnit matches scope |
+| Active member requests `view_mode=personal` with BusinessUnit scopes | Returns feed-visible Signals where affected or responsible BusinessUnit matches scope |
 | Active member requests `view_mode=personal` without BusinessUnit scopes | Returns empty list (not an error) for Manager/Staff |
-| Owner/Director requests `view_mode=personal` | All active establishment Signals |
-| Active member requests `view_mode=general` | Returns all active establishment Signals |
-| Resolved / canceled Signals | Excluded from default active feed results |
+| Owner/Director requests `view_mode=personal` | All feed-visible establishment Signals |
+| Active member requests `view_mode=general` | Returns all feed-visible establishment Signals |
+| `resolved` Signals | Included in default feed-visible results |
+| `canceled` / `archived` Signals | Excluded from default feed-visible results |
 | Cross-establishment access | 404 when establishment does not match session membership |
 | Inactive membership | 403 / no feed access |
 
@@ -232,11 +233,11 @@ Detail routes belong to owning domains, not Feed.
 
 | Role | Scopes | Expected Ma vue |
 | --- | --- | --- |
-| Owner/Director | N/A (broad) | All active establishment Signals |
+| Owner/Director | N/A (broad) | All feed-visible establishment Signals |
 | Manager | BusinessUnit `restaurant` | Signals where affected or responsible BU is `restaurant` |
 | Staff | BusinessUnit `maintenance` | Signals where affected or responsible BU is `maintenance` |
 
-Vue générale for each role above must still return **all** active establishment Signals (RBAC feed access only).
+Vue générale for each role above must still return **all** feed-visible establishment Signals (RBAC feed access only).
 
 ### Response contract
 

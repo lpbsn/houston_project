@@ -24,7 +24,7 @@ from houston.signals.tests.conftest import (
     create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,
 )
-from houston.testing.factories import build_membership
+from houston.testing.factories import build_membership, create_membership
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db
@@ -159,6 +159,78 @@ def test_processing_status_404_for_other_establishment(api_client):
 
     response = api_client.get(
         processing_status_url(membership.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 404
+
+
+def test_processing_status_submitter_can_read_own_observation(api_client):
+    membership = build_membership(role=EstablishmentMembership.Role.STAFF)
+    membership.user.set_password(TEST_PASSWORD)
+    membership.user.save(update_fields=["password"])
+    observation = create_observation(membership=membership)
+    token = login(api_client, user=membership.user)
+
+    response = api_client.get(
+        processing_status_url(membership.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+
+
+def test_processing_status_owner_can_read_peer_observation(api_client):
+    submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
+    owner = create_membership(
+        establishment=submitter.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+    owner.user.set_password(TEST_PASSWORD)
+    owner.user.save(update_fields=["password"])
+    observation = create_observation(membership=submitter)
+    token = login(api_client, user=owner.user)
+
+    response = api_client.get(
+        processing_status_url(submitter.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+
+
+def test_processing_status_staff_peer_returns_404(api_client):
+    submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
+    peer = create_membership(
+        establishment=submitter.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    peer.user.set_password(TEST_PASSWORD)
+    peer.user.save(update_fields=["password"])
+    observation = create_observation(membership=submitter)
+    token = login(api_client, user=peer.user)
+
+    response = api_client.get(
+        processing_status_url(submitter.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 404
+
+
+def test_processing_status_manager_peer_returns_404(api_client):
+    submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
+    manager = create_membership(
+        establishment=submitter.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    manager.user.set_password(TEST_PASSWORD)
+    manager.user.save(update_fields=["password"])
+    observation = create_observation(membership=submitter)
+    token = login(api_client, user=manager.user)
+
+    response = api_client.get(
+        processing_status_url(submitter.establishment_id, observation.id),
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
 

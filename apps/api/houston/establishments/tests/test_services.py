@@ -320,6 +320,12 @@ def test_active_director_satisfies_readiness(onboarding_session, owner):
 def test_activity_description_does_not_block_readiness(onboarding_session, owner):
     create_ready_runtime(onboarding_session, owner)
 
+    from houston.establishments.models import EstablishmentActivityDescription
+
+    assert not EstablishmentActivityDescription.objects.filter(
+        establishment=onboarding_session.establishment,
+    ).exists()
+
     readiness = compute_activation_readiness(session=onboarding_session)
 
     assert "description" not in readiness["sections"]

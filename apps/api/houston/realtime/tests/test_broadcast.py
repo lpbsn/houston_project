@@ -7,6 +7,7 @@ import pytest
 from django.db import transaction
 from houston.accounts.models import UserSession
 from houston.accounts.services import revoke_session, switch_selected_establishment
+from houston.establishments.models import EstablishmentMembership
 from houston.realtime.groups import establishment_group_name, session_group_name
 from houston.realtime.tests.conftest import (
     create_establishment,
@@ -14,7 +15,14 @@ from houston.realtime.tests.conftest import (
     create_user,
     login,
 )
-from houston.signals.services import pin_signal
+from houston.signals.models import Signal
+from houston.signals.services import (
+    cancel_signal,
+    pin_signal,
+    resolve_signal,
+    set_signal_urgency,
+    unpin_signal,
+)
 from houston.signals.tests.conftest import build_api_membership, create_minimal_v3_signal
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -46,6 +54,69 @@ def test_invalidation_emitted_after_commit():
             reason="signal.updated",
             entity_id=signal.id,
         )
+
+
+def _assert_signal_updated_invalidation_emitted_after_commit(
+    *,
+    signal: Signal,
+    service_call,
+) -> None:
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        with transaction.atomic():
+            service_call()
+            mock_notify.assert_not_called()
+        mock_notify.assert_called_once_with(
+            establishment_id=signal.establishment_id,
+            subject_type="signal",
+            reason="signal.updated",
+            entity_id=signal.id,
+        )
+
+
+def test_cancel_signal_invalidation_emitted_after_commit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Cancel invalidation")
+
+    _assert_signal_updated_invalidation_emitted_after_commit(
+        signal=signal,
+        service_call=lambda: cancel_signal(signal=signal, actor_membership=membership),
+    )
+
+
+def test_resolve_signal_invalidation_emitted_after_commit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Resolve invalidation")
+
+    _assert_signal_updated_invalidation_emitted_after_commit(
+        signal=signal,
+        service_call=lambda: resolve_signal(signal=signal, actor_membership=membership),
+    )
+
+
+def test_unpin_signal_invalidation_emitted_after_commit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Unpin invalidation")
+    signal.is_pinned = True
+    signal.save(update_fields=["is_pinned", "updated_at"])
+
+    _assert_signal_updated_invalidation_emitted_after_commit(
+        signal=signal,
+        service_call=lambda: unpin_signal(signal=signal),
+    )
+
+
+def test_set_signal_urgency_invalidation_emitted_after_commit():
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = create_minimal_v3_signal(membership, title="Urgency invalidation")
+
+    _assert_signal_updated_invalidation_emitted_after_commit(
+        signal=signal,
+        service_call=lambda: set_signal_urgency(
+            signal=signal,
+            urgency=Signal.Urgency.HIGH,
+            actor_membership=membership,
+        ),
+    )
 
 
 def test_access_event_uses_session_group_not_establishment_group(api_client):

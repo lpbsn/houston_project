@@ -140,7 +140,7 @@ No AI event contract is validated as implemented today.
 
 Current code only proves that the generic `EventEnvelope` category set includes `ai`; it does not validate an AI event catalog.
 
-Candidate events only:
+Candidate events only (**not implemented** — no emitters in `ai/` or `signals/` today):
 - `AIRequestStarted`
 - `AIRequestSucceeded`
 - `AIRequestFailed`

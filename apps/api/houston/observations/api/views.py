@@ -111,6 +111,7 @@ class ObservationProcessingStatusView(EstablishmentScopedObservationMixin, APIVi
         },
         description=(
             "Returns AI pipeline processing status for a submitted Observation. "
+            "Visible to the submitter and establishment admins (owner/director) only. "
             "Does not expose raw observation text or AI prompts."
         ),
     )
@@ -123,7 +124,7 @@ class ObservationProcessingStatusView(EstablishmentScopedObservationMixin, APIVi
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         projection = get_observation_processing_status(
-            establishment_id=self.establishment_id,
+            membership=membership,
             observation_id=observation_id,
         )
         if projection is None:
