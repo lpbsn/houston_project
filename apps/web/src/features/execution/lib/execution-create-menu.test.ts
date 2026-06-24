@@ -53,9 +53,26 @@ describe('execution create menu options', () => {
       { id: 'use_existing', label: 'Utiliser une checklist existante' },
     ])
   })
+})
 
-  it('allows staff to open the create menu', () => {
-    expect(canOpenExecutionCreateMenu('staff')).toBe(true)
+describe('canOpenExecutionCreateMenu', () => {
+  it('returns false when permission hints are unavailable', () => {
     expect(canOpenExecutionCreateMenu(null)).toBe(false)
+    expect(canOpenExecutionCreateMenu(undefined)).toBe(false)
+  })
+
+  it('allows staff to open the menu for checklist use without can_create_action', () => {
+    expect(canOpenExecutionCreateMenu(hints(false, false))).toBe(true)
+    expect(getChecklistCreateSubmenuOptions(hints(false, false))).toEqual([
+      { id: 'use_existing', label: 'Utiliser une checklist existante' },
+    ])
+  })
+
+  it('allows the menu when can_create_action is true', () => {
+    expect(canOpenExecutionCreateMenu(hints(true, false))).toBe(true)
+  })
+
+  it('allows the menu when can_create_checklist_template is true', () => {
+    expect(canOpenExecutionCreateMenu(hints(false, true))).toBe(true)
   })
 })

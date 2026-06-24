@@ -4086,7 +4086,8 @@ paths:
     get:
       operationId: v1_establishments_observations_processing_status_retrieve
       description: Returns AI pipeline processing status for a submitted Observation.
-        Does not expose raw observation text or AI prompts.
+        Visible to the submitter and establishment admins (owner/director) only. Does
+        not expose raw observation text or AI prompts.
       parameters:
       - in: path
         name: establishment_id

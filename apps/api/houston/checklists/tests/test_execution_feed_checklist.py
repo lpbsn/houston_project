@@ -104,6 +104,83 @@ def test_execution_feed_includes_checklist_item(api_client):
     assert "raw_text" not in payload
 
 
+def test_manager_sees_in_scope_checklist_assigned_to_staff_in_general_view(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    manager = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    maintenance = create_business_unit(
+        establishment=owner.establishment,
+        key="maintenance",
+        label="Maintenance",
+    )
+    hotel = create_business_unit(
+        establishment=owner.establishment,
+        key="hotel",
+        label="Hôtel",
+    )
+    staff = _scoped_staff_on_establishment(owner, maintenance)
+    other_staff = _scoped_staff_on_establishment(owner, hotel)
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=maintenance,
+    )
+
+    scoped_template = _active_registered_template(owner, maintenance)
+    out_of_scope_template = _active_registered_template(owner, hotel)
+    now = timezone.now()
+    schedule = stable_assignment_times(duration_hours=2)
+    scoped_assignment = create_checklist_assignment(
+        template=scoped_template,
+        actor=owner,
+        assigned_to_id=staff.id,
+        start_date=now.date(),
+        end_date=now.date(),
+        start_at=schedule[0],
+        end_at=schedule[1],
+    )
+    scoped_execution = ChecklistExecution.objects.get(checklist_assignment=scoped_assignment)
+    out_of_scope_assignment = create_checklist_assignment(
+        template=out_of_scope_template,
+        actor=owner,
+        assigned_to_id=other_staff.id,
+        start_date=now.date(),
+        end_date=now.date(),
+        start_at=schedule[0],
+        end_at=schedule[1],
+    )
+    out_of_scope_execution = ChecklistExecution.objects.get(
+        checklist_assignment=out_of_scope_assignment,
+    )
+
+    token = login(api_client, user=manager.user)
+    general = api_client.get(
+        execution_feed_url(manager.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert general.status_code == 200
+    general_ids = {
+        item["checklist"]["id"]
+        for item in general.json()["items"]
+        if item["item_type"] == "checklist"
+    }
+    assert str(scoped_execution.id) in general_ids
+    assert str(out_of_scope_execution.id) not in general_ids
+
+    personal = api_client.get(
+        execution_feed_url(manager.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert personal.status_code == 200
+    personal_ids = {
+        item["checklist"]["id"]
+        for item in personal.json()["items"]
+        if item["item_type"] == "checklist"
+    }
+    assert str(scoped_execution.id) not in personal_ids
+
+
 def test_execution_feed_checklist_invisible_two_hours_before_start(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")

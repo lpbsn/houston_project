@@ -400,3 +400,44 @@ def test_execution_feed_query_count_with_three_actions(api_client):
         max_queries=EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES,
         label="execution_feed_general_three_actions",
     )
+
+
+FEED_PERMISSION_HINT_KEYS = frozenset(
+    {
+        "can_accept",
+        "can_mark_done",
+        "can_validate",
+        "can_reopen",
+        "can_cancel",
+        "can_reassign",
+        "can_update_due_at",
+        "is_assignee",
+        "accepted_by_me",
+    }
+)
+
+
+def test_execution_feed_action_item_includes_permission_hints(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = _hotel_maintenance_setup(owner.establishment)
+    _create_free_action_for(
+        owner,
+        assigned_to=staff,
+        responsible_business_unit=hotel,
+        title="Feed hints action",
+    )
+
+    token = login(api_client, user=staff.user)
+    response = api_client.get(
+        execution_feed_url(staff.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    action_items = [item for item in response.json()["items"] if item["item_type"] == "action"]
+    assert len(action_items) == 1
+    hints = action_items[0]["action"]["permission_hints"]
+    assert set(hints.keys()) == FEED_PERMISSION_HINT_KEYS
+    assert hints["is_assignee"] is True
+    assert hints["can_accept"] is True
+    assert hints["accepted_by_me"] is False

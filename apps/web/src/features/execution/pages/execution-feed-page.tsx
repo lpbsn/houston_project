@@ -44,9 +44,13 @@ export function ExecutionFeedPage({
   const { checklistItems, actionItems } = splitExecutionFeedItems(feedItems)
   const actionGroups = groupExecutionActionsBySection(actionItems)
 
-  const role = auth.bootstrap?.active_membership?.role
-  const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
-  const canCreate = canOpenExecutionCreateMenu(role)
+  const permissionHints = auth.bootstrap
+    ? getBootstrapPermissionHints(auth.bootstrap)
+    : null
+  const canCreate =
+    auth.bootstrap != null &&
+    !auth.isBootstrapping &&
+    canOpenExecutionCreateMenu(permissionHints)
 
   const createAction = canCreate ? (
     <Button
@@ -71,7 +75,7 @@ export function ExecutionFeedPage({
     <div className="flex h-full min-h-0 flex-col">
       <ExecutionCreateMenuSheet
         open={isCreateMenuOpen}
-        permissionHints={permissionHints}
+        permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectAction={() => onNavigate?.('/actions/new')}
         onSelectChecklistCreate={() => onNavigate?.('/checklists/new')}

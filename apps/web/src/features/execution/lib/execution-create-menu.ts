@@ -54,6 +54,22 @@ export function getChecklistCreateSubmenuOptions(
   return options
 }
 
-export function canOpenExecutionCreateMenu(role: string | null | undefined): boolean {
-  return Boolean(role)
+export function canOpenExecutionCreateMenu(
+  permissionHints: BootstrapPermissionHints | null | undefined,
+): boolean {
+  if (permissionHints == null) {
+    return false
+  }
+
+  if (permissionHints.can_create_action === true) {
+    return true
+  }
+
+  if (permissionHints.can_create_checklist_template === true) {
+    return true
+  }
+
+  return getChecklistCreateSubmenuOptions(permissionHints).some(
+    (option) => option.id === 'use_existing',
+  )
 }
