@@ -137,6 +137,11 @@ See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)
 - Checklist MVP: checklist-origin Observation requires authorized access to the originating checklist task execution (see [`checklist_domain.md`](checklist_domain.md) §3.8).
 - `GET .../observations/{id}/processing-status/` is visible to the submitter and establishment admins (owner/director) only; other submit-capable peers receive 404.
 
+| Path | Endpoint | Who may submit | Backend check |
+|------|----------|----------------|---------------|
+| Direct report | `POST .../observations/` | Any active establishment member | `CanSubmitObservation` → `can_create_observation` |
+| Checklist task | `POST .../checklist-task-executions/{id}/create-observation/` | Checklist execution assignee only | `can_execute_checklist_tasks` + task `pending` |
+
 ## 8. Events
 
 No Observation event contract is validated in current code or in `apps/api/schema.yml`.

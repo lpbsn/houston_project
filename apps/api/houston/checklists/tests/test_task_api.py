@@ -139,6 +139,48 @@ def test_create_observation_endpoint_no_raw_text_no_direct_signal_action(
     mock_enqueue.assert_not_called()
 
 
+@patch("houston.observations.services._enqueue_observation_processing")
+def test_checklist_create_observation_rejects_second_submit_on_same_task(
+    mock_enqueue,
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution, token = _assigned_execution_with_tasks(
+        api_client,
+        owner_membership,
+        staff_membership,
+        business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+    url = checklist_task_execution_url(
+        staff_membership.establishment_id,
+        task.id,
+        "create-observation/",
+    )
+    payload = {"text": "Broken equipment in kitchen area today"}
+
+    first_response = api_client.post(
+        url,
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert first_response.status_code == 201
+    assert first_response.json()["status"] == "observation_created"
+    mock_enqueue.assert_not_called()
+
+    second_response = api_client.post(
+        url,
+        {"text": "Another attempt on the same checklist task."},
+        format="json",
+        **auth_headers(token),
+    )
+    assert second_response.status_code == 400
+    assert second_response.json()["code"] == "validation_error"
+
+
 def test_create_observation_rejects_short_text(
     api_client,
     owner_membership,

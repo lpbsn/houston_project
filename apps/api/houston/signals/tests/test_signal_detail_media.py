@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import io
+import time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections
-from django.test import Client
+from django.test import Client, override_settings
+from django.urls import reverse
 from PIL import Image
 
 from houston.establishments.models import EstablishmentMembership
+from houston.observations.media_access import sign_observation_media_preview
 from houston.observations.models import Observation, ObservationMedia
 from houston.signals.models import Signal, SignalSourceObservation
 from houston.signals.services import (
@@ -234,6 +237,51 @@ def test_preview_rejects_wrong_establishment(api_client):
     wrong_url = f"{wrong_path}?{parsed.query}"
 
     assert Client().get(wrong_url).status_code == 404
+
+
+def test_preview_404_without_created_from_feed_signal(api_client):
+    membership = build_api_membership()
+    observation, _ = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    media = ObservationMedia.objects.get(observation_id=observation.id)
+    token = sign_observation_media_preview(
+        establishment_id=membership.establishment_id,
+        media_id=media.id,
+    )
+    path = reverse(
+        "observation-media-preview",
+        kwargs={
+            "establishment_id": membership.establishment_id,
+            "media_id": media.id,
+        },
+    )
+    preview_url = f"{path}?token={token}"
+
+    assert Client().get(preview_url).status_code == 404
+
+
+@pytest.mark.slow
+@override_settings(HOUSTON_OBSERVATION_MEDIA_PREVIEW_TTL_SECONDS=1)
+def test_preview_404_expired_token(api_client):
+    membership = build_api_membership()
+    observation, token = _create_observation_with_photo(
+        api_client=api_client,
+        membership=membership,
+    )
+    signal = create_minimal_v3_signal(membership, title="Preview expiry")
+    _link_created_from(signal=signal, observation=observation)
+
+    detail = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+    preview_url = detail.json()["media_items"][0]["preview_url"]
+
+    time.sleep(1.1)
+
+    assert Client().get(preview_url).status_code == 404
 
 
 def test_golden_split_keeps_media_until_last_active_signal_resolved(api_client):

@@ -133,6 +133,92 @@ def test_submit_with_temporary_photo_upload(api_client):
     assert submit_response.json()["media_count"] == 1
 
 
+def test_submit_rejects_already_linked_upload(api_client):
+    establishment = create_establishment(name="Observation Hotel")
+    staff = create_user(username="obs_linked_upload")
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    token = login(api_client, user=staff)
+
+    upload_response = api_client.post(
+        uploads_url(establishment.id),
+        {"file": _png_upload()},
+        format="multipart",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert upload_response.status_code == 201
+    upload_id = upload_response.json()["id"]
+
+    first_submit = api_client.post(
+        observations_url(establishment.id),
+        {
+            "text": "Tache visible sur le mur près de la réception.",
+            "temporary_upload_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert first_submit.status_code == 201
+
+    second_submit = api_client.post(
+        observations_url(establishment.id),
+        {
+            "text": "Autre observation avec la même photo liée.",
+            "temporary_upload_ids": [upload_id],
+        },
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert second_submit.status_code == 404
+    assert second_submit.json()["code"] == "observation_upload_not_found"
+
+
+@pytest.mark.django_db(transaction=True)
+@patch("houston.signals.tasks.process_observation_task.delay")
+def test_api_submit_201_when_enqueue_fails_on_commit_observation_stays_queued(
+    mock_delay,
+    api_client,
+):
+    establishment = create_establishment(name="Observation Hotel")
+    staff = create_user(username="obs_enqueue_fail")
+    create_membership(
+        establishment=establishment,
+        user=staff,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    token = login(api_client, user=staff)
+    mock_delay.side_effect = RuntimeError("broker unavailable")
+    callbacks = []
+
+    with patch(
+        "django.db.transaction.on_commit",
+        side_effect=lambda fn: callbacks.append(fn),
+    ):
+        response = api_client.post(
+            observations_url(establishment.id),
+            {
+                "text": "Observation persistée malgré échec enqueue post-commit.",
+                "temporary_upload_ids": [],
+            },
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["processing_status"] == ObservationProcessing.Status.QUEUED
+    assert len(callbacks) == 1
+
+    with pytest.raises(RuntimeError, match="broker unavailable"):
+        callbacks[0]()
+
+    observation = Observation.objects.get(id=body["id"])
+    assert observation.processing.status == ObservationProcessing.Status.QUEUED
+
+
 @patch("houston.uploads.api.transcription_views.transcribe_audio_file")
 def test_transcription_returns_editable_text_without_persisting_audio(
     mock_transcribe,

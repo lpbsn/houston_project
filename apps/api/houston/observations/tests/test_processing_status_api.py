@@ -199,6 +199,25 @@ def test_processing_status_owner_can_read_peer_observation(api_client):
     assert response.status_code == 200
 
 
+def test_processing_status_director_can_read_peer_observation(api_client):
+    submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
+    director = create_membership(
+        establishment=submitter.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    director.user.set_password(TEST_PASSWORD)
+    director.user.save(update_fields=["password"])
+    observation = create_observation(membership=submitter)
+    token = login(api_client, user=director.user)
+
+    response = api_client.get(
+        processing_status_url(submitter.establishment_id, observation.id),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+
+
 def test_processing_status_staff_peer_returns_404(api_client):
     submitter = build_membership(role=EstablishmentMembership.Role.STAFF)
     peer = create_membership(
