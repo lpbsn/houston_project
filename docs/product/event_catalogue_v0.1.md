@@ -173,13 +173,13 @@ Operational WebSocket invalidation is documented in [realtime_domain.md](domains
 | `comment` | `comment.action.resolved` | `comments/services.py::resolve_action_comment` | `comment.action.resolved` |
 | `comment` | `comment.action.unresolved` | `comments/services.py::unresolve_action_comment` | `comment.action.unresolved` |
 
-### 4.2 Signal side-effects without dedicated `signal.*` transport
+### 4.2 Signal side-effects from Action lifecycle (cross-domain)
 
 | Business transition | DB mutation | Transport emitted |
 |---|---|---|
 | Linked `create_action`: Signal `open→in_progress`, optional unpin | yes | `action.created` (+ `signal.updated` only if unpin) |
-| `reopen_action`: Signal `resolved→in_progress` | yes | `action.updated` only |
-| All linked actions canceled → Signal reopens to `open` | yes | `action.updated` only |
+| `reopen_action`: Signal `resolved→in_progress` | yes | `action.updated` + `signal.updated` |
+| All linked actions canceled → Signal reopens to `open` | yes | `action.updated` + `signal.updated` |
 | `mark_done` / `validate` → auto `resolve_signal` | yes | `action.updated` + `signal.updated` |
 
 Frontend: `invalidateActionMutationSurfaces` also invalidates Signal queries ([apps/web/src/lib/query-invalidation.ts](apps/web/src/lib/query-invalidation.ts)).
@@ -465,7 +465,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | notification_candidate | yes |
 | notification_lot | **lot1** |
 | notification_reason | Work must resume — assignees need attention |
-| tests_futurs | ∪(assignees, creator) set dedup; signal reopen does not emit separate `signal.updated` |
+| tests_futurs | ∪(assignees, creator) set dedup; linked signal reopen emits `signal.updated` |
 
 #### `action.canceled`
 

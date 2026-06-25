@@ -166,6 +166,7 @@ def sync_signal_after_action_change(*, signal: Signal) -> Signal:
                     "updated_at",
                 ]
             )
+            _schedule_linked_signal_updated_invalidation(signal=signal)
     return signal
 
 
@@ -419,6 +420,7 @@ def reopen_action(
             signal.status = Signal.Status.IN_PROGRESS
             touch_signal_activity(signal=signal)
             signal.save(update_fields=["status", "last_activity_at", "updated_at"])
+            _schedule_linked_signal_updated_invalidation(signal=signal)
     _schedule_action_invalidation(action=action, reason="action.updated")
     schedule_action_reopened_notification(
         action_id=action.id,
@@ -511,4 +513,15 @@ def _schedule_action_invalidation(*, action: Action, reason: str) -> None:
         subject_type="action",
         reason=reason,
         entity_id=action.id,
+    )
+
+
+def _schedule_linked_signal_updated_invalidation(*, signal: Signal) -> None:
+    from houston.realtime.broadcast import schedule_establishment_invalidation
+
+    schedule_establishment_invalidation(
+        establishment_id=signal.establishment_id,
+        subject_type="signal",
+        reason="signal.updated",
+        entity_id=signal.id,
     )

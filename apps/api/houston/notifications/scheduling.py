@@ -36,12 +36,28 @@ from houston.signals.models import Signal
 logger = logging.getLogger(__name__)
 
 
-def _run_notification_after_commit(*, deliver: Callable[[], None]) -> None:
+def _run_notification_after_commit(
+    *,
+    deliver: Callable[[], None],
+    event_key: str | None = None,
+    subject_type: str | None = None,
+    subject_id: uuid.UUID | None = None,
+) -> None:
     def _wrapped() -> None:
         try:
             deliver()
         except Exception:
-            logger.exception("Failed to create in-app notification after business commit")
+            extra: dict[str, str] = {}
+            if event_key is not None:
+                extra["event_key"] = event_key
+            if subject_type is not None:
+                extra["subject_type"] = subject_type
+            if subject_id is not None:
+                extra["subject_id"] = str(subject_id)
+            logger.exception(
+                "Failed to create in-app notification after business commit",
+                extra=extra,
+            )
 
     transaction.on_commit(_wrapped)
 
@@ -120,7 +136,12 @@ def schedule_action_created_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action_id,
+    )
 
 
 def schedule_action_reassigned_notification(
@@ -172,7 +193,12 @@ def schedule_action_reassigned_notification(
             dedupe_key=dedupe_key,
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_REASSIGNED,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action_id,
+    )
 
 
 def schedule_action_pending_validation_notification(*, action_id: uuid.UUID) -> None:
@@ -192,7 +218,12 @@ def schedule_action_pending_validation_notification(*, action_id: uuid.UUID) -> 
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PENDING_VALIDATION,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action_id,
+    )
 
 
 def schedule_action_reopened_notification(
@@ -216,7 +247,12 @@ def schedule_action_reopened_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_REOPENED,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action_id,
+    )
 
 
 def schedule_action_canceled_notification(
@@ -240,7 +276,12 @@ def schedule_action_canceled_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_CANCELED,
+        subject_type=Notification.SubjectType.ACTION,
+        subject_id=action_id,
+    )
 
 
 def _load_execution(*, execution_id: uuid.UUID) -> ChecklistExecution | None:
@@ -295,7 +336,12 @@ def schedule_checklist_execution_created_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.CHECKLIST_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.CHECKLIST_EXECUTION,
+        subject_id=execution_id,
+    )
 
 
 def schedule_checklist_execution_canceled_notification(
@@ -319,7 +365,12 @@ def schedule_checklist_execution_canceled_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.CHECKLIST_EXECUTION_CANCELED,
+        subject_type=Notification.SubjectType.CHECKLIST_EXECUTION,
+        subject_id=execution_id,
+    )
 
 
 def _load_comment(*, comment_id: uuid.UUID) -> Comment | None:
@@ -376,7 +427,12 @@ def schedule_comment_mention_created_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment_id,
+    )
 
 
 def _load_signal(*, signal_id: uuid.UUID) -> Signal | None:
@@ -425,7 +481,12 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
             exclude_actor_if_recipient=False,
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_CREATED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
 
 
 def schedule_signal_urgency_changed_notification(
@@ -449,7 +510,12 @@ def schedule_signal_urgency_changed_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_URGENCY_CHANGED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
 
 
 def schedule_signal_pinned_notification(
@@ -473,7 +539,12 @@ def schedule_signal_pinned_notification(
             ),
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_PINNED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
 
 
 def schedule_signal_resolved_notification(
@@ -498,7 +569,12 @@ def schedule_signal_resolved_notification(
             exclude_actor_if_recipient=actor_membership_id is not None,
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_RESOLVED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )
 
 
 def schedule_signal_canceled_notification(
@@ -523,4 +599,9 @@ def schedule_signal_canceled_notification(
             exclude_actor_if_recipient=actor_membership_id is not None,
         )
 
-    _run_notification_after_commit(deliver=deliver)
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.SIGNAL_CANCELED,
+        subject_type=Notification.SubjectType.SIGNAL,
+        subject_id=signal_id,
+    )

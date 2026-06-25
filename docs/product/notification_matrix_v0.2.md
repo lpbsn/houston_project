@@ -1,11 +1,11 @@
 # Notification Matrix v0.2
 
-> **Status: draft / reference only**  
-> **Not an implementation contract** until the Notification model/API ticket is delivered.  
-> **Authoritative implementation source (future):** `houston/notifications/` models + services + `apps/api/schema.yml`  
+> **Status: Lot 1 implemented / Lot 2+ draft reference**  
+> **Canonical Lot 1 keys:** `LOT1_EVENT_KEYS` in `apps/api/houston/notifications/constants.py`  
+> **Implementation:** `houston/notifications/` models + services + `scheduling.py` + `apps/api/schema.yml`  
 > **Business-fact reference:** [event_catalogue_v0.1.md](event_catalogue_v0.1.md)
 
-Last reviewed: 2026-06-22
+Last reviewed: 2026-06-25
 
 ---
 
@@ -14,8 +14,8 @@ Last reviewed: 2026-06-22
 | Document | Role |
 |---|---|
 | [event_catalogue_v0.1.md](event_catalogue_v0.1.md) | Complete business-fact catalogue (~35 entries) |
-| **This document** | Draft rules for turning catalogue events into user notifications |
-| [notification_domain.md](domains/notification_domain.md) | Notification domain boundaries (not started in code) |
+| **This document** | Lot 1 rules (implemented) + Lot 2+ backlog (draft) |
+| [notification_domain.md](domains/notification_domain.md) | Notification domain boundaries (`lot1_in_app`) |
 
 ```txt
 Event        = system fact (catalogue)
@@ -34,7 +34,9 @@ Realtime/feed handles visibility.
 
 ## 1. Notifications Lot 1 scope
 
-### 1.1 Strict event subset (13 in-app events)
+### 1.1 Strict event subset (13 in-app events) — **implemented (Lot 1)**
+
+Canonical source: `LOT1_EVENT_KEYS` in `apps/api/houston/notifications/constants.py`. Producers: `scheduling.py`.
 
 ```txt
 action.created
@@ -93,7 +95,7 @@ If a membership appears in multiple recipient groups → one notification, highe
 
 Priority order: `urgent` > `action_required` > `info` > `system`
 
-Dedup window (recommended for implementation): same recipient + `event_key` + `subject_id` within 5 minutes → skip or merge.
+Dedup window (implemented): same recipient + `event_key` + `subject_id` within 5 minutes → skip (`DEDUPE_WINDOW` in `constants.py`).
 
 ### 2.2 Actor exclusion
 
@@ -255,9 +257,9 @@ For `action.pending_validation`:
 
 ---
 
-## 6. Deferred (`notification_lot: later`)
+## 6. Lot 2 backlog (`notification_lot: later`)
 
-Not in current implementation. Documented in catalogue for future lots.
+Not in Lot 1 implementation. Documented for future lots — do not assume these fire notifications today.
 
 | event_key | Direction (draft) | Channel (future) |
 |---|---|---|

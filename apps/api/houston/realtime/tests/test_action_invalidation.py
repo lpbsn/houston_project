@@ -155,8 +155,8 @@ def test_create_linked_action_emits_single_invalidation_for_unpinned_signal():
         assert call["reason"] == "action.created"
 
 
-def test_cancel_last_linked_action_reopen_refreshes_via_action_updated_only():
-    """Signal reopen side-effect is covered by action.updated for frontend refetch."""
+def test_cancel_last_linked_action_reopen_emits_action_and_signal_updated():
+    """Linked signal reopen emits both action.updated and signal.updated."""
     owner, staff, hotel, maintenance, electricite = _owner_staff_maintenance()
     signal = _linked_signal(
         owner=owner,
@@ -171,17 +171,86 @@ def test_cancel_last_linked_action_reopen_refreshes_via_action_updated_only():
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
         cancel_action(action_id=action.id, actor=owner)
 
-        mock_notify.assert_called_once()
-        _assert_action_invalidation(mock_notify, action=action, reason="action.updated")
+        assert mock_notify.call_count == 2
+        action_calls = [
+            call.kwargs
+            for call in mock_notify.call_args_list
+            if call.kwargs.get("subject_type") == "action"
+        ]
         signal_calls = [
             call.kwargs
             for call in mock_notify.call_args_list
             if call.kwargs.get("subject_type") == "signal"
         ]
-        assert signal_calls == []
+        assert action_calls == [
+            {
+                "establishment_id": action.establishment_id,
+                "subject_type": "action",
+                "reason": "action.updated",
+                "entity_id": action.id,
+            }
+        ]
+        assert signal_calls == [
+            {
+                "establishment_id": signal.establishment_id,
+                "subject_type": "signal",
+                "reason": "signal.updated",
+                "entity_id": signal.id,
+            }
+        ]
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.OPEN
+
+
+def test_reopen_action_linked_resolved_signal_emits_action_and_signal_updated():
+    owner, staff, hotel, maintenance, electricite = _owner_staff_maintenance()
+    signal = _linked_signal(
+        owner=owner,
+        hotel=hotel,
+        maintenance=maintenance,
+        electricite=electricite,
+    )
+    action = _create_linked_action(owner=owner, staff=staff, signal=signal)
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
+    validate_action(action_id=action.id, actor_membership=owner)
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        reopen_action(action_id=action.id, actor=owner)
+
+        assert mock_notify.call_count == 2
+        action_calls = [
+            call.kwargs
+            for call in mock_notify.call_args_list
+            if call.kwargs.get("subject_type") == "action"
+        ]
+        signal_calls = [
+            call.kwargs
+            for call in mock_notify.call_args_list
+            if call.kwargs.get("subject_type") == "signal"
+        ]
+        assert action_calls == [
+            {
+                "establishment_id": action.establishment_id,
+                "subject_type": "action",
+                "reason": "action.updated",
+                "entity_id": action.id,
+            }
+        ]
+        assert signal_calls == [
+            {
+                "establishment_id": signal.establishment_id,
+                "subject_type": "signal",
+                "reason": "signal.updated",
+                "entity_id": signal.id,
+            }
+        ]
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
 
 
 def test_accept_action_emits_action_updated_after_commit():

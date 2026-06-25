@@ -217,18 +217,23 @@ Source domains with invalidation emission today:
 - Action — create and lifecycle → `action.created`, `action.updated`
 - Checklist — sync template / assignment writers → `checklist.updated`; execution writers (sync + async materialization) → `execution.created`, `execution.updated`
 - Comment — sync create / resolve → `comment.signal.*`, `comment.action.*`
-
-Not emitted today:
-
-- Notification create / read / archive
+- Notification — create / read / archive / mark-all-read → membership-scoped `notification.created`, `notification.updated`, `notification.bulk_updated` (emitted from `notifications/services.py`, not domain lifecycle writers)
 
 ### Action lifecycle side-effects on Signal (refetch contract)
 
-When an Action lifecycle write also mutates a linked Signal (for example `OPEN → IN_PROGRESS` on linked action create, signal reopen after last linked action cancel, or `RESOLVED → IN_PROGRESS` on action reopen), the backend may emit only `action.created` or `action.updated` — not a separate `signal.updated`.
+When an Action lifecycle write also mutates a linked Signal, transport depends on the mutation:
 
-Frontend refetch still covers Signal feed/detail because `action.created` / `action.updated` dispatch through `invalidateActionMutationSurfaces`, which also calls `invalidateEstablishmentSignalQueries`.
+| Mutation | Transport |
+|---|---|
+| Linked `create_action`: `OPEN → IN_PROGRESS` (no unpin) | `action.created` only |
+| Linked `create_action` with unpin | `action.created` + `signal.updated` |
+| All linked actions canceled → Signal reopens to `OPEN` | `action.updated` + `signal.updated` |
+| `reopen_action`: Signal `RESOLVED → IN_PROGRESS` | `action.updated` + `signal.updated` |
+| `mark_done` / `validate` → auto `resolve_signal` | `action.updated` + `signal.updated` |
 
-Direct `signal.updated` / `signal.created` emissions remain owned by `signals/services.py` writers and the observation async pipeline.
+Houston web also invalidates Signal queries on `action.created` / `action.updated` via `invalidateActionMutationSurfaces` (defense-in-depth).
+
+Direct `signal.updated` / `signal.created` emissions from signal-domain writers remain owned by `signals/services.py` and the observation async pipeline; linked-action reopen paths schedule `signal.updated` from `actions/services.py` when the Signal is mutated.
 
 See **Operational WebSocket invalidation** under section 2 for the reason matrix.
 
@@ -298,8 +303,8 @@ Current implementation note (operational realtime):
 - Frontend must not infer authorization from channel names or local subscription state.
 - Feed order, insertion, removal, and filtering remain backend-owned through Feed refetch.
 - Open Signal and Action detail views refetch when matching operational invalidation messages arrive.
-- On reconnect, refetch active signal, action, and checklist queries that are still visible and authorized (operational provider). Comment lists are not refetched on reconnect — a known limitation ; live comment threads still refresh via `comment.*` invalidation during the session.
-- Notification Center refetch via realtime not implemented.
+- On reconnect, refetch active signal, action, checklist, and notification queries that are still visible and authorized (operational provider). Comment lists are not refetched on reconnect — a known limitation ; live comment threads still refresh via `comment.*` invalidation during the session.
+- Notification Center refetch via realtime is implemented: membership-scoped `notification.created`, `notification.updated`, and `notification.bulk_updated` invalidate `['notifications','list', establishmentId]` (see `apply-operational-invalidation.ts`).
 - Comment surfaces refetch via operational `comment` invalidation (implemented).
 - Checklist execution surfaces refetch via operational `execution` / `checklist` invalidation (implemented).
 - Chat V1 follows [`chat_domain.md`](chat_domain.md) ; do not apply generic invalidation-only rules to Chat message WebSocket delivery.

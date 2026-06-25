@@ -1,8 +1,8 @@
 # Notification Domain
 
 Status: authoritative
-Last reviewed: 2026-05-27
-Implementation status: not_started
+Last reviewed: 2026-06-25
+Implementation status: lot1_in_app
 
 ## 1. Purpose
 
@@ -33,9 +33,13 @@ Notification does not own:
 - Candidate push delivery for selected high-attention cases when implemented.
 - Targeted mention notifications without permission grants.
 
-Current truth:
-- `apps/api/houston/notifications/` is only a Django app stub today.
-- `apps/api/schema.yml` confirms no notification endpoints today.
+Current truth (Lot 1 in-app):
+- `apps/api/houston/notifications/` implements persisted in-app notifications, recipient resolution, dedupe, and scheduling producers (`scheduling.py`).
+- `apps/api/schema.yml` lists notification endpoints: list, mark-read, archive, mark-all-read, preferences.
+- Frontend Notification Center uses TanStack Query (`features/notifications/`).
+- Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the notification list and unread badge; transport is owned by `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
+- Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`); see [`notification_matrix_v0.2.md`](../notification_matrix_v0.2.md) §1.1.
+- `notifications_enabled` on `EstablishmentMembership` suppresses in-app notification creation for that recipient.
 
 ## 3. Out of Scope
 
@@ -98,8 +102,7 @@ Current truth:
   - Exact storage and service design are not validated in current code.
 
 - `NotificationDeduplication`
-  - Candidate anti-noise rule to avoid duplicate notifications for the same recipient, event, and subject window.
-  - Exact dedup window remains candidate until implemented.
+  - Implemented: same recipient + `dedupe_key` within 5 minutes skips duplicate creation (`DEDUPE_WINDOW` in `constants.py`).
 
 ## 6. Lifecycle / Statuses
 
@@ -122,7 +125,9 @@ Target transition direction:
 - recipient archives -> `archived`
 - delivery attempt created -> `queued` then `sent`, `delivered`, `failed`, or `skipped`
 
-Current code does not validate notification models, services, or delivery pipelines yet.
+Current code (Lot 1):
+- `Notification` model with statuses `unread`, `read`, `archived`.
+- In-app delivery only; push/email delivery tracking not implemented.
 
 ## 7. Permissions
 
@@ -136,47 +141,37 @@ Current code does not validate notification models, services, or delivery pipeli
 
 ## 8. Events
 
-No implemented notification event contract is validated in current code or in `apps/api/schema.yml`.
+Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
 
-Candidate notification-domain events only:
-- `NotificationCreated`
-- `NotificationRead`
-- `NotificationArchived`
-- `NotificationDeliveryQueued`
-- `NotificationDeliverySucceeded`
-- `NotificationDeliveryFailed`
-- `NotificationDeliverySkipped`
+- Action: `action.created`, `action.reassigned`, `action.pending_validation`, `action.reopened`, `action.canceled`
+- Checklist: `checklist.execution.created`, `checklist.execution.canceled`
+- Comment: `comment.mention.created`
+- Signal: `signal.created`, `signal.urgency_changed`, `signal.pinned`, `signal.resolved`, `signal.canceled`
 
-Candidate source-trigger families only:
-- Signal events such as `SignalCreated`, `SignalUrgencyChanged`, `SignalResolved`, and `SignalCanceled`
-- Action events such as `ActionAssigned`, `ActionPendingValidation`, `ActionValidated`, `ActionReopened`, and `ActionCanceled`
-- Checklist events such as `ChecklistExecutionAssigned`, `ChecklistExecutionDone`, and `ChecklistExecutionCanceled`
-- mention or comment-related events on authorized Signal or Action context
-- selected technical or onboarding failures with simplified, non-sensitive messaging
+Intentionally no Lot 1 notification for: `accept_action`, `validate_action`, direct-done without validation, signal aggregation.
 
-Validated boundary notes:
-- Notification may consume events from Signal, Action, Checklist, Comments, Identity, or onboarding-related domains.
-- Notification does not define the event catalog.
-- `ChecklistExecutionAssigned` notifies the assignee.
-- `ChecklistExecutionDone` notifies the user who assigned the checklist.
-- Current MVP build direction keeps Chat isolated from Notifications; chat notification behavior is not validated.
+Candidate notification-domain transport events (membership-scoped WS invalidation via `notifications/services.py`):
+
+- `notification.created`, `notification.updated`, `notification.bulk_updated`
+
+Candidate Lot 2+ source triggers (not implemented): see [`notification_matrix_v0.2.md`](../notification_matrix_v0.2.md) §Lot2 backlog.
 
 ## 9. API Surface
 
 Current API truth is `apps/api/schema.yml`.
 
-Implemented notification endpoints confirmed in `apps/api/schema.yml`:
-- none
+Implemented notification endpoints in `apps/api/schema.yml`:
 
-Candidate endpoints only:
-- list current user's notifications
-- mark a notification as read
-- archive a notification
-- mark all notifications as read
-- update minimal notification preferences such as `push_enabled` or `email_enabled`
-- register or update a browser push subscription
+- `GET /api/v1/establishments/{establishment_id}/notifications/` — list for authenticated recipient (cursor pagination)
+- `POST .../notifications/{notification_id}/mark-read/`
+- `POST .../notifications/{notification_id}/archive/`
+- `POST .../notifications/mark-all-read/`
+- `GET` / `PATCH .../notifications/preferences/` — `notifications_enabled`
 
-Do not treat any notification endpoint as implemented until it exists in `apps/api/schema.yml`.
+Not implemented:
+
+- browser push subscription endpoints
+- general-purpose email notification workflows
 
 ## 10. Frontend Expectations
 
@@ -188,7 +183,7 @@ Do not treat any notification endpoint as implemented until it exists in `apps/a
 - Frontend may optimistically update read state only if backend confirmation or reconciliation remains the authority.
 - TanStack Query owns notification server state when notification APIs exist.
 - Frontend must use generated OpenAPI clients only for routes present in `apps/api/schema.yml`.
-- Realtime remains invalidation and refetch only; it does not replace persisted notifications.
+- Realtime invalidates notification list queries on membership-scoped `notification.*` events; it does not replace persisted notifications.
 
 ## 11. AI Agent Notes
 
