@@ -64,7 +64,7 @@ def test_owner_detail_delete_hint_false_when_active_execution(
     assert hints["can_delete"] is False
 
 
-def test_owner_list_delete_hint_ignores_active_execution_conflict(
+def test_owner_list_delete_hint_false_when_active_execution(
     api_client,
     owner_membership,
     registered_template,
@@ -78,7 +78,7 @@ def test_owner_list_delete_hint_ignores_active_execution_conflict(
     )
     assert response.status_code == 200
     item = next(row for row in response.json() if row["id"] == str(registered_template.id))
-    assert item["permission_hints"]["can_delete"] is True
+    assert item["permission_hints"]["can_delete"] is False
 
 
 def test_manager_out_of_bu_cannot_view_registered_template_detail(

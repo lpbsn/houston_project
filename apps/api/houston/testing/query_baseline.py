@@ -24,6 +24,8 @@ EXECUTION_FEED_EMPTY_MAX_QUERIES = 8
 EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 11
 # GET .../execution-feed/?view_mode=general — owner, 3 active actions (post ACT-01 prefetch fix)
 EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES = 9
+# GET checklist-assignments/ — owner, 12 assignments (CL-02; measured 2026-06-24)
+CHECKLIST_ASSIGNMENT_LIST_TWELVE_ASSIGNMENTS_MAX_QUERIES = 7
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 # Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 from django.utils import timezone
 
 from houston.actions.selectors import ExecutionFeedViewMode
@@ -56,6 +56,9 @@ def get_in_progress_execution_for_assignment(
     *,
     assignment: ChecklistAssignment,
 ) -> ChecklistExecution | None:
+    prefetched = getattr(assignment, "prefetched_in_progress_executions", None)
+    if prefetched is not None:
+        return prefetched[0] if prefetched else None
     return (
         assignment.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS)
         .order_by("-created_at")
@@ -138,6 +141,22 @@ def active_assignments_for_management(
 ) -> QuerySet[ChecklistAssignment]:
     return assignments_for_management(membership=membership).filter(
         status=ASSIGNMENT_STATUS_ACTIVE,
+    )
+
+
+def active_assignments_for_management_list(
+    *,
+    membership: EstablishmentMembership,
+) -> QuerySet[ChecklistAssignment]:
+    in_progress_prefetch = Prefetch(
+        "executions",
+        queryset=ChecklistExecution.objects.filter(
+            status=EXECUTION_STATUS_IN_PROGRESS,
+        ).order_by("-created_at"),
+        to_attr="prefetched_in_progress_executions",
+    )
+    return active_assignments_for_management(membership=membership).prefetch_related(
+        in_progress_prefetch,
     )
 
 

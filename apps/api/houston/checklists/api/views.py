@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from django.db.models import Count
+from django.db.models import Count, Exists, OuterRef
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -38,19 +38,20 @@ from houston.checklists.api.serializers import (
     serialize_template_detail,
     serialize_template_list_item,
 )
+from houston.checklists.constants import ACTIVE_EXECUTION_STATUSES
 from houston.checklists.exceptions import (
     ChecklistConflictError,
     ChecklistPermissionError,
     ChecklistValidationError,
 )
-from houston.checklists.models import ChecklistTemplate
+from houston.checklists.models import ChecklistExecution, ChecklistTemplate
 from houston.checklists.permissions import (
     can_access_checklist_management,
     can_create_checklist_assignment,
     can_create_registered_template,
 )
 from houston.checklists.selectors import (
-    active_assignments_for_management,
+    active_assignments_for_management_list,
     get_checklist_assignment_for_detail,
     get_checklist_execution_for_detail,
     get_checklist_task_execution_for_commands,
@@ -169,7 +170,15 @@ class ChecklistTemplateListCreateView(EstablishmentScopedChecklistMixin, APIView
             business_unit_id=business_unit_id,
         )
 
-        queryset = queryset.annotate(task_count=Count("task_templates")).order_by(
+        queryset = queryset.annotate(
+            task_count=Count("task_templates"),
+            has_active_execution=Exists(
+                ChecklistExecution.objects.filter(
+                    checklist_template_id=OuterRef("pk"),
+                    status__in=ACTIVE_EXECUTION_STATUSES,
+                )
+            ),
+        ).order_by(
             "-updated_at",
             "-created_at",
         )
@@ -603,7 +612,7 @@ class ChecklistAssignmentListView(EstablishmentScopedChecklistMixin, APIView):
         if isinstance(membership, Response):
             return membership
 
-        queryset = active_assignments_for_management(membership=membership).order_by(
+        queryset = active_assignments_for_management_list(membership=membership).order_by(
             "-updated_at",
             "-created_at",
         )

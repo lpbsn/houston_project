@@ -636,3 +636,50 @@ def test_assignment_deactivate_preserves_terminal_history(
     assert response.status_code == 200
     execution.refresh_from_db()
     assert execution.status == ChecklistExecution.Status.DONE
+
+
+def test_assignment_list_query_count_baseline_many_assignments(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.checklists.services import create_checklist_assignment, create_checklist_template
+    from houston.checklists.tests.conftest import add_task_template, default_assignment_schedule
+    from houston.testing.query_baseline import (
+        CHECKLIST_ASSIGNMENT_LIST_TWELVE_ASSIGNMENTS_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    template = create_checklist_template(
+        establishment_id=owner_membership.establishment_id,
+        actor=owner_membership,
+        title="Routine bulk",
+        business_unit_id=business_unit.id,
+    )
+    add_task_template(template=template, task="Task")
+    template.status = "active"
+    template.save(update_fields=["status", "updated_at"])
+    schedule = default_assignment_schedule()
+    for index in range(12):
+        create_checklist_assignment(
+            template=template,
+            actor=owner_membership,
+            assigned_to_id=staff_membership.id,
+            recurrence_days=[["monday", "tuesday", "wednesday", "thursday", "friday"][index % 5]],
+            **schedule,
+        )
+
+    token = login(api_client, user=owner_membership.user)
+    url = checklist_assignments_url(owner_membership.establishment_id)
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    assert len(response.json()) == 12
+    assert_query_count_at_most(
+        context,
+        max_queries=CHECKLIST_ASSIGNMENT_LIST_TWELVE_ASSIGNMENTS_MAX_QUERIES,
+        label="GET checklist-assignments/ twelve active assignments",
+    )

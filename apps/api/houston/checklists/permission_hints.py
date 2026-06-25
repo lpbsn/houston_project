@@ -51,7 +51,11 @@ def _build_checklist_template_permission_hints_core(
         template,
     )
     if can_delete and reflect_delete_conflicts:
-        can_delete = get_active_execution_for_template(template=template) is None
+        has_active_execution = getattr(template, "has_active_execution", None)
+        if has_active_execution is not None:
+            can_delete = not has_active_execution
+        else:
+            can_delete = get_active_execution_for_template(template=template) is None
 
     can_create_assignment = (
         checklist_permissions.can_create_checklist_assignment(membership, template)
@@ -94,7 +98,7 @@ def build_checklist_template_list_permission_hints(
         membership=membership,
         template=template,
         include_launch_execution_hint=False,
-        reflect_delete_conflicts=False,
+        reflect_delete_conflicts=True,
     )
 
 

@@ -17,7 +17,6 @@ import type {
   ChecklistTaskTemplateCreateRequest,
   ChecklistTemplateCreateRequest,
   ChecklistTemplateDetail,
-  ChecklistTemplateExecutionCreateRequest,
   ChecklistTemplateListFilters,
   ChecklistTemplateListItem,
   ChecklistTemplateScheduleRequest,
@@ -188,25 +187,6 @@ export async function updateChecklistTemplate(
   return assertChecklistData<ChecklistTemplateDetail>(result)
 }
 
-export async function activateChecklistTemplate(
-  establishmentId: string,
-  templateId: string,
-): Promise<ChecklistTemplateDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/activate/',
-        {
-          params: templatePath(establishmentId, templateId),
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  return assertChecklistData<ChecklistTemplateDetail>(result)
-}
-
 export async function deleteChecklistTemplate(
   establishmentId: string,
   templateId: string,
@@ -226,25 +206,6 @@ export async function deleteChecklistTemplate(
   if (!result.response.ok) {
     throw parseError(result.response, result.error)
   }
-}
-
-export async function deactivateChecklistTemplate(
-  establishmentId: string,
-  templateId: string,
-): Promise<ChecklistTemplateDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/deactivate/',
-        {
-          params: templatePath(establishmentId, templateId),
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  return assertChecklistData<ChecklistTemplateDetail>(result)
 }
 
 export async function createChecklistTask(
@@ -431,27 +392,6 @@ export async function deactivateChecklistAssignment(
   return assertChecklistData<ChecklistAssignment>(result)
 }
 
-export async function createExecutionFromTemplate(
-  establishmentId: string,
-  templateId: string,
-  body: ChecklistTemplateExecutionCreateRequest,
-): Promise<ChecklistExecutionDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/checklist-templates/{template_id}/executions/',
-        {
-          params: templatePath(establishmentId, templateId),
-          body,
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  return assertChecklistData<ChecklistExecutionDetail>(result)
-}
-
 export async function scheduleChecklistFromTemplate(
   establishmentId: string,
   templateId: string,
@@ -585,39 +525,4 @@ export async function createChecklistTaskObservation(
   )
 
   return assertChecklistData<ChecklistTaskCreateObservationResponse>(result)
-}
-
-export type RegisteredChecklistTemplateInput = {
-  title: string
-  description: string
-  business_unit_id: string
-  tasks: Array<{ task: string }>
-  assign_now?: boolean
-  assigned_to?: string | null
-  end_at?: string | null
-}
-
-export async function createRegisteredChecklistTemplate(
-  establishmentId: string,
-  input: RegisteredChecklistTemplateInput,
-): Promise<ChecklistTemplateDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/establishments/{establishment_id}/checklist-templates/', {
-        params: establishmentPath(establishmentId),
-        body: toChecklistTemplateCreateApiBody({
-          title: input.title.trim(),
-          description: input.description.trim(),
-          business_unit_id: input.business_unit_id,
-          tasks: input.tasks.map((task) => ({ task: task.task.trim() })),
-          assign_now: input.assign_now ?? false,
-          assigned_to: input.assign_now ? (input.assigned_to ?? null) : undefined,
-          end_at: input.assign_now ? (input.end_at ?? null) : undefined,
-        }),
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  return assertChecklistData<ChecklistTemplateDetail>(result)
 }
