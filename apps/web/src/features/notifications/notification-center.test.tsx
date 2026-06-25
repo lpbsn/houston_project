@@ -41,12 +41,18 @@ vi.mock('./hooks', () => ({
 
 import { NotificationCenter } from './components/notification-center'
 
+const FIXED_NOW = new Date('2026-06-23T12:00:00')
+
 describe('NotificationCenter', () => {
   afterEach(() => {
+    vi.useRealTimers()
     cleanup()
   })
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(FIXED_NOW)
+
     fetchNextPage.mockClear()
     refetch.mockClear()
     markReadMutate.mockClear()
