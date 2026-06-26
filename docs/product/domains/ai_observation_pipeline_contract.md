@@ -76,8 +76,9 @@ Rejected shapes: legacy `operational_*_key`, `detected_domains[]`, confidence sc
 | --- | --- |
 | `signals_created` | One or more new Signals |
 | `signal_aggregated` | Merged into active Signals |
-| `no_signal_created` | Nothing actionable after validation |
-| `not_actionable` | Pipeline declined to propose |
+| `no_signal_created` | No Signal produced: `candidates: []`, validation rejection, or no actionable candidate after validation (includes cases where the pipeline would not propose a Signal) |
+
+**MVP:** no separate `not_actionable` outcome — use `no_signal_created` only. A distinct « AI declined » analytics outcome requires an explicit future product decision.
 
 ## Versioning
 

@@ -106,8 +106,9 @@ Permission outcomes are:
 
 - Staff
   - Reporting and execution role, not management authority.
-  - Current implemented helpers allow app access, signal-feed access, and observation creation, but not action creation or action validation.
-  - BusinessUnit scope coverage required for visibility (or owner/director broad access).
+  - Current implemented helpers allow app access, signal-feed access, and observation creation.
+  - **Actions (implemented):** Staff may create **free Actions** when the responsible BusinessUnit is in their `MembershipScope` (`can_create_free_action` + `establishments.permissions.can_create_action`). Staff **cannot** create **linked Actions** from a Signal (`can_create_linked_action` returns false; service rejects with `Staff members cannot create linked actions.`). Staff may only create Actions **assigned to themselves** (single assignee = self; no multi-assignee to others). Staff **cannot validate** Actions (`can_validate_action` excludes Staff).
+  - BusinessUnit scope coverage required for visibility and free-action creation (or owner/director broad access).
 
 - Signal Feed — list scope vs detail access (validated 2026-06-11, audit BE-RBAC02)
   - **Ma vue** (`view_mode=personal`): Manager/Staff see Signals where affected **or** responsible BusinessUnit is in `MembershipScope`. Owner/Director see all feed-visible establishment Signals.

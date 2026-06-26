@@ -145,6 +145,8 @@ Frontend display states may include:
 
 **Execution Feed — Checklist items (cible Lot 0):** rules in [`checklist_domain.md`](checklist_domain.md) §5.6 and §9. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. **`execution_source = assignment`** : `visible_from = start_at - 1 hour`. **`template`** : `visible_from` null (immediate). Terminal `done` / `canceled` excluded from active feed. `end_at` overdue does not remove items (`is_overdue` indicator only). Feed cards expose `execution_source` — no Flash To-do label, no badge Process/To-do.
 
+**Execution Feed — Action items (MVP):** inclusion requires `status IN (open, reopened, in_progress, pending_validation)` per [`action_domain.md`](action_domain.md). Terminal `done` / `canceled` **excluded** from active feed; detail remains accessible. No terminal history section in MVP (future reporting/workspace).
+
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
 ## 8. Events

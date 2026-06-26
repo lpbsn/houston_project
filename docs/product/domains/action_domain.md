@@ -36,7 +36,7 @@ An Action is classified by **BusinessUnit / ActivitySubject** (v2, authoritative
 - Create with `assignee_ids` (1 to N membership UUIDs, `minItems: 1`)
 - Duplicate IDs forbidden (request validation + service)
 - Assignees must be **active** memberships of the same establishment
-- Optional `requires_validation` at create (default `true`)
+- Optional `requires_validation` at create (default `true`). **Immutable after create** in MVP — no PATCH/update API; wrong choice requires cancel/recreate.
 - **Staff:** exactly one assignee — themselves only (no multi-assignee create)
 
 ### Shared lifecycle
@@ -154,7 +154,7 @@ Signal: `POST signals/{id}/resolve/` returns **409** `business_conflict` when li
 
 - **Visibility** and **actionability**: `responsible_business_unit` in scopes
 
-Detail: Action **detail** visibility follows `action_visible_to_membership`. `done`/`canceled` readable in detail without feed-active status filter.
+**Execution Feed vs detail (MVP):** Active feed statuses are `open`, `reopened`, `in_progress`, `pending_validation` only (see [`feed_domain.md`](feed_domain.md) §7). Terminal `done` / `canceled` Actions are **excluded from Execution Feed** but remain **readable in detail** via deep-link (`action_visible_to_membership`). No feed history section in MVP.
 
 ## 7. AI Agent Notes
 

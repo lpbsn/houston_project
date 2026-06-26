@@ -127,6 +127,9 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 ## 7. Permissions
 
+- **DRAFT onboarding is owner-led (MVP):** only **Owner** may configure proposals, wizard steps, and runtime setup while the establishment is `DRAFT` (`can_configure_runtime` owner-only on draft).
+- **Director** is required for activation minimum (non-owner director membership) but **cannot complete the draft wizard** in MVP — intervenes on invitation accept and the activation path as documented.
+- **Director-led onboarding** (director completes draft setup) is a **post-MVP** product variant; not supported without access-model change.
 - Owner and Director are the product-level actors who validate and activate runtime setup.
 - Managers may modify some runtime context post-activation only when RBAC allows it.
 - Staff does not configure, validate, or activate onboarding/runtime setup in MVP.

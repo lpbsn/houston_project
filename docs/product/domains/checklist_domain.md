@@ -293,6 +293,8 @@ Checklists among themselves : `last_activity_at desc`. Page merge : checklists f
 | Owner / Director / Manager | Bibliothèque complète selon scope ; CRUD processus ; gestion assignments |
 | Staff | Bibliothèque en **lecture seule** ; lancer exécution pour soi depuis un modèle accessible (« Lancer pour moi ») |
 
+**Nav Profil « Listes » (MVP UX contract):** visible for **active Owner / Director / Manager / Staff memberships** in the selected establishment (`canShowChecklistsNav` is role-based on the active membership, not gated on `can_create_checklist_template`). **Active Staff** see the bibliothèque hub in **read-only** mode; create/edit/delete/assignment actions are hint-gated and API-enforced. Intentional — Staff needs scoped catalogue visibility for « Lancer pour moi ».
+
 - Filtres bibliothèque : pôle, créées par moi
 - Détail modèle : tâches, assignments planifiés (si autorisé), utiliser / assigner selon RBAC
 
