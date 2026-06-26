@@ -42,9 +42,21 @@ jobs:
       - uses: astral-sh/setup-uv@v8.2.0
       - name: Install backend dependencies
         run: uv sync
+      # GATE-01: mirror Makefile backend-check contract gates (local dev uses make/Docker).
+      - name: Django system check
+        working-directory: apps/api
+        run: uv run python manage.py check
+      - name: Check migrations
+        working-directory: apps/api
+        run: uv run python manage.py makemigrations --check --dry-run
       - name: Lint backend
         working-directory: apps/api
         run: uv run ruff check .
+      - name: Generate OpenAPI schema
+        working-directory: apps/api
+        run: uv run python manage.py spectacular --file schema.yml
+      - name: Verify schema.yml is committed
+        run: git diff --exit-code apps/api/schema.yml
       - name: Run backend tests
         working-directory: apps/api
         run: uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q
@@ -70,3 +82,7 @@ jobs:
       - name: Typecheck frontend
         working-directory: apps/web
         run: npm run typecheck
+      # GATE-01: mirror Makefile web-build (make verify web-check slice).
+      - name: Build frontend
+        working-directory: apps/web
+        run: npm run build
