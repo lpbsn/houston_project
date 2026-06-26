@@ -155,6 +155,11 @@ flowchart TB
 - **Tests or gates needed first:** None
 - **Size:** M
 - **Recommended wave:** 0
+- **Status:** Done (Wave 0, 2026-06-26)
+- **Changed:** `.github/workflows/ci.yml` (+5 steps: Django check, migrations check, OpenAPI schema diff, frontend build); `docs/engineering/testing.md` CI vs local gates table
+- **Validated:** `npm run build` OK; `make web-lint web-test web-typecheck` OK; `make backend-check` OK (check, migrations, schema diff, pytest via Docker)
+- **Risks:** `web-lint` asymmetry (CI runs lint, `verify` does not — CI-E9); `types.ts` still ungated (CI-E8); Postgres 16 (CI) vs 17 (local — CI-E5)
+- **Follow-up:** CI-E8 — gate `types.ts` in frontend CI job; CI-E9 — lint vs verify documentation / optional `web-check` alignment
 
 ---
 
@@ -511,7 +516,7 @@ flowchart TB
 Pre-flight checklist — complete in order before Wave 3 structural PRs:
 
 1. Run `make verify` locally once to establish baseline (not executed during audits).
-2. **GATE-01** — Land CI steps: `backend-migrations-check`, `backend-schema-check`, `manage.py check`, `npm run build`; consider `types.ts` diff gate.
+2. ~~**GATE-01**~~ **Done** — CI steps landed: Django check, migrations check, OpenAPI schema diff, `npm run build`. Follow-up: `types.ts` diff gate (CI-E8).
 3. **DEVEX-01** — Fix `.env.shared-dev.example`; publish mode-switch checklist in `shared_dev_database.md` and `INSTALL_MAC.md`.
 4. **TS-E4** — Land parity test: `*QueryKeys` factories ↔ `query-invalidation.ts` prefixes.
 5. **TS-E1** — Land N=20 assignment query-count ceiling **before** any MAT-01 decouple PR.
