@@ -114,14 +114,8 @@ NotificationDelivery per channel
 ```txt
 MVP:
 ├── in_app
+├── email
 └── push
-```
-
-## 4.2 Email
-
-```txt
-Post-MVP / sélectif:
-└── email
 ```
 
 ## 4.3 Email MVP limité

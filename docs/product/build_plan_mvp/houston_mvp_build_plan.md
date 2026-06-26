@@ -31,7 +31,7 @@ Houston remains a backend-authoritative operational workflow app.
 6. Phase 5 — Actions / Execution Feed ✅ core implemented
 7. Phase 7 — Checklists ✅ core implemented
 8. Phase 8 — Chat V1 (minimal Chat-only realtime) ✅ core implemented
-9. Phase 8C — Global realtime invalidation (Signal/Action/Notifications) — **deferred post Chat V1**
+9. Phase 8C — Global realtime invalidation (Signal/Action/Notifications)
 10. Phase 6 — Notifications
 11. Phase 9 — Hardening
 12. Phase 10 — Pilot readiness
