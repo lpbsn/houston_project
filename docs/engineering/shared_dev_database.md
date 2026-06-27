@@ -46,6 +46,24 @@ After `git pull` with new migrations (coordinate with your teammate — one `mig
 make shared-dev-migrate
 ```
 
+## Switching between local and shared-dev
+
+Editing `.env` or `.env.shared-dev` does **not** retarget running containers. Container env is fixed at create time until containers are recreated.
+
+**Mandatory procedure (both directions):**
+
+1. `make down` — stop all project containers.
+2. Start with the correct target:
+   - → **local:** `make up-backend` or `make bootstrap-dev`
+   - → **shared-dev:** `make shared-dev-up` or `make shared-dev-bootstrap`
+3. Optional scheduler (never mix local vs shared-dev targets):
+   - local: `make up-scheduler`
+   - shared-dev: `make shared-dev-up-scheduler`
+
+**Before local-only destructive ops** (`make test`, `make migrate`, `make reset-dev-db`): containers must have been started via local targets after the last `make down`. After any shared-dev session, run `make down` before those commands.
+
+**Do not use `make recreate-backend` or `make restart-backend` as a mode switch** — those reload in-mode `.env` only (same Compose merge). Mode switch also changes the Compose file merge (`docker-compose.shared-dev.yml` vs local-only).
+
 ## Docker Compose: `depends_on` and `!override`
 
 The base [`docker-compose.yml`](../../docker-compose.yml) makes `api`, `celery`, and `celery-beat` depend on local `postgres`.
@@ -123,7 +141,9 @@ Local dev (`.env`) continues to use `make up-scheduler`.
 
 ## Safety guards
 
-Local-only targets run [`assert-local-dev-db.sh`](../../infra/scripts/assert-local-dev-db.sh), which validates the **effective** `POSTGRES_HOST` from `docker compose config` (not just the `.env` file) and refuses a shell `POSTGRES_HOST` override pointing to a remote host.
+Local-only targets run [`assert-local-dev-db.sh`](../../infra/scripts/assert-local-dev-db.sh), which validates the **effective** `POSTGRES_HOST` from `docker compose config` with `--env-file .env` (not just the `.env` file on disk) and refuses a shell `POSTGRES_HOST` override pointing to a remote host.
+
+**Guard limit:** the script checks Compose **config intent**, not the running `api` container's env. If containers were started in shared-dev mode and you switch back to local without `make down` + local restart, the guard can pass while `docker compose exec api …` still hits containers pointing at the remote database. See [Switching between local and shared-dev](#switching-between-local-and-shared-dev).
 
 | Command | Guard |
 |---------|-------|

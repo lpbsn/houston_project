@@ -19,6 +19,8 @@ Remplacez `<URL_DU_REPO>` par l’URL SSH réelle fournie par votre équipe (ex.
 | **Quotidien / après `git pull`** | Stack déjà configurée, pas de wipe | **`make bootstrap-dev`** (non destructif, safe à relancer) ou `make up-backend` |
 | **Shared-dev (DB distante équipe)** | Deux devs sur la même DB métier (Neon, etc.) | `cp .env.shared-dev.example .env.shared-dev` (1Password) → **`make shared-dev-bootstrap`** → `make web-dev` — voir [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) |
 
+**Changer de mode local ↔ shared-dev :** `make down`, puis la cible adaptée (`make up-backend` / `make bootstrap-dev` ou `make shared-dev-up` / `make shared-dev-bootstrap`). Éditer `.env` seul ne retargete pas les conteneurs déjà lancés — procédure complète : [Switching between local and shared-dev](docs/engineering/shared_dev_database.md#switching-between-local-and-shared-dev).
+
 - **`make bootstrap-dev`** ne remplace pas **`make build-backend`** (première install) ni **`make web-install`** (frontend local).
 - **`make reset-dev-db`** efface la DB Postgres locale et **tous les volumes Docker du projet** (dont `web_node_modules` si vous utilisez le conteneur `web`). Il ne modifie ni le code ni le `.env`. Relancez **`make web-install`** si le frontend Docker (`make up`) était utilisé.
 - Validation E2E documentée : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
@@ -556,6 +558,8 @@ make recreate-backend
 ```
 
 Recrée `api` et `celery` pour recharger `.env` (`postgres` / `redis` non touchés). Pour un simple bounce process sans recharger `.env` : `make restart-backend`.
+
+**Uniquement pour des changements `.env` dans le même mode** (local ou shared-dev) — pas pour basculer local ↔ shared-dev ; voir [Switching between local and shared-dev](docs/engineering/shared_dev_database.md#switching-between-local-and-shared-dev).
 
 (Documenté dans [`README.md`](README.md) pour le pipeline observation → signal.)
 

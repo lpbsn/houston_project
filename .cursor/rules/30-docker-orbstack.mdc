@@ -26,9 +26,12 @@ Build / restart:
 Shared-dev (remote PostgreSQL, `.env.shared-dev`):
 - `make shared-dev-up` — runs compose preflight (`assert-shared-dev-compose.sh`) before `up`
 - `make shared-dev-check` / `make shared-dev-bootstrap` / `make shared-dev-migrate`
-- see `docs/engineering/shared_dev_database.md`
+- see `docs/engineering/shared_dev_database.md` (mode-switch checklist: `make down` then correct up target)
 - never run `make reset-dev-db` or `make test` against shared-dev credentials in `.env`
 - local `make up*` targets refuse remote DB (Compose-effective guard)
+- mode switch: `make down` then `make up-backend` or `make shared-dev-up` — never assume `.env` alone retargets containers
+- `make recreate-backend` does not switch modes (in-mode `.env` reload only)
+- after shared-dev session: `make down` before `make test` / `make migrate` / `make reset-dev-db`
 
 Do not run `docker compose up` without explicit service/profile unless requested.
 

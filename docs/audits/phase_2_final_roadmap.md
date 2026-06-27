@@ -165,6 +165,7 @@ flowchart TB
 
 ### ROADMAP-02 — DEVEX-01a: Shared-dev mode-switch trap
 
+- **Status:** **Done** (Wave 0 — docs/guardrails only; runtime trap not closed)
 - **Priority:** P1
 - **Source findings:** CI-E1
 - **Root problem:** `assert-local-dev-db.sh` validates compose config from `.env`, not running container env. After `make shared-dev-up`, switching `.env` back to local without `make down` + recreate leaves containers on remote Postgres while guards pass.
@@ -174,11 +175,15 @@ flowchart TB
 - **Tests or gates needed first:** None
 - **Size:** S–M (docs first) / L (optional runtime guard)
 - **Recommended wave:** 0
+- **Changed:** Mode-switch checklist + guard-limit note in [`shared_dev_database.md`](../../docs/engineering/shared_dev_database.md); callout in [`INSTALL_MAC.md`](../../INSTALL_MAC.md); guardrails in [`.cursor/rules/30-docker-orbstack.mdc`](../../.cursor/rules/30-docker-orbstack.mdc).
+- **Validated:** Docs links/commands reviewed against Makefile and AGENTS/Cursor rules; `make infra-check` sanity (guard scripts unchanged).
+- **Risks / follow-up:** Runtime trap still possible if checklist ignored; optional runtime guard still open — shared-dev onboarding template fixed in DEVEX-01b.
 
 ---
 
 ### ROADMAP-03 — DEVEX-01b: Broken shared-dev env template
 
+- **Status:** **Done** (Wave 0 — template fix only)
 - **Priority:** P1
 - **Source findings:** CI-E4
 - **Root problem:** `.env.shared-dev.example` uses invalid YAML interpolation for `HOUSTON_AUTH_TOKEN_PEPPER`; missing salt vars required by `shared_dev_database.md`.
@@ -187,6 +192,9 @@ flowchart TB
 - **Dependencies:** None
 - **Size:** S
 - **Recommended wave:** 0
+- **Changed:** Fixed dotenv syntax for `HOUSTON_AUTH_TOKEN_PEPPER`; added `HOUSTON_AUTH_TOKEN_SALT` and `HOUSTON_CHAT_WS_TICKET_SALT` with 1Password alignment comments in [`.env.shared-dev.example`](../../.env.shared-dev.example).
+- **Validated:** `make infra-check`; `docker compose --env-file .env.shared-dev.example` merged config; `assert-shared-dev-compose.sh` on template copy; no `KEY: ${` lines remain.
+- **Risks / follow-up:** CI-E2 compose passthrough gap (`HOUSTON_REALTIME_WS_*`, throttle, beat schedules) unchanged; devs with existing broken `.env.shared-dev` must fix pepper line manually; CI-E1 runtime trap still open (DEVEX-01a docs only).
 
 ---
 
@@ -517,10 +525,11 @@ Pre-flight checklist — complete in order before Wave 3 structural PRs:
 
 1. Run `make verify` locally once to establish baseline (not executed during audits).
 2. ~~**GATE-01**~~ **Done** — CI steps landed: Django check, migrations check, OpenAPI schema diff, `npm run build`. Follow-up: `types.ts` diff gate (CI-E8).
-3. **DEVEX-01** — Fix `.env.shared-dev.example`; publish mode-switch checklist in `shared_dev_database.md` and `INSTALL_MAC.md`.
-4. **TS-E4** — Land parity test: `*QueryKeys` factories ↔ `query-invalidation.ts` prefixes.
-5. **TS-E1** — Land N=20 assignment query-count ceiling **before** any MAT-01 decouple PR.
-6. **Do not** expand EF-07/DB-07 full baseline matrix until MAT-01 direction is chosen.
+3. ~~**DEVEX-01a**~~ **Done** — mode-switch checklist in `shared_dev_database.md`, `INSTALL_MAC.md`, `30-docker-orbstack.mdc` (docs/guardrails; runtime trap not closed).
+4. ~~**DEVEX-01b**~~ **Done** — fixed `.env.shared-dev.example` pepper dotenv + aligned salt vars (ROADMAP-03 / CI-E4).
+5. **TS-E4** — Land parity test: `*QueryKeys` factories ↔ `query-invalidation.ts` prefixes.
+6. **TS-E1** — Land N=20 assignment query-count ceiling **before** any MAT-01 decouple PR.
+7. **Do not** expand EF-07/DB-07 full baseline matrix until MAT-01 direction is chosen.
 
 **Already sufficient — fix without new tests first:**
 
