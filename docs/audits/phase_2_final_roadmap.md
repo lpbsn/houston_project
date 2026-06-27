@@ -1,7 +1,7 @@
 # Phase 2 Final Roadmap
 
-Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; GUARD-01 Option A done scoped)  
-Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; GUARD-01 closure pass: 2026-06-27)  
+Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; GUARD-01 Option A done scoped; ORM-QW-01 done scoped)  
+Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; GUARD-01 closure pass: 2026-06-27; ORM-QW-01 closure pass: 2026-06-27)  
 Mode: audit consolidation + Wave 0–1 status tracking
 
 ## Sources
@@ -21,7 +21,7 @@ Mode: audit consolidation + Wave 0–1 status tracking
 
 **Still open (explicit — do not treat as Wave 0 closure):** **CI-E1** runtime mode-switch trap; **CI-E2** compose env passthrough; **CI-E6** / **CA-E4** beat opt-in; **CI-E8** `types.ts` gate; **CI-E9** lint vs `verify` asymmetry; **CACHE-01** (Wave 3 architecture). Shared-dev remains **discipline-sensitive, not team-safe**.
 
-**Next:** Wave 1 — **ORM-QW-01** (MOBILE-01a–01e done scoped; **GUARD-01 Option A done scoped** — parent **GUARD-01 not closed**). Wave 2 guard **TS-E1** before MAT-01 decouple work.
+**Next:** Wave 1 remainder — **HYGIENE-01**, **AUTH-CACHE-01**, **TQ-E8** (MOBILE-01a–01e done scoped; **GUARD-01 Option A done scoped** — parent **GUARD-01 not closed**; **ORM-QW-01 done scoped**). Wave 2 guard **TS-E1** before MAT-01 decouple work.
 
 ---
 
@@ -39,7 +39,7 @@ Residual work is **not** 90+ independent tasks. It clusters into **five root the
 | Field mobile readiness | **MOBILE-01** | PWA-E1–E8, FE-E5 | **01a–01e done scoped**; parent theme open (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG-Apple) |
 | DevEx / shared-dev traps | **DEVEX-01** | CI-E1, CI-E4, CI-E6, CA-E4 | Remote DB mutation risk; beat silently off |
 
-Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ONB-01**), report flow tests (**TEST-RPT-01**), permission hint / route guard UX (**GUARD-01** — **Option A done scoped**; **API-O5**, **FE-E8**, Staff 400 mapping follow-up open), ORM prefetch quick wins (**ORM-QW-01**), LLM retry policy (**PIPE-01**), backend structural debt (**STRUCT-01**).
+Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ONB-01**), report flow tests (**TEST-RPT-01**), permission hint / route guard UX (**GUARD-01** — **Option A done scoped**; **API-O5**, **FE-E8**, Staff 400 mapping follow-up open), ORM prefetch quick wins (**ORM-QW-01 done scoped**), LLM retry policy (**PIPE-01**), backend structural debt (**STRUCT-01**).
 
 **Top 7 priorities** (Wave 0 scoped items done — active ordering from Wave 1 onward):
 
@@ -254,6 +254,19 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 **Still open under GUARD-01 parent (do not treat as closed):** **API-O5** / **FE-E8** (bootstrap `can_create_action` Staff granularity); **GUARD-01-FU-1** (friendly 400 mapping on action-create submit); **GUARD-01-FU-2** / **TS-E9** remainder (`action-create-page` denied, `team-invite-page`, `operational-config-page`, long-tail mutations); **FE-E4 RBAC slice** (membership/invite mirror reduction); **FE-E7** global denied UX standardization.
 
+**ORM-QW-01 Wave 1 status (2026-06-27):** **Done (scoped)** (ROADMAP-11). Four backend micro-steps landed — **DB-02**, **DB-03**, **DB-04/F9**, **DB-06**. **Not closed:** **DB-01 / MAT-01** (materialization-on-read structural cost); **TS-E1** (N-assignment scaling guard); **INDEX-01** / **DB-05** / **DB-08** (evidence-gated index migrations); **DB-07** feed/detail baseline gaps beyond local ORM-QW-01 guards.
+
+**ORM-QW-01 (scoped deliverable) — four micro-steps done scoped**
+
+| Micro-step | ID | Status | Summary |
+|------------|-----|--------|---------|
+| Materialization duplicate SELECT | **DB-02** | Done (scoped) | Single `_existing_occurrence_dates_for_assignment` call per stale assignment |
+| Canceled signal detail prefetch | **DB-04 / F9** | Done (scoped) | Canceled branch uses feed prefetch bundle + `aggregation_count` |
+| Checklist detail prefetch order | **DB-06** | Done (scoped) | Ordered `Prefetch` in selectors; serializers use `.all()` |
+| Taxonomy snapshot prefetch | **DB-03** | Done (scoped) | Filtered/ordered `Prefetch` on `activity_subjects` |
+
+**Still open after ORM-QW-01 (do not treat as closed):** **MAT-01** / **DB-01** (read-path materialization loop — primary owner Realtime/Celery); **TS-E1** (N-assignment query-count + beat→WS guard, Wave 2); **INDEX-01** / **SIG-04** / **CL-09** (EXPLAIN-gated migrations); **DB-09** / **DB-10** (poll dedupe, comments baseline/pagination). No API contract, permissions, frontend, or migration changes in ORM-QW-01 scope.
+
 ---
 
 ### ROADMAP-05 — MOBILE-01a: Offline and network-failure UX
@@ -362,6 +375,7 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 ### ROADMAP-11 — ORM-QW-01: Prefetch and duplicate SELECT quick wins
 
+- **Status:** **Done** (scoped — Wave 1; **DB-01 / MAT-01 not closed**)
 - **Priority:** P2
 - **Source findings:** DB-02, DB-03, DB-04/F9, DB-06
 - **Root problem:** Materialization stale path runs duplicate `_existing_occurrence_dates_for_assignment` SELECT; taxonomy snapshot and checklist serializers defeat prefetch via `.filter().order_by()` on related managers; canceled signal detail omits prefetch bundle.
@@ -370,6 +384,9 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 - **Dependencies:** Independent of MAT-01 strategy — safe incremental wins
 - **Size:** S each
 - **Recommended wave:** 1
+- **Changed:** **DB-02** — [`materialization.py`](../../apps/api/houston/checklists/materialization.py): compute `existing_dates` once per assignment; pass to `_assignment_read_path_materialization_is_fresh`. **DB-04** — [`signals/selectors.py`](../../apps/api/houston/signals/selectors.py): canceled branch of `get_signal_for_detail` uses `_SIGNAL_LIST_SELECT_RELATED`, `_SIGNAL_LIST_PREFETCH`, `_SIGNAL_AGGREGATION_COUNT_ANNOTATION`. **DB-06** — [`checklists/selectors.py`](../../apps/api/houston/checklists/selectors.py) + [`checklists/api/serializers.py`](../../apps/api/houston/checklists/api/serializers.py): ordered `Prefetch` for detail reads; serializers iterate `.all()` without `.order_by()`. **DB-03** — [`taxonomy_snapshot.py`](../../apps/api/houston/establishments/taxonomy_snapshot.py): filtered/ordered `Prefetch` on `activity_subjects`. Local query-count tests per micro-step (no new global `query_baseline.py` constants). **Not in scope:** MAT-01 decouple, index migrations, API/OpenAPI, permissions, frontend, migrations.
+- **Validated:** Targeted pytest **9/9** (new ORM-QW-01 guards) + domain regression **36/36** (materialization, canceled detail, aggregation, tenant isolation, pipeline input queries); `make backend-lint` OK; `make backend-check` OK (**1489 passed**, migrations check + schema diff unchanged).
+- **Risks / follow-up:** **DB-01 / MAT-01** read-path write amplification unchanged — ORM-QW-01 removes one duplicate SELECT only; **TS-E1** N-assignment scaling guard still open (Wave 2); query ceilings measured on local PostgreSQL test DB only — no prod profiling; **INDEX-01** / **DB-05** / **DB-08** remain EXPLAIN-gated.
 
 ---
 
@@ -618,10 +635,10 @@ All Size **S** unless noted. Group by domain; safe to batch in small PRs.
 | Scheduler trap callout | CI-E6, CA-E4 | README + `30-docker-orbstack.mdc` |
 | Cursor validation matrix | CI-E9 | Patch `api-contract-change.md`, `backend-fix.md` |
 | Dead onboarding hook | API-O7, OB-05 | Remove `useSubmitActivityDescription` |
-| Duplicate materialization SELECT | DB-02 | Reuse freshness-check query in loop |
-| Taxonomy prefetch bypass | DB-03 | Filter/sort in Python |
-| Canceled signal prefetch | DB-04, F9 | Share feed prefetch bundle |
-| Checklist serializer prefetch | DB-06 | Sort in Python from prefetch cache |
+| Duplicate materialization SELECT | DB-02 | Done scoped (ROADMAP-11) |
+| Taxonomy prefetch bypass | DB-03 | Done scoped (ROADMAP-11) |
+| Canceled signal prefetch | DB-04, F9 | Done scoped (ROADMAP-11) |
+| Checklist serializer prefetch | DB-06 | Done scoped (ROADMAP-11) |
 | Checklist create guard | FE-E3 | Done scoped (ROADMAP-10 Option A) |
 | Team route guard | FE-E4 route slice | Done scoped (ROADMAP-10 Option A) |
 | Checklist filter keys | TQ-E8 | Normalize template list filters |
@@ -738,7 +755,7 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 | **GUARD-01** | API-O5, F8, FE-E3, FE-E4, FE-E8, FE-02, FE-03, FE-04, TS-E9 | API + Frontend — **Option A done scoped** (FE-E3, FE-E4 route, TS-E9 slice); remainder open |
 | **TEST-ONB-01** | OB-03, FE-E1, TS-E3 | Frontend + Test strategy |
 | **TEST-RPT-01** | OR-09, FE-E9, TS-E5, PWA-E6 slice | Frontend + Test strategy |
-| **ORM-QW-01** | DB-02, DB-03, DB-04, F9, DB-06 | Database / ORM |
+| **ORM-QW-01** | DB-02, DB-03, DB-04, F9, DB-06 | Database / ORM — **Done (scoped 2026-06-27)**; **MAT-01 / DB-01 not closed** |
 | **PIPE-01** | C-03, OR-02, CA-E2, CA-E6 | Celery / Async |
 | **STRUCT-01** | C-06, F1, R9, R2, F6, R4, F7, API-O10, RBAC-05, F4, F5 | API + Realtime |
 | **HYGIENE-01** | API-O7, OB-05, R5, RT-E4, R10, CI-E7, CI-E9 | CI / DevEx + API |
@@ -775,8 +792,8 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 
 ## 12. Changed / Validated / Risks
 
-**Changed:** GUARD-01 closure pass (2026-06-27) — **Option A Done (scoped)** on ROADMAP-10: page guards `/checklists/new` + `/team` via existing bootstrap hints; denied tests for both pages; quick wins table updated; ROADMAP-19 marked partial (checklist + team slice only); **GUARD-01 parent not closed** (API-O5, FE-E8, GUARD-01-FU-1/FU-2, FE-E4 RBAC slice, FE-E7). Prior pass: MOBILE-01 closure review pass (2026-06-27) — **01a–01e confirmed Done (scoped)**; **MOBILE-01 parent not closed**. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
+**Changed:** ORM-QW-01 closure pass (2026-06-27) — **Done (scoped)** on ROADMAP-11: four backend micro-steps (DB-02, DB-03, DB-04/F9, DB-06); Wave 1 status block + quick wins table updated; **MAT-01 / DB-01**, **TS-E1**, **INDEX-01** explicitly remain open. Prior pass: GUARD-01 closure pass (2026-06-27) — **Option A Done (scoped)** on ROADMAP-10: page guards `/checklists/new` + `/team` via existing bootstrap hints; denied tests for both pages; quick wins table updated; ROADMAP-19 marked partial (checklist + team slice only); **GUARD-01 parent not closed** (API-O5, FE-E8, GUARD-01-FU-1/FU-2, FE-E4 RBAC slice, FE-E7). Prior pass: MOBILE-01 closure review pass (2026-06-27) — **01a–01e confirmed Done (scoped)**; **MOBILE-01 parent not closed**. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
 
-**Validated:** GUARD-01 Option A (2026-06-27): targeted Vitest **11/11** (`checklist-create-page`, `team-page`); `npm run typecheck` OK; `npm run lint` OK; no `apps/api` diff. Prior: MOBILE-01 closure targeted Vitest **107/107**; `npm run build` OK. Consolidation audit snapshots not rewritten — living roadmap status lines only.
+**Validated:** ORM-QW-01 (2026-06-27): targeted pytest **9/9** (ORM-QW-01 query guards) + domain regression **36/36**; `make backend-lint` OK; `make backend-check` OK (**1489 passed**). Prior: GUARD-01 Option A targeted Vitest **11/11** (`checklist-create-page`, `team-page`); `npm run typecheck` OK; `npm run lint` OK; no `apps/api` diff. Prior: MOBILE-01 closure targeted Vitest **107/107**; `npm run build` OK. Consolidation audit snapshots not rewritten — living roadmap status lines only.
 
-**Risks / not verified:** GUARD-01 manual deep-link QA not run (Staff `/checklists/new`, Staff `/team` on device); guards are UX hints only — API enforcement assumed from existing backend tests; Staff action-create form-then-400 friction **still open** (not Option A scope); `make verify` not run in GUARD-01 doc pass; MOBILE-01 device QA gaps unchanged; CI-E1 runtime trap not live-reproduced; consolidation audit tables remain 2026-06-26 snapshots for evidence rows.
+**Risks / not verified:** ORM-QW-01 does not reduce **MAT-01** per-assignment loop cost; **TS-E1** scaling guard not added; local query ceilings only — no prod EXPLAIN/load profiling; **INDEX-01** migrations still deferred. Prior: GUARD-01 manual deep-link QA not run (Staff `/checklists/new`, Staff `/team` on device); guards are UX hints only — API enforcement assumed from existing backend tests; Staff action-create form-then-400 friction **still open** (not Option A scope); MOBILE-01 device QA gaps unchanged; CI-E1 runtime trap not live-reproduced; consolidation audit tables remain 2026-06-26 snapshots for evidence rows.

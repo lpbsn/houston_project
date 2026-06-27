@@ -143,6 +143,47 @@ def test_execution_detail_rbac(api_client, owner_membership, staff_membership, b
     assert denied.status_code == 404
 
 
+def test_execution_detail_query_count_and_task_order(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.checklists.tests.test_template_api import _active_template_with_tasks
+    from houston.testing.query_baseline import capture_queries
+
+    template, owner_token = _active_template_with_tasks(
+        api_client,
+        owner_membership,
+        business_unit,
+        task_count=5,
+    )
+    assignment = api_client.post(
+        checklist_template_url(owner_membership.establishment_id, template["id"], "assignments/"),
+        assignment_api_payload(staff_membership.id),
+        format="json",
+        **auth_headers(owner_token),
+    )
+    assert assignment.status_code == 201
+    execution = ChecklistExecution.objects.get(checklist_assignment_id=assignment.json()["id"])
+
+    staff_token = login(api_client, user=staff_membership.user)
+
+    # Measured post-fix on PostgreSQL test DB (ORM-QW-01 / DB-06).
+    max_queries = 9
+
+    with capture_queries() as context:
+        response = api_client.get(
+            checklist_execution_url(staff_membership.establishment_id, execution.id),
+            **auth_headers(staff_token),
+        )
+
+    assert response.status_code == 200
+    assert len(context.captured_queries) <= max_queries
+    positions = [task["position"] for task in response.json()["task_executions"]]
+    assert positions == sorted(positions)
+
+
 def test_cancel_assignment_execution_assignee_and_owner_allowed(
     api_client,
     owner_membership,

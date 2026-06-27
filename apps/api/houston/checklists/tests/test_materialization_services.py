@@ -71,6 +71,59 @@ def test_ensure_visible_skips_recently_materialized_assignments(
     assert created == 0
 
 
+def test_partial_stale_assignment_queries_existing_dates_once(
+    owner_membership,
+    staff_membership,
+    business_unit,
+    monkeypatch,
+):
+    from houston.checklists import materialization as materialization_module
+
+    now = timezone.now()
+    template = _active_registered_template(owner_membership, business_unit)
+    start_at, end_at = stable_assignment_times(duration_hours=2)
+    assignment = create_checklist_assignment(
+        template=template,
+        actor=owner_membership,
+        assigned_to_id=staff_membership.id,
+        start_date=now.date(),
+        end_date=now.date(),
+        start_at=start_at,
+        end_at=end_at,
+    )
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+    materialize_assignment_occurrences_in_horizon(
+        assignment=assignment,
+        horizon_days=READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+        now=now,
+    )
+
+    assignment.last_materialized_at = now
+    assignment.save(update_fields=["last_materialized_at", "updated_at"])
+    ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+
+    call_count = {"n": 0}
+    original = materialization_module._existing_occurrence_dates_for_assignment
+
+    def counting_wrapper(**kwargs):
+        call_count["n"] += 1
+        return original(**kwargs)
+
+    monkeypatch.setattr(
+        materialization_module,
+        "_existing_occurrence_dates_for_assignment",
+        counting_wrapper,
+    )
+
+    created = ensure_visible_executions_materialized(
+        membership=staff_membership,
+        view_mode="personal",
+    )
+
+    assert created == 1
+    assert call_count["n"] == 1
+
+
 def test_materialize_requires_occurrence_date(owner_membership, staff_membership, business_unit):
     template = _active_registered_template(owner_membership, business_unit)
     now = timezone.now()

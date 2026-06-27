@@ -177,7 +177,7 @@ def get_checklist_execution_for_detail(
             "checklist_template",
             "checklist_assignment",
         )
-        .prefetch_related("task_executions")
+        .prefetch_related(_TASK_EXECUTION_DETAIL_PREFETCH)
         .first()
     )
     if execution is None:
@@ -255,6 +255,14 @@ _TEMPLATE_DETAIL_SELECT_RELATED = (
     "business_unit",
     "created_by__user",
 )
+_TASK_TEMPLATE_DETAIL_PREFETCH = Prefetch(
+    "task_templates",
+    queryset=ChecklistTaskTemplate.objects.order_by("position", "created_at"),
+)
+_TASK_EXECUTION_DETAIL_PREFETCH = Prefetch(
+    "task_executions",
+    queryset=ChecklistTaskExecution.objects.order_by("position", "created_at"),
+)
 
 
 def get_checklist_template_for_detail(
@@ -268,7 +276,7 @@ def get_checklist_template_for_detail(
             establishment_id=membership.establishment_id,
         )
         .select_related(*_TEMPLATE_DETAIL_SELECT_RELATED)
-        .prefetch_related("task_templates")
+        .prefetch_related(_TASK_TEMPLATE_DETAIL_PREFETCH)
         .first()
     )
     if template is None:

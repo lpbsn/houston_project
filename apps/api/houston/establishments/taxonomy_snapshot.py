@@ -3,7 +3,19 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from houston.establishments.models import BusinessUnit, Establishment, OperationalUnit
+from django.db.models import Prefetch
+
+from houston.establishments.models import (
+    ActivitySubject,
+    BusinessUnit,
+    Establishment,
+    OperationalUnit,
+)
+
+_ACTIVITY_SUBJECTS_PREFETCH = Prefetch(
+    "activity_subjects",
+    queryset=ActivitySubject.objects.filter(active=True).order_by("normalized_name"),
+)
 
 
 def build_establishment_taxonomy_snapshot(
@@ -20,7 +32,7 @@ def build_establishment_taxonomy_snapshot(
             establishment_id=establishment_id,
             active=True,
         )
-        .prefetch_related("activity_subjects")
+        .prefetch_related(_ACTIVITY_SUBJECTS_PREFETCH)
         .order_by("key")
     )
 
@@ -32,7 +44,7 @@ def build_establishment_taxonomy_snapshot(
                 "label": subject.label,
                 "description": subject.description or "",
             }
-            for subject in unit.activity_subjects.filter(active=True).order_by("normalized_name")
+            for subject in unit.activity_subjects.all()
         ]
         business_units.append(
             {

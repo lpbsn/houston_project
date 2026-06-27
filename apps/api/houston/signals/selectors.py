@@ -146,11 +146,12 @@ def get_signal_for_detail(
             id=signal_id,
             status=Signal.Status.CANCELED,
         )
+        .annotate(**_SIGNAL_AGGREGATION_COUNT_ANNOTATION)
         .select_related(
             "pinned_by_membership__user",
-            "affected_business_unit",
-            "responsible_business_unit",
+            *_SIGNAL_LIST_SELECT_RELATED,
         )
+        .prefetch_related(*_SIGNAL_LIST_PREFETCH)
         .first()
     )
     if canceled_signal is None:
