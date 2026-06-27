@@ -1,4 +1,4 @@
-import { startTransition, useMemo, useState } from 'react'
+import { startTransition, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
@@ -53,6 +53,7 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
     selectedScopes: [],
   })
   const [membershipMutationError, setMembershipMutationError] = useState<string | null>(null)
+  const isSwitchingRef = useRef(false)
 
   const activeEstablishmentId = activeMembership?.establishment_id ?? null
   const actorRole = normalizeRole(activeMembership?.role)
@@ -186,6 +187,11 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
   }, [editorState.membershipId, editorState.selectedScopes, selectedMembership])
 
   async function handleSelectEstablishment(establishmentId: string) {
+    if (isSwitchingRef.current) {
+      return
+    }
+
+    isSwitchingRef.current = true
     setSelectorError(null)
     setPendingEstablishmentId(establishmentId)
 
@@ -203,6 +209,7 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
     } catch (error) {
       setSelectorError(toErrorMessage(error, 'We could not switch this establishment.'))
     } finally {
+      isSwitchingRef.current = false
       setPendingEstablishmentId(null)
     }
   }

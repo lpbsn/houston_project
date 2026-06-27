@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Building2, LoaderCircle } from 'lucide-react'
 
@@ -27,17 +27,20 @@ export function ProfileSwitchEstablishmentPage({
   const { activeMembership, isBootstrapping, isReady, memberships } = useAuth()
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
   const [selectorError, setSelectorError] = useState<string | null>(null)
+  const isSwitchingRef = useRef(false)
   const activeEstablishmentId = activeMembership?.establishment_id ?? null
+  const isSwitching = pendingEstablishmentId !== null
 
   const switchMutation = useMutation({
     mutationFn: switchEstablishment,
   })
 
   async function handleSelectEstablishment(establishmentId: string) {
-    if (establishmentId === activeEstablishmentId) {
+    if (establishmentId === activeEstablishmentId || isSwitchingRef.current) {
       return
     }
 
+    isSwitchingRef.current = true
     setSelectorError(null)
     setPendingEstablishmentId(establishmentId)
 
@@ -49,6 +52,7 @@ export function ProfileSwitchEstablishmentPage({
         toErrorMessage(error, 'Impossible de sélectionner cet établissement.'),
       )
     } finally {
+      isSwitchingRef.current = false
       setPendingEstablishmentId(null)
     }
   }
@@ -78,7 +82,7 @@ export function ProfileSwitchEstablishmentPage({
                 'w-full text-left active:opacity-90',
                 isActive && 'cursor-default',
               )}
-              disabled={isActive || isPending}
+              disabled={isActive || isSwitching}
               onClick={() => {
                 void handleSelectEstablishment(membership.establishment_id)
               }}

@@ -62,6 +62,17 @@ const { authState } = vi.hoisted(() => ({
           scopes: [],
           scope_summary: { business_unit_count: 1 },
         },
+        {
+          id: 'member-3',
+          establishment_id: 'est-3',
+          establishment_name: 'Café Strasbourg',
+          organization_id: 'org-1',
+          organization_name: 'Groupe Demo',
+          role: 'staff',
+          status: 'active',
+          scopes: [],
+          scope_summary: { business_unit_count: 0 },
+        },
       ],
     },
   },
@@ -124,5 +135,42 @@ describe('ProfileSwitchEstablishmentPage', () => {
 
     expect(await screen.findByText('Network error')).toBeTruthy()
     expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('disables all establishments and ignores concurrent clicks while switching', async () => {
+    let resolveSwitch: (value: unknown) => void = () => {}
+    switchEstablishment.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSwitch = resolve
+        }),
+    )
+
+    renderPage()
+
+    const nancyButton = screen.getByRole('button', { name: /Le Palais Nancy/i })
+    const metzButton = screen.getByRole('button', { name: /Brasserie Metz/i })
+    const strasbourgButton = screen.getByRole('button', { name: /Café Strasbourg/i })
+
+    fireEvent.click(metzButton)
+
+    await waitFor(() => {
+      expect((metzButton as HTMLButtonElement).disabled).toBe(true)
+      expect((strasbourgButton as HTMLButtonElement).disabled).toBe(true)
+      expect((nancyButton as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    fireEvent.click(strasbourgButton)
+
+    expect(switchEstablishment).toHaveBeenCalledTimes(1)
+    expect(switchEstablishment).toHaveBeenCalledWith(
+      { establishment_id: 'est-2' },
+      expect.anything(),
+    )
+
+    resolveSwitch({})
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith('/reporting', { replace: true })
+    })
   })
 })
