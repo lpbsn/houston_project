@@ -4,7 +4,6 @@ import type {
   ActivationBlocker,
   ActivationResponse,
   ActivationSummaryResponse,
-  ActivityDescriptionUpdateResponse,
   DetailResponse,
   DirectorInvitationRequest,
   DirectorInvitationResponse,
@@ -18,7 +17,6 @@ import type {
   ProposalCommandResponse,
   ProposalValidationErrorItem,
   RuntimeConfigResponse,
-  SubmitActivityDescriptionRequest,
   CatalogActivitySubjectSuggestion,
   CatalogBusinessUnitSuggestion,
   OnboardingProposalCreateRequest,
@@ -175,33 +173,6 @@ export async function getOnboardingSession(sessionId: string) {
   }
 
   return result.data as OnboardingSessionResponse
-}
-
-export async function submitActivityDescription(
-  sessionId: string,
-  input: SubmitActivityDescriptionRequest,
-) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.PATCH('/api/v1/onboarding-sessions/{session_id}/description/', {
-        params: {
-          path: { session_id: sessionId },
-        },
-        body: input,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildOnboardingError(
-      result.response,
-      result.error,
-      'Activity description could not be saved.',
-    )
-  }
-
-  return result.data as ActivityDescriptionUpdateResponse
 }
 
 export async function getRuntimeConfig(sessionId: string) {
