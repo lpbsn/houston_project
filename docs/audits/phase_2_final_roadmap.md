@@ -1,8 +1,8 @@
 # Phase 2 Final Roadmap
 
-Status: consolidated roadmap (living — Wave 0 scoped deliverables complete)  
-Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27)  
-Mode: audit consolidation + Wave 0 status tracking
+Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; GUARD-01 Option A done scoped)  
+Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; GUARD-01 closure pass: 2026-06-27)  
+Mode: audit consolidation + Wave 0–1 status tracking
 
 ## Sources
 
@@ -21,7 +21,7 @@ Mode: audit consolidation + Wave 0 status tracking
 
 **Still open (explicit — do not treat as Wave 0 closure):** **CI-E1** runtime mode-switch trap; **CI-E2** compose env passthrough; **CI-E6** / **CA-E4** beat opt-in; **CI-E8** `types.ts` gate; **CI-E9** lint vs `verify` asymmetry; **CACHE-01** (Wave 3 architecture). Shared-dev remains **discipline-sensitive, not team-safe**.
 
-**Next:** Wave 1 — **GUARD-01**, **ORM-QW-01** (MOBILE-01a–01e done scoped). Wave 2 guard **TS-E1** before MAT-01 decouple work.
+**Next:** Wave 1 — **ORM-QW-01** (MOBILE-01a–01e done scoped; **GUARD-01 Option A done scoped** — parent **GUARD-01 not closed**). Wave 2 guard **TS-E1** before MAT-01 decouple work.
 
 ---
 
@@ -39,7 +39,7 @@ Residual work is **not** 90+ independent tasks. It clusters into **five root the
 | Field mobile readiness | **MOBILE-01** | PWA-E1–E8, FE-E5 | **01a–01e done scoped**; parent theme open (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG-Apple) |
 | DevEx / shared-dev traps | **DEVEX-01** | CI-E1, CI-E4, CI-E6, CA-E4 | Remote DB mutation risk; beat silently off |
 
-Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ONB-01**), report flow tests (**TEST-RPT-01**), permission hint / route guard UX (**GUARD-01**), ORM prefetch quick wins (**ORM-QW-01**), LLM retry policy (**PIPE-01**), backend structural debt (**STRUCT-01**).
+Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ONB-01**), report flow tests (**TEST-RPT-01**), permission hint / route guard UX (**GUARD-01** — **Option A done scoped**; **API-O5**, **FE-E8**, Staff 400 mapping follow-up open), ORM prefetch quick wins (**ORM-QW-01**), LLM retry policy (**PIPE-01**), backend structural debt (**STRUCT-01**).
 
 **Top 7 priorities** (Wave 0 scoped items done — active ordering from Wave 1 onward):
 
@@ -242,6 +242,18 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 **Still open under MOBILE-01 parent (do not treat as closed):** **FE-E5** (local state after establishment switch); **TEST-RPT-01** (report flow tests); **PWA-E5–E8** (CI build gate, PWA regression tests, broader polish); **PNG/Apple install** product slice; **NR-08/TQ-E4** comment reconnect sweep; captive portal / routes outside `TerrainShell`; manual device QA gaps across slices.
 
+**GUARD-01 Wave 1 status (2026-06-27):** **Option A done scoped** (ROADMAP-10). **GUARD-01 parent theme not closed** — Staff action-create friction and backend hint granularity remain open.
+
+**GUARD-01 (parent theme) — Option A done scoped**
+
+| Slice | ID | Status | Summary |
+|-------|-----|--------|---------|
+| Checklist create route guard | **Option A / FE-E3** (ROADMAP-10) | Done (scoped) | `/checklists/new` gated on `canCreateChecklistTemplateFromBootstrapHints` + `TerrainErrorState` |
+| Team route guard | **Option A / FE-E4 route** (ROADMAP-10) | Done (scoped) | `/team` gated on `canAccessManagementSpace` + denied terrain state |
+| Denied-case page tests (scope slice) | **TS-E9 slice** | Done (scoped) | Denied tests for checklist-create + team pages only |
+
+**Still open under GUARD-01 parent (do not treat as closed):** **API-O5** / **FE-E8** (bootstrap `can_create_action` Staff granularity); **GUARD-01-FU-1** (friendly 400 mapping on action-create submit); **GUARD-01-FU-2** / **TS-E9** remainder (`action-create-page` denied, `team-invite-page`, `operational-config-page`, long-tail mutations); **FE-E4 RBAC slice** (membership/invite mirror reduction); **FE-E7** global denied UX standardization.
+
 ---
 
 ### ROADMAP-05 — MOBILE-01a: Offline and network-failure UX
@@ -333,14 +345,18 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 ### ROADMAP-10 — GUARD-01: Route guards and hint UX alignment
 
+- **Status:** **Done** (scoped — Wave 1 Option A; **GUARD-01** parent theme **not closed**)
 - **Priority:** P2
 - **Source findings:** FE-E3, FE-E4 (route slice), API-O5, F8, FE-E8, FE-02, FE-03, TS-E9
 - **Root problem:** `/checklists/new` and `/team` reachable without bootstrap hint guards; Staff `can_create_action=true` does not reflect free/self-assigned/non-linked constraints (API enforces via 400).
 - **Why it matters:** Not security bypass — UX frustration and support burden. Inconsistent with action-create and execution-create-menu patterns.
 - **Suggested direction:** Page guards mirroring `action-create-page` / `team-invite-page` patterns. Backend-first finer bootstrap hints (API-O5); interim friendly 400 mapping on create pages. Denied-case page tests (TS-E9) before guard PRs.
-- **Dependencies:** TS-E9 denied-case tests recommended first
+- **Dependencies:** TS-E9 denied-case tests recommended first (checklist + team slice landed with guards)
 - **Size:** S (route guards) / M (backend hints)
 - **Recommended wave:** 1
+- **Changed (Option A):** Page-level UX guards on [`checklist-create-page.tsx`](../../apps/web/src/features/checklists/pages/checklist-create-page.tsx) (`canCreateChecklistTemplateFromBootstrapHints` → `TerrainErrorState`, retour `/checklists`) and [`team-page.tsx`](../../apps/web/src/features/auth/pages/team-page.tsx) (`canAccessManagementSpace` → `TerrainErrorState`, retour `/profile`). Denied-case tests — [`checklist-create-page.test.tsx`](../../apps/web/src/features/checklists/pages/checklist-create-page.test.tsx), [`team-page.test.tsx`](../../apps/web/src/features/auth/pages/team-page.test.tsx). Reuses existing bootstrap hint helpers only — **no** API/backend change, **no** routing/`App.tsx`/`ProtectedRoute` refactor. **Not in scope (Option A):** Staff action-create 400 mapping (**GUARD-01-FU-1**), `action-create-page` denied tests (**GUARD-01-FU-2**), **API-O5** finer bootstrap hints, **FE-E4** RBAC mirror reduction.
+- **Validated:** Targeted Vitest **11/11** (`checklist-create-page`, `team-page`); `npm run typecheck` OK; `npm run lint` OK; no `apps/api` diff.
+- **Risks / follow-up:** Manual deep-link QA Staff/manager on device not run; hints UX-only — API still enforces on mutations; **GUARD-01 parent not closed** — Staff can still fill action-create then hit 400 (**FE-E8** / **API-O5**); **TS-E9** remainder open for other pages; **FE-E7** denied UX inconsistency across legacy Card pages unchanged.
 
 ---
 
@@ -455,14 +471,17 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 ### ROADMAP-19 — TS-E9: Permission-denied page tests
 
+- **Status:** **Partial** (scoped slice done with ROADMAP-10 Option A — remainder open)
 - **Priority:** P2
 - **Source findings:** TS-E9, FE-E3, FE-E4
 - **Root problem:** `checklist-create-page.test.tsx` and `action-create-page.test.tsx` cover happy paths only.
 - **Why it matters:** Guard refactors (GUARD-01) need denied-case regression signal.
 - **Suggested direction:** Denied-case tests for `/checklists/new`, `/actions/new`, `/team` using bootstrap hint mocks.
-- **Dependencies:** Recommended before GUARD-01 route guard PRs
+- **Dependencies:** Checklist + team denied slice landed with ROADMAP-10 Option A (2026-06-27)
 - **Size:** S
 - **Recommended wave:** 2
+- **Done (scoped slice):** Denied tests for [`checklist-create-page.test.tsx`](../../apps/web/src/features/checklists/pages/checklist-create-page.test.tsx) and [`team-page.test.tsx`](../../apps/web/src/features/auth/pages/team-page.test.tsx).
+- **Still open:** `action-create-page` denied (`can_create_action: false`); `team-invite-page`; `operational-config-page`; long-tail mutation hooks; `invitations/` zero coverage.
 
 ---
 
@@ -603,8 +622,8 @@ All Size **S** unless noted. Group by domain; safe to batch in small PRs.
 | Taxonomy prefetch bypass | DB-03 | Filter/sort in Python |
 | Canceled signal prefetch | DB-04, F9 | Share feed prefetch bundle |
 | Checklist serializer prefetch | DB-06 | Sort in Python from prefetch cache |
-| Checklist create guard | FE-E3 | Mirror action-create `TerrainErrorState` |
-| Team route guard | FE-E4 | Redirect or invite-style unauthorized card |
+| Checklist create guard | FE-E3 | Done scoped (ROADMAP-10 Option A) |
+| Team route guard | FE-E4 route slice | Done scoped (ROADMAP-10 Option A) |
 | Checklist filter keys | TQ-E8 | Normalize template list filters |
 | Bootstrap/login cache | TQ-E9, TQ-E10 | Purge parity on login; rewrite bootstrap on WS switch |
 | Offline banner | PWA-E1 | Done scoped (ROADMAP-05) |
@@ -716,7 +735,7 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 | **CACHE-01** | TQ-E1, TQ-E2, RT-E5, NR-09, TS-E4 | TanStack + Realtime |
 | **DEVEX-01** | CI-E1, CI-E4, CI-E6, CA-E4 | CI / DevEx + Celery |
 | **MOBILE-01** | PWA-E1–E8, FE-E5 (complement) | PWA + Frontend |
-| **GUARD-01** | API-O5, F8, FE-E3, FE-E4, FE-E8, FE-02, FE-03, FE-04, TS-E9 | API + Frontend |
+| **GUARD-01** | API-O5, F8, FE-E3, FE-E4, FE-E8, FE-02, FE-03, FE-04, TS-E9 | API + Frontend — **Option A done scoped** (FE-E3, FE-E4 route, TS-E9 slice); remainder open |
 | **TEST-ONB-01** | OB-03, FE-E1, TS-E3 | Frontend + Test strategy |
 | **TEST-RPT-01** | OR-09, FE-E9, TS-E5, PWA-E6 slice | Frontend + Test strategy |
 | **ORM-QW-01** | DB-02, DB-03, DB-04, F9, DB-06 | Database / ORM |
@@ -749,15 +768,15 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 | **MAT-01 at scale** | Feed latency, stale supervision, read→write amplification | Multi-assignment establishments |
 | **CACHE-01** | Silent stale feeds/details after refactors | All operational UI |
 | **PIPE-01** | Divergent LLM retry → duplicate signals (SIG-03 mitigates per-key) | High observation volume |
-| **GUARD-01** | Form-filled-then-403 UX; perceived RBAC bugs | Staff/manager daily use |
+| **GUARD-01** (remainder) | Staff action-create form-then-400 UX; perceived RBAC bugs on free action create | Staff daily use — **Option A route guards done scoped** |
 | **STRUCT-01** | Merge conflicts, missed notifications, lifecycle coupling pain | Post-pilot evolution |
 
 ---
 
 ## 12. Changed / Validated / Risks
 
-**Changed:** MOBILE-01 closure review pass (2026-06-27) — **01a–01e confirmed Done (scoped)**; 19 previously untracked implementation/test files indexed for commit; `App.tsx` terrain wrapper indentation normalized; **MOBILE-01 parent not closed** (FE-E5, TEST-RPT-01, PWA-E5–E8, PNG-Apple, NR-08/TQ-E4, device QA). Prior pass: MOBILE-01 roadmap alignment pass (2026-06-27) — parent summary for **01a–01e done scoped**; ROADMAP-05..09 status/risk lines aligned; ROADMAP-09 Changed/Validated/Risks normalized; readiness table + quick wins updated. Prior pass: MOBILE-01e implementation (ROADMAP-09 **Done scoped**). Prior pass: Wave 0 closure pass (2026-06-27). MOBILE-01 Wave 1 alignment pass (2026-06-27) — ROADMAP-05..08 marked **Done (scoped)**. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
+**Changed:** GUARD-01 closure pass (2026-06-27) — **Option A Done (scoped)** on ROADMAP-10: page guards `/checklists/new` + `/team` via existing bootstrap hints; denied tests for both pages; quick wins table updated; ROADMAP-19 marked partial (checklist + team slice only); **GUARD-01 parent not closed** (API-O5, FE-E8, GUARD-01-FU-1/FU-2, FE-E4 RBAC slice, FE-E7). Prior pass: MOBILE-01 closure review pass (2026-06-27) — **01a–01e confirmed Done (scoped)**; **MOBILE-01 parent not closed**. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
 
-**Validated:** MOBILE-01 closure (2026-06-27): targeted Vitest **107/107** (01a 12, 01b 61, 01c–01e 37); `npm run typecheck` OK; `npm run lint` OK; `npm run build` OK (manifest + SW); no `apps/api` diff. Prior: spot-check of `.github/workflows/ci.yml` (GATE-01 steps), `.env.shared-dev.example` (DEVEX-01b dotenv), TS-E4 guard tests + `contracts/operational-realtime-invalidation.json`, `docs/engineering/testing.md` CI table, mode-switch docs in `shared_dev_database.md` / `INSTALL_MAC.md` / `30-docker-orbstack.mdc`. Consolidation snapshots get post-audit banners only — evidence rows not rewritten.
+**Validated:** GUARD-01 Option A (2026-06-27): targeted Vitest **11/11** (`checklist-create-page`, `team-page`); `npm run typecheck` OK; `npm run lint` OK; no `apps/api` diff. Prior: MOBILE-01 closure targeted Vitest **107/107**; `npm run build` OK. Consolidation audit snapshots not rewritten — living roadmap status lines only.
 
-**Risks / not verified:** MOBILE-01 manual device QA not run (switch mid-report/checklist, banner stacking on `/chat`, prod SW update prompt); `make verify` not run in this pass; CI-E1 runtime mode-switch trap not live-reproduced; devs with legacy broken `.env.shared-dev` must fix pepper line manually; consolidation audit tables remain 2026-06-26 snapshots; pilot/DevEx scores qualitative; MAT-01 N=20 threshold not benchmarked; shared-dev explicitly **not** validated as team-safe.
+**Risks / not verified:** GUARD-01 manual deep-link QA not run (Staff `/checklists/new`, Staff `/team` on device); guards are UX hints only — API enforcement assumed from existing backend tests; Staff action-create form-then-400 friction **still open** (not Option A scope); `make verify` not run in GUARD-01 doc pass; MOBILE-01 device QA gaps unchanged; CI-E1 runtime trap not live-reproduced; consolidation audit tables remain 2026-06-26 snapshots for evidence rows.

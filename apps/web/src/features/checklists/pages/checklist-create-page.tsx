@@ -3,7 +3,16 @@ import { useMemo, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainSectionLabel, TerrainStickyFooter } from '@/components/ui/terrain'
+import {
+  TerrainCard,
+  TerrainErrorState,
+  TerrainSectionLabel,
+  TerrainStickyFooter,
+} from '@/components/ui/terrain'
+import {
+  canCreateChecklistTemplateFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
@@ -86,6 +95,17 @@ export function ChecklistCreatePage({ backPath }: ChecklistCreatePageProps) {
 
   if (!establishmentId || !membershipId) {
     return null
+  }
+
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
+  if (!canCreateChecklistTemplateFromBootstrapHints(permissionHints)) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Vous n'avez pas la permission de créer une checklist."
+        onRetry={() => navigate('/checklists')}
+      />
+    )
   }
 
   const assignmentSummary =

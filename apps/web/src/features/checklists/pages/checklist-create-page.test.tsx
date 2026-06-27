@@ -15,17 +15,30 @@ vi.mock('@/app/app-routes', () => ({
   useAppRoute: () => ({ navigate }),
 }))
 
+const { authState } = vi.hoisted(() => ({
+  authState: {
+    current: {
+      activeMembership: {
+        id: 'member-1',
+        establishment_id: 'est-1',
+        role: 'manager',
+      },
+      bootstrap: {
+        user: { username: 'manager.user' },
+        permission_hints: {
+          chat_available: false,
+          can_create_action: true,
+          can_create_checklist_template: true,
+          can_invite: true,
+          can_manage_runtime_config: false,
+        },
+      },
+    },
+  },
+}))
+
 vi.mock('@/app/auth-provider', () => ({
-  useAuth: () => ({
-    activeMembership: {
-      id: 'member-1',
-      establishment_id: 'est-1',
-      role: 'manager',
-    },
-    bootstrap: {
-      user: { username: 'manager.user' },
-    },
-  }),
+  useAuth: () => authState.current,
 }))
 
 vi.mock('@/features/auth/hooks', () => ({
@@ -97,6 +110,24 @@ describe('ChecklistCreatePage', () => {
     createTemplateMutateAsync.mockReset()
     createAssignmentMutateAsync.mockReset()
 
+    authState.current = {
+      activeMembership: {
+        id: 'member-1',
+        establishment_id: 'est-1',
+        role: 'manager',
+      },
+      bootstrap: {
+        user: { username: 'manager.user' },
+        permission_hints: {
+          chat_available: false,
+          can_create_action: true,
+          can_create_checklist_template: true,
+          can_invite: true,
+          can_manage_runtime_config: false,
+        },
+      },
+    }
+
     createTemplateMutateAsync.mockResolvedValue({ id: 'tpl-1' })
     createAssignmentMutateAsync.mockResolvedValue({ id: 'assign-1' })
   })
@@ -146,6 +177,34 @@ describe('ChecklistCreatePage', () => {
 
     expect(await screen.findByText('Le titre est obligatoire.')).toBeTruthy()
     expect(createTemplateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('shows permission denied when can_create_checklist_template is false', () => {
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        ...authState.current.bootstrap,
+        permission_hints: {
+          chat_available: false,
+          can_create_action: false,
+          can_create_checklist_template: false,
+          can_invite: false,
+          can_manage_runtime_config: false,
+        },
+      },
+    }
+
+    renderPage()
+
+    expect(
+      screen.getByText("Vous n'avez pas la permission de créer une checklist."),
+    ).toBeTruthy()
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('To do ouverture')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Créer' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(navigate).toHaveBeenCalledWith('/checklists')
   })
 
   it('handles partial assignment failure without recreating template', async () => {

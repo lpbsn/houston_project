@@ -70,7 +70,29 @@ describe('TeamPage', () => {
     expect(onNavigate).toHaveBeenCalledWith('/team/invite')
   })
 
-  it('hides invite card when can_invite is false', () => {
+  it('hides invite card when can_invite is false but runtime config access remains', () => {
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        permission_hints: {
+          chat_available: false,
+          can_create_action: false,
+          can_create_checklist_template: false,
+          can_invite: false,
+          can_manage_runtime_config: true,
+        },
+      },
+      isBootstrapping: false,
+      isReady: true,
+    }
+
+    render(createElement(TeamPage, { onNavigate }))
+
+    expect(screen.queryByRole('button', { name: /Inviter un membre/i })).toBeNull()
+    expect(screen.getByText('Membres')).toBeTruthy()
+  })
+
+  it('shows permission denied when management hints are false', () => {
     authState.current = {
       ...authState.current,
       bootstrap: {
@@ -82,11 +104,18 @@ describe('TeamPage', () => {
           can_manage_runtime_config: false,
         },
       },
+      isBootstrapping: false,
+      isReady: true,
     }
 
     render(createElement(TeamPage, { onNavigate }))
 
+    expect(screen.getByText("Vous n'avez pas accès à la gestion d'équipe.")).toBeTruthy()
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.queryByText('Membres')).toBeNull()
     expect(screen.queryByRole('button', { name: /Inviter un membre/i })).toBeNull()
-    expect(screen.getByText('Membres')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retour au profil' }))
+    expect(onNavigate).toHaveBeenCalledWith('/profile')
   })
 })
