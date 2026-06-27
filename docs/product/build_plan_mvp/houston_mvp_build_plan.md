@@ -100,7 +100,7 @@ Add shared and personal checklists, including task-to-Observation handoff where 
 ### Phase 8 — Chat V1 (minimal Chat-only realtime) ✅ core implemented
 
 Authoritative product spec : [`chat_domain.md`](../domains/chat_domain.md).
-Technical debt register : [`chat_v1_technical_debt_2026-06-09.md`](../../audit/chat_v1_technical_debt_2026-06-09.md).
+Technical debt register : not archived in this repo — see [`chat_domain.md`](../domains/chat_domain.md).
 
 Implementation lots (closed):
 

@@ -2,6 +2,8 @@
 
 Implement or review event-driven behavior.
 
+**Runtime side effects today:** post-commit hubs in `apps/api/houston/realtime/broadcast.py` and `apps/api/houston/notifications/scheduling.py`. The `houston.events` app and `EventEnvelope` in `houston/core/events.py` are non-runtime scaffolding (tests only) — do not treat them as the live event bus.
+
 Before editing:
 - identify the business state transition
 - inspect existing event type/registry/publisher pattern

@@ -169,7 +169,7 @@ Implemented endpoints (establishment-scoped):
 
 Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
 
-Pagination standard and audit: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md), [`pagination_audit_2026-06-13.md`](../../audit/pagination_audit_2026-06-13.md).
+Pagination standard: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
 
 Candidate / not implemented: advanced search, feed counts, saved views, global cross-type sort interleaving (checklist-first merge remains).
 

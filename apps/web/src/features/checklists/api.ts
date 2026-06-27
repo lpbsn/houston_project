@@ -3,6 +3,7 @@ import type { components } from '@/api/generated/types'
 
 import { parseStandardApiError } from '@/lib/api-errors'
 
+import { buildChecklistTemplateListQueryParams, normalizeChecklistTemplateFilters } from './lib/checklist-template-filters'
 import type {
   ChecklistAssignment,
   ChecklistAssignmentCreateRequest,
@@ -28,7 +29,12 @@ import type {
 export const checklistsQueryKeys = {
   all: ['checklists'] as const,
   templates: (establishmentId: string, filters: ChecklistTemplateListFilters = {}) =>
-    ['checklists', 'templates', establishmentId, filters] as const,
+    [
+      'checklists',
+      'templates',
+      establishmentId,
+      normalizeChecklistTemplateFilters(filters),
+    ] as const,
   templateDetail: (establishmentId: string, templateId: string) =>
     ['checklists', 'template-detail', establishmentId, templateId] as const,
   assignments: (establishmentId: string) =>
@@ -107,10 +113,7 @@ export async function fetchChecklistTemplates(
   establishmentId: string,
   filters: ChecklistTemplateListFilters = {},
 ): Promise<ChecklistTemplateListItem[]> {
-  const query = {
-    ...(filters.business_unit_id ? { business_unit_id: filters.business_unit_id } : {}),
-    ...(filters.created_by_me ? { created_by_me: true } : {}),
-  }
+  const query = buildChecklistTemplateListQueryParams(filters)
 
   const result = await withAuthRetry(
     (accessToken) =>

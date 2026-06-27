@@ -15,6 +15,7 @@ Preferred local workflow:
 - frontend local: `make web-dev`
 - full stack only when needed: `make up` (no rebuild; use `make up-build` after image changes)
 - optional scheduler (celery-beat): `make up-scheduler` (local `.env`) or `make shared-dev-up-scheduler` (`.env.shared-dev`)
+- **Scheduler trap (shared-dev):** after `make shared-dev-up`, never use `make up-scheduler` — it runs against local `.env`. Use `make shared-dev-up-scheduler` (see `docs/engineering/shared_dev_database.md` § Scheduler in shared-dev mode)
 
 Build / restart:
 - backend image `houston-api:dev` (api + celery + celery-beat): `make build-backend`
