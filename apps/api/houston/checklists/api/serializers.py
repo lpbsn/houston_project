@@ -339,7 +339,7 @@ def serialize_template_detail(
     )
     payload["tasks"] = [
         serialize_task_template(task)
-        for task in template.task_templates.order_by("position", "created_at")
+        for task in template.task_templates.all()
     ]
     return payload
 
@@ -427,7 +427,7 @@ def serialize_execution_detail(
         "updated_at": execution.updated_at,
         "task_executions": [
             serialize_task_execution(task)
-            for task in execution.task_executions.order_by("position", "created_at")
+            for task in execution.task_executions.all()
         ],
         "permission_hints": build_checklist_execution_permission_hints(
             membership=membership,

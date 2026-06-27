@@ -691,6 +691,35 @@ def test_delete_registered_template_with_in_progress_execution_returns_conflict(
     assert ChecklistTemplate.objects.filter(id=template["id"]).exists()
 
 
+def test_template_detail_query_count_and_task_order(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    from houston.testing.query_baseline import capture_queries
+
+    template, owner_token = _active_template_with_tasks(
+        api_client,
+        owner_membership,
+        business_unit,
+        task_count=5,
+    )
+
+    # Measured post-fix on PostgreSQL test DB (ORM-QW-01 / DB-06).
+    max_queries = 9
+
+    with capture_queries() as context:
+        response = api_client.get(
+            checklist_template_url(owner_membership.establishment_id, template["id"]),
+            **auth_headers(owner_token),
+        )
+
+    assert response.status_code == 200
+    assert len(context.captured_queries) <= max_queries
+    positions = [task["position"] for task in response.json()["tasks"]]
+    assert positions == sorted(positions)
+
+
 def test_no_start_endpoint_in_checklist_urls():
     from houston.checklists.api import urls as checklist_urls
 

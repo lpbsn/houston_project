@@ -1,8 +1,9 @@
 import { ChevronRight, UserPlus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainComingSoonState } from '@/components/ui/terrain'
+import { TerrainCard, TerrainComingSoonState, TerrainErrorState } from '@/components/ui/terrain'
 import {
+  canAccessManagementSpace,
   canInviteFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
@@ -20,6 +21,17 @@ export function TeamPage({ onNavigate }: TeamPageProps) {
 
   if (!isReady || isBootstrapping) {
     return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement...</p>
+  }
+
+  if (!canAccessManagementSpace(permissionHints)) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Vous n'avez pas accès à la gestion d'équipe."
+        retryLabel="Retour au profil"
+        onRetry={() => onNavigate?.('/profile')}
+      />
+    )
   }
 
   return (

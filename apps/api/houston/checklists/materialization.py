@@ -354,6 +354,7 @@ def _assignment_read_path_materialization_is_fresh(
     assignment: ChecklistAssignment,
     visible_occurrence_dates: list[date],
     now: datetime,
+    existing_dates: set[date] | None = None,
     stale_minutes: int = READ_PATH_MATERIALIZATION_STALE_MINUTES,
 ) -> bool:
     if assignment.last_materialized_at is None:
@@ -362,11 +363,15 @@ def _assignment_read_path_materialization_is_fresh(
         return False
     if not visible_occurrence_dates:
         return True
-    existing_dates = _existing_occurrence_dates_for_assignment(
-        assignment=assignment,
-        occurrence_dates=visible_occurrence_dates,
+    resolved_existing_dates = (
+        existing_dates
+        if existing_dates is not None
+        else _existing_occurrence_dates_for_assignment(
+            assignment=assignment,
+            occurrence_dates=visible_occurrence_dates,
+        )
     )
-    return existing_dates.issuperset(visible_occurrence_dates)
+    return resolved_existing_dates.issuperset(visible_occurrence_dates)
 
 
 def ensure_visible_executions_materialized(
@@ -401,17 +406,19 @@ def ensure_visible_executions_materialized(
             occurrence_dates=occurrence_dates,
             now=now,
         )
+        existing_dates: set[date] = set()
+        if visible_occurrence_dates:
+            existing_dates = _existing_occurrence_dates_for_assignment(
+                assignment=assignment,
+                occurrence_dates=visible_occurrence_dates,
+            )
         if _assignment_read_path_materialization_is_fresh(
             assignment=assignment,
             visible_occurrence_dates=visible_occurrence_dates,
             now=now,
+            existing_dates=existing_dates if visible_occurrence_dates else None,
         ):
             continue
-
-        existing_dates = _existing_occurrence_dates_for_assignment(
-            assignment=assignment,
-            occurrence_dates=visible_occurrence_dates,
-        )
         materialized_any = False
         for occurrence_date in visible_occurrence_dates:
             if occurrence_date in existing_dates:

@@ -7,16 +7,18 @@ from houston.actions.tests.conftest import (
     build_api_membership_on_establishment,
 )
 from houston.establishments.models import EstablishmentMembership
-from houston.signals.models import Signal
+from houston.signals.models import Signal, SignalSourceObservation
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
+    create_observation,
     create_restaurant_v3_taxonomy,
     login,
     signal_detail_url,
     signal_feed_url,
 )
 from houston.testing.auth import build_api_membership as build_other_establishment_membership
+from houston.testing.query_baseline import capture_queries
 from houston.testing.taxonomy import create_signal_v3_for_membership
 
 pytestmark = pytest.mark.django_db
@@ -222,3 +224,27 @@ def test_feed_still_excludes_canceled_after_detail_access(api_client):
     assert detail.status_code == 200
     assert feed.status_code == 200
     assert feed.json()["items"] == []
+
+
+def test_detail_canceled_query_count_with_source_observation(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _canceled_signal_for_membership(owner)
+    observation = create_observation(membership=owner, text="A" * 20)
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=observation,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+    )
+    token = login(api_client, user=owner.user)
+
+    # Measured post-fix on PostgreSQL test DB (ORM-QW-01 / DB-04).
+    max_queries = 10
+
+    with capture_queries() as context:
+        response = api_client.get(
+            signal_detail_url(owner.establishment_id, signal.id),
+            **auth_headers(token),
+        )
+
+    assert response.status_code == 200
+    assert len(context.captured_queries) <= max_queries

@@ -114,3 +114,21 @@ def test_aggregation_count_multiple_aggregated_from(api_client):
         )
 
     _assert_aggregation_count(api_client, membership, signal, 3)
+
+
+def test_aggregation_count_on_canceled_signal_detail(api_client):
+    from houston.establishments.models import EstablishmentMembership
+
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _create_signal(membership)
+    observation = create_observation(membership=membership, text="A" * 20)
+    SignalSourceObservation.objects.create(
+        signal=signal,
+        observation=observation,
+        link_type=SignalSourceObservation.LinkType.AGGREGATED_FROM,
+    )
+    signal.status = Signal.Status.CANCELED
+    signal.save(update_fields=["status", "updated_at"])
+
+    detail_payload = _detail_payload_for_signal(api_client, membership, signal)
+    assert detail_payload["aggregation_count"] == 1
