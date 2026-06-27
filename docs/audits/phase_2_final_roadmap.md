@@ -1,7 +1,7 @@
 # Phase 2 Final Roadmap
 
-Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; Wave 1 scoped deliverables complete ROADMAP-05..11)  
-Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; Wave 1 closure pass: 2026-06-27)  
+Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; Wave 1 scoped deliverables complete ROADMAP-05..14)  
+Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; Wave 1 closure pass: 2026-06-27; Wave 1 remainder closure pass: 2026-06-27)  
 Mode: audit consolidation + Wave 0–1 status tracking
 
 ## Sources
@@ -23,13 +23,13 @@ Mode: audit consolidation + Wave 0–1 status tracking
 
 ## Wave 1 status (2026-06-27)
 
-**Wave 1 scoped deliverables complete** — not “Wave 1 fully closed.” Landed: ROADMAP-05..09 (**MOBILE-01** 01a–01e), ROADMAP-10 (**GUARD-01** Option A), ROADMAP-11 (**ORM-QW-01** DB-02/03/04/06).
+**Wave 1 scoped deliverables complete** — not “Wave 1 fully closed.” Landed: ROADMAP-05..09 (**MOBILE-01** 01a–01e), ROADMAP-10 (**GUARD-01** Option A), ROADMAP-11 (**ORM-QW-01** DB-02/03/04/06), ROADMAP-12 (**HYGIENE-01** OB-05 dead-code + partial doc slices), ROADMAP-13 (**AUTH-CACHE-01** TQ-E9/TQ-E10), ROADMAP-14 (**TQ-E8** checklist filter key normalization).
 
-**Still open (Wave 1 remainder — do not treat as Wave 1 closure):** **HYGIENE-01** (ROADMAP-12), **AUTH-CACHE-01** (ROADMAP-13), **TQ-E8** (ROADMAP-14).
+**Done (scoped — Wave 1 remainder, 2026-06-27):** ROADMAP-12..14 — **HYGIENE-01** slice, **AUTH-CACHE-01**, **TQ-E8**. Parent themes **not** closed.
 
-**Still open (parent themes — do not treat as Wave 1 closure):** **MOBILE-01** parent (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG/Apple, device QA); **GUARD-01** parent (**API-O5**, **FE-E8**, GUARD-01-FU-1/FU-2, TS-E9 remainder, FE-E4/FE-E7); **MAT-01** / **DB-01**, **TS-E1**, **INDEX-01**, **DB-07** / **DB-09** / **DB-10**.
+**Still open (parent themes — do not treat as Wave 1 closure):** **MOBILE-01** parent (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG/Apple, device QA); **GUARD-01** parent (**API-O5**, **FE-E8**, GUARD-01-FU-1/FU-2, TS-E9 remainder, FE-E4/FE-E7); **HYGIENE-01** parent (**CI-E7** remainder, **R10**, **RT-E4/R5**, link checker CI, **API-O7** session cancel); **MAT-01** / **DB-01**, **TS-E1**, **INDEX-01**, **DB-07** / **DB-09** / **DB-10**, **CACHE-01**.
 
-**Next:** Wave 1 remainder batch (**HYGIENE-01**, **AUTH-CACHE-01**, **TQ-E8**); Wave 2 guard **TS-E1** before MAT-01 decouple work.
+**Next:** Wave 2 guard **TS-E1** before MAT-01 decouple work; then **TEST-ONB-01**.
 
 ---
 
@@ -93,7 +93,7 @@ flowchart TB
 | Operational loop (observe → signal → action → feed) | **Ready at dev volume** | Post-commit WS; materialization idempotence tested |
 | DevEx / shared-dev | **Workable, discipline-sensitive** | Mode-switch checklist + fixed `.env.shared-dev.example` (Wave 0); **CI-E1** runtime trap open; **CI-E6** / **CA-E4** beat off by default — **not team-safe** |
 | CI merge confidence | **Partially ready** | GATE-01 core: Django check, migrations, schema diff, `npm run build` in CI; **CI-E8** `types.ts` ungated; **CI-E9** lint vs `verify` asymmetry |
-| Multi-establishment field use | **Partial** | MOBILE-01a–01e done scoped (network banner, Profile switch, ErrorBoundary, sticky CTAs, PWA trust / reconnect); **FE-E5**, **TQ-E9**, **AUTH-CACHE-01** complement open |
+| Multi-establishment field use | **Partial** | MOBILE-01a–01e done scoped (network banner, Profile switch, ErrorBoundary, sticky CTAs, PWA trust / reconnect); **AUTH-CACHE-01** done scoped (TQ-E9/TQ-E10); **FE-E5** local state after switch open |
 | Patchy network UX | **Partial** | MOBILE-01a terrain offline banner + fetch-failure copy landed; captive portal / routes outside `TerrainShell` gaps remain |
 | Installed PWA | **Partial** | 01e done scoped (favicon Houston, SW update prompt, operational reconnect banner); PNG/Apple meta product-gated; PWA-E5 CI build open |
 | Scale (N assignments, multi-tenant beat) | **Defer** | MAT-01 acceptable at pilot mono-shift per EF-08 default |
@@ -236,7 +236,7 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 ### Wave 1 — Pilot blockers and quick wins
 
-Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remainder **HYGIENE-01**, **AUTH-CACHE-01**, **TQ-E8** (ROADMAP-12..14) and parent themes **MOBILE-01**, **GUARD-01**, **MAT-01** / **DB-01** remain open — not Wave 2 blockers unless noted on a card.
+Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..14 landed (including remainder **HYGIENE-01** slice, **AUTH-CACHE-01**, **TQ-E8**). Parent themes **MOBILE-01**, **GUARD-01**, **HYGIENE-01**, **MAT-01** / **DB-01**, **CACHE-01** remain open — not Wave 2 blockers unless noted on a card.
 
 **MOBILE-01 Wave 1 status (2026-06-27):** **01a–01e done scoped** (ROADMAP-05..09). **MOBILE-01 parent theme not closed** — global mobile/PWA risk remains open.
 
@@ -299,19 +299,19 @@ Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remaind
 
 ### ROADMAP-06 — MOBILE-01b: Profile establishment switch
 
-- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open; **FE-E5**, **TQ-E9**, **AUTH-CACHE-01** not closed)
+- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open; **FE-E5** not closed)
 - **Priority:** P1
 - **Source findings:** PWA-E2, FE-E5
 - **Root problem:** `switchEstablishment` exists on `/select-establishment` and `/app` workspace only. Terrain Profile displays establishment name with no switch entry.
 - **Why it matters:** Multi-site field staff cannot discoverably change establishment from daily terrain UI.
 - **Suggested direction:** Add Profile entry routing to existing selector; reuse `switchEstablishment` + `purgeNonAuthQueries`. Coordinate establishment-scoped remount or local state reset (FE-E5).
-- **Dependencies:** TQ-E9 bootstrap parity on cross-tab switch
+- **Dependencies:** ~~TQ-E9 bootstrap parity on cross-tab switch~~ satisfied by ROADMAP-13 (**AUTH-CACHE-01**)
 - **Tests or gates needed first:** None
 - **Size:** S
 - **Recommended wave:** 1
 - **Changed:** [`establishment-switch.ts`](../../apps/web/src/features/auth/lib/establishment-switch.ts) (`canSwitchEstablishment`); Profile card « Changer d'établissement » in [`profile-page.tsx`](../../apps/web/src/features/auth/pages/profile-page.tsx); terrain sub-page [`profile-switch-establishment-page.tsx`](../../apps/web/src/features/auth/pages/profile-switch-establishment-page.tsx) at `/profile/switch-establishment`; routing in [`app-routes.ts`](../../apps/web/src/app/app-routes.ts) (parsed before `/profile`), [`terrain-routes.ts`](../../apps/web/src/app/terrain-routes.ts), [`App.tsx`](../../apps/web/src/App.tsx); reuses existing [`switchEstablishment`](../../apps/web/src/features/auth/api.ts) + `purgeNonAuthQueries` — **no** API change, **no** global cache/auth refactor. Targeted tests — `establishment-switch.test.ts`, `profile-page.test.tsx`, `profile-switch-establishment-page.test.tsx`, `app-routes.test.ts`, `terrain-routes.test.ts`.
 - **Validated:** Targeted Vitest **61/61**; `npm run typecheck` OK; `npm run lint` OK.
-- **Risks / follow-up:** **FE-E5** (local React state after switch) remains open; **TQ-E9** / **AUTH-CACHE-01** (bootstrap cross-tab / login cache parity) remain open; manual QA of switch mid-flow report/checklist not done. **MOBILE-01** parent **not** closed.
+- **Risks / follow-up:** **FE-E5** (local React state after switch) remains open; manual QA of switch mid-flow report/checklist not done. **MOBILE-01** parent **not** closed.
 
 ---
 
@@ -402,6 +402,7 @@ Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remaind
 
 ### ROADMAP-12 — HYGIENE-01: Docs, dead code, agent guardrails
 
+- **Status:** **Done** (scoped — Wave 1 remainder slice; **HYGIENE-01** parent theme remains open)
 - **Priority:** P2
 - **Source findings:** API-O7/OB-05, CI-E7, CI-E9, CI-E6, RT-E4/R5, R10
 - **Root problem:** Dead `useSubmitActivityDescription` hook; broken `docs/audit/` links; Cursor commands lack validation matrix; scheduler trap under-documented; `houston.events` stub confuses contributors.
@@ -410,11 +411,15 @@ Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remaind
 - **Dependencies:** None
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** Dead OB-05 onboarding hook + API/types removed (`140d653` — `useSubmitActivityDescription`, `submitActivityDescription`); partial doc hygiene bundled in `fbec6da` — Cursor validation matrix (**CI-E9** slice) in [`api-contract-change.md`](../../.cursor/commands/api-contract-change.md), [`backend-fix.md`](../../.cursor/commands/backend-fix.md); scheduler trap callout (**CI-E6** slice) in [`README.md`](../../README.md) + [`.cursor/rules/30-docker-orbstack.mdc`](../../.cursor/rules/30-docker-orbstack.mdc); broken audit link fixes (**CI-E7** slice) in README + [`api_pagination_standard.md`](../../docs/engineering/api_pagination_standard.md). **Not in scope:** `docs/README.md` stale tree, README build order / foreground `make up`, events stub doc, link checker CI, **API-O7** session cancel.
+- **Validated:** Grep confirms no `useSubmitActivityDescription` in source; remainder-batch targeted Vitest OK (see ROADMAP-13/14).
+- **Risks / follow-up:** **CI-E7 remainder** (`docs/README.md` stale tree, README build order, foreground `make up` note); **R10** archive / `product_operating_model.md`; **RT-E4/R5** events stub doc; **link checker CI**; **API-O7** session cancel (product); **CI-E9** lint vs `verify` asymmetry. **HYGIENE-01 parent not closed.**
 
 ---
 
 ### ROADMAP-13 — AUTH-CACHE-01: Bootstrap and login cache parity
 
+- **Status:** **Done** (scoped — Wave 1 remainder; **CACHE-01** architecture and **FE-E5** remain open)
 - **Priority:** P2
 - **Source findings:** TQ-E9, TQ-E10
 - **Root problem:** Realtime `establishment.switched` invalidates bootstrap instead of rewriting it; login/register do not purge non-auth cache (switch does).
@@ -423,11 +428,15 @@ Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remaind
 - **Dependencies:** MOBILE-01b establishment switch
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** TQ-E10 — `purgeNonAuthQueries` on `login` / `registerOnboarding` in [`auth/api.ts`](../../apps/web/src/features/auth/api.ts) (`90b78ab`); TQ-E9 — realtime `establishment.switched` → purge + `fetchBootstrap` + `setQueryData` with fallback invalidate in [`apply-realtime-access-events.ts`](../../apps/web/src/features/realtime/lib/apply-realtime-access-events.ts) (`7ede3b9`); [`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) cache isolation contract updated (login/registration parity with switch).
+- **Validated:** Targeted Vitest — [`auth/api.test.ts`](../../apps/web/src/features/auth/api.test.ts) (login/register/switch purge + bootstrap rewrite); [`apply-realtime-access-events.test.ts`](../../apps/web/src/features/realtime/lib/apply-realtime-access-events.test.ts) (WS switch refetch + fallback invalidation); `npm run typecheck` OK; `npm run lint` OK.
+- **Risks / follow-up:** **FE-E5** (component `useState` after switch) remains open; **CACHE-01** architecture open; cross-tab mid-flow manual QA not run; bootstrap-in-access-event payload not used (refetch path chosen).
 
 ---
 
 ### ROADMAP-14 — TQ-E8: Checklist template key normalization
 
+- **Status:** **Done** (scoped — Wave 1 remainder; **CACHE-01** / TQ-E1/TQ-E2 remain Wave 3)
 - **Priority:** P2
 - **Source findings:** TQ-E8
 - **Root problem:** `checklistsQueryKeys.templates` embeds raw filter objects without normalization (signals already normalize).
@@ -436,6 +445,9 @@ Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remaind
 - **Dependencies:** None
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** [`checklist-template-filters.ts`](../../apps/web/src/features/checklists/lib/checklist-template-filters.ts) (`normalizeChecklistTemplateFilters`, `buildChecklistTemplateListQueryParams`); [`checklists/api.ts`](../../apps/web/src/features/checklists/api.ts) query keys use normalized filters (`fbec6da`).
+- **Validated:** Targeted Vitest — [`checklist-template-filters.test.ts`](../../apps/web/src/features/checklists/lib/checklist-template-filters.test.ts); `npm run typecheck` OK; `npm run lint` OK.
+- **Risks / follow-up:** None within TQ-E8 scope; **CACHE-01** / TQ-E1/TQ-E2 remain Wave 3.
 
 ---
 
@@ -641,18 +653,18 @@ All Size **S** unless noted. Group by domain; safe to batch in small PRs.
 
 | Item | Source | Action |
 |------|--------|--------|
-| Broken audit doc links | CI-E7 | Repair `docs/audit/` → `docs/audits/` paths in README |
-| Scheduler trap callout | CI-E6, CA-E4 | README + `30-docker-orbstack.mdc` |
-| Cursor validation matrix | CI-E9 | Patch `api-contract-change.md`, `backend-fix.md` |
-| Dead onboarding hook | API-O7, OB-05 | Remove `useSubmitActivityDescription` |
+| Broken audit doc links | CI-E7 | Partial done scoped (ROADMAP-12 slice — README + pagination doc); **CI-E7 remainder** open |
+| Scheduler trap callout | CI-E6, CA-E4 | Done scoped (ROADMAP-12 slice — README + `30-docker-orbstack.mdc`) |
+| Cursor validation matrix | CI-E9 | Partial done scoped (ROADMAP-12 slice — `api-contract-change.md`, `backend-fix.md`); lint vs `verify` asymmetry open |
+| Dead onboarding hook | API-O7, OB-05 | Done scoped (ROADMAP-12) |
 | Duplicate materialization SELECT | DB-02 | Done scoped (ROADMAP-11) |
 | Taxonomy prefetch bypass | DB-03 | Done scoped (ROADMAP-11) |
 | Canceled signal prefetch | DB-04, F9 | Done scoped (ROADMAP-11) |
 | Checklist serializer prefetch | DB-06 | Done scoped (ROADMAP-11) |
 | Checklist create guard | FE-E3 | Done scoped (ROADMAP-10 Option A) |
 | Team route guard | FE-E4 route slice | Done scoped (ROADMAP-10 Option A) |
-| Checklist filter keys | TQ-E8 | Normalize template list filters |
-| Bootstrap/login cache | TQ-E9, TQ-E10 | Purge parity on login; rewrite bootstrap on WS switch |
+| Checklist filter keys | TQ-E8 | Done scoped (ROADMAP-14) |
+| Bootstrap/login cache | TQ-E9, TQ-E10 | Done scoped (ROADMAP-13) |
 | Offline banner | PWA-E1 | Done scoped (ROADMAP-05) |
 | Profile switch link | PWA-E2 | Done scoped (ROADMAP-06) |
 | Favicon + SW update prompt | PWA-E3 | Done scoped (ROADMAP-09) — engineering slice; PNG/Apple product-gated |
@@ -768,8 +780,8 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 | **ORM-QW-01** | DB-02, DB-03, DB-04, F9, DB-06 | Database / ORM — **Done (scoped 2026-06-27)**; **MAT-01 / DB-01 not closed** |
 | **PIPE-01** | C-03, OR-02, CA-E2, CA-E6 | Celery / Async |
 | **STRUCT-01** | C-06, F1, R9, R2, F6, R4, F7, API-O10, RBAC-05, F4, F5 | API + Realtime |
-| **HYGIENE-01** | API-O7, OB-05, R5, RT-E4, R10, CI-E7, CI-E9 | CI / DevEx + API |
-| **AUTH-CACHE-01** | TQ-E9, TQ-E10 | TanStack |
+| **HYGIENE-01** | API-O7, OB-05, R5, RT-E4, R10, CI-E7, CI-E9 | CI / DevEx + API — **Done (scoped 2026-06-27)** OB-05 dead-code + partial CI-E6/CI-E7/CI-E9 slices; **CI-E7 remainder**, **R10**, **RT-E4/R5**, link checker CI, **API-O7** cancel open |
+| **AUTH-CACHE-01** | TQ-E9, TQ-E10 | TanStack — **Done (scoped 2026-06-27)**; **CACHE-01** architecture open; **FE-E5** complements |
 | **SCALE-01** | CL-08, CA-E3, CA-E5 retry slice | Celery |
 | **INDEX-01** | SIG-04, CL-09, DB-05, DB-08 | Database / ORM |
 
@@ -802,8 +814,8 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 
 ## 12. Changed / Validated / Risks
 
-**Changed:** Wave 1 closure pass (2026-06-27) — **Wave 1 scoped deliverables complete** (ROADMAP-05..11): **MOBILE-01** 01a–01e, **GUARD-01** Option A, **ORM-QW-01** DB-02/03/04/06; § Wave 1 status block + Wave 1 section banner; post-audit notes on PWA / frontend / database consolidation reports; **Wave 1 remainder** (HYGIENE-01, AUTH-CACHE-01, TQ-E8) and parent themes explicitly remain open. Prior pass: ORM-QW-01 (2026-06-27) — ROADMAP-11 quick wins + status block. Prior pass: GUARD-01 (2026-06-27) — ROADMAP-10 Option A; ROADMAP-19 partial. Prior pass: MOBILE-01 (2026-06-27) — ROADMAP-05..09 confirmed. Prior pass (2026-06-26): Wave 0 + file creation from nine consolidation reports.
+**Changed:** Wave 1 remainder closure pass (2026-06-27) — **Wave 1 scoped deliverables complete** (ROADMAP-05..14): remainder **HYGIENE-01** slice (ROADMAP-12), **AUTH-CACHE-01** (ROADMAP-13), **TQ-E8** (ROADMAP-14); § Wave 1 status block + Wave 1 section banner + ROADMAP-12/13/14 cards + cross-refs; optional TanStack consolidation post-audit note. Prior pass (2026-06-27): **Wave 1 scoped deliverables complete** (ROADMAP-05..11): **MOBILE-01** 01a–01e, **GUARD-01** Option A, **ORM-QW-01** DB-02/03/04/06; post-audit notes on PWA / frontend / database consolidation reports. Prior pass: ORM-QW-01 (2026-06-27) — ROADMAP-11 quick wins + status block. Prior pass: GUARD-01 (2026-06-27) — ROADMAP-10 Option A; ROADMAP-19 partial. Prior pass: MOBILE-01 (2026-06-27) — ROADMAP-05..09 confirmed. Prior pass (2026-06-26): Wave 0 + file creation from nine consolidation reports.
 
-**Validated:** Wave 1 closure (2026-06-27): code spot-check confirms ROADMAP-05..11 landed; ORM-QW-01 targeted pytest **64/64** + `make backend-lint` OK + `make backend-check` OK (**1489 passed**, migrations check + schema diff unchanged). Prior: MOBILE-01 Vitest **107/107** + `npm run build` OK; GUARD-01 Option A Vitest **11/11** + no `apps/api` diff for guards. Consolidation audit evidence rows remain 2026-06-26 snapshots — living status lines only.
+**Validated:** Wave 1 remainder closure (2026-06-27): targeted Vitest — `auth/api.test.ts`, `apply-realtime-access-events.test.ts`, `checklist-template-filters.test.ts`; `npm run typecheck` OK; `npm run lint` OK; grep confirms no `useSubmitActivityDescription` in source. Prior: Wave 1 closure (2026-06-27): code spot-check confirms ROADMAP-05..11 landed; ORM-QW-01 targeted pytest **64/64** + `make backend-lint` OK + `make backend-check` OK (**1489 passed**, migrations check + schema diff unchanged). Prior: MOBILE-01 Vitest **107/107** + `npm run build` OK; GUARD-01 Option A Vitest **11/11** + no `apps/api` diff for guards. Consolidation audit evidence rows remain 2026-06-26 snapshots — living status lines only.
 
-**Risks / not verified:** Wave 1 **not fully closed** — HYGIENE-01, AUTH-CACHE-01, TQ-E8 open; **MOBILE-01** / **GUARD-01** parent themes open; **MAT-01** / **DB-01** / **TS-E1** unchanged by ORM-QW-01; local query ceilings only — no prod profiling; device QA / SW prod update QA not run; GUARD-01 Staff action-create form-then-400 (**GUARD-01-FU-1**, **API-O5**) still open; `make verify` not run in closure pass; CI-E1 runtime trap not live-reproduced.
+**Risks / not verified:** Wave 1 **not fully closed** — parent themes **MOBILE-01**, **GUARD-01**, **HYGIENE-01**, **MAT-01** / **DB-01**, **CACHE-01** remain open; **FE-E5**, **TS-E1**, **API-O5**, **R10**, **CI-E7 remainder**, link checker CI explicitly open; HYGIENE-01 commit message overclaims "docs" — only partial CI-E7/CI-E9/CI-E6 slices landed; AUTH-CACHE-01 does not fix FE-E5 local React state bleed; no cross-tab mid-flow manual QA; refetch-on-WS-switch adds latency vs inline bootstrap payload; local query ceilings only — no prod profiling; device QA / SW prod update QA not run; GUARD-01 Staff action-create form-then-400 (**GUARD-01-FU-1**, **API-O5**) still open; `make verify` not run in remainder closure pass; CI-E1 runtime trap not live-reproduced.
