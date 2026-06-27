@@ -4,6 +4,7 @@ import {
   bootstrapQueryKey,
   businessUnitTreeQueryKey,
   clearAuthState,
+  fetchBootstrap,
   membershipListQueryKey,
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
@@ -15,6 +16,7 @@ vi.mock('@/features/auth/api', async () => {
   return {
     ...actual,
     clearAuthState: vi.fn(),
+    fetchBootstrap: vi.fn(),
   }
 })
 
@@ -31,6 +33,17 @@ const staleBootstrap = {
   },
   pending_onboarding_memberships: [],
   permission_hints: {},
+}
+
+const freshBootstrap = {
+  ...staleBootstrap,
+  active_membership: {
+    id: 'm2',
+    establishment_id: 'est-b',
+    establishment_name: 'Establishment B',
+    role: 'manager',
+    status: 'active',
+  },
 }
 
 describe('applyRealtimeAccessEvent', () => {
@@ -113,9 +126,10 @@ describe('applyRealtimeAccessEvent', () => {
     expect(onActiveMembershipDeactivated).toHaveBeenCalledTimes(1)
   })
 
-  it('resyncs when another tab receives establishment.switched', () => {
+  it('refetches bootstrap when another tab receives establishment.switched', async () => {
     const onIntentionalClose = vi.fn()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    vi.mocked(fetchBootstrap).mockResolvedValueOnce(freshBootstrap)
 
     queryClient.setQueryData(['signals', 'feed', 'est-a', 'general', {}], { items: ['stale'] })
     queryClient.setQueryData(['workspace', 'summary', 'est-a'], { name: 'A' })
@@ -141,9 +155,44 @@ describe('applyRealtimeAccessEvent', () => {
     expect(queryClient.getQueryData(['signals', 'feed', 'est-a', 'general', {}])).toBeUndefined()
     expect(queryClient.getQueryData(['workspace', 'summary', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(['reporting', 'kpi', 'est-a'])).toBeUndefined()
-    expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(staleBootstrap)
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
-    expect(onIntentionalClose).toHaveBeenCalledTimes(1)
+
+    await vi.waitFor(() => {
+      expect(fetchBootstrap).toHaveBeenCalledTimes(1)
+      expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(freshBootstrap)
+      expect(onIntentionalClose).toHaveBeenCalledTimes(1)
+    })
+    expect(invalidateSpy).not.toHaveBeenCalled()
+    invalidateSpy.mockRestore()
+  })
+
+  it('falls back to bootstrap invalidation when establishment.switched refetch fails', async () => {
+    const onIntentionalClose = vi.fn()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    vi.mocked(fetchBootstrap).mockRejectedValueOnce(new Error('Network error'))
+
+    queryClient.setQueryData(bootstrapQueryKey, staleBootstrap)
+
+    applyRealtimeAccessEvent(
+      {
+        type: 'access',
+        reason: 'establishment.switched',
+        establishment_id: 'est-a',
+        occurred_at: '2026-06-19T12:00:00Z',
+      },
+      {
+        queryClient,
+        establishmentId: 'est-a',
+        activeMembershipId: 'm1',
+        onIntentionalClose,
+        onActiveMembershipDeactivated: vi.fn(),
+      },
+    )
+
+    await vi.waitFor(() => {
+      expect(fetchBootstrap).toHaveBeenCalledTimes(1)
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
+      expect(onIntentionalClose).toHaveBeenCalledTimes(1)
+    })
     invalidateSpy.mockRestore()
   })
 
