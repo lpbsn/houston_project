@@ -20,6 +20,7 @@ export function EstablishmentSelectorCard({
   variant = 'admin',
 }: EstablishmentSelectorCardProps) {
   const isPostLogin = variant === 'post-login'
+  const isSwitching = pendingEstablishmentId !== null
 
   return (
     <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
@@ -48,7 +49,7 @@ export function EstablishmentSelectorCard({
               key={membership.id}
               type="button"
               onClick={() => onSelect(membership.establishment_id)}
-              disabled={isPending}
+              disabled={isSwitching}
               className="flex w-full items-center justify-between rounded-[1.4rem] border border-[#ece5da] bg-white px-4 py-4 text-left shadow-[0_16px_36px_-30px_rgba(46,72,173,0.22)] transition hover:border-[color:var(--primary)]/35 hover:shadow-[0_22px_40px_-30px_rgba(46,72,173,0.28)] disabled:opacity-70"
             >
               <div className="min-w-0 space-y-2">

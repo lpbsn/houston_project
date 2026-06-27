@@ -1,5 +1,5 @@
 import { useId, type ComponentType } from 'react'
-import { Building2, ChevronRight, ClipboardCheck, Users } from 'lucide-react'
+import { ArrowLeftRight, Building2, ChevronRight, ClipboardCheck, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -12,6 +12,7 @@ import {
   canManageRuntimeConfigFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
+import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import {
@@ -177,7 +178,7 @@ function ProfileManagementNavCard({
 }
 
 export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: ProfilePageProps) {
-  const { activeMembership, bootstrap, user, isBootstrapping, isReady } = useAuth()
+  const { activeMembership, bootstrap, memberships, user, isBootstrapping, isReady } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
 
   const firstName = readOptionalUserName(user, 'first_name')
@@ -194,6 +195,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     activeMembership?.establishment_name,
   )
   const establishmentId = activeMembership?.establishment_id ?? null
+  const showEstablishmentSwitch = canSwitchEstablishment(memberships, establishmentId)
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
   const updateNotificationPreferencesMutation =
     useUpdateNotificationPreferencesMutation(establishmentId)
@@ -231,6 +233,19 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
 
       <div className="space-y-2">
         <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
+        {showEstablishmentSwitch ? (
+          <ProfileManagementNavCard
+            icon={ArrowLeftRight}
+            iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
+            title="Changer d'établissement"
+            subtitle={
+              activeMembership?.establishment_name
+                ? `Actuellement : ${activeMembership.establishment_name}`
+                : 'Basculer vers un autre site'
+            }
+            onClick={() => onNavigate?.('/profile/switch-establishment')}
+          />
+        ) : null}
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
           <ProfileSettingSwitch
             label="Notifications"

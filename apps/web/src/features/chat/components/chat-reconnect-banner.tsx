@@ -1,3 +1,5 @@
+import { terrainStatusBannerClassName } from '@/lib/terrain-styles'
+
 import type { ChatConnectionStatus } from '../types'
 
 type ChatReconnectBannerProps = {
@@ -17,7 +19,7 @@ export function ChatReconnectBanner({ status }: ChatReconnectBannerProps) {
         : 'Chat déconnecté'
 
   return (
-    <div className="border-b border-[#E8E6DF] bg-[#FFF7E8] px-3 py-2 text-center text-xs font-medium text-[#8A5A00]">
+    <div className={terrainStatusBannerClassName()} role="status">
       {label}
     </div>
   )

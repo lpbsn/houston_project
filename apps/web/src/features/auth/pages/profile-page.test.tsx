@@ -30,6 +30,19 @@ const { authState } = vi.hoisted(() => ({
           can_manage_runtime_config: true,
         },
       },
+      memberships: [
+        {
+          id: 'member-1',
+          establishment_id: 'est-1',
+          establishment_name: 'Le Palais Nancy',
+          organization_id: 'org-1',
+          organization_name: 'Org',
+          role: 'director',
+          status: 'active',
+          scopes: [],
+          scope_summary: { business_unit_count: 0 },
+        },
+      ],
       user: {
         first_name: 'Marie',
         last_name: 'Renaud',
@@ -208,5 +221,46 @@ describe('ProfilePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Se déconnecter' }))
     expect(onSignOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides establishment switch when only one membership is available', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Changer d'établissement/i })).toBeNull()
+  })
+
+  it('shows establishment switch and navigates when multiple memberships exist', () => {
+    authState.current = {
+      ...authState.current,
+      memberships: [
+        ...authState.current.memberships,
+        {
+          id: 'member-2',
+          establishment_id: 'est-2',
+          establishment_name: 'Brasserie Metz',
+          organization_id: 'org-1',
+          organization_name: 'Org',
+          role: 'manager',
+          status: 'active',
+          scopes: [],
+          scope_summary: { business_unit_count: 0 },
+        },
+      ],
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Changer d'établissement/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/profile/switch-establishment')
   })
 })

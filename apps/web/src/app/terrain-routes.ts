@@ -36,6 +36,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/execution',
   '/chat',
   '/profile',
+  '/profile/switch-establishment',
   '/team',
   '/team/invite',
   '/checklists',
@@ -63,6 +64,8 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
 const CHECKLIST_TERRAIN_PATHS = new Set<string>(['/checklists'])
 
 const TEAM_TERRAIN_PATHS = new Set<string>(['/team'])
+
+const PROFILE_TERRAIN_PATHS = new Set<string>(['/profile/switch-establishment'])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
   '/reporting',
@@ -129,6 +132,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && TEAM_TERRAIN_PATHS.has(route.path)) {
+    return true
+  }
+  if (route.kind === 'static' && PROFILE_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   return false
@@ -238,6 +244,16 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     return {
       topbarVariant: 'detail',
       title: 'Équipe',
+      backPath: '/profile',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/profile/switch-establishment') {
+    return {
+      topbarVariant: 'detail',
+      title: "Changer d'établissement",
       backPath: '/profile',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -359,6 +375,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'checklists-hub'
       case '/team':
         return 'team'
+      case '/profile/switch-establishment':
+        return 'profile-switch-establishment'
       default:
         break
     }

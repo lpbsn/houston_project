@@ -1,12 +1,18 @@
-import { createElement } from 'react'
+// @vitest-environment jsdom
+
+import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { useOperationalRealtimeWebSocket } from '../hooks/use-operational-realtime-websocket'
 import type { OperationalRealtimeInvalidateEvent } from '../types'
 
-import { OperationalRealtimeProvider } from './operational-realtime-provider'
+import {
+  OperationalRealtimeProvider,
+  useOperationalRealtime,
+} from './operational-realtime-provider'
 
 vi.mock('@/features/realtime/hooks/use-operational-realtime-websocket', () => ({
   useOperationalRealtimeWebSocket: vi.fn(() => ({
@@ -83,5 +89,33 @@ describe('OperationalRealtimeProvider', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
     invalidateSpy.mockRestore()
+  })
+
+  it('exposes connectionStatus through context', () => {
+    mockUseOperationalRealtimeWebSocket.mockImplementation(() => ({
+      connectionStatus: 'reconnecting',
+      requestIntentionalClose: vi.fn(),
+    }))
+
+    const queryClient = new QueryClient()
+
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(
+          OperationalRealtimeProvider,
+          {
+            establishmentId: 'est-1',
+            activeMembershipId: 'mbr-1',
+            enabled: true,
+          },
+          children,
+        ),
+      )
+
+    const { result } = renderHook(() => useOperationalRealtime(), { wrapper })
+
+    expect(result.current.connectionStatus).toBe('reconnecting')
   })
 })

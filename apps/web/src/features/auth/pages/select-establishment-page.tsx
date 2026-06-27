@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
@@ -13,12 +13,18 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
   const { memberships } = useAuth()
   const [pendingEstablishmentId, setPendingEstablishmentId] = useState<string | null>(null)
   const [selectorError, setSelectorError] = useState<string | null>(null)
+  const isSwitchingRef = useRef(false)
 
   const switchMutation = useMutation({
     mutationFn: switchEstablishment,
   })
 
   async function handleSelectEstablishment(establishmentId: string) {
+    if (isSwitchingRef.current) {
+      return
+    }
+
+    isSwitchingRef.current = true
     setSelectorError(null)
     setPendingEstablishmentId(establishmentId)
 
@@ -30,6 +36,7 @@ export function SelectEstablishmentPage({ onNavigate }: SelectEstablishmentPageP
         error instanceof Error ? error.message : 'Impossible de sélectionner cet établissement.',
       )
     } finally {
+      isSwitchingRef.current = false
       setPendingEstablishmentId(null)
     }
   }

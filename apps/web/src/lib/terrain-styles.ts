@@ -89,6 +89,13 @@ export function terrainErrorStateClassName(className?: string) {
   return cn('rounded-[14px] border p-4 text-sm', terrain.errorSurface, className)
 }
 
+export function terrainStatusBannerClassName(className?: string) {
+  return cn(
+    'border-b border-[#E8E6DF] bg-[#FFF7E8] px-3 py-2 text-center text-xs font-medium text-[#8A5A00]',
+    className,
+  )
+}
+
 export function terrainFilterPillClassName(active: boolean, className?: string) {
   return cn(
     'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium transition',

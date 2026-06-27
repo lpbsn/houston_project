@@ -14,6 +14,7 @@ import {
   LazyChecklistTemplateDetailPage,
   LazyExecutionFeedPage,
   LazyProfilePage,
+  LazyProfileSwitchEstablishmentPage,
   LazyTeamPage,
   LazyReportPage,
   LazySignalDetailPage,
@@ -31,6 +32,7 @@ import {
   usesTerrainShell,
 } from '@/app/terrain-routes'
 import { AppShell } from '@/components/app-shell'
+import { PwaUpdateBanner } from '@/components/layout/pwa-update-banner'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
@@ -320,6 +322,10 @@ function App() {
       )
     }
 
+    if (route.path === '/profile/switch-establishment') {
+      return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
+    }
+
     if (route.path === '/profile') {
       return (
         <LazyProfilePage
@@ -418,7 +424,12 @@ function App() {
   )
 
   if (route.kind !== 'invitation' && shouldShowAuthRoutingLoading(route, auth)) {
-    return <AuthRoutingLoading />
+    return (
+      <>
+        <PwaUpdateBanner />
+        <AuthRoutingLoading />
+      </>
+    )
   }
 
   const signOutAction = (
@@ -577,66 +588,78 @@ function App() {
   }
 
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
-    return wrapTerrainWithOperationalRealtime(
-      wrapTerrainWithChatRealtime(
-      <TerrainShell
-        contentKey="not-found"
-        showBottomNav={true}
-        activeNavPath="/reporting"
-        mainScroll="auto"
-        navigate={navigate}
-        showChatNav={showChatNav}
-        chatHasUnread={chatHasUnread}
-        topbar={
-          <TerrainTopbar
-            variant="hub"
-            pageTitle="Page introuvable"
-            showBottomBorder={true}
-            trailing={terrainTopbarTrailing}
-          />
-        }
-      >
-        <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
-      </TerrainShell>,
-      ),
+    return (
+      <>
+        <PwaUpdateBanner />
+        {wrapTerrainWithOperationalRealtime(
+          wrapTerrainWithChatRealtime(
+            <TerrainShell
+              contentKey="not-found"
+              showBottomNav={true}
+              activeNavPath="/reporting"
+              mainScroll="auto"
+              navigate={navigate}
+              showChatNav={showChatNav}
+              chatHasUnread={chatHasUnread}
+              topbar={
+                <TerrainTopbar
+                  variant="hub"
+                  pageTitle="Page introuvable"
+                  showBottomBorder={true}
+                  trailing={terrainTopbarTrailing}
+                />
+              }
+            >
+              <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+            </TerrainShell>,
+          ),
+        )}
+      </>
     )
   }
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    return wrapTerrainWithOperationalRealtime(
-      wrapTerrainWithChatRealtime(
-      <TerrainShell
-        contentKey={getTerrainContentKey(route)}
-        showBottomNav={terrainConfig.showBottomNav}
-        activeNavPath={terrainConfig.activeNavPath}
-        mainScroll={terrainConfig.mainScroll}
-        navigate={navigate}
-        showChatNav={showChatNav}
-        chatHasUnread={chatHasUnread}
-        topbar={
-          terrainConfig.hideTopbar ? null : (
-            <TerrainTopbar
-              variant={terrainConfig.topbarVariant}
-              title={terrainConfig.title}
-              pageTitle={terrainConfig.pageTitle}
-              detailTitleLayout={terrainConfig.detailTitleLayout}
-              showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-              onBack={
-                terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
+    return (
+      <>
+        <PwaUpdateBanner />
+        {wrapTerrainWithOperationalRealtime(
+          wrapTerrainWithChatRealtime(
+            <TerrainShell
+              contentKey={getTerrainContentKey(route)}
+              showBottomNav={terrainConfig.showBottomNav}
+              activeNavPath={terrainConfig.activeNavPath}
+              mainScroll={terrainConfig.mainScroll}
+              navigate={navigate}
+              showChatNav={showChatNav}
+              chatHasUnread={chatHasUnread}
+              topbar={
+                terrainConfig.hideTopbar ? null : (
+                  <TerrainTopbar
+                    variant={terrainConfig.topbarVariant}
+                    title={terrainConfig.title}
+                    pageTitle={terrainConfig.pageTitle}
+                    detailTitleLayout={terrainConfig.detailTitleLayout}
+                    showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
+                    onBack={
+                      terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
+                    }
+                    trailing={terrainTopbarTrailing}
+                  />
+                )
               }
-              trailing={terrainTopbarTrailing}
-            />
-          )
-        }
-      >
-        <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
-      </TerrainShell>,
-      ),
+            >
+              <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+            </TerrainShell>,
+          ),
+        )}
+      </>
     )
   }
 
   return (
+    <>
+      <PwaUpdateBanner />
     <motion.main {...motionProps} className="mx-auto flex min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6">
       <AppShell
         headingBadge={routeCopy.headingBadge}
@@ -647,6 +670,7 @@ function App() {
         <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
       </AppShell>
     </motion.main>
+    </>
   )
 }
 

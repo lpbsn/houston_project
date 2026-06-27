@@ -8,6 +8,7 @@ import {
   TerrainErrorState,
   TerrainFieldLabel,
   TerrainOrDivider,
+  TerrainStickyFooter,
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import {
@@ -309,77 +310,81 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     )
   }
 
-  return pageShell(
-    <>
-      {checklistContext ? (
-        <TerrainCard className="border-[#E8E6DF] bg-[#FAFAF8]">
-          <p className={cn('text-sm font-medium', terrain.foreground)}>
-            Signalement lié à une checklist
-          </p>
+  return (
+    <div className="flex min-h-full flex-col">
+      <div className="flex flex-1 flex-col gap-4 px-3 pb-28 pt-2">
+        {checklistContext ? (
+          <TerrainCard className="border-[#E8E6DF] bg-[#FAFAF8]">
+            <p className={cn('text-sm font-medium', terrain.foreground)}>
+              Signalement lié à une checklist
+            </p>
+            <p className={cn('mt-1 text-xs', terrain.muted)}>
+              Votre signalement sera rattaché à la tâche en cours.
+            </p>
+          </TerrainCard>
+        ) : null}
+
+        <ReportVoiceSection
+          shouldReduceMotion={shouldReduceMotion}
+          isRecording={isRecording}
+          isTranscribing={isTranscribing}
+          isSubmitPending={isSubmitPending}
+          latestTranscript={latestTranscript}
+          onStartRecording={() => void handleStartRecording()}
+          onStopRecording={handleStopRecording}
+        />
+
+        <TerrainOrDivider />
+
+        <TerrainCard>
+          <TerrainFieldLabel htmlFor="observation-text">Description</TerrainFieldLabel>
+          <textarea
+            id="observation-text"
+            className={cn(
+              'mt-2 min-h-[72px] w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed outline-none',
+              terrain.foreground,
+              'placeholder:text-[#aaa]',
+            )}
+            value={text}
+            onChange={(event) => setText(event.target.value.slice(0, OBSERVATION_TEXT_MAX_LENGTH))}
+            placeholder="Décrivez le problème observé..."
+          />
           <p className={cn('mt-1 text-xs', terrain.muted)}>
-            Votre signalement sera rattaché à la tâche en cours.
+            {textLength}/{OBSERVATION_TEXT_MAX_LENGTH} caractères (min. {OBSERVATION_TEXT_MIN_LENGTH})
           </p>
         </TerrainCard>
-      ) : null}
 
-      <ReportVoiceSection
-        shouldReduceMotion={shouldReduceMotion}
-        isRecording={isRecording}
-        isTranscribing={isTranscribing}
-        isSubmitPending={isSubmitPending}
-        latestTranscript={latestTranscript}
-        onStartRecording={() => void handleStartRecording()}
-        onStopRecording={handleStopRecording}
-      />
-
-      <TerrainOrDivider />
-
-      <TerrainCard>
-        <TerrainFieldLabel htmlFor="observation-text">Description</TerrainFieldLabel>
-        <textarea
-          id="observation-text"
-          className={cn(
-            'mt-2 min-h-[72px] w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed outline-none',
-            terrain.foreground,
-            'placeholder:text-[#aaa]',
-          )}
-          value={text}
-          onChange={(event) => setText(event.target.value.slice(0, OBSERVATION_TEXT_MAX_LENGTH))}
-          placeholder="Décrivez le problème observé..."
+        <ReportPhotosSection
+          photos={photos}
+          photoHint={photoHint}
+          isUploadPending={uploadMutation.isPending}
+          onPhotoSelect={(event) => void handlePhotoSelect(event)}
+          onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
         />
-        <p className={cn('mt-1 text-xs', terrain.muted)}>
-          {textLength}/{OBSERVATION_TEXT_MAX_LENGTH} caractères (min. {OBSERVATION_TEXT_MIN_LENGTH})
-        </p>
-      </TerrainCard>
 
-      <ReportPhotosSection
-        photos={photos}
-        photoHint={photoHint}
-        isUploadPending={uploadMutation.isPending}
-        onPhotoSelect={(event) => void handlePhotoSelect(event)}
-        onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
-      />
+        {formError ? <TerrainErrorState message={formError} /> : null}
+      </div>
 
-      {formError ? <TerrainErrorState message={formError} /> : null}
-
-      <Button
-        type="button"
-        className={cn(
-          'h-12 w-full rounded-2xl text-[15px] font-bold text-white hover:bg-[#1B4FD8]/95',
-          terrain.primaryBg,
-        )}
-        disabled={!canSubmit}
-        onClick={() => void handleSubmit()}
-      >
-        {isSubmitPending ? (
-          <>
-            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-            Envoi...
-          </>
-        ) : (
-          'Envoyer le signal'
-        )}
-      </Button>
-    </>,
+      <TerrainStickyFooter>
+        <Button
+          type="button"
+          className={cn(
+            'h-12 w-full rounded-2xl text-[15px] font-bold text-white hover:bg-[#1B4FD8]/95',
+            terrain.primaryBg,
+          )}
+          disabled={!canSubmit}
+          onClick={() => void handleSubmit()}
+        >
+          {isSubmitPending ? (
+            <>
+              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+              Envoi...
+            </>
+          ) : (
+            'Envoyer le signal'
+          )}
+        </Button>
+      </TerrainStickyFooter>
+    </div>
   )
 }

@@ -192,7 +192,7 @@ describe('ChecklistExecutionDetailPage', () => {
     })
   })
 
-  it('renders cancel button in document flow when allowed', () => {
+  it('renders cancel button inside sticky footer when allowed', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -204,7 +204,39 @@ describe('ChecklistExecutionDetailPage', () => {
     renderPage()
 
     const cancelButton = screen.getByRole('button', { name: /Annuler l'exécution/ })
-    expect(cancelButton).toBeTruthy()
-    expect(cancelButton.className).toContain('w-full')
+    expect(cancelButton.closest('footer')).toBeTruthy()
+  })
+
+  it('hides cancel button when execution is terminal', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({ status: 'done' }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: /Annuler l'exécution/ })).toBeNull()
+  })
+
+  it('hides cancel button when cancel is not permitted', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        permission_hints: {
+          can_execute_tasks: true,
+          can_cancel: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: /Annuler l'exécution/ })).toBeNull()
   })
 })
