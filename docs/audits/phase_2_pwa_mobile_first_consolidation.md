@@ -1,5 +1,7 @@
 # Phase 2 — PWA / Mobile-first Consolidation
 
+> **Post-audit note (2026-06-27):** Wave 1 scoped deliverables landed — see [`phase_2_final_roadmap.md`](./phase_2_final_roadmap.md) § Wave 1 status. **MOBILE-01** 01a–01e done scoped (ROADMAP-05..09); **MOBILE-01** parent theme remains open (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG/Apple, device QA). Evidence rows below reflect the 2026-06-26 audit snapshot.
+
 Status: consolidation report  
 Date: 2026-06-26  
 Mode: consolidation only — no source changes

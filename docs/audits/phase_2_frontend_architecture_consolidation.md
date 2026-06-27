@@ -1,5 +1,7 @@
 # Phase 2 — Frontend Architecture Consolidation
 
+> **Post-audit note (2026-06-27):** Wave 1 scoped deliverables landed — see [`phase_2_final_roadmap.md`](./phase_2_final_roadmap.md) § Wave 1 status. **GUARD-01** Option A done scoped (ROADMAP-10); **GUARD-01** parent theme remains open (**API-O5**, **FE-E8**, GUARD-01-FU-1/FU-2, TS-E9 remainder). Evidence rows below reflect the 2026-06-26 audit snapshot.
+
 Status: consolidation report  
 Date: 2026-06-26  
 Mode: consolidation only — no source changes

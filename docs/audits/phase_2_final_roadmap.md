@@ -1,7 +1,7 @@
 # Phase 2 Final Roadmap
 
-Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; GUARD-01 Option A done scoped; ORM-QW-01 done scoped)  
-Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; GUARD-01 closure pass: 2026-06-27; ORM-QW-01 closure pass: 2026-06-27)  
+Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; Wave 1 scoped deliverables complete ROADMAP-05..11)  
+Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; Wave 1 closure pass: 2026-06-27)  
 Mode: audit consolidation + Wave 0–1 status tracking
 
 ## Sources
@@ -21,7 +21,15 @@ Mode: audit consolidation + Wave 0–1 status tracking
 
 **Still open (explicit — do not treat as Wave 0 closure):** **CI-E1** runtime mode-switch trap; **CI-E2** compose env passthrough; **CI-E6** / **CA-E4** beat opt-in; **CI-E8** `types.ts` gate; **CI-E9** lint vs `verify` asymmetry; **CACHE-01** (Wave 3 architecture). Shared-dev remains **discipline-sensitive, not team-safe**.
 
-**Next:** Wave 1 remainder — **HYGIENE-01**, **AUTH-CACHE-01**, **TQ-E8** (MOBILE-01a–01e done scoped; **GUARD-01 Option A done scoped** — parent **GUARD-01 not closed**; **ORM-QW-01 done scoped**). Wave 2 guard **TS-E1** before MAT-01 decouple work.
+## Wave 1 status (2026-06-27)
+
+**Wave 1 scoped deliverables complete** — not “Wave 1 fully closed.” Landed: ROADMAP-05..09 (**MOBILE-01** 01a–01e), ROADMAP-10 (**GUARD-01** Option A), ROADMAP-11 (**ORM-QW-01** DB-02/03/04/06).
+
+**Still open (Wave 1 remainder — do not treat as Wave 1 closure):** **HYGIENE-01** (ROADMAP-12), **AUTH-CACHE-01** (ROADMAP-13), **TQ-E8** (ROADMAP-14).
+
+**Still open (parent themes — do not treat as Wave 1 closure):** **MOBILE-01** parent (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG/Apple, device QA); **GUARD-01** parent (**API-O5**, **FE-E8**, GUARD-01-FU-1/FU-2, TS-E9 remainder, FE-E4/FE-E7); **MAT-01** / **DB-01**, **TS-E1**, **INDEX-01**, **DB-07** / **DB-09** / **DB-10**.
+
+**Next:** Wave 1 remainder batch (**HYGIENE-01**, **AUTH-CACHE-01**, **TQ-E8**); Wave 2 guard **TS-E1** before MAT-01 decouple work.
 
 ---
 
@@ -227,6 +235,8 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 ---
 
 ### Wave 1 — Pilot blockers and quick wins
+
+Wave 1 scoped deliverables complete (2026-06-27). ROADMAP-05..11 landed. Remainder **HYGIENE-01**, **AUTH-CACHE-01**, **TQ-E8** (ROADMAP-12..14) and parent themes **MOBILE-01**, **GUARD-01**, **MAT-01** / **DB-01** remain open — not Wave 2 blockers unless noted on a card.
 
 **MOBILE-01 Wave 1 status (2026-06-27):** **01a–01e done scoped** (ROADMAP-05..09). **MOBILE-01 parent theme not closed** — global mobile/PWA risk remains open.
 
@@ -792,8 +802,8 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 
 ## 12. Changed / Validated / Risks
 
-**Changed:** ORM-QW-01 closure pass (2026-06-27) — **Done (scoped)** on ROADMAP-11: four backend micro-steps (DB-02, DB-03, DB-04/F9, DB-06); Wave 1 status block + quick wins table updated; **MAT-01 / DB-01**, **TS-E1**, **INDEX-01** explicitly remain open. Prior pass: GUARD-01 closure pass (2026-06-27) — **Option A Done (scoped)** on ROADMAP-10: page guards `/checklists/new` + `/team` via existing bootstrap hints; denied tests for both pages; quick wins table updated; ROADMAP-19 marked partial (checklist + team slice only); **GUARD-01 parent not closed** (API-O5, FE-E8, GUARD-01-FU-1/FU-2, FE-E4 RBAC slice, FE-E7). Prior pass: MOBILE-01 closure review pass (2026-06-27) — **01a–01e confirmed Done (scoped)**; **MOBILE-01 parent not closed**. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
+**Changed:** Wave 1 closure pass (2026-06-27) — **Wave 1 scoped deliverables complete** (ROADMAP-05..11): **MOBILE-01** 01a–01e, **GUARD-01** Option A, **ORM-QW-01** DB-02/03/04/06; § Wave 1 status block + Wave 1 section banner; post-audit notes on PWA / frontend / database consolidation reports; **Wave 1 remainder** (HYGIENE-01, AUTH-CACHE-01, TQ-E8) and parent themes explicitly remain open. Prior pass: ORM-QW-01 (2026-06-27) — ROADMAP-11 quick wins + status block. Prior pass: GUARD-01 (2026-06-27) — ROADMAP-10 Option A; ROADMAP-19 partial. Prior pass: MOBILE-01 (2026-06-27) — ROADMAP-05..09 confirmed. Prior pass (2026-06-26): Wave 0 + file creation from nine consolidation reports.
 
-**Validated:** ORM-QW-01 (2026-06-27): targeted pytest **9/9** (ORM-QW-01 query guards) + domain regression **36/36**; `make backend-lint` OK; `make backend-check` OK (**1489 passed**). Prior: GUARD-01 Option A targeted Vitest **11/11** (`checklist-create-page`, `team-page`); `npm run typecheck` OK; `npm run lint` OK; no `apps/api` diff. Prior: MOBILE-01 closure targeted Vitest **107/107**; `npm run build` OK. Consolidation audit snapshots not rewritten — living roadmap status lines only.
+**Validated:** Wave 1 closure (2026-06-27): code spot-check confirms ROADMAP-05..11 landed; ORM-QW-01 targeted pytest **64/64** + `make backend-lint` OK + `make backend-check` OK (**1489 passed**, migrations check + schema diff unchanged). Prior: MOBILE-01 Vitest **107/107** + `npm run build` OK; GUARD-01 Option A Vitest **11/11** + no `apps/api` diff for guards. Consolidation audit evidence rows remain 2026-06-26 snapshots — living status lines only.
 
-**Risks / not verified:** ORM-QW-01 does not reduce **MAT-01** per-assignment loop cost; **TS-E1** scaling guard not added; local query ceilings only — no prod EXPLAIN/load profiling; **INDEX-01** migrations still deferred. Prior: GUARD-01 manual deep-link QA not run (Staff `/checklists/new`, Staff `/team` on device); guards are UX hints only — API enforcement assumed from existing backend tests; Staff action-create form-then-400 friction **still open** (not Option A scope); MOBILE-01 device QA gaps unchanged; CI-E1 runtime trap not live-reproduced; consolidation audit tables remain 2026-06-26 snapshots for evidence rows.
+**Risks / not verified:** Wave 1 **not fully closed** — HYGIENE-01, AUTH-CACHE-01, TQ-E8 open; **MOBILE-01** / **GUARD-01** parent themes open; **MAT-01** / **DB-01** / **TS-E1** unchanged by ORM-QW-01; local query ceilings only — no prod profiling; device QA / SW prod update QA not run; GUARD-01 Staff action-create form-then-400 (**GUARD-01-FU-1**, **API-O5**) still open; `make verify` not run in closure pass; CI-E1 runtime trap not live-reproduced.
