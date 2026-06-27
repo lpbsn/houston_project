@@ -63,11 +63,12 @@ Forbidden in Zustand:
 - backend-derived visibility
 - API response caches
 
-TanStack Query cache isolation: `auth` is the only root preserved on establishment switch. Never store operational, tenant-scoped, workspace, onboarding, reporting, or feature data under `auth`. Logout must clear the full query cache; establishment switch must purge all non-auth queries by default.
+TanStack Query cache isolation: `auth` is the only root preserved on establishment switch, login, and registration. Never store operational, tenant-scoped, workspace, onboarding, reporting, or feature data under `auth`. Logout must clear the full query cache; login, registration, and establishment switch must purge all non-auth queries before hydrating bootstrap.
 
 Establishment-scoped cache purge (`@/lib/query-invalidation`):
 - Logout / invalidated session: `clearAuthenticatedQueryCache` — `cancelQueries()` then `queryClient.clear()`.
-- Establishment switch: `purgeNonAuthQueries` — `cancelQueries` then `removeQueries` with predicate `queryKey[0] !== 'auth'`, then rewrite `['auth', 'bootstrap']`.
+- Login / registration: `purgeNonAuthQueries` — `cancelQueries` then `removeQueries` with predicate `queryKey[0] !== 'auth'`, then rewrite `['auth', 'bootstrap']`.
+- Establishment switch: same as login/registration — `purgeNonAuthQueries`, then rewrite `['auth', 'bootstrap']`.
 - Default-safe: any non-`auth` query root is treated as tenant-scoped and removed automatically — no manual whitelist to update per feature.
 - Only queries under the `auth` root may survive an establishment switch (today: bootstrap). Do not store operational data under `auth`.
 
