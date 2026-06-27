@@ -54,6 +54,12 @@ export const LazyProfilePage = lazy(() =>
   })),
 )
 
+export const LazyProfileSwitchEstablishmentPage = lazy(() =>
+  import('@/features/auth/pages/profile-switch-establishment-page').then((module) => ({
+    default: module.ProfileSwitchEstablishmentPage,
+  })),
+)
+
 export const LazyTeamPage = lazy(() =>
   import('@/features/auth/pages/team-page').then((module) => ({
     default: module.TeamPage,

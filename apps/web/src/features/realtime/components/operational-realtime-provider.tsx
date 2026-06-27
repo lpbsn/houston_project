@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, type PropsWithChildren } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  type PropsWithChildren,
+} from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { useOperationalRealtimeWebSocket } from '../hooks/use-operational-realtime-websocket'
@@ -7,7 +15,17 @@ import {
   applyOperationalReconnectInvalidation,
 } from '../lib/apply-operational-invalidation'
 import { applyRealtimeAccessEvent } from '../lib/apply-realtime-access-events'
-import type { OperationalRealtimeAccessEvent, OperationalRealtimeInvalidateEvent } from '../types'
+import type {
+  OperationalRealtimeAccessEvent,
+  OperationalRealtimeConnectionStatus,
+  OperationalRealtimeInvalidateEvent,
+} from '../types'
+
+type OperationalRealtimeContextValue = {
+  connectionStatus: OperationalRealtimeConnectionStatus
+}
+
+const OperationalRealtimeContext = createContext<OperationalRealtimeContextValue | null>(null)
 
 type OperationalRealtimeProviderProps = PropsWithChildren<{
   establishmentId: string | null
@@ -63,7 +81,7 @@ export function OperationalRealtimeProvider({
     applyOperationalReconnectInvalidation(queryClient, establishmentId)
   }, [establishmentId, queryClient])
 
-  const { requestIntentionalClose } = useOperationalRealtimeWebSocket({
+  const { connectionStatus, requestIntentionalClose } = useOperationalRealtimeWebSocket({
     establishmentId,
     enabled,
     onInvalidate: handleInvalidate,
@@ -75,5 +93,26 @@ export function OperationalRealtimeProvider({
     intentionalCloseRef.current = requestIntentionalClose
   }, [requestIntentionalClose])
 
-  return children
+  const value = useMemo(
+    () => ({
+      connectionStatus,
+    }),
+    [connectionStatus],
+  )
+
+  return (
+    <OperationalRealtimeContext.Provider value={value}>{children}</OperationalRealtimeContext.Provider>
+  )
+}
+
+export function useOperationalRealtime(): OperationalRealtimeContextValue {
+  const context = useContext(OperationalRealtimeContext)
+  if (!context) {
+    throw new Error('useOperationalRealtime must be used within OperationalRealtimeProvider.')
+  }
+  return context
+}
+
+export function useOptionalOperationalRealtime(): OperationalRealtimeContextValue | null {
+  return useContext(OperationalRealtimeContext)
 }

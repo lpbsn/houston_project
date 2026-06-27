@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { TerrainEmptyState, TerrainErrorState, TerrainStickyFooter } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { ChecklistExecutionDetailHeader } from '@/features/checklists/components/checklist-execution-detail-header'
 import { ChecklistExecutionSkipSheet } from '@/features/checklists/components/checklist-execution-skip-sheet'
@@ -17,6 +17,7 @@ import {
 } from '@/features/checklists/hooks'
 import { buildChecklistReportingHref } from '@/features/checklists/lib/checklist-reporting-context'
 import { resolveChecklistErrorMessage } from '@/features/checklists/lib/checklist-errors'
+import { cn } from '@/lib/utils'
 import {
   countChecklistTreatedTasks,
   isChecklistExecutionOverdue,
@@ -136,52 +137,61 @@ export function ChecklistExecutionDetailPage({ executionId }: ChecklistExecution
   }
 
   return (
-    <div className="space-y-2 px-3 pb-28 pt-2">
-      <ChecklistExecutionDetailHeader
-        title={execution.template_title}
-        businessUnitLabel={execution.business_unit?.label ?? null}
-        endAt={execution.end_at}
-        isOverdue={isOverdue}
-        treatedCount={treatedCount}
-        totalCount={sortedTasks.length}
-      />
+    <div className="flex min-h-full flex-col">
+      <div
+        className={cn(
+          'flex flex-1 flex-col space-y-2 px-3 pt-2',
+          showCancel ? 'pb-28' : 'pb-4',
+        )}
+      >
+        <ChecklistExecutionDetailHeader
+          title={execution.template_title}
+          businessUnitLabel={execution.business_unit?.label ?? null}
+          endAt={execution.end_at}
+          isOverdue={isOverdue}
+          treatedCount={treatedCount}
+          totalCount={sortedTasks.length}
+        />
 
-      {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
+        {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
 
-      {sortedTasks.length === 0 ? (
-        <TerrainEmptyState title="Aucune tâche dans cette exécution." />
-      ) : (
-        <div className="space-y-2">
-          {sortedTasks.map((task) => (
-            <ChecklistExecutionTaskRow
-              key={task.id}
-              task={task}
-              canShowActions={canShowChecklistExecutionTaskActions(permissionHints, {
-                isTerminal,
-                task,
-              })}
-              isMutationPending={isMutationPending}
-              onMarkDone={() => void handleMarkDone(task.id)}
-              onReport={() => handleReportTask(task)}
-              onSkipRequest={() => {
-                setSkipTaskId(task.id)
-                setSkipReason('')
-              }}
-            />
-          ))}
-        </div>
-      )}
+        {sortedTasks.length === 0 ? (
+          <TerrainEmptyState title="Aucune tâche dans cette exécution." />
+        ) : (
+          <div className="space-y-2">
+            {sortedTasks.map((task) => (
+              <ChecklistExecutionTaskRow
+                key={task.id}
+                task={task}
+                canShowActions={canShowChecklistExecutionTaskActions(permissionHints, {
+                  isTerminal,
+                  task,
+                })}
+                isMutationPending={isMutationPending}
+                onMarkDone={() => void handleMarkDone(task.id)}
+                onReport={() => handleReportTask(task)}
+                onSkipRequest={() => {
+                  setSkipTaskId(task.id)
+                  setSkipReason('')
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {showCancel ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 w-full rounded-xl border-[#E8E6DF] text-[#E24B4A]"
-          disabled={cancelMutation.isPending}
-          onClick={() => void handleCancel()}
-        >
-          Annuler l&apos;exécution
-        </Button>
+        <TerrainStickyFooter>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full rounded-xl border-[#E8E6DF] text-[#E24B4A]"
+            disabled={cancelMutation.isPending}
+            onClick={() => void handleCancel()}
+          >
+            Annuler l&apos;exécution
+          </Button>
+        </TerrainStickyFooter>
       ) : null}
 
       <ChecklistExecutionSkipSheet

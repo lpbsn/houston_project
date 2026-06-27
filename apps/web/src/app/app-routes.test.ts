@@ -45,6 +45,17 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses profile switch establishment before profile', () => {
+    expect(parseAppRoute('/profile/switch-establishment')).toEqual({
+      kind: 'static',
+      path: '/profile/switch-establishment',
+    })
+    expect(parseAppRoute('/profile')).toEqual({
+      kind: 'static',
+      path: '/profile',
+    })
+  })
+
   it('parses operational config route', () => {
     expect(parseAppRoute('/app/operational-config')).toEqual({
       kind: 'static',

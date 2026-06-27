@@ -2,8 +2,13 @@ import type { PropsWithChildren, ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
+import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
+import { NetworkStatusBanner } from '@/components/layout/network-status-banner'
+import { OperationalReconnectBanner } from '@/features/realtime/components/operational-reconnect-banner'
+import { useOptionalOperationalRealtime } from '@/features/realtime/components/operational-realtime-provider'
 import type { TerrainMainScroll, TerrainNavPath } from '@/app/terrain-routes'
 import { terrainPageMotionProps } from '@/lib/terrain-motion'
+import { useNetworkStatus } from '@/lib/network-status'
 import { cn } from '@/lib/utils'
 
 type TerrainShellProps = PropsWithChildren<{
@@ -30,10 +35,17 @@ export function TerrainShell({
 }: TerrainShellProps) {
   const shouldReduceMotion = useReducedMotion()
   const pageMotion = terrainPageMotionProps(shouldReduceMotion)
+  const { isOnline } = useNetworkStatus()
+  const operationalRealtime = useOptionalOperationalRealtime()
+  const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]">
       <div className="shrink-0">{topbar}</div>
+      <NetworkStatusBanner isOnline={isOnline} />
+      {isOnline ? (
+        <OperationalReconnectBanner status={operationalConnectionStatus} />
+      ) : null}
       <main
         className={cn(
           'min-h-0 flex-1',
@@ -43,11 +55,17 @@ export function TerrainShell({
         )}
       >
         {shouldReduceMotion ? (
-          <div className="h-full min-h-0">{children}</div>
+          <div className="h-full min-h-0">
+            <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
+              {children}
+            </TerrainErrorBoundary>
+          </div>
         ) : (
           <AnimatePresence initial={false}>
             <motion.div key={contentKey} className="h-full min-h-0" {...pageMotion}>
-              {children}
+              <TerrainErrorBoundary resetKey={contentKey} navigate={navigate}>
+                {children}
+              </TerrainErrorBoundary>
             </motion.div>
           </AnimatePresence>
         )}

@@ -21,7 +21,7 @@ Mode: audit consolidation + Wave 0 status tracking
 
 **Still open (explicit — do not treat as Wave 0 closure):** **CI-E1** runtime mode-switch trap; **CI-E2** compose env passthrough; **CI-E6** / **CA-E4** beat opt-in; **CI-E8** `types.ts` gate; **CI-E9** lint vs `verify` asymmetry; **CACHE-01** (Wave 3 architecture). Shared-dev remains **discipline-sensitive, not team-safe**.
 
-**Next:** Wave 1 — **MOBILE-01**, **GUARD-01**, **ORM-QW-01**. Wave 2 guard **TS-E1** before MAT-01 decouple work.
+**Next:** Wave 1 — **GUARD-01**, **ORM-QW-01** (MOBILE-01a–01e done scoped). Wave 2 guard **TS-E1** before MAT-01 decouple work.
 
 ---
 
@@ -36,7 +36,7 @@ Residual work is **not** 90+ independent tasks. It clusters into **five root the
 | Materialization-on-read | **MAT-01** | RT-E1, CA-E1, DB-01, EF-02, EF-07, OR-10 | Supervision freshness + feed latency at scale |
 | CI / contract gates | **GATE-01** | API-O1, CI-E3, CI-E8, PWA-E5, TS-E2, API-O8 | Green CI ≠ safe merge during Phase 2 fixes |
 | Cache / WS invalidation drift | **CACHE-01** | TQ-E1, TQ-E2, RT-E5, NR-09, TS-E4 | Silent stale UI after refactors |
-| Field mobile readiness | **MOBILE-01** | PWA-E1–E8, FE-E5 | Connected browser OK; multi-site + long forms fragile |
+| Field mobile readiness | **MOBILE-01** | PWA-E1–E8, FE-E5 | **01a–01e done scoped**; parent theme open (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG-Apple) |
 | DevEx / shared-dev traps | **DEVEX-01** | CI-E1, CI-E4, CI-E6, CA-E4 | Remote DB mutation risk; beat silently off |
 
 Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ONB-01**), report flow tests (**TEST-RPT-01**), permission hint / route guard UX (**GUARD-01**), ORM prefetch quick wins (**ORM-QW-01**), LLM retry policy (**PIPE-01**), backend structural debt (**STRUCT-01**).
@@ -46,7 +46,7 @@ Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ON
 1. ~~**GATE-01**~~ **Done (scoped)** — core CI gates landed; follow-ups **CI-E8**, **CI-E9** open
 2. ~~**DEVEX-01** (01a/01b)~~ **Done (scoped)** — mode-switch checklist + env template; **CI-E1** runtime, **CI-E6** / **CA-E4** open
 3. ~~**TS-E4**~~ **Done** — parity guards + operational contract; **TS-E1** remains Wave 2 before MAT-01
-4. **MOBILE-01** — **Next active P1** — field blockers: offline UX, Profile establishment switch, sticky CTAs, ErrorBoundary
+4. **MOBILE-01** — **01a–01e done scoped** — parent theme **not closed** (**FE-E5**, **TEST-RPT-01**, PNG-Apple / PWA-E5–E8)
 5. **TEST-ONB-01** — Onboarding wizard smoke tests before OB-07 / wizard refactors
 6. **MAT-01** — Materialization timing strategy (measure → decide lazy vs decouple)
 7. **CACHE-01** — Invalidation registry + key single source of truth (Wave 3; TS-E4 guard landed, architecture open)
@@ -85,9 +85,9 @@ flowchart TB
 | Operational loop (observe → signal → action → feed) | **Ready at dev volume** | Post-commit WS; materialization idempotence tested |
 | DevEx / shared-dev | **Workable, discipline-sensitive** | Mode-switch checklist + fixed `.env.shared-dev.example` (Wave 0); **CI-E1** runtime trap open; **CI-E6** / **CA-E4** beat off by default — **not team-safe** |
 | CI merge confidence | **Partially ready** | GATE-01 core: Django check, migrations, schema diff, `npm run build` in CI; **CI-E8** `types.ts` ungated; **CI-E9** lint vs `verify` asymmetry |
-| Multi-establishment field use | **Gap** | No Profile establishment switch (PWA-E2) |
-| Patchy network UX | **Gap** | No offline/network banner (PWA-E1) |
-| Installed PWA | **Defer** | Favicon/SW update UI incomplete; PNG/Apple meta product-gated |
+| Multi-establishment field use | **Partial** | MOBILE-01a–01e done scoped (network banner, Profile switch, ErrorBoundary, sticky CTAs, PWA trust / reconnect); **FE-E5**, **TQ-E9**, **AUTH-CACHE-01** complement open |
+| Patchy network UX | **Partial** | MOBILE-01a terrain offline banner + fetch-failure copy landed; captive portal / routes outside `TerrainShell` gaps remain |
+| Installed PWA | **Partial** | 01e done scoped (favicon Houston, SW update prompt, operational reconnect banner); PNG/Apple meta product-gated; PWA-E5 CI build open |
 | Scale (N assignments, multi-tenant beat) | **Defer** | MAT-01 acceptable at pilot mono-shift per EF-08 default |
 
 Qualitative scores retained from consolidations (not re-measured): PWA **64/100** pilot band; DevEx **68/100** following `INSTALL_MAC.md` / **~50/100** for README-only joiners. These scores describe onboarding friction, not shared-dev safety — shared-dev remains discipline-sensitive and **not team-safe** even after Wave 0 scoped deliverables.
@@ -96,7 +96,7 @@ Qualitative scores retained from consolidations (not re-measured): PWA **64/100*
 
 **What is workable but not safe-by-default (DevEx):** local dev on Docker when `INSTALL_MAC.md` is followed; shared-dev only with explicit mode-switch procedure (`make down` then correct up target), aligned secrets, and scheduler discipline — partial guardrails exist (`assert-local-dev-db.sh`, `shared_dev_database.md`) but **CI-E1** runtime trap and beat opt-in remain.
 
-**What is not safe to assume:** CI green implies full contract parity (**CI-E8** `types.ts` still ungated); shared-dev is team-safe; multi-site staff without Profile switch; structural materialization changes without **TS-E1** baselines; **CACHE-01** resolved because **TS-E4** guards landed.
+**What is not safe to assume:** CI green implies full contract parity (**CI-E8** `types.ts` still ungated); shared-dev is team-safe; establishment switch mid-flow resets all local UI state (**FE-E5** open); structural materialization changes without **TS-E1** baselines; **CACHE-01** resolved because **TS-E4** guards landed.
 
 ---
 
@@ -107,7 +107,7 @@ Qualitative scores retained from consolidations (not re-measured): PWA **64/100*
 | 1 | **GATE-01** | Every Phase 2 fix touches API, types, or build artifacts | 0 | Done (scoped); CI-E8/E9 open |
 | 2 | **DEVEX-01** | Data-integrity risk on shared Neon if ignored | 0 | 01a/01b done; CI-E1/E6 open |
 | 3 | **TS-E4** + **TS-E1** | Cheap guards before expensive MAT-01 / CACHE-01 refactors | 0–2 | TS-E4 done; TS-E1 Wave 2 |
-| 4 | **MOBILE-01** | Field pilot blockers unrelated to backend scale | 1 | **Next** |
+| 4 | **MOBILE-01** | Field pilot blockers unrelated to backend scale | 1 | 01a–01e done scoped; **FE-E5**, **TEST-RPT-01**, broader PWA gaps open |
 | 5 | **TEST-ONB-01** | Largest untested user journey | 2 | Open |
 | 6 | **MAT-01** | Highest cross-audit structural risk; needs measurement first | 3 | Open |
 | 7 | **CACHE-01** | Blocks safe frontend evolution after guards land | 3 | Open (TS-E4 guard only) |
@@ -228,10 +228,25 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 
 ### Wave 1 — Pilot blockers and quick wins
 
+**MOBILE-01 Wave 1 status (2026-06-27):** **01a–01e done scoped** (ROADMAP-05..09). **MOBILE-01 parent theme not closed** — global mobile/PWA risk remains open.
+
+**MOBILE-01 (parent theme) — engineering slices 01a–01e done scoped**
+
+| Slice | ID | Status | Summary |
+|-------|-----|--------|---------|
+| Offline / network UX | **01a** (ROADMAP-05) | Done (scoped) | Terrain offline banner + fetch-failure copy |
+| Profile establishment switch | **01b** (ROADMAP-06) | Done (scoped) | Discoverable switch from terrain Profile |
+| Terrain ErrorBoundary | **01c** (ROADMAP-07) | Done (scoped) | Recovery fallback on terrain routes |
+| Sticky primary actions | **01d** (ROADMAP-08) | Done (scoped) | Report submit + checklist cancel sticky |
+| PWA install trust + reconnect | **01e** (ROADMAP-09) | Done (scoped) | Favicon Houston, SW update prompt, operational reconnect banner |
+
+**Still open under MOBILE-01 parent (do not treat as closed):** **FE-E5** (local state after establishment switch); **TEST-RPT-01** (report flow tests); **PWA-E5–E8** (CI build gate, PWA regression tests, broader polish); **PNG/Apple install** product slice; **NR-08/TQ-E4** comment reconnect sweep; captive portal / routes outside `TerrainShell`; manual device QA gaps across slices.
+
 ---
 
 ### ROADMAP-05 — MOBILE-01a: Offline and network-failure UX
 
+- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open)
 - **Priority:** P1
 - **Source findings:** PWA-E1
 - **Root problem:** No `navigator.onLine` listeners, no global offline banner. `apps/web/AGENTS.md` and rule 21 require explicit offline/network states. Processing poll continues on network loss with generic API errors only.
@@ -241,11 +256,15 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 - **Tests or gates needed first:** None
 - **Size:** M
 - **Recommended wave:** 1
+- **Changed:** [`network-status.ts`](../../apps/web/src/lib/network-status.ts) (`useNetworkStatus` via `useSyncExternalStore` + `online`/`offline` events); [`network-status-banner.tsx`](../../apps/web/src/components/layout/network-status-banner.tsx) wired in [`terrain-shell.tsx`](../../apps/web/src/components/layout/terrain-shell.tsx) (offline banner under topbar on all terrain routes); [`network-error.ts`](../../apps/web/src/lib/network-error.ts) (`isNetworkFailure`, field-friendly copy constants); [`error-message.ts`](../../apps/web/src/lib/error-message.ts) enriched (`toErrorMessage` + `resolveApiErrorMessage` map fetch failures before `*ApiError` HTTP); shared [`terrainStatusBannerClassName`](../../apps/web/src/lib/terrain-styles.ts) reused by [`chat-reconnect-banner.tsx`](../../apps/web/src/features/chat/components/chat-reconnect-banner.tsx); targeted tests — `network-error.test.ts`, `network-status.test.ts`, `error-message.test.ts`, `network-status-banner.test.ts`. **Not in scope:** ReportSuccessPanel retry, backend/API, offline mutation queue, SW data caching, MOBILE-01e.
+- **Validated:** Targeted Vitest **12/12** (`network-error`, `network-status`, `error-message`, `network-status-banner`); `npm run typecheck` OK; `npm run lint` OK.
+- **Risks / follow-up:** `navigator.onLine` imperfect (captive portal / DNS dead may stay “online” — centralized fetch-failure copy compensates partially); routes outside `TerrainShell` (login, onboarding AppShell) still have no offline banner; offline banner + chat reconnect banner may stack on `/chat`; real airplane-mode / patchy 4G not manually QA’d post-merge. **MOBILE-01** parent **not** closed.
 
 ---
 
 ### ROADMAP-06 — MOBILE-01b: Profile establishment switch
 
+- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open; **FE-E5**, **TQ-E9**, **AUTH-CACHE-01** not closed)
 - **Priority:** P1
 - **Source findings:** PWA-E2, FE-E5
 - **Root problem:** `switchEstablishment` exists on `/select-establishment` and `/app` workspace only. Terrain Profile displays establishment name with no switch entry.
@@ -255,11 +274,15 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 - **Tests or gates needed first:** None
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** [`establishment-switch.ts`](../../apps/web/src/features/auth/lib/establishment-switch.ts) (`canSwitchEstablishment`); Profile card « Changer d'établissement » in [`profile-page.tsx`](../../apps/web/src/features/auth/pages/profile-page.tsx); terrain sub-page [`profile-switch-establishment-page.tsx`](../../apps/web/src/features/auth/pages/profile-switch-establishment-page.tsx) at `/profile/switch-establishment`; routing in [`app-routes.ts`](../../apps/web/src/app/app-routes.ts) (parsed before `/profile`), [`terrain-routes.ts`](../../apps/web/src/app/terrain-routes.ts), [`App.tsx`](../../apps/web/src/App.tsx); reuses existing [`switchEstablishment`](../../apps/web/src/features/auth/api.ts) + `purgeNonAuthQueries` — **no** API change, **no** global cache/auth refactor. Targeted tests — `establishment-switch.test.ts`, `profile-page.test.tsx`, `profile-switch-establishment-page.test.tsx`, `app-routes.test.ts`, `terrain-routes.test.ts`.
+- **Validated:** Targeted Vitest **61/61**; `npm run typecheck` OK; `npm run lint` OK.
+- **Risks / follow-up:** **FE-E5** (local React state after switch) remains open; **TQ-E9** / **AUTH-CACHE-01** (bootstrap cross-tab / login cache parity) remain open; manual QA of switch mid-flow report/checklist not done. **MOBILE-01** parent **not** closed.
 
 ---
 
 ### ROADMAP-07 — MOBILE-01c: Terrain ErrorBoundary
 
+- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open; **no** global AppShell/auth ErrorBoundary)
 - **Priority:** P2
 - **Source findings:** PWA-E7
 - **Root problem:** No React ErrorBoundary on terrain shell. Uncaught render errors produce white screen with no recovery.
@@ -268,24 +291,32 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 - **Dependencies:** None
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** [`terrain-error-boundary.tsx`](../../apps/web/src/components/layout/terrain-error-boundary.tsx) — class component `TerrainErrorBoundary` (React native, no new dependency); fallback via [`TerrainErrorState`](../../apps/web/src/components/ui/terrain/terrain-error-state.tsx) with **Réessayer** (boundary state reset) + **Retour à l'accueil** (`navigate('/reporting', { replace: true })`); [`terrain-shell.tsx`](../../apps/web/src/components/layout/terrain-shell.tsx) wraps `children` in both reduced-motion and animated branches inside `<main>`. Targeted tests — [`terrain-error-boundary.test.tsx`](../../apps/web/src/components/layout/terrain-error-boundary.test.tsx) (catch, retry, home, resetKey + healthy child). **Not in scope:** `TerrainShell` layout (topbar, nav, banner), external providers (`OperationalRealtimeProvider`, `LazyChatRealtimeProvider`), AppShell/auth routes, lazy-chunk failure, global ErrorBoundary, backend/API.
+- **Validated:** `npm test -- terrain-error-boundary` **5/5**; `npm run typecheck` OK; `npm run lint` OK.
+- **Risks / follow-up:** Boundary limited to terrain `children` only; crash in shell topbar/nav/banner or external providers **not** covered; lazy-chunk / Suspense rejection behavior **not** tested; no manual device QA on `AnimatePresence` + fallback interaction. **MOBILE-01** parent **not** closed.
 
 ---
 
 ### ROADMAP-08 — MOBILE-01d: Sticky primary actions on report and checklist
 
+- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open; **TEST-RPT-01** not closed)
 - **Priority:** P2
 - **Source findings:** PWA-E8
 - **Root problem:** Report submit and checklist cancel scroll off-screen on long forms/lists. Action create already uses `TerrainStickyFooter`.
 - **Why it matters:** Field-usage production blocker for long observation reports and large checklists.
 - **Suggested direction:** Move report submit to `TerrainStickyFooter`; pin checklist cancel above safe-area inset. Reference `action-create-page.tsx` pattern.
-- **Dependencies:** TEST-RPT-01 when touching report layout
+- **Dependencies:** TEST-RPT-01 when touching report layout (mutations/smoke — still open, Wave 2)
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** Report submit déplacé dans [`TerrainStickyFooter`](../../apps/web/src/components/ui/terrain/terrain-sticky-footer.tsx) ([`report-page.tsx`](../../apps/web/src/features/observations/pages/report-page.tsx) — état formulaire). Checklist cancel conditionnel déplacé dans `TerrainStickyFooter` ([`checklist-execution-detail-page.tsx`](../../apps/web/src/features/checklists/pages/checklist-execution-detail-page.tsx) — `showCancel` inchangé). Tests ciblés — [`report-page.test.tsx`](../../apps/web/src/features/observations/pages/report-page.test.tsx), [`checklist-execution-detail-page.test.tsx`](../../apps/web/src/features/checklists/pages/checklist-execution-detail-page.test.tsx). Logique disabled/pending conservée (`disabled={!canSubmit}`, `isSubmitPending` ; `disabled={cancelMutation.isPending}`). **Not in scope:** backend/API, terrain shell, report/checklist refactors, **TEST-RPT-01**.
+- **Validated:** `npm test -- report-page checklist-execution-detail` **14/14**; `npm run typecheck` OK; `npm run lint` OK.
+- **Risks / follow-up:** QA device scroll / bottom nav / safe-area non faite; clavier mobile + textarea non testé; [`ReportSuccessPanel`](../../apps/web/src/features/observations/components/report-success-panel.tsx) post-submit hors scope. **TEST-RPT-01** reste ouvert. **MOBILE-01** parent **not** closed.
 
 ---
 
 ### ROADMAP-09 — MOBILE-01e: PWA install trust + reconnect visibility
 
+- **Status:** **Done** (scoped — Wave 1 slice; **MOBILE-01** parent theme remains open: **FE-E5**, **TEST-RPT-01**, PWA-E5–E8 / PNG-Apple)
 - **Priority:** P2
 - **Source findings:** PWA-E3 (engineering slice), PWA-E4 (banner slice)
 - **Root problem:** Broken favicon reference; silent SW updates; operational WS reconnects with no user feedback (chat has banner).
@@ -294,6 +325,9 @@ Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2*
 - **Dependencies:** GATE-01 for build CI (PWA-E5)
 - **Size:** S
 - **Recommended wave:** 1
+- **Changed:** favicon Houston corrigé ([`public/favicon.svg`](../../apps/web/public/favicon.svg) aligned to [`pwa-icon.svg`](../../apps/web/public/pwa-icon.svg)); prompt SW update **Recharger / Plus tard** ([`pwa-update.ts`](../../apps/web/src/lib/pwa-update.ts), [`pwa-update-banner.tsx`](../../apps/web/src/components/layout/pwa-update-banner.tsx), [`main.tsx`](../../apps/web/src/main.tsx) `onNeedRefresh` — reload delegated to vite-plugin-pwa `updateSW()`); reconnect opérationnel visible sur terrain pour **reconnecting/disconnected** only ([`operational-reconnect-banner.tsx`](../../apps/web/src/features/realtime/components/operational-reconnect-banner.tsx), [`operational-realtime-provider.tsx`](../../apps/web/src/features/realtime/components/operational-realtime-provider.tsx) context, [`terrain-shell.tsx`](../../apps/web/src/components/layout/terrain-shell.tsx)); **offline banner prioritaire** (operational banner hidden when `!isOnline`); [`PwaUpdateBanner`](../../apps/web/src/components/layout/pwa-update-banner.tsx) mounted in [`App.tsx`](../../apps/web/src/App.tsx) root; tests ciblés — `pwa-update.test.ts`, `pwa-update-banner.test.tsx`, `operational-reconnect-banner.test.tsx`, `operational-realtime-provider.test.tsx`; build OK. **Not in scope:** PNG/Apple meta, PWA-E5 CI build, comment reconnect sweep (NR-08/TQ-E4), offline data caching, push/background sync, refonte WS.
+- **Validated:** Vitest ciblé **18/18**; `npm run typecheck` OK; `npm run lint` OK; `npm run build` OK (manifest + SW generated).
+- **Risks / follow-up:** QA prod SW update non faite; SW update non testable en dev (`devOptions.enabled: false`); empilement possible offline + operational + chat sur `/chat`; PNG/Apple install product slice hors scope; comment reconnect sweep **NR-08/TQ-E4** hors scope; **FE-E5** et **TEST-RPT-01** restent ouverts; **MOBILE-01** parent **not** closed.
 
 ---
 
@@ -573,9 +607,12 @@ All Size **S** unless noted. Group by domain; safe to batch in small PRs.
 | Team route guard | FE-E4 | Redirect or invite-style unauthorized card |
 | Checklist filter keys | TQ-E8 | Normalize template list filters |
 | Bootstrap/login cache | TQ-E9, TQ-E10 | Purge parity on login; rewrite bootstrap on WS switch |
-| Profile switch link | PWA-E2 | "Changer d'établissement" on Profile |
-| ErrorBoundary | PWA-E7 | Wrap terrain shell |
-| Sticky footers | PWA-E8 | Report submit + checklist cancel |
+| Offline banner | PWA-E1 | Done scoped (ROADMAP-05) |
+| Profile switch link | PWA-E2 | Done scoped (ROADMAP-06) |
+| Favicon + SW update prompt | PWA-E3 | Done scoped (ROADMAP-09) — engineering slice; PNG/Apple product-gated |
+| Operational reconnect banner | PWA-E4 | Done scoped (ROADMAP-09) — banner slice; NR-08/TQ-E4 comment sweep separate |
+| ErrorBoundary | PWA-E7 | Done scoped (ROADMAP-07) — terrain children only |
+| Sticky footers | PWA-E8 | Done scoped (ROADMAP-08) — report submit + checklist cancel |
 | Events stub doc | RT-E4, R5 | Point contributors to live hubs |
 | Beat failure-log parity | CA-E5 | Mirror uploads pattern for checklist/chat |
 | Horizon metric semantics | CA-E10 | Document or split create vs idempotent counts |
@@ -707,7 +744,7 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 | **GATE-01** | Schema/types drift merges; Phase 2 refactors break frontend silently | Any API or serializer change |
 | **DEVEX-01** | `make test` mutates shared Neon after mode switch | Shared-dev team |
 | **TS-E4 / TS-E1** | Structural refactors regress without CI signal | MAT-01, CACHE-01 PRs |
-| **MOBILE-01** | Field teams blocked on patchy network, multi-site, long forms | Multi-establishment field shift |
+| **MOBILE-01** | Residual gaps: **FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG-Apple, device QA, captive portal | Multi-establishment field shift; installed PWA polish |
 | **TEST-ONB-01** | Onboarding activation breaks undetected | Director onboarding |
 | **MAT-01 at scale** | Feed latency, stale supervision, read→write amplification | Multi-assignment establishments |
 | **CACHE-01** | Silent stale feeds/details after refactors | All operational UI |
@@ -719,8 +756,8 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 
 ## 12. Changed / Validated / Risks
 
-**Changed:** Wave 0 closure pass (2026-06-27) — added § Wave 0 status; updated §1 top priorities, §2 readiness verdict, §3 status column, §5 pre-flight checklist (TS-E4 done), §6 quick wins (removed done CI-E4 row); Wave 0 header note. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
+**Changed:** MOBILE-01 closure review pass (2026-06-27) — **01a–01e confirmed Done (scoped)**; 19 previously untracked implementation/test files indexed for commit; `App.tsx` terrain wrapper indentation normalized; **MOBILE-01 parent not closed** (FE-E5, TEST-RPT-01, PWA-E5–E8, PNG-Apple, NR-08/TQ-E4, device QA). Prior pass: MOBILE-01 roadmap alignment pass (2026-06-27) — parent summary for **01a–01e done scoped**; ROADMAP-05..09 status/risk lines aligned; ROADMAP-09 Changed/Validated/Risks normalized; readiness table + quick wins updated. Prior pass: MOBILE-01e implementation (ROADMAP-09 **Done scoped**). Prior pass: Wave 0 closure pass (2026-06-27). MOBILE-01 Wave 1 alignment pass (2026-06-27) — ROADMAP-05..08 marked **Done (scoped)**. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
 
-**Validated:** Spot-check of `.github/workflows/ci.yml` (GATE-01 steps), `.env.shared-dev.example` (DEVEX-01b dotenv), TS-E4 guard tests + `contracts/operational-realtime-invalidation.json`, `docs/engineering/testing.md` CI table, mode-switch docs in `shared_dev_database.md` / `INSTALL_MAC.md` / `30-docker-orbstack.mdc`. Consolidation snapshots get post-audit banners only — evidence rows not rewritten.
+**Validated:** MOBILE-01 closure (2026-06-27): targeted Vitest **107/107** (01a 12, 01b 61, 01c–01e 37); `npm run typecheck` OK; `npm run lint` OK; `npm run build` OK (manifest + SW); no `apps/api` diff. Prior: spot-check of `.github/workflows/ci.yml` (GATE-01 steps), `.env.shared-dev.example` (DEVEX-01b dotenv), TS-E4 guard tests + `contracts/operational-realtime-invalidation.json`, `docs/engineering/testing.md` CI table, mode-switch docs in `shared_dev_database.md` / `INSTALL_MAC.md` / `30-docker-orbstack.mdc`. Consolidation snapshots get post-audit banners only — evidence rows not rewritten.
 
-**Risks / not verified:** `make verify` not run in this docs pass; CI-E1 runtime mode-switch trap not live-reproduced; devs with legacy broken `.env.shared-dev` must fix pepper line manually; consolidation audit tables remain 2026-06-26 snapshots; pilot/DevEx scores qualitative; MAT-01 N=20 threshold not benchmarked; shared-dev explicitly **not** validated as team-safe.
+**Risks / not verified:** MOBILE-01 manual device QA not run (switch mid-report/checklist, banner stacking on `/chat`, prod SW update prompt); `make verify` not run in this pass; CI-E1 runtime mode-switch trap not live-reproduced; devs with legacy broken `.env.shared-dev` must fix pepper line manually; consolidation audit tables remain 2026-06-26 snapshots; pilot/DevEx scores qualitative; MAT-01 N=20 threshold not benchmarked; shared-dev explicitly **not** validated as team-safe.
