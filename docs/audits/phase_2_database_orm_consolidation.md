@@ -1,5 +1,7 @@
 # Phase 2 — Database / ORM Consolidation
 
+> **Post-audit note (2026-06-27):** Wave 1 scoped deliverables landed — see [`phase_2_final_roadmap.md`](./phase_2_final_roadmap.md) § Wave 1 status. **ORM-QW-01** done scoped (ROADMAP-11 DB-02/03/04/06); **MAT-01** / **DB-01**, **TS-E1**, **INDEX-01** remain open. Evidence rows below reflect the 2026-06-26 audit snapshot.
+
 Status: consolidation report  
 Date: 2026-06-26  
 Mode: consolidation only — no source changes
