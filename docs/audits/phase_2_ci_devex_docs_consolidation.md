@@ -4,6 +4,8 @@ Status: consolidation report
 Date: 2026-06-26  
 Mode: consolidation only — no source changes
 
+> **Post-audit note (2026-06-27):** Wave 0 scoped deliverables landed — see [`phase_2_final_roadmap.md`](./phase_2_final_roadmap.md) § Wave 0 status. Evidence rows below reflect the 2026-06-26 audit snapshot; cross-check CI/DevEx/runtime before citing as current state. **CI-E1**, **CI-E2**, **CI-E8**, **CI-E9** remain open.
+
 ## Sources
 
 | Category | Files |

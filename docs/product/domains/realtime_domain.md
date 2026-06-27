@@ -63,7 +63,7 @@ Server message types on the operational socket: `auth.ok` (handshake), `invalida
 
 Access / session messages use `type: "access"` with reasons: `session.revoked`, `establishment.switched`, `membership.deactivated`, `membership.updated`.
 
-Implemented `invalidate` reasons (verify in domain `services.py` before extending):
+Implemented `invalidate` reasons (verify in domain `services.py` before extending). Machine-readable contract: [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json) — keep in sync with this table and emitter parity tests when extending.
 
 | `subject_type` | `reason` | `entity_id` | Emitted today | Frontend surfaces |
 |---|---|---|---|---|

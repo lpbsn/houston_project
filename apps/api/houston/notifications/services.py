@@ -17,11 +17,12 @@ from houston.notifications.exceptions import NotificationValidationError
 from houston.notifications.models import Notification
 from houston.notifications.permissions import recipient_can_view_notification_subject
 from houston.notifications.selectors import get_notification_for_recipient
-
-NOTIFICATION_INVALIDATION_SUBJECT_TYPE = "notification"
-NOTIFICATION_CREATED_REASON = "notification.created"
-NOTIFICATION_UPDATED_REASON = "notification.updated"
-NOTIFICATION_BULK_UPDATED_REASON = "notification.bulk_updated"
+from houston.realtime.operational_invalidation_events import (
+    NOTIFICATION_BULK_UPDATED_REASON,
+    NOTIFICATION_CREATED_REASON,
+    NOTIFICATION_INVALIDATION_SUBJECT_TYPE,
+    NOTIFICATION_UPDATED_REASON,
+)
 
 
 def _schedule_notification_invalidation(

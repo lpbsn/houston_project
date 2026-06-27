@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "events": [
+    {
+      "subject_type": "signal",
+      "reason": "signal.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "signal",
+      "reason": "signal.created",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action",
+      "reason": "action.created",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action",
+      "reason": "action.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "checklist",
+      "reason": "checklist.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "execution",
+      "reason": "execution.created",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "execution",
+      "reason": "execution.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.signal.created",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.signal.inherited",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.action.created",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.action.resolved",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.action.unresolved",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "notification",
+      "reason": "notification.created",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "notification",
+      "reason": "notification.updated",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "notification",
+      "reason": "notification.bulk_updated",
+      "dispatch": "by_reason"
+    }
+  ]
+}

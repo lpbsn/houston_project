@@ -1,8 +1,8 @@
 # Phase 2 Final Roadmap
 
-Status: consolidated roadmap  
-Date: 2026-06-26  
-Mode: audit only — no source changes
+Status: consolidated roadmap (living — Wave 0 scoped deliverables complete)  
+Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27)  
+Mode: audit consolidation + Wave 0 status tracking
 
 ## Sources
 
@@ -14,6 +14,14 @@ Mode: audit only — no source changes
 | Contract | [`AGENTS.md`](../AGENTS.md), [`apps/api/AGENTS.md`](../../apps/api/AGENTS.md), [`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) |
 
 **Method:** Deduplicated findings from Phase 2 consolidations only. No re-audit. Spot-check code only where consolidations were unclear — none contradicted.
+
+## Wave 0 status (2026-06-27)
+
+**Wave 0 scoped deliverables complete** — not “Wave 0 fully safe.” Landed: ROADMAP-01 (GATE-01 core CI gates), ROADMAP-02/03 (DEVEX-01a docs checklist, DEVEX-01b env template), ROADMAP-04 (TS-E4 invalidation guards + operational contract).
+
+**Still open (explicit — do not treat as Wave 0 closure):** **CI-E1** runtime mode-switch trap; **CI-E2** compose env passthrough; **CI-E6** / **CA-E4** beat opt-in; **CI-E8** `types.ts` gate; **CI-E9** lint vs `verify` asymmetry; **CACHE-01** (Wave 3 architecture). Shared-dev remains **discipline-sensitive, not team-safe**.
+
+**Next:** Wave 1 — **MOBILE-01**, **GUARD-01**, **ORM-QW-01**. Wave 2 guard **TS-E1** before MAT-01 decouple work.
 
 ---
 
@@ -33,15 +41,15 @@ Residual work is **not** 90+ independent tasks. It clusters into **five root the
 
 Secondary themes (P2, incremental or post-pilot): onboarding test gap (**TEST-ONB-01**), report flow tests (**TEST-RPT-01**), permission hint / route guard UX (**GUARD-01**), ORM prefetch quick wins (**ORM-QW-01**), LLM retry policy (**PIPE-01**), backend structural debt (**STRUCT-01**).
 
-**Top 7 priorities** (ordered by risk if ignored during Phase 2 coding):
+**Top 7 priorities** (Wave 0 scoped items done — active ordering from Wave 1 onward):
 
-1. **GATE-01** — Close CI vs `make verify` gap before contract/cache refactors
-2. **DEVEX-01** — Shared-dev mode-switch + broken env template before wider team use
-3. **TS-GUARDS** — Regression guards (TS-E4, TS-E1) before MAT-01 or CACHE-01 code changes
-4. **MOBILE-01** — Field blockers: offline UX, Profile establishment switch, sticky CTAs, ErrorBoundary
+1. ~~**GATE-01**~~ **Done (scoped)** — core CI gates landed; follow-ups **CI-E8**, **CI-E9** open
+2. ~~**DEVEX-01** (01a/01b)~~ **Done (scoped)** — mode-switch checklist + env template; **CI-E1** runtime, **CI-E6** / **CA-E4** open
+3. ~~**TS-E4**~~ **Done** — parity guards + operational contract; **TS-E1** remains Wave 2 before MAT-01
+4. **MOBILE-01** — **Next active P1** — field blockers: offline UX, Profile establishment switch, sticky CTAs, ErrorBoundary
 5. **TEST-ONB-01** — Onboarding wizard smoke tests before OB-07 / wizard refactors
 6. **MAT-01** — Materialization timing strategy (measure → decide lazy vs decouple)
-7. **CACHE-01** — Invalidation key factory parity + WS reason registry (after TS-E4 guard)
+7. **CACHE-01** — Invalidation registry + key single source of truth (Wave 3; TS-E4 guard landed, architecture open)
 
 ```mermaid
 flowchart TB
@@ -69,40 +77,40 @@ flowchart TB
 
 **Product pilot (connected mobile browser, mono-establishment):** Yes, with documented gaps (MOBILE-01, scale).
 
-**Developer experience (local workflow, CI, shared-dev):** Workable with caveats — **not safe-by-default before Wave 0**. A developer who follows [`INSTALL_MAC.md`](../../INSTALL_MAC.md) end-to-end on local Docker can work productively; README-only joiners, agents, and shared-dev adopters hit documented traps (DEVEX-01, GATE-01). **Shared-dev is not fully secured today:** the mode-switch trap (CI-E1) can leave running containers on remote Postgres while guards pass; the env template is broken (CI-E4); Celery beat is opt-in (CI-E6 / CA-E4). Treat Wave 0 (**DEVEX-01**, **GATE-01**) as prerequisite before wider team adoption or calling shared-dev team-safe.
+**Developer experience (local workflow, CI, shared-dev):** Workable with caveats — **Wave 0 scoped deliverables complete, not team-safe-by-default**. A developer who follows [`INSTALL_MAC.md`](../../INSTALL_MAC.md) end-to-end on local Docker can work productively; README-only joiners and agents still need explicit guardrails. **Shared-dev is not team-safe:** the runtime mode-switch trap (**CI-E1**) can leave running containers on remote Postgres while compose guards pass; Celery beat is opt-in (**CI-E6** / **CA-E4**). Wave 0 landed docs checklist (DEVEX-01a) and fixed env template (DEVEX-01b / CI-E4) — runtime guard and scheduler discipline remain open.
 
 | Dimension | Verdict | Evidence |
 |-----------|---------|----------|
 | Security / RBAC (runtime) | **Ready** | `TODO_NOW = 0`; `test_*_tenant_isolation_api.py` suites; hints server-sourced |
 | Operational loop (observe → signal → action → feed) | **Ready at dev volume** | Post-commit WS; materialization idempotence tested |
-| DevEx / shared-dev | **Workable, not safe-by-default** | CI-E1 container env ≠ `.env` after mode switch; CI-E4 broken `.env.shared-dev.example`; CI-E6 / CA-E4 beat off by default; Wave 0 gates not landed |
-| CI merge confidence | **Not ready** | CI lacks schema, migrations, build, types gates (CI-E3, API-O1) |
+| DevEx / shared-dev | **Workable, discipline-sensitive** | Mode-switch checklist + fixed `.env.shared-dev.example` (Wave 0); **CI-E1** runtime trap open; **CI-E6** / **CA-E4** beat off by default — **not team-safe** |
+| CI merge confidence | **Partially ready** | GATE-01 core: Django check, migrations, schema diff, `npm run build` in CI; **CI-E8** `types.ts` ungated; **CI-E9** lint vs `verify` asymmetry |
 | Multi-establishment field use | **Gap** | No Profile establishment switch (PWA-E2) |
 | Patchy network UX | **Gap** | No offline/network banner (PWA-E1) |
 | Installed PWA | **Defer** | Favicon/SW update UI incomplete; PNG/Apple meta product-gated |
 | Scale (N assignments, multi-tenant beat) | **Defer** | MAT-01 acceptable at pilot mono-shift per EF-08 default |
 
-Qualitative scores retained from consolidations (not re-measured): PWA **64/100** pilot band; DevEx **68/100** following `INSTALL_MAC.md` / **~50/100** for README-only joiners. These scores describe onboarding friction, not shared-dev safety — shared-dev remains a discipline-sensitive workflow until Wave 0.
+Qualitative scores retained from consolidations (not re-measured): PWA **64/100** pilot band; DevEx **68/100** following `INSTALL_MAC.md` / **~50/100** for README-only joiners. These scores describe onboarding friction, not shared-dev safety — shared-dev remains discipline-sensitive and **not team-safe** even after Wave 0 scoped deliverables.
 
 **What is pilot-ready today (product):** connected mobile browser for mono-establishment field use; backend-enforced RBAC; operational realtime spine; lazy materialization with read-path safety net; Lot1 in-app notifications.
 
-**What is workable but not safe-by-default (DevEx):** local dev on Docker when `INSTALL_MAC.md` is followed; shared-dev only with explicit mode-switch procedure, aligned secrets, and scheduler discipline — partial guardrails exist (`assert-local-dev-db.sh`, `shared_dev_database.md`) but do not eliminate CI-E1 / CI-E4 risks without Wave 0 remediation.
+**What is workable but not safe-by-default (DevEx):** local dev on Docker when `INSTALL_MAC.md` is followed; shared-dev only with explicit mode-switch procedure (`make down` then correct up target), aligned secrets, and scheduler discipline — partial guardrails exist (`assert-local-dev-db.sh`, `shared_dev_database.md`) but **CI-E1** runtime trap and beat opt-in remain.
 
-**What is not safe to assume:** CI green implies merge-safe contract; DevEx or shared-dev is safe-by-default without Wave 0; shared-dev is team-ready before DEVEX-01 lands; multi-site staff without Profile switch; structural materialization changes without TS-E1 baselines.
+**What is not safe to assume:** CI green implies full contract parity (**CI-E8** `types.ts` still ungated); shared-dev is team-safe; multi-site staff without Profile switch; structural materialization changes without **TS-E1** baselines; **CACHE-01** resolved because **TS-E4** guards landed.
 
 ---
 
 ## 3. Top consolidated priorities
 
-| Rank | ID | Why first | Wave |
-|------|-----|-----------|------|
-| 1 | **GATE-01** | Every Phase 2 fix touches API, types, or build artifacts | 0 |
-| 2 | **DEVEX-01** | Data-integrity risk on shared Neon if ignored | 0 |
-| 3 | **TS-E4** + **TS-E1** | Cheap guards before expensive MAT-01 / CACHE-01 refactors | 0–2 |
-| 4 | **MOBILE-01** | Field pilot blockers unrelated to backend scale | 1 |
-| 5 | **TEST-ONB-01** | Largest untested user journey | 2 |
-| 6 | **MAT-01** | Highest cross-audit structural risk; needs measurement first | 3 |
-| 7 | **CACHE-01** | Blocks safe frontend evolution after guards land | 3 |
+| Rank | ID | Why first | Wave | Status |
+|------|-----|-----------|------|--------|
+| 1 | **GATE-01** | Every Phase 2 fix touches API, types, or build artifacts | 0 | Done (scoped); CI-E8/E9 open |
+| 2 | **DEVEX-01** | Data-integrity risk on shared Neon if ignored | 0 | 01a/01b done; CI-E1/E6 open |
+| 3 | **TS-E4** + **TS-E1** | Cheap guards before expensive MAT-01 / CACHE-01 refactors | 0–2 | TS-E4 done; TS-E1 Wave 2 |
+| 4 | **MOBILE-01** | Field pilot blockers unrelated to backend scale | 1 | **Next** |
+| 5 | **TEST-ONB-01** | Largest untested user journey | 2 | Open |
+| 6 | **MAT-01** | Highest cross-audit structural risk; needs measurement first | 3 | Open |
+| 7 | **CACHE-01** | Blocks safe frontend evolution after guards land | 3 | Open (TS-E4 guard only) |
 
 ---
 
@@ -141,6 +149,8 @@ flowchart TB
 ```
 
 ### Wave 0 — Gates and guards (before risky code changes)
+
+Wave 0 scoped deliverables complete (2026-06-27). Follow-ups **CI-E1**, **CI-E2**, **CI-E8**, **CI-E9**, **CI-E6** / **CA-E4**, and **CACHE-01** remain open — not Wave 1 blockers unless noted on a card.
 
 ---
 
@@ -201,14 +211,18 @@ flowchart TB
 ### ROADMAP-04 — TS-E4: Invalidation key parity guard
 
 - **Priority:** P1
+- **Status:** **CLOSED** (Wave 0)
 - **Source findings:** TQ-E1, TQ-E2, RT-E5, TS-E4
-- **Root problem:** `query-invalidation.ts` hardcodes key arrays; `*QueryKeys` factories in `features/*/api.ts` are not imported. Tests lock literals, not factory parity.
+- **Root problem:** `query-invalidation.ts` hardcodes key arrays; `*QueryKeys` factories in `features/*/api.ts` are not imported. Tests lock literals, not factory parity. No machine-readable link between backend emitters and frontend handlers.
 - **Why it matters:** Any CACHE-01 refactor can cause silent stale UI — mutations succeed, mounted queries never invalidate.
 - **Suggested direction:** Parity test importing `*QueryKeys` factories and asserting invalidation helper prefixes match. Add before any invalidation key refactor.
 - **Dependencies:** None — prerequisite for CACHE-01
 - **Tests or gates needed first:** This *is* the guard
 - **Size:** S
 - **Recommended wave:** 0
+- **Changed:** Added [`contracts/operational-realtime-invalidation.json`](../../contracts/operational-realtime-invalidation.json) (15 operational events); [`operational_invalidation_events.py`](../../apps/api/houston/realtime/operational_invalidation_events.py); frontend loader [`operational-invalidation-contract.ts`](../../apps/web/src/features/realtime/lib/operational-invalidation-contract.ts) with `@contracts` alias (Vite + tsconfig); triple guard tests — `query-invalidation-parity.test.ts`, `operational-invalidation-contract.test.ts`, `test_operational_invalidation_registry.py`, `test_operational_invalidation_emitter_parity.py` (AST emitters → contract); notification constants aligned via realtime loader; doc pointer in `realtime_domain.md`.
+- **Validated:** Targeted frontend tests + `npm run typecheck`; backend `test_operational_invalidation_registry.py` + `test_operational_invalidation_emitter_parity.py`.
+- **Risks / follow-up:** Handler runtime unchanged (`apply-operational-invalidation.ts`); CACHE-01 (derive keys from factories + domain wrappers from registry) remains Wave 3. AST emitter scan covers string literals and known notification constants only — dynamic reason variables outside wrapper call sites would not be detected.
 
 ---
 
@@ -527,7 +541,7 @@ Pre-flight checklist — complete in order before Wave 3 structural PRs:
 2. ~~**GATE-01**~~ **Done** — CI steps landed: Django check, migrations check, OpenAPI schema diff, `npm run build`. Follow-up: `types.ts` diff gate (CI-E8).
 3. ~~**DEVEX-01a**~~ **Done** — mode-switch checklist in `shared_dev_database.md`, `INSTALL_MAC.md`, `30-docker-orbstack.mdc` (docs/guardrails; runtime trap not closed).
 4. ~~**DEVEX-01b**~~ **Done** — fixed `.env.shared-dev.example` pepper dotenv + aligned salt vars (ROADMAP-03 / CI-E4).
-5. **TS-E4** — Land parity test: `*QueryKeys` factories ↔ `query-invalidation.ts` prefixes.
+5. ~~**TS-E4**~~ **Done** — parity guards + operational contract (ROADMAP-04). **CACHE-01** architecture remains Wave 3.
 6. **TS-E1** — Land N=20 assignment query-count ceiling **before** any MAT-01 decouple PR.
 7. **Do not** expand EF-07/DB-07 full baseline matrix until MAT-01 direction is chosen.
 
@@ -547,7 +561,6 @@ All Size **S** unless noted. Group by domain; safe to batch in small PRs.
 
 | Item | Source | Action |
 |------|--------|--------|
-| Shared-dev dotenv fix | CI-E4 | Fix `.env.shared-dev.example` pepper + salts |
 | Broken audit doc links | CI-E7 | Repair `docs/audit/` → `docs/audits/` paths in README |
 | Scheduler trap callout | CI-E6, CA-E4 | README + `30-docker-orbstack.mdc` |
 | Cursor validation matrix | CI-E9 | Patch `api-contract-change.md`, `backend-fix.md` |
@@ -706,8 +719,8 @@ Canonical map — use these IDs in planning; do not open parallel tickets for ab
 
 ## 12. Changed / Validated / Risks
 
-**Changed:** Nuanced §2 final readiness verdict — product pilot (connected mobile browser / mono-establishment) separated from DevEx; DevEx workable but not safe-by-default before Wave 0; shared-dev explicitly not team-secure until DEVEX-01 lands. Prior version created this file from nine Phase 2 consolidation reports.
+**Changed:** Wave 0 closure pass (2026-06-27) — added § Wave 0 status; updated §1 top priorities, §2 readiness verdict, §3 status column, §5 pre-flight checklist (TS-E4 done), §6 quick wins (removed done CI-E4 row); Wave 0 header note. Prior pass (2026-06-26) created this file from nine Phase 2 consolidation reports and landed ROADMAP-01..04 implementation notes.
 
-**Validated:** Cross-check of all consolidations for MAT-01, GATE-01, CACHE-01 ownership alignment; feature closure `TODO_NOW = 0`, `DECISION_OPEN = 7`; wave order unchanged; closed items not reopened.
+**Validated:** Spot-check of `.github/workflows/ci.yml` (GATE-01 steps), `.env.shared-dev.example` (DEVEX-01b dotenv), TS-E4 guard tests + `contracts/operational-realtime-invalidation.json`, `docs/engineering/testing.md` CI table, mode-switch docs in `shared_dev_database.md` / `INSTALL_MAC.md` / `30-docker-orbstack.mdc`. Consolidation snapshots get post-audit banners only — evidence rows not rewritten.
 
-**Risks / not verified:** `make verify` not run; pilot readiness scores qualitative (retained from source consolidations); shared-dev team-safety not validated beyond consolidation evidence — CI-E1 mode-switch trap not live-reproduced; MAT-01 N=20 assignment threshold not benchmarked; product defaults for 7 open decisions not validated beyond decision pack; no source code inspected beyond consolidation citations.
+**Risks / not verified:** `make verify` not run in this docs pass; CI-E1 runtime mode-switch trap not live-reproduced; devs with legacy broken `.env.shared-dev` must fix pepper line manually; consolidation audit tables remain 2026-06-26 snapshots; pilot/DevEx scores qualitative; MAT-01 N=20 threshold not benchmarked; shared-dev explicitly **not** validated as team-safe.
