@@ -4,9 +4,11 @@ import {
   bootstrapQueryKey,
   businessUnitTreeQueryKey,
   clearAuthState,
+  fetchBootstrap,
   membershipListQueryKey,
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
+import type { BootstrapResponse } from '@/features/auth/types'
 import { purgeNonAuthQueries } from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeAccessEvent } from '../types'
@@ -17,6 +19,20 @@ export type ApplyRealtimeAccessEventsOptions = {
   activeMembershipId: string | null
   onIntentionalClose: () => void
   onActiveMembershipDeactivated: () => void
+}
+
+async function resyncBootstrapAfterRealtimeSwitch(
+  queryClient: QueryClient,
+  onIntentionalClose: () => void,
+) {
+  try {
+    const bootstrap = await fetchBootstrap()
+    queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, bootstrap)
+  } catch {
+    void queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
+  } finally {
+    onIntentionalClose()
+  }
 }
 
 export function applyRealtimeAccessEvent(
@@ -33,11 +49,23 @@ export function applyRealtimeAccessEvent(
     case 'session.revoked':
       clearAuthState()
       return
-    case 'establishment.switched':
+    case 'establishment.switched': {
+      const cachedBootstrap = queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey)
+      const activeEstablishmentId = cachedBootstrap?.active_membership?.establishment_id
+
+      if (
+        event.establishment_id &&
+        activeEstablishmentId &&
+        event.establishment_id !== activeEstablishmentId
+      ) {
+        onIntentionalClose()
+        return
+      }
+
       purgeNonAuthQueries(queryClient)
-      void queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
-      onIntentionalClose()
+      void resyncBootstrapAfterRealtimeSwitch(queryClient, onIntentionalClose)
       return
+    }
     case 'membership.deactivated':
       if (event.membership_id && event.membership_id === activeMembershipId) {
         onIntentionalClose()

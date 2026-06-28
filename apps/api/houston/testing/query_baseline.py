@@ -8,7 +8,7 @@ from django.test.utils import CaptureQueriesContext
 
 # Fixture-scale query-count ceilings for Phase L hot endpoints.
 # Measured 2026-06-11 (PostgreSQL test DB, pytest). See:
-# docs/audit/db_scalability_phase_l_2026-06-11.md
+# Measured 2026-06-11 (PostgreSQL test DB, pytest). Historical audit doc not archived in this repo.
 
 # GET .../signals/feed/?view_mode=general — owner, 2 feed-visible signals
 # Phase L: 11 queries; Phase E: 8 (prefetch-aware serializer + has_more without count)

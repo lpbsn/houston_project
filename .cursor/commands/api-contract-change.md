@@ -10,6 +10,11 @@ Required workflow:
 5. update frontend API caller, query keys, and UI usage
 6. run affected backend + frontend checks
 
+Validation (see [`docs/engineering/testing.md`](../../docs/engineering/testing.md) — CI ≠ `make verify`):
+- contract change: `make schema && make web-api-generate && make backend-schema-check`
+- backend: `make backend-test` with focused `PYTEST_ARGS`, or `make backend-check` before merge
+- frontend: `cd apps/web && npm run typecheck && npm test` (add `npm run build` for PWA-affecting changes)
+
 Constraints:
 - no schema drift
 - no local duplicate frontend types when generated types exist

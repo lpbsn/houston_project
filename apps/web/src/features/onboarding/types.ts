@@ -3,9 +3,6 @@ import type { components } from '@/api/generated/types'
 export type ActivationBlocker = components['schemas']['ActivationBlocker']
 export type ActivationResponse = components['schemas']['ActivationResponse']
 export type ActivationSummaryResponse = components['schemas']['ActivationSummaryResponse']
-export type ActivityDescriptionResponse = components['schemas']['ActivityDescriptionResponse']
-export type ActivityDescriptionUpdateResponse =
-  components['schemas']['ActivityDescriptionUpdateResponse']
 export type DetailResponse = components['schemas']['DetailResponse']
 export type DirectorInvitationRequest = components['schemas']['DirectorInvitationRequest']
 export type DirectorInvitationResponse = components['schemas']['DirectorInvitationResponse']
@@ -23,8 +20,6 @@ export type ProposalCommandResponse = components['schemas']['ProposalCommandResp
 export type ProposalValidationErrorItem =
   components['schemas']['ProposalValidationErrorItem']
 export type RuntimeConfigResponse = components['schemas']['RuntimeConfigResponse']
-export type SubmitActivityDescriptionRequest =
-  components['schemas']['PatchedActivityDescriptionRequest']
 export type CatalogBusinessUnitSuggestion = components['schemas']['CatalogBusinessUnitSuggestion']
 export type CatalogActivitySubjectSuggestion =
   components['schemas']['CatalogActivitySubjectSuggestion']

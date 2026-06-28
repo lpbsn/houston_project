@@ -11,7 +11,7 @@ Define how Houston list endpoints paginate (or intentionally do not), and how th
 This document applies to:
 
 - new list endpoints
-- pagination fixes on existing endpoints (see derived tickets in [`pagination_audit_2026-06-13.md`](../audit/pagination_audit_2026-06-13.md))
+- pagination fixes on existing endpoints (see derived tickets in §11 below)
 
 ## 2. Authority order
 
@@ -191,10 +191,8 @@ Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain imp
 
 ## 10. Related documents
 
-- Audit inventory: [`docs/audit/pagination_audit_2026-06-13.md`](../audit/pagination_audit_2026-06-13.md)
 - Feed domain: [`docs/product/domains/feed_domain.md`](../product/domains/feed_domain.md)
-- Phase L unbounded lists: [`docs/audit/db_scalability_phase_l_2026-06-11.md`](../audit/db_scalability_phase_l_2026-06-11.md) (API-04)
-- S0 feed gaps: [`docs/audit/code_scalability_s0_2026-06-11.md`](../audit/code_scalability_s0_2026-06-11.md) (API-02, API-03)
+- Historical pagination/scalability audit markdown is not archived in this repo; use §11 derived tickets below.
 
 ## 11. Derived implementation tickets
 
@@ -211,4 +209,4 @@ Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain imp
 | HOU-PAG-009 | P2 | Raw array → `{ items }` harmonization |
 | HOU-PAG-010 | P2 | Shared backend pagination helpers |
 
-Details and acceptance criteria: [`pagination_audit_2026-06-13.md`](../audit/pagination_audit_2026-06-13.md).
+Details and acceptance criteria: see §11 derived tickets (historical pagination audit not archived in this repo).

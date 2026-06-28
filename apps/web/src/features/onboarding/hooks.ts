@@ -16,7 +16,6 @@ import {
   onboardingQueryKeys,
   rejectOnboardingProposal,
   startOnboardingSession,
-  submitActivityDescription,
   submitManualOnboardingProposal,
   suggestActivitySubjects,
   suggestBusinessUnits,
@@ -30,7 +29,6 @@ import type {
   OnboardingProposalCreateRequest,
   OnboardingProposalUpdateRequest,
   ProposalCommandResponse,
-  SubmitActivityDescriptionRequest,
 } from './types'
 
 type OnboardingQueryOptions = {
@@ -96,26 +94,6 @@ export function useOnboardingSession(
     queryFn: () => getOnboardingSession(sessionId!),
     enabled: isQueryEnabled(sessionId, options),
     staleTime: options?.staleTime,
-  })
-}
-
-export function useSubmitActivityDescription(sessionId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (input: SubmitActivityDescriptionRequest) =>
-      submitActivityDescription(sessionId, input),
-    onSuccess: async (response) => {
-      queryClient.setQueryData(onboardingQueryKeys.session(sessionId), response.session)
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: onboardingQueryKeys.runtimeConfig(sessionId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: onboardingQueryKeys.activationSummary(sessionId),
-        }),
-      ])
-    },
   })
 }
 

@@ -4,7 +4,7 @@ Status: consolidation report
 Date: 2026-06-26  
 Mode: consolidation only — no source changes
 
-> **Post-audit note (2026-06-27):** Wave 0 scoped deliverables landed — see [`phase_2_final_roadmap.md`](./phase_2_final_roadmap.md) § Wave 0 status. Evidence rows below reflect the 2026-06-26 audit snapshot. **TS-E4** parity guard closed; **CACHE-01** / **TQ-E1** / **TQ-E2** architecture remains open (Wave 3).
+> **Post-audit note (2026-06-27):** Wave 0 scoped deliverables landed — see [`phase_2_final_roadmap.md`](./phase_2_final_roadmap.md) § Wave 0 status. Wave 1 remainder scoped: **TQ-E8**, **TQ-E9**, **TQ-E10** closed via ROADMAP-13/14; **CACHE-01** / **TQ-E1** / **TQ-E2** architecture remains open (Wave 3). Evidence rows below reflect the 2026-06-26 audit snapshot. **TS-E4** parity guard closed.
 
 ## Sources
 

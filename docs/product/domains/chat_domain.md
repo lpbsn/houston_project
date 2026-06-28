@@ -4,7 +4,7 @@ Status: authoritative
 Last reviewed: 2026-06-09
 Implementation status: **implemented_core** (Lots 2–6 done — REST, WS messages, Terrain UI, purge, hardening ; Lot 7 doc alignment)
 
-**Dettes techniques actives** : [`chat_v1_technical_debt_2026-06-09.md`](../../audit/chat_v1_technical_debt_2026-06-09.md) (P0/Lot 6 closed ; post-MVP product gaps remain)
+**Dettes techniques actives** : post-MVP product gaps documented in this domain doc (P0/Lot 6 closed ; group settings UI, bootstrap flag, and related items remain open).
 
 ## 1. Purpose
 
@@ -255,7 +255,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 ## 11. AI Agent Notes
 
 - Inspect `apps/api/schema.yml` for the current Chat REST surface (implemented).
-- Inspect [`chat_v1_technical_debt_2026-06-09.md`](../../audit/chat_v1_technical_debt_2026-06-09.md) for remaining post-core gaps (events, group settings UI, bootstrap flag).
+- Inspect §1–§10 of this doc for remaining post-core gaps (events, group settings UI, bootstrap flag).
 - Inspect [`realtime_domain.md`](realtime_domain.md) for Chat vs global realtime boundary.
 - Inspect [`authentication_charter.md`](../../architecture/authentication_charter.md) before WebSocket auth work.
 - Inspect [`rbac_permissions_domain.md`](rbac_permissions_domain.md) and [`identity_membership_domain.md`](identity_membership_domain.md) for eligibility.

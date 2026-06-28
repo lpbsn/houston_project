@@ -18,6 +18,10 @@ Tests:
 - add/update focused pytest only if behavior changes or regression exists
 - run the smallest relevant backend validation
 
+Validation (see [`docs/engineering/testing.md`](../../docs/engineering/testing.md)):
+- focused tests: `make backend-test PYTEST_ARGS='path/to/test_file.py::test_name'`
+- broader gate: `make backend-check` (lint, migrations, schema diff, pytest)
+
 Final:
 - Changed
 - Validated

@@ -262,6 +262,7 @@ export async function login(input: LoginRequest) {
     throw buildAuthError(response, error, 'Sign-in failed.')
   }
 
+  purgeNonAuthQueries(queryClient)
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -307,6 +308,7 @@ export async function registerOnboarding(input: RegistrationRequest) {
     )
   }
 
+  purgeNonAuthQueries(queryClient)
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 

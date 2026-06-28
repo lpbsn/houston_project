@@ -83,7 +83,7 @@ The project currently uses a Django modular monolith as the business authority a
 ## What Is Not Implemented Yet
 - Notifications
 - Global realtime invalidation (Signal/Action/Notifications) — deferred post Chat V1
-- Chat post-core product gaps (group management UI, Owner/Director `chat_enabled` toggle UI, `EventEnvelope` events) — see `docs/audit/chat_v1_technical_debt_2026-06-09.md`. Bootstrap `permission_hints.chat_available` is implemented (gates Terrain chat nav).
+- Chat post-core product gaps (group management UI, Owner/Director `chat_enabled` toggle UI, `EventEnvelope` events) — see [`docs/product/domains/chat_domain.md`](docs/product/domains/chat_domain.md) (historical debt register not archived in this repo). Bootstrap `permission_hints.chat_available` is implemented (gates Terrain chat nav).
 - Production-grade frontend feature surface
 
 ## Auth Notes
@@ -119,6 +119,8 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
 **Workflow quotidien (recommandé macOS / OrbStack)** : `make up-backend` + `make web-dev` — backend dans Docker, frontend npm local.
 
 **Shared-dev (DB PostgreSQL distante partagée)** : `cp .env.shared-dev.example .env.shared-dev` (secrets via 1Password) → `make shared-dev-bootstrap` → `make web-dev`. Voir [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md).
+
+**Important (scheduler + shared-dev):** after `make shared-dev-up`, do **not** use `make up-scheduler` (it targets local `.env`). Use `make shared-dev-up-scheduler` instead. See [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) § Scheduler in shared-dev mode.
 
 **Stack complète Docker** : `make up` — démarre `api`, `celery` et le conteneur `web` (port 5173), sans rebuild. Utiliser `make up-build` pour reconstruire les images avant démarrage.
 
