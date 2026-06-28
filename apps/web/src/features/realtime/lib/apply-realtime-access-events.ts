@@ -49,10 +49,23 @@ export function applyRealtimeAccessEvent(
     case 'session.revoked':
       clearAuthState()
       return
-    case 'establishment.switched':
+    case 'establishment.switched': {
+      const cachedBootstrap = queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey)
+      const activeEstablishmentId = cachedBootstrap?.active_membership?.establishment_id
+
+      if (
+        event.establishment_id &&
+        activeEstablishmentId &&
+        event.establishment_id !== activeEstablishmentId
+      ) {
+        onIntentionalClose()
+        return
+      }
+
       purgeNonAuthQueries(queryClient)
       void resyncBootstrapAfterRealtimeSwitch(queryClient, onIntentionalClose)
       return
+    }
     case 'membership.deactivated':
       if (event.membership_id && event.membership_id === activeMembershipId) {
         onIntentionalClose()

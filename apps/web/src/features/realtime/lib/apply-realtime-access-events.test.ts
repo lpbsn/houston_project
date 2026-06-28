@@ -126,6 +126,37 @@ describe('applyRealtimeAccessEvent', () => {
     expect(onActiveMembershipDeactivated).toHaveBeenCalledTimes(1)
   })
 
+  it('skips purge and refetch when bootstrap already reflects establishment switch', () => {
+    const onIntentionalClose = vi.fn()
+
+    queryClient.setQueryData(['signals', 'feed', 'est-b', 'general', {}], { items: ['fresh'] })
+    queryClient.setQueryData(['workspace', 'summary', 'est-b'], { name: 'B' })
+    queryClient.setQueryData(bootstrapQueryKey, freshBootstrap)
+
+    applyRealtimeAccessEvent(
+      {
+        type: 'access',
+        reason: 'establishment.switched',
+        establishment_id: 'est-a',
+        occurred_at: '2026-06-19T12:00:00Z',
+      },
+      {
+        queryClient,
+        establishmentId: 'est-a',
+        activeMembershipId: 'm2',
+        onIntentionalClose,
+        onActiveMembershipDeactivated: vi.fn(),
+      },
+    )
+
+    expect(queryClient.getQueryData(['signals', 'feed', 'est-b', 'general', {}])).toEqual({
+      items: ['fresh'],
+    })
+    expect(queryClient.getQueryData(['workspace', 'summary', 'est-b'])).toEqual({ name: 'B' })
+    expect(fetchBootstrap).not.toHaveBeenCalled()
+    expect(onIntentionalClose).toHaveBeenCalledTimes(1)
+  })
+
   it('refetches bootstrap when another tab receives establishment.switched', async () => {
     const onIntentionalClose = vi.fn()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
