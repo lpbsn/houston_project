@@ -3,7 +3,7 @@
 	up up-build up-backend up-scheduler restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
-	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-check \
+	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
 	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db \
 	shared-dev-up shared-dev-up-scheduler shared-dev-bootstrap shared-dev-migrate shared-dev-import-catalog shared-dev-check
@@ -221,7 +221,11 @@ web-test:
 web-api-generate:
 	cd $(WEB_DIR) && npm run api:generate
 
-web-check: web-test web-typecheck web-build
+web-api-generate-check:
+	cd $(WEB_DIR) && npm run api:generate
+	git diff --exit-code apps/web/src/api/generated/types.ts
+
+web-check: web-test web-typecheck web-build web-api-generate-check
 
 # -----------------------------------------------------------------------------
 # Full validation

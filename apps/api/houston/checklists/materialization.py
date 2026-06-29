@@ -317,6 +317,35 @@ def _assignment_materialization_visibility_q(
     return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
 
 
+def _existing_occurrence_dates_for_assignments(
+    *,
+    assignment_occurrence_dates: dict[uuid.UUID, list[date]],
+) -> dict[uuid.UUID, set[date]]:
+    assignment_ids = [
+        assignment_id
+        for assignment_id, occurrence_dates in assignment_occurrence_dates.items()
+        if occurrence_dates
+    ]
+    result: dict[uuid.UUID, set[date]] = {
+        assignment_id: set() for assignment_id in assignment_occurrence_dates
+    }
+    if not assignment_ids:
+        return result
+
+    all_dates = {
+        occurrence_date
+        for occurrence_dates in assignment_occurrence_dates.values()
+        for occurrence_date in occurrence_dates
+    }
+    rows = ChecklistExecution.objects.filter(
+        checklist_assignment_id__in=assignment_ids,
+        occurrence_date__in=all_dates,
+    ).values_list("checklist_assignment_id", "occurrence_date")
+    for assignment_id, occurrence_date in rows:
+        result[assignment_id].add(occurrence_date)
+    return result
+
+
 def _existing_occurrence_dates_for_assignment(
     *,
     assignment: ChecklistAssignment,
@@ -324,12 +353,9 @@ def _existing_occurrence_dates_for_assignment(
 ) -> set[date]:
     if not occurrence_dates:
         return set()
-    return set(
-        ChecklistExecution.objects.filter(
-            checklist_assignment_id=assignment.id,
-            occurrence_date__in=occurrence_dates,
-        ).values_list("occurrence_date", flat=True)
-    )
+    return _existing_occurrence_dates_for_assignments(
+        assignment_occurrence_dates={assignment.id: occurrence_dates},
+    ).get(assignment.id, set())
 
 
 def _visible_occurrence_dates_for_assignment(
@@ -390,28 +416,39 @@ def ensure_visible_executions_materialized(
         membership=membership,
         view_mode=view_mode,
     )
-    assignments = ChecklistAssignment.objects.filter(
-        visibility_q,
-        status=ASSIGNMENT_STATUS_ACTIVE,
+    assignments = list(
+        ChecklistAssignment.objects.filter(
+            visibility_q,
+            status=ASSIGNMENT_STATUS_ACTIVE,
+        ).select_related("checklist_template", "establishment")
     )
-    count = 0
-    for assignment in assignments.select_related("checklist_template", "establishment"):
+    visible_occurrence_dates_by_assignment: dict[uuid.UUID, list[date]] = {}
+    for assignment in assignments:
         occurrence_dates = _iter_occurrence_dates(
             assignment=assignment,
             from_date=local_today,
             until_date=local_today + timedelta(days=read_horizon_days),
         )
-        visible_occurrence_dates = _visible_occurrence_dates_for_assignment(
-            assignment=assignment,
-            occurrence_dates=occurrence_dates,
-            now=now,
-        )
-        existing_dates: set[date] = set()
-        if visible_occurrence_dates:
-            existing_dates = _existing_occurrence_dates_for_assignment(
+        visible_occurrence_dates_by_assignment[assignment.id] = (
+            _visible_occurrence_dates_for_assignment(
                 assignment=assignment,
-                occurrence_dates=visible_occurrence_dates,
+                occurrence_dates=occurrence_dates,
+                now=now,
             )
+        )
+
+    existing_dates_by_assignment = _existing_occurrence_dates_for_assignments(
+        assignment_occurrence_dates={
+            assignment_id: visible_dates
+            for assignment_id, visible_dates in visible_occurrence_dates_by_assignment.items()
+            if visible_dates
+        }
+    )
+
+    count = 0
+    for assignment in assignments:
+        visible_occurrence_dates = visible_occurrence_dates_by_assignment[assignment.id]
+        existing_dates = existing_dates_by_assignment.get(assignment.id, set())
         if _assignment_read_path_materialization_is_fresh(
             assignment=assignment,
             visible_occurrence_dates=visible_occurrence_dates,

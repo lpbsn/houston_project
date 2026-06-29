@@ -73,6 +73,11 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/web
         run: npm ci
+      - name: Generate frontend API types
+        working-directory: apps/web
+        run: npm run api:generate
+      - name: Verify types.ts is committed
+        run: git diff --exit-code apps/web/src/api/generated/types.ts
       - name: Lint frontend
         working-directory: apps/web
         run: npm run lint

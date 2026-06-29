@@ -15,6 +15,7 @@ Before editing:
 
 Implementation rules:
 
+* Houston is in dev phase only. No staging/prod compatibility requirement. No defensive migration strategy unless it protects data integrity or architecture
 * Backend is the source of truth for business-critical logic.
 * Frontend consumes backend state, permissions, hints, and capabilities; do not duplicate authoritative RBAC or domain rules.
 * Preserve security, RBAC, establishment scoping, transactions, and data integrity.
@@ -25,6 +26,11 @@ Implementation rules:
 * Prefer small coherent changes over broad refactors.
 * If API contracts change, update backend, generated frontend types/usages, and tests.
 * Check active documentation and update it when behavior, contracts, permissions, realtime, setup, or workflow changes.
+
+Validation :
+* tests ciblés
+* checks utiles selon fichiers touchés
+* git status
 
 Workflow:
 
@@ -38,4 +44,6 @@ Workflow:
    * behavior changed
    * docs updated or why not needed
    * tests/checks run
+   * Still open
+   * Risks
    * risks / not verified

@@ -128,6 +128,10 @@ def test_horizon_task_emits_execution_created_for_new_materializations(
     staff_membership,
     business_unit,
 ):
+    """TS-E1 / ROADMAP-15 — beat-only materialization emits execution.created.
+
+    Without prior execution-feed GET.
+    """
     template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(
@@ -139,10 +143,17 @@ def test_horizon_task_emits_execution_created_for_new_materializations(
     )
     ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
 
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+    with (
+        patch("houston.actions.execution_feed.build_execution_feed_page") as mock_feed,
+        patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify,
+    ):
+        mock_feed.side_effect = AssertionError(
+            "execution-feed GET must not run before beat materialization",
+        )
         materialize_checklist_assignments_horizon_task.run()
 
         assert _count_execution_created_calls(mock_notify) >= 1
+        mock_feed.assert_not_called()
 
 
 def test_ensure_visible_executions_materialized_emits_execution_created(

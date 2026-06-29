@@ -125,18 +125,19 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
 | Job | Steps |
 |-----|-------|
 | `backend-tests` | `manage.py check`, `makemigrations --check --dry-run`, `ruff check .`, OpenAPI regen + `git diff schema.yml`, `pytest` (PostgreSQL + Redis; smoke/slow excluded) |
-| `frontend-tests` | `npm run lint`, `npm test`, `npm run typecheck`, `npm run build` |
+| `frontend-tests` | `npm ci`, `api:generate` + `git diff types.ts`, `npm run lint`, `npm test`, `npm run typecheck`, `npm run build` |
 
 **Runtime note:** CI backend steps run **native `uv`** with GitHub Actions Postgres/Redis services. Local backend validation uses **Make/Docker only** (`make backend-check`, `make verify`) — do not run `cd apps/api && uv run …` on the host. Frontend checks may run natively from `apps/web` or via `make web-*`.
 
-**Still ungated in CI and `make verify`:** generated `types.ts` freshness (follow-up CI-E8). CI runs `npm run lint`; `make verify` / `web-check` do not — run `make web-lint` before merge if you need lint parity.
+**Still ungated in CI and `make verify`:** CI runs `npm run lint`; `make verify` / `web-check` do not — run `make web-lint` before merge if you need lint parity.
 
 ### Local validation targets
 
 | Target | What it runs |
 |--------|----------------|
 | `make backend-check` | Django check, ruff, migrations check, schema diff, pytest |
-| `make web-check` | vitest, typecheck, build |
+| `make web-api-generate-check` | regen `types.ts` from committed `schema.yml` + `git diff` |
+| `make web-check` | vitest, typecheck, build, `web-api-generate-check` |
 | `make local-check` | `backend-check` + `web-check` |
 | `make verify` | alias for `local-check` |
 
