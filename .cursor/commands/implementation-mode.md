@@ -26,6 +26,11 @@ Implementation rules:
 * If API contracts change, update backend, generated frontend types/usages, and tests.
 * Check active documentation and update it when behavior, contracts, permissions, realtime, setup, or workflow changes.
 
+Validation :
+* tests ciblés
+* checks utiles selon fichiers touchés
+* git status
+
 Workflow:
 
 1. Analyze impacted backend/frontend/API/realtime/cache/tests/docs.
@@ -38,4 +43,6 @@ Workflow:
    * behavior changed
    * docs updated or why not needed
    * tests/checks run
+   * Still open
+   * Risks
    * risks / not verified

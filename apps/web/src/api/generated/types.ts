@@ -1198,7 +1198,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns AI pipeline processing status for a submitted Observation. Does not expose raw observation text or AI prompts. */
+        /** @description Returns AI pipeline processing status for a submitted Observation. Visible to the submitter and establishment admins (owner/director) only. Does not expose raw observation text or AI prompts. */
         get: operations["v1_establishments_observations_processing_status_retrieve"];
         put?: never;
         post?: never;

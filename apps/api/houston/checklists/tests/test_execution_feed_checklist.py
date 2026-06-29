@@ -676,3 +676,61 @@ def test_execution_feed_checklist_query_count_baseline(api_client):
         max_queries=EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES,
         label="execution_feed_personal_one_checklist",
     )
+
+
+def test_execution_feed_query_count_with_twenty_visible_assignments(api_client):
+    """TS-E1 / ROADMAP-15: steady-state GET with 20 visible checklist assignments."""
+    from houston.checklists.materialization import (
+        READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+        materialize_assignment_occurrences_in_horizon,
+    )
+    from houston.checklists.tests.conftest import default_assignment_schedule
+    from houston.testing.query_baseline import (
+        EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES,
+        assert_query_count_at_most,
+        capture_queries,
+    )
+
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
+    staff = _scoped_staff_on_establishment(owner, business_unit)
+    template = _active_registered_template(owner, business_unit)
+    schedule = default_assignment_schedule()
+    weekday_names = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    assignments = []
+    for index in range(20):
+        assignment = create_checklist_assignment(
+            template=template,
+            actor=owner,
+            assigned_to_id=staff.id,
+            recurrence_days=[weekday_names[index % 5]],
+            **schedule,
+        )
+        assignments.append(assignment)
+
+    now = timezone.now()
+    for assignment in assignments:
+        ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+        materialize_assignment_occurrences_in_horizon(
+            assignment=assignment,
+            horizon_days=READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+            now=now,
+        )
+        assignment.last_materialized_at = now
+        assignment.save(update_fields=["last_materialized_at", "updated_at"])
+
+    token = login(api_client, user=owner.user)
+    url = execution_feed_url(owner.establishment_id) + _feed_query("general")
+    with capture_queries() as context:
+        response = api_client.get(url, **auth_headers(token))
+
+    assert response.status_code == 200
+    checklist_items = [
+        item for item in response.json()["items"] if item["item_type"] == "checklist"
+    ]
+    assert len(checklist_items) >= 1
+    assert_query_count_at_most(
+        context,
+        max_queries=EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES,
+        label="execution_feed_general_twenty_checklist_assignments",
+    )

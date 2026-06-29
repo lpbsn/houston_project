@@ -18,6 +18,7 @@ docs/
   README.md
   architecture/
   engineering/
+  evolution_action/
   product/
   product/Build_Plan/
   api/
@@ -25,6 +26,11 @@ docs/
 ```
 
 Engineering standards (e.g. [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md)) live under `docs/engineering/`.
+
+Refonte Plan d'action (Lot -1 signé) :
+
+- [`evolution_action/besoin_evolution_action.md`](evolution_action/besoin_evolution_action.md) — expression de besoin
+- [`evolution_action/decisions_plan_action.md`](evolution_action/decisions_plan_action.md) — decision log §26 (`authoritative`)
 
 This index does not require creating a larger doc tree immediately. It defines how the active documentation set should be read.
 
