@@ -390,6 +390,8 @@ def test_execution_feed_checklist_disappears_when_assignment_update_auto_cancels
 # Tuesday 2026-06-09 at 13:35 in Django active timezone (UTC in settings).
 SCENARIO_NOW = timezone.make_aware(datetime(2026, 6, 9, 13, 35, 0))
 OCCURRENCE_DATE = date(2026, 6, 9)
+# TS-E1 query-count guard: same Tuesday, noon — independent of wall clock / weekend.
+TS_E1_FIXED_NOW = timezone.make_aware(datetime(2026, 6, 9, 12, 0, 0))
 
 
 def test_execution_feed_three_assignments_tuesday_scenario(api_client):
@@ -684,7 +686,6 @@ def test_execution_feed_query_count_with_twenty_visible_assignments(api_client):
         READ_PATH_MATERIALIZATION_HORIZON_DAYS,
         materialize_assignment_occurrences_in_horizon,
     )
-    from houston.checklists.tests.conftest import default_assignment_schedule
     from houston.testing.query_baseline import (
         EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES,
         assert_query_count_at_most,
@@ -695,40 +696,47 @@ def test_execution_feed_query_count_with_twenty_visible_assignments(api_client):
     business_unit = create_business_unit(establishment=owner.establishment, key="restaurant")
     staff = _scoped_staff_on_establishment(owner, business_unit)
     template = _active_registered_template(owner, business_unit)
-    schedule = default_assignment_schedule()
-    weekday_names = ["monday", "tuesday", "wednesday", "thursday", "friday"]
-    assignments = []
-    for index in range(20):
-        assignment = create_checklist_assignment(
-            template=template,
-            actor=owner,
-            assigned_to_id=staff.id,
-            recurrence_days=[weekday_names[index % 5]],
-            **schedule,
-        )
-        assignments.append(assignment)
 
-    now = timezone.now()
-    for assignment in assignments:
-        ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
-        materialize_assignment_occurrences_in_horizon(
-            assignment=assignment,
-            horizon_days=READ_PATH_MATERIALIZATION_HORIZON_DAYS,
-            now=now,
-        )
-        assignment.last_materialized_at = now
-        assignment.save(update_fields=["last_materialized_at", "updated_at"])
+    with patch.object(timezone, "now", return_value=TS_E1_FIXED_NOW):
+        schedule = assignment_schedule_from_datetime(TS_E1_FIXED_NOW, duration_hours=2)
+        assignments = []
+        for _index in range(20):
+            assignment = create_checklist_assignment(
+                template=template,
+                actor=owner,
+                assigned_to_id=staff.id,
+                recurrence_days=["tuesday"],
+                **schedule,
+            )
+            assignments.append(assignment)
 
-    token = login(api_client, user=owner.user)
-    url = execution_feed_url(owner.establishment_id) + _feed_query("general")
-    with capture_queries() as context:
-        response = api_client.get(url, **auth_headers(token))
+        for assignment in assignments:
+            ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+            materialize_assignment_occurrences_in_horizon(
+                assignment=assignment,
+                horizon_days=READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+                now=TS_E1_FIXED_NOW,
+            )
+            assignment.last_materialized_at = TS_E1_FIXED_NOW
+            assignment.save(update_fields=["last_materialized_at", "updated_at"])
+
+        assert len(assignments) == 20
+        visible_count = checklist_execution_feed_queryset(
+            membership=owner,
+            view_mode="general",
+        ).count()
+        assert visible_count == 20
+
+        token = login(api_client, user=owner.user)
+        url = execution_feed_url(owner.establishment_id) + _feed_query("general")
+        with capture_queries() as context:
+            response = api_client.get(url, **auth_headers(token))
 
     assert response.status_code == 200
     checklist_items = [
         item for item in response.json()["items"] if item["item_type"] == "checklist"
     ]
-    assert len(checklist_items) >= 1
+    assert len(checklist_items) == 20
     assert_query_count_at_most(
         context,
         max_queries=EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES,

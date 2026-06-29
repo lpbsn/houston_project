@@ -15,6 +15,7 @@ Before editing:
 
 Implementation rules:
 
+* Houston is in dev phase only. No staging/prod compatibility requirement. No defensive migration strategy unless it protects data integrity or architecture
 * Backend is the source of truth for business-critical logic.
 * Frontend consumes backend state, permissions, hints, and capabilities; do not duplicate authoritative RBAC or domain rules.
 * Preserve security, RBAC, establishment scoping, transactions, and data integrity.

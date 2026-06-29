@@ -128,7 +128,10 @@ def test_horizon_task_emits_execution_created_for_new_materializations(
     staff_membership,
     business_unit,
 ):
-    """TS-E1 / ROADMAP-15 — beat-only materialization emits execution.created without prior execution-feed GET."""
+    """TS-E1 / ROADMAP-15 — beat-only materialization emits execution.created.
+
+    Without prior execution-feed GET.
+    """
     template = _active_registered_template(owner_membership, business_unit)
     start_at = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     assignment = create_checklist_assignment(

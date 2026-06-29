@@ -103,7 +103,7 @@ def test_partial_stale_assignment_queries_existing_dates_once(
     ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
 
     call_count = {"n": 0}
-    original = materialization_module._existing_occurrence_dates_for_assignment
+    original = materialization_module._existing_occurrence_dates_for_assignments
 
     def counting_wrapper(**kwargs):
         call_count["n"] += 1
@@ -111,7 +111,7 @@ def test_partial_stale_assignment_queries_existing_dates_once(
 
     monkeypatch.setattr(
         materialization_module,
-        "_existing_occurrence_dates_for_assignment",
+        "_existing_occurrence_dates_for_assignments",
         counting_wrapper,
     )
 
@@ -121,6 +121,59 @@ def test_partial_stale_assignment_queries_existing_dates_once(
     )
 
     assert created == 1
+    assert call_count["n"] == 1
+
+
+def test_ensure_visible_batches_existing_dates_lookup(
+    owner_membership,
+    staff_membership,
+    business_unit,
+    monkeypatch,
+):
+    from houston.checklists import materialization as materialization_module
+
+    now = timezone.now()
+    template = _active_registered_template(owner_membership, business_unit)
+    schedule = assignment_schedule_from_datetime(now, duration_hours=2)
+    assignments = []
+    for _index in range(3):
+        assignment = create_checklist_assignment(
+            template=template,
+            actor=owner_membership,
+            assigned_to_id=staff_membership.id,
+            **schedule,
+        )
+        assignments.append(assignment)
+
+    for assignment in assignments:
+        ChecklistExecution.objects.filter(checklist_assignment=assignment).delete()
+        materialize_assignment_occurrences_in_horizon(
+            assignment=assignment,
+            horizon_days=READ_PATH_MATERIALIZATION_HORIZON_DAYS,
+            now=now,
+        )
+        assignment.last_materialized_at = now
+        assignment.save(update_fields=["last_materialized_at", "updated_at"])
+
+    call_count = {"n": 0}
+    original = materialization_module._existing_occurrence_dates_for_assignments
+
+    def counting_wrapper(**kwargs):
+        call_count["n"] += 1
+        return original(**kwargs)
+
+    monkeypatch.setattr(
+        materialization_module,
+        "_existing_occurrence_dates_for_assignments",
+        counting_wrapper,
+    )
+
+    created = ensure_visible_executions_materialized(
+        membership=staff_membership,
+        view_mode="personal",
+    )
+
+    assert created == 0
     assert call_count["n"] == 1
 
 

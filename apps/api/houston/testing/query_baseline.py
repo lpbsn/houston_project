@@ -24,10 +24,13 @@ EXECUTION_FEED_EMPTY_MAX_QUERIES = 8
 EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 11
 # GET .../execution-feed/?view_mode=general — owner, 3 active actions (post ACT-01 prefetch fix)
 EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES = 9
-# GET .../execution-feed/?view_mode=general — owner, 20 active checklist assignments (TS-E1)
-# Measured 2026-06-28: 12 queries (3 runs local Docker PG, pytest).
-# Ceiling: 12 (+0; min == max on stability runs).
-EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES = 12
+# GET .../execution-feed/?view_mode=general — owner, 20 visible checklist executions (TS-E1)
+# Measured steady-state: 20 feed-visible checklist executions, all pre-materialized.
+# ~8 fixed feed overhead + 1 batched existing_dates lookup in
+# ensure_visible_executions_materialized (post DB-02b batch; MAT-01 read-path remains).
+# Before batch (2026-06-29): 28 queries (8 + 20 per-assignment SELECTs).
+# After batch (2026-06-29): 9 queries (3 runs local Docker PG, pytest).
+EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES = 9
 # GET checklist-assignments/ — owner, 12 assignments (CL-02; measured 2026-06-24)
 CHECKLIST_ASSIGNMENT_LIST_TWELVE_ASSIGNMENTS_MAX_QUERIES = 7
 
