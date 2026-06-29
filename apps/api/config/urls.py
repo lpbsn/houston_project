@@ -14,6 +14,7 @@ urlpatterns = [
     path("api/v1/", include("houston.signals.api.urls")),
     path("api/v1/", include("houston.actions.api.urls")),
     path("api/v1/", include("houston.checklists.api.urls")),
+    path("api/v1/", include("houston.action_plans.api.urls")),
     path("api/v1/", include("houston.chat.api.urls")),
     path("api/v1/", include("houston.realtime.api.urls")),
     path("api/v1/", include("houston.comments.api.urls")),

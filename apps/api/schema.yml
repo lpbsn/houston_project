@@ -458,6 +458,788 @@ paths:
                 items:
                   $ref: '#/components/schemas/CatalogBusinessUnitSuggestion'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/create-observation/:
+    post:
+      operationId: v1_establishments_action_plan_execution_tasks_create_observation_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanTaskCreateObservationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanTaskCreateObservationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanTaskCreateObservationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanTaskCreateObservationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-done/:
+    post:
+      operationId: v1_establishments_action_plan_execution_tasks_mark_done_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanTaskExecution'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/skip/:
+    post:
+      operationId: v1_establishments_action_plan_execution_tasks_skip_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanTaskSkipRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanTaskSkipRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanTaskSkipRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanTaskExecution'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/:
+    get:
+      operationId: v1_establishments_action_plan_executions_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/cancel/:
+    post:
+      operationId: v1_establishments_action_plan_executions_cancel_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/mark-done/:
+    post:
+      operationId: v1_establishments_action_plan_executions_mark_done_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/reopen/:
+    post:
+      operationId: v1_establishments_action_plan_executions_reopen_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/validate/:
+    post:
+      operationId: v1_establishments_action_plan_executions_validate_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/:
+    get:
+      operationId: v1_establishments_action_plans_list
+      parameters:
+      - in: query
+        name: business_unit_id
+        schema:
+          type: string
+      - in: query
+        name: created_by_me
+        schema:
+          type: boolean
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActionPlanListItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    post:
+      operationId: v1_establishments_action_plans_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanCreate201Response'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/:
+    get:
+      operationId: v1_establishments_action_plans_retrieve
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_action_plans_partial_update
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/activate/:
+    post:
+      operationId: v1_establishments_action_plans_activate_create
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/deactivate/:
+    post:
+      operationId: v1_establishments_action_plans_deactivate_create
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/use/:
+    post:
+      operationId: v1_establishments_action_plans_use_create
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanUseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanUseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanUseRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/actions/:
     post:
       operationId: v1_establishments_actions_create
@@ -6116,6 +6898,552 @@ components:
       - can_update_due_at
       - can_validate
       - is_assignee
+    ActionPlanActivitySubject:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        normalized_name:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - label
+      - normalized_name
+    ActionPlanAssigneeInput:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        business_unit_id:
+          type: string
+          format: uuid
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - business_unit_id
+      - membership_id
+    ActionPlanAssigneeRef:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+      required:
+      - display_name
+      - membership_id
+    ActionPlanAssigneesByPole:
+      type: object
+      properties:
+        business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanAssigneeRef'
+      required:
+      - assignees
+      - business_unit
+    ActionPlanBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - key
+      - label
+    ActionPlanCreate201Response:
+      oneOf:
+      - $ref: '#/components/schemas/ActionPlanDetail'
+      - $ref: '#/components/schemas/ActionPlanExecutionDetail'
+    ActionPlanCreateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          default: ''
+          maxLength: 2000
+        pilot_business_unit_id:
+          type: string
+          format: uuid
+        requires_validation:
+          type: boolean
+          default: true
+        is_reusable:
+          type: boolean
+          default: false
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanTaskInput'
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanAssigneeInput'
+        source_signal_id:
+          type: string
+          format: uuid
+          nullable: true
+        use_shared_chronology:
+          type: boolean
+          default: false
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - pilot_business_unit_id
+      - title
+    ActionPlanDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        catalog_status:
+          type: string
+          nullable: true
+        pilot_business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        task_count:
+          type: integer
+        involved_pole_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ActionPlanPermissionHints'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanTaskTemplate'
+        requires_validation:
+          type: boolean
+        is_reusable:
+          type: boolean
+      required:
+      - catalog_status
+      - created_at
+      - description
+      - id
+      - involved_pole_count
+      - is_reusable
+      - permission_hints
+      - pilot_business_unit
+      - requires_validation
+      - task_count
+      - tasks
+      - title
+      - updated_at
+    ActionPlanExecutionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action_plan_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        requires_validation:
+          type: boolean
+        pilot_business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        affected_business_unit:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanBusinessUnit'
+          nullable: true
+        responsible_business_unit:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanBusinessUnit'
+          nullable: true
+        activity_subject:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanActivitySubject'
+          nullable: true
+        signal_summary:
+          allOf:
+          - $ref: '#/components/schemas/ActionSignalSummary'
+          nullable: true
+        created_by_id:
+          type: string
+          format: uuid
+        created_by_display_name:
+          type: string
+        use_shared_chronology:
+          type: boolean
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+        marked_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        validated_at:
+          type: string
+          format: date-time
+          nullable: true
+        canceled_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        assignees_by_pole:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanAssigneesByPole'
+        involved_poles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanInvolvedPole'
+        task_executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanTaskExecution'
+        permission_hints:
+          $ref: '#/components/schemas/ActionPlanExecutionPermissionHints'
+      required:
+      - action_plan_id
+      - activity_subject
+      - affected_business_unit
+      - assignees_by_pole
+      - canceled_at
+      - created_at
+      - created_by_display_name
+      - created_by_id
+      - description
+      - end_at
+      - id
+      - involved_poles
+      - last_activity_at
+      - marked_done_at
+      - occurrence_date
+      - permission_hints
+      - pilot_business_unit
+      - requires_validation
+      - responsible_business_unit
+      - signal_summary
+      - start_at
+      - status
+      - task_executions
+      - title
+      - updated_at
+      - use_shared_chronology
+      - validated_at
+      - visible_from
+    ActionPlanExecutionPermissionHints:
+      type: object
+      properties:
+        can_mark_done:
+          type: boolean
+        can_validate:
+          type: boolean
+        can_reopen:
+          type: boolean
+        can_cancel:
+          type: boolean
+        is_pilot_pole_assignee:
+          type: boolean
+      required:
+      - can_cancel
+      - can_mark_done
+      - can_reopen
+      - can_validate
+      - is_pilot_pole_assignee
+    ActionPlanInvolvedPole:
+      type: object
+      properties:
+        business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        contribution_status:
+          type: string
+          nullable: true
+      required:
+      - business_unit
+      - contribution_status
+    ActionPlanListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        catalog_status:
+          type: string
+          nullable: true
+        pilot_business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        task_count:
+          type: integer
+        involved_pole_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ActionPlanPermissionHints'
+      required:
+      - catalog_status
+      - created_at
+      - description
+      - id
+      - involved_pole_count
+      - permission_hints
+      - pilot_business_unit
+      - task_count
+      - title
+      - updated_at
+    ActionPlanPermissionHints:
+      type: object
+      properties:
+        can_update:
+          type: boolean
+        can_activate:
+          type: boolean
+        can_deactivate:
+          type: boolean
+        can_use:
+          type: boolean
+      required:
+      - can_activate
+      - can_deactivate
+      - can_update
+      - can_use
+    ActionPlanTaskCreateObservationRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 10
+        temporary_upload_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 3
+      required:
+      - text
+    ActionPlanTaskCreateObservationResponse:
+      type: object
+      properties:
+        task_execution_id:
+          type: string
+          format: uuid
+        observation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        processing_status:
+          type: string
+      required:
+      - observation_id
+      - processing_status
+      - status
+      - task_execution_id
+    ActionPlanTaskExecution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task:
+          type: string
+        position:
+          type: integer
+        status:
+          type: string
+        business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        observation_id:
+          type: string
+          format: uuid
+          nullable: true
+        skipped_reason:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        skipped_at:
+          type: string
+          format: date-time
+          nullable: true
+        observation_created_at:
+          type: string
+          format: date-time
+          nullable: true
+        permission_hints:
+          $ref: '#/components/schemas/ActionPlanTaskExecutionPermissionHints'
+      required:
+      - business_unit
+      - completed_at
+      - id
+      - observation_created_at
+      - observation_id
+      - permission_hints
+      - position
+      - skipped_at
+      - skipped_reason
+      - status
+      - task
+    ActionPlanTaskExecutionPermissionHints:
+      type: object
+      properties:
+        can_mark_done:
+          type: boolean
+        can_skip:
+          type: boolean
+        can_create_observation:
+          type: boolean
+      required:
+      - can_create_observation
+      - can_mark_done
+      - can_skip
+    ActionPlanTaskInput:
+      type: object
+      properties:
+        task:
+          type: string
+          maxLength: 500
+        business_unit_id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          minimum: 1
+      required:
+      - business_unit_id
+      - task
+    ActionPlanTaskSkipRequest:
+      type: object
+      properties:
+        skipped_reason:
+          type: string
+          nullable: true
+          maxLength: 500
+    ActionPlanTaskTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task:
+          type: string
+        position:
+          type: integer
+        business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+      required:
+      - business_unit
+      - id
+      - position
+      - task
+    ActionPlanUseRequest:
+      type: object
+      properties:
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanAssigneeInput'
+        use_shared_chronology:
+          type: boolean
+          default: false
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
     ActionReassignRequest:
       type: object
       properties:
@@ -8271,6 +9599,15 @@ components:
         due_at:
           type: string
           format: date-time
+    PatchedActionPlanUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
     PatchedActivityDescriptionRequest:
       type: object
       properties:

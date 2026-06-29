@@ -5,6 +5,7 @@ import pytest
 from houston.accounts.models import User
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.permissions import (
+    action_plan_execution_visible_to_membership,
     action_plan_visible_to_membership,
     can_assign_to_execution_business_unit,
     can_cancel_action_plan_execution,
@@ -13,10 +14,12 @@ from houston.action_plans.permissions import (
     can_create_staff_feed_execution_plan,
     can_define_cross_pole_task,
     can_execute_action_plan_task,
+    can_manage_action_plan,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
     can_use_action_plan,
     can_validate_action_plan_execution,
+    can_view_action_plan_catalog,
     is_pilot_pole_assignee,
     manages_pilot_pole,
 )
@@ -130,6 +133,76 @@ def _task_execution_for_permissions(
         "action_plan_execution",
         "execution_team__business_unit",
     ).first()
+
+
+def test_owner_can_manage_catalog_plan(owner_membership, catalog_action_plan):
+    assert can_manage_action_plan(owner_membership, catalog_action_plan) is True
+
+
+def test_manager_in_scope_can_manage_catalog_plan(manager_membership, catalog_action_plan):
+    assert can_manage_action_plan(manager_membership, catalog_action_plan) is True
+
+
+def test_out_of_scope_manager_cannot_manage_catalog_plan(
+    out_of_scope_manager,
+    catalog_action_plan,
+):
+    assert can_manage_action_plan(out_of_scope_manager, catalog_action_plan) is False
+
+
+def test_staff_cannot_view_catalog(staff_membership):
+    assert can_view_action_plan_catalog(staff_membership) is False
+
+
+def test_manager_can_view_catalog(manager_membership):
+    assert can_view_action_plan_catalog(manager_membership) is True
+
+
+def test_execution_visible_to_assignee(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    assert action_plan_execution_visible_to_membership(staff_membership, execution) is True
+
+
+def test_execution_not_visible_to_unrelated_staff(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    out_of_scope_staff,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    assert action_plan_execution_visible_to_membership(out_of_scope_staff, execution) is False
+
+
+def test_contributor_manager_can_see_cross_pole_execution(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    contributor_manager_membership,
+    out_of_scope_staff,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        maintenance_business_unit=maintenance_business_unit,
+        pilot_assignee=owner_membership,
+        contributor_assignee=out_of_scope_staff,
+    )
+    assert action_plan_execution_visible_to_membership(
+        contributor_manager_membership,
+        execution,
+    ) is True
 
 
 def test_owner_can_execute_action_plan_task(

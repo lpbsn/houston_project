@@ -14,8 +14,10 @@ from houston.action_plans.models import (
     ActionPlanTask,
 )
 from houston.action_plans.services import create_action_plan_with_execution
+from houston.actions.tests.conftest import auth_headers
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
+from houston.testing.auth import login
 from houston.testing.factories import create_establishment, create_membership
 from houston.testing.taxonomy import (
     create_business_unit,
@@ -24,6 +26,47 @@ from houston.testing.taxonomy import (
 )
 
 pytestmark = pytest.mark.django_db
+
+__all__ = [
+    "auth_headers",
+    "login",
+    "action_plans_url",
+    "action_plan_url",
+    "action_plan_execution_url",
+    "action_plan_task_url",
+]
+
+
+def action_plans_url(establishment_id, query: str = "") -> str:
+    base = f"/api/v1/establishments/{establishment_id}/action-plans/"
+    return base + query
+
+
+def action_plan_url(establishment_id, action_plan_id, suffix: str = "") -> str:
+    base = f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/"
+    return base + suffix.lstrip("/")
+
+
+def action_plan_execution_url(establishment_id, execution_id, suffix: str = "") -> str:
+    base = (
+        f"/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/"
+    )
+    return base + suffix.lstrip("/")
+
+
+def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") -> str:
+    base = (
+        f"/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/"
+        f"{task_execution_id}/"
+    )
+    return base + suffix.lstrip("/")
+
+
+@pytest.fixture
+def api_client():
+    from rest_framework.test import APIClient
+
+    return APIClient(enforce_csrf_checks=True)
 
 
 @pytest.fixture
@@ -246,6 +289,20 @@ def build_task_payload(*, task: str, business_unit, position: int = 1) -> dict:
         "task": task,
         "business_unit_id": business_unit.id,
         "position": position,
+    }
+
+
+def api_task_payload(*, task: str, business_unit, position: int = 1) -> dict:
+    payload = build_task_payload(task=task, business_unit=business_unit, position=position)
+    payload["business_unit_id"] = str(payload["business_unit_id"])
+    return payload
+
+
+def api_assignee_payload(*, membership, business_unit) -> dict:
+    payload = build_assignee_payload(membership=membership, business_unit=business_unit)
+    return {
+        "membership_id": str(payload["membership_id"]),
+        "business_unit_id": str(payload["business_unit_id"]),
     }
 
 

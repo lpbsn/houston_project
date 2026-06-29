@@ -8,7 +8,10 @@ from houston.action_plans.models import (
     ActionPlanExecutionTask,
 )
 from houston.actions.permissions import can_access_signal_for_linked_action
-from houston.establishments.membership_scope import membership_scope_covers_business_unit
+from houston.establishments.membership_scope import (
+    _iter_membership_scopes,
+    membership_scope_covers_business_unit,
+)
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.establishments.permissions import (
     can_create_action as establishment_can_create_action,
@@ -108,6 +111,69 @@ def can_manage_contributor_pole(
     if membership.role != EstablishmentMembership.Role.MANAGER:
         return False
     return membership_scope_covers_business_unit(membership, business_unit)
+
+
+def _scope_business_unit_ids(membership: EstablishmentMembership) -> set:
+    bu_ids: set = set()
+    for scope in _iter_membership_scopes(membership):
+        if scope.business_unit_id is not None:
+            bu_ids.add(scope.business_unit_id)
+    return bu_ids
+
+
+def can_manage_action_plan(
+    membership: EstablishmentMembership | None,
+    action_plan: ActionPlan,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=action_plan.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    if membership.role in ADMIN_ROLES:
+        return True
+    return manages_business_unit(membership, action_plan.pilot_business_unit)
+
+
+def can_view_action_plan_catalog(membership: EstablishmentMembership | None) -> bool:
+    if membership is None:
+        return False
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return False
+    if membership.role in ADMIN_ROLES:
+        return True
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        return True
+    return False
+
+
+def action_plan_execution_visible_to_membership(
+    membership: EstablishmentMembership | None,
+    execution: ActionPlanExecution,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=execution.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    if membership.role in ADMIN_ROLES:
+        return True
+    if execution.created_by_id == membership.id:
+        return True
+    if is_action_plan_execution_assignee(membership, execution):
+        return True
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        prefetched = getattr(execution, "_prefetched_objects_cache", None)
+        if prefetched is not None and "execution_teams" in prefetched:
+            teams = execution.execution_teams.select_related("business_unit").all()
+        else:
+            teams = execution.execution_teams.select_related("business_unit").all()
+        return any(manages_business_unit(membership, team.business_unit) for team in teams)
+    return False
 
 
 def action_plan_visible_to_membership(
