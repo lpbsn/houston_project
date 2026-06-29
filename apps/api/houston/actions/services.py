@@ -144,6 +144,11 @@ def sync_signal_after_action_change(*, signal: Signal) -> Signal:
     if linked.exclude(status__in=TERMINAL_ACTION_STATUSES).exists():
         return signal
 
+    from houston.action_plans.services import _linked_active_executions_block_signal_sync
+
+    if _linked_active_executions_block_signal_sync(signal=signal):
+        return signal
+
     if linked.filter(status=Action.Status.DONE).exists():
         from houston.signals.services import resolve_signal
 

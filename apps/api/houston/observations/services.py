@@ -48,6 +48,25 @@ def _validate_checklist_observation_context(
         raise ObservationValidationError("Not allowed to submit this checklist observation.")
 
 
+def _validate_action_plan_observation_context(
+    *,
+    membership: EstablishmentMembership,
+    action_plan_execution,
+    action_plan_execution_task,
+) -> None:
+    if action_plan_execution is None or action_plan_execution_task is None:
+        raise ObservationValidationError("Action plan context is required.")
+    if action_plan_execution.establishment_id != membership.establishment_id:
+        raise ObservationValidationError("Invalid action plan execution.")
+    if action_plan_execution_task.action_plan_execution_id != action_plan_execution.id:
+        raise ObservationValidationError("Invalid action plan task execution.")
+
+    from houston.action_plans.permissions import can_execute_action_plan_task
+
+    if not can_execute_action_plan_task(membership, action_plan_execution_task):
+        raise ObservationValidationError("Not allowed to submit this action plan observation.")
+
+
 @transaction.atomic
 def submit_observation(
     *,
@@ -57,8 +76,17 @@ def submit_observation(
     origin: str = Observation.Origin.DIRECT_REPORT,
     checklist_execution=None,
     checklist_task_execution=None,
+    action_plan_execution=None,
+    action_plan_execution_task=None,
 ) -> Observation:
     raw_text = validate_observation_text(text)
+
+    has_checklist_context = (
+        checklist_execution is not None or checklist_task_execution is not None
+    )
+    has_action_plan_context = (
+        action_plan_execution is not None or action_plan_execution_task is not None
+    )
 
     if origin == Observation.Origin.CHECKLIST_TASK:
         _validate_checklist_observation_context(
@@ -66,10 +94,23 @@ def submit_observation(
             checklist_execution=checklist_execution,
             checklist_task_execution=checklist_task_execution,
         )
-    elif checklist_execution is not None or checklist_task_execution is not None:
+    elif origin == Observation.Origin.ACTION_PLAN_TASK:
+        _validate_action_plan_observation_context(
+            membership=membership,
+            action_plan_execution=action_plan_execution,
+            action_plan_execution_task=action_plan_execution_task,
+        )
+    elif has_checklist_context:
         raise ObservationValidationError(
             "Checklist context is only allowed for checklist_task origin.",
         )
+    elif has_action_plan_context:
+        raise ObservationValidationError(
+            "Action plan context is only allowed for action_plan_task origin.",
+        )
+
+    if has_checklist_context and has_action_plan_context:
+        raise ObservationValidationError("Mixed observation context is not allowed.")
 
     if len(temporary_upload_ids) > MAX_OBSERVATION_PHOTOS:
         raise ObservationValidationError("Too many photos.")
@@ -93,6 +134,8 @@ def submit_observation(
         origin=origin,
         checklist_execution=checklist_execution,
         checklist_task_execution=checklist_task_execution,
+        action_plan_execution=action_plan_execution,
+        action_plan_execution_task=action_plan_execution_task,
         submitted_at=now,
     )
     ObservationProcessing.objects.create(
