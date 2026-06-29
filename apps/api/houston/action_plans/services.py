@@ -14,6 +14,7 @@ from houston.action_plans.constants import (
     ACTION_PLAN_TITLE_MAX_LENGTH,
     ACTIVE_EXECUTION_STATUSES,
     CATALOG_STATUS_ACTIVE,
+    CATALOG_STATUS_INACTIVE,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
@@ -47,6 +48,7 @@ from houston.action_plans.permissions import (
     can_create_staff_feed_execution_plan,
     can_define_cross_pole_task,
     can_execute_action_plan_task,
+    can_manage_action_plan,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
     can_use_action_plan,
@@ -581,6 +583,80 @@ def _lock_execution_for_transition(*, execution_id: uuid.UUID) -> ActionPlanExec
     return ActionPlanExecution.objects.select_for_update().get(pk=execution_id)
 
 
+def _validate_active_reusable_has_tasks(
+    *,
+    is_reusable: bool,
+    catalog_status: str | None,
+    tasks: list,
+) -> None:
+    if is_reusable and catalog_status == CATALOG_STATUS_ACTIVE and not tasks:
+        raise ActionPlanValidationError(
+            "Action plan must have at least one task to activate."
+        )
+
+
+def _validate_active_catalog_has_tasks(*, action_plan: ActionPlan) -> None:
+    if not action_plan.is_reusable:
+        raise ActionPlanValidationError("Only reusable action plans can be activated.")
+    if not ActionPlanTask.objects.filter(action_plan=action_plan).exists():
+        raise ActionPlanValidationError(
+            "Action plan must have at least one task to activate."
+        )
+
+
+@transaction.atomic
+def update_action_plan(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+    title: str | None = None,
+    description: str | None = None,
+) -> ActionPlan:
+    if not can_manage_action_plan(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to update this action plan.")
+
+    update_fields = ["updated_at"]
+    if title is not None:
+        action_plan.title = _normalize_title(title)
+        update_fields.append("title")
+    if description is not None:
+        action_plan.description = _normalize_description(description)
+        update_fields.append("description")
+    action_plan.save(update_fields=update_fields)
+    return action_plan
+
+
+@transaction.atomic
+def activate_action_plan(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+) -> ActionPlan:
+    if not can_manage_action_plan(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to activate this action plan.")
+
+    _validate_active_catalog_has_tasks(action_plan=action_plan)
+    action_plan.catalog_status = CATALOG_STATUS_ACTIVE
+    action_plan.save(update_fields=["catalog_status", "updated_at"])
+    return action_plan
+
+
+@transaction.atomic
+def deactivate_action_plan(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+) -> ActionPlan:
+    if not can_manage_action_plan(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to deactivate this action plan.")
+    if not action_plan.is_reusable:
+        raise ActionPlanValidationError("Only reusable action plans can be deactivated.")
+
+    action_plan.catalog_status = CATALOG_STATUS_INACTIVE
+    action_plan.save(update_fields=["catalog_status", "updated_at"])
+    return action_plan
+
+
 @transaction.atomic
 def create_action_plan(
     *,
@@ -616,6 +692,11 @@ def create_action_plan(
         pilot_business_unit=pilot_business_unit,
         validated_tasks=validated_tasks,
         creation_context="direct",
+    )
+    _validate_active_reusable_has_tasks(
+        is_reusable=is_reusable,
+        catalog_status=catalog_status,
+        tasks=validated_tasks,
     )
 
     action_plan = ActionPlan.objects.create(

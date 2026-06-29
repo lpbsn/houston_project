@@ -193,19 +193,44 @@ def test_manager_linked_signal_allows_in_scope_pilot(
 
 
 def test_create_catalog_plan_without_execution(owner_membership, business_unit):
+    with pytest.raises(ActionPlanValidationError, match="at least one task"):
+        create_action_plan(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Catalog entry",
+            is_reusable=True,
+            catalog_status=CATALOG_STATUS_ACTIVE,
+            tasks=[],
+        )
+
+
+def test_create_inactive_reusable_without_tasks_allowed(owner_membership, business_unit):
+    from houston.action_plans.constants import CATALOG_STATUS_INACTIVE
+
     plan = create_action_plan(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
         pilot_business_unit_id=business_unit.id,
-        title="Catalog entry",
+        title="Draft catalog entry",
         is_reusable=True,
-        catalog_status=CATALOG_STATUS_ACTIVE,
+        catalog_status=CATALOG_STATUS_INACTIVE,
         tasks=[],
     )
 
     assert plan.is_reusable is True
-    assert plan.catalog_status == CATALOG_STATUS_ACTIVE
-    assert ActionPlanExecution.objects.filter(action_plan=plan).count() == 0
+    assert plan.catalog_status == CATALOG_STATUS_INACTIVE
+    assert ActionPlanTask.objects.filter(action_plan=plan).count() == 0
+
+
+def test_deactivate_action_plan_rejects_non_reusable(
+    owner_membership,
+    action_plan,
+):
+    from houston.action_plans.services import deactivate_action_plan
+
+    with pytest.raises(ActionPlanValidationError, match="Only reusable"):
+        deactivate_action_plan(action_plan=action_plan, actor=owner_membership)
 
 
 def test_create_execution_from_catalog_plan(
