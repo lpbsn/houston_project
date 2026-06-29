@@ -583,11 +583,25 @@ def _lock_execution_for_transition(*, execution_id: uuid.UUID) -> ActionPlanExec
     return ActionPlanExecution.objects.select_for_update().get(pk=execution_id)
 
 
+def _validate_active_reusable_has_tasks(
+    *,
+    is_reusable: bool,
+    catalog_status: str | None,
+    tasks: list,
+) -> None:
+    if is_reusable and catalog_status == CATALOG_STATUS_ACTIVE and not tasks:
+        raise ActionPlanValidationError(
+            "Action plan must have at least one task to activate."
+        )
+
+
 def _validate_active_catalog_has_tasks(*, action_plan: ActionPlan) -> None:
     if not action_plan.is_reusable:
         raise ActionPlanValidationError("Only reusable action plans can be activated.")
     if not ActionPlanTask.objects.filter(action_plan=action_plan).exists():
-        raise ActionPlanValidationError("Action plan must have at least one task to activate.")
+        raise ActionPlanValidationError(
+            "Action plan must have at least one task to activate."
+        )
 
 
 @transaction.atomic
@@ -635,6 +649,8 @@ def deactivate_action_plan(
 ) -> ActionPlan:
     if not can_manage_action_plan(actor, action_plan):
         raise ActionPlanPermissionError("Not allowed to deactivate this action plan.")
+    if not action_plan.is_reusable:
+        raise ActionPlanValidationError("Only reusable action plans can be deactivated.")
 
     action_plan.catalog_status = CATALOG_STATUS_INACTIVE
     action_plan.save(update_fields=["catalog_status", "updated_at"])
@@ -676,6 +692,11 @@ def create_action_plan(
         pilot_business_unit=pilot_business_unit,
         validated_tasks=validated_tasks,
         creation_context="direct",
+    )
+    _validate_active_reusable_has_tasks(
+        is_reusable=is_reusable,
+        catalog_status=catalog_status,
+        tasks=validated_tasks,
     )
 
     action_plan = ActionPlan.objects.create(

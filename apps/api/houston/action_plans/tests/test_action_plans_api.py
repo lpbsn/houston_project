@@ -255,6 +255,82 @@ def test_staff_catalog_detail_returns_404(
     assert response.status_code == 404
 
 
+def test_list_and_detail_involved_pole_count_match(
+    api_client,
+    owner_membership,
+    inactive_catalog_action_plan,
+):
+    token = login(api_client, user=owner_membership.user)
+    list_response = api_client.get(
+        action_plans_url(owner_membership.establishment_id),
+        **auth_headers(token),
+    )
+    assert list_response.status_code == 200
+    list_item = next(
+        item for item in list_response.json() if item["id"] == str(inactive_catalog_action_plan.id)
+    )
+
+    detail_response = api_client.get(
+        action_plan_url(owner_membership.establishment_id, inactive_catalog_action_plan.id),
+        **auth_headers(token),
+    )
+    assert detail_response.status_code == 200
+    detail_item = detail_response.json()
+
+    assert list_item["involved_pole_count"] == detail_item["involved_pole_count"] == 1
+
+
+def test_catalog_create_without_tasks_returns_400(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    token = login(api_client, user=owner_membership.user)
+    payload = _catalog_create_payload(business_unit=business_unit)
+    payload["tasks"] = []
+    response = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        payload,
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
+
+
+def test_deactivate_non_reusable_plan_returns_400(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    staff_token = login(api_client, user=staff_membership.user)
+    create = api_client.post(
+        action_plans_url(staff_membership.establishment_id),
+        {
+            "title": "Staff feed plan",
+            "pilot_business_unit_id": str(business_unit.id),
+            "requires_validation": False,
+            "tasks": [api_task_payload(task="Self task", business_unit=business_unit)],
+            "assignees": [
+                api_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+        },
+        format="json",
+        **auth_headers(staff_token),
+    )
+    assert create.status_code == 201, create.json()
+    plan_id = create.json()["action_plan_id"]
+
+    owner_token = login(api_client, user=owner_membership.user)
+    deactivate = api_client.post(
+        action_plan_url(owner_membership.establishment_id, plan_id, "deactivate/"),
+        **auth_headers(owner_token),
+    )
+    assert deactivate.status_code == 400
+    assert deactivate.json()["code"] == "validation_error"
+
+
 def test_openapi_post_action_plans_create_documents_dual_201_response():
     from pathlib import Path
 

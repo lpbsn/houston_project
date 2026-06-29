@@ -297,7 +297,7 @@ def serialize_action_plan_list_item(
     involved_pole_count = getattr(action_plan, "involved_pole_count", None)
     if involved_pole_count is None:
         involved_pole_count = action_plan.tasks.values("business_unit_id").distinct().count()
-        involved_pole_count = max(involved_pole_count, 1)
+    involved_pole_count = max(involved_pole_count, 1)
     return {
         "id": action_plan.id,
         "title": action_plan.title,
