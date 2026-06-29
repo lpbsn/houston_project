@@ -135,6 +135,7 @@ is_reusable=true
 → visible dans le catalogue si catalog_status=active
 → peut être sauvegardé sans assigné
 → peut être utilisé plus tard depuis le catalogue
+→ utilisation manager : voir [decision 26.14](decisions_plan_action.md#decision-26-14) (scope sur pôle pilote suffit)
 ```
 
 ### Libellé UI
@@ -394,7 +395,9 @@ Un staff voit toutes les tâches du plan pour comprendre le contexte global.
 
 Mais il ne peut agir que sur les tâches de son scope.
 
-Règle exacte :
+**Création de plan :** voir [decision 26.13](decisions_plan_action.md#decision-26-13) — feed execution uniquement, self-assigné, mono-pôle, `requires_validation=false` ; pas signal, pas catalogue.
+
+Règle exacte (action sur tâche — voir [decision 26.8](decisions_plan_action.md#decision-26-8)) :
 
 ```txt
 user est assigné à l’exécution
@@ -815,6 +818,7 @@ La refonte est validée si :
 ## 26. Décisions §26 — voir decision log
 
 **Statut Lot -1 :** décisions §26 verrouillées (sign-off 2026-06-28).  
+**Compléments Lot 2B :** décisions [26.13](decisions_plan_action.md#decision-26-13)–[26.15](decisions_plan_action.md#decision-26-15) (2026-06-29).  
 **Arbitrages §26 :** [`decisions_plan_action.md`](decisions_plan_action.md) (`authoritative`)
 
 Les ambiguïtés §26 sont tranchées dans le decision log. Ce tableau est un index — ne pas recopier les règles ici.
@@ -828,11 +832,14 @@ Les ambiguïtés §26 sont tranchées dans le decision log. Ce tableau est un in
 | 26.5 | Signal lié — sync exécutions | [decision 26.5](decisions_plan_action.md#decision-26-5) |
 | 26.6 | Plans catalogue multi-pôles | [decision 26.6](decisions_plan_action.md#decision-26-6) |
 | 26.7 | Tâches modèle multi-pôles | [decision 26.7](decisions_plan_action.md#decision-26-7) |
-| 26.8 | Staff multi-scope | [decision 26.8](decisions_plan_action.md#decision-26-8) |
+| 26.8 | Staff multi-scope (tâches) | [decision 26.8](decisions_plan_action.md#decision-26-8) |
 | 26.9 | Suppression d'un pôle visible | [decision 26.9](decisions_plan_action.md#decision-26-9) |
 | 26.10 | Statut contribution et `observation_created` | [decision 26.10](decisions_plan_action.md#decision-26-10) |
 | 26.11 | Assigné sans tâche | [decision 26.11](decisions_plan_action.md#decision-26-11) |
 | 26.12 | Récurrence et contributeurs | [decision 26.12](decisions_plan_action.md#decision-26-12) |
+| 26.13 | Création staff (feed execution) | [decision 26.13](decisions_plan_action.md#decision-26-13) |
+| 26.14 | Manager — utilisation catalogue | [decision 26.14](decisions_plan_action.md#decision-26-14) |
+| 26.15 | Cross-pôle — création directe vs catalogue | [decision 26.15](decisions_plan_action.md#decision-26-15) |
 
-Arbitrage création vs runtime (§10 / §26.6–26.7) : voir [Arbitrages](decisions_plan_action.md#arbitrages) dans le decision log.  
+Arbitrage création vs runtime (§10 / §26.6–26.7 / §26.15) : voir [Arbitrages](decisions_plan_action.md#arbitrages) dans le decision log.  
 Récurrence globale vs contributeurs : voir [decision 26.12](decisions_plan_action.md#decision-26-12).

@@ -1,9 +1,9 @@
 # Decision log — Plan d'action (§26)
 
 Status: `authoritative`  
-Lot: -1  
-Last updated: 2026-06-28  
-Sign-off: 2026-06-28 (produit + tech)
+Lot: -1 (+ compléments Lot 2B — décisions 26.13–26.15)  
+Last updated: 2026-06-29  
+Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 2B (2026-06-29)
 
 ## Procédure sign-off
 
@@ -26,11 +26,14 @@ Sign-off: 2026-06-28 (produit + tech)
 | [26.5](#decision-26-5) | Signal lié — sync exécutions | Voir détail ci-dessous | 2D |
 | [26.6](#decision-26-6) | Catalogue multi-pôles | Voir détail ci-dessous | 1, 2B |
 | [26.7](#decision-26-7) | Tâches modèle multi-pôles | Voir détail ci-dessous | 1, 2A, 2B |
-| [26.8](#decision-26-8) | Staff multi-scope | Voir détail ci-dessous | 2B, 2C |
+| [26.8](#decision-26-8) | Staff multi-scope (tâches) | Voir détail ci-dessous | 2C |
 | [26.9](#decision-26-9) | Retrait pôle impliqué | Voir détail ci-dessous | 2C, 8 |
 | [26.10](#decision-26-10) | Contribution `observation_created` | Voir détail ci-dessous | 2C |
 | [26.11](#decision-26-11) | Assigné sans tâche | Voir détail ci-dessous | 1, 8 |
 | [26.12](#decision-26-12) | Récurrence et contributeurs | Voir détail ci-dessous | 1, 4, 5 |
+| [26.13](#decision-26-13) | Création staff (feed execution) | Voir détail ci-dessous | 2B, 3 |
+| [26.14](#decision-26-14) | Manager — utilisation catalogue | Voir détail ci-dessous | 2B, 3 |
+| [26.15](#decision-26-15) | Cross-pôle — création directe vs catalogue | Voir détail ci-dessous | 2B, 3 |
 
 ---
 
@@ -178,7 +181,9 @@ Runtime (exécution en cours) :
 
 Voir aussi l'arbitrage §10 vs §26.6–26.7 ci-dessous.
 
-### Decision 26.8 — Staff multi-scope {#decision-26-8}
+### Decision 26.8 — Staff multi-scope (tâches) {#decision-26-8}
+
+Règle d'**action sur les tâches** (pas la création de plan — voir [26.13](#decision-26-13)).
 
 ```txt
 Un staff multi-pôle peut agir sur les tâches de tous ses scopes actifs
@@ -251,6 +256,58 @@ Si un pôle doit intervenir selon une fréquence différente, il faut créer un 
 
 La chronologie individuelle (décision [26.1](#decision-26-1), §9) définit des horaires par assigné dans le cadre d'une occurrence ; ce n'est pas une récurrence contributeur.
 
+### Decision 26.13 — Création staff (feed execution) {#decision-26-13}
+
+Complément Lot 2B (A1). Le staff **ne crée pas** de plan via signal, catalogue, ni enregistrement bibliothèque.
+
+**Chemin autorisé :** création ponctuelle depuis le feed execution (`create_action_plan_with_execution`, sans signal, `is_reusable=false`).
+
+**Contraintes obligatoires :**
+
+```txt
+pilot_business_unit ∈ scope staff
+assigné uniquement à lui-même, sur le pôle pilote
+pas de pôle contributeur (assignés et tâches sur pilot_business_unit uniquement)
+tâches uniquement dans son scope (= pôle pilote, pas de cross-pôle)
+requires_validation = false
+```
+
+**Interdit :**
+
+```txt
+création liée à un signal
+création ou enregistrement catalogue (is_reusable=true, catalog_status actif)
+requires_validation = true
+multi-assignés ou assignation d'autres membres
+```
+
+### Decision 26.14 — Manager — utilisation catalogue {#decision-26-14}
+
+Complément Lot 2B (A2).
+
+Un manager peut **utiliser** un plan catalogue (`can_use_action_plan` / `create_execution_from_action_plan`) si le **pôle pilote** du modèle est dans son scope, **même si certaines tâches du modèle sont sur des pôles hors de son scope**.
+
+```txt
+Scope requis : pilot_business_unit ∈ scope manager
+Tâches catalogue hors scope manager : héritées telles quelles (snapshot) — pas de droit de modification à l'utilisation
+Staff : pas d'accès catalogue (utilisation ni création)
+```
+
+### Decision 26.15 — Cross-pôle — création directe vs catalogue {#decision-26-15}
+
+Complément Lot 2B (A3). Précise [26.6](#decision-26-6) et [26.7](#decision-26-7) pour le RBAC à la création.
+
+| Contexte | Tâche sur pôle ≠ pilote (`task.business_unit ≠ pilot_business_unit`) |
+|----------|-----------------------------------------------------------------------|
+| **Création directe** (`create_action_plan`, `create_action_plan_with_execution` hors catalogue) | Director / Owner **uniquement** |
+| **Utilisation catalogue** (`create_execution_from_action_plan`) | Tâches déjà présentes dans le modèle catalogue — snapshot autorisé sans re-vérification admin |
+
+```txt
+Création directe : manager ne peut pas ajouter de tâche cross-pôle
+Catalogue : le manager in-scope sur le pilote hérite les tâches multi-pôles du modèle
+Assignation §26.2 : toujours appliquée sur les assignés ajoutés à l'exécution, y compris depuis catalogue
+```
+
 ---
 
 ## Arbitrages {#arbitrages}
@@ -264,7 +321,7 @@ La chronologie individuelle (décision [26.1](#decision-26-1), §9) définit des
 | Création / édition catalogue ou formulaire initial | Director / Owner |
 | Runtime (exécution en cours) | Manager pilote (tous pôles) ; manager contributeur (son pôle) |
 
-Le besoin §10 (« ajouter des tâches sur tous les pôles ») s'applique au **runtime**. Les restrictions cross-pôle à la **création** sont dans les décisions [26.6](#decision-26-6) et [26.7](#decision-26-7).
+Le besoin §10 (« ajouter des tâches sur tous les pôles ») s'applique au **runtime**. Les restrictions cross-pôle à la **création** sont dans les décisions [26.6](#decision-26-6), [26.7](#decision-26-7) et [26.15](#decision-26-15) (directe vs catalogue).
 
 ---
 
