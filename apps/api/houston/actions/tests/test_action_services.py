@@ -6,6 +6,9 @@ import pytest
 from django.db import close_old_connections
 from django.utils import timezone
 
+from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
 from houston.actions.exceptions import (
     ActionPermissionError,
     ActionStateError,
@@ -755,3 +758,44 @@ def test_sync_signal_reopens_when_all_linked_actions_canceled():
     signal.refresh_from_db()
     assert signal.status == Signal.Status.OPEN
     assert signal.is_pinned is False
+
+
+def test_sync_signal_skips_auto_resolve_when_active_action_plan_execution():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, hotel)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+        status=Signal.Status.IN_PROGRESS,
+    )
+    _, plan_execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=hotel.id,
+        title="Active plan execution",
+        source_signal_id=signal.id,
+        requires_validation=False,
+        tasks=[build_task_payload(task="Plan task", business_unit=hotel, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=hotel)],
+    )
+    action = create_action(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        title="Legacy linked action",
+        instruction="Work",
+        assignee_ids=[staff.id],
+        due_at=timezone.now() + timezone.timedelta(days=1),
+        signal_id=signal.id,
+    )
+    action = accept_action(action_id=action.id, accepted_by=staff)
+    action = mark_action_done(action_id=action.id, actor_membership=staff)
+    validate_action(action_id=action.id, actor_membership=owner)
+
+    signal.refresh_from_db()
+    plan_execution.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert plan_execution.status == ActionPlanExecution.Status.IN_PROGRESS

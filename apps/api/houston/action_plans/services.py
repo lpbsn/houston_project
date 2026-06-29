@@ -115,6 +115,13 @@ def _linked_legacy_actions_block_signal_sync(*, signal: Signal) -> bool:
     ).exists()
 
 
+def _linked_active_executions_block_signal_sync(*, signal: Signal) -> bool:
+    return ActionPlanExecution.objects.filter(
+        source_signal_id=signal.id,
+        status__in=ACTIVE_EXECUTION_STATUSES,
+    ).exists()
+
+
 @transaction.atomic
 def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
     if _linked_legacy_actions_block_signal_sync(signal=signal):
@@ -125,6 +132,10 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
         return signal
 
     if linked.filter(status=EXECUTION_STATUS_DONE).exists():
+        from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
+
+        if signal.status not in ACTIVE_SIGNAL_STATUSES:
+            return signal
         from houston.signals.services import resolve_signal
 
         return resolve_signal(signal=signal)

@@ -405,3 +405,87 @@ def test_lifecycle_succeeds_when_legacy_blocks_sync(
     assert canceled.status == ActionPlanExecution.Status.CANCELED
     signal.refresh_from_db()
     assert signal.status == Signal.Status.IN_PROGRESS
+
+
+def test_sync_idempotent_when_signal_already_resolved_with_done_execution(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Idempotent resolve",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    done_execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+        staff_membership=staff_membership,
+        signal=signal,
+        title="Done execution",
+        requires_validation=False,
+    )
+    _create_linked_execution(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+        staff_membership=staff_membership,
+        signal=signal,
+        title="Active execution",
+    )
+    mark_action_plan_execution_done(
+        execution_id=done_execution.id,
+        actor_membership=owner_membership,
+    )
+
+    resolve_signal(signal=signal, actor_membership=owner_membership)
+    sync_signal_after_execution_change(signal=signal)
+
+    signal.refresh_from_db()
+    done_execution.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+    assert done_execution.status == ActionPlanExecution.Status.DONE
+
+
+def test_cancel_after_manual_resolve_does_not_rollback(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Cancel after manual resolve",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    done_execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+        staff_membership=staff_membership,
+        signal=signal,
+        title="Done execution",
+        requires_validation=False,
+    )
+    active_execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+        staff_membership=staff_membership,
+        signal=signal,
+        title="Active execution",
+    )
+    mark_action_plan_execution_done(
+        execution_id=done_execution.id,
+        actor_membership=owner_membership,
+    )
+
+    signal.status = Signal.Status.RESOLVED
+    signal.save(update_fields=["status", "updated_at"])
+
+    canceled = cancel_action_plan_execution(
+        execution_id=active_execution.id,
+        actor=owner_membership,
+    )
+
+    signal.refresh_from_db()
+    done_execution.refresh_from_db()
+    assert canceled.status == ActionPlanExecution.Status.CANCELED
+    assert done_execution.status == ActionPlanExecution.Status.DONE
+    assert signal.status == Signal.Status.RESOLVED
