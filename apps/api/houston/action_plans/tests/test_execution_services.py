@@ -468,6 +468,213 @@ def test_cancel_rejects_done(owner_membership, business_unit, staff_membership):
         )
 
 
+def test_pilot_manager_mark_done_succeeds(
+    manager_membership,
+    business_unit,
+    staff_membership,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=manager_membership.establishment_id,
+        created_by=manager_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Manager plan",
+        requires_validation=False,
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+
+    execution = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=manager_membership,
+    )
+
+    execution.refresh_from_db()
+    assert execution.status == ActionPlanExecution.Status.DONE
+
+
+def test_contributor_assignee_mark_done_denied(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    out_of_scope_staff,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Multi-pole plan",
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+            build_assignee_payload(
+                membership=out_of_scope_staff,
+                business_unit=maintenance_business_unit,
+            ),
+        ],
+        tasks=[
+            build_task_payload(task="Pilot", business_unit=business_unit),
+            build_task_payload(
+                task="Maintenance",
+                business_unit=maintenance_business_unit,
+                position=2,
+            ),
+        ],
+    )
+
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to mark"):
+        mark_action_plan_execution_done(
+            execution_id=execution.id,
+            actor_membership=out_of_scope_staff,
+        )
+
+
+def test_contributor_manager_validate_denied(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    contributor_manager_membership,
+    out_of_scope_staff,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Validate RBAC plan",
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+            build_assignee_payload(
+                membership=out_of_scope_staff,
+                business_unit=maintenance_business_unit,
+            ),
+        ],
+        tasks=[
+            build_task_payload(task="Pilot", business_unit=business_unit),
+            build_task_payload(
+                task="Maintenance",
+                business_unit=maintenance_business_unit,
+                position=2,
+            ),
+        ],
+    )
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to validate"):
+        validate_action_plan_execution(
+            execution_id=pending.id,
+            actor_membership=contributor_manager_membership,
+        )
+
+
+def test_staff_feed_create_succeeds(staff_membership, business_unit):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=staff_membership.establishment_id,
+        created_by=staff_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Staff personal plan",
+        requires_validation=False,
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+        tasks=[build_task_payload(task="My task", business_unit=business_unit)],
+    )
+
+    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert execution.requires_validation is False
+
+
+def test_staff_feed_create_rejects_requires_validation(staff_membership, business_unit):
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to create"):
+        create_action_plan_with_execution(
+            establishment_id=staff_membership.establishment_id,
+            created_by=staff_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Staff invalid plan",
+            requires_validation=True,
+            assignees=[
+                build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+        )
+
+
+def test_staff_cannot_create_from_signal(staff_membership, business_unit, signal):
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to create"):
+        create_action_plan_with_execution(
+            establishment_id=staff_membership.establishment_id,
+            created_by=staff_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Staff signal plan",
+            requires_validation=False,
+            source_signal_id=signal.id,
+            assignees=[
+                build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+        )
+
+
+def test_manager_direct_cross_pole_task_denied(
+    manager_membership,
+    business_unit,
+    maintenance_business_unit,
+    staff_membership,
+):
+    with pytest.raises(ActionPlanPermissionError, match="non-pilot business unit"):
+        create_action_plan_with_execution(
+            establishment_id=manager_membership.establishment_id,
+            created_by=manager_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Cross-pole direct",
+            assignees=[
+                build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+            tasks=[
+                build_task_payload(
+                    task="Maintenance task",
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+        )
+
+
+def test_manager_launches_cross_pole_catalog_in_scope_pilot(
+    manager_membership,
+    cross_pole_catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    execution = create_execution_from_action_plan(
+        action_plan_id=cross_pole_catalog_action_plan.id,
+        actor=manager_membership,
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+
+    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
+    assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 2
+
+
+def test_manager_cannot_assign_out_of_scope_on_catalog_launch(
+    manager_membership,
+    cross_pole_catalog_action_plan,
+    out_of_scope_staff,
+    maintenance_business_unit,
+):
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to assign"):
+        create_execution_from_action_plan(
+            action_plan_id=cross_pole_catalog_action_plan.id,
+            actor=manager_membership,
+            assignees=[
+                build_assignee_payload(
+                    membership=out_of_scope_staff,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+        )
+
+
 @pytest.mark.django_db(transaction=True)
 def test_concurrent_mark_done_only_one_succeeds(owner_membership, execution_with_assignee):
     def try_mark_done() -> str:

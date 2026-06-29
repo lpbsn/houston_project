@@ -35,9 +35,12 @@ from houston.action_plans.models import (
     ActionPlanTask,
 )
 from houston.action_plans.permissions import (
+    can_assign_to_execution_business_unit,
     can_cancel_action_plan_execution,
     can_create_action_plan,
     can_create_linked_action_plan,
+    can_create_staff_feed_execution_plan,
+    can_define_cross_pole_task,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
     can_use_action_plan,
@@ -224,6 +227,65 @@ def _validate_execution_has_content(
         raise ActionPlanValidationError("At least one task or assignee is required.")
 
 
+def _validate_cross_pole_tasks_allowed(
+    *,
+    actor: EstablishmentMembership,
+    pilot_business_unit: BusinessUnit,
+    validated_tasks: list[dict],
+    creation_context: str,
+) -> None:
+    if creation_context == "catalog":
+        return
+    for task_item in validated_tasks:
+        if task_item["business_unit"].id != pilot_business_unit.id:
+            if not can_define_cross_pole_task(actor):
+                raise ActionPlanPermissionError(
+                    "Not allowed to attach tasks to a non-pilot business unit."
+                )
+
+
+def _validate_actor_can_assign_poles(
+    *,
+    actor: EstablishmentMembership,
+    pilot_business_unit: BusinessUnit,
+    validated_assignees: list[ValidatedAssigneePayload],
+) -> None:
+    for assignee in validated_assignees:
+        if not can_assign_to_execution_business_unit(
+            actor,
+            business_unit=assignee.business_unit,
+            pilot_business_unit=pilot_business_unit,
+        ):
+            raise ActionPlanPermissionError(
+                "Not allowed to assign members to this business unit."
+            )
+
+
+def _validate_staff_feed_create_constraints(
+    *,
+    created_by: EstablishmentMembership,
+    pilot_business_unit: BusinessUnit,
+    validated_assignees: list[ValidatedAssigneePayload],
+    validated_tasks: list[dict],
+    requires_validation: bool,
+    source_signal_id: uuid.UUID | None,
+    is_reusable: bool,
+    catalog_status: str | None,
+) -> None:
+    if source_signal_id is not None:
+        raise ActionPlanPermissionError("Not allowed to create this action plan.")
+    if is_reusable or catalog_status is not None:
+        raise ActionPlanPermissionError("Not allowed to create this action plan.")
+    if not can_create_staff_feed_execution_plan(
+        created_by,
+        pilot_business_unit=pilot_business_unit,
+        assignees=validated_assignees,
+        tasks=validated_tasks,
+        requires_validation=requires_validation,
+    ):
+        raise ActionPlanPermissionError("Not allowed to create this action plan.")
+
+
 def _create_plan_tasks(
     *,
     action_plan: ActionPlan,
@@ -384,18 +446,28 @@ def create_action_plan(
     catalog_status: str | None = CATALOG_STATUS_ACTIVE,
     tasks: list[dict] | None = None,
 ) -> ActionPlan:
-    if not can_create_action_plan(created_by, establishment_id=establishment_id):
-        raise ActionPlanPermissionError("Not allowed to create this action plan.")
-
     pilot_business_unit = _validate_business_unit_in_establishment(
         establishment_id=establishment_id,
         business_unit_id=pilot_business_unit_id,
     )
+    if not can_create_action_plan(
+        created_by,
+        establishment_id=establishment_id,
+        pilot_business_unit=pilot_business_unit,
+    ):
+        raise ActionPlanPermissionError("Not allowed to create this action plan.")
+
     normalized_title = _normalize_title(title)
     normalized_description = _normalize_description(description)
     validated_tasks = _validate_task_payloads(
         establishment_id=establishment_id,
         tasks=tasks or [],
+    )
+    _validate_cross_pole_tasks_allowed(
+        actor=created_by,
+        pilot_business_unit=pilot_business_unit,
+        validated_tasks=validated_tasks,
+        creation_context="direct",
     )
 
     action_plan = ActionPlan.objects.create(
@@ -450,7 +522,18 @@ def create_action_plan_with_execution(
     )
 
     signal = None
-    if source_signal_id is not None:
+    if created_by.role == EstablishmentMembership.Role.STAFF:
+        _validate_staff_feed_create_constraints(
+            created_by=created_by,
+            pilot_business_unit=pilot_business_unit,
+            validated_assignees=validated_assignees,
+            validated_tasks=validated_tasks,
+            requires_validation=requires_validation,
+            source_signal_id=source_signal_id,
+            is_reusable=is_reusable,
+            catalog_status=catalog_status,
+        )
+    elif source_signal_id is not None:
         signal = Signal.objects.filter(
             id=source_signal_id,
             establishment_id=establishment_id,
@@ -459,8 +542,25 @@ def create_action_plan_with_execution(
             raise ActionPlanValidationError("Invalid signal.")
         if not can_create_linked_action_plan(created_by, signal=signal):
             raise ActionPlanPermissionError("Not allowed to create this action plan.")
-    elif not can_create_action_plan(created_by, establishment_id=establishment_id):
+    elif not can_create_action_plan(
+        created_by,
+        establishment_id=establishment_id,
+        pilot_business_unit=pilot_business_unit,
+    ):
         raise ActionPlanPermissionError("Not allowed to create this action plan.")
+
+    _validate_cross_pole_tasks_allowed(
+        actor=created_by,
+        pilot_business_unit=pilot_business_unit,
+        validated_tasks=validated_tasks,
+        creation_context="direct",
+    )
+    if created_by.role != EstablishmentMembership.Role.STAFF:
+        _validate_actor_can_assign_poles(
+            actor=created_by,
+            pilot_business_unit=pilot_business_unit,
+            validated_assignees=validated_assignees,
+        )
 
     normalized_title = _normalize_title(title)
     normalized_description = _normalize_description(description)
@@ -538,6 +638,11 @@ def create_execution_from_action_plan(
     validated_assignees = _validate_assignee_payloads(
         establishment_id=action_plan.establishment_id,
         assignees=assignees or [],
+    )
+    _validate_actor_can_assign_poles(
+        actor=actor,
+        pilot_business_unit=action_plan.pilot_business_unit,
+        validated_assignees=validated_assignees,
     )
     plan_tasks = list(action_plan.tasks.order_by("position", "created_at"))
     _validate_execution_has_content(

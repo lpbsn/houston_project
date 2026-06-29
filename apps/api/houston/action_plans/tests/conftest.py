@@ -80,6 +80,32 @@ def manager_membership(establishment, business_unit):
 
 
 @pytest.fixture
+def contributor_manager_membership(establishment, maintenance_business_unit):
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=maintenance_business_unit,
+    )
+    return membership
+
+
+@pytest.fixture
+def out_of_scope_manager(establishment, maintenance_business_unit):
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=maintenance_business_unit,
+    )
+    return membership
+
+
+@pytest.fixture
 def out_of_scope_staff(establishment, maintenance_business_unit):
     membership = create_membership(
         establishment=establishment,
@@ -128,6 +154,32 @@ def catalog_action_plan(owner_membership, business_unit):
         business_unit=business_unit,
         task="Check inventory",
         position=1,
+    )
+    return plan
+
+
+@pytest.fixture
+def cross_pole_catalog_action_plan(owner_membership, business_unit, maintenance_business_unit):
+    plan = ActionPlan.objects.create(
+        establishment=owner_membership.establishment,
+        created_by=owner_membership,
+        pilot_business_unit=business_unit,
+        title="Cross-pole catalog plan",
+        description="Pilot restaurant, task maintenance",
+        is_reusable=True,
+        catalog_status=CATALOG_STATUS_ACTIVE,
+    )
+    ActionPlanTask.objects.create(
+        action_plan=plan,
+        business_unit=business_unit,
+        task="Open restaurant",
+        position=1,
+    )
+    ActionPlanTask.objects.create(
+        action_plan=plan,
+        business_unit=maintenance_business_unit,
+        task="Check HVAC",
+        position=2,
     )
     return plan
 
