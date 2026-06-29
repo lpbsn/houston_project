@@ -14,6 +14,7 @@ from houston.action_plans.constants import (
     ACTION_PLAN_TITLE_MAX_LENGTH,
     ACTIVE_EXECUTION_STATUSES,
     CATALOG_STATUS_ACTIVE,
+    EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
@@ -102,6 +103,105 @@ def _lock_execution_task_for_transition(
 def touch_execution_activity(*, execution: ActionPlanExecution, at=None) -> None:
     execution.last_activity_at = at or timezone.now()
     execution.save(update_fields=["last_activity_at", "updated_at"])
+
+
+def _linked_legacy_actions_block_signal_sync(*, signal: Signal) -> bool:
+    from houston.actions.constants import ACTIVE_ACTION_STATUSES
+    from houston.actions.models import Action
+
+    return Action.objects.filter(
+        signal_id=signal.id,
+        status__in=ACTIVE_ACTION_STATUSES,
+    ).exists()
+
+
+@transaction.atomic
+def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
+    if _linked_legacy_actions_block_signal_sync(signal=signal):
+        return signal
+
+    linked = ActionPlanExecution.objects.filter(source_signal_id=signal.id)
+    if linked.filter(status__in=ACTIVE_EXECUTION_STATUSES).exists():
+        return signal
+
+    if linked.filter(status=EXECUTION_STATUS_DONE).exists():
+        from houston.signals.services import resolve_signal
+
+        return resolve_signal(signal=signal)
+
+    if (
+        linked.exists()
+        and not linked.filter(status=EXECUTION_STATUS_DONE).exists()
+        and linked.filter(status=EXECUTION_STATUS_CANCELED).count() == linked.count()
+    ):
+        from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
+        from houston.signals.services import (
+            _schedule_signal_invalidation,
+            touch_signal_activity,
+        )
+
+        if signal.status in ACTIVE_SIGNAL_STATUSES:
+            signal.status = Signal.Status.OPEN
+            signal.is_pinned = False
+            signal.pinned_at = None
+            signal.pinned_by_membership = None
+            touch_signal_activity(signal=signal)
+            signal.save(
+                update_fields=[
+                    "status",
+                    "is_pinned",
+                    "pinned_at",
+                    "pinned_by_membership",
+                    "last_activity_at",
+                    "updated_at",
+                ]
+            )
+            _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+    return signal
+
+
+def _sync_linked_signal_after_execution_change(*, execution: ActionPlanExecution) -> None:
+    if execution.source_signal_id is None:
+        return
+    signal = Signal.objects.get(pk=execution.source_signal_id)
+    sync_signal_after_execution_change(signal=signal)
+
+
+def _cancel_linked_active_executions_for_signal_resolve(
+    *,
+    signal: Signal,
+    actor_membership: EstablishmentMembership | None = None,
+) -> None:
+    _ = actor_membership
+    now = timezone.now()
+    active_executions = ActionPlanExecution.objects.filter(
+        source_signal_id=signal.id,
+        status__in=ACTIVE_EXECUTION_STATUSES,
+    ).select_for_update()
+    for execution in active_executions:
+        execution.status = EXECUTION_STATUS_CANCELED
+        execution.canceled_at = now
+        execution.last_activity_at = now
+        execution.save(
+            update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
+        )
+
+
+def _reopen_linked_signal_after_execution_reopen(*, execution: ActionPlanExecution) -> None:
+    if execution.source_signal_id is None:
+        return
+    signal = Signal.objects.get(pk=execution.source_signal_id)
+    if signal.status != Signal.Status.RESOLVED:
+        return
+    from houston.signals.services import (
+        _schedule_signal_invalidation,
+        touch_signal_activity,
+    )
+
+    signal.status = Signal.Status.IN_PROGRESS
+    touch_signal_activity(signal=signal)
+    signal.save(update_fields=["status", "last_activity_at", "updated_at"])
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
 
 
 def _normalize_title(title: str) -> str:
@@ -745,6 +845,7 @@ def mark_action_plan_execution_done(
     execution.save(
         update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"]
     )
+    _sync_linked_signal_after_execution_change(execution=execution)
     return execution
 
 
@@ -767,6 +868,7 @@ def validate_action_plan_execution(
     execution.save(
         update_fields=["status", "validated_at", "last_activity_at", "updated_at"]
     )
+    _sync_linked_signal_after_execution_change(execution=execution)
     return execution
 
 
@@ -801,6 +903,7 @@ def reopen_action_plan_execution(
             "updated_at",
         ]
     )
+    _reopen_linked_signal_after_execution_reopen(execution=execution)
     return execution
 
 
@@ -823,6 +926,7 @@ def cancel_action_plan_execution(
     execution.save(
         update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
     )
+    _sync_linked_signal_after_execution_change(execution=execution)
     return execution
 
 

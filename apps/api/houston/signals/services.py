@@ -1443,6 +1443,14 @@ def resolve_signal(
         raise SignalBusinessConflictError(
             "Cannot resolve signal while linked actions are still active."
         )
+    from houston.action_plans.services import (
+        _cancel_linked_active_executions_for_signal_resolve,
+    )
+
+    _cancel_linked_active_executions_for_signal_resolve(
+        signal=signal,
+        actor_membership=actor_membership,
+    )
     result = _transition_active_signal_to_terminal(
         signal=signal,
         target_status=Signal.Status.RESOLVED,
