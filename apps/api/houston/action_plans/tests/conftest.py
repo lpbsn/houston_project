@@ -8,11 +8,8 @@ from django.utils import timezone
 from houston.action_plans.models import (
     ActionPlan,
     ActionPlanExecution,
-    ActionPlanExecutionTask,
     ActionPlanExecutionTeam,
     ActionPlanSchedule,
-    ActionPlanScheduleAssignee,
-    ActionPlanTask,
 )
 from houston.establishments.models import EstablishmentMembership
 from houston.testing.factories import create_establishment, create_membership
