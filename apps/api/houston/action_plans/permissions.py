@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from houston.action_plans.models import ActionPlan, ActionPlanAssignee, ActionPlanExecution
+from houston.action_plans.constants import ACTIVE_EXECUTION_STATUSES
+from houston.action_plans.models import (
+    ActionPlan,
+    ActionPlanAssignee,
+    ActionPlanExecution,
+    ActionPlanExecutionTask,
+)
 from houston.actions.permissions import can_access_signal_for_linked_action
 from houston.establishments.membership_scope import membership_scope_covers_business_unit
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
@@ -324,3 +330,31 @@ def can_use_action_plan(
     if action_plan.catalog_status != CATALOG_STATUS_ACTIVE:
         return False
     return action_plan_visible_to_membership(membership, action_plan)
+
+
+def can_execute_action_plan_task(
+    membership: EstablishmentMembership | None,
+    task_execution: ActionPlanExecutionTask,
+) -> bool:
+    execution = task_execution.action_plan_execution
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=execution.establishment_id,
+    ):
+        return False
+    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+        return False
+    if membership is None:
+        return False
+
+    task_business_unit = task_execution.execution_team.business_unit
+    if membership.role in ADMIN_ROLES:
+        return True
+    if can_manage_contributor_pole(membership, execution, task_business_unit):
+        return True
+    if membership.role != EstablishmentMembership.Role.STAFF:
+        return False
+    return is_action_plan_execution_assignee(
+        membership,
+        execution,
+    ) and membership_scope_covers_business_unit(membership, task_business_unit)

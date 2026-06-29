@@ -448,6 +448,13 @@ class ActionPlanExecutionTask(BaseModel):
         choices=Status.choices,
         default=Status.PENDING,
     )
+    observation = models.ForeignKey(
+        "observations.Observation",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_execution_tasks",
+        null=True,
+        blank=True,
+    )
     skipped_reason = models.CharField(
         max_length=ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH,
         null=True,

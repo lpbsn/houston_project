@@ -12,6 +12,7 @@ from houston.action_plans.permissions import (
     can_create_linked_action_plan,
     can_create_staff_feed_execution_plan,
     can_define_cross_pole_task,
+    can_execute_action_plan_task,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
     can_use_action_plan,
@@ -103,6 +104,123 @@ def _execution_for_permissions(
         execution.status = status
         execution.save(update_fields=["status", "updated_at"])
     return execution
+
+
+def _task_execution_for_permissions(
+    *,
+    owner,
+    pilot_business_unit,
+    maintenance_business_unit=None,
+    pilot_assignee=None,
+    contributor_assignee=None,
+):
+    execution = _execution_for_permissions(
+        owner=owner,
+        pilot_business_unit=pilot_business_unit,
+        maintenance_business_unit=maintenance_business_unit,
+        pilot_assignee=pilot_assignee,
+        contributor_assignee=contributor_assignee,
+        requires_validation=False,
+    )
+    if maintenance_business_unit is not None:
+        return execution.task_executions.filter(
+            execution_team__business_unit=maintenance_business_unit,
+        ).select_related("action_plan_execution", "execution_team__business_unit").first()
+    return execution.task_executions.select_related(
+        "action_plan_execution",
+        "execution_team__business_unit",
+    ).first()
+
+
+def test_owner_can_execute_action_plan_task(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    task_execution = _task_execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    assert can_execute_action_plan_task(owner_membership, task_execution) is True
+
+
+def test_pilot_manager_can_execute_action_plan_task_without_assignee(
+    owner_membership,
+    manager_membership,
+    business_unit,
+    staff_membership,
+):
+    task_execution = _task_execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    assert can_execute_action_plan_task(manager_membership, task_execution) is True
+
+
+def test_contributor_manager_can_execute_task_in_managed_pole(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    contributor_manager_membership,
+    out_of_scope_staff,
+):
+    task_execution = _task_execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        maintenance_business_unit=maintenance_business_unit,
+        pilot_assignee=owner_membership,
+        contributor_assignee=out_of_scope_staff,
+    )
+    assert can_execute_action_plan_task(contributor_manager_membership, task_execution) is True
+
+
+def test_staff_assignee_in_scope_can_execute_task(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    task_execution = _task_execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    assert can_execute_action_plan_task(staff_membership, task_execution) is True
+
+
+def test_staff_out_of_scope_cannot_execute_task(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    out_of_scope_staff,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        maintenance_business_unit=maintenance_business_unit,
+        pilot_assignee=owner_membership,
+        contributor_assignee=out_of_scope_staff,
+        requires_validation=False,
+    )
+    pilot_task = execution.task_executions.filter(
+        execution_team__business_unit=business_unit,
+    ).select_related("action_plan_execution", "execution_team__business_unit").first()
+    assert can_execute_action_plan_task(out_of_scope_staff, pilot_task) is False
+
+
+def test_staff_non_assignee_cannot_execute_task(
+    owner_membership,
+    business_unit,
+    out_of_scope_staff,
+    staff_membership,
+):
+    task_execution = _task_execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    assert can_execute_action_plan_task(out_of_scope_staff, task_execution) is False
 
 
 def test_pilot_assignee_can_mark_done(

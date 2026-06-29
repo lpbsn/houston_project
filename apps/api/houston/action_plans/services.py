@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from houston.action_plans.constants import (
     ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH,
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
     ACTIVE_EXECUTION_STATUSES,
@@ -19,7 +20,10 @@ from houston.action_plans.constants import (
     MAX_TASK_POSITION,
     MAX_TASKS_PER_PLAN,
     MIN_TASK_POSITION,
+    TASK_STATUS_DONE,
+    TASK_STATUS_OBSERVATION_CREATED,
     TASK_STATUS_PENDING,
+    TASK_STATUS_SKIPPED,
 )
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
@@ -41,6 +45,7 @@ from houston.action_plans.permissions import (
     can_create_linked_action_plan,
     can_create_staff_feed_execution_plan,
     can_define_cross_pole_task,
+    can_execute_action_plan_task,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
     can_use_action_plan,
@@ -50,6 +55,9 @@ from houston.establishments.membership_scope import (
     membership_covers_business_unit_including_admins,
 )
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
+from houston.observations.exceptions import ObservationValidationError
+from houston.observations.models import Observation
+from houston.observations.services import submit_observation
 from houston.signals.models import Signal
 
 
@@ -60,6 +68,35 @@ class ValidatedAssigneePayload:
     start_at: datetime | None = None
     visible_from: datetime | None = None
     end_at: datetime | None = None
+
+
+def _normalize_skipped_reason(skipped_reason: str | None) -> str | None:
+    if skipped_reason is None:
+        return None
+    normalized = skipped_reason.strip()
+    if not normalized:
+        return None
+    if len(normalized) > ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH:
+        raise ActionPlanValidationError("Skipped reason is too long.")
+    return normalized
+
+
+def _lock_execution_task_for_transition(
+    *,
+    task_execution_id: uuid.UUID,
+) -> ActionPlanExecutionTask:
+    task_execution = (
+        ActionPlanExecutionTask.objects.select_for_update()
+        .select_related(
+            "action_plan_execution",
+            "execution_team__business_unit",
+        )
+        .filter(id=task_execution_id)
+        .first()
+    )
+    if task_execution is None:
+        raise ActionPlanValidationError("Task execution not found.")
+    return task_execution
 
 
 def touch_execution_activity(*, execution: ActionPlanExecution, at=None) -> None:
@@ -787,3 +824,117 @@ def cancel_action_plan_execution(
         update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
     )
     return execution
+
+
+@transaction.atomic
+def mark_execution_task_done(
+    *,
+    task_execution: ActionPlanExecutionTask,
+    actor: EstablishmentMembership,
+) -> ActionPlanExecutionTask:
+    task_execution = _lock_execution_task_for_transition(task_execution_id=task_execution.id)
+    execution = task_execution.action_plan_execution
+    if not can_execute_action_plan_task(actor, task_execution):
+        raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
+    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+        raise ActionPlanValidationError("Action plan execution is not active.")
+    if task_execution.status != TASK_STATUS_PENDING:
+        raise ActionPlanValidationError("Task cannot be marked done in its current state.")
+
+    now = timezone.now()
+    task_execution.status = TASK_STATUS_DONE
+    task_execution.completed_at = now
+    task_execution.save(update_fields=["status", "completed_at", "updated_at"])
+    touch_execution_activity(execution=execution, at=now)
+    return task_execution
+
+
+@transaction.atomic
+def skip_execution_task(
+    *,
+    task_execution: ActionPlanExecutionTask,
+    actor: EstablishmentMembership,
+    skipped_reason: str | None = None,
+) -> ActionPlanExecutionTask:
+    task_execution = _lock_execution_task_for_transition(task_execution_id=task_execution.id)
+    execution = task_execution.action_plan_execution
+    if not can_execute_action_plan_task(actor, task_execution):
+        raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
+    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+        raise ActionPlanValidationError("Action plan execution is not active.")
+    if task_execution.status != TASK_STATUS_PENDING:
+        raise ActionPlanValidationError("Task cannot be skipped in its current state.")
+
+    now = timezone.now()
+    task_execution.status = TASK_STATUS_SKIPPED
+    task_execution.skipped_reason = _normalize_skipped_reason(skipped_reason)
+    task_execution.skipped_at = now
+    task_execution.save(
+        update_fields=["status", "skipped_reason", "skipped_at", "updated_at"],
+    )
+    touch_execution_activity(execution=execution, at=now)
+    return task_execution
+
+
+@transaction.atomic
+def record_execution_task_observation_created(
+    *,
+    task_execution: ActionPlanExecutionTask,
+    actor: EstablishmentMembership,
+    observation: Observation,
+) -> ActionPlanExecutionTask:
+    """Internal transition used by Observation handoff."""
+    task_execution = _lock_execution_task_for_transition(task_execution_id=task_execution.id)
+    execution = task_execution.action_plan_execution
+    if not can_execute_action_plan_task(actor, task_execution):
+        raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
+    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+        raise ActionPlanValidationError("Action plan execution is not active.")
+    if task_execution.status != TASK_STATUS_PENDING:
+        raise ActionPlanValidationError("Task cannot create an observation in its current state.")
+
+    now = timezone.now()
+    task_execution.status = TASK_STATUS_OBSERVATION_CREATED
+    task_execution.observation = observation
+    task_execution.observation_created_at = now
+    task_execution.save(
+        update_fields=["status", "observation", "observation_created_at", "updated_at"],
+    )
+    touch_execution_activity(execution=execution, at=now)
+    return task_execution
+
+
+@transaction.atomic
+def create_observation_from_execution_task(
+    *,
+    task_execution: ActionPlanExecutionTask,
+    actor: EstablishmentMembership,
+    text: str,
+    temporary_upload_ids: list[uuid.UUID] | None = None,
+) -> ActionPlanExecutionTask:
+    task_execution = _lock_execution_task_for_transition(task_execution_id=task_execution.id)
+    execution = task_execution.action_plan_execution
+    if not can_execute_action_plan_task(actor, task_execution):
+        raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
+    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+        raise ActionPlanValidationError("Action plan execution is not active.")
+    if task_execution.status != TASK_STATUS_PENDING:
+        raise ActionPlanValidationError("Task cannot create an observation in its current state.")
+
+    try:
+        observation = submit_observation(
+            membership=actor,
+            text=text,
+            temporary_upload_ids=temporary_upload_ids or [],
+            origin=Observation.Origin.ACTION_PLAN_TASK,
+            action_plan_execution=execution,
+            action_plan_execution_task=task_execution,
+        )
+    except ObservationValidationError as exc:
+        raise ActionPlanValidationError(str(exc)) from exc
+
+    return record_execution_task_observation_created(
+        task_execution=task_execution,
+        actor=actor,
+        observation=observation,
+    )

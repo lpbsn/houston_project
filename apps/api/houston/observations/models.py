@@ -10,6 +10,7 @@ class Observation(BaseModel):
     class Origin(models.TextChoices):
         DIRECT_REPORT = "direct_report", "Direct report"
         CHECKLIST_TASK = "checklist_task", "Checklist task"
+        ACTION_PLAN_TASK = "action_plan_task", "Action plan task"
 
     establishment = models.ForeignKey(
         "establishments.Establishment",
@@ -36,6 +37,20 @@ class Observation(BaseModel):
     )
     checklist_task_execution = models.ForeignKey(
         "checklists.ChecklistTaskExecution",
+        on_delete=models.PROTECT,
+        related_name="origin_observations",
+        null=True,
+        blank=True,
+    )
+    action_plan_execution = models.ForeignKey(
+        "action_plans.ActionPlanExecution",
+        on_delete=models.PROTECT,
+        related_name="observations",
+        null=True,
+        blank=True,
+    )
+    action_plan_execution_task = models.ForeignKey(
+        "action_plans.ActionPlanExecutionTask",
         on_delete=models.PROTECT,
         related_name="origin_observations",
         null=True,
