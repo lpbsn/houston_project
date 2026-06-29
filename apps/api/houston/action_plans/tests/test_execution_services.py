@@ -29,7 +29,9 @@ from houston.action_plans.services import (
 )
 from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
 from houston.establishments.models import EstablishmentMembership
+from houston.signals.models import Signal
 from houston.testing.factories import create_establishment
+from houston.testing.taxonomy import create_minimal_v3_signal
 
 pytestmark = pytest.mark.django_db
 
@@ -128,6 +130,66 @@ def test_create_from_signal_sets_execution_signal_only(
 
     assert execution.source_signal_id == signal.id
     assert not hasattr(plan, "source_signal_id")
+
+
+def test_manager_linked_signal_rejects_out_of_scope_pilot(
+    contributor_manager_membership,
+    maintenance_business_unit,
+    business_unit,
+    out_of_scope_staff,
+):
+    signal = create_minimal_v3_signal(
+        contributor_manager_membership,
+        title="Maintenance signal",
+        status=Signal.Status.OPEN,
+    )
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to create"):
+        create_action_plan_with_execution(
+            establishment_id=contributor_manager_membership.establishment_id,
+            created_by=contributor_manager_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Bypass attempt",
+            source_signal_id=signal.id,
+            tasks=[
+                build_task_payload(task="Maintenance task", business_unit=maintenance_business_unit)
+            ],
+            assignees=[
+                build_assignee_payload(
+                    membership=out_of_scope_staff,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+        )
+
+
+def test_manager_linked_signal_allows_in_scope_pilot(
+    contributor_manager_membership,
+    maintenance_business_unit,
+    out_of_scope_staff,
+):
+    signal = create_minimal_v3_signal(
+        contributor_manager_membership,
+        title="Maintenance signal",
+        status=Signal.Status.OPEN,
+    )
+    _, execution = create_action_plan_with_execution(
+        establishment_id=contributor_manager_membership.establishment_id,
+        created_by=contributor_manager_membership,
+        pilot_business_unit_id=maintenance_business_unit.id,
+        title="Linked maintenance plan",
+        source_signal_id=signal.id,
+        tasks=[
+            build_task_payload(task="Maintenance task", business_unit=maintenance_business_unit)
+        ],
+        assignees=[
+            build_assignee_payload(
+                membership=out_of_scope_staff,
+                business_unit=maintenance_business_unit,
+            )
+        ],
+    )
+
+    assert execution.source_signal_id == signal.id
 
 
 def test_create_catalog_plan_without_execution(owner_membership, business_unit):

@@ -542,6 +542,12 @@ def create_action_plan_with_execution(
             raise ActionPlanValidationError("Invalid signal.")
         if not can_create_linked_action_plan(created_by, signal=signal):
             raise ActionPlanPermissionError("Not allowed to create this action plan.")
+        if not can_create_action_plan(
+            created_by,
+            establishment_id=establishment_id,
+            pilot_business_unit=pilot_business_unit,
+        ):
+            raise ActionPlanPermissionError("Not allowed to create this action plan.")
     elif not can_create_action_plan(
         created_by,
         establishment_id=establishment_id,
