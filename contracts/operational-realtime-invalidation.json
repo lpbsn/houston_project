@@ -62,6 +62,21 @@
       "dispatch": "by_reason"
     },
     {
+      "subject_type": "comment",
+      "reason": "comment.execution.created",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.execution.resolved",
+      "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "comment",
+      "reason": "comment.execution.unresolved",
+      "dispatch": "by_reason"
+    },
+    {
       "subject_type": "notification",
       "reason": "notification.created",
       "dispatch": "by_reason"

@@ -7,7 +7,11 @@ from houston.actions.selectors import actions_for_establishment
 from houston.checklists.models import ChecklistExecution
 from houston.checklists.permissions import checklist_execution_visible_to_membership
 from houston.comments.models import Comment
-from houston.comments.selectors import get_action_for_comments, get_signal_for_comments
+from houston.comments.selectors import (
+    get_action_for_comments,
+    get_action_plan_execution_for_comments,
+    get_signal_for_comments,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import is_valid_membership
 from houston.notifications.models import Notification
@@ -82,6 +86,14 @@ def recipient_can_view_notification_subject(
                 get_action_for_comments(
                     membership=recipient,
                     action_id=comment.action_id,
+                )
+                is not None
+            )
+        if comment.action_plan_execution_id is not None:
+            return (
+                get_action_plan_execution_for_comments(
+                    membership=recipient,
+                    execution_id=comment.action_plan_execution_id,
                 )
                 is not None
             )

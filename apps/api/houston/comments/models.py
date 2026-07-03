@@ -27,6 +27,13 @@ class Comment(BaseModel):
         null=True,
         blank=True,
     )
+    action_plan_execution = models.ForeignKey(
+        "action_plans.ActionPlanExecution",
+        on_delete=models.CASCADE,
+        related_name="comments",
+        null=True,
+        blank=True,
+    )
     author_membership = models.ForeignKey(
         "establishments.EstablishmentMembership",
         on_delete=models.PROTECT,
@@ -54,13 +61,29 @@ class Comment(BaseModel):
         indexes = [
             models.Index(fields=["establishment", "signal", "created_at", "id"]),
             models.Index(fields=["establishment", "action", "created_at", "id"]),
+            models.Index(
+                fields=["establishment", "action_plan_execution", "created_at", "id"],
+            ),
             models.Index(fields=["parent_comment", "created_at", "id"]),
         ]
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    Q(signal__isnull=False, action__isnull=True)
-                    | Q(signal__isnull=True, action__isnull=False)
+                    Q(
+                        signal__isnull=False,
+                        action__isnull=True,
+                        action_plan_execution__isnull=True,
+                    )
+                    | Q(
+                        signal__isnull=True,
+                        action__isnull=False,
+                        action_plan_execution__isnull=True,
+                    )
+                    | Q(
+                        signal__isnull=True,
+                        action__isnull=True,
+                        action_plan_execution__isnull=False,
+                    )
                 ),
                 name="comment_exactly_one_parent",
             ),

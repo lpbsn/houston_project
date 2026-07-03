@@ -7,8 +7,13 @@ from unittest.mock import patch
 import pytest
 from django.db import transaction
 from django.utils import timezone
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
 from houston.actions.services import create_action
-from houston.actions.tests.conftest import build_api_membership_on_establishment
+from houston.actions.tests.conftest import (
+    assign_business_unit_scope,
+    build_api_membership_on_establishment,
+)
 from houston.comments.constants import (
     ALREADY_RESOLVED_ERROR_DETAIL,
     NOT_RESOLVED_ERROR_DETAIL,
@@ -16,9 +21,12 @@ from houston.comments.constants import (
 from houston.comments.exceptions import CommentValidationError
 from houston.comments.services import (
     create_action_comment,
+    create_action_plan_execution_comment,
     create_signal_comment,
     resolve_action_comment,
+    resolve_action_plan_execution_comment,
     unresolve_action_comment,
+    unresolve_action_plan_execution_comment,
 )
 from houston.comments.tests.conftest import build_api_membership
 from houston.establishments.models import EstablishmentMembership
@@ -59,8 +67,11 @@ def _signal(owner):
     )
 
 
-def _staff(owner):
-    return build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+def _staff(owner, *, maintenance=None):
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    if maintenance is not None:
+        assign_business_unit_scope(staff, maintenance)
+    return staff
 
 
 def _create_linked_action(*, owner, staff, signal, title: str = "Linked task"):
@@ -182,6 +193,134 @@ def test_create_signal_comment_emits_inherited_for_two_linked_actions():
             if call["reason"] == "comment.signal.inherited"
         }
         assert inherited_entity_ids == {action_one.id, action_two.id}
+
+
+def test_create_signal_comment_emits_inherited_execution_invalidation():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    signal = _signal(owner)
+    maintenance = signal.responsible_business_unit
+    staff = _staff(owner, maintenance=maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Linked execution",
+        source_signal_id=signal.id,
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        create_signal_comment(author_membership=owner, signal=signal, body="signal note")
+
+        comment_calls = _comment_calls(mock_notify)
+        inherited_entity_ids = {
+            call["entity_id"]
+            for call in comment_calls
+            if call["reason"] == "comment.signal.inherited"
+        }
+        assert execution.id in inherited_entity_ids
+
+
+def test_create_execution_comment_root_emits_execution_created():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    staff = _staff(owner, maintenance=maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Execution",
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        create_action_plan_execution_comment(
+            author_membership=owner,
+            execution=execution,
+            body="Sensitive body text",
+        )
+
+        comment_calls = _comment_calls(mock_notify)
+        assert len(comment_calls) == 1
+        _assert_comment_invalidation(
+            mock_notify,
+            establishment_id=owner.establishment_id,
+            reason="comment.execution.created",
+            entity_id=execution.id,
+        )
+
+
+def test_resolve_execution_comment_emits_execution_resolved():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    staff = _staff(owner, maintenance=maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Execution",
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+    root = create_action_plan_execution_comment(
+        author_membership=owner,
+        execution=execution,
+        body="root",
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        resolve_action_plan_execution_comment(
+            execution=execution,
+            comment_id=root.id,
+            resolved_by_membership=owner,
+        )
+
+        comment_calls = _comment_calls(mock_notify)
+        assert len(comment_calls) == 1
+        _assert_comment_invalidation(
+            mock_notify,
+            establishment_id=owner.establishment_id,
+            reason="comment.execution.resolved",
+            entity_id=execution.id,
+        )
+
+
+def test_unresolve_execution_comment_emits_execution_unresolved():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    staff = _staff(owner, maintenance=maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Execution",
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+    root = create_action_plan_execution_comment(
+        author_membership=owner,
+        execution=execution,
+        body="root",
+    )
+    resolve_action_plan_execution_comment(
+        execution=execution,
+        comment_id=root.id,
+        resolved_by_membership=owner,
+    )
+
+    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
+        unresolve_action_plan_execution_comment(execution=execution, comment_id=root.id)
+
+        comment_calls = _comment_calls(mock_notify)
+        assert len(comment_calls) == 1
+        _assert_comment_invalidation(
+            mock_notify,
+            establishment_id=owner.establishment_id,
+            reason="comment.execution.unresolved",
+            entity_id=execution.id,
+        )
 
 
 def test_create_action_comment_root_emits_action_created():
@@ -368,6 +507,9 @@ def test_unresolve_action_comment_not_resolved_does_not_emit():
         "comment.action.created",
         "comment.action.resolved",
         "comment.action.unresolved",
+        "comment.execution.created",
+        "comment.execution.resolved",
+        "comment.execution.unresolved",
     ],
 )
 def test_comment_invalidate_payload_allowlist(reason: str):
