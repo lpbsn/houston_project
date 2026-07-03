@@ -165,15 +165,18 @@ Current API truth is `apps/api/schema.yml`.
 Implemented endpoints (establishment-scoped):
 
 - `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_keys`, `activity_subject_ids`. **Cursor pagination implemented** (reference).
-- `GET /api/v1/establishments/{establishment_id}/execution-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size` (default 25, max 50). **Cursor pagination implemented** (checklist-first page merge preserved; polymorphic opaque cursor).
+- `GET /api/v1/establishments/{establishment_id}/execution-feed/?view_mode=personal|general` — **legacy** polymorphic `action` \| `checklist` (inchangé jusqu'au Lot 10).
+- `GET /api/v1/establishments/{establishment_id}/action-plan-execution-feed/?view_mode=personal|general` — **Lot 5** feed unifié `item_type=action_plan_execution` uniquement ; optional `cursor`, `page_size` (default 25, max 50). Single-type cursor on `last_activity_at`, `created_at`, `id`.
 
 Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
 
 Pagination standard: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
 
-Candidate / not implemented: advanced search, feed counts, saved views, global cross-type sort interleaving (checklist-first merge remains).
+Candidate / not implemented: advanced search, feed counts, saved views, global cross-type sort interleaving (checklist-first merge remains on **legacy** `execution-feed/`).
 
-**Execution Feed page merge (implemented):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at`, `is_overdue`, `execution_source`; overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)).
+**Action plan execution feed (Lot 5, implemented):** `item_type=action_plan_execution` only. Card fields: title, `description_short`, status, pilot pole, `involved_poles` (always present, `[]` when empty), optional signal summary, assignees, `end_at`, `is_overdue`, up to 3 task previews, execution `permission_hints`. Status filter: `in_progress`, `pending_validation` only. Visibility: `(execution.visible_from IS NULL OR now >= execution.visible_from)`; **Ma vue** additionally requires assignee `visible_from` when the viewer is assigné. Read-path schedule materialization runs on GET via `ensure_visible_action_plan_executions_materialized` (horizon 3 days, stale guard 30 min) — **not** on legacy `execution-feed/`. Coexistence dual feed until Lot 10; frontend Lot 9 targets `action-plan-execution-feed/`.
+
+**Execution Feed page merge (legacy `execution-feed/`):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at`, `is_overdue`, `execution_source`; overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)).
 
 **Execution Feed `+` menu (cible, Lot 0):** mobile-first bottom sheet with **Action** (Owner/Director/Manager) and **Checklist** (Owner/Director/Manager : créer ou utiliser enregistrée ; Staff : utiliser enregistrée — « Lancer pour moi » uniquement). See [`checklist_domain.md`](checklist_domain.md) §5.16.
 

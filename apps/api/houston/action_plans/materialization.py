@@ -4,6 +4,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 
 from django.db import IntegrityError, transaction
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -29,6 +30,7 @@ from houston.action_plans.models import (
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
 )
+from houston.action_plans.permissions import _scope_business_unit_ids
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
     _create_execution_record,
@@ -36,6 +38,7 @@ from houston.action_plans.services import (
     _validate_execution_has_content,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.establishments.timezone_utils import (
     establishment_local_date,
     establishment_timezone,
@@ -560,12 +563,79 @@ def materialize_schedules_horizon(
     return count
 
 
+def _schedule_assignee_exists_subquery(*, membership_id: uuid.UUID):
+    return ActionPlanScheduleAssignee.objects.filter(
+        action_plan_schedule_id=OuterRef("pk"),
+        membership_id=membership_id,
+    )
+
+
+def _schedule_materialization_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: str,
+) -> Q:
+    if view_mode == "personal":
+        assignee_exists = _schedule_assignee_exists_subquery(membership_id=membership.id)
+        return Q(establishment_id=membership.establishment_id) & (
+            Q(created_by_id=membership.id) | Q(Exists(assignee_exists))
+        )
+
+    if membership.role in ADMIN_ROLES:
+        return Q(establishment_id=membership.establishment_id)
+
+    assignee_exists = _schedule_assignee_exists_subquery(membership_id=membership.id)
+    personal_q = Q(created_by_id=membership.id) | Q(Exists(assignee_exists))
+
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return personal_q & Q(establishment_id=membership.establishment_id)
+
+    business_unit_ids = _scope_business_unit_ids(membership)
+    if not business_unit_ids:
+        return personal_q & Q(establishment_id=membership.establishment_id)
+    scope_q = Q(action_plan__pilot_business_unit_id__in=business_unit_ids)
+    return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
+
+
+def _schedule_read_path_materialization_is_fresh(
+    *,
+    schedule: ActionPlanSchedule,
+    now: datetime,
+    stale_minutes: int = READ_PATH_MATERIALIZATION_STALE_MINUTES,
+) -> bool:
+    if schedule.last_materialized_at is None:
+        return False
+    return (now - schedule.last_materialized_at) < timedelta(minutes=stale_minutes)
+
+
 def ensure_visible_action_plan_executions_materialized(
     *,
     membership: EstablishmentMembership,
     view_mode: str = "personal",
     horizon_days: int = MATERIALIZATION_HORIZON_DAYS,
 ) -> int:
-    """Lot 5 hook — not wired in Lot 4."""
-    del membership, view_mode, horizon_days
-    return 0
+    now = timezone.now()
+    read_horizon_days = min(horizon_days, READ_PATH_MATERIALIZATION_HORIZON_DAYS)
+    visibility_q = _schedule_materialization_visibility_q(
+        membership=membership,
+        view_mode=view_mode,
+    )
+    schedules = list(
+        ActionPlanSchedule.objects.filter(
+            visibility_q,
+            status=SCHEDULE_STATUS_ACTIVE,
+        ).select_related("establishment", "action_plan")
+    )
+
+    count = 0
+    for schedule in schedules:
+        if _schedule_read_path_materialization_is_fresh(schedule=schedule, now=now):
+            continue
+        materialized = materialize_schedule_occurrences_in_horizon(
+            schedule=schedule,
+            horizon_days=read_horizon_days,
+            now=now,
+            visible_only=True,
+        )
+        count += len(materialized)
+    return count

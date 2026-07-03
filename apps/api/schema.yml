@@ -458,6 +458,62 @@ paths:
                 items:
                   $ref: '#/components/schemas/CatalogBusinessUnitSuggestion'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-feed/:
+    get:
+      operationId: v1_establishments_action_plan_execution_feed_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque pagination cursor from a previous response next_cursor.
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/create-observation/:
     post:
       operationId: v1_establishments_action_plan_execution_tasks_create_observation_create
@@ -7436,6 +7492,114 @@ components:
       - use_shared_chronology
       - validated_at
       - visible_from
+    ActionPlanExecutionFeedItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description_short:
+          type: string
+        status:
+          type: string
+        requires_validation:
+          type: boolean
+        pilot_business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        involved_poles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanInvolvedPole'
+        signal_summary:
+          allOf:
+          - $ref: '#/components/schemas/ActionSignalSummary'
+          nullable: true
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionMembershipRef'
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_overdue:
+          type: boolean
+        task_executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionFeedTaskPreview'
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        permission_hints:
+          $ref: '#/components/schemas/ActionPlanExecutionPermissionHints'
+      required:
+      - assignees
+      - created_at
+      - description_short
+      - end_at
+      - id
+      - involved_poles
+      - is_overdue
+      - last_activity_at
+      - permission_hints
+      - pilot_business_unit
+      - requires_validation
+      - signal_summary
+      - status
+      - task_executions
+      - title
+    ActionPlanExecutionFeedItemWrapper:
+      type: object
+      properties:
+        item_type:
+          type: string
+        action_plan_execution:
+          $ref: '#/components/schemas/ActionPlanExecutionFeedItem'
+      required:
+      - action_plan_execution
+      - item_type
+    ActionPlanExecutionFeedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionFeedItemWrapper'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+      required:
+      - has_more
+      - items
+      - next_cursor
+    ActionPlanExecutionFeedTaskPreview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task:
+          type: string
+        position:
+          type: integer
+        status:
+          type: string
+        business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+      required:
+      - business_unit
+      - id
+      - position
+      - status
+      - task
     ActionPlanExecutionPermissionHints:
       type: object
       properties:

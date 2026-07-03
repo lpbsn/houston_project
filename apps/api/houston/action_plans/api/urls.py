@@ -6,6 +6,7 @@ from houston.action_plans.api.views import (
     ActionPlanDetailView,
     ActionPlanExecutionCancelView,
     ActionPlanExecutionDetailView,
+    ActionPlanExecutionFeedView,
     ActionPlanExecutionMarkDoneView,
     ActionPlanExecutionReopenView,
     ActionPlanExecutionTaskCreateObservationView,
@@ -20,6 +21,11 @@ from houston.action_plans.api.views import (
 )
 
 urlpatterns = [
+    path(
+        "establishments/<uuid:establishment_id>/action-plan-execution-feed/",
+        ActionPlanExecutionFeedView.as_view(),
+        name="action-plan-execution-feed",
+    ),
     path(
         "establishments/<uuid:establishment_id>/action-plans/",
         ActionPlanListCreateView.as_view(),

@@ -33,6 +33,7 @@ __all__ = [
     "action_plans_url",
     "action_plan_url",
     "action_plan_execution_url",
+    "action_plan_execution_feed_url",
     "action_plan_task_url",
     "action_plan_schedule_url",
     "action_plan_schedule_deactivate_url",
@@ -54,6 +55,11 @@ def action_plan_execution_url(establishment_id, execution_id, suffix: str = "") 
         f"/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/"
     )
     return base + suffix.lstrip("/")
+
+
+def action_plan_execution_feed_url(establishment_id, query: str = "") -> str:
+    base = f"/api/v1/establishments/{establishment_id}/action-plan-execution-feed/"
+    return base + query
 
 
 def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") -> str:

@@ -1,0 +1,134 @@
+from __future__ import annotations
+
+from rest_framework import serializers
+
+from houston.action_plans.api.serializers import (
+    ActionPlanBusinessUnitSerializer,
+    ActionPlanExecutionPermissionHintsSerializer,
+    ActionPlanInvolvedPoleSerializer,
+    _serialize_business_unit,
+    _serialize_involved_poles,
+    _serialize_signal_summary,
+)
+from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.selectors import action_plan_execution_overdue
+from houston.actions.api.serializers import (
+    ActionMembershipRefSerializer,
+    ActionSignalSummarySerializer,
+    instruction_short,
+)
+
+FEED_TASK_PREVIEW_LIMIT = 3
+
+
+def _membership_display_name(membership) -> str:
+    user = membership.user
+    return user.get_full_name() or user.email or user.username
+
+
+class ActionPlanExecutionFeedTaskPreviewSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    task = serializers.CharField()
+    position = serializers.IntegerField()
+    status = serializers.CharField()
+    business_unit = ActionPlanBusinessUnitSerializer()
+
+
+class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    description_short = serializers.CharField()
+    status = serializers.CharField()
+    requires_validation = serializers.BooleanField()
+    pilot_business_unit = ActionPlanBusinessUnitSerializer()
+    involved_poles = ActionPlanInvolvedPoleSerializer(many=True)
+    signal_summary = ActionSignalSummarySerializer(allow_null=True)
+    assignees = ActionMembershipRefSerializer(many=True)
+    end_at = serializers.DateTimeField(allow_null=True)
+    is_overdue = serializers.BooleanField()
+    task_executions = ActionPlanExecutionFeedTaskPreviewSerializer(many=True)
+    last_activity_at = serializers.DateTimeField()
+    created_at = serializers.DateTimeField()
+    permission_hints = ActionPlanExecutionPermissionHintsSerializer()
+
+
+class ActionPlanExecutionFeedItemWrapperSerializer(serializers.Serializer):
+    item_type = serializers.CharField()
+    action_plan_execution = ActionPlanExecutionFeedItemSerializer()
+
+
+class ActionPlanExecutionFeedResponseSerializer(serializers.Serializer):
+    items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
+    next_cursor = serializers.CharField(allow_null=True)
+    has_more = serializers.BooleanField()
+
+
+def _serialize_feed_assignees(execution: ActionPlanExecution) -> list[dict]:
+    assignees: list[dict] = []
+    seen_membership_ids: set = set()
+    for assignee in execution.assignees.all():
+        if assignee.membership_id in seen_membership_ids:
+            continue
+        seen_membership_ids.add(assignee.membership_id)
+        assignees.append(
+            {
+                "membership_id": assignee.membership_id,
+                "display_name": _membership_display_name(assignee.membership),
+                "role": assignee.membership.role,
+            }
+        )
+    return assignees
+
+
+def _serialize_feed_task_previews(execution: ActionPlanExecution) -> list[dict]:
+    previews: list[dict] = []
+    for task_execution in execution.task_executions.all()[:FEED_TASK_PREVIEW_LIMIT]:
+        previews.append(
+            {
+                "id": task_execution.id,
+                "task": task_execution.task,
+                "position": task_execution.position,
+                "status": task_execution.status,
+                "business_unit": _serialize_business_unit(
+                    task_execution.execution_team.business_unit,
+                ),
+            }
+        )
+    return previews
+
+
+def serialize_action_plan_execution_feed_item(
+    *,
+    execution: ActionPlanExecution,
+    membership,
+    is_overdue: bool | None = None,
+) -> dict:
+    from houston.action_plans.permission_hints import (
+        build_action_plan_execution_permission_hints,
+    )
+
+    overdue = (
+        is_overdue
+        if is_overdue is not None
+        else action_plan_execution_overdue(execution=execution)
+    )
+    return {
+        "id": execution.id,
+        "title": execution.title,
+        "description_short": instruction_short(execution.description),
+        "status": execution.status,
+        "requires_validation": execution.requires_validation,
+        "pilot_business_unit": _serialize_business_unit(execution.pilot_business_unit),
+        "involved_poles": _serialize_involved_poles(execution),
+        "signal_summary": _serialize_signal_summary(execution),
+        "assignees": _serialize_feed_assignees(execution),
+        "end_at": execution.end_at,
+        "is_overdue": overdue,
+        "task_executions": _serialize_feed_task_previews(execution),
+        "last_activity_at": execution.last_activity_at,
+        "created_at": execution.created_at,
+        "permission_hints": build_action_plan_execution_permission_hints(
+            membership=membership,
+            execution=execution,
+        ),
+    }
