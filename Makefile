@@ -5,7 +5,7 @@
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
-	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db \
+	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data \
 	shared-dev-up shared-dev-up-scheduler shared-dev-bootstrap shared-dev-migrate shared-dev-import-catalog shared-dev-check
 
 # -----------------------------------------------------------------------------
@@ -162,6 +162,9 @@ reset-dev-db: assert-local-dev-db
 	@echo "  - Après reset, make web-install peut être nécessaire si vous utilisez le conteneur web."
 	$(COMPOSE) down -v --remove-orphans
 	$(MAKE) bootstrap-dev
+
+clean-operational-test-data: assert-local-dev-db
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py clean_operational_test_data $(ARGS)'
 
 # -----------------------------------------------------------------------------
 # Shared-dev — explicit only

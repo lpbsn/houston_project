@@ -29,6 +29,18 @@ def _schedule_storage_file_deletion(*, storage_key: str) -> None:
     transaction.on_commit(lambda: _delete_storage_file_idempotent(storage_key=storage_key))
 
 
+def schedule_storage_files_deletion(*, storage_keys: list[str]) -> None:
+    keys = [key for key in storage_keys if key]
+    if not keys:
+        return
+
+    def _delete_all() -> None:
+        for storage_key in keys:
+            _delete_storage_file_idempotent(storage_key=storage_key)
+
+    transaction.on_commit(_delete_all)
+
+
 @transaction.atomic
 def delete_observation_media_permanently(*, media: ObservationMedia) -> None:
     upload = media.temporary_upload
