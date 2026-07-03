@@ -8,6 +8,8 @@ from django.utils import timezone
 
 from houston.action_plans.constants import (
     CATALOG_STATUS_ACTIVE,
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_IN_PROGRESS,
     RECURRENCE_DAY_FRIDAY,
     RECURRENCE_DAY_MONDAY,
     RECURRENCE_DAY_SATURDAY,
@@ -16,11 +18,14 @@ from houston.action_plans.constants import (
     RECURRENCE_DAY_TUESDAY,
     RECURRENCE_DAY_WEDNESDAY,
     SCHEDULE_STATUS_ACTIVE,
+    TASK_STATUS_PENDING,
 )
 from houston.action_plans.exceptions import ActionPlanValidationError
 from houston.action_plans.models import (
     ActionPlan,
+    ActionPlanAssignee,
     ActionPlanExecution,
+    ActionPlanExecutionTask,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
 )
@@ -161,21 +166,182 @@ def _existing_execution(
     schedule: ActionPlanSchedule,
     occurrence_date: date,
     schedule_assignee: ActionPlanScheduleAssignee | None,
+    active_only: bool = True,
 ) -> ActionPlanExecution | None:
     if schedule.use_shared_chronology:
-        return ActionPlanExecution.objects.filter(
+        queryset = ActionPlanExecution.objects.filter(
             action_plan_schedule_id=schedule.id,
             occurrence_date=occurrence_date,
             use_shared_chronology=True,
-        ).first()
-    if schedule_assignee is None:
+        )
+    elif schedule_assignee is None:
         return None
-    return ActionPlanExecution.objects.filter(
-        action_plan_schedule_id=schedule.id,
+    else:
+        queryset = ActionPlanExecution.objects.filter(
+            action_plan_schedule_id=schedule.id,
+            occurrence_date=occurrence_date,
+            schedule_source_membership_id=schedule_assignee.membership_id,
+            use_shared_chronology=False,
+        )
+    if active_only:
+        queryset = queryset.filter(status=EXECUTION_STATUS_IN_PROGRESS)
+    return queryset.first()
+
+
+def _execution_structure_is_complete(execution: ActionPlanExecution) -> bool:
+    return execution.task_executions.exists() and execution.assignees.exists()
+
+
+def _ensure_execution_structure_if_needed(
+    *,
+    execution: ActionPlanExecution,
+    pilot_business_unit,
+    plan_tasks: list,
+    assignees: list[ValidatedAssigneePayload],
+) -> None:
+    if _execution_structure_is_complete(execution):
+        return
+
+    existing_teams = list(execution.execution_teams.all())
+    if existing_teams:
+        teams_by_bu_id = {team.business_unit_id: team for team in existing_teams}
+        if assignees and not execution.assignees.exists():
+            ActionPlanAssignee.objects.bulk_create(
+                [
+                    ActionPlanAssignee(
+                        action_plan_execution=execution,
+                        execution_team=teams_by_bu_id[assignee.business_unit.id],
+                        membership=assignee.membership,
+                        start_at=assignee.start_at,
+                        visible_from=assignee.visible_from,
+                        end_at=assignee.end_at,
+                    )
+                    for assignee in assignees
+                ]
+            )
+        if plan_tasks and not execution.task_executions.exists():
+            ActionPlanExecutionTask.objects.bulk_create(
+                [
+                    ActionPlanExecutionTask(
+                        action_plan_execution=execution,
+                        execution_team=teams_by_bu_id[plan_task.business_unit_id],
+                        action_plan_task=plan_task,
+                        task=plan_task.task,
+                        position=plan_task.position,
+                        status=TASK_STATUS_PENDING,
+                    )
+                    for plan_task in plan_tasks
+                ]
+            )
+        return
+
+    _materialize_execution_structure(
+        execution=execution,
+        pilot_business_unit=pilot_business_unit,
+        plan_tasks=plan_tasks,
+        assignees=assignees,
+    )
+
+
+def _try_reactivate_canceled_execution(
+    *,
+    execution: ActionPlanExecution,
+    schedule: ActionPlanSchedule,
+) -> ActionPlanExecution | None:
+    from houston.action_plans.schedule_services import (
+        _can_reactivate_canceled_schedule_execution,
+        reactivate_schedule_future_execution,
+    )
+
+    valid_dates = set(
+        iter_occurrence_dates(
+            schedule=schedule,
+            from_date=schedule.start_date,
+            until_date=schedule.end_date,
+        )
+    )
+    current_membership_ids = set(
+        schedule.schedule_assignees.values_list("membership_id", flat=True)
+    )
+    if not _can_reactivate_canceled_schedule_execution(
+        execution=execution,
+        schedule=schedule,
+        valid_dates=valid_dates,
+        current_membership_ids=current_membership_ids,
+        now=timezone.now(),
+    ):
+        return None
+    return reactivate_schedule_future_execution(execution=execution, schedule=schedule)
+
+
+def _resolve_existing_schedule_execution(
+    *,
+    schedule: ActionPlanSchedule,
+    occurrence_date: date,
+    schedule_assignee: ActionPlanScheduleAssignee | None,
+    action_plan: ActionPlan,
+    plan_tasks: list,
+    assignees: list[ValidatedAssigneePayload],
+) -> ActionPlanExecution | None:
+    existing = _existing_execution(
+        schedule=schedule,
         occurrence_date=occurrence_date,
-        schedule_source_membership_id=schedule_assignee.membership_id,
-        use_shared_chronology=False,
-    ).first()
+        schedule_assignee=schedule_assignee,
+        active_only=True,
+    )
+    if existing is not None:
+        _ensure_execution_structure_if_needed(
+            execution=existing,
+            pilot_business_unit=action_plan.pilot_business_unit,
+            plan_tasks=plan_tasks,
+            assignees=assignees,
+        )
+        return existing
+
+    canceled = _existing_execution(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+        schedule_assignee=schedule_assignee,
+        active_only=False,
+    )
+    if canceled is not None and canceled.status == EXECUTION_STATUS_CANCELED:
+        reactivated = _try_reactivate_canceled_execution(
+            execution=canceled,
+            schedule=schedule,
+        )
+        if reactivated is not None:
+            _ensure_execution_structure_if_needed(
+                execution=reactivated,
+                pilot_business_unit=action_plan.pilot_business_unit,
+                plan_tasks=plan_tasks,
+                assignees=assignees,
+            )
+            return reactivated
+    return None
+
+
+def _occurrence_is_visible_for_schedule(
+    *,
+    schedule: ActionPlanSchedule,
+    occurrence_date: date,
+    resolved_now: datetime,
+) -> bool:
+    if schedule.use_shared_chronology:
+        occurrence_start, _, _ = occurrence_datetimes_for_schedule(
+            schedule=schedule,
+            occurrence_date=occurrence_date,
+        )
+        return occurrence_start - VISIBLE_FROM_OFFSET <= resolved_now
+
+    for schedule_assignee in schedule.schedule_assignees.all():
+        occurrence_start, _, _ = occurrence_datetimes_for_schedule(
+            schedule=schedule,
+            occurrence_date=occurrence_date,
+            schedule_assignee=schedule_assignee,
+        )
+        if occurrence_start - VISIBLE_FROM_OFFSET <= resolved_now:
+            return True
+    return False
 
 
 @transaction.atomic
@@ -196,25 +362,11 @@ def materialize_execution_from_schedule(
             raise ActionPlanValidationError(
                 "schedule_assignee is not used for shared chronology materialization.",
             )
-        existing = _existing_execution(
-            schedule=schedule,
-            occurrence_date=occurrence_date,
-            schedule_assignee=None,
-        )
-        if existing is not None:
-            return existing
     else:
         if schedule_assignee is None:
             raise ActionPlanValidationError(
                 "schedule_assignee is required for individual chronology materialization.",
             )
-        existing = _existing_execution(
-            schedule=schedule,
-            occurrence_date=occurrence_date,
-            schedule_assignee=schedule_assignee,
-        )
-        if existing is not None:
-            return existing
 
     _assert_can_materialize_from_schedule(schedule=schedule, action_plan=action_plan)
 
@@ -254,6 +406,17 @@ def materialize_execution_from_schedule(
         assignee_count=len(assignees),
     )
 
+    resolved = _resolve_existing_schedule_execution(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+        schedule_assignee=schedule_assignee,
+        action_plan=action_plan,
+        plan_tasks=plan_tasks,
+        assignees=assignees,
+    )
+    if resolved is not None:
+        return resolved
+
     try:
         with transaction.atomic():
             execution = _create_execution_record(
@@ -280,12 +443,26 @@ def materialize_execution_from_schedule(
             schedule=schedule,
             occurrence_date=occurrence_date,
             schedule_assignee=schedule_assignee,
+            active_only=False,
         )
         if recovered is not None:
+            if recovered.status == EXECUTION_STATUS_CANCELED:
+                reactivated = _try_reactivate_canceled_execution(
+                    execution=recovered,
+                    schedule=schedule,
+                )
+                if reactivated is not None:
+                    recovered = reactivated
+            _ensure_execution_structure_if_needed(
+                execution=recovered,
+                pilot_business_unit=action_plan.pilot_business_unit,
+                plan_tasks=plan_tasks,
+                assignees=assignees,
+            )
             return recovered
         raise
 
-    _materialize_execution_structure(
+    _ensure_execution_structure_if_needed(
         execution=execution,
         pilot_business_unit=action_plan.pilot_business_unit,
         plan_tasks=plan_tasks,
@@ -344,11 +521,11 @@ def materialize_schedule_occurrences_in_horizon(
         until_date=until_date,
     ):
         if visible_only:
-            occurrence_start, _, _ = occurrence_datetimes_for_schedule(
+            if not _occurrence_is_visible_for_schedule(
                 schedule=schedule,
                 occurrence_date=occurrence_date,
-            )
-            if occurrence_start - VISIBLE_FROM_OFFSET > resolved_now:
+                resolved_now=resolved_now,
+            ):
                 continue
         materialized.extend(
             _materialize_occurrence(

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 
 from django.db import transaction
 from django.utils import timezone
 
 from houston.action_plans.constants import (
+    CANCEL_ORIGIN_SCHEDULE_SYNC,
     CATALOG_STATUS_ACTIVE,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
@@ -23,7 +24,6 @@ from houston.action_plans.exceptions import (
 )
 from houston.action_plans.materialization import (
     MATERIALIZATION_HORIZON_DAYS,
-    _materialize_occurrence,
     iter_occurrence_dates,
     materialize_schedule_occurrences_in_horizon,
     occurrence_datetimes_for_schedule,
@@ -139,10 +139,101 @@ def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None
     now = timezone.now()
     execution.status = EXECUTION_STATUS_CANCELED
     execution.canceled_at = now
+    execution.cancel_origin = CANCEL_ORIGIN_SCHEDULE_SYNC
     execution.last_activity_at = now
     execution.save(
-        update_fields=["status", "canceled_at", "last_activity_at", "updated_at"],
+        update_fields=[
+            "status",
+            "canceled_at",
+            "cancel_origin",
+            "last_activity_at",
+            "updated_at",
+        ],
     )
+
+
+def _schedule_assignee_for_execution(
+    *,
+    execution: ActionPlanExecution,
+    schedule: ActionPlanSchedule,
+) -> ActionPlanScheduleAssignee | None:
+    if schedule.use_shared_chronology or execution.schedule_source_membership_id is None:
+        return None
+    return schedule.schedule_assignees.filter(
+        membership_id=execution.schedule_source_membership_id,
+    ).first()
+
+
+def _effective_assignee_times(
+    *,
+    schedule_start_at: time,
+    schedule_end_at: time,
+    assignee_start_at: time | None,
+    assignee_end_at: time | None,
+) -> tuple[time, time]:
+    effective_start = assignee_start_at if assignee_start_at is not None else schedule_start_at
+    effective_end = assignee_end_at if assignee_end_at is not None else schedule_end_at
+    return effective_start, effective_end
+
+
+def _can_reactivate_canceled_schedule_execution(
+    *,
+    execution: ActionPlanExecution,
+    schedule: ActionPlanSchedule,
+    valid_dates: set[date],
+    current_membership_ids: set[uuid.UUID],
+    now: datetime,
+) -> bool:
+    if execution.status != EXECUTION_STATUS_CANCELED:
+        return False
+    if execution.cancel_origin != CANCEL_ORIGIN_SCHEDULE_SYNC:
+        return False
+    if execution.occurrence_date is None or execution.occurrence_date not in valid_dates:
+        return False
+    if execution.start_at is None or now >= execution.start_at:
+        return False
+    if not schedule.use_shared_chronology:
+        if execution.schedule_source_membership_id is None:
+            return False
+        if execution.schedule_source_membership_id not in current_membership_ids:
+            return False
+    return True
+
+
+def reactivate_schedule_future_execution(
+    *,
+    execution: ActionPlanExecution,
+    schedule: ActionPlanSchedule,
+) -> ActionPlanExecution:
+    if execution.occurrence_date is None:
+        return execution
+    schedule_assignee = _schedule_assignee_for_execution(execution=execution, schedule=schedule)
+    occurrence_start, occurrence_end, visible_from = occurrence_datetimes_for_schedule(
+        schedule=schedule,
+        occurrence_date=execution.occurrence_date,
+        schedule_assignee=schedule_assignee,
+    )
+    now = timezone.now()
+    execution.status = EXECUTION_STATUS_IN_PROGRESS
+    execution.canceled_at = None
+    execution.cancel_origin = None
+    execution.start_at = occurrence_start
+    execution.end_at = occurrence_end
+    execution.visible_from = visible_from
+    execution.last_activity_at = now
+    execution.save(
+        update_fields=[
+            "status",
+            "canceled_at",
+            "cancel_origin",
+            "start_at",
+            "end_at",
+            "visible_from",
+            "last_activity_at",
+            "updated_at",
+        ],
+    )
+    return execution
 
 
 def _sync_future_execution_window(
@@ -152,9 +243,11 @@ def _sync_future_execution_window(
 ) -> None:
     if execution.occurrence_date is None:
         return
+    schedule_assignee = _schedule_assignee_for_execution(execution=execution, schedule=schedule)
     occurrence_start, occurrence_end, visible_from = occurrence_datetimes_for_schedule(
         schedule=schedule,
         occurrence_date=execution.occurrence_date,
+        schedule_assignee=schedule_assignee,
     )
     now = timezone.now()
     execution.start_at = occurrence_start
@@ -176,6 +269,8 @@ def _validate_schedule_assignee_payloads(
     *,
     establishment_id: uuid.UUID,
     assignees: list[dict],
+    schedule_start_at: time,
+    schedule_end_at: time,
 ) -> list[dict]:
     if not assignees:
         return []
@@ -212,7 +307,13 @@ def _validate_schedule_assignee_payloads(
 
         start_at = assignee_item.get("start_at")
         end_at = assignee_item.get("end_at")
-        if start_at is not None and end_at is not None and end_at <= start_at:
+        effective_start, effective_end = _effective_assignee_times(
+            schedule_start_at=schedule_start_at,
+            schedule_end_at=schedule_end_at,
+            assignee_start_at=start_at,
+            assignee_end_at=end_at,
+        )
+        if effective_end <= effective_start:
             raise ActionPlanValidationError(
                 "Schedule assignee end_at must be after start_at.",
             )
@@ -294,6 +395,8 @@ def create_action_plan_schedule(
     validated_assignees = _validate_schedule_assignee_payloads(
         establishment_id=action_plan.establishment_id,
         assignees=assignees or [],
+        schedule_start_at=start_at,
+        schedule_end_at=end_at,
     )
     task_count = ActionPlanTask.objects.filter(action_plan=action_plan).count()
     _validate_execution_has_content(
@@ -328,30 +431,12 @@ def _materialize_new_schedule_occurrences(
     schedule: ActionPlanSchedule,
     now: datetime | None = None,
 ) -> None:
-    from houston.establishments.timezone_utils import establishment_local_date
-
-    resolved_now = now or timezone.now()
-    today = establishment_local_date(establishment=schedule.establishment, at=resolved_now)
-    until_date = today + timedelta(days=MATERIALIZATION_HORIZON_DAYS)
-    existing_dates = set(
-        schedule.executions.filter(occurrence_date__isnull=False).values_list(
-            "occurrence_date",
-            flat=True,
-        )
-    )
-    materialized_any = False
-    for occurrence_date in iter_occurrence_dates(
+    materialize_schedule_occurrences_in_horizon(
         schedule=schedule,
-        from_date=today,
-        until_date=until_date,
-    ):
-        if occurrence_date in existing_dates:
-            continue
-        _materialize_occurrence(schedule=schedule, occurrence_date=occurrence_date)
-        materialized_any = True
-    if materialized_any:
-        schedule.last_materialized_at = timezone.now()
-        schedule.save(update_fields=["last_materialized_at", "updated_at"])
+        horizon_days=MATERIALIZATION_HORIZON_DAYS,
+        now=now,
+        visible_only=False,
+    )
 
 
 def _sync_schedule_executions_after_update(
@@ -367,13 +452,34 @@ def _sync_schedule_executions_after_update(
             until_date=schedule.end_date,
         )
     )
+    current_membership_ids = set(
+        schedule.schedule_assignees.values_list("membership_id", flat=True)
+    )
 
     for execution in schedule.executions.all():
+        if execution.status == EXECUTION_STATUS_CANCELED:
+            if _can_reactivate_canceled_schedule_execution(
+                execution=execution,
+                schedule=schedule,
+                valid_dates=valid_dates,
+                current_membership_ids=current_membership_ids,
+                now=resolved_now,
+            ):
+                reactivate_schedule_future_execution(execution=execution, schedule=schedule)
+            continue
+
         classification = classify_schedule_linked_execution(
             execution=execution,
             now=resolved_now,
         )
         if classification == "terminal" or classification == "active_started":
+            continue
+        if (
+            not schedule.use_shared_chronology
+            and execution.schedule_source_membership_id is not None
+            and execution.schedule_source_membership_id not in current_membership_ids
+        ):
+            _cancel_schedule_future_execution(execution=execution)
             continue
         if execution.occurrence_date not in valid_dates:
             _cancel_schedule_future_execution(execution=execution)
@@ -441,6 +547,8 @@ def update_action_plan_schedule(
         validated_assignees = _validate_schedule_assignee_payloads(
             establishment_id=schedule.establishment_id,
             assignees=assignees,
+            schedule_start_at=next_start_at,
+            schedule_end_at=next_end_at,
         )
         task_count = ActionPlanTask.objects.filter(action_plan=schedule.action_plan_id).count()
         _validate_execution_has_content(

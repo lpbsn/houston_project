@@ -232,6 +232,98 @@ def test_concurrent_materialization_creates_single_execution(
 
     assert results[0].id == results[1].id
     assert ActionPlanExecution.objects.filter(action_plan_schedule_id=schedule_id).count() == 1
+    assert results[0].task_executions.exists()
+    assert results[0].assignees.exists()
+
+
+def test_concurrent_materialization_completes_structure_on_recovery(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday"],
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    occurrence_date = schedule.start_date
+    while occurrence_date.weekday() != 0:
+        occurrence_date += timezone.timedelta(days=1)
+
+    execution = materialize_execution_from_schedule(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+    )
+    execution.task_executions.all().delete()
+    execution.assignees.all().delete()
+    assert not execution.task_executions.exists()
+    assert not execution.assignees.exists()
+
+    rematerialized = materialize_execution_from_schedule(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+    )
+    assert rematerialized.id == execution.id
+    assert rematerialized.task_executions.exists()
+    assert rematerialized.assignees.exists()
+
+
+def test_canceled_does_not_block_other_assignee_materialization(
+    owner_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    establishment = owner_membership.establishment
+    staff_a = _create_staff(establishment, business_unit)
+    staff_b = _create_staff(establishment, business_unit)
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=21)
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=["monday"],
+        assignees=[
+            build_schedule_assignee_payload(membership=staff_a, business_unit=business_unit),
+            build_schedule_assignee_payload(membership=staff_b, business_unit=business_unit),
+        ],
+        use_shared_chronology=False,
+        **window,
+    )
+    schedule.executions.all().delete()
+    occurrence_date = schedule.start_date
+    while occurrence_date.weekday() != 0:
+        occurrence_date += timezone.timedelta(days=1)
+
+    assignee_a = schedule.schedule_assignees.get(membership_id=staff_a.id)
+    assignee_b = schedule.schedule_assignees.get(membership_id=staff_b.id)
+    execution_a = materialize_execution_from_schedule(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+        schedule_assignee=assignee_a,
+    )
+    execution_a.status = "canceled"
+    execution_a.canceled_at = timezone.now()
+    execution_a.save(update_fields=["status", "canceled_at", "updated_at"])
+
+    execution_b = materialize_execution_from_schedule(
+        schedule=schedule,
+        occurrence_date=occurrence_date,
+        schedule_assignee=assignee_b,
+    )
+    assert execution_b.status == "in_progress"
+    assert execution_b.schedule_source_membership_id == staff_b.id
 
 
 def test_materialize_schedules_horizon_counts_executions(

@@ -31,6 +31,18 @@ Définir comment les exécutions récurrentes sont créées à partir d'un `Acti
 
 Fixée à la création de l'exécution. Un PATCH schedule ne déplace jamais une exécution existante : cancel si hors nouvelle règle, sinon sync fenêtre (`start_at` / `end_at` / `visible_from`) uniquement.
 
+## Réactivation des exécutions `canceled` (Lot 4)
+
+Champ interne `cancel_origin` sur `ActionPlanExecution` :
+
+| Valeur | Signification | Réactivable par PATCH / materialize ? |
+|--------|---------------|--------------------------------------|
+| `null` | jamais annulée, ou réactivée / reopen | non |
+| `schedule_sync` | annulée par sync schedule (`_cancel_schedule_future_execution`) | **oui** (si occurrence encore valide, futur, assigné présent) |
+| `manual` | annulée via API (`cancel`) ou résolution signal | **non** |
+
+Seules les lignes `cancel_origin=schedule_sync` peuvent être remises en `in_progress` par PATCH schedule ou `materialize_schedule_occurrences_in_horizon`. Une annulation manuelle reste `canceled` jusqu'à un `reopen` API explicite (hors materialize).
+
 ## PATCH `use_shared_chronology`
 
 Interdit si le schedule a déjà ≥1 exécution matérialisée (`400`).

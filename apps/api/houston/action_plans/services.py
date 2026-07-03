@@ -13,6 +13,7 @@ from houston.action_plans.constants import (
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
     ACTIVE_EXECUTION_STATUSES,
+    CANCEL_ORIGIN_MANUAL,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
     EXECUTION_STATUS_CANCELED,
@@ -195,9 +196,16 @@ def _cancel_linked_active_executions_for_signal_resolve(
     for execution in active_executions:
         execution.status = EXECUTION_STATUS_CANCELED
         execution.canceled_at = now
+        execution.cancel_origin = CANCEL_ORIGIN_MANUAL
         execution.last_activity_at = now
         execution.save(
-            update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
+            update_fields=[
+                "status",
+                "canceled_at",
+                "cancel_origin",
+                "last_activity_at",
+                "updated_at",
+            ]
         )
 
 
@@ -989,6 +997,7 @@ def reopen_action_plan_execution(
     execution.marked_done_at = None
     execution.validated_at = None
     execution.canceled_at = None
+    execution.cancel_origin = None
     execution.last_activity_at = now
     execution.save(
         update_fields=[
@@ -996,6 +1005,7 @@ def reopen_action_plan_execution(
             "marked_done_at",
             "validated_at",
             "canceled_at",
+            "cancel_origin",
             "last_activity_at",
             "updated_at",
         ]
@@ -1019,9 +1029,16 @@ def cancel_action_plan_execution(
     now = timezone.now()
     execution.status = ActionPlanExecution.Status.CANCELED
     execution.canceled_at = now
+    execution.cancel_origin = CANCEL_ORIGIN_MANUAL
     execution.last_activity_at = now
     execution.save(
-        update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
+        update_fields=[
+            "status",
+            "canceled_at",
+            "cancel_origin",
+            "last_activity_at",
+            "updated_at",
+        ]
     )
     _sync_linked_signal_after_execution_change(execution=execution)
     return execution
