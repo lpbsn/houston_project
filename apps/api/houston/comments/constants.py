@@ -5,6 +5,9 @@ INVALID_PARENT_COMMENT_ERROR_DETAIL = "Le commentaire parent est invalide."
 CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL = (
     "Impossible de répondre à un commentaire Signal depuis une Action."
 )
+CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL = (
+    "Impossible de répondre à un commentaire Signal depuis un Plan d'action."
+)
 CANNOT_REPLY_TO_REPLY_ERROR_DETAIL = "Impossible de répondre à une réponse."
 NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL = "Seul un commentaire racine Action peut être ciblé."
 NOT_EXECUTION_ROOT_COMMENT_ERROR_DETAIL = (

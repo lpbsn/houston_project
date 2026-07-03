@@ -9,7 +9,7 @@ from houston.actions.tests.conftest import (
     build_api_membership_on_establishment,
 )
 from houston.comments.constants import (
-    CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL,
+    CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL,
     NOT_EXECUTION_ROOT_COMMENT_ERROR_DETAIL,
 )
 from houston.comments.services import (
@@ -156,7 +156,7 @@ def test_cannot_reply_to_inherited_signal_comment(api_client):
         **auth_headers(token),
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL
+    assert response.json()["detail"] == CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL
 
 
 def test_resolve_execution_comment(api_client):

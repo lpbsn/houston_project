@@ -12,6 +12,7 @@ from houston.comments.constants import (
     ALREADY_RESOLVED_ERROR_DETAIL,
     CANNOT_REPLY_TO_REPLY_ERROR_DETAIL,
     CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL,
+    CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL,
     COMMENT_BODY_MAX_LENGTH,
     INVALID_MENTIONS_ERROR_DETAIL,
     INVALID_PARENT_COMMENT_ERROR_DETAIL,
@@ -339,7 +340,7 @@ def _get_parent_comment_for_execution_reply(
     if parent is None:
         raise CommentValidationError(INVALID_PARENT_COMMENT_ERROR_DETAIL)
     if parent.signal_id is not None:
-        raise CommentValidationError(CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL)
+        raise CommentValidationError(CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL)
     if parent.action_plan_execution_id != execution.id:
         raise CommentValidationError(INVALID_PARENT_COMMENT_ERROR_DETAIL)
     if parent.parent_comment_id is not None:

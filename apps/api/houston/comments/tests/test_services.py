@@ -18,6 +18,7 @@ from houston.comments.constants import (
     ALREADY_RESOLVED_ERROR_DETAIL,
     CANNOT_REPLY_TO_REPLY_ERROR_DETAIL,
     CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL,
+    CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL,
     INVALID_MENTIONS_ERROR_DETAIL,
     NOT_ACTION_ROOT_COMMENT_ERROR_DETAIL,
     NOT_EXECUTION_ROOT_COMMENT_ERROR_DETAIL,
@@ -331,7 +332,7 @@ def test_create_execution_comment_rejects_reply_to_signal_comment():
 
     with pytest.raises(
         CommentValidationError,
-        match=CANNOT_REPLY_TO_SIGNAL_COMMENT_ERROR_DETAIL,
+        match=CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL,
     ):
         create_action_plan_execution_comment(
             author_membership=owner,
