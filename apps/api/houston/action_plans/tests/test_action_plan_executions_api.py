@@ -4,13 +4,12 @@ import pytest
 
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import create_action_plan_with_execution
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     action_plan_execution_url,
-    auth_headers,
     build_assignee_payload,
     build_task_payload,
-    login,
 )
+from houston.testing.auth import auth_headers, login
 
 pytestmark = pytest.mark.django_db
 

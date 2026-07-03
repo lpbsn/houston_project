@@ -4,15 +4,14 @@ import pytest
 from django.utils import timezone
 
 from houston.action_plans.schedule_services import create_action_plan_schedule
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     action_plan_schedule_detail_url,
     api_recurring_schedule_payload,
-    auth_headers,
     build_schedule_assignee_payload,
-    login,
     schedule_window_from_datetime,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.testing.auth import auth_headers, login
 from houston.testing.auth import build_api_membership as build_foreign_membership
 
 pytestmark = pytest.mark.django_db

@@ -107,6 +107,12 @@ def _lock_execution_task_for_transition(
 def touch_execution_activity(*, execution: ActionPlanExecution, at=None) -> None:
     execution.last_activity_at = at or timezone.now()
     execution.save(update_fields=["last_activity_at", "updated_at"])
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.updated",
+    )
 
 
 def _linked_legacy_actions_block_signal_sync(*, signal: Signal) -> bool:
@@ -206,6 +212,19 @@ def _cancel_linked_active_executions_for_signal_resolve(
                 "last_activity_at",
                 "updated_at",
             ]
+        )
+        from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+        from houston.notifications.scheduling import (
+            schedule_action_plan_execution_canceled_notification,
+        )
+
+        schedule_action_plan_execution_invalidation(
+            execution=execution,
+            reason="action_plan_execution.canceled",
+        )
+        schedule_action_plan_execution_canceled_notification(
+            execution_id=execution.id,
+            actor_membership_id=None,
         )
 
 
@@ -636,6 +655,9 @@ def update_action_plan(
         action_plan.description = _normalize_description(description)
         update_fields.append("description")
     action_plan.save(update_fields=update_fields)
+    from houston.action_plans.realtime import schedule_action_plan_invalidation
+
+    schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.updated")
     return action_plan
 
 
@@ -651,6 +673,9 @@ def activate_action_plan(
     _validate_active_catalog_has_tasks(action_plan=action_plan)
     action_plan.catalog_status = CATALOG_STATUS_ACTIVE
     action_plan.save(update_fields=["catalog_status", "updated_at"])
+    from houston.action_plans.realtime import schedule_action_plan_invalidation
+
+    schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.updated")
     return action_plan
 
 
@@ -667,6 +692,9 @@ def deactivate_action_plan(
 
     action_plan.catalog_status = CATALOG_STATUS_INACTIVE
     action_plan.save(update_fields=["catalog_status", "updated_at"])
+    from houston.action_plans.realtime import schedule_action_plan_invalidation
+
+    schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.updated")
     return action_plan
 
 
@@ -723,6 +751,9 @@ def create_action_plan(
         catalog_status=catalog_status,
     )
     _create_plan_tasks(action_plan=action_plan, validated_tasks=validated_tasks)
+    from houston.action_plans.realtime import schedule_action_plan_invalidation
+
+    schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.created")
     return action_plan
 
 
@@ -846,6 +877,23 @@ def create_action_plan_with_execution(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_created_notification,
+    )
+
+    if not is_reusable:
+        from houston.action_plans.realtime import schedule_action_plan_invalidation
+
+        schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.created")
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.created",
+    )
+    schedule_action_plan_execution_created_notification(
+        execution_id=execution.id,
+        actor_membership_id=created_by.id,
+    )
     return action_plan, execution
 
 
@@ -921,6 +969,19 @@ def create_execution_from_action_plan(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_created_notification,
+    )
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.created",
+    )
+    schedule_action_plan_execution_created_notification(
+        execution_id=execution.id,
+        actor_membership_id=actor.id,
+    )
     return execution
 
 
@@ -944,11 +1005,30 @@ def mark_action_plan_execution_done(
         execution.save(
             update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"]
         )
+        from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+        from houston.notifications.scheduling import (
+            schedule_action_plan_execution_pending_validation_notification,
+        )
+
+        schedule_action_plan_execution_invalidation(
+            execution=execution,
+            reason="action_plan_execution.pending_validation",
+        )
+        schedule_action_plan_execution_pending_validation_notification(
+            execution_id=execution.id,
+            actor_membership_id=actor_membership.id,
+        )
         return execution
 
     execution.status = EXECUTION_STATUS_DONE
     execution.save(
         update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"]
+    )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.done",
     )
     _sync_linked_signal_after_execution_change(execution=execution)
     return execution
@@ -972,6 +1052,12 @@ def validate_action_plan_execution(
     execution.last_activity_at = now
     execution.save(
         update_fields=["status", "validated_at", "last_activity_at", "updated_at"]
+    )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.done",
     )
     _sync_linked_signal_after_execution_change(execution=execution)
     return execution
@@ -1011,6 +1097,19 @@ def reopen_action_plan_execution(
         ]
     )
     _reopen_linked_signal_after_execution_reopen(execution=execution)
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_reopened_notification,
+    )
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.updated",
+    )
+    schedule_action_plan_execution_reopened_notification(
+        execution_id=execution.id,
+        actor_membership_id=actor.id,
+    )
     return execution
 
 
@@ -1041,6 +1140,19 @@ def cancel_action_plan_execution(
         ]
     )
     _sync_linked_signal_after_execution_change(execution=execution)
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_canceled_notification,
+    )
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.canceled",
+    )
+    schedule_action_plan_execution_canceled_notification(
+        execution_id=execution.id,
+        actor_membership_id=actor.id,
+    )
     return execution
 
 
@@ -1064,6 +1176,9 @@ def mark_execution_task_done(
     task_execution.completed_at = now
     task_execution.save(update_fields=["status", "completed_at", "updated_at"])
     touch_execution_activity(execution=execution, at=now)
+    from houston.action_plans.realtime import schedule_action_plan_execution_task_invalidation
+
+    schedule_action_plan_execution_task_invalidation(task=task_execution)
     return task_execution
 
 
@@ -1091,6 +1206,9 @@ def skip_execution_task(
         update_fields=["status", "skipped_reason", "skipped_at", "updated_at"],
     )
     touch_execution_activity(execution=execution, at=now)
+    from houston.action_plans.realtime import schedule_action_plan_execution_task_invalidation
+
+    schedule_action_plan_execution_task_invalidation(task=task_execution)
     return task_execution
 
 
@@ -1119,6 +1237,9 @@ def record_execution_task_observation_created(
         update_fields=["status", "observation", "observation_created_at", "updated_at"],
     )
     touch_execution_activity(execution=execution, at=now)
+    from houston.action_plans.realtime import schedule_action_plan_execution_task_invalidation
+
+    schedule_action_plan_execution_task_invalidation(task=task_execution)
     return task_execution
 
 

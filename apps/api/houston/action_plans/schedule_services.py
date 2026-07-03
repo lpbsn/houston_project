@@ -150,6 +150,19 @@ def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None
             "updated_at",
         ],
     )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_canceled_notification,
+    )
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.canceled",
+    )
+    schedule_action_plan_execution_canceled_notification(
+        execution_id=execution.id,
+        actor_membership_id=None,
+    )
 
 
 def _schedule_assignee_for_execution(
@@ -233,6 +246,12 @@ def reactivate_schedule_future_execution(
             "updated_at",
         ],
     )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.updated",
+    )
     return execution
 
 
@@ -262,6 +281,12 @@ def _sync_future_execution_window(
             "last_activity_at",
             "updated_at",
         ],
+    )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.updated",
     )
 
 

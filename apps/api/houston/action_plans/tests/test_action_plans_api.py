@@ -4,14 +4,13 @@ import pytest
 
 from houston.action_plans.constants import CATALOG_STATUS_ACTIVE, CATALOG_STATUS_INACTIVE
 from houston.action_plans.models import ActionPlanExecution
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     action_plan_url,
     action_plans_url,
     api_assignee_payload,
     api_task_payload,
-    auth_headers,
-    login,
 )
+from houston.testing.auth import auth_headers, login
 
 pytestmark = pytest.mark.django_db
 

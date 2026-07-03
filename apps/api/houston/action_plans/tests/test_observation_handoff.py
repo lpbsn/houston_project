@@ -11,7 +11,7 @@ from houston.action_plans.services import (
     create_observation_from_execution_task,
     skip_execution_task,
 )
-from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.observations.models import Observation
 from houston.signals.models import Signal
 

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import uuid
 
+from houston.action_plans.constants import EXECUTION_STATUS_PENDING_VALIDATION
+from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.permissions import can_validate_action_plan_execution
 from houston.actions.models import Action, ActionAssignee
 from houston.actions.permissions import can_validate_action_on_object
 from houston.checklists.models import ChecklistExecution
@@ -160,6 +163,64 @@ def resolve_checklist_execution_canceled_recipients(
     if assigner is not None:
         recipients.append(assigner)
     return _dedupe_memberships(recipients)
+
+
+def _active_action_plan_assignee_memberships(
+    *,
+    execution: ActionPlanExecution,
+) -> list[EstablishmentMembership]:
+    return [
+        assignee.membership
+        for assignee in execution.assignees.select_related("membership").all()
+        if assignee.membership.status == EstablishmentMembership.Status.ACTIVE
+        and assignee.membership.establishment_id == execution.establishment_id
+    ]
+
+
+def resolve_action_plan_execution_created_recipients(
+    *,
+    execution: ActionPlanExecution,
+) -> list[EstablishmentMembership]:
+    return _dedupe_memberships(_active_action_plan_assignee_memberships(execution=execution))
+
+
+def resolve_action_plan_execution_pending_validation_recipients(
+    *,
+    execution: ActionPlanExecution,
+) -> list[EstablishmentMembership]:
+    if execution.status != EXECUTION_STATUS_PENDING_VALIDATION:
+        return []
+
+    validators: list[EstablishmentMembership] = []
+    for membership in EstablishmentMembership.objects.filter(
+        establishment_id=execution.establishment_id,
+        status=EstablishmentMembership.Status.ACTIVE,
+    ).select_related("user"):
+        if can_validate_action_plan_execution(membership, execution):
+            validators.append(membership)
+    return validators
+
+
+def resolve_action_plan_execution_reopened_recipients(
+    *,
+    execution: ActionPlanExecution,
+) -> list[EstablishmentMembership]:
+    recipients = _active_action_plan_assignee_memberships(execution=execution)
+    creator = execution.created_by
+    if (
+        creator is not None
+        and creator.status == EstablishmentMembership.Status.ACTIVE
+        and creator.establishment_id == execution.establishment_id
+    ):
+        recipients.append(creator)
+    return _dedupe_memberships(recipients)
+
+
+def resolve_action_plan_execution_canceled_recipients(
+    *,
+    execution: ActionPlanExecution,
+) -> list[EstablishmentMembership]:
+    return resolve_action_plan_execution_reopened_recipients(execution=execution)
 
 
 def snapshot_action_assignee_ids(*, action_id: uuid.UUID) -> set[uuid.UUID]:

@@ -3,17 +3,16 @@ from __future__ import annotations
 import pytest
 
 from houston.action_plans.services import create_action_plan_with_execution
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     action_plan_execution_url,
     action_plan_task_url,
     action_plan_url,
     action_plans_url,
-    auth_headers,
     build_assignee_payload,
     build_task_payload,
-    login,
 )
 from houston.establishments.models import EstablishmentMembership
+from houston.testing.auth import auth_headers, login
 from houston.testing.auth import build_api_membership as build_foreign_membership
 
 pytestmark = pytest.mark.django_db

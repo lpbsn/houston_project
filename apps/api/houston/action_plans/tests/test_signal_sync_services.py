@@ -12,7 +12,7 @@ from houston.action_plans.services import (
     sync_signal_after_execution_change,
     validate_action_plan_execution,
 )
-from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.actions.services import accept_action, create_action
 from houston.signals.exceptions import SignalBusinessConflictError
 from houston.signals.models import Signal

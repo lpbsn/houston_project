@@ -110,6 +110,59 @@ describe('applyOperationalInvalidation', () => {
   )
 
   it.each([
+    'action_plan_execution.created',
+    'action_plan_execution.updated',
+    'action_plan_execution.canceled',
+    'action_plan_execution.done',
+    'action_plan_execution.pending_validation',
+  ] as const)('invalidates action plan execution feed for %s', (reason) => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const event: OperationalRealtimeInvalidateEvent = {
+      type: 'invalidate',
+      subject_type: 'action_plan_execution',
+      reason,
+      establishment_id: 'est-1',
+      entity_id: 'ap-exec-1',
+      occurred_at: '2026-06-19T12:00:00Z',
+    }
+
+    applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'execution-detail', 'est-1', 'ap-exec-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ['actions', 'execution-feed', 'est-1'],
+    })
+    invalidateSpy.mockRestore()
+  })
+
+  it('invalidates broad execution detail for action_plan_assignee without feed', () => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const event: OperationalRealtimeInvalidateEvent = {
+      type: 'invalidate',
+      subject_type: 'action_plan_assignee',
+      reason: 'action_plan_assignee.updated',
+      establishment_id: 'est-1',
+      entity_id: 'assignee-1',
+      occurred_at: '2026-06-19T12:00:00Z',
+    }
+
+    applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'execution-detail', 'est-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    invalidateSpy.mockRestore()
+  })
+
+  it.each([
     ['comment.signal.created', ['comments', 'signal', 'est-1', 'sig-1']],
     [
       'comment.signal.inherited',
@@ -223,6 +276,9 @@ describe('applyOperationalReconnectInvalidation', () => {
       queryKey: ['checklists', 'template-detail', 'est-1'],
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications', 'list', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
     invalidateSpy.mockRestore()
   })
 })

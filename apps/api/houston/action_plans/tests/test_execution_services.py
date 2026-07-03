@@ -27,7 +27,7 @@ from houston.action_plans.services import (
     reopen_action_plan_execution,
     validate_action_plan_execution,
 )
-from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
 from houston.testing.factories import create_establishment
