@@ -16,6 +16,9 @@ const COMMENT_INVALIDATION_REASONS = new Set([
   'comment.action.created',
   'comment.action.resolved',
   'comment.action.unresolved',
+  'comment.execution.created',
+  'comment.execution.resolved',
+  'comment.execution.unresolved',
 ])
 
 function buildEvent(
@@ -35,8 +38,8 @@ function buildEvent(
 
 describe('operational invalidation contract', () => {
   it('loads the expected number of operational events', () => {
-    expect(operationalInvalidationEvents).toHaveLength(15)
-    expect(operationalInvalidationEventPairs).toHaveLength(15)
+    expect(operationalInvalidationEvents).toHaveLength(18)
+    expect(operationalInvalidationEventPairs).toHaveLength(18)
   })
 
   it.each(operationalInvalidationEventPairs)(

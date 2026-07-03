@@ -101,6 +101,16 @@ export function invalidateActionCommentQueries(
   })
 }
 
+export function invalidateExecutionCommentQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+  executionId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['comments', 'action-plan-execution', establishmentId, executionId],
+  })
+}
+
 export function invalidateEstablishmentNotificationQueries(
   queryClient: QueryClient,
   establishmentId: string,

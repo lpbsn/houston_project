@@ -15,6 +15,7 @@ import {
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
+  invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
 } from '@/lib/query-invalidation'
 import { createTestQueryClient } from '@/test-utils'
@@ -93,6 +94,15 @@ describe('query-invalidation factory parity', () => {
     invalidateActionCommentQueries(queryClient, EST, ENTITY)
 
     expect(prefixes()).toEqual([commentsQueryKeys.actionList(EST, ENTITY)])
+  })
+
+  it('invalidateExecutionCommentQueries matches commentsQueryKeys.executionList', () => {
+    const queryClient = createTestQueryClient()
+    const { prefixes } = invalidatedPrefixes(queryClient)
+
+    invalidateExecutionCommentQueries(queryClient, EST, ENTITY)
+
+    expect(prefixes()).toEqual([commentsQueryKeys.executionList(EST, ENTITY)])
   })
 
   it('invalidateEstablishmentNotificationQueries matches notificationsQueryKeys.lists', () => {
