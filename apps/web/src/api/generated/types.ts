@@ -3631,11 +3631,12 @@ export interface components {
         /**
          * @description * `action` - Action
          *     * `checklist_execution` - Checklist execution
+         *     * `action_plan_execution` - Action plan execution
          *     * `comment` - Comment
          *     * `signal` - Signal
          * @enum {string}
          */
-        SubjectTypeEnum: "action" | "checklist_execution" | "comment" | "signal";
+        SubjectTypeEnum: "action" | "checklist_execution" | "action_plan_execution" | "comment" | "signal";
         SwitchEstablishmentRequest: {
             /** Format: uuid */
             establishment_id: string;
