@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     action_plan_schedule_deactivate_url,
     action_plan_schedule_detail_url,
     action_plan_schedule_url,
     action_plan_url,
     api_recurring_schedule_payload,
-    auth_headers,
-    login,
 )
+from houston.testing.auth import auth_headers, login
 
 pytestmark = pytest.mark.django_db
 

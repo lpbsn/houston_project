@@ -13,7 +13,7 @@ from houston.action_plans.services import (
     mark_execution_task_done,
     skip_execution_task,
 )
-from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 
 pytestmark = pytest.mark.django_db
 

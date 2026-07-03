@@ -206,19 +206,22 @@ def _ensure_execution_structure_if_needed(
     if existing_teams:
         teams_by_bu_id = {team.business_unit_id: team for team in existing_teams}
         if assignees and not execution.assignees.exists():
-            ActionPlanAssignee.objects.bulk_create(
-                [
-                    ActionPlanAssignee(
-                        action_plan_execution=execution,
-                        execution_team=teams_by_bu_id[assignee.business_unit.id],
-                        membership=assignee.membership,
-                        start_at=assignee.start_at,
-                        visible_from=assignee.visible_from,
-                        end_at=assignee.end_at,
-                    )
-                    for assignee in assignees
-                ]
-            )
+            created_assignees = [
+                ActionPlanAssignee(
+                    action_plan_execution=execution,
+                    execution_team=teams_by_bu_id[assignee.business_unit.id],
+                    membership=assignee.membership,
+                    start_at=assignee.start_at,
+                    visible_from=assignee.visible_from,
+                    end_at=assignee.end_at,
+                )
+                for assignee in assignees
+            ]
+            ActionPlanAssignee.objects.bulk_create(created_assignees)
+            from houston.action_plans.realtime import schedule_action_plan_assignee_invalidation
+
+            for created_assignee in created_assignees:
+                schedule_action_plan_assignee_invalidation(assignee=created_assignee)
         if plan_tasks and not execution.task_executions.exists():
             ActionPlanExecutionTask.objects.bulk_create(
                 [
@@ -467,6 +470,19 @@ def materialize_execution_from_schedule(
         pilot_business_unit=action_plan.pilot_business_unit,
         plan_tasks=plan_tasks,
         assignees=assignees,
+    )
+    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+    from houston.notifications.scheduling import (
+        schedule_action_plan_execution_created_notification,
+    )
+
+    schedule_action_plan_execution_invalidation(
+        execution=execution,
+        reason="action_plan_execution.created",
+    )
+    schedule_action_plan_execution_created_notification(
+        execution_id=execution.id,
+        actor_membership_id=None,
     )
     return execution
 

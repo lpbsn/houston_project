@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import uuid
 
+from houston.action_plans.permissions import action_plan_execution_visible_to_membership
+from houston.action_plans.selectors import get_action_plan_execution_for_detail
 from houston.actions.permissions import action_visible_to_membership
 from houston.actions.selectors import actions_for_establishment
 from houston.checklists.models import ChecklistExecution
@@ -62,6 +64,15 @@ def recipient_can_view_notification_subject(
         if execution is None:
             return False
         return checklist_execution_visible_to_membership(recipient, execution)
+
+    if subject_type == Notification.SubjectType.ACTION_PLAN_EXECUTION:
+        execution = get_action_plan_execution_for_detail(
+            membership=recipient,
+            execution_id=subject_id,
+        )
+        if execution is None:
+            return False
+        return action_plan_execution_visible_to_membership(recipient, execution)
 
     if subject_type == Notification.SubjectType.COMMENT:
         comment = (

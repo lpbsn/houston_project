@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { actionPlansQueryKeys } from '@/features/action-plans/api'
 import { actionsQueryKeys } from '@/features/actions/api'
 import { checklistsQueryKeys } from '@/features/checklists/api'
 import { commentsQueryKeys } from '@/features/comments/api'
@@ -9,9 +10,14 @@ import { EMPTY_SIGNAL_FEED_FILTERS } from '@/features/signals/lib/signal-feed-fi
 import {
   invalidateActionCommentQueries,
   invalidateActionMutationSurfaces,
+  invalidateActionPlanAssigneeSurfaces,
+  invalidateActionPlanExecutionFeedQueries,
+  invalidateActionPlanExecutionSurfaces,
+  invalidateActionPlanMutationSurfaces,
   invalidateChecklistExecutionSurfaces,
   invalidateChecklistMutationSurfaces,
   invalidateEstablishmentActionQueries,
+  invalidateEstablishmentActionPlanCatalogQueries,
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
@@ -164,6 +170,70 @@ describe('query-invalidation factory parity', () => {
         checklistsQueryKeys.assignments(EST),
         actionsQueryKeys.feed(EST, 'personal').slice(0, 3),
         actionsQueryKeys.detail(EST, ENTITY).slice(0, 3),
+      ]),
+    )
+  })
+
+  it('invalidateEstablishmentActionPlanCatalogQueries matches actionPlansQueryKeys prefixes', () => {
+    const queryClient = createTestQueryClient()
+    const { prefixes } = invalidatedPrefixes(queryClient)
+
+    invalidateEstablishmentActionPlanCatalogQueries(queryClient, EST)
+
+    expect(prefixes()).toEqual(
+      expect.arrayContaining([
+        actionPlansQueryKeys.catalog(EST).slice(0, 3),
+        actionPlansQueryKeys.detail(EST, ENTITY).slice(0, 3),
+      ]),
+    )
+  })
+
+  it('invalidateActionPlanExecutionFeedQueries matches actionPlansQueryKeys.executionFeed', () => {
+    const queryClient = createTestQueryClient()
+    const { prefixes } = invalidatedPrefixes(queryClient)
+
+    invalidateActionPlanExecutionFeedQueries(queryClient, EST)
+
+    expect(prefixes()).toEqual([
+      actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
+    ])
+  })
+
+  it('invalidateActionPlanExecutionSurfaces matches execution feed and detail prefixes', () => {
+    const queryClient = createTestQueryClient()
+    const { prefixes } = invalidatedPrefixes(queryClient)
+
+    invalidateActionPlanExecutionSurfaces(queryClient, EST, ENTITY)
+
+    expect(prefixes()).toEqual(
+      expect.arrayContaining([
+        actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
+        actionPlansQueryKeys.executionDetail(EST, ENTITY),
+        signalsQueryKeys.feed(EST, 'general', EMPTY_SIGNAL_FEED_FILTERS).slice(0, 3),
+        signalsQueryKeys.detail(EST, ENTITY).slice(0, 3),
+      ]),
+    )
+  })
+
+  it('invalidateActionPlanAssigneeSurfaces matches broad execution detail prefix', () => {
+    const queryClient = createTestQueryClient()
+    const { prefixes } = invalidatedPrefixes(queryClient)
+
+    invalidateActionPlanAssigneeSurfaces(queryClient, EST)
+
+    expect(prefixes()).toEqual([actionPlansQueryKeys.executionDetail(EST, ENTITY).slice(0, 3)])
+  })
+
+  it('invalidateActionPlanMutationSurfaces matches catalog prefixes', () => {
+    const queryClient = createTestQueryClient()
+    const { prefixes } = invalidatedPrefixes(queryClient)
+
+    invalidateActionPlanMutationSurfaces(queryClient, EST, ENTITY)
+
+    expect(prefixes()).toEqual(
+      expect.arrayContaining([
+        actionPlansQueryKeys.catalog(EST).slice(0, 3),
+        actionPlansQueryKeys.detail(EST, ENTITY),
       ]),
     )
   })

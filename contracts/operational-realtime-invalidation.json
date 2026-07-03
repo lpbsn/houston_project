@@ -90,6 +90,51 @@
       "subject_type": "notification",
       "reason": "notification.bulk_updated",
       "dispatch": "by_reason"
+    },
+    {
+      "subject_type": "action_plan",
+      "reason": "action_plan.created",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan",
+      "reason": "action_plan.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution",
+      "reason": "action_plan_execution.created",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution",
+      "reason": "action_plan_execution.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution",
+      "reason": "action_plan_execution.canceled",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution",
+      "reason": "action_plan_execution.done",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution",
+      "reason": "action_plan_execution.pending_validation",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution_task",
+      "reason": "action_plan_execution_task.updated",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_assignee",
+      "reason": "action_plan_assignee.updated",
+      "dispatch": "by_subject_type"
     }
   ]
 }

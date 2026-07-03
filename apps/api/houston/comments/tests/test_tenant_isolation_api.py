@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from houston.action_plans.services import create_action_plan_with_execution
-from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.actions.services import create_action
 from houston.actions.tests.conftest import (
     assign_business_unit_scope,

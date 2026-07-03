@@ -15,6 +15,10 @@ API_ROOT = Path(__file__).resolve().parents[3]
 EMITTER_SCAN_FILES: tuple[Path, ...] = (
     API_ROOT / "houston/signals/services.py",
     API_ROOT / "houston/actions/services.py",
+    API_ROOT / "houston/action_plans/services.py",
+    API_ROOT / "houston/action_plans/materialization.py",
+    API_ROOT / "houston/action_plans/schedule_services.py",
+    API_ROOT / "houston/action_plans/realtime.py",
     API_ROOT / "houston/checklists/services.py",
     API_ROOT / "houston/checklists/materialization.py",
     API_ROOT / "houston/comments/services.py",
@@ -27,6 +31,19 @@ SCHEDULE_INVALIDATION_FUNCTIONS = frozenset(
         "schedule_membership_invalidation",
     }
 )
+
+FIXED_EVENT_WRAPPERS: dict[str, tuple[str, str | None]] = {
+    "schedule_action_plan_invalidation": ("action_plan", None),
+    "schedule_action_plan_execution_invalidation": ("action_plan_execution", None),
+    "schedule_action_plan_execution_task_invalidation": (
+        "action_plan_execution_task",
+        "action_plan_execution_task.updated",
+    ),
+    "schedule_action_plan_assignee_invalidation": (
+        "action_plan_assignee",
+        "action_plan_assignee.updated",
+    ),
+}
 
 WRAPPER_SUBJECT_TYPES = {
     "_schedule_signal_invalidation": "signal",
@@ -79,6 +96,15 @@ def _extract_event_from_call(call: ast.Call) -> tuple[str, str] | None:
         subject_type = _string_value(_keyword_value(call, "subject_type"))
         reason = _string_value(_keyword_value(call, "reason"))
         if subject_type is None or reason is None:
+            return None
+        return subject_type, reason
+
+    if function_name in FIXED_EVENT_WRAPPERS:
+        subject_type, fixed_reason = FIXED_EVENT_WRAPPERS[function_name]
+        if fixed_reason is not None:
+            return subject_type, fixed_reason
+        reason = _string_value(_keyword_value(call, "reason"))
+        if reason is None:
             return None
         return subject_type, reason
 

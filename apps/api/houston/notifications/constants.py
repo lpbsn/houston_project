@@ -20,6 +20,10 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "action.canceled",
         "checklist.execution.created",
         "checklist.execution.canceled",
+        "action_plan.execution.created",
+        "action_plan.execution.pending_validation",
+        "action_plan.execution.canceled",
+        "action_plan.execution.reopened",
         "comment.mention.created",
         "signal.created",
         "signal.urgency_changed",
@@ -58,6 +62,22 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "checklist.execution.canceled": (
         "Checklist annulée",
         "Une exécution de checklist a été annulée.",
+    ),
+    "action_plan.execution.created": (
+        "Nouveau plan d'action",
+        "Une exécution de plan d'action vous a été assignée.",
+    ),
+    "action_plan.execution.pending_validation": (
+        "Plan d'action à valider",
+        "Une exécution de plan d'action attend votre validation.",
+    ),
+    "action_plan.execution.canceled": (
+        "Plan d'action annulé",
+        "Une exécution de plan d'action a été annulée.",
+    ),
+    "action_plan.execution.reopened": (
+        "Plan d'action rouvert",
+        "Une exécution de plan d'action a été rouverte.",
     ),
     "comment.mention.created": (
         "Mention",

@@ -25,6 +25,22 @@ class Notification(BaseModel):
             "checklist.execution.canceled",
             "Checklist execution canceled",
         )
+        ACTION_PLAN_EXECUTION_CREATED = (
+            "action_plan.execution.created",
+            "Action plan execution created",
+        )
+        ACTION_PLAN_EXECUTION_PENDING_VALIDATION = (
+            "action_plan.execution.pending_validation",
+            "Action plan execution pending validation",
+        )
+        ACTION_PLAN_EXECUTION_CANCELED = (
+            "action_plan.execution.canceled",
+            "Action plan execution canceled",
+        )
+        ACTION_PLAN_EXECUTION_REOPENED = (
+            "action_plan.execution.reopened",
+            "Action plan execution reopened",
+        )
         COMMENT_MENTION_CREATED = "comment.mention.created", "Comment mention created"
         SIGNAL_CREATED = "signal.created", "Signal created"
         SIGNAL_URGENCY_CHANGED = "signal.urgency_changed", "Signal urgency changed"
@@ -35,6 +51,7 @@ class Notification(BaseModel):
     class SubjectType(models.TextChoices):
         ACTION = "action", "Action"
         CHECKLIST_EXECUTION = "checklist_execution", "Checklist execution"
+        ACTION_PLAN_EXECUTION = "action_plan_execution", "Action plan execution"
         COMMENT = "comment", "Comment"
         SIGNAL = "signal", "Signal"
 

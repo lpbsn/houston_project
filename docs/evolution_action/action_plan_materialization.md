@@ -14,7 +14,7 @@ Définir comment les exécutions récurrentes sont créées à partir d'un `Acti
 | Sync on schedule create | Oui | Occurrences **visibles** dans l'horizon (`visible_from <= now`) |
 | Read-path sur GET feed | **Non** | Legacy `execution_feed.py` inchangé ; pas de write-on-read |
 | `ensure_visible_action_plan_executions_materialized` | Implémenté, **non branché** | Branchement réservé au feed unifié Lot 5 |
-| WebSocket / notifications | **Non** | Lot 7 (`action_plan_execution.created`) |
+| WebSocket / notifications | **Oui (Lot 7)** | `action_plan_execution.created` (+ lifecycle events §22) ; notifications in-app created / pending_validation / canceled / reopened — pas de `reassigned` (V1) |
 
 ## Chronologie partagée vs individuelle (§9)
 

@@ -6,7 +6,17 @@ export type OperationalRealtimeAuthOkEvent = {
 
 export type OperationalRealtimeInvalidateEvent = {
   type: 'invalidate'
-  subject_type: 'signal' | 'action' | 'checklist' | 'execution' | 'comment' | 'notification'
+  subject_type:
+    | 'signal'
+    | 'action'
+    | 'checklist'
+    | 'execution'
+    | 'action_plan'
+    | 'action_plan_execution'
+    | 'action_plan_execution_task'
+    | 'action_plan_assignee'
+    | 'comment'
+    | 'notification'
   reason: string
   establishment_id: string
   entity_id: string

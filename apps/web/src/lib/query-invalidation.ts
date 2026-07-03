@@ -117,3 +117,66 @@ export function invalidateEstablishmentNotificationQueries(
 ) {
   void queryClient.invalidateQueries({ queryKey: ['notifications', 'list', establishmentId] })
 }
+
+export function invalidateEstablishmentActionPlanCatalogQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: ['action-plans', 'catalog', establishmentId] })
+  void queryClient.invalidateQueries({ queryKey: ['action-plans', 'detail', establishmentId] })
+}
+
+export function invalidateActionPlanExecutionFeedQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
+  })
+}
+
+export function invalidateActionPlanExecutionDetailQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+  executionId?: string,
+) {
+  if (executionId) {
+    void queryClient.invalidateQueries({
+      queryKey: ['action-plans', 'execution-detail', establishmentId, executionId],
+    })
+    return
+  }
+  void queryClient.invalidateQueries({
+    queryKey: ['action-plans', 'execution-detail', establishmentId],
+  })
+}
+
+export function invalidateActionPlanExecutionSurfaces(
+  queryClient: QueryClient,
+  establishmentId: string,
+  executionId?: string,
+) {
+  invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)
+  invalidateActionPlanExecutionDetailQueries(queryClient, establishmentId, executionId)
+  invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+}
+
+export function invalidateActionPlanAssigneeSurfaces(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  invalidateActionPlanExecutionDetailQueries(queryClient, establishmentId)
+}
+
+export function invalidateActionPlanMutationSurfaces(
+  queryClient: QueryClient,
+  establishmentId: string,
+  actionPlanId?: string,
+) {
+  invalidateEstablishmentActionPlanCatalogQueries(queryClient, establishmentId)
+  if (actionPlanId) {
+    void queryClient.invalidateQueries({
+      queryKey: ['action-plans', 'detail', establishmentId, actionPlanId],
+    })
+  }
+}

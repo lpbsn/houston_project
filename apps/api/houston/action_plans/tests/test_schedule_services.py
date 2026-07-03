@@ -19,7 +19,7 @@ from houston.action_plans.schedule_services import (
     update_action_plan_schedule,
 )
 from houston.action_plans.services import cancel_action_plan_execution
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     build_schedule_assignee_payload,
     schedule_window_from_datetime,
 )

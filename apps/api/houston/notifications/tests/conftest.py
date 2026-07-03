@@ -8,13 +8,58 @@ from rest_framework.test import APIClient
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.testing.auth import auth_headers, build_api_membership, login
+from houston.testing.factories import create_establishment, create_membership
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
-__all__ = ["api_client", "auth_headers", "build_api_membership", "login"]
+__all__ = [
+    "api_client",
+    "auth_headers",
+    "build_api_membership",
+    "business_unit",
+    "establishment",
+    "login",
+    "owner_membership",
+    "staff_membership",
+]
 
 
 @pytest.fixture
 def api_client():
     return APIClient(enforce_csrf_checks=True)
+
+
+@pytest.fixture
+def establishment():
+    return create_establishment(name="Notification Hotel", timezone="UTC")
+
+
+@pytest.fixture
+def business_unit(establishment):
+    return create_business_unit(establishment=establishment, key="restaurant")
+
+
+@pytest.fixture
+def owner_membership(establishment):
+    return create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.OWNER,
+    )
+
+
+@pytest.fixture
+def staff_membership(establishment, business_unit):
+    membership = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_unit,
+    )
+    return membership
 
 
 def notifications_url(establishment_id, query: str = "") -> str:

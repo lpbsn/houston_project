@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from houston.action_plans.tests.helpers import create_catalog_action_plan, create_open_signal
 from houston.establishments.models import EstablishmentMembership
 from houston.testing.auth import login
 from houston.testing.factories import (
@@ -28,6 +29,8 @@ __all__ = [
     "login",
     "other_staff_membership",
     "owner_membership",
+    "signal",
+    "catalog_action_plan",
     "staff_membership",
     "ws_realtime_path",
     "ws_realtime_ticket_url",
@@ -81,6 +84,19 @@ def other_staff_membership(establishment, business_unit):
         business_unit=business_unit,
     )
     return EstablishmentMembership.objects.prefetch_related("scope_links").get(pk=membership.pk)
+
+
+@pytest.fixture
+def catalog_action_plan(owner_membership, business_unit):
+    return create_catalog_action_plan(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+    )
+
+
+@pytest.fixture
+def signal(owner_membership):
+    return create_open_signal(owner_membership=owner_membership)
 
 
 def ws_realtime_ticket_url(establishment_id) -> str:

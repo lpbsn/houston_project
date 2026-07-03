@@ -17,8 +17,8 @@ from houston.realtime.operational_invalidation_events import (
 def test_contract_has_expected_version_and_event_count():
     payload = load_operational_invalidation_contract()
     assert payload["version"] == 1
-    assert len(payload["events"]) == 18
-    assert len(operational_invalidation_events()) == 18
+    assert len(payload["events"]) == 27
+    assert len(operational_invalidation_events()) == 27
 
 
 def test_contract_events_have_valid_dispatch():

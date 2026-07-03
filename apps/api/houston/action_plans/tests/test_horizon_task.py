@@ -6,7 +6,7 @@ from django.utils import timezone
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.tasks import materialize_action_plan_schedules_horizon_task
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     build_schedule_assignee_payload,
     schedule_window_from_datetime,
 )

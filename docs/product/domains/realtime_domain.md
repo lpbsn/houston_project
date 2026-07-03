@@ -74,6 +74,15 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `checklist` | `checklist.updated` | checklist template id | yes — sync template / assignment writers | templates, template detail, assignments, execution-detail prefix, execution feed |
 | `execution` | `execution.created` | checklist execution id | yes — sync execution creation and async/read-path materialization | execution detail, checklist mutation surfaces, execution feed |
 | `execution` | `execution.updated` | checklist execution id | yes — cancel, task done/skip, observation-from-task handoff | same as `execution.created` |
+| `action_plan` | `action_plan.created` | action plan id | yes — catalog create, one-shot create | action-plans catalog, detail |
+| `action_plan` | `action_plan.updated` | action plan id | yes — catalog patch, activate/deactivate | action-plans catalog, detail |
+| `action_plan_execution` | `action_plan_execution.created` | action plan execution id | yes — create, catalog use, schedule materialization | action-plan-execution-feed, execution-detail, signals |
+| `action_plan_execution` | `action_plan_execution.updated` | action plan execution id | yes — reopen, schedule sync/reactivate, task activity | same as `created` |
+| `action_plan_execution` | `action_plan_execution.canceled` | action plan execution id | yes — manual cancel, schedule sync, signal resolve cascade | same as `created` |
+| `action_plan_execution` | `action_plan_execution.done` | action plan execution id | yes — mark-done (no validation), validate | same as `created` |
+| `action_plan_execution` | `action_plan_execution.pending_validation` | action plan execution id | yes — mark-done when validation required | same as `created` |
+| `action_plan_execution_task` | `action_plan_execution_task.updated` | task execution id | yes — mark-done, skip, observation handoff | action-plan-execution-feed, execution-detail prefix, signals |
+| `action_plan_assignee` | `action_plan_assignee.updated` | **assignee row id** (not execution id) | yes — materialization structure repair only | execution-detail prefix (establishment-scoped sweep; feed unchanged) |
 | `comment` | `comment.signal.created` | signal id | yes — sync signal comment create | signal comment list |
 | `comment` | `comment.signal.inherited` | linked action id | yes — sync signal comment create when action is linked | action comment list (inherited signal comments) |
 | `comment` | `comment.action.created` | action id | yes — sync action comment create (root or reply) | action comment list |
@@ -86,6 +95,10 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 `notification.bulk_updated` is a membership-level bulk event: `entity_id` is the recipient membership id, not an individual notification id. Delivery uses the membership Channels group (`realtime_est_{establishment_id}_mbr_{membership_id}`), not the establishment-wide invalidation group.
 
 `execution.updated` includes sync checklist task transitions that change execution detail and may start or complete an execution visible on the execution feed.
+
+Action plan notifications (Lot 7): in-app events `action_plan.execution.created`, `.pending_validation`, `.canceled`, `.reopened`. No `action_plan.execution.reassigned` in V1 — runtime assignee reassignment API does not exist; schedule assignee changes surface via `action_plan_execution.created` / `.canceled`.
+
+Legacy `action` / `checklist` / `execution` invalidation handlers are unchanged until Lot 10. Action plan events do **not** invalidate legacy `actions.execution-feed`.
 
 ## 3. Out of Scope
 

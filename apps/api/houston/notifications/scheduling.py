@@ -7,6 +7,7 @@ from collections.abc import Callable
 from django.db import transaction
 from django.db.models import Prefetch
 
+from houston.action_plans.models import ActionPlanExecution
 from houston.actions.models import Action
 from houston.checklists.models import ChecklistExecution
 from houston.comments.models import Comment, CommentMention
@@ -20,6 +21,10 @@ from houston.notifications.recipients import (
     resolve_action_canceled_recipients,
     resolve_action_created_recipients,
     resolve_action_pending_validation_recipients,
+    resolve_action_plan_execution_canceled_recipients,
+    resolve_action_plan_execution_created_recipients,
+    resolve_action_plan_execution_pending_validation_recipients,
+    resolve_action_plan_execution_reopened_recipients,
     resolve_action_reassigned_recipient_groups,
     resolve_action_reopened_recipients,
     resolve_checklist_execution_canceled_recipients,
@@ -369,6 +374,156 @@ def schedule_checklist_execution_canceled_notification(
         deliver=deliver,
         event_key=Notification.EventKey.CHECKLIST_EXECUTION_CANCELED,
         subject_type=Notification.SubjectType.CHECKLIST_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def _load_action_plan_execution(*, execution_id: uuid.UUID) -> ActionPlanExecution | None:
+    return (
+        ActionPlanExecution.objects.filter(id=execution_id)
+        .select_related("created_by")
+        .prefetch_related("assignees__membership")
+        .first()
+    )
+
+
+def _deliver_action_plan_execution_notifications(
+    *,
+    execution: ActionPlanExecution,
+    event_key: str,
+    priority: str,
+    recipients: list[EstablishmentMembership],
+    actor_membership: EstablishmentMembership | None,
+    exclude_actor_if_recipient: bool = True,
+) -> None:
+    if not recipients:
+        return
+    create_in_app_notifications_for_recipients(
+        establishment_id=execution.establishment_id,
+        recipient_memberships=recipients,
+        event_key=event_key,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
+        priority=priority,
+        actor_membership=actor_membership,
+        exclude_actor_if_recipient=exclude_actor_if_recipient,
+    )
+
+
+def schedule_action_plan_execution_created_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_action_plan_execution_created_recipients(execution=execution)
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_pending_validation_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_action_plan_execution_pending_validation_recipients(
+            execution=execution,
+        )
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_canceled_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_action_plan_execution_canceled_recipients(execution=execution)
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CANCELED,
+            priority=Notification.Priority.INFO,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CANCELED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_reopened_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_action_plan_execution_reopened_recipients(execution=execution)
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
         subject_id=execution_id,
     )
 

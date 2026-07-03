@@ -18,7 +18,7 @@ from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
     normalize_recurring_recurrence_days,
 )
-from houston.action_plans.tests.conftest import (
+from houston.action_plans.tests.helpers import (
     build_schedule_assignee_payload,
     schedule_window_from_datetime,
 )
