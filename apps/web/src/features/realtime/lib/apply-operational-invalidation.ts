@@ -9,6 +9,7 @@ import {
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
+  invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
 } from '@/lib/query-invalidation'
 
@@ -51,10 +52,18 @@ export function applyOperationalInvalidation(
         invalidateSignalCommentQueries(queryClient, establishmentId, event.entity_id)
         break
       case 'comment.signal.inherited':
+        invalidateActionCommentQueries(queryClient, establishmentId, event.entity_id)
+        invalidateExecutionCommentQueries(queryClient, establishmentId, event.entity_id)
+        break
       case 'comment.action.created':
       case 'comment.action.resolved':
       case 'comment.action.unresolved':
         invalidateActionCommentQueries(queryClient, establishmentId, event.entity_id)
+        break
+      case 'comment.execution.created':
+      case 'comment.execution.resolved':
+      case 'comment.execution.unresolved':
+        invalidateExecutionCommentQueries(queryClient, establishmentId, event.entity_id)
         break
       default:
         break

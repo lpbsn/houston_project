@@ -8,6 +8,7 @@ import {
   invalidateEstablishmentActionQueries,
   invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentSignalQueries,
+  invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
   purgeNonAuthQueries,
 } from '@/lib/query-invalidation'
@@ -206,5 +207,20 @@ describe('query-invalidation', () => {
     })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments', 'action', 'est-1'] })
+  })
+
+  it('invalidates execution comment queries without global keys', () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    invalidateExecutionCommentQueries(queryClient, 'est-1', 'exec-1')
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['comments', 'action-plan-execution', 'est-1', 'exec-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ['comments', 'action-plan-execution', 'est-1'],
+    })
   })
 })

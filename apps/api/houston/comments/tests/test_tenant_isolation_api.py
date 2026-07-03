@@ -5,12 +5,18 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.conftest import build_assignee_payload, build_task_payload
 from houston.actions.services import create_action
-from houston.actions.tests.conftest import build_api_membership_on_establishment
+from houston.actions.tests.conftest import (
+    assign_business_unit_scope,
+    build_api_membership_on_establishment,
+)
 from houston.comments.tests.conftest import (
     action_comments_url,
     auth_headers,
     build_api_membership,
+    execution_comments_url,
     login,
     signal_comments_url,
 )
@@ -96,6 +102,52 @@ def test_action_comments_create_cross_establishment_returns_404(api_client):
 
     response = api_client.post(
         action_comments_url(foreign.establishment_id, action.id),
+        {"body": "Should not post"},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 404
+
+
+def _execution(owner, staff):
+    hotel, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Tenant execution",
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+    return execution
+
+
+def test_execution_comments_list_cross_establishment_returns_404(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    foreign = build_foreign_membership(role=EstablishmentMembership.Role.OWNER)
+    execution = _execution(owner, staff)
+    token = login(api_client, user=foreign.user)
+
+    response = api_client.get(
+        execution_comments_url(foreign.establishment_id, execution.id),
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 404
+
+
+def test_execution_comments_create_cross_establishment_returns_404(api_client):
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    foreign = build_foreign_membership(role=EstablishmentMembership.Role.OWNER)
+    execution = _execution(owner, staff)
+    token = login(api_client, user=foreign.user)
+
+    response = api_client.post(
+        execution_comments_url(foreign.establishment_id, execution.id),
         {"body": "Should not post"},
         format="json",
         **auth_headers(token),

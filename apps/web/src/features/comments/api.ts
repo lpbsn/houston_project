@@ -16,6 +16,8 @@ export const commentsQueryKeys = {
     ['comments', 'signal', establishmentId, signalId] as const,
   actionList: (establishmentId: string, actionId: string) =>
     ['comments', 'action', establishmentId, actionId] as const,
+  executionList: (establishmentId: string, executionId: string) =>
+    ['comments', 'action-plan-execution', establishmentId, executionId] as const,
 }
 
 export const mentionUserSearchQueryKey = (establishmentId: string, query: string) =>

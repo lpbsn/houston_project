@@ -33,3 +33,24 @@ def action_comment_unresolve_url(establishment_id, action_id, comment_id) -> str
         f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
         f"{comment_id}/unresolve/"
     )
+
+
+def execution_comments_url(establishment_id, execution_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/action-plan-executions/"
+        f"{execution_id}/comments/"
+    )
+
+
+def execution_comment_resolve_url(establishment_id, execution_id, comment_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/action-plan-executions/"
+        f"{execution_id}/comments/{comment_id}/resolve/"
+    )
+
+
+def execution_comment_unresolve_url(establishment_id, execution_id, comment_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/action-plan-executions/"
+        f"{execution_id}/comments/{comment_id}/unresolve/"
+    )

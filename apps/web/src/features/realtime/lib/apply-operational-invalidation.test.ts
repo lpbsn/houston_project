@@ -111,13 +111,27 @@ describe('applyOperationalInvalidation', () => {
 
   it.each([
     ['comment.signal.created', ['comments', 'signal', 'est-1', 'sig-1']],
-    ['comment.signal.inherited', ['comments', 'action', 'est-1', 'act-1']],
+    [
+      'comment.signal.inherited',
+      [
+        ['comments', 'action', 'est-1', 'act-1'],
+        ['comments', 'action-plan-execution', 'est-1', 'act-1'],
+      ],
+    ],
     ['comment.action.created', ['comments', 'action', 'est-1', 'act-1']],
     ['comment.action.resolved', ['comments', 'action', 'est-1', 'act-1']],
     ['comment.action.unresolved', ['comments', 'action', 'est-1', 'act-1']],
+    ['comment.execution.created', ['comments', 'action-plan-execution', 'est-1', 'exec-1']],
+    ['comment.execution.resolved', ['comments', 'action-plan-execution', 'est-1', 'exec-1']],
+    ['comment.execution.unresolved', ['comments', 'action-plan-execution', 'est-1', 'exec-1']],
   ] as const)('invalidates comment queries for %s', (reason, queryKey) => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-    const entityId = reason === 'comment.signal.created' ? 'sig-1' : 'act-1'
+    const entityId =
+      reason === 'comment.signal.created'
+        ? 'sig-1'
+        : reason.startsWith('comment.execution.')
+          ? 'exec-1'
+          : 'act-1'
     const event: OperationalRealtimeInvalidateEvent = {
       type: 'invalidate',
       subject_type: 'comment',
@@ -129,8 +143,11 @@ describe('applyOperationalInvalidation', () => {
 
     applyOperationalInvalidation(event, { queryClient, establishmentId: 'est-1' })
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey })
-    expect(invalidateSpy).toHaveBeenCalledOnce()
+    const expectedKeys = Array.isArray(queryKey[0]) ? queryKey : [queryKey]
+    for (const key of expectedKeys) {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: key })
+    }
+    expect(invalidateSpy).toHaveBeenCalledTimes(expectedKeys.length)
     invalidateSpy.mockRestore()
   })
 
