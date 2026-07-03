@@ -6,6 +6,7 @@ from houston.action_plans.models import (
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionTask,
+    ActionPlanSchedule,
 )
 from houston.actions.permissions import can_access_signal_for_linked_action
 from houston.establishments.membership_scope import (
@@ -396,6 +397,41 @@ def can_use_action_plan(
     if action_plan.catalog_status != CATALOG_STATUS_ACTIVE:
         return False
     return action_plan_visible_to_membership(membership, action_plan)
+
+
+def can_create_action_plan_schedule(
+    membership: EstablishmentMembership | None,
+    action_plan: ActionPlan,
+) -> bool:
+    return can_use_action_plan(membership, action_plan)
+
+
+def can_manage_action_plan_schedule(
+    membership: EstablishmentMembership | None,
+    schedule: ActionPlanSchedule,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=schedule.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    return can_manage_action_plan(membership, schedule.action_plan)
+
+
+def can_view_action_plan_schedule(
+    membership: EstablishmentMembership | None,
+    schedule: ActionPlanSchedule,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=schedule.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    return action_plan_visible_to_membership(membership, schedule.action_plan)
 
 
 def can_execute_action_plan_task(

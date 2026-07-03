@@ -877,6 +877,163 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-schedules/{schedule_id}/:
+    get:
+      operationId: v1_establishments_action_plan_schedules_retrieve
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: schedule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanScheduleDetail'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_action_plan_schedules_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: schedule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanScheduleUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanScheduleUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanScheduleUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanScheduleDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-schedules/{schedule_id}/deactivate/:
+    post:
+      operationId: v1_establishments_action_plan_schedules_deactivate_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: schedule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanScheduleDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanActiveExecutionConflict'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plans/:
     get:
       operationId: v1_establishments_action_plans_list
@@ -1153,6 +1310,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActionPlanDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/:
+    post:
+      operationId: v1_establishments_action_plans_schedule_create
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanScheduleDetail'
           description: ''
         '400':
           content:
@@ -6898,6 +7118,20 @@ components:
       - can_update_due_at
       - can_validate
       - is_assignee
+    ActionPlanActiveExecutionConflict:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        active_execution_id:
+          type: string
+          format: uuid
+      required:
+      - active_execution_id
+      - code
+      - detail
     ActionPlanActivitySubject:
       type: object
       properties:
@@ -7286,6 +7520,160 @@ components:
       - can_deactivate
       - can_update
       - can_use
+    ActionPlanScheduleAssignee:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        start_at:
+          type: string
+          format: time
+          nullable: true
+        end_at:
+          type: string
+          format: time
+          nullable: true
+      required:
+      - business_unit
+      - display_name
+      - end_at
+      - membership_id
+      - start_at
+    ActionPlanScheduleAssigneeInput:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        business_unit_id:
+          type: string
+          format: uuid
+        start_at:
+          type: string
+          format: time
+          nullable: true
+        end_at:
+          type: string
+          format: time
+          nullable: true
+      required:
+      - business_unit_id
+      - membership_id
+    ActionPlanScheduleCreateRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        end_date:
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanScheduleAssigneeInput'
+        use_shared_chronology:
+          type: boolean
+          default: false
+      required:
+      - end_at
+      - end_date
+      - recurrence_days
+      - start_at
+    ActionPlanScheduleDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action_plan_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        use_shared_chronology:
+          type: boolean
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+        created_by_id:
+          type: string
+          format: uuid
+        created_by_display_name:
+          type: string
+        last_materialized_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanScheduleAssignee'
+        permission_hints:
+          $ref: '#/components/schemas/ActionPlanSchedulePermissionHints'
+      required:
+      - action_plan_id
+      - assignees
+      - created_at
+      - created_by_display_name
+      - created_by_id
+      - end_at
+      - end_date
+      - id
+      - last_materialized_at
+      - permission_hints
+      - recurrence_days
+      - start_at
+      - start_date
+      - status
+      - updated_at
+      - use_shared_chronology
+    ActionPlanSchedulePermissionHints:
+      type: object
+      properties:
+        can_update:
+          type: boolean
+        can_deactivate:
+          type: boolean
+      required:
+      - can_deactivate
+      - can_update
     ActionPlanTaskCreateObservationRequest:
       type: object
       properties:
@@ -9599,6 +9987,31 @@ components:
         due_at:
           type: string
           format: date-time
+    PatchedActionPlanScheduleUpdateRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        start_at:
+          type: string
+          format: time
+        end_at:
+          type: string
+          format: time
+        recurrence_days:
+          type: array
+          items:
+            type: string
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanScheduleAssigneeInput'
+        use_shared_chronology:
+          type: boolean
     PatchedActionPlanUpdateRequest:
       type: object
       properties:

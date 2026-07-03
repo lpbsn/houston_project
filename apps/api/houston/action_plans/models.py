@@ -8,6 +8,8 @@ from houston.action_plans.constants import (
     ACTION_PLAN_SKIPPED_REASON_MAX_LENGTH,
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
+    CANCEL_ORIGIN_MANUAL,
+    CANCEL_ORIGIN_SCHEDULE_SYNC,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
     EXECUTION_STATUS_IN_PROGRESS,
@@ -262,6 +264,13 @@ class ActionPlanExecution(BaseModel):
         null=True,
         blank=True,
     )
+    schedule_source_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="action_plan_schedule_sourced_executions",
+        null=True,
+        blank=True,
+    )
     establishment = models.ForeignKey(
         "establishments.Establishment",
         on_delete=models.CASCADE,
@@ -326,6 +335,15 @@ class ActionPlanExecution(BaseModel):
     marked_done_at = models.DateTimeField(null=True, blank=True)
     validated_at = models.DateTimeField(null=True, blank=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
+    cancel_origin = models.CharField(
+        max_length=32,
+        null=True,
+        blank=True,
+        choices=[
+            (CANCEL_ORIGIN_MANUAL, "Manual"),
+            (CANCEL_ORIGIN_SCHEDULE_SYNC, "Schedule sync"),
+        ],
+    )
 
     class Meta:
         indexes = [
@@ -342,6 +360,27 @@ class ActionPlanExecution(BaseModel):
             models.CheckConstraint(
                 condition=Q(pilot_business_unit__isnull=False),
                 name="action_plan_execution_pilot_business_unit_required",
+            ),
+            models.UniqueConstraint(
+                fields=["action_plan_schedule", "occurrence_date"],
+                condition=Q(
+                    action_plan_schedule__isnull=False,
+                    use_shared_chronology=True,
+                ),
+                name="uniq_ap_exec_schedule_occurrence_shared",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "action_plan_schedule",
+                    "occurrence_date",
+                    "schedule_source_membership",
+                ],
+                condition=Q(
+                    action_plan_schedule__isnull=False,
+                    use_shared_chronology=False,
+                    schedule_source_membership__isnull=False,
+                ),
+                name="uniq_ap_exec_schedule_occurrence_individual",
             ),
         ]
 

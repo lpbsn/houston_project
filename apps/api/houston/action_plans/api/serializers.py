@@ -14,6 +14,7 @@ from houston.action_plans.models import (
     ActionPlan,
     ActionPlanExecution,
     ActionPlanExecutionTask,
+    ActionPlanSchedule,
     ActionPlanTask,
 )
 from houston.action_plans.selectors import get_involved_poles
@@ -168,6 +169,84 @@ class ActionPlanUseRequestSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False, allow_null=True)
     visible_from = serializers.DateTimeField(required=False, allow_null=True)
     occurrence_date = serializers.DateField(required=False, allow_null=True)
+
+
+class ActionPlanScheduleAssigneeInputSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    business_unit_id = serializers.UUIDField()
+    start_at = serializers.TimeField(required=False, allow_null=True)
+    end_at = serializers.TimeField(required=False, allow_null=True)
+
+
+class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
+    start_date = serializers.DateField(required=False, allow_null=True)
+    end_date = serializers.DateField()
+    start_at = serializers.TimeField()
+    end_at = serializers.TimeField()
+    recurrence_days = serializers.ListField(
+        child=serializers.CharField(),
+        min_length=1,
+    )
+    assignees = ActionPlanScheduleAssigneeInputSerializer(
+        many=True,
+        required=False,
+        default=list,
+    )
+    use_shared_chronology = serializers.BooleanField(required=False, default=False)
+
+
+class ActionPlanScheduleUpdateRequestSerializer(serializers.Serializer):
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False)
+    start_at = serializers.TimeField(required=False)
+    end_at = serializers.TimeField(required=False)
+    recurrence_days = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
+    assignees = ActionPlanScheduleAssigneeInputSerializer(
+        many=True,
+        required=False,
+    )
+    use_shared_chronology = serializers.BooleanField(required=False)
+
+
+class ActionPlanSchedulePermissionHintsSerializer(serializers.Serializer):
+    can_update = serializers.BooleanField()
+    can_deactivate = serializers.BooleanField()
+
+
+class ActionPlanScheduleAssigneeSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    display_name = serializers.CharField()
+    business_unit = ActionPlanBusinessUnitSerializer()
+    start_at = serializers.TimeField(allow_null=True)
+    end_at = serializers.TimeField(allow_null=True)
+
+
+class ActionPlanScheduleDetailSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    action_plan_id = serializers.UUIDField()
+    status = serializers.CharField()
+    use_shared_chronology = serializers.BooleanField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    start_at = serializers.TimeField()
+    end_at = serializers.TimeField()
+    recurrence_days = serializers.ListField(child=serializers.CharField())
+    created_by_id = serializers.UUIDField()
+    created_by_display_name = serializers.CharField()
+    last_materialized_at = serializers.DateTimeField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    assignees = ActionPlanScheduleAssigneeSerializer(many=True)
+    permission_hints = ActionPlanSchedulePermissionHintsSerializer()
+
+
+class ActionPlanActiveExecutionConflictSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+    active_execution_id = serializers.UUIDField()
 
 
 class ActionPlanExecutionPermissionHintsSerializer(serializers.Serializer):
@@ -443,5 +522,46 @@ def serialize_execution_detail(
         "permission_hints": build_action_plan_execution_permission_hints(
             membership=membership,
             execution=execution,
+        ),
+    }
+
+
+def serialize_schedule_detail(
+    schedule: ActionPlanSchedule,
+    *,
+    membership,
+) -> dict:
+    from houston.action_plans.permission_hints import (
+        build_action_plan_schedule_permission_hints,
+    )
+
+    return {
+        "id": schedule.id,
+        "action_plan_id": schedule.action_plan_id,
+        "status": schedule.status,
+        "use_shared_chronology": schedule.use_shared_chronology,
+        "start_date": schedule.start_date,
+        "end_date": schedule.end_date,
+        "start_at": schedule.start_at,
+        "end_at": schedule.end_at,
+        "recurrence_days": schedule.recurrence_days or [],
+        "created_by_id": schedule.created_by_id,
+        "created_by_display_name": _membership_display_name(schedule.created_by),
+        "last_materialized_at": schedule.last_materialized_at,
+        "created_at": schedule.created_at,
+        "updated_at": schedule.updated_at,
+        "assignees": [
+            {
+                "membership_id": assignee.membership_id,
+                "display_name": _membership_display_name(assignee.membership),
+                "business_unit": _serialize_business_unit(assignee.business_unit),
+                "start_at": assignee.start_at,
+                "end_at": assignee.end_at,
+            }
+            for assignee in schedule.schedule_assignees.all()
+        ],
+        "permission_hints": build_action_plan_schedule_permission_hints(
+            membership=membership,
+            schedule=schedule,
         ),
     }

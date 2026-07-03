@@ -22,6 +22,11 @@ WEB_DIR := apps/web
 
 PYTEST_MARKERS := not openai_observation_smoke and not openai_smoke and not slow
 PYTEST_ARGS := -m "$(PYTEST_MARKERS)" -q
+# Optional extra pytest args, e.g. make backend-test PYTEST_EXTRA_ARGS="houston/action_plans/tests/test_schedule_api.py -k staff"
+PYTEST_EXTRA_ARGS ?=
+ifdef ARGS
+PYTEST_EXTRA_ARGS := $(ARGS)
+endif
 
 SHARED_ENV_FILE := .env.shared-dev
 SHARED_COMPOSE := $(COMPOSE) --env-file $(SHARED_ENV_FILE) \
@@ -123,7 +128,7 @@ backend-schema-check: backend-schema
 	git diff --exit-code apps/api/schema.yml
 
 backend-test: assert-local-dev-db
-	$(API_CMD) 'cd $(API_DIR) && uv run pytest $(PYTEST_ARGS)'
+	$(API_CMD) 'cd $(API_DIR) && uv run pytest $(PYTEST_ARGS) $(PYTEST_EXTRA_ARGS)'
 
 backend-check: check backend-lint backend-migrations-check backend-schema-check backend-test
 

@@ -64,6 +64,15 @@ TERMINAL_EXECUTION_STATUSES = frozenset(
     }
 )
 
+CANCEL_ORIGIN_MANUAL = "manual"
+CANCEL_ORIGIN_SCHEDULE_SYNC = "schedule_sync"
+CANCEL_ORIGINS = frozenset(
+    {
+        CANCEL_ORIGIN_MANUAL,
+        CANCEL_ORIGIN_SCHEDULE_SYNC,
+    }
+)
+
 TASK_STATUS_PENDING = "pending"
 TASK_STATUS_DONE = "done"
 TASK_STATUS_SKIPPED = "skipped"

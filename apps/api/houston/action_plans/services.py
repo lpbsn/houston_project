@@ -13,6 +13,7 @@ from houston.action_plans.constants import (
     ACTION_PLAN_TASK_MAX_LENGTH,
     ACTION_PLAN_TITLE_MAX_LENGTH,
     ACTIVE_EXECUTION_STATUSES,
+    CANCEL_ORIGIN_MANUAL,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
     EXECUTION_STATUS_CANCELED,
@@ -38,6 +39,7 @@ from houston.action_plans.models import (
     ActionPlanExecution,
     ActionPlanExecutionTask,
     ActionPlanExecutionTeam,
+    ActionPlanSchedule,
     ActionPlanTask,
 )
 from houston.action_plans.permissions import (
@@ -194,9 +196,16 @@ def _cancel_linked_active_executions_for_signal_resolve(
     for execution in active_executions:
         execution.status = EXECUTION_STATUS_CANCELED
         execution.canceled_at = now
+        execution.cancel_origin = CANCEL_ORIGIN_MANUAL
         execution.last_activity_at = now
         execution.save(
-            update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
+            update_fields=[
+                "status",
+                "canceled_at",
+                "cancel_origin",
+                "last_activity_at",
+                "updated_at",
+            ]
         )
 
 
@@ -547,6 +556,8 @@ def _create_execution_record(
     description: str,
     requires_validation: bool,
     source_signal_id: uuid.UUID | None = None,
+    action_plan_schedule: ActionPlanSchedule | None = None,
+    schedule_source_membership: EstablishmentMembership | None = None,
     use_shared_chronology: bool = False,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
@@ -559,6 +570,8 @@ def _create_execution_record(
     now = timezone.now()
     return ActionPlanExecution.objects.create(
         action_plan=action_plan,
+        action_plan_schedule=action_plan_schedule,
+        schedule_source_membership=schedule_source_membership,
         establishment_id=establishment_id,
         source_signal_id=source_signal_id,
         created_by=created_by,
@@ -984,6 +997,7 @@ def reopen_action_plan_execution(
     execution.marked_done_at = None
     execution.validated_at = None
     execution.canceled_at = None
+    execution.cancel_origin = None
     execution.last_activity_at = now
     execution.save(
         update_fields=[
@@ -991,6 +1005,7 @@ def reopen_action_plan_execution(
             "marked_done_at",
             "validated_at",
             "canceled_at",
+            "cancel_origin",
             "last_activity_at",
             "updated_at",
         ]
@@ -1014,9 +1029,16 @@ def cancel_action_plan_execution(
     now = timezone.now()
     execution.status = ActionPlanExecution.Status.CANCELED
     execution.canceled_at = now
+    execution.cancel_origin = CANCEL_ORIGIN_MANUAL
     execution.last_activity_at = now
     execution.save(
-        update_fields=["status", "canceled_at", "last_activity_at", "updated_at"]
+        update_fields=[
+            "status",
+            "canceled_at",
+            "cancel_origin",
+            "last_activity_at",
+            "updated_at",
+        ]
     )
     _sync_linked_signal_after_execution_change(execution=execution)
     return execution

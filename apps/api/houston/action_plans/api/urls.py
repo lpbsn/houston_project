@@ -13,6 +13,9 @@ from houston.action_plans.api.views import (
     ActionPlanExecutionTaskSkipView,
     ActionPlanExecutionValidateView,
     ActionPlanListCreateView,
+    ActionPlanScheduleCreateView,
+    ActionPlanScheduleDeactivateView,
+    ActionPlanScheduleDetailView,
     ActionPlanUseView,
 )
 
@@ -41,6 +44,24 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/action-plans/<uuid:action_plan_id>/use/",
         ActionPlanUseView.as_view(),
         name="action-plan-use",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/action-plans/<uuid:action_plan_id>/schedule/",
+        ActionPlanScheduleCreateView.as_view(),
+        name="action-plan-schedule-create",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/action-plan-schedules/<uuid:schedule_id>/",
+        ActionPlanScheduleDetailView.as_view(),
+        name="action-plan-schedule-detail",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-schedules/"
+            "<uuid:schedule_id>/deactivate/"
+        ),
+        ActionPlanScheduleDeactivateView.as_view(),
+        name="action-plan-schedule-deactivate",
     ),
     path(
         "establishments/<uuid:establishment_id>/action-plan-executions/<uuid:execution_id>/",

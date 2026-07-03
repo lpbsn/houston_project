@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from django.db import close_old_connections
 
-from houston.action_plans.constants import CATALOG_STATUS_ACTIVE
+from houston.action_plans.constants import CANCEL_ORIGIN_MANUAL, CATALOG_STATUS_ACTIVE
 from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
@@ -423,6 +423,7 @@ def test_reopen_from_pending_validation_clears_timestamps(
     assert execution.marked_done_at is None
     assert execution.validated_at is None
     assert execution.canceled_at is None
+    assert execution.cancel_origin is None
 
 
 def test_reopen_from_done_clears_timestamps(
@@ -469,6 +470,7 @@ def test_cancel_from_in_progress_sets_canceled_at(
     execution.refresh_from_db()
     assert execution.status == ActionPlanExecution.Status.CANCELED
     assert execution.canceled_at is not None
+    assert execution.cancel_origin == CANCEL_ORIGIN_MANUAL
 
 
 def test_cancel_from_pending_validation(
