@@ -29,6 +29,7 @@ from houston.action_plans.models import (
     ActionPlanExecutionTask,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
+    ActionPlanTask,
 )
 from houston.action_plans.permissions import _scope_business_unit_ids
 from houston.action_plans.services import (
@@ -570,6 +571,20 @@ def _schedule_assignee_exists_subquery(*, membership_id: uuid.UUID):
     )
 
 
+def _schedule_catalog_task_in_scope_exists(*, business_unit_ids: set):
+    return ActionPlanTask.objects.filter(
+        action_plan_id=OuterRef("action_plan_id"),
+        business_unit_id__in=business_unit_ids,
+    )
+
+
+def _schedule_assignee_bu_in_scope_exists(*, business_unit_ids: set):
+    return ActionPlanScheduleAssignee.objects.filter(
+        action_plan_schedule_id=OuterRef("pk"),
+        business_unit_id__in=business_unit_ids,
+    )
+
+
 def _schedule_materialization_visibility_q(
     *,
     membership: EstablishmentMembership,
@@ -593,7 +608,11 @@ def _schedule_materialization_visibility_q(
     business_unit_ids = _scope_business_unit_ids(membership)
     if not business_unit_ids:
         return personal_q & Q(establishment_id=membership.establishment_id)
-    scope_q = Q(action_plan__pilot_business_unit_id__in=business_unit_ids)
+    scope_q = (
+        Q(action_plan__pilot_business_unit_id__in=business_unit_ids)
+        | Q(Exists(_schedule_catalog_task_in_scope_exists(business_unit_ids=business_unit_ids)))
+        | Q(Exists(_schedule_assignee_bu_in_scope_exists(business_unit_ids=business_unit_ids)))
+    )
     return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
 
 

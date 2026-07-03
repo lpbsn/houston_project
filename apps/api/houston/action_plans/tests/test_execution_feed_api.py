@@ -8,15 +8,19 @@ from django.utils import timezone
 from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
+    RECURRENCE_DAYS,
 )
 from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecution
+from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.conftest import (
     action_plan_execution_feed_url,
     auth_headers,
     build_assignee_payload,
+    build_schedule_assignee_payload,
     build_task_payload,
     login,
+    schedule_window_from_datetime,
 )
 from houston.establishments.models import EstablishmentMembership
 from houston.testing.auth import build_api_membership as build_foreign_membership
@@ -289,6 +293,46 @@ def test_manager_sees_scoped_execution_in_general_only(
     )
     assert personal.status_code == 200
     assert str(scoped.id) not in _execution_ids(personal.json())
+
+
+def test_manager_general_feed_materializes_cross_pole_schedule_with_scoped_task(
+    api_client,
+    owner_membership,
+    contributor_manager_membership,
+    cross_pole_catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, period_days=14)
+    schedule = create_action_plan_schedule(
+        action_plan=cross_pole_catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=sorted(RECURRENCE_DAYS),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **window,
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    schedule.last_materialized_at = None
+    schedule.save(update_fields=["last_materialized_at", "updated_at"])
+
+    assert not ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+    token = login(api_client, user=contributor_manager_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(contributor_manager_membership.establishment_id)
+        + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _execution_ids(response.json())
+    assert ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
 
 
 def test_feed_pagination_cursor(
