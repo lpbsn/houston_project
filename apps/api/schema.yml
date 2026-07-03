@@ -10996,12 +10996,14 @@ components:
       enum:
       - action
       - checklist_execution
+      - action_plan_execution
       - comment
       - signal
       type: string
       description: |-
         * `action` - Action
         * `checklist_execution` - Checklist execution
+        * `action_plan_execution` - Action plan execution
         * `comment` - Comment
         * `signal` - Signal
     SwitchEstablishmentRequest:
