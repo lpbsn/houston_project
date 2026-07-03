@@ -1,6 +1,8 @@
 # Phase 2 Final Roadmap
 
-Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; Wave 1 scoped deliverables complete ROADMAP-05..14)  
+Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; Wave 1 scoped deliverables complete ROADMAP-05..14)
+
+> **Post-Lot-4 note (action_plans):** New-domain schedule materialization uses beat + sync-on-create only (see `docs/evolution_action/action_plan_materialization.md`). **MAT-01** legacy checklist read-path debt remains open until Lot 10.  
 Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; Wave 1 closure pass: 2026-06-27; Wave 1 remainder closure pass: 2026-06-27)  
 Mode: audit consolidation + Wave 0–1 status tracking
 

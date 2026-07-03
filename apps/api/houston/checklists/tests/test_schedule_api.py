@@ -30,6 +30,15 @@ pytestmark = pytest.mark.django_db
 LOCAL_DAY_BOUNDARY_NOW = timezone.make_aware(datetime(2026, 6, 9, 23, 30, 0))
 
 
+def _next_strict_future_monday() -> date:
+    """Prochain lundi strictement après today (jamais today même si lundi)."""
+    today = timezone.now().date()
+    days_ahead = (0 - today.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    return today + timezone.timedelta(days=days_ahead)
+
+
 def _schedule_payload(**overrides) -> dict:
     payload = {
         "start_at": "09:00:00",
@@ -108,6 +117,8 @@ def test_schedule_recurring_creates_assignment_and_materializes_first_execution_
     business_unit,
 ):
     template, owner_token = _active_registered_template(api_client, owner_membership, business_unit)
+    start_date = _next_strict_future_monday()
+    recurrence_end_date = start_date + timezone.timedelta(days=8)
 
     response = _post_schedule(
         api_client,
@@ -115,9 +126,9 @@ def test_schedule_recurring_creates_assignment_and_materializes_first_execution_
         template["id"],
         owner_token,
         assigned_to=str(staff_membership.id),
-        start_date="2026-06-22",
+        start_date=start_date.isoformat(),
         recurrence_days=["monday"],
-        recurrence_end_date="2026-06-30",
+        recurrence_end_date=recurrence_end_date.isoformat(),
     )
     assert response.status_code == 201
     body = response.json()
@@ -131,7 +142,7 @@ def test_schedule_recurring_creates_assignment_and_materializes_first_execution_
     assert materialized.count() == 1
     execution = materialized.get()
     assert execution.execution_source == ChecklistExecution.ExecutionSource.ASSIGNMENT
-    assert execution.occurrence_date == date(2026, 6, 22)
+    assert execution.occurrence_date == start_date
 
 
 def test_schedule_rejects_end_at_before_start_at(
@@ -201,6 +212,7 @@ def test_schedule_staff_cannot_create_recurring_assignment(
 ):
     template, _ = _active_registered_template(api_client, owner_membership, business_unit)
     staff_token = login(api_client, user=staff_membership.user)
+    recurrence_end_date = (timezone.now().date() + timezone.timedelta(days=30)).isoformat()
 
     response = _post_schedule(
         api_client,
@@ -209,7 +221,7 @@ def test_schedule_staff_cannot_create_recurring_assignment(
         staff_token,
         assigned_to=str(staff_membership.id),
         recurrence_days=["tuesday"],
-        recurrence_end_date="2026-06-30",
+        recurrence_end_date=recurrence_end_date,
     )
     assert response.status_code == 403
 

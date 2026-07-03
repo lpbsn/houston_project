@@ -34,6 +34,8 @@ __all__ = [
     "action_plan_url",
     "action_plan_execution_url",
     "action_plan_task_url",
+    "action_plan_schedule_url",
+    "action_plan_schedule_deactivate_url",
 ]
 
 
@@ -60,6 +62,87 @@ def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") 
         f"{task_execution_id}/"
     )
     return base + suffix.lstrip("/")
+
+
+def action_plan_schedule_url(establishment_id, action_plan_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/"
+    )
+
+
+def action_plan_schedule_detail_url(establishment_id, schedule_id, suffix: str = "") -> str:
+    base = f"/api/v1/establishments/{establishment_id}/action-plan-schedules/{schedule_id}/"
+    return base + suffix.lstrip("/")
+
+
+def action_plan_schedule_deactivate_url(establishment_id, schedule_id) -> str:
+    return action_plan_schedule_detail_url(establishment_id, schedule_id, "deactivate/")
+
+
+def schedule_window_from_datetime(
+    dt,
+    *,
+    duration_hours: int = 1,
+    period_days: int = 14,
+) -> dict:
+    end_dt = dt + timezone.timedelta(hours=duration_hours)
+    start_at = dt.time().replace(microsecond=0)
+    end_at = end_dt.time().replace(microsecond=0)
+    if end_at <= start_at:
+        start_at = time(9, 0)
+        end_at = time(10, 0)
+    return {
+        "start_date": dt.date(),
+        "end_date": dt.date() + timezone.timedelta(days=period_days),
+        "start_at": start_at,
+        "end_at": end_at,
+    }
+
+
+def build_schedule_assignee_payload(*, membership, business_unit) -> dict:
+    return {
+        "membership_id": membership.id,
+        "business_unit_id": business_unit.id,
+    }
+
+
+def api_schedule_assignee_payload(*, membership, business_unit) -> dict:
+    payload = build_schedule_assignee_payload(
+        membership=membership,
+        business_unit=business_unit,
+    )
+    return {
+        "membership_id": str(payload["membership_id"]),
+        "business_unit_id": str(payload["business_unit_id"]),
+    }
+
+
+def api_recurring_schedule_payload(
+    *,
+    staff_membership,
+    business_unit,
+    recurrence_days=None,
+    **overrides,
+) -> dict:
+    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    window = schedule_window_from_datetime(now, duration_hours=1, period_days=14)
+    if recurrence_days is None:
+        recurrence_days = ["monday", "wednesday", "friday"]
+    payload = {
+        "start_date": window["start_date"].isoformat(),
+        "end_date": window["end_date"].isoformat(),
+        "start_at": window["start_at"].isoformat(),
+        "end_at": window["end_at"].isoformat(),
+        "recurrence_days": recurrence_days,
+        "assignees": [
+            api_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+    }
+    payload.update(overrides)
+    return payload
 
 
 @pytest.fixture

@@ -38,6 +38,7 @@ from houston.action_plans.models import (
     ActionPlanExecution,
     ActionPlanExecutionTask,
     ActionPlanExecutionTeam,
+    ActionPlanSchedule,
     ActionPlanTask,
 )
 from houston.action_plans.permissions import (
@@ -547,6 +548,8 @@ def _create_execution_record(
     description: str,
     requires_validation: bool,
     source_signal_id: uuid.UUID | None = None,
+    action_plan_schedule: ActionPlanSchedule | None = None,
+    schedule_source_membership: EstablishmentMembership | None = None,
     use_shared_chronology: bool = False,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
@@ -559,6 +562,8 @@ def _create_execution_record(
     now = timezone.now()
     return ActionPlanExecution.objects.create(
         action_plan=action_plan,
+        action_plan_schedule=action_plan_schedule,
+        schedule_source_membership=schedule_source_membership,
         establishment_id=establishment_id,
         source_signal_id=source_signal_id,
         created_by=created_by,

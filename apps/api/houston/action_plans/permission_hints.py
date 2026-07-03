@@ -4,23 +4,27 @@ from houston.action_plans.constants import (
     ACTIVE_EXECUTION_STATUSES,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
+    SCHEDULE_STATUS_ACTIVE,
     TASK_STATUS_PENDING,
 )
 from houston.action_plans.models import (
     ActionPlan,
     ActionPlanExecution,
     ActionPlanExecutionTask,
+    ActionPlanSchedule,
 )
 from houston.action_plans.permissions import (
     can_cancel_action_plan_execution,
     can_execute_action_plan_task,
     can_manage_action_plan,
+    can_manage_action_plan_schedule,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
     can_use_action_plan,
     can_validate_action_plan_execution,
     is_pilot_pole_assignee,
 )
+from houston.action_plans.schedule_services import get_active_started_execution_for_schedule
 from houston.establishments.models import EstablishmentMembership
 
 
@@ -106,4 +110,19 @@ def build_action_plan_task_execution_permission_hints(
         "can_mark_done": can_execute,
         "can_skip": can_execute,
         "can_create_observation": can_execute,
+    }
+
+
+def build_action_plan_schedule_permission_hints(
+    *,
+    membership: EstablishmentMembership,
+    schedule: ActionPlanSchedule,
+) -> dict[str, bool]:
+    can_manage = can_manage_action_plan_schedule(membership, schedule)
+    has_active_started = get_active_started_execution_for_schedule(schedule=schedule) is not None
+    return {
+        "can_update": can_manage and schedule.status == SCHEDULE_STATUS_ACTIVE,
+        "can_deactivate": can_manage
+        and schedule.status == SCHEDULE_STATUS_ACTIVE
+        and not has_active_started,
     }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 
 class ActionPlanServiceError(Exception):
     error_code = "action_plan_error"
@@ -15,3 +17,16 @@ class ActionPlanStateError(ActionPlanServiceError):
 
 class ActionPlanPermissionError(ActionPlanServiceError):
     error_code = "permission_denied"
+
+
+class ActionPlanConflictError(ActionPlanServiceError):
+    error_code = "conflict"
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        active_execution_id: uuid.UUID | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.active_execution_id = active_execution_id

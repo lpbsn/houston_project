@@ -16,6 +16,8 @@ from houston.action_plans.models import (
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionTask,
+    ActionPlanSchedule,
+    ActionPlanScheduleAssignee,
     ActionPlanTask,
 )
 from houston.action_plans.permissions import (
@@ -24,6 +26,7 @@ from houston.action_plans.permissions import (
     action_plan_visible_to_membership,
     can_execute_action_plan_task,
     can_view_action_plan_catalog,
+    can_view_action_plan_schedule,
 )
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.role_constants import ADMIN_ROLES
@@ -238,3 +241,39 @@ def get_involved_poles(execution: ActionPlanExecution) -> list[InvolvedPoleSnaps
             )
         )
     return snapshots
+
+
+_SCHEDULE_DETAIL_SELECT_RELATED = (
+    "action_plan",
+    "action_plan__pilot_business_unit",
+    "created_by__user",
+    "establishment",
+)
+_SCHEDULE_ASSIGNEE_PREFETCH = Prefetch(
+    "schedule_assignees",
+    queryset=ActionPlanScheduleAssignee.objects.select_related(
+        "membership__user",
+        "business_unit",
+    ),
+)
+
+
+def get_action_plan_schedule_for_detail(
+    *,
+    membership: EstablishmentMembership,
+    schedule_id: uuid.UUID,
+) -> ActionPlanSchedule | None:
+    schedule = (
+        ActionPlanSchedule.objects.filter(
+            id=schedule_id,
+            establishment_id=membership.establishment_id,
+        )
+        .select_related(*_SCHEDULE_DETAIL_SELECT_RELATED)
+        .prefetch_related(_SCHEDULE_ASSIGNEE_PREFETCH)
+        .first()
+    )
+    if schedule is None:
+        return None
+    if not can_view_action_plan_schedule(membership, schedule):
+        return None
+    return schedule

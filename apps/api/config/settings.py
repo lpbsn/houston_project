@@ -177,6 +177,14 @@ CELERY_BEAT_SCHEDULE = {
         ),
         "kwargs": {"establishment_id": None},
     },
+    "materialize-action-plan-schedules-horizon": {
+        "task": "houston.action_plans.tasks.materialize_action_plan_schedules_horizon_task",
+        "schedule": crontab(
+            hour=env_int("HOUSTON_ACTION_PLAN_HORIZON_BEAT_HOUR_UTC", 3),
+            minute=env_int("HOUSTON_ACTION_PLAN_HORIZON_BEAT_MINUTE_UTC", 30),
+        ),
+        "kwargs": {"establishment_id": None},
+    },
     "purge-chat-messages": {
         "task": "houston.chat.tasks.purge_chat_messages_task",
         "schedule": crontab(
