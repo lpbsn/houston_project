@@ -39,6 +39,7 @@ export type AppRoute =
   | { kind: 'checklist-template-detail'; templateId: string }
   | { kind: 'checklist-execution-detail'; executionId: string }
   | { kind: 'action-plan-create' }
+  | { kind: 'execution-action-plan-create' }
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
   | { kind: 'action-plan-execution-detail'; executionId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
@@ -71,6 +72,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return `checklist-execution-detail:${route.executionId}`
     case 'action-plan-create':
       return 'action-plan-create'
+    case 'execution-action-plan-create':
+      return 'execution-action-plan-create'
     case 'action-plan-template-detail':
       return `action-plan-template-detail:${route.actionPlanId}`
     case 'action-plan-execution-detail':
@@ -226,6 +229,10 @@ export function parseAppRoute(input: string): AppRoute {
   const chatConversationId = parseChatConversationId(pathname)
   if (chatConversationId) {
     return { kind: 'chat-conversation-detail', conversationId: chatConversationId }
+  }
+
+  if (pathname === '/execution/plans/new') {
+    return { kind: 'execution-action-plan-create' }
   }
 
   if (

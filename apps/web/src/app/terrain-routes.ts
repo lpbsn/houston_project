@@ -60,6 +60,7 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'checklist-template-detail',
   'checklist-execution-detail',
   'action-plan-create',
+  'execution-action-plan-create',
   'action-plan-template-detail',
   'action-plan-execution-detail',
   'chat-conversation-detail',
@@ -106,6 +107,7 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'checklist-template-detail' ||
     route.kind === 'checklist-execution-detail' ||
     route.kind === 'action-plan-create' ||
+    route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-execution-detail' ||
     route.kind === 'chat-conversation-detail'
@@ -130,6 +132,7 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'checklist-template-detail' ||
     route.kind === 'checklist-execution-detail' ||
     route.kind === 'action-plan-create' ||
+    route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-execution-detail' ||
     route.kind === 'chat-conversation-detail'
@@ -186,6 +189,16 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   }
 
   if (route.kind === 'action-create') {
+    return {
+      topbarVariant: 'detail',
+      title: "Plan d'action",
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'execution-action-plan-create') {
     return {
       topbarVariant: 'detail',
       title: "Plan d'action",
@@ -397,6 +410,10 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'action-create') {
     return 'action-create'
+  }
+
+  if (route.kind === 'execution-action-plan-create') {
+    return 'execution-action-plan-create'
   }
 
   if (route.kind === 'checklist-template-create') {

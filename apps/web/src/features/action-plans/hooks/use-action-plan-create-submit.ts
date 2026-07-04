@@ -13,12 +13,14 @@ import { useCreateActionPlanMutation } from '../hooks'
 type UseActionPlanCreateSubmitOptions = {
   establishmentId: string
   canDefineCrossPoleTasks: boolean
+  staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
   onNavigate: (pathname: string) => void
 }
 
 export function useActionPlanCreateSubmit({
   establishmentId,
   canDefineCrossPoleTasks,
+  staffExecutionMode,
   onNavigate,
 }: UseActionPlanCreateSubmitOptions) {
   const createMutation = useCreateActionPlanMutation(establishmentId)
@@ -27,7 +29,10 @@ export function useActionPlanCreateSubmit({
 
   async function submit(values: ActionPlanCreateFormValues) {
     setSubmitError(null)
-    const errors = validateActionPlanCreateForm(values, { canDefineCrossPoleTasks })
+    const errors = validateActionPlanCreateForm(values, {
+      canDefineCrossPoleTasks,
+      staffExecutionMode,
+    })
     setFieldErrors(errors)
     if (hasActionPlanCreateFormErrors(errors)) {
       return false

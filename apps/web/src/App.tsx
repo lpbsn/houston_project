@@ -287,7 +287,11 @@ function App() {
     }
 
     if (route.kind === 'action-plan-create') {
-      return <LazyActionPlanCreatePage />
+      return <LazyActionPlanCreatePage mode="catalog" backPath="/action-plans" />
+    }
+
+    if (route.kind === 'execution-action-plan-create') {
+      return <LazyActionPlanCreatePage mode="execution" backPath="/execution" />
     }
 
     if (route.kind === 'action-plan-template-detail') {

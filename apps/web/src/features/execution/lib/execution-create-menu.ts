@@ -1,6 +1,6 @@
 import type { BootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 
-export type ExecutionCreateMenuOptionId = 'action' | 'checklist'
+export type ExecutionCreateMenuOptionId = 'action_plan' | 'action' | 'checklist'
 
 export type ChecklistCreateSubmenuOptionId = 'create_registered' | 'use_existing'
 
@@ -24,6 +24,11 @@ export function getExecutionCreateMenuOptions(
   const options: ExecutionCreateMenuOption[] = []
 
   if (canCreateAction) {
+    options.push({
+      id: 'action_plan',
+      label: "Plan d'action",
+      disabled: false,
+    })
     options.push({
       id: 'action',
       label: 'Action',

@@ -63,7 +63,10 @@ const MAX_TASKS = 10
 
 export function validateActionPlanCreateForm(
   values: ActionPlanCreateFormValues,
-  options: { canDefineCrossPoleTasks: boolean },
+  options: {
+    canDefineCrossPoleTasks: boolean
+    staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
+  },
 ): ActionPlanCreateFormErrors {
   const errors: ActionPlanCreateFormErrors = {}
 
@@ -112,6 +115,37 @@ export function validateActionPlanCreateForm(
     if (values.useSharedChronology && values.sharedEndAt && values.sharedStartAt) {
       if (Date.parse(values.sharedEndAt) <= Date.parse(values.sharedStartAt)) {
         errors.sharedEndAt = 'La fin doit être postérieure au début.'
+      }
+    }
+  }
+
+  if (options.staffExecutionMode) {
+    const { membershipId, pilotBusinessUnitId } = options.staffExecutionMode
+
+    if (values.saveToLibrary) {
+      errors.submit = 'Les plans staff ne peuvent pas être enregistrés dans la bibliothèque.'
+    }
+    if (values.requiresValidation) {
+      errors.submit = 'Les plans staff ne peuvent pas exiger une validation.'
+    }
+
+    const validAssignees = values.assignees.filter((assignee) => assignee.membershipId)
+    if (validAssignees.length !== 1) {
+      errors.assignees = 'Le staff ne peut s’assigner qu’à lui-même.'
+    } else {
+      const assignee = validAssignees[0]
+      if (assignee.membershipId !== membershipId) {
+        errors.assignees = 'Le staff ne peut s’assigner qu’à lui-même.'
+      }
+      if (assignee.businessUnitId !== pilotBusinessUnitId) {
+        errors.assignees = 'L’assigné staff doit être sur le pôle pilote.'
+      }
+    }
+
+    for (const task of nonEmptyTasks) {
+      if (task.businessUnitId !== pilotBusinessUnitId) {
+        errors.tasks = 'Les tâches staff doivent rester sur le pôle pilote.'
+        break
       }
     }
   }
