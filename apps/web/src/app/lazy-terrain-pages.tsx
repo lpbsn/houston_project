@@ -90,6 +90,30 @@ export const LazyChecklistExecutionDetailPage = lazy(() =>
   })),
 )
 
+export const LazyActionPlanHubPage = lazy(() =>
+  import('@/features/action-plans/pages/action-plan-hub-page').then((module) => ({
+    default: module.ActionPlanHubPage,
+  })),
+)
+
+export const LazyActionPlanCreatePage = lazy(() =>
+  import('@/features/action-plans/pages/action-plan-create-page').then((module) => ({
+    default: module.ActionPlanCreatePage,
+  })),
+)
+
+export const LazyActionPlanTemplateDetailPage = lazy(() =>
+  import('@/features/action-plans/pages/action-plan-template-detail-page').then((module) => ({
+    default: module.ActionPlanTemplateDetailPage,
+  })),
+)
+
+export const LazyActionPlanExecutionDetailPage = lazy(() =>
+  import('@/features/action-plans/pages/action-plan-execution-detail-page').then((module) => ({
+    default: module.ActionPlanExecutionDetailPage,
+  })),
+)
+
 export const LazyChatRealtimeProvider = lazy(() =>
   import('@/features/chat/components/chat-realtime-provider').then((module) => ({
     default: module.ChatRealtimeProvider,

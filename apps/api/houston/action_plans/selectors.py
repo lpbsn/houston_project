@@ -4,11 +4,13 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet
+from django.utils import timezone
 
 from houston.action_plans.constants import (
     CONTRIBUTION_STATUS_DONE,
     CONTRIBUTION_STATUS_IN_PROGRESS,
+    EXECUTION_FEED_STATUSES,
     TERMINAL_TASK_STATUSES,
 )
 from houston.action_plans.models import (
@@ -28,6 +30,7 @@ from houston.action_plans.permissions import (
     can_view_action_plan_catalog,
     can_view_action_plan_schedule,
 )
+from houston.actions.selectors import ExecutionFeedViewMode
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.role_constants import ADMIN_ROLES
 
@@ -256,6 +259,133 @@ _SCHEDULE_ASSIGNEE_PREFETCH = Prefetch(
         "business_unit",
     ),
 )
+
+
+_EXECUTION_FEED_SELECT_RELATED = (
+    "pilot_business_unit",
+    "source_signal__affected_business_unit",
+    "source_signal__responsible_business_unit",
+    "source_signal__activity_subject",
+    "created_by__user",
+)
+_EXECUTION_FEED_TASK_PREFETCH = Prefetch(
+    "task_executions",
+    queryset=ActionPlanExecutionTask.objects.select_related(
+        "execution_team__business_unit",
+    ).order_by("position", "created_at"),
+)
+_EXECUTION_FEED_ASSIGNEE_PREFETCH = Prefetch(
+    "assignees",
+    queryset=ActionPlanAssignee.objects.select_related(
+        "membership__user",
+        "execution_team__business_unit",
+    ),
+)
+_EXECUTION_FEED_PREFETCH = (
+    _EXECUTION_FEED_ASSIGNEE_PREFETCH,
+    _EXECUTION_FEED_TASK_PREFETCH,
+    "execution_teams__business_unit",
+)
+
+
+def _assignee_visible_to_membership_now_q(
+    *,
+    membership: EstablishmentMembership,
+    now,
+) -> Exists:
+    return Exists(
+        ActionPlanAssignee.objects.filter(
+            action_plan_execution_id=OuterRef("pk"),
+            membership_id=membership.id,
+        ).filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
+    )
+
+
+def _is_assigned_to_membership_q(*, membership: EstablishmentMembership) -> Exists:
+    return Exists(
+        ActionPlanAssignee.objects.filter(
+            action_plan_execution_id=OuterRef("pk"),
+            membership_id=membership.id,
+        )
+    )
+
+
+def action_plan_execution_personal_feed_q(
+    *,
+    membership: EstablishmentMembership,
+) -> Q:
+    now = timezone.now()
+    assigned_visible = _assignee_visible_to_membership_now_q(membership=membership, now=now)
+    return (
+        Q(created_by_id=membership.id) | assigned_visible
+    ) & Q(establishment_id=membership.establishment_id)
+
+
+def action_plan_execution_general_feed_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+) -> Q:
+    if membership.role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return Q(establishment_id=membership.establishment_id)
+
+    personal_q = Q(created_by_id=membership.id) | _is_assigned_to_membership_q(
+        membership=membership,
+    )
+
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return personal_q & Q(establishment_id=membership.establishment_id)
+
+    scope_bu_ids = _scope_business_unit_ids(membership)
+    if not scope_bu_ids:
+        scope_q = Q(pk__in=[])
+    else:
+        scope_q = Q(execution_teams__business_unit_id__in=scope_bu_ids)
+
+    return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
+
+
+def action_plan_execution_feed_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+) -> QuerySet[ActionPlanExecution]:
+    now = timezone.now()
+    visibility_q = (
+        action_plan_execution_personal_feed_q(membership=membership)
+        if view_mode == "personal"
+        else action_plan_execution_general_feed_visibility_q(membership=membership)
+    )
+    return (
+        ActionPlanExecution.objects.filter(
+            visibility_q,
+            status__in=EXECUTION_FEED_STATUSES,
+        )
+        .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
+        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
+        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
+        .distinct()
+    )
+
+
+def apply_action_plan_execution_feed_sorting(
+    queryset: QuerySet[ActionPlanExecution],
+) -> QuerySet[ActionPlanExecution]:
+    return queryset.order_by("-last_activity_at", "-created_at", "-id")
+
+
+def action_plan_execution_overdue(
+    *,
+    execution: ActionPlanExecution,
+    now=None,
+) -> bool:
+    if execution.end_at is None:
+        return False
+    if execution.status not in EXECUTION_FEED_STATUSES:
+        return False
+    return execution.end_at < (now or timezone.now())
 
 
 def get_action_plan_schedule_for_detail(

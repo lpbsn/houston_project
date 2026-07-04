@@ -1,9 +1,38 @@
+import { apiClient, withAuthRetry } from '@/api/client'
+import type { components } from '@/api/generated/types'
+
+import { parseStandardApiError } from '@/lib/api-errors'
+
+import {
+  buildActionPlanCatalogListQueryParams,
+  normalizeActionPlanCatalogFilters,
+} from './lib/action-plan-catalog-filters'
+import type {
+  ActionPlanCatalogListFilters,
+  ActionPlanCreate201Response,
+  ActionPlanCreateRequest,
+  ActionPlanDetail,
+  ActionPlanExecutionDetail,
+  ActionPlanListItem,
+  ActionPlanTaskCreateObservationRequest,
+  ActionPlanTaskCreateObservationResponse,
+  ActionPlanTaskExecution,
+  ActionPlanTaskSkipRequest,
+  ActionPlanUseRequest,
+  PatchedActionPlanUpdateRequest,
+} from './types'
+
 export type ActionPlanExecutionFeedViewMode = 'personal' | 'general'
 
 export const actionPlansQueryKeys = {
   all: ['action-plans'] as const,
-  catalog: (establishmentId: string) =>
-    ['action-plans', 'catalog', establishmentId] as const,
+  catalog: (establishmentId: string, filters: ActionPlanCatalogListFilters = {}) =>
+    [
+      'action-plans',
+      'catalog',
+      establishmentId,
+      normalizeActionPlanCatalogFilters(filters),
+    ] as const,
   detail: (establishmentId: string, actionPlanId: string) =>
     ['action-plans', 'detail', establishmentId, actionPlanId] as const,
   executionFeed: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
@@ -12,4 +41,347 @@ export const actionPlansQueryKeys = {
     ['action-plans', 'execution-detail', establishmentId, executionId] as const,
   scheduleDetail: (establishmentId: string, scheduleId: string) =>
     ['action-plans', 'schedule-detail', establishmentId, scheduleId] as const,
+}
+
+export class ActionPlansApiError extends Error {
+  status: number
+  detail: string
+  code: string | null
+
+  constructor(options: { status: number; detail: string; code?: string | null }) {
+    super(options.detail)
+    this.name = 'ActionPlansApiError'
+    this.status = options.status
+    this.detail = options.detail
+    this.code = options.code ?? null
+  }
+}
+
+function getAuthHeaders(accessToken: string | null) {
+  return accessToken
+    ? {
+        Authorization: `Bearer ${accessToken}`,
+      }
+    : undefined
+}
+
+function parseError(response: Response, payload: unknown): ActionPlansApiError {
+  const { status, detail, code } = parseStandardApiError(response, payload)
+  return new ActionPlansApiError({ status, detail, code })
+}
+
+function assertActionPlanData<T>(result: {
+  response: Response
+  data?: T
+  error?: unknown
+}): T {
+  if (result.response.ok && result.data) {
+    return result.data
+  }
+  throw parseError(result.response, result.error)
+}
+
+function establishmentPath(establishmentId: string) {
+  return { path: { establishment_id: establishmentId } }
+}
+
+function actionPlanPath(establishmentId: string, actionPlanId: string) {
+  return {
+    path: {
+      establishment_id: establishmentId,
+      action_plan_id: actionPlanId,
+    },
+  }
+}
+
+function executionPath(establishmentId: string, executionId: string) {
+  return {
+    path: {
+      establishment_id: establishmentId,
+      execution_id: executionId,
+    },
+  }
+}
+
+function taskExecutionPath(establishmentId: string, taskExecutionId: string) {
+  return {
+    path: {
+      establishment_id: establishmentId,
+      task_execution_id: taskExecutionId,
+    },
+  }
+}
+
+export async function fetchActionPlanCatalog(
+  establishmentId: string,
+  filters: ActionPlanCatalogListFilters = {},
+): Promise<ActionPlanListItem[]> {
+  const query = buildActionPlanCatalogListQueryParams(filters)
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/action-plans/', {
+        params: {
+          ...establishmentPath(establishmentId),
+          query: Object.keys(query).length > 0 ? query : undefined,
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanListItem[]>(result)
+}
+
+export async function fetchActionPlanDetail(
+  establishmentId: string,
+  actionPlanId: string,
+): Promise<ActionPlanDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/', {
+        params: actionPlanPath(establishmentId, actionPlanId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanDetail>(result)
+}
+
+function toActionPlanCreateApiBody(
+  body: ActionPlanCreateRequest,
+): components['schemas']['ActionPlanCreateRequest'] {
+  return body as components['schemas']['ActionPlanCreateRequest']
+}
+
+export async function createActionPlan(
+  establishmentId: string,
+  body: ActionPlanCreateRequest,
+): Promise<ActionPlanCreate201Response> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/action-plans/', {
+        params: establishmentPath(establishmentId),
+        body: toActionPlanCreateApiBody(body),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanCreate201Response>(result)
+}
+
+export async function updateActionPlan(
+  establishmentId: string,
+  actionPlanId: string,
+  body: PatchedActionPlanUpdateRequest,
+): Promise<ActionPlanDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/', {
+        params: actionPlanPath(establishmentId, actionPlanId),
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanDetail>(result)
+}
+
+export async function activateActionPlan(
+  establishmentId: string,
+  actionPlanId: string,
+): Promise<ActionPlanDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/activate/',
+        {
+          params: actionPlanPath(establishmentId, actionPlanId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanDetail>(result)
+}
+
+export async function deactivateActionPlan(
+  establishmentId: string,
+  actionPlanId: string,
+): Promise<ActionPlanDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/deactivate/',
+        {
+          params: actionPlanPath(establishmentId, actionPlanId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanDetail>(result)
+}
+
+export async function launchActionPlanExecution(
+  establishmentId: string,
+  actionPlanId: string,
+  body: ActionPlanUseRequest = { use_shared_chronology: false, assignees: [] },
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/use/', {
+        params: actionPlanPath(establishmentId, actionPlanId),
+        body,
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function fetchActionPlanExecutionDetail(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function markActionPlanExecutionDone(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/mark-done/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function validateActionPlanExecution(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/validate/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function reopenActionPlanExecution(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/reopen/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function cancelActionPlanExecution(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/cancel/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function markActionPlanTaskDone(
+  establishmentId: string,
+  taskExecutionId: string,
+): Promise<ActionPlanTaskExecution> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-done/',
+        {
+          params: taskExecutionPath(establishmentId, taskExecutionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanTaskExecution>(result)
+}
+
+export async function skipActionPlanTask(
+  establishmentId: string,
+  taskExecutionId: string,
+  body: ActionPlanTaskSkipRequest = {},
+): Promise<ActionPlanTaskExecution> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/skip/',
+        {
+          params: taskExecutionPath(establishmentId, taskExecutionId),
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanTaskExecution>(result)
+}
+
+export async function createObservationFromActionPlanTask(
+  establishmentId: string,
+  taskExecutionId: string,
+  body: ActionPlanTaskCreateObservationRequest,
+): Promise<ActionPlanTaskCreateObservationResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/create-observation/',
+        {
+          params: taskExecutionPath(establishmentId, taskExecutionId),
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanTaskCreateObservationResponse>(result)
 }

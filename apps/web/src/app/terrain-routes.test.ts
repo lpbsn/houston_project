@@ -158,6 +158,24 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
+  it('configures action plan routes', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/action-plans' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Bibliothèque',
+      backPath: '/profile',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+    expect(getTerrainRouteConfig({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toEqual({
+      topbarVariant: 'detail',
+      detailTitleLayout: 'belowBack',
+      backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      showTopbarBottomBorder: false,
+    })
+  })
+
   it('configures signal detail without bottom nav', () => {
     expect(getTerrainRouteConfig({ kind: 'signal-detail', signalId: 'x' })).toEqual({
       topbarVariant: 'detail',

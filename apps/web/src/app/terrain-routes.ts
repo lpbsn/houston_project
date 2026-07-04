@@ -40,6 +40,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/team',
   '/team/invite',
   '/checklists',
+  '/action-plans',
 ])
 
 const PROTECTED_STATIC_PATHS = new Set<string>([
@@ -58,10 +59,14 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'checklist-template-create',
   'checklist-template-detail',
   'checklist-execution-detail',
+  'action-plan-create',
+  'action-plan-template-detail',
+  'action-plan-execution-detail',
   'chat-conversation-detail',
 ])
 
 const CHECKLIST_TERRAIN_PATHS = new Set<string>(['/checklists'])
+const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
 
 const TEAM_TERRAIN_PATHS = new Set<string>(['/team'])
 
@@ -100,6 +105,9 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'checklist-template-create' ||
     route.kind === 'checklist-template-detail' ||
     route.kind === 'checklist-execution-detail' ||
+    route.kind === 'action-plan-create' ||
+    route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-execution-detail' ||
     route.kind === 'chat-conversation-detail'
   ) {
     return true
@@ -121,6 +129,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'checklist-template-create' ||
     route.kind === 'checklist-template-detail' ||
     route.kind === 'checklist-execution-detail' ||
+    route.kind === 'action-plan-create' ||
+    route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-execution-detail' ||
     route.kind === 'chat-conversation-detail'
   ) {
     return true
@@ -129,6 +140,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && CHECKLIST_TERRAIN_PATHS.has(route.path)) {
+    return true
+  }
+  if (route.kind === 'static' && ACTION_PLAN_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   if (route.kind === 'static' && TEAM_TERRAIN_PATHS.has(route.path)) {
@@ -303,6 +317,48 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
+  if (route.kind === 'static' && route.path === '/action-plans') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Bibliothèque',
+      backPath: '/profile',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'action-plan-create') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Nouveau plan d’action',
+      backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
+    }
+  }
+
+  if (route.kind === 'action-plan-template-detail') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Détail du plan',
+      backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'action-plan-execution-detail') {
+    return {
+      topbarVariant: 'detail',
+      detailTitleLayout: 'belowBack',
+      backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      showTopbarBottomBorder: false,
+    }
+  }
+
   throw new Error('getTerrainRouteConfig called for a non-terrain route')
 }
 
@@ -355,6 +411,18 @@ export function getTerrainContentKey(route: AppRoute): string {
     return `checklist-execution-detail-${route.executionId}`
   }
 
+  if (route.kind === 'action-plan-create') {
+    return 'action-plan-create'
+  }
+
+  if (route.kind === 'action-plan-template-detail') {
+    return `action-plan-template-detail-${route.actionPlanId}`
+  }
+
+  if (route.kind === 'action-plan-execution-detail') {
+    return `action-plan-execution-detail-${route.executionId}`
+  }
+
   if (route.kind === 'chat-conversation-detail') {
     return `chat-conversation-detail-${route.conversationId}`
   }
@@ -373,6 +441,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'profile'
       case '/checklists':
         return 'checklists-hub'
+      case '/action-plans':
+        return 'action-plans-hub'
       case '/team':
         return 'team'
       case '/profile/switch-establishment':

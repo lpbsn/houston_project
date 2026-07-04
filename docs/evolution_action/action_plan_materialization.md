@@ -12,8 +12,9 @@ Définir comment les exécutions récurrentes sont créées à partir d'un `Acti
 |--------|-------------|--------|
 | Celery Beat proactif | Oui | Horizon 14 jours (`MATERIALIZATION_HORIZON_DAYS`), cron daily UTC (`HOUSTON_ACTION_PLAN_HORIZON_BEAT_*`) |
 | Sync on schedule create | Oui | Occurrences **visibles** dans l'horizon (`visible_from <= now`) |
-| Read-path sur GET feed | **Non** | Legacy `execution_feed.py` inchangé ; pas de write-on-read |
-| `ensure_visible_action_plan_executions_materialized` | Implémenté, **non branché** | Branchement réservé au feed unifié Lot 5 |
+| Read-path sur GET feed legacy | **Non** | Legacy `execution-feed/` inchangé ; pas de write-on-read |
+| Read-path sur `GET action-plan-execution-feed/` | **Oui (Lot 5)** | Horizon 3 jours (`READ_PATH_MATERIALIZATION_HORIZON_DAYS`), stale guard 30 min |
+| `ensure_visible_action_plan_executions_materialized` | **Oui (Lot 5)** | Branché **uniquement** sur `GET /establishments/{id}/action-plan-execution-feed/` via `build_action_plan_execution_feed_page` — jamais sur legacy `execution-feed/` |
 | WebSocket / notifications | **Oui (Lot 7)** | `action_plan_execution.created` (+ lifecycle events §22) ; notifications in-app created / pending_validation / canceled / reopened — pas de `reassigned` (V1) |
 
 ## Chronologie partagée vs individuelle (§9)

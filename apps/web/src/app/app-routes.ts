@@ -27,6 +27,7 @@ export type AppPath =
   | '/team'
   | '/team/invite'
   | '/checklists'
+  | '/action-plans'
 
 export type AppRoute =
   | { kind: 'static'; path: AppPath }
@@ -37,6 +38,9 @@ export type AppRoute =
   | { kind: 'checklist-template-create' }
   | { kind: 'checklist-template-detail'; templateId: string }
   | { kind: 'checklist-execution-detail'; executionId: string }
+  | { kind: 'action-plan-create' }
+  | { kind: 'action-plan-template-detail'; actionPlanId: string }
+  | { kind: 'action-plan-execution-detail'; executionId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'invitation'; token: string }
   | { kind: 'unknown'; pathname: string }
@@ -65,6 +69,12 @@ export function getAppRouteKey(route: AppRoute): string {
       return `checklist-template-detail:${route.templateId}`
     case 'checklist-execution-detail':
       return `checklist-execution-detail:${route.executionId}`
+    case 'action-plan-create':
+      return 'action-plan-create'
+    case 'action-plan-template-detail':
+      return `action-plan-template-detail:${route.actionPlanId}`
+    case 'action-plan-execution-detail':
+      return `action-plan-execution-detail:${route.executionId}`
     case 'chat-conversation-detail':
       return `chat-conversation-detail:${route.conversationId}`
     case 'invitation':
@@ -131,6 +141,33 @@ function parseChecklistRoute(pathname: string): AppRoute | null {
   return null
 }
 
+function parseActionPlanRoute(pathname: string): AppRoute | null {
+  const executionDetailMatch = pathname.match(/^\/action-plans\/executions\/([^/]+)$/)
+  if (executionDetailMatch?.[1]) {
+    return {
+      kind: 'action-plan-execution-detail',
+      executionId: executionDetailMatch[1],
+    }
+  }
+
+  if (pathname === '/action-plans/new') {
+    return { kind: 'action-plan-create' }
+  }
+
+  const detailMatch = pathname.match(/^\/action-plans\/([^/]+)$/)
+  if (detailMatch?.[1]) {
+    const segment = detailMatch[1]
+    if (!['executions', 'new'].includes(segment)) {
+      return {
+        kind: 'action-plan-template-detail',
+        actionPlanId: segment,
+      }
+    }
+  }
+
+  return null
+}
+
 function parseChatConversationId(pathname: string): string | null {
   const match = pathname.match(/^\/chat\/([^/]+)$/)
   return match?.[1] ?? null
@@ -181,6 +218,11 @@ export function parseAppRoute(input: string): AppRoute {
     return checklistRoute
   }
 
+  const actionPlanRoute = parseActionPlanRoute(pathname)
+  if (actionPlanRoute) {
+    return actionPlanRoute
+  }
+
   const chatConversationId = parseChatConversationId(pathname)
   if (chatConversationId) {
     return { kind: 'chat-conversation-detail', conversationId: chatConversationId }
@@ -204,7 +246,8 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/profile' ||
     pathname === '/team' ||
     pathname === '/team/invite' ||
-    pathname === '/checklists'
+    pathname === '/checklists' ||
+    pathname === '/action-plans'
   ) {
     return { kind: 'static', path: pathname as AppPath }
   }

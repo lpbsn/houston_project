@@ -5,6 +5,10 @@ import { getAppRouteKey, useAppRoute } from '@/app/app-routes'
 import {
   LazyActionCreatePage,
   LazyActionDetailPage,
+  LazyActionPlanCreatePage,
+  LazyActionPlanExecutionDetailPage,
+  LazyActionPlanHubPage,
+  LazyActionPlanTemplateDetailPage,
   LazyChatConversationPage,
   LazyChatPage,
   LazyChatRealtimeProvider,
@@ -282,6 +286,18 @@ function App() {
       return <LazyChecklistExecutionDetailPage executionId={route.executionId} />
     }
 
+    if (route.kind === 'action-plan-create') {
+      return <LazyActionPlanCreatePage />
+    }
+
+    if (route.kind === 'action-plan-template-detail') {
+      return <LazyActionPlanTemplateDetailPage actionPlanId={route.actionPlanId} />
+    }
+
+    if (route.kind === 'action-plan-execution-detail') {
+      return <LazyActionPlanExecutionDetailPage executionId={route.executionId} />
+    }
+
     if (route.kind === 'chat-conversation-detail') {
       return <LazyChatConversationPage conversationId={route.conversationId} />
     }
@@ -346,6 +362,10 @@ function App() {
 
     if (route.path === '/checklists') {
       return <LazyChecklistHubPage onNavigate={navigate} />
+    }
+
+    if (route.path === '/action-plans') {
+      return <LazyActionPlanHubPage onNavigate={navigate} />
     }
 
     if (route.path === '/onboarding') {

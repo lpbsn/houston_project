@@ -1,5 +1,5 @@
 import { useId, type ComponentType } from 'react'
-import { ArrowLeftRight, Building2, ChevronRight, ClipboardCheck, Users } from 'lucide-react'
+import { ArrowLeftRight, Building2, ChevronRight, ClipboardCheck, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -188,6 +188,8 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
   const canShowChecklistsNav = Boolean(activeMembership && role)
+  const canShowActionPlansNav =
+    role === 'manager' || role === 'director' || role === 'owner'
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)
   const roleEstablishmentLine = buildRoleEstablishmentLine(
@@ -301,6 +303,16 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
                 title="Listes"
                 subtitle="Gérer, modifier, désactiver"
                 onClick={() => onNavigate?.('/checklists')}
+              />
+            ) : null}
+
+            {canShowActionPlansNav ? (
+              <ProfileManagementNavCard
+                icon={Library}
+                iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+                title="Bibliothèque"
+                subtitle="Plans d’action réutilisables"
+                onClick={() => onNavigate?.('/action-plans')}
               />
             ) : null}
 

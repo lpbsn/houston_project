@@ -93,6 +93,28 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses action plan routes with execution before template detail', () => {
+    expect(parseAppRoute('/action-plans')).toEqual({
+      kind: 'static',
+      path: '/action-plans',
+    })
+    expect(parseAppRoute('/action-plans/new')).toEqual({
+      kind: 'action-plan-create',
+    })
+    expect(parseAppRoute('/action-plans/plan-1')).toEqual({
+      kind: 'action-plan-template-detail',
+      actionPlanId: 'plan-1',
+    })
+    expect(parseAppRoute('/action-plans/executions/exec-1')).toEqual({
+      kind: 'action-plan-execution-detail',
+      executionId: 'exec-1',
+    })
+    expect(parseAppRoute('/action-plans/executions')).toEqual({
+      kind: 'unknown',
+      pathname: '/action-plans/executions',
+    })
+  })
+
   it('returns unknown for unrecognized paths', () => {
     expect(parseAppRoute('/foo/bar')).toEqual({
       kind: 'unknown',

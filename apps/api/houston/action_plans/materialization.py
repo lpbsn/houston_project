@@ -4,6 +4,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -29,6 +30,7 @@ from houston.action_plans.models import (
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
 )
+from houston.action_plans.permissions import _scope_business_unit_ids
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
     _create_execution_record,
@@ -576,12 +578,171 @@ def materialize_schedules_horizon(
     return count
 
 
+def _schedule_materialization_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: str,
+) -> Q:
+    if view_mode == "personal":
+        return Q(
+            schedule_assignees__membership_id=membership.id,
+            establishment_id=membership.establishment_id,
+        )
+
+    if membership.role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return Q(establishment_id=membership.establishment_id)
+
+    personal_q = Q(schedule_assignees__membership_id=membership.id)
+
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return personal_q & Q(establishment_id=membership.establishment_id)
+
+    scope_bu_ids = _scope_business_unit_ids(membership)
+    if not scope_bu_ids:
+        scope_q = Q(pk__in=[])
+    else:
+        scope_q = Q(action_plan__pilot_business_unit_id__in=scope_bu_ids)
+
+    return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
+
+
+def _existing_occurrence_dates_for_schedules(
+    *,
+    schedule_occurrence_dates: dict[uuid.UUID, list[date]],
+) -> dict[uuid.UUID, set[date]]:
+    schedule_ids = [
+        schedule_id
+        for schedule_id, occurrence_dates in schedule_occurrence_dates.items()
+        if occurrence_dates
+    ]
+    result: dict[uuid.UUID, set[date]] = {
+        schedule_id: set() for schedule_id in schedule_occurrence_dates
+    }
+    if not schedule_ids:
+        return result
+
+    all_dates = {
+        occurrence_date
+        for occurrence_dates in schedule_occurrence_dates.values()
+        for occurrence_date in occurrence_dates
+    }
+    rows = ActionPlanExecution.objects.filter(
+        action_plan_schedule_id__in=schedule_ids,
+        occurrence_date__in=all_dates,
+    ).values_list("action_plan_schedule_id", "occurrence_date")
+    for schedule_id, occurrence_date in rows:
+        result[schedule_id].add(occurrence_date)
+    return result
+
+
+def _visible_occurrence_dates_for_schedule(
+    *,
+    schedule: ActionPlanSchedule,
+    occurrence_dates: list[date],
+    resolved_now: datetime,
+) -> list[date]:
+    visible_dates: list[date] = []
+    for occurrence_date in occurrence_dates:
+        if _occurrence_is_visible_for_schedule(
+            schedule=schedule,
+            occurrence_date=occurrence_date,
+            resolved_now=resolved_now,
+        ):
+            visible_dates.append(occurrence_date)
+    return visible_dates
+
+
+def _schedule_read_path_materialization_is_fresh(
+    *,
+    schedule: ActionPlanSchedule,
+    visible_occurrence_dates: list[date],
+    now: datetime,
+    existing_dates: set[date] | None = None,
+    stale_minutes: int = READ_PATH_MATERIALIZATION_STALE_MINUTES,
+) -> bool:
+    if schedule.last_materialized_at is None:
+        return False
+    if (now - schedule.last_materialized_at) >= timedelta(minutes=stale_minutes):
+        return False
+    if not visible_occurrence_dates:
+        return True
+    resolved_existing_dates = (
+        existing_dates
+        if existing_dates is not None
+        else _existing_occurrence_dates_for_schedules(
+            schedule_occurrence_dates={schedule.id: visible_occurrence_dates},
+        ).get(schedule.id, set())
+    )
+    return resolved_existing_dates.issuperset(visible_occurrence_dates)
+
+
 def ensure_visible_action_plan_executions_materialized(
     *,
     membership: EstablishmentMembership,
     view_mode: str = "personal",
     horizon_days: int = MATERIALIZATION_HORIZON_DAYS,
 ) -> int:
-    """Lot 5 hook — not wired in Lot 4."""
-    del membership, view_mode, horizon_days
-    return 0
+    now = timezone.now()
+    local_today = establishment_local_date(
+        establishment=membership.establishment,
+        at=now,
+    )
+    read_horizon_days = min(horizon_days, READ_PATH_MATERIALIZATION_HORIZON_DAYS)
+    visibility_q = _schedule_materialization_visibility_q(
+        membership=membership,
+        view_mode=view_mode,
+    )
+    schedules = list(
+        ActionPlanSchedule.objects.filter(
+            visibility_q,
+            status=SCHEDULE_STATUS_ACTIVE,
+        )
+        .select_related("establishment", "action_plan")
+        .prefetch_related("schedule_assignees")
+        .distinct()
+    )
+    visible_occurrence_dates_by_schedule: dict[uuid.UUID, list[date]] = {}
+    for schedule in schedules:
+        occurrence_dates = iter_occurrence_dates(
+            schedule=schedule,
+            from_date=local_today,
+            until_date=local_today + timedelta(days=read_horizon_days),
+        )
+        visible_occurrence_dates_by_schedule[schedule.id] = (
+            _visible_occurrence_dates_for_schedule(
+                schedule=schedule,
+                occurrence_dates=occurrence_dates,
+                resolved_now=now,
+            )
+        )
+
+    existing_dates_by_schedule = _existing_occurrence_dates_for_schedules(
+        schedule_occurrence_dates={
+            schedule_id: visible_dates
+            for schedule_id, visible_dates in visible_occurrence_dates_by_schedule.items()
+            if visible_dates
+        }
+    )
+
+    count = 0
+    for schedule in schedules:
+        visible_occurrence_dates = visible_occurrence_dates_by_schedule[schedule.id]
+        existing_dates = existing_dates_by_schedule.get(schedule.id, set())
+        if _schedule_read_path_materialization_is_fresh(
+            schedule=schedule,
+            visible_occurrence_dates=visible_occurrence_dates,
+            now=now,
+            existing_dates=existing_dates if visible_occurrence_dates else None,
+        ):
+            continue
+        materialized = materialize_schedule_occurrences_in_horizon(
+            schedule=schedule,
+            horizon_days=read_horizon_days,
+            now=now,
+            visible_only=True,
+        )
+        count += len(materialized)
+    return count
