@@ -352,7 +352,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     return {
       topbarVariant: 'detail',
       detailTitleLayout: 'belowBack',
-      backPath: '/action-plans',
+      backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
       showTopbarBottomBorder: false,

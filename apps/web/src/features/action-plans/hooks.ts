@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   invalidateActionPlanExecutionSurfaces,
@@ -8,6 +8,7 @@ import {
 import {
   activateActionPlan,
   actionPlansQueryKeys,
+  type ActionPlanExecutionFeedViewMode,
   cancelActionPlanExecution,
   createActionPlan,
   createObservationFromActionPlanTask,
@@ -15,6 +16,7 @@ import {
   fetchActionPlanCatalog,
   fetchActionPlanDetail,
   fetchActionPlanExecutionDetail,
+  fetchActionPlanExecutionFeed,
   launchActionPlanExecution,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
@@ -74,6 +76,33 @@ export function useActionPlanDetailQuery(
       return fetchActionPlanDetail(establishmentId, actionPlanId)
     },
     enabled: Boolean(establishmentId && actionPlanId),
+  })
+}
+
+export function useActionPlanExecutionFeedQuery(
+  establishmentId: string | null,
+  viewMode: ActionPlanExecutionFeedViewMode,
+) {
+  return useInfiniteQuery({
+    queryKey: establishmentId
+      ? actionPlansQueryKeys.executionFeed(establishmentId, viewMode)
+      : ['action-plans', 'action-plan-execution-feed', 'none'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return fetchActionPlanExecutionFeed(establishmentId, viewMode, {
+        cursor: pageParam,
+      })
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more || !lastPage.next_cursor) {
+        return undefined
+      }
+      return lastPage.next_cursor
+    },
+    enabled: Boolean(establishmentId),
   })
 }
 
