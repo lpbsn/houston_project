@@ -1,9 +1,10 @@
 import {
   canCreateActionPlanCatalogEntry,
+  canCreateSignalLinkedActionPlan,
   canDefineCrossPoleTasks,
 } from './action-plan-management-access'
 
-export type ActionPlanCreateMode = 'catalog' | 'execution'
+export type ActionPlanCreateMode = 'catalog' | 'execution' | 'signal-linked'
 
 export type ActionPlanCreateModeConfig = {
   canAccess: boolean
@@ -39,6 +40,20 @@ export function resolveActionPlanCreateModeConfig(input: {
     return {
       canAccess: canCreateActionPlanCatalogEntry(role),
       showLibraryToggle: true,
+      showValidationToggle: true,
+      showAssigneeSheet: true,
+      showStaffSelfAssignee: false,
+      filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
+      canDefineCrossPoleTasks: canCrossPole,
+      defaultRequiresValidation: true,
+      defaultSaveToLibrary: false,
+    }
+  }
+
+  if (mode === 'signal-linked') {
+    return {
+      canAccess: canCreateSignalLinkedActionPlan({ role, canCreateAction }),
+      showLibraryToggle: false,
       showValidationToggle: true,
       showAssigneeSheet: true,
       showStaffSelfAssignee: false,

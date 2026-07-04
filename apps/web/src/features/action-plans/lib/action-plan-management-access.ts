@@ -20,3 +20,23 @@ export function canDefineCrossPoleTasks(role: string | null | undefined): boolea
 export function canCreateExecutionFeedActionPlan(canCreateAction: boolean): boolean {
   return canCreateAction === true
 }
+
+/** Bootstrap/role gate for creating an action plan linked to a signal. Staff denied (§26.13). */
+export function canCreateSignalLinkedActionPlan(options: {
+  role: string | null | undefined
+  canCreateAction: boolean
+}): boolean {
+  if (options.canCreateAction !== true) {
+    return false
+  }
+  return canCreateActionPlanCatalogEntry(options.role)
+}
+
+import { shouldShowSignalCreateActionPlan } from '@/features/signals/lib/signal-create-action'
+
+/** Signal-scoped hint gate — same contract as the signal detail CTA. */
+export function canCreateSignalLinkedActionPlanFromSignalHints(
+  hints: { can_create_action?: boolean } | null | undefined,
+): boolean {
+  return shouldShowSignalCreateActionPlan(hints)
+}

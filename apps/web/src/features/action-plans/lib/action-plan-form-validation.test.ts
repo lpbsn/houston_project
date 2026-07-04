@@ -52,6 +52,26 @@ describe('buildActionPlanCreateRequest', () => {
     expect(payload.tasks).toEqual([
       { task: 'Task 1', business_unit_id: 'bu-1', position: 1 },
     ])
+    expect(payload.source_signal_id).toBeUndefined()
+  })
+
+  it('includes source_signal_id when sourceSignalId is provided', () => {
+    const payload = buildActionPlanCreateRequest({
+      title: 'Signal plan',
+      description: '',
+      pilotBusinessUnitId: 'bu-1',
+      requiresValidation: true,
+      saveToLibrary: false,
+      useSharedChronology: false,
+      sharedStartAt: '',
+      sharedEndAt: '',
+      sharedVisibleFrom: '',
+      tasks: [{ id: '1', task: 'Task 1', businessUnitId: 'bu-1' }],
+      assignees: [],
+      sourceSignalId: 'sig-1',
+    })
+
+    expect(payload.source_signal_id).toBe('sig-1')
   })
 })
 

@@ -85,6 +85,7 @@ export function buildActionPlanCreateRequest(
     visible_from: values.useSharedChronology
       ? toIsoDateTime(values.sharedVisibleFrom) ?? null
       : null,
+    ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
   }
 }
 
