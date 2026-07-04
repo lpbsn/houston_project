@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CommentsApiError } from './api'
 import { CommentList } from './components/comment-list'
 import { CommentSection } from './components/comment-section'
-import type { ActionCommentListItem } from './types'
+import type { ActionCommentListItem, ExecutionCommentListItem } from './types'
 
 const actionComments: ActionCommentListItem[] = [
   {
@@ -39,6 +39,32 @@ const actionComments: ActionCommentListItem[] = [
     is_resolved: true,
     resolved_at: '2026-06-15T12:00:00Z',
     resolved_by: { membership_id: 'm-2', display_name: 'Bob' },
+    permission_hints: { can_reply: true, can_resolve: true },
+  },
+]
+
+const executionComments: ExecutionCommentListItem[] = [
+  {
+    item_type: 'inherited_signal',
+    id: 'signal-comment-1',
+    origin: 'signal',
+    body: 'note signal héritée',
+    author: { membership_id: 'm-1', display_name: 'Alice' },
+    mentions: [],
+    created_at: '2026-06-15T10:00:00Z',
+  },
+  {
+    item_type: 'execution_thread',
+    id: 'execution-root-1',
+    origin: 'action_plan_execution',
+    body: 'note execution',
+    author: { membership_id: 'm-2', display_name: 'Bob' },
+    mentions: [],
+    created_at: '2026-06-15T10:30:00Z',
+    replies: [],
+    is_resolved: false,
+    resolved_at: null,
+    resolved_by: null,
     permission_hints: { can_reply: true, can_resolve: true },
   },
 ]
@@ -80,6 +106,7 @@ const {
   rootCommentMutation,
   replyCommentMutation,
   actionCommentsQueryData,
+  executionCommentsQueryData,
 } = vi.hoisted(() => ({
   createRootMutate: vi.fn(),
   createReplyMutate: vi.fn(),
@@ -94,9 +121,11 @@ const {
     mutate: vi.fn(),
   },
   actionCommentsQueryData: { current: [] as ActionCommentListItem[] },
+  executionCommentsQueryData: { current: [] as ExecutionCommentListItem[] },
 }))
 
 let createActionCommentMutationCallCount = 0
+let createExecutionCommentMutationCallCount = 0
 
 vi.mock('./hooks', () => ({
   useSignalCommentsQuery: () => ({
@@ -113,6 +142,13 @@ vi.mock('./hooks', () => ({
     data: actionCommentsQueryData.current,
     refetch: vi.fn(),
   }),
+  useExecutionCommentsQuery: () => ({
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    data: executionCommentsQueryData.current,
+    refetch: vi.fn(),
+  }),
   useCreateSignalCommentMutation: () => ({
     isPending: false,
     error: null,
@@ -124,12 +160,28 @@ vi.mock('./hooks', () => ({
       ? { ...rootCommentMutation, mutate: createRootMutate }
       : { ...replyCommentMutation, mutate: createReplyMutate }
   },
+  useCreateExecutionCommentMutation: () => {
+    createExecutionCommentMutationCallCount += 1
+    return createExecutionCommentMutationCallCount % 2 === 1
+      ? { ...rootCommentMutation, mutate: createRootMutate }
+      : { ...replyCommentMutation, mutate: createReplyMutate }
+  },
   useResolveActionCommentMutation: () => ({
     isPending: false,
     error: null,
     mutate: vi.fn(),
   }),
   useUnresolveActionCommentMutation: () => ({
+    isPending: false,
+    error: null,
+    mutate: vi.fn(),
+  }),
+  useResolveExecutionCommentMutation: () => ({
+    isPending: false,
+    error: null,
+    mutate: vi.fn(),
+  }),
+  useUnresolveExecutionCommentMutation: () => ({
     isPending: false,
     error: null,
     mutate: vi.fn(),
@@ -162,7 +214,9 @@ function submitRootComment(text = 'Nouveau commentaire') {
 
 beforeEach(() => {
   createActionCommentMutationCallCount = 0
+  createExecutionCommentMutationCallCount = 0
   actionCommentsQueryData.current = actionComments
+  executionCommentsQueryData.current = executionComments
   rootCommentMutation.isPending = false
   rootCommentMutation.error = null
   replyCommentMutation.isPending = false
@@ -281,6 +335,22 @@ describe('CommentSection', () => {
 
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByPlaceholderText('Répondre...')).toBeTruthy()
+  })
+
+  it('renders execution threads and inherited signal comments', () => {
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="action-plan-execution"
+        targetId="exec-1"
+      />,
+    )
+
+    expect(screen.getByText('note signal héritée')).toBeTruthy()
+    expect(screen.getByText('note execution')).toBeTruthy()
+    expect(screen.getByText('Plan')).toBeTruthy()
+    expect(screen.getByLabelText('Répondre au commentaire')).toBeTruthy()
+    expect(screen.getByLabelText('Marquer le commentaire comme résolu')).toBeTruthy()
   })
 })
 

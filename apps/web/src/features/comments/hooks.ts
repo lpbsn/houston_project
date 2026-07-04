@@ -3,13 +3,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   commentsQueryKeys,
   createActionComment,
+  createExecutionComment,
   createSignalComment,
   fetchActionComments,
+  fetchExecutionComments,
   fetchSignalComments,
   mentionUserSearchQueryKey,
   resolveActionComment,
+  resolveExecutionComment,
   searchEstablishmentUsersForMentions,
   unresolveActionComment,
+  unresolveExecutionComment,
 } from './api'
 import type { CommentCreateRequest } from './types'
 
@@ -44,6 +48,25 @@ export function useActionCommentsQuery(establishmentId: string | null, actionId:
       return fetchActionComments(establishmentId, actionId)
     },
     enabled: Boolean(establishmentId && actionId),
+  })
+}
+
+export function useExecutionCommentsQuery(
+  establishmentId: string | null,
+  executionId: string | null,
+) {
+  return useQuery({
+    queryKey:
+      establishmentId && executionId
+        ? commentsQueryKeys.executionList(establishmentId, executionId)
+        : ['comments', 'action-plan-execution', 'none'],
+    queryFn: () => {
+      if (!establishmentId || !executionId) {
+        throw new Error('Exécution introuvable.')
+      }
+      return fetchExecutionComments(establishmentId, executionId)
+    },
+    enabled: Boolean(establishmentId && executionId),
   })
 }
 
@@ -151,6 +174,75 @@ export function useUnresolveActionCommentMutation(
       if (establishmentId && actionId) {
         void queryClient.invalidateQueries({
           queryKey: commentsQueryKeys.actionList(establishmentId, actionId),
+        })
+      }
+    },
+  })
+}
+
+export function useCreateExecutionCommentMutation(
+  establishmentId: string | null,
+  executionId: string | null,
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: CommentCreateRequest) => {
+      if (!establishmentId || !executionId) {
+        throw new Error('Exécution introuvable.')
+      }
+      return createExecutionComment(establishmentId, executionId, payload)
+    },
+    onSuccess: () => {
+      if (establishmentId && executionId) {
+        void queryClient.invalidateQueries({
+          queryKey: commentsQueryKeys.executionList(establishmentId, executionId),
+        })
+      }
+    },
+  })
+}
+
+export function useResolveExecutionCommentMutation(
+  establishmentId: string | null,
+  executionId: string | null,
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: string) => {
+      if (!establishmentId || !executionId) {
+        throw new Error('Exécution introuvable.')
+      }
+      return resolveExecutionComment(establishmentId, executionId, commentId)
+    },
+    onSuccess: () => {
+      if (establishmentId && executionId) {
+        void queryClient.invalidateQueries({
+          queryKey: commentsQueryKeys.executionList(establishmentId, executionId),
+        })
+      }
+    },
+  })
+}
+
+export function useUnresolveExecutionCommentMutation(
+  establishmentId: string | null,
+  executionId: string | null,
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (commentId: string) => {
+      if (!establishmentId || !executionId) {
+        throw new Error('Exécution introuvable.')
+      }
+      return unresolveExecutionComment(establishmentId, executionId, commentId)
+    },
+    onSuccess: () => {
+      if (establishmentId && executionId) {
+        void queryClient.invalidateQueries({
+          queryKey: commentsQueryKeys.executionList(establishmentId, executionId),
         })
       }
     },

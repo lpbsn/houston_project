@@ -35,6 +35,14 @@ function CommentOriginBadge({ origin }: { origin: ActionCommentListItem['origin'
     )
   }
 
+  if (origin === 'action_plan_execution') {
+    return (
+      <HoustonBadge variant="blue" className="text-[9px]">
+        Plan
+      </HoustonBadge>
+    )
+  }
+
   return (
     <HoustonBadge variant="blue" className="text-[9px]">
       Action

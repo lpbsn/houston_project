@@ -3,11 +3,16 @@ import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
-import { ActionPlansApiError } from '../api'
+import {
+  ActionDetailTabs,
+  type ActionDetailTab,
+} from '@/features/actions/components/action-detail-tabs'
+import { CommentSection } from '@/features/comments/components/comment-section'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
+import { ActionPlansApiError } from '../api'
 import { ActionPlanExecutionDetailHeader } from '../components/action-plan-execution-detail-header'
 import { ActionPlanExecutionObservationSheet } from '../components/action-plan-execution-observation-sheet'
 import { ActionPlanExecutionSkipSheet } from '../components/action-plan-execution-skip-sheet'
@@ -35,27 +40,36 @@ import {
   canShowActionPlanTaskMarkDone,
   canShowActionPlanTaskSkip,
 } from '../lib/action-plan-permission-hints'
+import type { ActionPlanExecutionDetail } from '../types'
 
 type ActionPlanExecutionDetailPageProps = {
   executionId: string
 }
 
-export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecutionDetailPageProps) {
-  const { activeMembership } = useAuth()
-  const establishmentId = activeMembership?.establishment_id ?? null
+type ActionPlanExecutionDetailPageContentProps = {
+  executionId: string
+  establishmentId: string
+  execution: ActionPlanExecutionDetail
+}
 
-  const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
-  const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId ?? '', executionId)
-  const validateMutation = useValidateActionPlanExecutionMutation(establishmentId ?? '', executionId)
-  const reopenMutation = useReopenActionPlanExecutionMutation(establishmentId ?? '', executionId)
-  const cancelMutation = useCancelActionPlanExecutionMutation(establishmentId ?? '', executionId)
-  const markTaskDoneMutation = useMarkActionPlanTaskDoneMutation(establishmentId ?? '', executionId)
-  const skipMutation = useSkipActionPlanTaskMutation(establishmentId ?? '', executionId)
+function ActionPlanExecutionDetailPageContent({
+  executionId,
+  establishmentId,
+  execution,
+}: ActionPlanExecutionDetailPageContentProps) {
+  const markDoneMutation = useMarkActionPlanExecutionDoneMutation(establishmentId, executionId)
+  const validateMutation = useValidateActionPlanExecutionMutation(establishmentId, executionId)
+  const reopenMutation = useReopenActionPlanExecutionMutation(establishmentId, executionId)
+  const cancelMutation = useCancelActionPlanExecutionMutation(establishmentId, executionId)
+  const markTaskDoneMutation = useMarkActionPlanTaskDoneMutation(establishmentId, executionId)
+  const skipMutation = useSkipActionPlanTaskMutation(establishmentId, executionId)
   const observationMutation = useCreateObservationFromActionPlanTaskMutation(
-    establishmentId ?? '',
+    establishmentId,
     executionId,
   )
 
+  const [activeTab, setActiveTab] = useState<ActionDetailTab>('details')
+  const [hasOpenedComments, setHasOpenedComments] = useState(false)
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
@@ -73,42 +87,16 @@ export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecuti
     skipMutation.isPending ||
     observationMutation.isPending
 
-  if (!establishmentId) {
-    return null
-  }
-
-  if (detailQuery.isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 px-3 py-10 text-sm text-[#7D7B75]">
-        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-        Chargement de l&apos;exécution...
-      </div>
-    )
-  }
-
-  if (detailQuery.isError || !detailQuery.data) {
-    return (
-      <TerrainErrorState
-        className="mx-3 mt-3"
-        message={resolveActionPlanErrorMessage(
-          detailQuery.error,
-          'Cette exécution est introuvable ou inaccessible.',
-        )}
-        onRetry={() => void detailQuery.refetch()}
-      />
-    )
-  }
-
-  const execution = detailQuery.data
   const isTerminal = isActionPlanExecutionTerminal(execution.status)
   const isOverdue = isActionPlanExecutionOverdue(execution.end_at, isTerminal)
   const permissionHints = execution.permission_hints
   const poleSections = buildActionPlanPoleSections(execution)
-  const showStickyFooter =
+  const canShowLifecycleFooter =
     permissionHints.can_mark_done ||
     permissionHints.can_validate ||
     permissionHints.can_reopen ||
     canShowActionPlanExecutionCancel(permissionHints, { isTerminal })
+  const showStickyFooter = activeTab === 'details' && canShowLifecycleFooter
 
   const mutationError =
     markDoneMutation.error ??
@@ -116,6 +104,13 @@ export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecuti
     reopenMutation.error ??
     cancelMutation.error ??
     null
+
+  const handleTabChange = (tab: ActionDetailTab) => {
+    if (tab === 'comments') {
+      setHasOpenedComments(true)
+    }
+    setActiveTab(tab)
+  }
 
   async function handleMarkDone() {
     setFeedback(null)
@@ -223,37 +218,58 @@ export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecuti
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className={cn('flex flex-1 flex-col space-y-3 px-3 pt-2', showStickyFooter ? 'pb-28' : 'pb-4')}>
-        <ActionPlanExecutionDetailHeader execution={execution} isOverdue={isOverdue} />
+      <div className="px-3 pt-2">
+        <ActionDetailTabs activeTab={activeTab} onChange={handleTabChange} />
+      </div>
 
-        {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
-
-        {poleSections.length === 0 ? (
-          <TerrainEmptyState title="Aucune tâche dans cette exécution." />
-        ) : (
-          poleSections.map((section) => (
-            <ActionPlanPoleSectionView
-              key={section.businessUnitId}
-              section={section}
-              isTerminal={isTerminal}
-              isMutationPending={isMutationPending}
-              canShowTaskActions={(task) =>
-                canShowActionPlanTaskMarkDone(task.permission_hints, { isTerminal, task }) ||
-                canShowActionPlanTaskSkip(task.permission_hints, { isTerminal, task }) ||
-                canShowActionPlanTaskCreateObservation(task.permission_hints, { isTerminal, task })
-              }
-              onMarkDone={handleTaskMarkDone}
-              onCreateObservation={(taskId) => {
-                setObservationTaskId(taskId)
-                setObservationText('')
-              }}
-              onSkipRequest={(taskId) => {
-                setSkipTaskId(taskId)
-                setSkipReason('')
-              }}
-            />
-          ))
+      <div
+        className={cn(
+          'flex flex-1 flex-col space-y-3 px-3 pt-2',
+          showStickyFooter ? 'pb-28' : 'pb-4',
         )}
+      >
+        <div className={cn('flex flex-col space-y-3', activeTab !== 'details' && 'hidden')}>
+          <ActionPlanExecutionDetailHeader execution={execution} isOverdue={isOverdue} />
+
+          {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
+
+          {poleSections.length === 0 ? (
+            <TerrainEmptyState title="Aucune tâche dans cette exécution." />
+          ) : (
+            poleSections.map((section) => (
+              <ActionPlanPoleSectionView
+                key={section.businessUnitId}
+                section={section}
+                isTerminal={isTerminal}
+                isMutationPending={isMutationPending}
+                canShowTaskActions={(task) =>
+                  canShowActionPlanTaskMarkDone(task.permission_hints, { isTerminal, task }) ||
+                  canShowActionPlanTaskSkip(task.permission_hints, { isTerminal, task }) ||
+                  canShowActionPlanTaskCreateObservation(task.permission_hints, { isTerminal, task })
+                }
+                onMarkDone={handleTaskMarkDone}
+                onCreateObservation={(taskId) => {
+                  setObservationTaskId(taskId)
+                  setObservationText('')
+                }}
+                onSkipRequest={(taskId) => {
+                  setSkipTaskId(taskId)
+                  setSkipReason('')
+                }}
+              />
+            ))
+          )}
+        </div>
+
+        {hasOpenedComments ? (
+          <div className={cn(activeTab !== 'comments' && 'hidden')}>
+            <CommentSection
+              establishmentId={establishmentId}
+              targetType="action-plan-execution"
+              targetId={executionId}
+            />
+          </div>
+        ) : null}
       </div>
 
       {showStickyFooter ? (
@@ -297,5 +313,47 @@ export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecuti
         }}
       />
     </div>
+  )
+}
+
+export function ActionPlanExecutionDetailPage({ executionId }: ActionPlanExecutionDetailPageProps) {
+  const { activeMembership } = useAuth()
+  const establishmentId = activeMembership?.establishment_id ?? null
+
+  const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
+
+  if (!establishmentId) {
+    return null
+  }
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 px-3 py-10 text-sm text-[#7D7B75]">
+        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+        Chargement de l&apos;exécution...
+      </div>
+    )
+  }
+
+  if (detailQuery.isError || !detailQuery.data) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message={resolveActionPlanErrorMessage(
+          detailQuery.error,
+          'Cette exécution est introuvable ou inaccessible.',
+        )}
+        onRetry={() => void detailQuery.refetch()}
+      />
+    )
+  }
+
+  return (
+    <ActionPlanExecutionDetailPageContent
+      key={executionId}
+      executionId={executionId}
+      establishmentId={establishmentId}
+      execution={detailQuery.data}
+    />
   )
 }

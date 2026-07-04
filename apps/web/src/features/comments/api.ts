@@ -7,6 +7,8 @@ import type {
   ActionCommentThreadItem,
   CommentCreateRequest,
   CommentItem,
+  ExecutionCommentListItem,
+  ExecutionCommentThreadItem,
   MentionUserSearchResult,
 } from './types'
 
@@ -200,6 +202,108 @@ export async function unresolveActionComment(
   )
 
   return assertCommentsData<ActionCommentThreadItem>(result)
+}
+
+export async function fetchExecutionComments(
+  establishmentId: string,
+  executionId: string,
+): Promise<ExecutionCommentListItem[]> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertCommentsData<ExecutionCommentListItem[]>(result)
+}
+
+export async function createExecutionComment(
+  establishmentId: string,
+  executionId: string,
+  payload: CommentCreateRequest,
+): Promise<CommentItem> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+            },
+          },
+          body: payload,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertCommentsData<CommentItem>(result)
+}
+
+export async function resolveExecutionComment(
+  establishmentId: string,
+  executionId: string,
+  commentId: string,
+): Promise<ExecutionCommentThreadItem> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/{comment_id}/resolve/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+              comment_id: commentId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertCommentsData<ExecutionCommentThreadItem>(result)
+}
+
+export async function unresolveExecutionComment(
+  establishmentId: string,
+  executionId: string,
+  commentId: string,
+): Promise<ExecutionCommentThreadItem> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/{comment_id}/unresolve/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              execution_id: executionId,
+              comment_id: commentId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  return assertCommentsData<ExecutionCommentThreadItem>(result)
 }
 
 export async function searchEstablishmentUsersForMentions(
