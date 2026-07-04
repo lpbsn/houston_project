@@ -22,6 +22,7 @@ describe('usesTerrainShell', () => {
   it('returns true for action create routes', () => {
     expect(usesTerrainShell({ kind: 'signal-action-create', signalId: 'abc' })).toBe(true)
     expect(usesTerrainShell({ kind: 'action-create' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'execution-action-plan-create' })).toBe(true)
   })
 
   it('returns true for checklist management routes', () => {
@@ -218,6 +219,16 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
+  it('configures execution action plan create route', () => {
+    expect(getTerrainRouteConfig({ kind: 'execution-action-plan-create' })).toEqual({
+      topbarVariant: 'detail',
+      title: "Plan d'action",
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
   it('configures chat conversation detail without bottom nav', () => {
     expect(
       getTerrainRouteConfig({ kind: 'chat-conversation-detail', conversationId: 'conv-1' }),
@@ -262,6 +273,9 @@ describe('getTerrainContentKey', () => {
       'signal-action-create-abc',
     )
     expect(getTerrainContentKey({ kind: 'action-create' })).toBe('action-create')
+    expect(getTerrainContentKey({ kind: 'execution-action-plan-create' })).toBe(
+      'execution-action-plan-create',
+    )
   })
 
   it('includes chat conversation id for detail routes', () => {
@@ -293,6 +307,7 @@ describe('isProtectedRoute', () => {
   it('returns true for operational detail routes', () => {
     expect(isProtectedRoute({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
     expect(isProtectedRoute({ kind: 'action-create' })).toBe(true)
+    expect(isProtectedRoute({ kind: 'execution-action-plan-create' })).toBe(true)
   })
 
   it('returns false for public routes', () => {
@@ -327,6 +342,7 @@ describe('requiresActiveMembership', () => {
     expect(requiresActiveMembership({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
     expect(requiresActiveMembership({ kind: 'action-detail', actionId: 'abc' })).toBe(true)
     expect(requiresActiveMembership({ kind: 'action-create' })).toBe(true)
+    expect(requiresActiveMembership({ kind: 'execution-action-plan-create' })).toBe(true)
     expect(requiresActiveMembership({ kind: 'checklist-template-create' })).toBe(true)
     expect(
       requiresActiveMembership({

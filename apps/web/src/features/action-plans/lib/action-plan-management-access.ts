@@ -16,3 +16,7 @@ export function canCreateActionPlanCatalogEntry(role: string | null | undefined)
 export function canDefineCrossPoleTasks(role: string | null | undefined): boolean {
   return role === 'director' || role === 'owner'
 }
+
+export function canCreateExecutionFeedActionPlan(canCreateAction: boolean): boolean {
+  return canCreateAction === true
+}

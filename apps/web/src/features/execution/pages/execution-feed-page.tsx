@@ -102,6 +102,7 @@ export function ExecutionFeedPage({
         open={isCreateMenuOpen}
         permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
+        onSelectActionPlan={() => onNavigate?.('/execution/plans/new')}
         onSelectAction={() => onNavigate?.('/actions/new')}
         onSelectChecklistCreate={() => onNavigate?.('/checklists/new')}
         onSelectChecklistUse={() => onNavigate?.('/checklists')}

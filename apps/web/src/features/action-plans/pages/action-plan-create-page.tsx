@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
+import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -22,30 +23,52 @@ import {
 } from '../components/action-plan-task-draft-editor'
 import { useActionPlanCreateSubmit } from '../hooks/use-action-plan-create-submit'
 import {
-  canCreateActionPlanCatalogEntry,
-  canDefineCrossPoleTasks,
-} from '../lib/action-plan-management-access'
+  type ActionPlanCreateMode,
+  resolveActionPlanCreateModeConfig,
+} from '../lib/action-plan-create-mode'
 import {
+  createActionPlanAssigneeDraft,
   createActionPlanTaskDraft,
   type ActionPlanAssigneeDraft,
   type ActionPlanCreateFormValues,
 } from '../lib/action-plan-form-validation'
 
 type ActionPlanCreatePageProps = {
+  mode?: ActionPlanCreateMode
   backPath?: string
 }
 
-export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanCreatePageProps) {
+export function ActionPlanCreatePage({
+  mode = 'catalog',
+  backPath = '/action-plans',
+}: ActionPlanCreatePageProps) {
   const { navigate } = useAppRoute()
-  const { activeMembership } = useAuth()
+  const auth = useAuth()
+  const { activeMembership, bootstrap } = auth
   const establishmentId = activeMembership?.establishment_id ?? null
   const role = activeMembership?.role ?? null
+  const membershipId = activeMembership?.id
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
+  const canCreateAction = permissionHints.can_create_action === true
+
+  const modeConfig = useMemo(
+    () =>
+      resolveActionPlanCreateModeConfig({
+        mode,
+        role,
+        canCreateAction,
+        membershipId,
+      }),
+    [mode, role, canCreateAction, membershipId],
+  )
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [pilotBusinessUnitId, setPilotBusinessUnitId] = useState('')
-  const [requiresValidation, setRequiresValidation] = useState(true)
-  const [saveToLibrary, setSaveToLibrary] = useState(false)
+  const [requiresValidation, setRequiresValidation] = useState(
+    modeConfig.defaultRequiresValidation,
+  )
+  const [saveToLibrary, setSaveToLibrary] = useState(modeConfig.defaultSaveToLibrary)
   const [useSharedChronology, setUseSharedChronology] = useState(true)
   const [sharedStartAt, setSharedStartAt] = useState('')
   const [sharedEndAt, setSharedEndAt] = useState('')
@@ -59,11 +82,26 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
     () => businessUnitQuery.data?.business_units ?? [],
     [businessUnitQuery.data?.business_units],
   )
-  const canCreate = canCreateActionPlanCatalogEntry(role)
-  const canCrossPole = canDefineCrossPoleTasks(role)
+
+  const visibleBusinessUnits = useMemo(() => {
+    if (!modeConfig.filterBusinessUnitsByScope) {
+      return businessUnits
+    }
+    const scopes = activeMembership?.scopes ?? []
+    if (scopes.length === 0) {
+      return businessUnits
+    }
+    return businessUnits.filter((unit) =>
+      scopes.some(
+        (scope) => scope.scope_type === 'business_unit' && scope.scope_id === unit.id,
+      ),
+    )
+  }, [activeMembership?.scopes, businessUnits, modeConfig.filterBusinessUnitsByScope])
 
   const resolvedPilotBusinessUnitId =
-    pilotBusinessUnitId || businessUnits[0]?.id || ''
+    pilotBusinessUnitId || visibleBusinessUnits[0]?.id || ''
+
+  const canCrossPole = modeConfig.canDefineCrossPoleTasks
 
   const resolvedTasks = useMemo(() => {
     if (canCrossPole) {
@@ -78,6 +116,27 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
     }))
   }, [canCrossPole, resolvedPilotBusinessUnitId, tasks])
 
+  const staffDisplayName = bootstrap?.user?.username ?? 'Moi'
+
+  const effectiveAssignees = useMemo(() => {
+    if (modeConfig.showStaffSelfAssignee && membershipId && resolvedPilotBusinessUnitId) {
+      return [
+        createActionPlanAssigneeDraft({
+          membershipId,
+          businessUnitId: resolvedPilotBusinessUnitId,
+          displayName: staffDisplayName,
+        }),
+      ]
+    }
+    return assignees
+  }, [
+    assignees,
+    membershipId,
+    modeConfig.showStaffSelfAssignee,
+    resolvedPilotBusinessUnitId,
+    staffDisplayName,
+  ])
+
   const formValues = useMemo<ActionPlanCreateFormValues>(
     () => ({
       title,
@@ -90,10 +149,10 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
       sharedEndAt,
       sharedVisibleFrom,
       tasks: resolvedTasks,
-      assignees,
+      assignees: effectiveAssignees,
     }),
     [
-      assignees,
+      effectiveAssignees,
       description,
       resolvedPilotBusinessUnitId,
       requiresValidation,
@@ -107,9 +166,15 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
     ],
   )
 
+  const staffExecutionMode =
+    modeConfig.showStaffSelfAssignee && membershipId && resolvedPilotBusinessUnitId
+      ? { membershipId, pilotBusinessUnitId: resolvedPilotBusinessUnitId }
+      : undefined
+
   const { submit, fieldErrors, submitError, isSubmitting } = useActionPlanCreateSubmit({
     establishmentId: establishmentId ?? '',
     canDefineCrossPoleTasks: canCrossPole,
+    staffExecutionMode,
     onNavigate: navigate,
   })
 
@@ -117,7 +182,7 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
     return null
   }
 
-  if (!canCreate) {
+  if (!modeConfig.canAccess) {
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
@@ -126,6 +191,9 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
       />
     )
   }
+
+  const showAssigneeSection = !saveToLibrary && modeConfig.showAssigneeSheet
+  const showToggleSection = modeConfig.showLibraryToggle || modeConfig.showValidationToggle
 
   return (
     <div className="flex min-h-full flex-col">
@@ -157,7 +225,7 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
               onChange={(event) => setPilotBusinessUnitId(event.target.value)}
               className="h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-sm"
             >
-              {businessUnits.map((unit) => (
+              {visibleBusinessUnits.map((unit) => (
                 <option key={unit.id} value={unit.id}>
                   {unit.label}
                 </option>
@@ -173,14 +241,14 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
           tasks={resolvedTasks}
           pilotBusinessUnitId={resolvedPilotBusinessUnitId}
           canDefineCrossPoleTasks={canCrossPole}
-          businessUnits={businessUnits}
+          businessUnits={visibleBusinessUnits}
           onTasksChange={setTasks}
         />
         {fieldErrors.tasks ? (
           <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
         ) : null}
 
-        {!saveToLibrary ? (
+        {showAssigneeSection ? (
           <section className="space-y-2">
             <TerrainSectionLabel>Assignés et chronologie</TerrainSectionLabel>
             <Button
@@ -197,27 +265,45 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
           </section>
         ) : null}
 
-        <TerrainCard className="space-y-3">
-          <label className="flex items-center justify-between gap-3 text-sm text-[#1a1a1a]">
-            <span>Validation requise</span>
-            <input
-              type="checkbox"
-              checked={requiresValidation}
-              onChange={(event) => setRequiresValidation(event.target.checked)}
-            />
-          </label>
-          <label className="flex items-center justify-between gap-3 text-sm text-[#1a1a1a]">
-            <span>Enregistrer dans la bibliothèque</span>
-            <input
-              type="checkbox"
-              checked={saveToLibrary}
-              onChange={(event) => setSaveToLibrary(event.target.checked)}
-            />
-          </label>
-          <p className={cn('text-xs', terrain.muted)}>
-            Un modèle bibliothèque est réutilisable sans assignés à la création.
-          </p>
-        </TerrainCard>
+        {modeConfig.showStaffSelfAssignee ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Assigné</TerrainSectionLabel>
+            <TerrainCard className="px-3 py-2.5 text-sm text-[#1a1a1a]">{staffDisplayName}</TerrainCard>
+            {fieldErrors.assignees ? (
+              <p className="text-xs text-destructive">{fieldErrors.assignees}</p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {showToggleSection ? (
+          <TerrainCard className="space-y-3">
+            {modeConfig.showValidationToggle ? (
+              <label className="flex items-center justify-between gap-3 text-sm text-[#1a1a1a]">
+                <span>Validation requise</span>
+                <input
+                  type="checkbox"
+                  checked={requiresValidation}
+                  onChange={(event) => setRequiresValidation(event.target.checked)}
+                />
+              </label>
+            ) : null}
+            {modeConfig.showLibraryToggle ? (
+              <>
+                <label className="flex items-center justify-between gap-3 text-sm text-[#1a1a1a]">
+                  <span>Enregistrer dans la bibliothèque</span>
+                  <input
+                    type="checkbox"
+                    checked={saveToLibrary}
+                    onChange={(event) => setSaveToLibrary(event.target.checked)}
+                  />
+                </label>
+                <p className={cn('text-xs', terrain.muted)}>
+                  Un modèle bibliothèque est réutilisable sans assignés à la création.
+                </p>
+              </>
+            ) : null}
+          </TerrainCard>
+        ) : null}
 
         {submitError ? <ChecklistFeedback variant="error" message={submitError} /> : null}
       </div>
@@ -233,23 +319,25 @@ export function ActionPlanCreatePage({ backPath = '/action-plans' }: ActionPlanC
         </Button>
       </TerrainStickyFooter>
 
-      <ActionPlanAssigneeChronologySheet
-        open={assigneeSheetOpen}
-        establishmentId={establishmentId}
-        pilotBusinessUnitId={resolvedPilotBusinessUnitId}
-        assignees={assignees}
-        useSharedChronology={useSharedChronology}
-        sharedStartAt={sharedStartAt}
-        sharedEndAt={sharedEndAt}
-        sharedVisibleFrom={sharedVisibleFrom}
-        onAssigneesChange={setAssignees}
-        onUseSharedChronologyChange={setUseSharedChronology}
-        onSharedStartAtChange={setSharedStartAt}
-        onSharedEndAtChange={setSharedEndAt}
-        onSharedVisibleFromChange={setSharedVisibleFrom}
-        onClose={() => setAssigneeSheetOpen(false)}
-        onConfirm={() => setAssigneeSheetOpen(false)}
-      />
+      {showAssigneeSection ? (
+        <ActionPlanAssigneeChronologySheet
+          open={assigneeSheetOpen}
+          establishmentId={establishmentId}
+          pilotBusinessUnitId={resolvedPilotBusinessUnitId}
+          assignees={assignees}
+          useSharedChronology={useSharedChronology}
+          sharedStartAt={sharedStartAt}
+          sharedEndAt={sharedEndAt}
+          sharedVisibleFrom={sharedVisibleFrom}
+          onAssigneesChange={setAssignees}
+          onUseSharedChronologyChange={setUseSharedChronology}
+          onSharedStartAtChange={setSharedStartAt}
+          onSharedEndAtChange={setSharedEndAt}
+          onSharedVisibleFromChange={setSharedVisibleFrom}
+          onClose={() => setAssigneeSheetOpen(false)}
+          onConfirm={() => setAssigneeSheetOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }

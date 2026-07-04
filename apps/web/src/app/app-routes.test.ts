@@ -115,6 +115,15 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses execution action plan create route before static execution hub', () => {
+    expect(parseAppRoute('/execution/plans/new')).toEqual({
+      kind: 'execution-action-plan-create',
+    })
+    expect(getAppRouteKey({ kind: 'execution-action-plan-create' })).toBe(
+      'execution-action-plan-create',
+    )
+  })
+
   it('returns unknown for unrecognized paths', () => {
     expect(parseAppRoute('/foo/bar')).toEqual({
       kind: 'unknown',

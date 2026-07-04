@@ -24,6 +24,7 @@ function hints(
 describe('execution create menu options', () => {
   it('exposes Action and Checklist when can_create_action is true', () => {
     expect(getExecutionCreateMenuOptions(hints(true))).toEqual([
+      { id: 'action_plan', label: "Plan d'action", disabled: false },
       { id: 'action', label: 'Action', disabled: false },
       { id: 'checklist', label: 'Checklist', disabled: false },
     ])
