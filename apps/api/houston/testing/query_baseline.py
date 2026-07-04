@@ -31,6 +31,10 @@ EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES = 9
 # Before batch (2026-06-29): 28 queries (8 + 20 per-assignment SELECTs).
 # After batch (2026-06-29): 9 queries (3 runs local Docker PG, pytest).
 EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES = 9
+# GET .../action-plan-execution-feed/?view_mode=general — owner, empty feed
+ACTION_PLAN_EXECUTION_FEED_EMPTY_MAX_QUERIES = 12
+# GET .../action-plan-execution-feed/?view_mode=general — owner, 1 active execution
+ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 14
 # GET checklist-assignments/ — owner, 12 assignments (CL-02; measured 2026-06-24)
 CHECKLIST_ASSIGNMENT_LIST_TWELVE_ASSIGNMENTS_MAX_QUERIES = 7
 

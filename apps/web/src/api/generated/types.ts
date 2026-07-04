@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/action-plan-execution-feed/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_action_plan_execution_feed_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/create-observation/": {
         parameters: {
             query?: never;
@@ -2272,6 +2288,51 @@ export interface components {
             task_executions: components["schemas"]["ActionPlanTaskExecution"][];
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
         };
+        ActionPlanExecutionFeedAssignee: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+        };
+        ActionPlanExecutionFeedItem: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description_short: string;
+            status: string;
+            requires_validation: boolean;
+            pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
+            involved_poles: {
+                [key: string]: unknown;
+            }[];
+            signal_summary: {
+                [key: string]: unknown;
+            } | null;
+            assignees: components["schemas"]["ActionPlanExecutionFeedAssignee"][];
+            /** Format: date-time */
+            end_at: string | null;
+            is_overdue: boolean;
+            task_executions: components["schemas"]["ActionPlanExecutionFeedTaskPreview"][];
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
+            permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
+        };
+        ActionPlanExecutionFeedItemWrapper: {
+            item_type: string;
+            action_plan_execution: components["schemas"]["ActionPlanExecutionFeedItem"];
+        };
+        ActionPlanExecutionFeedResponse: {
+            items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            next_cursor: string | null;
+            has_more: boolean;
+        };
+        ActionPlanExecutionFeedTaskPreview: {
+            position: number;
+            task: string;
+            status: string;
+            business_unit: components["schemas"]["ActionPlanBusinessUnit"];
+        };
         ActionPlanExecutionPermissionHints: {
             can_mark_done: boolean;
             can_validate: boolean;
@@ -4096,6 +4157,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogBusinessUnitSuggestion"][];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_execution_feed_retrieve: {
+        parameters: {
+            query: {
+                /** @description Opaque pagination cursor from a previous response next_cursor. */
+                cursor?: string;
+                page_size?: number;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

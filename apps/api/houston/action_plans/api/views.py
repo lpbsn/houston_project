@@ -42,6 +42,15 @@ from houston.action_plans.exceptions import (
     ActionPlanStateError,
     ActionPlanValidationError,
 )
+from houston.action_plans.execution_feed import build_action_plan_execution_feed_page
+from houston.action_plans.feed_cursor import (
+    ActionPlanExecutionFeedCursorError,
+    parse_action_plan_execution_feed_cursor,
+)
+from houston.action_plans.feed_serializers import (
+    ActionPlanExecutionFeedResponseSerializer,
+    serialize_action_plan_execution_feed_item,
+)
 from houston.action_plans.permissions import can_view_action_plan_catalog
 from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
@@ -80,6 +89,20 @@ from houston.uploads.api.views import EstablishmentScopedObservationMixin
 
 class EstablishmentScopedActionPlanMixin(EstablishmentScopedObservationMixin):
     pass
+
+
+DEFAULT_FEED_PAGE_SIZE = 25
+MAX_FEED_PAGE_SIZE = 50
+
+
+def _parse_feed_page_size(raw: str | None) -> int:
+    if raw is None or raw == "":
+        return DEFAULT_FEED_PAGE_SIZE
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_FEED_PAGE_SIZE
+    return min(max(value, 1), MAX_FEED_PAGE_SIZE)
 
 
 def _action_plan_error_response(exc: Exception) -> Response:
@@ -1004,3 +1027,88 @@ class ActionPlanScheduleDeactivateView(EstablishmentScopedActionPlanMixin, APIVi
         )
         payload = serialize_schedule_detail(schedule, membership=membership)
         return Response(ActionPlanScheduleDetailSerializer(payload).data)
+
+
+class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["action-plans"],
+        parameters=[
+            OpenApiParameter(
+                name="view_mode",
+                required=True,
+                type=str,
+                enum=["personal", "general"],
+            ),
+            OpenApiParameter(name="page_size", required=False, type=int),
+            OpenApiParameter(
+                name="cursor",
+                required=False,
+                type=str,
+                description="Opaque pagination cursor from a previous response next_cursor.",
+            ),
+        ],
+        responses={
+            200: ActionPlanExecutionFeedResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        view_mode = request.query_params.get("view_mode", "").strip().lower()
+        if view_mode not in {"personal", "general"}:
+            return Response(
+                {
+                    "code": "validation_error",
+                    "detail": "view_mode must be personal or general.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page_size = _parse_feed_page_size(request.query_params.get("page_size"))
+        try:
+            cursor = parse_action_plan_execution_feed_cursor(
+                request.query_params.get("cursor"),
+            )
+        except ActionPlanExecutionFeedCursorError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        executions, has_more, next_cursor = build_action_plan_execution_feed_page(
+            membership=membership,
+            view_mode=view_mode,  # type: ignore[arg-type]
+            page_size=page_size,
+            cursor=cursor,
+        )
+
+        serialized_items = [
+            {
+                "item_type": "action_plan_execution",
+                "action_plan_execution": serialize_action_plan_execution_feed_item(
+                    execution=execution,
+                    membership=membership,
+                ),
+            }
+            for execution in executions
+        ]
+        payload = {
+            "items": serialized_items,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        }
+        return Response(ActionPlanExecutionFeedResponseSerializer(payload).data)
