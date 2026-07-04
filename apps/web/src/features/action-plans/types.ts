@@ -27,3 +27,11 @@ export type ActionPlanBusinessUnit = components['schemas']['ActionPlanBusinessUn
 export type ActionPlanTaskTemplate = components['schemas']['ActionPlanTaskTemplate']
 export type ActionPlanAssigneesByPole = components['schemas']['ActionPlanAssigneesByPole']
 export type ActionPlanInvolvedPole = components['schemas']['ActionPlanInvolvedPole']
+export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanExecutionFeedResponse']
+export type ActionPlanExecutionFeedItemWrapper =
+  components['schemas']['ActionPlanExecutionFeedItemWrapper']
+export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecutionFeedItem']
+export type ActionPlanExecutionFeedAssignee =
+  components['schemas']['ActionPlanExecutionFeedAssignee']
+export type ActionPlanExecutionFeedTaskPreview =
+  components['schemas']['ActionPlanExecutionFeedTaskPreview']

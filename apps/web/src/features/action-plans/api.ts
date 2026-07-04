@@ -13,6 +13,9 @@ import type {
   ActionPlanCreateRequest,
   ActionPlanDetail,
   ActionPlanExecutionDetail,
+  ActionPlanExecutionFeedItem,
+  ActionPlanExecutionFeedItemWrapper,
+  ActionPlanExecutionFeedResponse,
   ActionPlanListItem,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskCreateObservationResponse,
@@ -110,6 +113,37 @@ function taskExecutionPath(establishmentId: string, taskExecutionId: string) {
       task_execution_id: taskExecutionId,
     },
   }
+}
+
+export function unwrapActionPlanExecutionFeedItems(
+  wrappers: ActionPlanExecutionFeedItemWrapper[],
+): ActionPlanExecutionFeedItem[] {
+  return wrappers
+    .filter((wrapper) => wrapper.item_type === 'action_plan_execution')
+    .map((wrapper) => wrapper.action_plan_execution)
+}
+
+export async function fetchActionPlanExecutionFeed(
+  establishmentId: string,
+  viewMode: ActionPlanExecutionFeedViewMode,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<ActionPlanExecutionFeedResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/action-plan-execution-feed/', {
+        params: {
+          ...establishmentPath(establishmentId),
+          query: {
+            view_mode: viewMode,
+            ...(options.cursor ? { cursor: options.cursor } : {}),
+            ...(options.pageSize ? { page_size: options.pageSize } : {}),
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionFeedResponse>(result)
 }
 
 export async function fetchActionPlanCatalog(

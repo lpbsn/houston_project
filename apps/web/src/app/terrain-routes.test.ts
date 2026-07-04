@@ -169,7 +169,7 @@ describe('getTerrainRouteConfig', () => {
     expect(getTerrainRouteConfig({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toEqual({
       topbarVariant: 'detail',
       detailTitleLayout: 'belowBack',
-      backPath: '/action-plans',
+      backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
       showTopbarBottomBorder: false,

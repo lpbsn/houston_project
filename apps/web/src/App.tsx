@@ -327,6 +327,7 @@ function App() {
         <LazyExecutionFeedPage
           onOpenAction={(id) => navigate(`/actions/${id}`)}
           onOpenChecklist={(id) => navigate(`/checklists/executions/${id}`)}
+          onOpenActionPlanExecution={(id) => navigate(`/action-plans/executions/${id}`)}
           onNavigate={navigate}
         />
       )
