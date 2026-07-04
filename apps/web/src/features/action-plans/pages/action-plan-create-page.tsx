@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -11,9 +12,15 @@ import {
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ActionLinkedSignalCard } from '@/features/actions/components/action-linked-signal-card'
+import { ActionLinkedSignalStrip } from '@/features/actions/components/action-linked-signal-strip'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
+import { SignalsApiError } from '@/features/signals/api'
+import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
+import { useSignalDetailQuery } from '@/features/signals/hooks'
+import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -26,6 +33,7 @@ import {
   type ActionPlanCreateMode,
   resolveActionPlanCreateModeConfig,
 } from '../lib/action-plan-create-mode'
+import { canCreateSignalLinkedActionPlanFromSignalHints } from '../lib/action-plan-management-access'
 import {
   createActionPlanAssigneeDraft,
   createActionPlanTaskDraft,
@@ -33,14 +41,19 @@ import {
   type ActionPlanCreateFormValues,
 } from '../lib/action-plan-form-validation'
 
+const SIGNAL_LINKED_PERMISSION_MESSAGE =
+  "Vous n'avez pas la permission de créer un plan d'action."
+
 type ActionPlanCreatePageProps = {
   mode?: ActionPlanCreateMode
   backPath?: string
+  signalId?: string
 }
 
 export function ActionPlanCreatePage({
   mode = 'catalog',
   backPath = '/action-plans',
+  signalId,
 }: ActionPlanCreatePageProps) {
   const { navigate } = useAppRoute()
   const auth = useAuth()
@@ -50,6 +63,7 @@ export function ActionPlanCreatePage({
   const membershipId = activeMembership?.id
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canCreateAction = permissionHints.can_create_action === true
+  const isSignalLinked = mode === 'signal-linked'
 
   const modeConfig = useMemo(
     () =>
@@ -60,6 +74,11 @@ export function ActionPlanCreatePage({
         membershipId,
       }),
     [mode, role, canCreateAction, membershipId],
+  )
+
+  const signalDetailQuery = useSignalDetailQuery(
+    establishmentId,
+    isSignalLinked ? (signalId ?? null) : null,
   )
 
   const [title, setTitle] = useState('')
@@ -150,6 +169,7 @@ export function ActionPlanCreatePage({
       sharedVisibleFrom,
       tasks: resolvedTasks,
       assignees: effectiveAssignees,
+      sourceSignalId: isSignalLinked ? signalId : undefined,
     }),
     [
       effectiveAssignees,
@@ -163,6 +183,8 @@ export function ActionPlanCreatePage({
       resolvedTasks,
       title,
       useSharedChronology,
+      isSignalLinked,
+      signalId,
     ],
   )
 
@@ -182,22 +204,90 @@ export function ActionPlanCreatePage({
     return null
   }
 
+  if (isSignalLinked && !signalId) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Signal introuvable."
+        onRetry={() => navigate('/signals')}
+      />
+    )
+  }
+
   if (!modeConfig.canAccess) {
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message="Vous n’avez pas accès à la création de plans d’action."
+        message={
+          isSignalLinked
+            ? SIGNAL_LINKED_PERMISSION_MESSAGE
+            : 'Vous n’avez pas accès à la création de plans d’action.'
+        }
         onRetry={() => navigate(backPath)}
       />
     )
   }
+
+  if (isSignalLinked) {
+    if (signalDetailQuery.isLoading) {
+      return (
+        <div className="flex items-center justify-center py-16 text-[#7D7B75]">
+          <LoaderCircle className="h-6 w-6 animate-spin" />
+        </div>
+      )
+    }
+
+    if (signalDetailQuery.isError || !signalDetailQuery.data) {
+      return (
+        <TerrainErrorState
+          className="mx-3 mt-3"
+          message={resolveApiErrorMessage(
+            signalDetailQuery.error,
+            SignalsApiError,
+            'Une erreur est survenue.',
+          )}
+          onRetry={() => void signalDetailQuery.refetch()}
+        />
+      )
+    }
+
+    if (!canCreateSignalLinkedActionPlanFromSignalHints(signalDetailQuery.data.permission_hints)) {
+      return (
+        <TerrainErrorState
+          className="mx-3 mt-3"
+          message={SIGNAL_LINKED_PERMISSION_MESSAGE}
+          onRetry={() => navigate(backPath)}
+        />
+      )
+    }
+  }
+
+  const signalDetail = isSignalLinked ? signalDetailQuery.data : null
 
   const showAssigneeSection = !saveToLibrary && modeConfig.showAssigneeSheet
   const showToggleSection = modeConfig.showLibraryToggle || modeConfig.showValidationToggle
 
   return (
     <div className="flex min-h-full flex-col">
+      {signalDetail ? (
+        <ActionLinkedSignalStrip>
+          <ActionLinkedSignalCard
+            title={signalDetail.title}
+            locationText={signalDetail.location_text || null}
+          />
+        </ActionLinkedSignalStrip>
+      ) : null}
+
       <div className="space-y-3 px-3 pb-28 pt-2">
+        {signalDetail ? (
+          <section className="flex flex-col gap-1.5">
+            <TerrainSectionLabel>Classification héritée du signal</TerrainSectionLabel>
+            <TerrainCard className="px-3 py-2.5">
+              <SignalClassificationBadges signal={signalDetail} />
+            </TerrainCard>
+          </section>
+        ) : null}
+
         <TerrainCard className="space-y-3">
           <div>
             <TerrainFieldLabel>Titre</TerrainFieldLabel>

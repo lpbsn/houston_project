@@ -44,6 +44,7 @@ export type ActionPlanCreateFormValues = {
   sharedVisibleFrom: string
   tasks: ActionPlanTaskDraft[]
   assignees: ActionPlanAssigneeDraft[]
+  sourceSignalId?: string | null
 }
 
 export type ActionPlanCreateFormErrors = Partial<

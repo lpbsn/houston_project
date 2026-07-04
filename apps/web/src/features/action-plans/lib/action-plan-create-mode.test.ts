@@ -80,4 +80,41 @@ describe('resolveActionPlanCreateModeConfig', () => {
       }).canAccess,
     ).toBe(false)
   })
+
+  it('returns signal-linked config for manager with execution-style flags', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'signal-linked',
+        role: 'manager',
+        canCreateAction: true,
+      }),
+    ).toMatchObject({
+      canAccess: true,
+      showLibraryToggle: false,
+      showValidationToggle: true,
+      showAssigneeSheet: true,
+      showStaffSelfAssignee: false,
+      defaultSaveToLibrary: false,
+    })
+  })
+
+  it('denies signal-linked access for staff', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'signal-linked',
+        role: 'staff',
+        canCreateAction: true,
+      }).canAccess,
+    ).toBe(false)
+  })
+
+  it('denies signal-linked access when can_create_action is false', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'signal-linked',
+        role: 'manager',
+        canCreateAction: false,
+      }).canAccess,
+    ).toBe(false)
+  })
 })

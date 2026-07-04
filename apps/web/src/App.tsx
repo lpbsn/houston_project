@@ -262,7 +262,11 @@ function App() {
 
     if (route.kind === 'signal-action-create') {
       return (
-        <LazyActionCreatePage mode="linked" signalId={route.signalId} onNavigate={navigate} />
+        <LazyActionPlanCreatePage
+          mode="signal-linked"
+          signalId={route.signalId}
+          backPath={`/signals/${route.signalId}`}
+        />
       )
     }
 
