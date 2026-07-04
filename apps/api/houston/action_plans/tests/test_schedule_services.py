@@ -21,19 +21,19 @@ from houston.action_plans.schedule_services import (
 from houston.action_plans.services import cancel_action_plan_execution
 from houston.action_plans.tests.helpers import (
     build_schedule_assignee_payload,
+    recurrence_days_for_visible_today,
     schedule_window_from_datetime,
+    visible_schedule_window,
 )
 
 pytestmark = pytest.mark.django_db
 
 
 def _create_schedule(owner_membership, catalog_action_plan, staff_membership, business_unit):
-    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
-    window = schedule_window_from_datetime(now)
     return create_action_plan_schedule(
         action_plan=catalog_action_plan,
         actor=owner_membership,
-        recurrence_days=["monday", "wednesday", "friday"],
+        recurrence_days=recurrence_days_for_visible_today(),
         assignees=[
             build_schedule_assignee_payload(
                 membership=staff_membership,
@@ -41,7 +41,7 @@ def _create_schedule(owner_membership, catalog_action_plan, staff_membership, bu
             )
         ],
         use_shared_chronology=True,
-        **window,
+        **visible_schedule_window(),
     )
 
 
@@ -80,7 +80,7 @@ def test_update_cancels_future_execution_outside_recurrence(
     update_action_plan_schedule(
         schedule=schedule,
         actor=owner_membership,
-        recurrence_days=["monday", "wednesday", "friday"],
+        recurrence_days=recurrence_days_for_visible_today(),
     )
     future_execution.refresh_from_db()
     assert future_execution.status == EXECUTION_STATUS_IN_PROGRESS
@@ -286,18 +286,14 @@ def _create_individual_schedule(
     owner_membership,
     catalog_action_plan,
     assignees,
-    *,
-    now=None,
 ):
-    resolved_now = now or timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
-    window = schedule_window_from_datetime(resolved_now, period_days=21)
     return create_action_plan_schedule(
         action_plan=catalog_action_plan,
         actor=owner_membership,
-        recurrence_days=["monday", "wednesday", "friday"],
+        recurrence_days=recurrence_days_for_visible_today(),
         assignees=assignees,
         use_shared_chronology=False,
-        **window,
+        **visible_schedule_window(period_days=21),
     )
 
 
@@ -371,12 +367,22 @@ def test_update_syncs_individual_assignee_time_override(
     staff_membership,
     business_unit,
 ):
-    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
-    window = schedule_window_from_datetime(now, period_days=21)
     schedule = create_action_plan_schedule(
         action_plan=catalog_action_plan,
         actor=owner_membership,
-        recurrence_days=["monday", "wednesday", "friday"],
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=False,
+        **visible_schedule_window(period_days=21),
+    )
+    update_action_plan_schedule(
+        schedule=schedule,
+        actor=owner_membership,
         assignees=[
             {
                 **build_schedule_assignee_payload(
@@ -387,8 +393,6 @@ def test_update_syncs_individual_assignee_time_override(
                 "end_at": time(11, 0),
             }
         ],
-        use_shared_chronology=False,
-        **window,
     )
     future_execution = schedule.executions.filter(status="in_progress").first()
     assert future_execution is not None

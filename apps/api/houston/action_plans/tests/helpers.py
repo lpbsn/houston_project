@@ -55,6 +55,42 @@ def action_plan_schedule_deactivate_url(establishment_id, schedule_id) -> str:
     return action_plan_schedule_detail_url(establishment_id, schedule_id, "deactivate/")
 
 
+_RECURRENCE_DAY_NAMES = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
+
+# Sync-on-create uses visible_only=True; today's occurrence must pass
+# visible_from = occurrence_start - 1h <= now.
+_VISIBLE_TEST_START_AT = time(0, 30)
+_VISIBLE_TEST_END_AT = time(1, 30)
+
+
+def recurrence_days_for_visible_today(*, base: list[str] | None = None) -> list[str]:
+    """Ensure today's weekday is in recurrence so sync-on-create has an occurrence."""
+    days = list(base or ["monday", "wednesday", "friday"])
+    today = _RECURRENCE_DAY_NAMES[timezone.now().weekday()]
+    if today not in days:
+        days.append(today)
+    return days
+
+
+def visible_schedule_window(*, period_days: int = 14) -> dict:
+    """Schedule window where today's occurrence is visible at any time-of-day."""
+    today = timezone.now().date()
+    return {
+        "start_date": today,
+        "end_date": today + timezone.timedelta(days=period_days),
+        "start_at": _VISIBLE_TEST_START_AT,
+        "end_at": _VISIBLE_TEST_END_AT,
+    }
+
+
 def schedule_window_from_datetime(
     dt,
     *,
@@ -100,10 +136,9 @@ def api_recurring_schedule_payload(
     recurrence_days=None,
     **overrides,
 ) -> dict:
-    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
-    window = schedule_window_from_datetime(now, duration_hours=1, period_days=14)
+    window = visible_schedule_window(period_days=14)
     if recurrence_days is None:
-        recurrence_days = ["monday", "wednesday", "friday"]
+        recurrence_days = recurrence_days_for_visible_today()
     payload = {
         "start_date": window["start_date"].isoformat(),
         "end_date": window["end_date"].isoformat(),
