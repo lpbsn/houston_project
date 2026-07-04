@@ -1,40 +1,71 @@
 import { HoustonBadge, TerrainEmptyState } from '@/components/ui/terrain'
 
 import { formatCommentRelativeTime } from '../lib/comment-display'
-import type { ActionCommentListItem, CommentCreateRequest, CommentItem } from '../types'
-import { isActionThreadItem, isInheritedSignalItem } from '../types'
+import type {
+  ActionCommentListItem,
+  CommentCreateRequest,
+  CommentItem,
+  ExecutionCommentListItem,
+} from '../types'
+import { isActionThreadItem, isExecutionInheritedSignalItem, isExecutionThreadItem, isInheritedSignalItem } from '../types'
 import {
   ActionCommentThreadCard,
   InheritedSignalCommentCard,
 } from './comment-thread-item'
+
+function toActionThreadView(item: ExecutionCommentListItem): ActionCommentListItem {
+  if (item.item_type === 'execution_thread') {
+    return {
+      ...item,
+      item_type: 'action_thread',
+    }
+  }
+
+  return item as ActionCommentListItem
+}
+
+type ThreadedCommentListProps = {
+  establishmentId: string
+  disabled?: boolean
+  replyErrorCommentId?: string | null
+  replyErrorMessage?: string | null
+  pendingReplyCommentId?: string | null
+  isResolvePending?: boolean
+  onReply: (
+    payload: CommentCreateRequest,
+    callbacks?: { onSuccess?: () => void },
+  ) => void
+  onResolve: (commentId: string) => void
+  onUnresolve: (commentId: string) => void
+}
 
 type CommentListProps =
   | {
       mode: 'signal'
       comments: CommentItem[]
     }
-  | {
+  | ({
       mode: 'action'
       comments: ActionCommentListItem[]
-      establishmentId: string
-      disabled?: boolean
-      replyErrorCommentId?: string | null
-      replyErrorMessage?: string | null
-      pendingReplyCommentId?: string | null
-      isResolvePending?: boolean
-      onReply: (
-        payload: CommentCreateRequest,
-        callbacks?: { onSuccess?: () => void },
-      ) => void
-      onResolve: (commentId: string) => void
-      onUnresolve: (commentId: string) => void
-    }
+    } & ThreadedCommentListProps)
+  | ({
+      mode: 'execution'
+      comments: ExecutionCommentListItem[]
+    } & ThreadedCommentListProps)
 
 function CommentOriginBadge({ origin }: { origin: CommentItem['origin'] }) {
   if (origin === 'signal') {
     return (
       <HoustonBadge variant="gray" className="text-[9px]">
         Signal
+      </HoustonBadge>
+    )
+  }
+
+  if (origin === 'action_plan_execution') {
+    return (
+      <HoustonBadge variant="blue" className="text-[9px]">
+        Plan
       </HoustonBadge>
     )
   }
@@ -122,9 +153,62 @@ function ActionCommentList({
   )
 }
 
+function ExecutionCommentList({
+  comments,
+  establishmentId,
+  disabled,
+  replyErrorCommentId,
+  replyErrorMessage,
+  pendingReplyCommentId,
+  isResolvePending,
+  onReply,
+  onResolve,
+  onUnresolve,
+}: Extract<CommentListProps, { mode: 'execution' }>) {
+  if (comments.length === 0) {
+    return <TerrainEmptyState title="Aucun commentaire pour l'instant." />
+  }
+
+  return (
+    <ul className="mt-3 flex flex-col gap-3" aria-label="Liste des commentaires">
+      {comments.map((item) => {
+        if (isExecutionInheritedSignalItem(item)) {
+          return (
+            <InheritedSignalCommentCard key={item.id} item={toActionThreadView(item)} />
+          )
+        }
+        if (isExecutionThreadItem(item)) {
+          const threadItem = toActionThreadView(item)
+          return (
+            <ActionCommentThreadCard
+              key={item.id}
+              item={threadItem}
+              establishmentId={establishmentId}
+              disabled={disabled}
+              replyErrorMessage={
+                replyErrorCommentId === item.id ? replyErrorMessage : null
+              }
+              isReplyPending={pendingReplyCommentId === item.id}
+              isResolvePending={isResolvePending}
+              onReply={onReply}
+              onResolve={onResolve}
+              onUnresolve={onUnresolve}
+            />
+          )
+        }
+        return null
+      })}
+    </ul>
+  )
+}
+
 export function CommentList(props: CommentListProps) {
   if (props.mode === 'signal') {
     return <SignalCommentList comments={props.comments} />
+  }
+
+  if (props.mode === 'execution') {
+    return <ExecutionCommentList {...props} />
   }
 
   return <ActionCommentList {...props} />
