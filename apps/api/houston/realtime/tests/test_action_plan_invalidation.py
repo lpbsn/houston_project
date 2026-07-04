@@ -305,7 +305,8 @@ def test_task_mark_done_emits_task_and_execution_updated(
         for call in mock_notify.call_args_list
     )
     assert any(
-        call.kwargs == {
+        call.kwargs
+        == {
             "establishment_id": execution.establishment_id,
             "subject_type": "action_plan_execution",
             "reason": "action_plan_execution.updated",
@@ -392,7 +393,8 @@ def test_signal_resolve_cancels_linked_executions_with_canceled_invalidation(
     execution.refresh_from_db()
     assert execution.status == ActionPlanExecution.Status.CANCELED
     assert any(
-        call.kwargs == {
+        call.kwargs
+        == {
             "establishment_id": execution.establishment_id,
             "subject_type": "action_plan_execution",
             "reason": "action_plan_execution.canceled",

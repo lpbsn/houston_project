@@ -6,9 +6,9 @@ import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import {
   ActionDetailTabs,
   type ActionDetailTab,
-} from '@/features/actions/components/action-detail-tabs'
+} from '@/features/action-plans/components/action-detail-tabs'
 import { CommentSection } from '@/features/comments/components/comment-section'
-import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
@@ -231,7 +231,7 @@ function ActionPlanExecutionDetailPageContent({
         <div className={cn('flex flex-col space-y-3', activeTab !== 'details' && 'hidden')}>
           <ActionPlanExecutionDetailHeader execution={execution} isOverdue={isOverdue} />
 
-          {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
+          {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
 
           {poleSections.length === 0 ? (
             <TerrainEmptyState title="Aucune tâche dans cette exécution." />

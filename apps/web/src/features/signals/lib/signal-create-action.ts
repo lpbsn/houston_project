@@ -1,6 +1,6 @@
-/** UI gate for creating an action plan from a signal (CTA + create page). Reads hint `can_create_action`. */
+/** UI gate for creating an action plan from a signal (CTA + create page). */
 export function shouldShowSignalCreateActionPlan(
-  hints: { can_create_action?: boolean } | null | undefined,
+  hints: { can_create_linked_action_plan?: boolean } | null | undefined,
 ): boolean {
-  return hints?.can_create_action === true
+  return hints?.can_create_linked_action_plan === true
 }

@@ -63,36 +63,6 @@ describe('parseAppRoute', () => {
     })
   })
 
-  it('parses checklist management routes', () => {
-    expect(parseAppRoute('/checklists')).toEqual({
-      kind: 'static',
-      path: '/checklists',
-    })
-    expect(parseAppRoute('/checklists/new')).toEqual({
-      kind: 'checklist-template-create',
-    })
-    expect(parseAppRoute('/checklists/template-1')).toEqual({
-      kind: 'checklist-template-detail',
-      templateId: 'template-1',
-    })
-    expect(parseAppRoute('/checklists/shared')).toEqual({
-      kind: 'unknown',
-      pathname: '/checklists/shared',
-    })
-    expect(parseAppRoute('/checklists/personal')).toEqual({
-      kind: 'unknown',
-      pathname: '/checklists/personal',
-    })
-    expect(parseAppRoute('/checklists/executions/new')).toEqual({
-      kind: 'checklist-execution-detail',
-      executionId: 'new',
-    })
-    expect(parseAppRoute('/checklists/executions/exec-1')).toEqual({
-      kind: 'checklist-execution-detail',
-      executionId: 'exec-1',
-    })
-  })
-
   it('parses action plan routes with execution before template detail', () => {
     expect(parseAppRoute('/action-plans')).toEqual({
       kind: 'static',

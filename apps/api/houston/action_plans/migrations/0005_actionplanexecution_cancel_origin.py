@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("action_plans", "0004_fix_schedule_occurrence_individual_constraint"),
     ]

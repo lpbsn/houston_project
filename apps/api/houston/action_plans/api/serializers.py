@@ -18,7 +18,6 @@ from houston.action_plans.models import (
     ActionPlanTask,
 )
 from houston.action_plans.selectors import get_involved_poles
-from houston.actions.api.serializers import ActionSignalSummarySerializer
 from houston.observations.constants import (
     MAX_OBSERVATION_PHOTOS,
     OBSERVATION_RAW_TEXT_MAX_LENGTH,
@@ -71,6 +70,20 @@ def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
         "activity_subject_label": subject["label"] if subject else None,
         "location_text": signal.location_text,
     }
+
+
+class ActionSignalSummarySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    urgency = serializers.CharField()
+    affected_business_unit_key = serializers.CharField(allow_null=True)
+    affected_business_unit_label = serializers.CharField(allow_null=True)
+    responsible_business_unit_key = serializers.CharField(allow_null=True)
+    responsible_business_unit_label = serializers.CharField(allow_null=True)
+    activity_subject_normalized_name = serializers.CharField(allow_null=True)
+    activity_subject_label = serializers.CharField(allow_null=True)
+    location_text = serializers.CharField(allow_blank=True)
 
 
 class ActionPlanBusinessUnitSerializer(serializers.Serializer):

@@ -13,8 +13,6 @@ from houston.action_plans.services import (
     validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.actions.services import accept_action, create_action
-from houston.signals.exceptions import SignalBusinessConflictError
 from houston.signals.models import Signal
 from houston.signals.services import resolve_signal
 from houston.testing.taxonomy import create_minimal_v3_signal
@@ -44,19 +42,6 @@ def _create_linked_execution(
         ],
     )
     return execution
-
-
-def _create_active_legacy_action(*, owner_membership, staff_membership, signal):
-    action = create_action(
-        establishment_id=owner_membership.establishment_id,
-        created_by=owner_membership,
-        title="Legacy linked action",
-        instruction="Work",
-        assignee_ids=[staff_membership.id],
-        due_at=timezone.now() + timezone.timedelta(days=1),
-        signal_id=signal.id,
-    )
-    return accept_action(action_id=action.id, accepted_by=staff_membership)
 
 
 def test_sync_auto_resolves_when_one_done_one_canceled(
@@ -163,68 +148,6 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_sync_skips_auto_resolve_when_legacy_action_active(
-    owner_membership,
-    business_unit,
-    staff_membership,
-):
-    signal = create_minimal_v3_signal(
-        owner_membership,
-        title="Legacy blocks resolve",
-        status=Signal.Status.IN_PROGRESS,
-    )
-    _create_active_legacy_action(
-        owner_membership=owner_membership,
-        staff_membership=staff_membership,
-        signal=signal,
-    )
-    execution = _create_linked_execution(
-        owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
-        signal=signal,
-        title="Done execution",
-        requires_validation=False,
-    )
-
-    mark_action_plan_execution_done(
-        execution_id=execution.id,
-        actor_membership=owner_membership,
-    )
-
-    signal.refresh_from_db()
-    assert signal.status == Signal.Status.IN_PROGRESS
-
-
-def test_sync_skips_open_when_legacy_action_active(
-    owner_membership,
-    business_unit,
-    staff_membership,
-):
-    signal = create_minimal_v3_signal(
-        owner_membership,
-        title="Legacy blocks open",
-        status=Signal.Status.IN_PROGRESS,
-    )
-    _create_active_legacy_action(
-        owner_membership=owner_membership,
-        staff_membership=staff_membership,
-        signal=signal,
-    )
-    execution = _create_linked_execution(
-        owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
-        signal=signal,
-        title="Canceled execution",
-    )
-
-    cancel_action_plan_execution(execution_id=execution.id, actor=owner_membership)
-
-    signal.refresh_from_db()
-    assert signal.status == Signal.Status.IN_PROGRESS
-
-
 def test_mark_done_without_validation_auto_resolves_linked_signal(
     owner_membership,
     business_unit,
@@ -274,6 +197,47 @@ def test_validate_execution_auto_resolves_linked_signal(
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
+
+
+def test_lifecycle_resolves_signal_after_validation_cycle(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Lifecycle succeeds",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+        staff_membership=staff_membership,
+        signal=signal,
+        title="Validation cycle",
+        requires_validation=True,
+    )
+
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+    validated = validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner_membership,
+    )
+    reopened = reopen_action_plan_execution(
+        execution_id=validated.id,
+        actor=owner_membership,
+    )
+    canceled = cancel_action_plan_execution(
+        execution_id=reopened.id,
+        actor=owner_membership,
+    )
+
+    assert canceled.status == ActionPlanExecution.Status.CANCELED
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.OPEN
 
 
 def test_reopen_linked_execution_sets_signal_in_progress(
@@ -344,67 +308,6 @@ def test_resolve_signal_cancels_active_executions_and_resolves(
     sync_signal_after_execution_change(signal=signal)
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
-
-
-def test_resolve_signal_still_blocked_by_active_legacy_action(
-    owner_membership,
-    staff_membership,
-    signal,
-):
-    _create_active_legacy_action(
-        owner_membership=owner_membership,
-        staff_membership=staff_membership,
-        signal=signal,
-    )
-
-    with pytest.raises(SignalBusinessConflictError):
-        resolve_signal(signal=signal, actor_membership=owner_membership)
-
-
-def test_lifecycle_succeeds_when_legacy_blocks_sync(
-    owner_membership,
-    business_unit,
-    staff_membership,
-):
-    signal = create_minimal_v3_signal(
-        owner_membership,
-        title="Lifecycle succeeds",
-        status=Signal.Status.IN_PROGRESS,
-    )
-    _create_active_legacy_action(
-        owner_membership=owner_membership,
-        staff_membership=staff_membership,
-        signal=signal,
-    )
-    execution = _create_linked_execution(
-        owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
-        signal=signal,
-        title="Blocked sync",
-        requires_validation=True,
-    )
-
-    pending = mark_action_plan_execution_done(
-        execution_id=execution.id,
-        actor_membership=owner_membership,
-    )
-    validated = validate_action_plan_execution(
-        execution_id=pending.id,
-        actor_membership=owner_membership,
-    )
-    reopened = reopen_action_plan_execution(
-        execution_id=validated.id,
-        actor=owner_membership,
-    )
-    canceled = cancel_action_plan_execution(
-        execution_id=reopened.id,
-        actor=owner_membership,
-    )
-
-    assert canceled.status == ActionPlanExecution.Status.CANCELED
-    signal.refresh_from_db()
-    assert signal.status == Signal.Status.IN_PROGRESS
 
 
 def test_sync_idempotent_when_signal_already_resolved_with_done_execution(

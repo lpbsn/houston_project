@@ -37,7 +37,7 @@ def test_list_notifications_returns_safe_payload(api_client):
     assert set(item.keys()) == NOTIFICATION_RESPONSE_ALLOWLIST
     assert "channel" not in item
     assert item["id"] == str(notification.id)
-    assert item["body"] == "Une action vous a été assignée."
+    assert item["body"] == "Une exécution de plan d'action est disponible."
 
 
 def test_default_list_excludes_archived(api_client):

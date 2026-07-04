@@ -96,13 +96,9 @@ def compare_pipeline_output_to_expected(
     expected_candidates: list[dict[str, Any]],
     output: ObservationPipelineOutput,
 ) -> CaseEvalResult:
-    expected_signatures = tuple(
-        candidate_signature(raw) for raw in expected_candidates
-    )
+    expected_signatures = tuple(candidate_signature(raw) for raw in expected_candidates)
     actual_snapshots = tuple(_candidate_to_snapshot(c) for c in output.candidates)
-    actual_signatures = tuple(
-        candidate_signature(snapshot) for snapshot in actual_snapshots
-    )
+    actual_signatures = tuple(candidate_signature(snapshot) for snapshot in actual_snapshots)
 
     diffs: list[str] = []
     if output.schema_version != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION:
@@ -141,9 +137,7 @@ def compare_pipeline_output_to_expected(
 
 
 def _fake_provider_for_case(case: dict[str, Any]) -> FakeObservationPipelineProvider:
-    candidates = [
-        PipelineCandidateOutput(**raw) for raw in case["expected_candidates"]
-    ]
+    candidates = [PipelineCandidateOutput(**raw) for raw in case["expected_candidates"]]
     payload = ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         candidates=candidates,
@@ -209,9 +203,7 @@ def evaluate_corpus_cases(
             if normalized_provider == "fake":
                 case = get_pipeline_golden_v4_case(case_id)
                 case_provider = _fake_provider_for_case(case)
-            results.append(
-                run_corpus_case_eval(case_id=case_id, provider=case_provider)
-            )
+            results.append(run_corpus_case_eval(case_id=case_id, provider=case_provider))
         except Exception as exc:
             errors.append(f"{case_id}: {exc}")
 
@@ -272,7 +264,5 @@ def format_corpus_eval_report(report: CorpusEvalReport) -> str:
 
     if report.errors:
         lines.append("")
-    lines.append(
-        f"Summary: {passed_count}/{total} passed, {len(report.errors)} errors"
-    )
+    lines.append(f"Summary: {passed_count}/{total} passed, {len(report.errors)} errors")
     return "\n".join(lines).rstrip() + "\n"

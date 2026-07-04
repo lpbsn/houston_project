@@ -172,10 +172,10 @@ def test_invalidate_payload_has_no_sensitive_fields():
 
 
 def test_membership_invalidation_not_emitted_on_transaction_rollback():
-    from houston.actions.tests.conftest import build_api_membership_on_establishment
     from houston.establishments.models import EstablishmentMembership
     from houston.notifications.models import Notification
     from houston.notifications.services import create_in_app_notification
+    from houston.testing.auth import build_api_membership_on_establishment
 
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
@@ -186,8 +186,8 @@ def test_membership_invalidation_not_emitted_on_transaction_rollback():
                 create_in_app_notification(
                     establishment_id=owner.establishment_id,
                     recipient_membership=staff,
-                    event_key=Notification.EventKey.ACTION_CREATED,
-                    subject_type=Notification.SubjectType.ACTION,
+                    event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+                    subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
                     subject_id=uuid.uuid4(),
                     priority=Notification.Priority.ACTION_REQUIRED,
                     actor_membership=owner,
@@ -199,7 +199,6 @@ def test_membership_invalidation_not_emitted_on_transaction_rollback():
 
 
 def test_membership_invalidation_emitted_after_commit():
-    from houston.actions.tests.conftest import build_api_membership_on_establishment
     from houston.establishments.models import EstablishmentMembership
     from houston.notifications.models import Notification
     from houston.notifications.services import (
@@ -207,6 +206,7 @@ def test_membership_invalidation_emitted_after_commit():
         NOTIFICATION_INVALIDATION_SUBJECT_TYPE,
         create_in_app_notification,
     )
+    from houston.testing.auth import build_api_membership_on_establishment
 
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
@@ -215,8 +215,8 @@ def test_membership_invalidation_emitted_after_commit():
         notification = create_in_app_notification(
             establishment_id=owner.establishment_id,
             recipient_membership=staff,
-            event_key=Notification.EventKey.ACTION_CREATED,
-            subject_type=Notification.SubjectType.ACTION,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
             subject_id=uuid.uuid4(),
             priority=Notification.Priority.ACTION_REQUIRED,
             actor_membership=owner,

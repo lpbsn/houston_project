@@ -14,8 +14,8 @@ const { authState } = vi.hoisted(() => ({
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
           can_invite: true,
           can_manage_runtime_config: false,
         },
@@ -76,8 +76,8 @@ describe('TeamPage', () => {
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
           can_invite: false,
           can_manage_runtime_config: true,
         },
@@ -98,8 +98,8 @@ describe('TeamPage', () => {
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
           can_invite: false,
           can_manage_runtime_config: false,
         },

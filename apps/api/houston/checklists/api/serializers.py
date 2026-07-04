@@ -337,10 +337,7 @@ def serialize_template_detail(
         membership=membership,
         template=template,
     )
-    payload["tasks"] = [
-        serialize_task_template(task)
-        for task in template.task_templates.all()
-    ]
+    payload["tasks"] = [serialize_task_template(task) for task in template.task_templates.all()]
     return payload
 
 
@@ -426,8 +423,7 @@ def serialize_execution_detail(
         "created_at": execution.created_at,
         "updated_at": execution.updated_at,
         "task_executions": [
-            serialize_task_execution(task)
-            for task in execution.task_executions.all()
+            serialize_task_execution(task) for task in execution.task_executions.all()
         ],
         "permission_hints": build_checklist_execution_permission_hints(
             membership=membership,

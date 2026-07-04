@@ -26,18 +26,12 @@ export type AppPath =
   | '/profile'
   | '/team'
   | '/team/invite'
-  | '/checklists'
   | '/action-plans'
 
 export type AppRoute =
   | { kind: 'static'; path: AppPath }
   | { kind: 'signal-detail'; signalId: string }
   | { kind: 'signal-action-create'; signalId: string }
-  | { kind: 'action-create' }
-  | { kind: 'action-detail'; actionId: string }
-  | { kind: 'checklist-template-create' }
-  | { kind: 'checklist-template-detail'; templateId: string }
-  | { kind: 'checklist-execution-detail'; executionId: string }
   | { kind: 'action-plan-create' }
   | { kind: 'execution-action-plan-create' }
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
@@ -60,16 +54,6 @@ export function getAppRouteKey(route: AppRoute): string {
       return `signal-detail:${route.signalId}`
     case 'signal-action-create':
       return `signal-action-create:${route.signalId}`
-    case 'action-create':
-      return 'action-create'
-    case 'action-detail':
-      return `action-detail:${route.actionId}`
-    case 'checklist-template-create':
-      return 'checklist-template-create'
-    case 'checklist-template-detail':
-      return `checklist-template-detail:${route.templateId}`
-    case 'checklist-execution-detail':
-      return `checklist-execution-detail:${route.executionId}`
     case 'action-plan-create':
       return 'action-plan-create'
     case 'execution-action-plan-create':
@@ -117,33 +101,6 @@ function parseSignalDetailId(pathname: string): string | null {
   return segments[0] || null
 }
 
-function parseChecklistRoute(pathname: string): AppRoute | null {
-  const executionDetailMatch = pathname.match(/^\/checklists\/executions\/([^/]+)$/)
-  if (executionDetailMatch?.[1]) {
-    return {
-      kind: 'checklist-execution-detail',
-      executionId: executionDetailMatch[1],
-    }
-  }
-
-  if (pathname === '/checklists/new') {
-    return { kind: 'checklist-template-create' }
-  }
-
-  const detailMatch = pathname.match(/^\/checklists\/([^/]+)$/)
-  if (detailMatch?.[1]) {
-    const segment = detailMatch[1]
-    if (!['executions', 'new', 'shared', 'personal'].includes(segment)) {
-      return {
-        kind: 'checklist-template-detail',
-        templateId: segment,
-      }
-    }
-  }
-
-  return null
-}
-
 function parseActionPlanRoute(pathname: string): AppRoute | null {
   const executionDetailMatch = pathname.match(/^\/action-plans\/executions\/([^/]+)$/)
   if (executionDetailMatch?.[1]) {
@@ -176,19 +133,6 @@ function parseChatConversationId(pathname: string): string | null {
   return match?.[1] ?? null
 }
 
-function parseActionDetailId(pathname: string): string | null {
-  if (pathname === '/actions/new' || pathname === '/actions/new/') {
-    return null
-  }
-  const prefix = '/actions/'
-  if (!pathname.startsWith(prefix)) {
-    return null
-  }
-  const remainder = pathname.slice(prefix.length)
-  const actionId = remainder.split('/').filter(Boolean)[0]
-  return actionId || null
-}
-
 export function parseAppRoute(input: string): AppRoute {
   const pathname = normalizeRoutePath(input)
 
@@ -202,23 +146,9 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'signal-action-create', signalId: signalPlanId }
   }
 
-  if (pathname === '/actions/new' || pathname === '/actions/new/') {
-    return { kind: 'action-create' }
-  }
-
   const signalId = parseSignalDetailId(pathname)
   if (signalId) {
     return { kind: 'signal-detail', signalId }
-  }
-
-  const actionId = parseActionDetailId(pathname)
-  if (actionId) {
-    return { kind: 'action-detail', actionId }
-  }
-
-  const checklistRoute = parseChecklistRoute(pathname)
-  if (checklistRoute) {
-    return checklistRoute
   }
 
   const actionPlanRoute = parseActionPlanRoute(pathname)
@@ -253,7 +183,6 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/profile' ||
     pathname === '/team' ||
     pathname === '/team/invite' ||
-    pathname === '/checklists' ||
     pathname === '/action-plans'
   ) {
     return { kind: 'static', path: pathname as AppPath }

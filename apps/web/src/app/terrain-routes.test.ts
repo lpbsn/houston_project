@@ -19,26 +19,22 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
   })
 
-  it('returns true for action create routes', () => {
+  it('returns true for action plan create routes', () => {
     expect(usesTerrainShell({ kind: 'signal-action-create', signalId: 'abc' })).toBe(true)
-    expect(usesTerrainShell({ kind: 'action-create' })).toBe(true)
     expect(usesTerrainShell({ kind: 'execution-action-plan-create' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'action-plan-create' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
+      true,
+    )
+    expect(usesTerrainShell({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
+      true,
+    )
   })
 
-  it('returns true for checklist management routes', () => {
-    expect(usesTerrainShell({ kind: 'static', path: '/checklists' })).toBe(true)
+  it('returns true for team and action plan hub routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/team' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/profile/switch-establishment' })).toBe(true)
-    expect(usesTerrainShell({ kind: 'checklist-template-create' })).toBe(true)
-    expect(
-      usesTerrainShell({
-        kind: 'checklist-template-detail',
-        templateId: 'tpl-1',
-      }),
-    ).toBe(true)
-    expect(
-      usesTerrainShell({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
-    ).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
   })
 
   it('returns false for non-terrain routes', () => {
@@ -112,53 +108,6 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
-  it('configures checklist execution detail route', () => {
-    expect(
-      getTerrainRouteConfig({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
-    ).toEqual({
-      topbarVariant: 'detail',
-      detailTitleLayout: 'belowBack',
-      backPath: '/execution',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      showTopbarBottomBorder: false,
-    })
-  })
-
-  it('configures checklist template create and detail routes', () => {
-    expect(getTerrainRouteConfig({ kind: 'checklist-template-create' })).toEqual({
-      topbarVariant: 'detail',
-      title: 'Nouvelle liste',
-      backPath: '/checklists',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      hideTopbar: true,
-    })
-
-    expect(
-      getTerrainRouteConfig({
-        kind: 'checklist-template-detail',
-        templateId: 'tpl-1',
-      }),
-    ).toEqual({
-      topbarVariant: 'detail',
-      title: 'Détail checklist',
-      backPath: '/checklists',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
-
-  it('configures checklist routes as detail shells without bottom nav', () => {
-    expect(getTerrainRouteConfig({ kind: 'static', path: '/checklists' })).toEqual({
-      topbarVariant: 'detail',
-      title: 'Gérer les checklists',
-      backPath: '/profile',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
-
   it('configures action plan routes', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/action-plans' })).toEqual({
       topbarVariant: 'detail',
@@ -167,13 +116,32 @@ describe('getTerrainRouteConfig', () => {
       showBottomNav: false,
       mainScroll: 'auto',
     })
-    expect(getTerrainRouteConfig({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toEqual({
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),
+    ).toEqual({
       topbarVariant: 'detail',
       detailTitleLayout: 'belowBack',
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
       showTopbarBottomBorder: false,
+    })
+    expect(getTerrainRouteConfig({ kind: 'action-plan-create' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Nouveau plan d’action',
+      backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Détail du plan',
+      backPath: '/action-plans',
+      showBottomNav: false,
+      mainScroll: 'auto',
     })
   })
 
@@ -187,33 +155,13 @@ describe('getTerrainRouteConfig', () => {
     })
   })
 
-  it('configures action detail with centered topbar title', () => {
-    expect(getTerrainRouteConfig({ kind: 'action-detail', actionId: 'x' })).toEqual({
-      topbarVariant: 'detail',
-      title: 'Action',
-      backPath: '/execution',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
-
-  it('configures signal-linked action create with centered topbar and back to signal', () => {
+  it('configures signal-linked action plan create with centered topbar and back to signal', () => {
     expect(
       getTerrainRouteConfig({ kind: 'signal-action-create', signalId: 'sig-1' }),
     ).toEqual({
       topbarVariant: 'detail',
       title: "Plan d'action",
       backPath: '/signals/sig-1',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
-
-  it('configures free action create with centered topbar', () => {
-    expect(getTerrainRouteConfig({ kind: 'action-create' })).toEqual({
-      topbarVariant: 'detail',
-      title: "Plan d'action",
-      backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -258,7 +206,7 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'static', path: '/profile/switch-establishment' })).toBe(
       'profile-switch-establishment',
     )
-    expect(getTerrainContentKey({ kind: 'static', path: '/checklists' })).toBe('checklists-hub')
+    expect(getTerrainContentKey({ kind: 'static', path: '/action-plans' })).toBe('action-plans-hub')
     expect(getTerrainContentKey({ kind: 'static', path: '/team' })).toBe('team')
   })
 
@@ -268,13 +216,19 @@ describe('getTerrainContentKey', () => {
     )
   })
 
-  it('maps action create routes to stable keys', () => {
+  it('maps action plan create routes to stable keys', () => {
     expect(getTerrainContentKey({ kind: 'signal-action-create', signalId: 'abc' })).toBe(
       'signal-action-create-abc',
     )
-    expect(getTerrainContentKey({ kind: 'action-create' })).toBe('action-create')
+    expect(getTerrainContentKey({ kind: 'action-plan-create' })).toBe('action-plan-create')
     expect(getTerrainContentKey({ kind: 'execution-action-plan-create' })).toBe(
       'execution-action-plan-create',
+    )
+    expect(getTerrainContentKey({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
+      'action-plan-template-detail-plan-1',
+    )
+    expect(getTerrainContentKey({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
+      'action-plan-execution-detail-exec-1',
     )
   })
 
@@ -306,8 +260,11 @@ describe('isProtectedRoute', () => {
 
   it('returns true for operational detail routes', () => {
     expect(isProtectedRoute({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
-    expect(isProtectedRoute({ kind: 'action-create' })).toBe(true)
     expect(isProtectedRoute({ kind: 'execution-action-plan-create' })).toBe(true)
+    expect(isProtectedRoute({ kind: 'action-plan-create' })).toBe(true)
+    expect(isProtectedRoute({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
+      true,
+    )
   })
 
   it('returns false for public routes', () => {
@@ -332,7 +289,7 @@ describe('requiresActiveMembership', () => {
       '/profile/switch-establishment',
       '/team',
       '/team/invite',
-      '/checklists',
+      '/action-plans',
     ] as const) {
       expect(requiresActiveMembership({ kind: 'static', path })).toBe(true)
     }
@@ -340,18 +297,13 @@ describe('requiresActiveMembership', () => {
 
   it('returns true for operational detail routes', () => {
     expect(requiresActiveMembership({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
-    expect(requiresActiveMembership({ kind: 'action-detail', actionId: 'abc' })).toBe(true)
-    expect(requiresActiveMembership({ kind: 'action-create' })).toBe(true)
     expect(requiresActiveMembership({ kind: 'execution-action-plan-create' })).toBe(true)
-    expect(requiresActiveMembership({ kind: 'checklist-template-create' })).toBe(true)
+    expect(requiresActiveMembership({ kind: 'action-plan-create' })).toBe(true)
     expect(
-      requiresActiveMembership({
-        kind: 'checklist-template-detail',
-        templateId: 'tpl-1',
-      }),
+      requiresActiveMembership({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
     ).toBe(true)
     expect(
-      requiresActiveMembership({ kind: 'checklist-execution-detail', executionId: 'exec-1' }),
+      requiresActiveMembership({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),
     ).toBe(true)
   })
 

@@ -1,5 +1,5 @@
 import { useId, type ComponentType } from 'react'
-import { ArrowLeftRight, Building2, ChevronRight, ClipboardCheck, Library, Users } from 'lucide-react'
+import { ArrowLeftRight, Building2, ChevronRight, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/terrain'
 import {
   canAccessManagementSpace,
+  canCreateCatalogActionPlanFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
@@ -187,9 +188,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
-  const canShowChecklistsNav = Boolean(activeMembership && role)
-  const canShowActionPlansNav =
-    role === 'manager' || role === 'director' || role === 'owner'
+  const canShowActionPlansNav = canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)
   const roleEstablishmentLine = buildRoleEstablishmentLine(
@@ -293,16 +292,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
                 title="Établissement"
                 subtitle="Pôles d'activités et sujets"
                 onClick={() => onNavigate?.('/app/operational-config')}
-              />
-            ) : null}
-
-            {canShowChecklistsNav ? (
-              <ProfileManagementNavCard
-                icon={ClipboardCheck}
-                iconClassName="bg-[#FFF4E0] text-[#EF9F27]"
-                title="Listes"
-                subtitle="Gérer, modifier, désactiver"
-                onClick={() => onNavigate?.('/checklists')}
               />
             ) : null}
 

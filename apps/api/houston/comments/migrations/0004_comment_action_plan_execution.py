@@ -6,7 +6,6 @@ from django.db.models import Q
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("action_plans", "0002_action_plan_task_observation"),
         ("comments", "0003_rename_parent_comment_index"),

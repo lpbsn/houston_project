@@ -432,9 +432,7 @@ def test_cursor_round_trip_without_duplicates(api_client):
     assert third_body["next_cursor"] is None
 
     all_ids = [
-        item["id"]
-        for page in (first_body, second_body, third_body)
-        for item in page["items"]
+        item["id"] for page in (first_body, second_body, third_body) for item in page["items"]
     ]
     assert len(all_ids) == len(set(all_ids)) == 5
 

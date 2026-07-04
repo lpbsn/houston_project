@@ -11,16 +11,11 @@ import {
   TerrainStickyFooter,
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import {
-  parseChecklistReportingContext,
-  type ChecklistReportingContext,
-} from '@/features/checklists/lib/checklist-reporting-context'
 import { ReportPhotosSection, type ReportPhotoDraft } from '@/features/observations/components/report-photos-section'
 import { ReportSuccessPanel } from '@/features/observations/components/report-success-panel'
 import { ReportVoiceSection } from '@/features/observations/components/report-voice-section'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
-  useChecklistReportSubmitMutation,
   useDeleteTemporaryPhotoMutation,
   useObservationProcessingStatusQuery,
   useSubmitObservationMutation,
@@ -48,19 +43,10 @@ type ReportPageProps = {
   onNavigate?: (pathname: string) => void
 }
 
-function getChecklistContextFromLocation(): ChecklistReportingContext | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-  return parseChecklistReportingContext(window.location.search)
-}
-
 export function ReportPage({ onNavigate }: ReportPageProps) {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
-
-  const checklistContext = useMemo(() => getChecklistContextFromLocation(), [])
 
   const [text, setText] = useState('')
   const [photos, setPhotos] = useState<ReportPhotoDraft[]>([])
@@ -76,11 +62,8 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   const deleteMutation = useDeleteTemporaryPhotoMutation(establishmentId)
   const transcribeMutation = useTranscribeAudioMutation(establishmentId)
   const submitMutation = useSubmitObservationMutation(establishmentId)
-  const checklistSubmitMutation = useChecklistReportSubmitMutation(establishmentId, checklistContext)
 
-  const isSubmitPending = checklistContext
-    ? checklistSubmitMutation.isPending
-    : submitMutation.isPending
+  const isSubmitPending = submitMutation.isPending
 
   const processingQuery = useObservationProcessingStatusQuery(
     establishmentId,
@@ -239,20 +222,11 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
       .filter((id): id is string => Boolean(id))
 
     try {
-      if (checklistContext) {
-        const response = await checklistSubmitMutation.mutateAsync({
-          taskExecutionId: checklistContext.checklistTaskExecutionId,
-          text: trimmedText,
-          temporaryUploadIds: uploadIds,
-        })
-        setSubmittedObservationId(response.observation_id)
-      } else {
-        const response = await submitMutation.mutateAsync({
-          text: trimmedText,
-          temporary_upload_ids: uploadIds,
-        })
-        setSubmittedObservationId(response.id)
-      }
+      const response = await submitMutation.mutateAsync({
+        text: trimmedText,
+        temporary_upload_ids: uploadIds,
+      })
+      setSubmittedObservationId(response.id)
       setText('')
       setPhotos([])
     } catch (error) {
@@ -265,13 +239,6 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
       return
     }
     onNavigate('/signals')
-  }
-
-  const handleReturnToChecklist = () => {
-    if (!onNavigate || !checklistContext) {
-      return
-    }
-    onNavigate(`/checklists/executions/${checklistContext.checklistExecutionId}`)
   }
 
   const pageShell = (content: React.ReactNode) => (
@@ -302,9 +269,6 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
         }
         showSignalFeedLink={showSignalFeedLink}
         onGoToSignalFeed={onNavigate ? handleGoToSignalFeed : undefined}
-        onReturnToChecklist={
-          checklistContext && onNavigate ? handleReturnToChecklist : undefined
-        }
         onNewObservation={() => setSubmittedObservationId(null)}
       />,
     )
@@ -313,17 +277,6 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex flex-1 flex-col gap-4 px-3 pb-28 pt-2">
-        {checklistContext ? (
-          <TerrainCard className="border-[#E8E6DF] bg-[#FAFAF8]">
-            <p className={cn('text-sm font-medium', terrain.foreground)}>
-              Signalement lié à une checklist
-            </p>
-            <p className={cn('mt-1 text-xs', terrain.muted)}>
-              Votre signalement sera rattaché à la tâche en cours.
-            </p>
-          </TerrainCard>
-        ) : null}
-
         <ReportVoiceSection
           shouldReduceMotion={shouldReduceMotion}
           isRecording={isRecording}

@@ -19,8 +19,7 @@ _LEGACY_TAXONOMY_TABLES = (
 )
 
 _DROP_LEGACY_TABLES_SQL = "\n".join(
-    f"DROP TABLE IF EXISTS {table} CASCADE;"
-    for table in _LEGACY_TAXONOMY_TABLES
+    f"DROP TABLE IF EXISTS {table} CASCADE;" for table in _LEGACY_TAXONOMY_TABLES
 )
 
 

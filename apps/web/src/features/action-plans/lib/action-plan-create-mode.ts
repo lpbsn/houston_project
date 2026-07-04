@@ -29,10 +29,10 @@ function shouldFilterBusinessUnitsByScope(role: string | null): boolean {
 export function resolveActionPlanCreateModeConfig(input: {
   mode: ActionPlanCreateMode
   role: string | null
-  canCreateAction: boolean
+  canCreateActionPlan: boolean
   membershipId?: string
 }): ActionPlanCreateModeConfig {
-  const { mode, role, canCreateAction } = input
+  const { mode, role, canCreateActionPlan } = input
   const isStaff = isStaffRole(role)
   const canCrossPole = canDefineCrossPoleTasks(role)
 
@@ -52,7 +52,7 @@ export function resolveActionPlanCreateModeConfig(input: {
 
   if (mode === 'signal-linked') {
     return {
-      canAccess: canCreateSignalLinkedActionPlan({ role, canCreateAction }),
+      canAccess: canCreateSignalLinkedActionPlan({ role, canCreateActionPlan }),
       showLibraryToggle: false,
       showValidationToggle: true,
       showAssigneeSheet: true,
@@ -64,7 +64,7 @@ export function resolveActionPlanCreateModeConfig(input: {
     }
   }
 
-  if (!canCreateAction) {
+  if (!canCreateActionPlan) {
     return {
       canAccess: false,
       showLibraryToggle: false,

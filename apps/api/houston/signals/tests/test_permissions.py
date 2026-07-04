@@ -4,7 +4,6 @@ import pytest
 from django.utils import timezone
 
 from houston.accounts.models import User
-from houston.actions.tests.conftest import build_api_membership_on_establishment
 from houston.establishments.models import EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
@@ -19,7 +18,7 @@ from houston.signals.permissions import (
     signal_pole_visible_to_membership,
     signal_visible_in_membership_scope,
 )
-from houston.testing.auth import build_api_membership
+from houston.testing.auth import build_api_membership, build_api_membership_on_establishment
 from houston.testing.factories import build_membership
 from houston.testing.taxonomy import (
     create_business_unit,

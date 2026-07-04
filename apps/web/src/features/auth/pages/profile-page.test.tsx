@@ -24,8 +24,8 @@ const { authState } = vi.hoisted(() => ({
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: true,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: true,
           can_invite: true,
           can_manage_runtime_config: true,
         },
@@ -136,8 +136,8 @@ describe('ProfilePage', () => {
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
           can_invite: false,
           can_manage_runtime_config: false,
         },
@@ -161,8 +161,8 @@ describe('ProfilePage', () => {
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: true,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: true,
           can_invite: true,
           can_manage_runtime_config: true,
         },
@@ -179,8 +179,8 @@ describe('ProfilePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Établissement/i }))
     expect(onNavigate).toHaveBeenCalledWith('/app/operational-config')
 
-    fireEvent.click(screen.getByRole('button', { name: /Listes/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/checklists')
+    fireEvent.click(screen.getByRole('button', { name: /Bibliothèque/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/action-plans')
 
     fireEvent.click(screen.getByRole('button', { name: /Équipe/i }))
     expect(onNavigate).toHaveBeenCalledWith('/team')
@@ -192,8 +192,8 @@ describe('ProfilePage', () => {
       bootstrap: {
         permission_hints: {
           chat_available: false,
-          can_create_action: false,
-          can_create_checklist_template: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
           can_invite: true,
           can_manage_runtime_config: false,
         },
@@ -208,6 +208,31 @@ describe('ProfilePage', () => {
     )
 
     expect(screen.queryByRole('button', { name: /Établissement/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
+  })
+
+  it('hides action plans nav when catalog hint is false', () => {
+    authState.current = {
+      ...authState.current,
+      bootstrap: {
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
+          can_invite: true,
+          can_manage_runtime_config: true,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Bibliothèque/i })).toBeNull()
     expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
   })
 

@@ -14,13 +14,10 @@ API_ROOT = Path(__file__).resolve().parents[3]
 
 EMITTER_SCAN_FILES: tuple[Path, ...] = (
     API_ROOT / "houston/signals/services.py",
-    API_ROOT / "houston/actions/services.py",
     API_ROOT / "houston/action_plans/services.py",
     API_ROOT / "houston/action_plans/materialization.py",
     API_ROOT / "houston/action_plans/schedule_services.py",
     API_ROOT / "houston/action_plans/realtime.py",
-    API_ROOT / "houston/checklists/services.py",
-    API_ROOT / "houston/checklists/materialization.py",
     API_ROOT / "houston/comments/services.py",
     API_ROOT / "houston/notifications/services.py",
 )
@@ -47,9 +44,6 @@ FIXED_EVENT_WRAPPERS: dict[str, tuple[str, str | None]] = {
 
 WRAPPER_SUBJECT_TYPES = {
     "_schedule_signal_invalidation": "signal",
-    "_schedule_action_invalidation": "action",
-    "_schedule_checklist_invalidation": "checklist",
-    "_schedule_execution_invalidation": "execution",
     "_schedule_comment_invalidation": "comment",
     "_schedule_notification_invalidation": "notification",
 }

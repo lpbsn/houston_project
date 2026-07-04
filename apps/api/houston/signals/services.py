@@ -50,7 +50,6 @@ from houston.signals.constants import (
     STRUCTURED_SUMMARY_SHORT_MAX_LENGTH,
 )
 from houston.signals.exceptions import (
-    SignalBusinessConflictError,
     SignalPipelineCandidateError,
     SignalStateError,
     SignalValidationError,
@@ -153,9 +152,7 @@ def format_aggregation_key(
 ) -> str:
     affected_id, responsible_id, subject_id, unit_id, issue_focus = key
     unit_token = str(unit_id) if unit_id is not None else "null"
-    return (
-        f"{affected_id}|{responsible_id}|{subject_id}|{unit_token}|{issue_focus}"
-    )
+    return f"{affected_id}|{responsible_id}|{subject_id}|{unit_token}|{issue_focus}"
 
 
 def resolve_signal_location_text(
@@ -1433,16 +1430,6 @@ def resolve_signal(
     signal: Signal,
     actor_membership: EstablishmentMembership | None = None,
 ) -> Signal:
-    from houston.actions.constants import ACTIVE_ACTION_STATUSES as ACTIVE_LINKED_ACTION_STATUSES
-    from houston.actions.models import Action
-
-    if Action.objects.filter(
-        signal_id=signal.id,
-        status__in=ACTIVE_LINKED_ACTION_STATUSES,
-    ).exists():
-        raise SignalBusinessConflictError(
-            "Cannot resolve signal while linked actions are still active."
-        )
     from houston.action_plans.services import (
         _cancel_linked_active_executions_for_signal_resolve,
     )
@@ -1487,9 +1474,7 @@ def _delete_created_from_media_for_signal_terminal(*, signal: Signal) -> None:
         .select_for_update()
         .order_by("id")
     )
-    active_count = sum(
-        1 for related in related_signals if related.status in ACTIVE_SIGNAL_STATUSES
-    )
+    active_count = sum(1 for related in related_signals if related.status in ACTIVE_SIGNAL_STATUSES)
     if active_count > 1:
         return
     delete_all_observation_media(observation_id=observation_id)

@@ -4,15 +4,14 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('comments', '0002_comment_threading_and_resolved'),
+        ("comments", "0002_comment_threading_and_resolved"),
     ]
 
     operations = [
         migrations.RenameIndex(
-            model_name='comment',
-            new_name='comments_co_parent__609e75_idx',
-            old_name='comments_co_parent__b0d2f8_idx',
+            model_name="comment",
+            new_name="comments_co_parent__609e75_idx",
+            old_name="comments_co_parent__b0d2f8_idx",
         ),
     ]

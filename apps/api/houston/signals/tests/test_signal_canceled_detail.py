@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from houston.actions.tests.conftest import (
-    assign_business_unit_scope,
-    build_api_membership_on_establishment,
-)
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal, SignalSourceObservation
 from houston.signals.tests.conftest import (
@@ -16,6 +12,10 @@ from houston.signals.tests.conftest import (
     login,
     signal_detail_url,
     signal_feed_url,
+)
+from houston.testing.auth import (
+    assign_business_unit_scope,
+    build_api_membership_on_establishment,
 )
 from houston.testing.auth import build_api_membership as build_other_establishment_membership
 from houston.testing.query_baseline import capture_queries
@@ -197,7 +197,7 @@ def test_detail_canceled_permission_hints_all_false(api_client):
     assert hints["can_set_urgency"] is False
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
-    assert hints["can_create_action"] is False
+    assert hints["can_create_linked_action_plan"] is False
 
 
 def test_feed_still_excludes_canceled_after_detail_access(api_client):

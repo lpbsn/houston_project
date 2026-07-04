@@ -28,14 +28,6 @@ from houston.actions.permissions import (
     can_validate_action_on_object,
 )
 from houston.establishments.models import EstablishmentMembership
-from houston.notifications.recipients import snapshot_action_assignee_ids
-from houston.notifications.scheduling import (
-    schedule_action_canceled_notification,
-    schedule_action_created_notification,
-    schedule_action_pending_validation_notification,
-    schedule_action_reassigned_notification,
-    schedule_action_reopened_notification,
-)
 from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
 from houston.signals.services import touch_signal_activity, unpin_signal
@@ -97,9 +89,7 @@ def _validate_staff_create_constraints(
     if signal_id is not None:
         raise ActionValidationError("Staff members cannot create linked actions.")
     if len(assignee_ids) != 1 or assignee_ids[0] != created_by.id:
-        raise ActionValidationError(
-            "Staff members can only create actions assigned to themselves."
-        )
+        raise ActionValidationError("Staff members can only create actions assigned to themselves.")
 
 
 def _replace_action_assignees(
@@ -109,10 +99,7 @@ def _replace_action_assignees(
 ) -> None:
     ActionAssignee.objects.filter(action_id=action.id).delete()
     ActionAssignee.objects.bulk_create(
-        [
-            ActionAssignee(action_id=action.id, membership=membership)
-            for membership in memberships
-        ]
+        [ActionAssignee(action_id=action.id, membership=membership) for membership in memberships]
     )
 
 
@@ -246,12 +233,6 @@ def create_action(
             signal.save(update_fields=["status", "last_activity_at", "updated_at"])
         if signal.is_pinned:
             unpin_signal(signal=signal)
-
-        _schedule_action_invalidation(action=action, reason="action.created")
-        schedule_action_created_notification(
-            action_id=action.id,
-            actor_membership_id=created_by.id,
-        )
         return action
 
     responsible_business_unit = resolve_responsible_business_unit(
@@ -279,11 +260,6 @@ def create_action(
         last_activity_at=now,
     )
     _replace_action_assignees(action=action, memberships=assignees)
-    _schedule_action_invalidation(action=action, reason="action.created")
-    schedule_action_created_notification(
-        action_id=action.id,
-        actor_membership_id=created_by.id,
-    )
     return action
 
 
@@ -324,7 +300,6 @@ def accept_action(
             "updated_at",
         ]
     )
-    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -356,8 +331,6 @@ def mark_action_done(
         if action.signal_id is not None:
             signal = Signal.objects.get(pk=action.signal_id)
             touch_signal_activity(signal=signal)
-        _schedule_action_invalidation(action=action, reason="action.updated")
-        schedule_action_pending_validation_notification(action_id=action.id)
         return action
 
     action.status = Action.Status.DONE
@@ -371,7 +344,6 @@ def mark_action_done(
     )
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
-    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -393,7 +365,6 @@ def validate_action(
     action.save(update_fields=["status", "validated_at", "last_activity_at", "updated_at"])
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
-    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 
@@ -426,11 +397,6 @@ def reopen_action(
             touch_signal_activity(signal=signal)
             signal.save(update_fields=["status", "last_activity_at", "updated_at"])
             _schedule_linked_signal_updated_invalidation(signal=signal)
-    _schedule_action_invalidation(action=action, reason="action.updated")
-    schedule_action_reopened_notification(
-        action_id=action.id,
-        actor_membership_id=actor.id,
-    )
     return action
 
 
@@ -448,11 +414,6 @@ def cancel_action(
     action.save(update_fields=["status", "last_activity_at", "updated_at"])
     if action.signal_id is not None:
         sync_signal_after_action_change(signal=action.signal)
-    _schedule_action_invalidation(action=action, reason="action.updated")
-    schedule_action_canceled_notification(
-        action_id=action.id,
-        actor_membership_id=actor.id,
-    )
     return action
 
 
@@ -475,8 +436,6 @@ def reassign_action(
         establishment_id=action.establishment_id,
         assignee_ids=assignee_ids,
     )
-    previous_assignee_ids = snapshot_action_assignee_ids(action_id=action.id)
-    new_assignee_ids = {membership.id for membership in assignees}
     _replace_action_assignees(action=action, memberships=assignees)
 
     update_fields = ["last_activity_at", "updated_at"]
@@ -488,13 +447,6 @@ def reassign_action(
 
     touch_action_activity(action=action)
     action.save(update_fields=update_fields)
-    _schedule_action_invalidation(action=action, reason="action.updated")
-    schedule_action_reassigned_notification(
-        action_id=action.id,
-        actor_membership_id=actor.id,
-        previous_assignee_ids=previous_assignee_ids,
-        new_assignee_ids=new_assignee_ids,
-    )
     return action
 
 
@@ -506,7 +458,6 @@ def update_action_due_at(*, action_id: uuid.UUID, due_at) -> Action:
     action.due_at = due_at
     touch_action_activity(action=action)
     action.save(update_fields=["due_at", "last_activity_at", "updated_at"])
-    _schedule_action_invalidation(action=action, reason="action.updated")
     return action
 
 

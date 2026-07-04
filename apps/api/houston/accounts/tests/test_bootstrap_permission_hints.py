@@ -4,11 +4,13 @@ import pytest
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
+from houston.action_plans.permissions import (
+    can_create_action_plan,
+    can_create_catalog_action_plan,
+)
 from houston.chat.permissions import can_access_chat
-from houston.checklists.permissions import can_create_registered_template
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import (
-    can_create_action,
     can_invite_memberships,
     can_manage_runtime_context,
 )
@@ -59,26 +61,26 @@ def fetch_bootstrap_hints(
 @pytest.mark.parametrize(
     (
         "role",
-        "expected_can_create_action",
+        "expected_can_create_action_plan",
         "expected_can_invite",
         "expected_can_manage_runtime_config",
-        "expected_can_create_checklist_template",
+        "expected_can_create_catalog_action_plan",
     ),
     [
         (EstablishmentMembership.Role.OWNER, True, True, True, True),
         (EstablishmentMembership.Role.DIRECTOR, True, True, True, True),
         (EstablishmentMembership.Role.MANAGER, True, True, False, True),
-        (EstablishmentMembership.Role.STAFF, True, False, False, False),
+        (EstablishmentMembership.Role.STAFF, False, False, False, False),
     ],
 )
 def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
     api_client,
     active_user,
     role,
-    expected_can_create_action,
+    expected_can_create_action_plan,
     expected_can_invite,
     expected_can_manage_runtime_config,
-    expected_can_create_checklist_template,
+    expected_can_create_catalog_action_plan,
 ):
     membership = create_membership(user=active_user, role=role)
     membership.establishment.chat_enabled = True
@@ -88,13 +90,18 @@ def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
 
     assert hints == {
         "chat_available": can_access_chat(membership),
-        "can_create_action": expected_can_create_action,
-        "can_create_checklist_template": expected_can_create_checklist_template,
+        "can_create_action_plan": expected_can_create_action_plan,
+        "can_create_catalog_action_plan": expected_can_create_catalog_action_plan,
         "can_invite": expected_can_invite,
         "can_manage_runtime_config": expected_can_manage_runtime_config,
     }
-    assert hints["can_create_action"] is can_create_action(membership)
-    assert hints["can_create_checklist_template"] is can_create_registered_template(membership)
+    assert hints["can_create_action_plan"] is can_create_action_plan(
+        membership,
+        establishment_id=membership.establishment_id,
+    )
+    assert hints["can_create_catalog_action_plan"] is can_create_catalog_action_plan(
+        membership,
+    )
     assert hints["can_invite"] is can_invite_memberships(membership)
     assert hints["can_manage_runtime_config"] is can_manage_runtime_context(membership)
 
@@ -125,8 +132,8 @@ def test_bootstrap_permission_hints_are_false_without_active_membership(
 
     assert hints == {
         "chat_available": False,
-        "can_create_action": False,
-        "can_create_checklist_template": False,
+        "can_create_action_plan": False,
+        "can_create_catalog_action_plan": False,
         "can_invite": False,
         "can_manage_runtime_config": False,
     }
@@ -159,8 +166,8 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_establishment(
     assert response.json()["active_membership"] is None
     assert response.json()["permission_hints"] == {
         "chat_available": False,
-        "can_create_action": False,
-        "can_create_checklist_template": False,
+        "can_create_action_plan": False,
+        "can_create_catalog_action_plan": False,
         "can_invite": False,
         "can_manage_runtime_config": False,
     }
@@ -182,8 +189,8 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_organization(
 
     assert hints == {
         "chat_available": False,
-        "can_create_action": False,
-        "can_create_checklist_template": False,
+        "can_create_action_plan": False,
+        "can_create_catalog_action_plan": False,
         "can_invite": False,
         "can_manage_runtime_config": False,
     }

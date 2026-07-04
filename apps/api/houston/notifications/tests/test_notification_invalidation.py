@@ -5,10 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from django.db import transaction
-from django.utils import timezone
 
-from houston.actions.services import create_action
-from houston.actions.tests.conftest import build_api_membership_on_establishment
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.notifications.services import (
@@ -22,8 +19,7 @@ from houston.notifications.services import (
     mark_notification_read,
 )
 from houston.notifications.tests.conftest import create_test_notification
-from houston.testing.auth import build_api_membership
-from houston.testing.taxonomy import hotel_maintenance_setup
+from houston.testing.auth import build_api_membership, build_api_membership_on_establishment
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -58,30 +54,13 @@ def _create_notification_without_action(*, owner, staff):
     return create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
         subject_id=uuid.uuid4(),
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
         skip_subject_visibility_recheck=True,
     )
-
-
-def _open_action(*, owner, staff, maintenance):
-    return create_action(
-        establishment_id=owner.establishment_id,
-        created_by=owner,
-        title="Sensitive action title",
-        instruction="Sensitive action instruction",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timezone.timedelta(days=1),
-        responsible_business_unit_id=maintenance.id,
-    )
-
-
-def _create_notification(*, owner, staff, maintenance):
-    del maintenance
-    return _create_notification_without_action(owner=owner, staff=staff)
 
 
 def test_create_emits_notification_created_after_commit():
@@ -103,18 +82,17 @@ def test_create_emits_notification_created_after_commit():
 
 def test_actor_exclusion_does_not_emit_invalidation():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=owner, maintenance=maintenance)
 
     with patch("houston.realtime.broadcast.notify_membership_invalidation") as mock_notify:
         notification = create_in_app_notification(
             establishment_id=owner.establishment_id,
             recipient_membership=owner,
-            event_key=Notification.EventKey.ACTION_CREATED,
-            subject_type=Notification.SubjectType.ACTION,
-            subject_id=action.id,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id=uuid.uuid4(),
             priority=Notification.Priority.ACTION_REQUIRED,
             actor_membership=owner,
+            skip_subject_visibility_recheck=True,
         )
 
         assert notification is None
@@ -130,8 +108,8 @@ def test_dedupe_does_not_emit_invalidation():
         first = create_in_app_notification(
             establishment_id=owner.establishment_id,
             recipient_membership=staff,
-            event_key=Notification.EventKey.ACTION_CREATED,
-            subject_type=Notification.SubjectType.ACTION,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
             subject_id=subject_id,
             priority=Notification.Priority.ACTION_REQUIRED,
             actor_membership=owner,
@@ -140,8 +118,8 @@ def test_dedupe_does_not_emit_invalidation():
         second = create_in_app_notification(
             establishment_id=owner.establishment_id,
             recipient_membership=staff,
-            event_key=Notification.EventKey.ACTION_CREATED,
-            subject_type=Notification.SubjectType.ACTION,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
             subject_id=subject_id,
             priority=Notification.Priority.ACTION_REQUIRED,
             actor_membership=owner,

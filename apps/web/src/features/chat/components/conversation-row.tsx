@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react'
 
-import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
+import { getDisplayNameInitials } from '@/lib/display-names'
 import { terrainFeedInteractiveCardClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 

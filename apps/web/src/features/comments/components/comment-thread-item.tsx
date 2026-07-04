@@ -6,8 +6,8 @@ import { HoustonBadge } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
 import { formatCommentRelativeTime } from '../lib/comment-display'
-import type { ActionCommentListItem, CommentCreateRequest } from '../types'
-import { isActionThreadItem } from '../types'
+import type { ExecutionCommentListItem, CommentCreateRequest } from '../types'
+import { isExecutionThreadItem } from '../types'
 import { CommentComposer } from './comment-composer'
 
 type ReplySubmitCallbacks = {
@@ -15,7 +15,7 @@ type ReplySubmitCallbacks = {
 }
 
 type CommentThreadItemProps = {
-  item: ActionCommentListItem
+  item: ExecutionCommentListItem
   establishmentId: string
   disabled?: boolean
   replyErrorMessage?: string | null
@@ -26,7 +26,7 @@ type CommentThreadItemProps = {
   onUnresolve: (commentId: string) => void
 }
 
-function CommentOriginBadge({ origin }: { origin: ActionCommentListItem['origin'] }) {
+function CommentOriginBadge({ origin }: { origin: ExecutionCommentListItem['origin'] }) {
   if (origin === 'signal') {
     return (
       <HoustonBadge variant="gray" className="text-[9px]">
@@ -62,7 +62,7 @@ function CommentBody({
   comment,
   showOrigin = false,
 }: {
-  comment: Pick<ActionCommentListItem, 'author' | 'origin' | 'created_at' | 'body' | 'mentions'>
+  comment: Pick<ExecutionCommentListItem, 'author' | 'origin' | 'created_at' | 'body' | 'mentions'>
   showOrigin?: boolean
 }) {
   return (
@@ -86,7 +86,7 @@ function CommentBody({
   )
 }
 
-export function InheritedSignalCommentCard({ item }: { item: ActionCommentListItem }) {
+export function InheritedSignalCommentCard({ item }: { item: ExecutionCommentListItem }) {
   return (
     <li className="rounded-[12px] border border-[#E8E6DF] bg-[#FAFAF8] px-3 py-3">
       <CommentBody comment={item} showOrigin />
@@ -105,7 +105,7 @@ export function ActionCommentThreadCard({
   onResolve,
   onUnresolve,
 }: CommentThreadItemProps) {
-  const isThread = isActionThreadItem(item)
+  const isThread = isExecutionThreadItem(item)
   const [expanded, setExpanded] = useState(!(item.is_resolved ?? false))
   const [isReplying, setIsReplying] = useState(false)
 

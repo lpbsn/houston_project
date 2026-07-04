@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   RotateCcw,
-  UserRound,
   XCircle,
 } from 'lucide-react'
 
@@ -142,7 +141,7 @@ export function getNotificationIconVariant(
   eventKey: string,
   subjectType: NotificationItem['subject_type'],
 ): NotificationIconVariant {
-  if (eventKey === 'action.pending_validation') {
+  if (eventKey === 'action_plan.execution.pending_validation') {
     return {
       icon: Bell,
       iconClassName: 'text-amber-600',
@@ -158,27 +157,7 @@ export function getNotificationIconVariant(
     }
   }
 
-  if (
-    eventKey === 'checklist.execution.created' ||
-    eventKey === 'checklist.execution.canceled' ||
-    subjectType === 'checklist_execution'
-  ) {
-    return {
-      icon: ClipboardCheck,
-      iconClassName: 'text-emerald-700',
-      containerClassName: 'bg-emerald-50',
-    }
-  }
-
-  if (eventKey === 'action.reassigned') {
-    return {
-      icon: UserRound,
-      iconClassName: 'text-[#1B4FD8]',
-      containerClassName: 'bg-[#EEF2FF]',
-    }
-  }
-
-  if (eventKey === 'action.reopened') {
+  if (eventKey === 'action_plan.execution.reopened') {
     return {
       icon: RotateCcw,
       iconClassName: 'text-[#1B4FD8]',
@@ -186,11 +165,22 @@ export function getNotificationIconVariant(
     }
   }
 
-  if (eventKey === 'action.canceled') {
+  if (eventKey === 'action_plan.execution.canceled') {
     return {
       icon: XCircle,
       iconClassName: 'text-rose-700',
       containerClassName: 'bg-rose-50',
+    }
+  }
+
+  if (
+    eventKey === 'action_plan.execution.created' ||
+    subjectType === 'action_plan_execution'
+  ) {
+    return {
+      icon: ClipboardCheck,
+      iconClassName: 'text-emerald-700',
+      containerClassName: 'bg-emerald-50',
     }
   }
 

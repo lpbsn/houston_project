@@ -43,9 +43,7 @@ class Command(BaseCommand):
             try:
                 establishment_id = uuid.UUID(raw_establishment_id)
             except ValueError as exc:
-                raise CommandError(
-                    f"Invalid establishment id: {raw_establishment_id}"
-                ) from exc
+                raise CommandError(f"Invalid establishment id: {raw_establishment_id}") from exc
 
         metrics = compute_issue_focus_eval_metrics(
             establishment_id=establishment_id,
@@ -71,16 +69,13 @@ class Command(BaseCommand):
             f"({payload['taxonomy_duplicate_signal_count']} signals)"
         )
         self.stdout.write(
-            "Candidates with aggregate hint: "
-            f"{payload['hint_provided_candidate_count']}"
+            f"Candidates with aggregate hint: {payload['hint_provided_candidate_count']}"
         )
         self.stdout.write(
-            "Hint rejected (created new signal): "
-            f"{payload['hint_rejected_created_count']}"
+            f"Hint rejected (created new signal): {payload['hint_rejected_created_count']}"
         )
         self.stdout.write(
-            "Hint issue_focus mismatches: "
-            f"{payload['hint_issue_focus_mismatch_count']}"
+            f"Hint issue_focus mismatches: {payload['hint_issue_focus_mismatch_count']}"
         )
         self.stdout.write("")
         self.stdout.write("Lot 4bis trigger indicators:")

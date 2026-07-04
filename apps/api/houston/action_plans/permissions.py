@@ -8,7 +8,6 @@ from houston.action_plans.models import (
     ActionPlanExecutionTask,
     ActionPlanSchedule,
 )
-from houston.actions.permissions import can_access_signal_for_linked_action
 from houston.establishments.membership_scope import (
     _iter_membership_scopes,
     membership_scope_covers_business_unit,
@@ -20,9 +19,14 @@ from houston.establishments.permissions import (
 from houston.establishments.permissions import (
     can_validate_action as establishment_can_validate_action,
 )
-from houston.establishments.role_constants import ADMIN_ROLES
+from houston.establishments.permissions import is_valid_membership
+from houston.establishments.role_constants import _MANAGEMENT_ROLES, ADMIN_ROLES
+from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
 from houston.signals.models import Signal
-from houston.signals.permissions import signal_actionable_by_membership
+from houston.signals.permissions import (
+    signal_actionable_by_membership,
+    signal_matches_membership_scope,
+)
 
 
 def _is_active_membership_in_establishment(
@@ -341,6 +345,27 @@ def can_cancel_action_plan_execution(
     if membership.role in ADMIN_ROLES:
         return True
     return manages_pilot_pole(membership, execution)
+
+
+def can_access_signal_for_linked_action(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    if membership is None:
+        return False
+    if signal.establishment_id != membership.establishment_id:
+        return False
+    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+        return False
+    if membership.role in ADMIN_ROLES:
+        return True
+    return signal_matches_membership_scope(membership, signal)
+
+
+def can_create_catalog_action_plan(membership: EstablishmentMembership | None) -> bool:
+    if not is_valid_membership(membership):
+        return False
+    return membership.role in _MANAGEMENT_ROLES
 
 
 def can_create_action_plan(

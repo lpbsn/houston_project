@@ -38,7 +38,6 @@ class ObservationPipelineOutput(_StrictModel):
     def validate_schema_version(cls, value: str) -> str:
         if value != AI_OBSERVATION_PIPELINE_SCHEMA_VERSION:
             raise ValueError(
-                f"schema_version must be {AI_OBSERVATION_PIPELINE_SCHEMA_VERSION!r}, "
-                f"got {value!r}"
+                f"schema_version must be {AI_OBSERVATION_PIPELINE_SCHEMA_VERSION!r}, got {value!r}"
             )
         return value

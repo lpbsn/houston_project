@@ -59,11 +59,7 @@ def get_notification_for_recipient(
     membership: EstablishmentMembership,
     notification_id: uuid.UUID,
 ) -> Notification | None:
-    return (
-        _notifications_queryset(membership=membership)
-        .filter(id=notification_id)
-        .first()
-    )
+    return _notifications_queryset(membership=membership).filter(id=notification_id).first()
 
 
 def count_unread_notifications(*, membership: EstablishmentMembership) -> int:

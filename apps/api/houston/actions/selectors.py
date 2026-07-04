@@ -54,16 +54,18 @@ def _assignee_exists_subquery(*, membership_id: uuid.UUID):
 
 
 def actions_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[Action]:
-    return Action.objects.filter(establishment_id=establishment_id).select_related(
-        *_ACTION_LIST_SELECT_RELATED
-    ).prefetch_related(_ACTION_ASSIGNEE_PREFETCH)
+    return (
+        Action.objects.filter(establishment_id=establishment_id)
+        .select_related(*_ACTION_LIST_SELECT_RELATED)
+        .prefetch_related(_ACTION_ASSIGNEE_PREFETCH)
+    )
 
 
 def action_personal_feed_q(*, membership: EstablishmentMembership) -> Q:
     assignee_exists = _assignee_exists_subquery(membership_id=membership.id)
-    return (
-        Q(created_by_id=membership.id) | Q(Exists(assignee_exists))
-    ) & Q(establishment_id=membership.establishment_id)
+    return (Q(created_by_id=membership.id) | Q(Exists(assignee_exists))) & Q(
+        establishment_id=membership.establishment_id
+    )
 
 
 def action_general_feed_visibility_q(*, membership: EstablishmentMembership) -> Q:

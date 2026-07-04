@@ -1,19 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import {
-  invalidateActionMutationSurfaces,
   invalidateActionPlanAssigneeSurfaces,
   invalidateActionPlanExecutionFeedQueries,
   invalidateActionPlanExecutionSurfaces,
   invalidateActionPlanMutationSurfaces,
-  invalidateChecklistExecutionSurfaces,
-  invalidateChecklistMutationSurfaces,
-  invalidateEstablishmentActionQueries,
   invalidateEstablishmentActionPlanCatalogQueries,
-  invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentNotificationQueries,
   invalidateEstablishmentSignalQueries,
-  invalidateActionCommentQueries,
   invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
 } from '@/lib/query-invalidation'
@@ -39,18 +33,6 @@ export function applyOperationalInvalidation(
     invalidateEstablishmentSignalQueries(queryClient, establishmentId)
     return
   }
-  if (event.subject_type === 'action') {
-    invalidateActionMutationSurfaces(queryClient, establishmentId)
-    return
-  }
-  if (event.subject_type === 'checklist') {
-    invalidateChecklistMutationSurfaces(queryClient, establishmentId, event.entity_id)
-    return
-  }
-  if (event.subject_type === 'execution') {
-    invalidateChecklistExecutionSurfaces(queryClient, establishmentId, event.entity_id)
-    return
-  }
   if (event.subject_type === 'action_plan') {
     invalidateActionPlanMutationSurfaces(queryClient, establishmentId, event.entity_id)
     return
@@ -73,13 +55,7 @@ export function applyOperationalInvalidation(
         invalidateSignalCommentQueries(queryClient, establishmentId, event.entity_id)
         break
       case 'comment.signal.inherited':
-        invalidateActionCommentQueries(queryClient, establishmentId, event.entity_id)
         invalidateExecutionCommentQueries(queryClient, establishmentId, event.entity_id)
-        break
-      case 'comment.action.created':
-      case 'comment.action.resolved':
-      case 'comment.action.unresolved':
-        invalidateActionCommentQueries(queryClient, establishmentId, event.entity_id)
         break
       case 'comment.execution.created':
       case 'comment.execution.resolved':
@@ -104,8 +80,6 @@ export function applyOperationalReconnectInvalidation(
   establishmentId: string,
 ) {
   invalidateEstablishmentSignalQueries(queryClient, establishmentId)
-  invalidateEstablishmentActionQueries(queryClient, establishmentId)
-  invalidateEstablishmentChecklistQueries(queryClient, establishmentId)
   invalidateEstablishmentActionPlanCatalogQueries(queryClient, establishmentId)
   invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)
   invalidateEstablishmentNotificationQueries(queryClient, establishmentId)

@@ -2,11 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   clearAuthenticatedQueryCache,
-  invalidateActionCommentQueries,
-  invalidateActionMutationSurfaces,
-  invalidateChecklistExecutionSurfaces,
-  invalidateEstablishmentActionQueries,
-  invalidateEstablishmentChecklistQueries,
   invalidateEstablishmentSignalQueries,
   invalidateExecutionCommentQueries,
   invalidateSignalCommentQueries,
@@ -56,7 +51,10 @@ describe('query-invalidation', () => {
 
     queryClient.setQueryData(['signals', 'feed', 'est-a', 'general', {}], { items: ['a'] })
     queryClient.setQueryData(['signals', 'detail', 'est-a', 'sig-1'], { id: 'sig-1' })
-    queryClient.setQueryData(['actions', 'execution-feed', 'est-b', 'personal'], { items: [] })
+    queryClient.setQueryData(
+      ['action-plans', 'action-plan-execution-feed', 'est-b', 'personal'],
+      { items: [] },
+    )
     queryClient.setQueryData(['workspace', 'summary', 'est-a'], { name: 'A' })
     queryClient.setQueryData(['auth', 'bootstrap'], { authenticated: true })
 
@@ -65,7 +63,7 @@ describe('query-invalidation', () => {
     expect(queryClient.getQueryData(['signals', 'feed', 'est-a', 'general', {}])).toBeUndefined()
     expect(queryClient.getQueryData(['signals', 'detail', 'est-a', 'sig-1'])).toBeUndefined()
     expect(
-      queryClient.getQueryData(['actions', 'execution-feed', 'est-b', 'personal']),
+      queryClient.getQueryData(['action-plans', 'action-plan-execution-feed', 'est-b', 'personal']),
     ).toBeUndefined()
     expect(queryClient.getQueryData(['workspace', 'summary', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(['auth', 'bootstrap'])).toEqual({ authenticated: true })
@@ -121,68 +119,6 @@ describe('query-invalidation', () => {
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals'] })
   })
 
-  it('invalidates establishment-scoped action queries', () => {
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    invalidateEstablishmentActionQueries(queryClient, 'est-1')
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['actions', 'execution-feed', 'est-1'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['actions', 'detail', 'est-1'] })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['actions'] })
-  })
-
-  it('invalidates establishment-scoped checklist queries', () => {
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    invalidateEstablishmentChecklistQueries(queryClient, 'est-1')
-
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['checklists', 'templates', 'est-1'] })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['checklists', 'template-detail', 'est-1'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['checklists', 'assignments', 'est-1'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['checklists', 'execution-detail', 'est-1'],
-    })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['checklists'] })
-  })
-
-  it('invalidates action mutation surfaces without global keys', () => {
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    invalidateActionMutationSurfaces(queryClient, 'est-1')
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['actions', 'execution-feed', 'est-1'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['actions'] })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals'] })
-  })
-
-  it('invalidates checklist execution surfaces without global keys', () => {
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    invalidateChecklistExecutionSurfaces(queryClient, 'est-1', 'exec-1')
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['checklists', 'execution-detail', 'est-1', 'exec-1'],
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['checklists', 'templates', 'est-1'] })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['actions', 'execution-feed', 'est-1'],
-    })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['checklists'] })
-  })
-
   it('invalidates signal comment queries without global keys', () => {
     const queryClient = createTestQueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
@@ -194,19 +130,6 @@ describe('query-invalidation', () => {
     })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments', 'signal', 'est-1'] })
-  })
-
-  it('invalidates action comment queries without global keys', () => {
-    const queryClient = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    invalidateActionCommentQueries(queryClient, 'est-1', 'act-1')
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['comments', 'action', 'est-1', 'act-1'],
-    })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments'] })
-    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['comments', 'action', 'est-1'] })
   })
 
   it('invalidates execution comment queries without global keys', () => {

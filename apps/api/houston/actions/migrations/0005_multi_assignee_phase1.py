@@ -22,7 +22,6 @@ def copy_assigned_to_assignees(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("actions", "0004_remove_legacy_operational_taxonomy_fks"),
         ("establishments", "0019_drop_orphan_legacy_taxonomy_tables"),

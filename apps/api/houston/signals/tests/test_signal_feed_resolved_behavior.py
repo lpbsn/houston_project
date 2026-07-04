@@ -190,7 +190,6 @@ def test_detail_resolved_returns_200(api_client):
     assert response.status_code == 200
     assert response.json()["status"] == Signal.Status.RESOLVED
 
-
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _create_signal(
         membership,
@@ -211,4 +210,4 @@ def test_detail_resolved_returns_200(api_client):
     assert hints["can_set_urgency"] is False
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
-    assert hints["can_create_action"] is False
+    assert hints["can_create_linked_action_plan"] is False

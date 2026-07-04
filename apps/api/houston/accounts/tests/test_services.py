@@ -156,9 +156,7 @@ def test_refresh_session_concurrent_rotation_only_one_succeeds(user, request_fac
 
     original_token = family_tokens.get(token_digest=issued_token.record.token_digest)
     assert original_token.used_at is not None
-    assert all(
-        token.status == SessionRefreshToken.Status.REVOKED for token in family_tokens
-    )
+    assert all(token.status == SessionRefreshToken.Status.REVOKED for token in family_tokens)
 
 
 def test_revoke_session_revokes_active_access_and_refresh_tokens(user, request_factory):

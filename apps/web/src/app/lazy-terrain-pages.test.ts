@@ -7,15 +7,15 @@ const LAZY_EXPORTS = [
   'LazySignalFeedPage',
   'LazySignalDetailPage',
   'LazyExecutionFeedPage',
-  'LazyActionCreatePage',
-  'LazyActionDetailPage',
   'LazyChatPage',
   'LazyChatConversationPage',
   'LazyProfilePage',
-  'LazyChecklistHubPage',
-  'LazyChecklistTemplateCreatePage',
-  'LazyChecklistTemplateDetailPage',
-  'LazyChecklistExecutionDetailPage',
+  'LazyProfileSwitchEstablishmentPage',
+  'LazyTeamPage',
+  'LazyActionPlanHubPage',
+  'LazyActionPlanCreatePage',
+  'LazyActionPlanTemplateDetailPage',
+  'LazyActionPlanExecutionDetailPage',
   'LazyChatRealtimeProvider',
 ] as const
 
@@ -34,7 +34,7 @@ describe('lazy-terrain-pages', () => {
       import('@/features/signals/pages/signal-feed-page'),
       import('@/features/execution/pages/execution-feed-page'),
       import('@/features/chat/pages/chat-page'),
-      import('@/features/checklists/pages/checklist-hub-page'),
+      import('@/features/action-plans/pages/action-plan-hub-page'),
     ])
 
     expect(modules.every((module) => Object.keys(module).length > 0)).toBe(true)

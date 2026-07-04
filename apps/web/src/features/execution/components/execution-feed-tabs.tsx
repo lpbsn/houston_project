@@ -1,4 +1,4 @@
-import type { ExecutionViewMode } from '@/features/actions/types'
+import type { ExecutionViewMode } from '@/features/execution/lib/types'
 import { TerrainFilterPill } from '@/components/ui/terrain'
 
 type ExecutionFeedTabsProps = {

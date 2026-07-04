@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Literal
+
+ExecutionFeedViewMode = Literal["personal", "general"]
+
 ACTION_PLAN_TITLE_MAX_LENGTH = 200
 ACTION_PLAN_DESCRIPTION_MAX_LENGTH = 2000
 ACTION_PLAN_TASK_MAX_LENGTH = 500

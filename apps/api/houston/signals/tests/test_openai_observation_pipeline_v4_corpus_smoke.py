@@ -105,9 +105,7 @@ def test_live_openai_v4_corpus_case(case_id: str):
             for entry in input_payload["active_signals_context"]
             if entry["title"] == setup["title"]
         ]
-        assert matching, (
-            f"{case_id}: expected active signal {setup['title']!r} in context"
-        )
+        assert matching, f"{case_id}: expected active signal {setup['title']!r} in context"
         assert matching[0]["issue_focus"] == setup["issue_focus"], (
             f"{case_id}: active_signals_context issue_focus mismatch for {setup['title']!r}"
         )

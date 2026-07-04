@@ -12,10 +12,6 @@ from houston.actions.services import (
     mark_action_done,
     validate_action,
 )
-from houston.actions.tests.conftest import (
-    assign_business_unit_scope,
-    build_api_membership_on_establishment,
-)
 from houston.ai.observation_pipeline_schema import PipelineCandidateOutput
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
@@ -36,7 +32,11 @@ from houston.signals.tests.conftest import (
     login,
     signal_detail_url,
 )
-from houston.testing.auth import build_api_membership
+from houston.testing.auth import (
+    assign_business_unit_scope,
+    build_api_membership,
+    build_api_membership_on_establishment,
+)
 from houston.testing.pipeline import create_observation
 from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
 

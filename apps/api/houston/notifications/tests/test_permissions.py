@@ -4,11 +4,8 @@ import uuid
 
 import pytest
 
-from houston.actions.services import create_action
-from houston.actions.tests.conftest import (
-    assign_business_unit_scope,
-    build_api_membership_on_establishment,
-)
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.notifications.permissions import (
@@ -18,7 +15,11 @@ from houston.notifications.permissions import (
 from houston.notifications.tests.conftest import create_test_notification
 from houston.signals.models import Signal
 from houston.signals.tests.conftest import create_minimal_v3_signal
-from houston.testing.auth import build_api_membership
+from houston.testing.auth import (
+    assign_business_unit_scope,
+    build_api_membership,
+    build_api_membership_on_establishment,
+)
 from houston.testing.taxonomy import hotel_maintenance_setup
 
 pytestmark = pytest.mark.django_db
@@ -41,52 +42,49 @@ def test_notification_not_visible_cross_establishment():
     assert notification_visible_to_membership(notification, outsider) is False
 
 
-def test_recipient_can_view_action_subject():
+def test_recipient_can_view_action_plan_execution_subject():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    from django.utils import timezone
+    hotel, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
 
-    action = create_action(
+    _, execution = create_action_plan_with_execution(
         establishment_id=owner.establishment_id,
         created_by=owner,
-        title="Sensitive action title",
-        instruction="Sensitive instruction",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timezone.timedelta(days=1),
-        responsible_business_unit_id=maintenance.id,
+        pilot_business_unit_id=maintenance.id,
+        title="Sensitive plan execution",
+        tasks=[build_task_payload(task="Inspect", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
     )
 
     assert recipient_can_view_notification_subject(
         recipient=staff,
         establishment_id=owner.establishment_id,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
     )
 
 
-def test_recipient_cannot_view_action_subject_out_of_scope():
+def test_recipient_cannot_view_action_plan_execution_subject_out_of_scope():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     outsider = build_api_membership()
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    from django.utils import timezone
 
-    action = create_action(
+    _, execution = create_action_plan_with_execution(
         establishment_id=owner.establishment_id,
         created_by=owner,
-        title="Sensitive action title",
-        instruction="Sensitive instruction",
-        assignee_ids=[owner.id],
-        due_at=timezone.now() + timezone.timedelta(days=1),
-        responsible_business_unit_id=maintenance.id,
+        pilot_business_unit_id=maintenance.id,
+        title="Sensitive plan execution",
+        tasks=[build_task_payload(task="Inspect", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=owner, business_unit=maintenance)],
     )
 
     assert (
         recipient_can_view_notification_subject(
             recipient=outsider,
             establishment_id=outsider.establishment_id,
-            subject_type=Notification.SubjectType.ACTION,
-            subject_id=action.id,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id=execution.id,
         )
         is False
     )

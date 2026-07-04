@@ -119,11 +119,7 @@ def find_active_taxonomy_duplicate_groups(
             )
         focuses = tuple(
             sorted(
-                {
-                    focus
-                    for focus in peer_queryset.values_list("issue_focus", flat=True)
-                    if focus
-                }
+                {focus for focus in peer_queryset.values_list("issue_focus", flat=True) if focus}
             )
         )
         groups.append(
@@ -170,9 +166,13 @@ def count_hint_issue_focus_mismatches(
         "issue_focus",
         "ai_aggregate_hint_signal_id",
     ):
-        hint_signal = Signal.objects.filter(
-            id=candidate.ai_aggregate_hint_signal_id,
-        ).only("issue_focus").first()
+        hint_signal = (
+            Signal.objects.filter(
+                id=candidate.ai_aggregate_hint_signal_id,
+            )
+            .only("issue_focus")
+            .first()
+        )
         if hint_signal is None:
             continue
         if _normalize_issue_focus(candidate.issue_focus) != _normalize_issue_focus(
@@ -192,9 +192,7 @@ def compute_lot4bis_trigger_indicators(
 ) -> dict[str, bool]:
     hint_rate = 0.0
     if metrics.hint_provided_candidate_count > 0:
-        hint_rate = (
-            metrics.hint_issue_focus_mismatch_count / metrics.hint_provided_candidate_count
-        )
+        hint_rate = metrics.hint_issue_focus_mismatch_count / metrics.hint_provided_candidate_count
 
     return {
         "numerous_taxonomy_duplicate_groups": (
@@ -204,8 +202,7 @@ def compute_lot4bis_trigger_indicators(
             metrics.taxonomy_duplicate_signal_count >= min_duplicate_signals
         ),
         "elevated_hint_issue_focus_mismatch_rate": (
-            metrics.hint_issue_focus_mismatch_count > 0
-            and hint_rate >= min_hint_mismatch_rate
+            metrics.hint_issue_focus_mismatch_count > 0 and hint_rate >= min_hint_mismatch_rate
         ),
     }
 

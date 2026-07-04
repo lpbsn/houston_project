@@ -23,9 +23,7 @@ def _schedule(owner, catalog_action_plan, staff, business_unit):
         action_plan=catalog_action_plan,
         actor=owner,
         recurrence_days=["monday"],
-        assignees=[
-            build_schedule_assignee_payload(membership=staff, business_unit=business_unit)
-        ],
+        assignees=[build_schedule_assignee_payload(membership=staff, business_unit=business_unit)],
         **schedule_window_from_datetime(now),
     )
 

@@ -3,8 +3,6 @@ import { apiClient, withAuthRetry } from '@/api/client'
 import { parseStandardApiError } from '@/lib/api-errors'
 
 import type {
-  ActionCommentListItem,
-  ActionCommentThreadItem,
   CommentCreateRequest,
   CommentItem,
   ExecutionCommentListItem,
@@ -16,8 +14,6 @@ export const commentsQueryKeys = {
   all: ['comments'] as const,
   signalList: (establishmentId: string, signalId: string) =>
     ['comments', 'signal', establishmentId, signalId] as const,
-  actionList: (establishmentId: string, actionId: string) =>
-    ['comments', 'action', establishmentId, actionId] as const,
   executionList: (establishmentId: string, executionId: string) =>
     ['comments', 'action-plan-execution', establishmentId, executionId] as const,
 }
@@ -85,27 +81,6 @@ export async function fetchSignalComments(
   return assertCommentsData<CommentItem[]>(result)
 }
 
-export async function fetchActionComments(
-  establishmentId: string,
-  actionId: string,
-): Promise<ActionCommentListItem[]> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/', {
-        params: {
-          path: {
-            establishment_id: establishmentId,
-            action_id: actionId,
-          },
-        },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  return assertCommentsData<ActionCommentListItem[]>(result)
-}
-
 export async function createSignalComment(
   establishmentId: string,
   signalId: string,
@@ -127,81 +102,6 @@ export async function createSignalComment(
   )
 
   return assertCommentsData<CommentItem>(result)
-}
-
-export async function createActionComment(
-  establishmentId: string,
-  actionId: string,
-  payload: CommentCreateRequest,
-): Promise<CommentItem> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST('/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/', {
-        params: {
-          path: {
-            establishment_id: establishmentId,
-            action_id: actionId,
-          },
-        },
-        body: payload,
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  return assertCommentsData<CommentItem>(result)
-}
-
-export async function resolveActionComment(
-  establishmentId: string,
-  actionId: string,
-  commentId: string,
-): Promise<ActionCommentThreadItem> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/resolve/',
-        {
-          params: {
-            path: {
-              establishment_id: establishmentId,
-              action_id: actionId,
-              comment_id: commentId,
-            },
-          },
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  return assertCommentsData<ActionCommentThreadItem>(result)
-}
-
-export async function unresolveActionComment(
-  establishmentId: string,
-  actionId: string,
-  commentId: string,
-): Promise<ActionCommentThreadItem> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/{comment_id}/unresolve/',
-        {
-          params: {
-            path: {
-              establishment_id: establishmentId,
-              action_id: actionId,
-              comment_id: commentId,
-            },
-          },
-          headers: getAuthHeaders(accessToken),
-        },
-      ),
-    { refreshable: true },
-  )
-
-  return assertCommentsData<ActionCommentThreadItem>(result)
 }
 
 export async function fetchExecutionComments(

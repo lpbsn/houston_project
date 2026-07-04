@@ -5,10 +5,8 @@ export function resolveNotificationPath(
   subjectId: string,
 ): string | null {
   switch (subjectType) {
-    case 'action':
-      return `/actions/${subjectId}`
-    case 'checklist_execution':
-      return `/checklists/executions/${subjectId}`
+    case 'action_plan_execution':
+      return `/action-plans/executions/${subjectId}`
     case 'signal':
       return `/signals/${subjectId}`
     case 'comment':

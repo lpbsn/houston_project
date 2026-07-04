@@ -17,28 +17,9 @@ def signal_comments_url(establishment_id, signal_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/"
 
 
-def action_comments_url(establishment_id, action_id) -> str:
-    return f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
-
-
-def action_comment_resolve_url(establishment_id, action_id, comment_id) -> str:
-    return (
-        f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
-        f"{comment_id}/resolve/"
-    )
-
-
-def action_comment_unresolve_url(establishment_id, action_id, comment_id) -> str:
-    return (
-        f"/api/v1/establishments/{establishment_id}/actions/{action_id}/comments/"
-        f"{comment_id}/unresolve/"
-    )
-
-
 def execution_comments_url(establishment_id, execution_id) -> str:
     return (
-        f"/api/v1/establishments/{establishment_id}/action-plan-executions/"
-        f"{execution_id}/comments/"
+        f"/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/"
     )
 
 

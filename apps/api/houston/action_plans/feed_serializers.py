@@ -13,10 +13,16 @@ from houston.action_plans.constants import ACTION_PLAN_DESCRIPTION_MAX_LENGTH
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.permission_hints import build_action_plan_execution_permission_hints
 from houston.action_plans.selectors import action_plan_execution_overdue
-from houston.actions.api.serializers import instruction_short
 
 FEED_TASK_PREVIEW_LIMIT = 3
 DESCRIPTION_SHORT_MAX_LENGTH = min(ACTION_PLAN_DESCRIPTION_MAX_LENGTH, 280)
+
+
+def _truncate_short(text: str, *, max_length: int) -> str:
+    normalized = (text or "").strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 1].rstrip() + "…"
 
 
 def _membership_display_name(membership) -> str:
@@ -25,10 +31,7 @@ def _membership_display_name(membership) -> str:
 
 
 def description_short(text: str) -> str:
-    normalized = (text or "").strip()
-    if len(normalized) <= DESCRIPTION_SHORT_MAX_LENGTH:
-        return normalized
-    return instruction_short(normalized)
+    return _truncate_short(text, max_length=DESCRIPTION_SHORT_MAX_LENGTH)
 
 
 class ActionPlanExecutionFeedAssigneeSerializer(serializers.Serializer):
@@ -79,9 +82,7 @@ def serialize_action_plan_execution_feed_item(
     is_overdue: bool | None = None,
 ) -> dict:
     overdue = (
-        is_overdue
-        if is_overdue is not None
-        else action_plan_execution_overdue(execution=execution)
+        is_overdue if is_overdue is not None else action_plan_execution_overdue(execution=execution)
     )
     task_executions = list(execution.task_executions.all())[:FEED_TASK_PREVIEW_LIMIT]
     assignees = [

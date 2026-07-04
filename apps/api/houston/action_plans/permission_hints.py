@@ -83,12 +83,10 @@ def build_action_plan_execution_permission_hints(
 ) -> dict[str, bool]:
     is_active = execution.status in ACTIVE_EXECUTION_STATUSES
     return {
-        "can_mark_done": is_active
-        and can_mark_action_plan_execution_done(membership, execution),
+        "can_mark_done": is_active and can_mark_action_plan_execution_done(membership, execution),
         "can_validate": can_validate_action_plan_execution(membership, execution),
         "can_reopen": can_reopen_action_plan_execution(membership, execution),
-        "can_cancel": is_active
-        and can_cancel_action_plan_execution(membership, execution),
+        "can_cancel": is_active and can_cancel_action_plan_execution(membership, execution),
         "is_pilot_pole_assignee": is_pilot_pole_assignee(membership, execution),
     }
 

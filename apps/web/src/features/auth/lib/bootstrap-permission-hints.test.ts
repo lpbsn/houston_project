@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canAccessManagementSpace,
-  canCreateActionFromBootstrapHints,
+  canCreateActionPlanFromBootstrapHints,
+  canCreateCatalogActionPlanFromBootstrapHints,
   canInviteFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   getBootstrapPermissionHints,
@@ -32,8 +33,8 @@ describe('bootstrap-permission-hints', () => {
   it('returns safe defaults when bootstrap is missing', () => {
     expect(getBootstrapPermissionHints(null)).toEqual({
       chat_available: false,
-      can_create_action: false,
-      can_create_checklist_template: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
       can_invite: false,
       can_manage_runtime_config: false,
     })
@@ -43,7 +44,8 @@ describe('bootstrap-permission-hints', () => {
     expect(
       isChatNavAvailable({
         chat_available: true,
-        can_create_action: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
         can_invite: false,
         can_manage_runtime_config: false,
       }),
@@ -54,7 +56,8 @@ describe('bootstrap-permission-hints', () => {
   it('drives invite affordances from can_invite', () => {
     const hints = bootstrap({
       chat_available: false,
-      can_create_action: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
       can_invite: true,
       can_manage_runtime_config: false,
     }).permission_hints
@@ -66,7 +69,8 @@ describe('bootstrap-permission-hints', () => {
   it('drives runtime config gating from can_manage_runtime_config', () => {
     const hints = bootstrap({
       chat_available: false,
-      can_create_action: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
       can_invite: false,
       can_manage_runtime_config: true,
     }).permission_hints
@@ -79,7 +83,8 @@ describe('bootstrap-permission-hints', () => {
     expect(
       canAccessManagementSpace({
         chat_available: false,
-        can_create_action: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
         can_invite: true,
         can_manage_runtime_config: false,
       }),
@@ -87,7 +92,8 @@ describe('bootstrap-permission-hints', () => {
     expect(
       canAccessManagementSpace({
         chat_available: false,
-        can_create_action: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: false,
         can_invite: false,
         can_manage_runtime_config: true,
       }),
@@ -95,15 +101,31 @@ describe('bootstrap-permission-hints', () => {
     expect(canAccessManagementSpace(getBootstrapPermissionHints(null))).toBe(false)
   })
 
-  it('drives free action create affordances from can_create_action', () => {
+  it('drives execution feed action plan create from can_create_action_plan', () => {
     expect(
-      canCreateActionFromBootstrapHints({
+      canCreateActionPlanFromBootstrapHints({
         chat_available: false,
-        can_create_action: true,
+        can_create_action_plan: true,
+        can_create_catalog_action_plan: false,
         can_invite: false,
         can_manage_runtime_config: false,
       }),
     ).toBe(true)
-    expect(canCreateActionFromBootstrapHints(getBootstrapPermissionHints(null))).toBe(false)
+    expect(canCreateActionPlanFromBootstrapHints(getBootstrapPermissionHints(null))).toBe(false)
+  })
+
+  it('drives catalog action plan nav from can_create_catalog_action_plan', () => {
+    expect(
+      canCreateCatalogActionPlanFromBootstrapHints({
+        chat_available: false,
+        can_create_action_plan: false,
+        can_create_catalog_action_plan: true,
+        can_invite: false,
+        can_manage_runtime_config: false,
+      }),
+    ).toBe(true)
+    expect(canCreateCatalogActionPlanFromBootstrapHints(getBootstrapPermissionHints(null))).toBe(
+      false,
+    )
   })
 })

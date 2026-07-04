@@ -70,9 +70,9 @@ describe('NotificationCenter', () => {
           buildNotificationListResponse({
             items: [
               buildNotificationItem({
-                id: 'notif-action',
-                subject_type: 'action',
-                subject_id: 'action-1',
+                id: 'notif-action-plan',
+                subject_type: 'action_plan_execution',
+                subject_id: 'exec-1',
                 created_at: '2026-06-23T10:00:00.000Z',
               }),
               buildNotificationItem({
@@ -180,9 +180,9 @@ describe('NotificationCenter', () => {
     expect(screen.getByText('Aujourd’hui')).toBeTruthy()
     expect(screen.getAllByText('Hier').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByText('Nouvelle action'))
-    expect(onNavigate).toHaveBeenCalledWith('/actions/action-1')
-    expect(markReadMutate).toHaveBeenCalledWith('notif-action')
+    fireEvent.click(screen.getByText('Nouveau plan d’action'))
+    expect(onNavigate).toHaveBeenCalledWith('/action-plans/executions/exec-1')
+    expect(markReadMutate).toHaveBeenCalledWith('notif-action-plan')
     expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull()
   })
 
