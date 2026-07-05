@@ -1,8 +1,8 @@
 # Realtime Domain
 
 Status: authoritative
-Last reviewed: 2026-06-22
-Implementation status: operational WebSocket invalidation implemented for Signal, Action, Checklist (templates / assignments / executions), Comment, Notification (membership-scoped), and async observation-pipeline downstream invalidation ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`.
+Last reviewed: 2026-07-05
+Implementation status: operational WebSocket invalidation implemented for Signal, Action Plan (catalog / executions / tasks / assignees), Comment, Notification (membership-scoped), and async observation-pipeline downstream invalidation ; access/session handlers implemented ; Chat V1 remains a separate WS contract under `houston/chat/`. Legacy Action/Checklist invalidation removed in Lot 10.
 
 ## 1. Purpose
 
@@ -10,14 +10,14 @@ Realtime owns Houston's live transport boundary for keeping authorized operation
 
 - It owns authenticated connection scope, subscription authorization, minimal message shape, and invalidation/refetch guidance.
 - It is a transport and invalidation layer, not Event, not Notification, not Feed, and not authoritative business state.
-- It does not own Signal, Action, Checklist, Comment, Notification, Chat, or Feed lifecycle.
+- It does not own Signal, Action Plan, Comment, Notification, Chat, or Feed lifecycle.
 
 ## 2. MVP Scope
 
 - Backend-capable realtime foundation through Django Channels configuration and the `houston.realtime` app.
 - Authenticated connection boundary with backend-owned subscription authorization before any establishment, user, or detail scope is joined.
 - Minimal non-sensitive invalidation messages only.
-- Establishment-scoped operational invalidation for Signal feed/detail, Action execution-feed/detail, and Checklist templates / assignments / execution detail / execution feed.
+- Establishment-scoped operational invalidation for Signal feed/detail, Action Plan catalog/execution surfaces, and execution feed.
 - Access/session messages for logout, establishment switch, and membership changes affecting bootstrap or workspace.
 - Comment invalidation implemented ; Notification invalidation implemented (membership-scoped broadcast).
 - Frontend query invalidation and REST refetch through TanStack Query after relevant realtime messages.
@@ -27,7 +27,7 @@ Current code truth:
 
 - Channels is installed and channel-layer configuration exists.
 - `houston/realtime` provides operational WS consumer, ws-ticket REST, broadcast after commit, and access events.
-- Operational invalidation is emitted from domain services (Signal lifecycle, Action lifecycle, Checklist sync writers, Comment sync writers, Notification lifecycle writers) and async downstream paths (observation pipeline → `signal.created` / `signal.updated` ; checklist materialization → `execution.created`).
+- Operational invalidation is emitted from domain services (Signal lifecycle, Action Plan lifecycle, Comment sync writers, Notification lifecycle writers) and async downstream paths (observation pipeline → `signal.created` / `signal.updated`).
 - Chat V1 WebSocket is implemented under `houston/chat/` — see Chat V1 section below.
 - Operational REST ws-ticket: `POST /api/v1/establishments/{establishment_id}/realtime/ws-ticket/` (see `apps/api/schema.yml`).
 - Operational WS path: `/ws/v1/establishments/{establishment_id}/realtime/`.
@@ -69,11 +69,6 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 |---|---|---|---|---|
 | `signal` | `signal.updated` | signal id | yes — sync lifecycle (pin, urgency, cancel, resolve, …) | signal feed, signal detail |
 | `signal` | `signal.created` | signal id | yes — observation async pipeline | signal feed, signal detail |
-| `action` | `action.created` | action id | yes | action execution-feed, action detail, signal queries |
-| `action` | `action.updated` | action id | yes | same as `action.created` |
-| `checklist` | `checklist.updated` | checklist template id | yes — sync template / assignment writers | templates, template detail, assignments, execution-detail prefix, execution feed |
-| `execution` | `execution.created` | checklist execution id | yes — sync execution creation and async/read-path materialization | execution detail, checklist mutation surfaces, execution feed |
-| `execution` | `execution.updated` | checklist execution id | yes — cancel, task done/skip, observation-from-task handoff | same as `execution.created` |
 | `action_plan` | `action_plan.created` | action plan id | yes — catalog create, one-shot create | action-plans catalog, detail |
 | `action_plan` | `action_plan.updated` | action plan id | yes — catalog patch, activate/deactivate | action-plans catalog, detail |
 | `action_plan_execution` | `action_plan_execution.created` | action plan execution id | yes — create, catalog use, schedule materialization | action-plan-execution-feed, execution-detail, signals |

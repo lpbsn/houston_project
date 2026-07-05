@@ -9,7 +9,6 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("actions", "0004_remove_legacy_operational_taxonomy_fks"),
         ("establishments", "0019_drop_orphan_legacy_taxonomy_tables"),
         ("signals", "0005_signal_issue_focus"),
     ]
@@ -27,16 +26,6 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 ("body", models.TextField(max_length=2000)),
-                (
-                    "action",
-                    models.ForeignKey(
-                        blank=True,
-                        null=True,
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="comments",
-                        to="actions.action",
-                    ),
-                ),
                 (
                     "author_membership",
                     models.ForeignKey(
@@ -104,20 +93,11 @@ class Migration(migrations.Migration):
                 name="comments_co_establi_f00df7_idx",
             ),
         ),
-        migrations.AddIndex(
-            model_name="comment",
-            index=models.Index(
-                fields=["establishment", "action", "created_at", "id"],
-                name="comments_co_establi_8fd39c_idx",
-            ),
-        ),
         migrations.AddConstraint(
             model_name="comment",
             constraint=models.CheckConstraint(
                 condition=models.Q(
-                    models.Q(("action__isnull", True), ("signal__isnull", False)),
-                    models.Q(("action__isnull", False), ("signal__isnull", True)),
-                    _connector="OR",
+                    ("signal__isnull", False),
                 ),
                 name="comment_exactly_one_parent",
             ),

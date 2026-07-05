@@ -13,10 +13,9 @@ from houston.core.operational_test_data_cleanup import (
 class Command(BaseCommand):
     help = (
         "Local/dev only: delete operational test data (comments, notifications, "
-        "observations, action plans, legacy actions, signals, legacy checklists) "
-        "while preserving users, establishments, memberships, business units, and "
-        "catalog infra (Catalog*). ActionPlan and ChecklistTemplate templates are "
-        "removed. Requires --confirm unless --dry-run."
+        "observations, action plans, signals) while preserving users, establishments, "
+        "memberships, business units, and catalog infra (Catalog*). ActionPlan "
+        "templates are removed. Requires --confirm unless --dry-run."
     )
 
     def add_arguments(self, parser):
@@ -56,7 +55,7 @@ class Command(BaseCommand):
             "Preserved: users, establishments, memberships, business_units, "
             "catalog_infra (Catalog*), chat, ai_usage_logs"
         )
-        self.stdout.write("Deleted includes: ActionPlan templates, ChecklistTemplate templates")
+        self.stdout.write("Deleted includes: ActionPlan templates")
 
         if result.dry_run:
             self.stdout.write(self.style.SUCCESS("Dry run complete. No database changes applied."))
@@ -82,13 +81,6 @@ def _iter_count_lines(counts: OperationalCleanupCounts):
         ("action_plan_schedules", counts.action_plan_schedules),
         ("action_plan_tasks", counts.action_plan_tasks),
         ("action_plans", counts.action_plans),
-        ("action_assignees", counts.action_assignees),
-        ("actions", counts.actions),
-        ("checklist_task_executions", counts.checklist_task_executions),
-        ("checklist_executions", counts.checklist_executions),
-        ("checklist_assignments", counts.checklist_assignments),
-        ("checklist_task_templates", counts.checklist_task_templates),
-        ("checklist_templates", counts.checklist_templates),
         ("signals", counts.signals),
         ("temporary_uploads", counts.temporary_uploads),
         ("media_files", counts.media_files),

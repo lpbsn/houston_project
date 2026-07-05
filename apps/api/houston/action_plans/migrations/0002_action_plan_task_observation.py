@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("action_plans", "0001_initial"),
-        ("observations", "0004_observation_checklist_origin"),
+        ("observations", "0003_observationprocessing_attempt_count_and_more"),
     ]
 
     operations = [

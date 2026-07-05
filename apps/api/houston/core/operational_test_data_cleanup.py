@@ -15,14 +15,6 @@ from houston.action_plans.models import (
     ActionPlanScheduleAssignee,
     ActionPlanTask,
 )
-from houston.actions.models import Action, ActionAssignee
-from houston.checklists.models import (
-    ChecklistAssignment,
-    ChecklistExecution,
-    ChecklistTaskExecution,
-    ChecklistTaskTemplate,
-    ChecklistTemplate,
-)
 from houston.comments.models import Comment, CommentMention
 from houston.core.dev_guards import assert_local_dev_environment
 from houston.notifications.models import Notification
@@ -50,13 +42,6 @@ class OperationalCleanupCounts:
     action_plan_schedules: int = 0
     action_plan_tasks: int = 0
     action_plans: int = 0
-    action_assignees: int = 0
-    actions: int = 0
-    checklist_task_executions: int = 0
-    checklist_executions: int = 0
-    checklist_assignments: int = 0
-    checklist_task_templates: int = 0
-    checklist_templates: int = 0
     signals: int = 0
     temporary_uploads: int = 0
     media_files: int = 0
@@ -124,13 +109,6 @@ def _count_dry_run() -> OperationalCleanupCounts:
         action_plan_schedules=ActionPlanSchedule.objects.count(),
         action_plan_tasks=ActionPlanTask.objects.count(),
         action_plans=ActionPlan.objects.count(),
-        action_assignees=ActionAssignee.objects.count(),
-        actions=Action.objects.count(),
-        checklist_task_executions=ChecklistTaskExecution.objects.count(),
-        checklist_executions=ChecklistExecution.objects.count(),
-        checklist_assignments=ChecklistAssignment.objects.count(),
-        checklist_task_templates=ChecklistTaskTemplate.objects.count(),
-        checklist_templates=ChecklistTemplate.objects.count(),
         signals=Signal.objects.count(),
         temporary_uploads=TemporaryUpload.objects.count(),
         media_files=media_file_count,
@@ -180,21 +158,6 @@ def _delete_operational_data() -> tuple[OperationalCleanupCounts, list[str]]:
         action_plan_schedules=_delete_queryset_count(ActionPlanSchedule.objects.all()),
         action_plan_tasks=_delete_queryset_count(ActionPlanTask.objects.all()),
         action_plans=_delete_queryset_count(ActionPlan.objects.all()),
-    )
-
-    counts = replace(
-        counts,
-        action_assignees=_delete_queryset_count(ActionAssignee.objects.all()),
-        actions=_delete_queryset_count(Action.objects.all()),
-    )
-
-    counts = replace(
-        counts,
-        checklist_task_executions=_delete_queryset_count(ChecklistTaskExecution.objects.all()),
-        checklist_executions=_delete_queryset_count(ChecklistExecution.objects.all()),
-        checklist_assignments=_delete_queryset_count(ChecklistAssignment.objects.all()),
-        checklist_task_templates=_delete_queryset_count(ChecklistTaskTemplate.objects.all()),
-        checklist_templates=_delete_queryset_count(ChecklistTemplate.objects.all()),
     )
 
     counts = replace(counts, signals=_delete_queryset_count(Signal.objects.all()))

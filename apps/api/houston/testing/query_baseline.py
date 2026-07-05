@@ -16,27 +16,10 @@ SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS = 8
 # Observed delta when increasing feed items from 1 to 3 (flat after Phase E prefetch fix)
 SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS = 0
 
-# GET .../execution-feed/?view_mode=general — owner, empty feed
-# Phase L: 9 queries; Phase G: 8 (has_more without dual count())
-EXECUTION_FEED_EMPTY_MAX_QUERIES = 8
-# GET .../execution-feed/?view_mode=personal — staff, 1 visible checklist execution
-# Phase L: 13 queries; Phase G: 11 (has_more without dual count() + scoped materialization)
-EXECUTION_FEED_ONE_CHECKLIST_MAX_QUERIES = 11
-# GET .../execution-feed/?view_mode=general — owner, 3 active actions (post ACT-01 prefetch fix)
-EXECUTION_FEED_THREE_ACTIONS_MAX_QUERIES = 9
-# GET .../execution-feed/?view_mode=general — owner, 20 visible checklist executions (TS-E1)
-# Measured steady-state: 20 feed-visible checklist executions, all pre-materialized.
-# ~8 fixed feed overhead + 1 batched existing_dates lookup in
-# ensure_visible_executions_materialized (post DB-02b batch; MAT-01 read-path remains).
-# Before batch (2026-06-29): 28 queries (8 + 20 per-assignment SELECTs).
-# After batch (2026-06-29): 9 queries (3 runs local Docker PG, pytest).
-EXECUTION_FEED_TWENTY_CHECKLIST_ASSIGNMENTS_MAX_QUERIES = 9
 # GET .../action-plan-execution-feed/?view_mode=general — owner, empty feed
 ACTION_PLAN_EXECUTION_FEED_EMPTY_MAX_QUERIES = 12
 # GET .../action-plan-execution-feed/?view_mode=general — owner, 1 active execution
 ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 14
-# GET checklist-assignments/ — owner, 12 assignments (CL-02; measured 2026-06-24)
-CHECKLIST_ASSIGNMENT_LIST_TWELVE_ASSIGNMENTS_MAX_QUERIES = 7
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 # Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)

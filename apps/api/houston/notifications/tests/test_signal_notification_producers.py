@@ -4,14 +4,13 @@ from unittest.mock import patch
 
 import pytest
 from django.db import transaction
-from django.utils import timezone
 
-from houston.actions.services import (
-    accept_action,
-    create_action,
-    mark_action_done,
-    validate_action,
+from houston.action_plans.services import (
+    create_action_plan_with_execution,
+    mark_action_plan_execution_done,
+    validate_action_plan_execution,
 )
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.ai.observation_pipeline_schema import PipelineCandidateOutput
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
@@ -388,20 +387,31 @@ def test_auto_resolve_with_actor_none_notifies_pole_members():
     assert taxonomy.maintenance is not None
     assign_business_unit_scope(staff, taxonomy.maintenance)
     signal = _open_signal(owner)
-    action = create_action(
+    _, execution = create_action_plan_with_execution(
         establishment_id=owner.establishment_id,
         created_by=owner,
+        pilot_business_unit_id=taxonomy.maintenance.id,
         title="Sensitive task title",
-        instruction="Sensitive task instruction",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timezone.timedelta(days=1),
-        signal_id=signal.id,
+        source_signal_id=signal.id,
+        requires_validation=True,
+        tasks=[
+            build_task_payload(
+                task="Sensitive task instruction",
+                business_unit=taxonomy.maintenance,
+            )
+        ],
+        assignees=[build_assignee_payload(membership=staff, business_unit=taxonomy.maintenance)],
     )
     Notification.objects.filter(subject_id=signal.id).delete()
 
-    accept_action(action_id=action.id, accepted_by=staff)
-    mark_action_done(action_id=action.id, actor_membership=staff)
-    validate_action(action_id=action.id, actor_membership=owner)
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner,
+    )
+    validate_action_plan_execution(
+        execution_id=pending.id,
+        actor_membership=owner,
+    )
 
     notifications = [
         item

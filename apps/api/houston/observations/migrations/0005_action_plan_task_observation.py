@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ("action_plans", "0002_action_plan_task_observation"),
-        ("observations", "0004_observation_checklist_origin"),
+        ("observations", "0003_observationprocessing_attempt_count_and_more"),
     ]
 
     operations = [
@@ -39,7 +39,6 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ("direct_report", "Direct report"),
-                    ("checklist_task", "Checklist task"),
                     ("action_plan_task", "Action plan task"),
                 ],
                 default="direct_report",

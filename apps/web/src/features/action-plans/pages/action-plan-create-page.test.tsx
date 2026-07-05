@@ -25,7 +25,10 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const { mockAuthState } = vi.hoisted(() => ({
+const { mockAuthState, mockBusinessUnitTree } = vi.hoisted(() => ({
+  mockBusinessUnitTree: {
+    business_units: [{ id: 'bu-1', label: 'Rooftop', key: 'rooftop', unit_type: 'service' }],
+  },
   mockAuthState: {
     bootstrap: {
       active_membership: {
@@ -65,9 +68,7 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('@/features/auth/hooks', () => ({
   useBusinessUnitTreeQuery: () => ({
-    data: {
-      business_units: [{ id: 'bu-1', label: 'Rooftop', key: 'rooftop', unit_type: 'service' }],
-    },
+    data: mockBusinessUnitTree,
     isLoading: false,
     isError: false,
   }),
@@ -189,10 +190,62 @@ describe('ActionPlanCreatePage', () => {
       role: 'manager',
       scopes: [],
     }
+    mockBusinessUnitTree.business_units = [
+      { id: 'bu-1', label: 'Rooftop', key: 'rooftop', unit_type: 'service' },
+    ]
   })
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('submits owner catalog create with multi-pole tasks when pilot pole is not explicitly selected', async () => {
+    mockAuthState.bootstrap.active_membership = {
+      id: 'member-owner',
+      establishment_id: 'est-1',
+      role: 'owner',
+      scopes: [],
+    }
+    mockAuthState.activeMembership = {
+      id: 'member-owner',
+      establishment_id: 'est-1',
+      role: 'owner',
+      scopes: [],
+    }
+    mockBusinessUnitTree.business_units = [
+      { id: 'bu-restaurant', label: 'Restaurant', key: 'restaurant', unit_type: 'service' },
+      { id: 'bu-maintenance', label: 'Maintenance', key: 'maintenance', unit_type: 'service' },
+    ]
+
+    renderPage({ mode: 'catalog' })
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan multi-pôles' } })
+    fireEvent.change(screen.getByLabelText('Tâche'), { target: { value: 'Tâche restaurant' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une tâche' }))
+
+    const taskInputs = screen.getAllByLabelText('Tâche')
+    fireEvent.change(taskInputs[1], { target: { value: 'Tâche maintenance' } })
+
+    const poleSelects = screen.getAllByLabelText('Pôle d’activité de la tâche')
+    fireEvent.change(poleSelects[1], { target: { value: 'bu-maintenance' } })
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Plan multi-pôles',
+          pilot_business_unit_id: 'bu-restaurant',
+          is_reusable: true,
+          assignees: [],
+          tasks: [
+            { task: 'Tâche restaurant', business_unit_id: 'bu-restaurant', position: 1 },
+            { task: 'Tâche maintenance', business_unit_id: 'bu-maintenance', position: 2 },
+          ],
+        }),
+      )
+    })
   })
 
   it('submits catalog create with is_reusable true when save to library is enabled', async () => {

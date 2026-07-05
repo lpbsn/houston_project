@@ -123,9 +123,6 @@ export function ActionPlanCreatePage({
   const canCrossPole = modeConfig.canDefineCrossPoleTasks
 
   const resolvedTasks = useMemo(() => {
-    if (canCrossPole) {
-      return tasks
-    }
     if (!resolvedPilotBusinessUnitId) {
       return tasks
     }
@@ -133,7 +130,7 @@ export function ActionPlanCreatePage({
       ...task,
       businessUnitId: task.businessUnitId || resolvedPilotBusinessUnitId,
     }))
-  }, [canCrossPole, resolvedPilotBusinessUnitId, tasks])
+  }, [resolvedPilotBusinessUnitId, tasks])
 
   const staffDisplayName = bootstrap?.user?.username ?? 'Moi'
 
