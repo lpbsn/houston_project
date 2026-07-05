@@ -8,33 +8,23 @@ import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-tool
 import { Button } from '@/components/ui/button'
 import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { ActionsApiError } from '@/features/actions/api'
-import { useExecutionFeedQuery } from '@/features/actions/hooks'
-import type { ExecutionViewMode } from '@/features/actions/types'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import { useActionPlanExecutionFeedQuery } from '@/features/action-plans/hooks'
+import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
-import { ExecutionActionCard } from '../components/execution-action-card'
-import { ExecutionChecklistCard } from '../components/execution-checklist-card'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
 import { groupActionPlanExecutionsBySection } from '../lib/action-plan-execution-feed-sections'
-import { groupExecutionActionsBySection } from '../lib/execution-action-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
 import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
-import { splitExecutionFeedItems } from '../lib/execution-feed-sections'
 
 type ExecutionFeedPageProps = {
-  onOpenAction?: (actionId: string) => void
-  onOpenChecklist?: (executionId: string) => void
   onOpenActionPlanExecution?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
 }
 
 export function ExecutionFeedPage({
-  onOpenAction,
-  onOpenChecklist,
   onOpenActionPlanExecution,
   onNavigate,
 }: ExecutionFeedPageProps) {
@@ -44,18 +34,11 @@ export function ExecutionFeedPage({
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
   const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode)
-  const legacyFeedQuery = useExecutionFeedQuery(establishmentId, viewMode)
 
   const planItems = planFeedQuery.isSuccess
     ? unwrapActionPlanExecutionFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
     : []
   const planGroups = groupActionPlanExecutionsBySection(planItems)
-
-  const legacyFeedItems = legacyFeedQuery.isSuccess
-    ? legacyFeedQuery.data.pages.flatMap((page) => page.items)
-    : []
-  const { checklistItems, actionItems } = splitExecutionFeedItems(legacyFeedItems)
-  const actionGroups = groupExecutionActionsBySection(actionItems)
 
   const permissionHints = auth.bootstrap
     ? getBootstrapPermissionHints(auth.bootstrap)
@@ -65,17 +48,11 @@ export function ExecutionFeedPage({
     !auth.isBootstrapping &&
     canOpenExecutionCreateMenu(permissionHints)
 
-  const isInitialLoading = planFeedQuery.isLoading && legacyFeedQuery.isLoading
-  const hasAnyContent =
-    planItems.length > 0 || checklistItems.length > 0 || actionItems.length > 0
+  const isInitialLoading = planFeedQuery.isLoading
   const showGlobalEmpty =
-    !hasAnyContent &&
-    planFeedQuery.isSuccess &&
-    legacyFeedQuery.isSuccess &&
-    !planFeedQuery.isLoading &&
-    !legacyFeedQuery.isLoading
-  const hasMore = planFeedQuery.hasNextPage || legacyFeedQuery.hasNextPage
-  const isFetchingMore = planFeedQuery.isFetchingNextPage || legacyFeedQuery.isFetchingNextPage
+    planItems.length === 0 && planFeedQuery.isSuccess && !planFeedQuery.isLoading
+  const hasMore = planFeedQuery.hasNextPage
+  const isFetchingMore = planFeedQuery.isFetchingNextPage
 
   const createAction = canCreate ? (
     <Button
@@ -103,9 +80,6 @@ export function ExecutionFeedPage({
         permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectActionPlan={() => onNavigate?.('/execution/plans/new')}
-        onSelectAction={() => onNavigate?.('/actions/new')}
-        onSelectChecklistCreate={() => onNavigate?.('/checklists/new')}
-        onSelectChecklistUse={() => onNavigate?.('/checklists')}
       />
       <TerrainHubSubheader>
         <TerrainHubViewToolbar trailing={createAction}>
@@ -151,49 +125,6 @@ export function ExecutionFeedPage({
                 ))
               : null}
 
-            {legacyFeedQuery.isError ? (
-              <TerrainErrorState
-                message={resolveApiErrorMessage(
-                  legacyFeedQuery.error,
-                  ActionsApiError,
-                  'Une erreur est survenue.',
-                )}
-                onRetry={() => void legacyFeedQuery.refetch()}
-              />
-            ) : null}
-
-            {legacyFeedQuery.isSuccess ? (
-              <>
-                {checklistItems.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {checklistItems.map((item) => (
-                      <ExecutionChecklistCard
-                        key={`checklist-${item.id}`}
-                        item={item}
-                        onSelect={(id) => onOpenChecklist?.(id)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                {actionGroups.map((group) => (
-                  <section key={group.section}>
-                    <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
-                      {group.label} · {group.items.length}
-                    </TerrainSectionLabel>
-                    <div className="flex flex-col gap-3">
-                      {group.items.map((action) => (
-                        <ExecutionActionCard
-                          key={`action-${action.id}`}
-                          item={action}
-                          onSelect={(id) => onOpenAction?.(id)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </>
-            ) : null}
-
             {showGlobalEmpty ? (
               <TerrainEmptyState
                 className="mx-3 mt-3"
@@ -207,14 +138,7 @@ export function ExecutionFeedPage({
                 <button
                   type="button"
                   className="text-xs font-semibold text-[#1B4FD8] disabled:opacity-60"
-                  onClick={() => {
-                    if (planFeedQuery.hasNextPage) {
-                      void planFeedQuery.fetchNextPage()
-                    }
-                    if (legacyFeedQuery.hasNextPage) {
-                      void legacyFeedQuery.fetchNextPage()
-                    }
-                  }}
+                  onClick={() => void planFeedQuery.fetchNextPage()}
                   disabled={isFetchingMore}
                 >
                   {isFetchingMore ? 'Chargement…' : 'Charger plus'}

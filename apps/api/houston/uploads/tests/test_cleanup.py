@@ -97,9 +97,7 @@ def test_cleanup_expired_uploads_task_failure_logs_safe_context(caplog):
                 cleanup_expired_uploads_task.run()
 
     failure_records = [
-        record
-        for record in caplog.records
-        if record.getMessage() == "upload_cleanup_task_failed"
+        record for record in caplog.records if record.getMessage() == "upload_cleanup_task_failed"
     ]
     assert len(failure_records) == 1
     record = failure_records[0]

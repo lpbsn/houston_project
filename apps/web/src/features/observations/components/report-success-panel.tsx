@@ -19,7 +19,6 @@ type ReportSuccessPanelProps = {
   processingErrorMessage: string | null
   showSignalFeedLink: boolean
   onGoToSignalFeed?: () => void
-  onReturnToChecklist?: () => void
   onNewObservation: () => void
 }
 
@@ -33,7 +32,6 @@ export function ReportSuccessPanel({
   processingErrorMessage,
   showSignalFeedLink,
   onGoToSignalFeed,
-  onReturnToChecklist,
   onNewObservation,
 }: ReportSuccessPanelProps) {
   return (
@@ -61,21 +59,11 @@ export function ReportSuccessPanel({
         <p className="mt-2 text-sm text-[#9a3b2e]">{processingErrorMessage}</p>
       ) : null}
       <p className={cn('mt-1 text-xs', terrain.muted)}>Référence : {observationId}</p>
-      {onReturnToChecklist ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-4 h-11 w-full rounded-2xl border-[#E8E6DF]"
-          onClick={onReturnToChecklist}
-        >
-          Retour à la checklist
-        </Button>
-      ) : null}
       {showSignalFeedLink && onGoToSignalFeed ? (
         <Button
           type="button"
           variant="outline"
-          className={cn('h-11 w-full rounded-2xl border-[#E8E6DF]', onReturnToChecklist ? 'mt-3' : 'mt-4')}
+          className="mt-4 h-11 w-full rounded-2xl border-[#E8E6DF]"
           onClick={onGoToSignalFeed}
         >
           Voir les signaux

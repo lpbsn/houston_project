@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import patch
 
 import pytest
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.ai.observation_pipeline_schema import (
@@ -258,30 +260,39 @@ def test_multiple_legacy_signals_same_taxonomy_creates_new():
     membership = build_membership()
     bar = _setup_bar_taxonomy(membership.establishment)
     subject = bar.activity_subjects.get()
-    _legacy_signal(
+    legacy_a = _legacy_signal(
         establishment=membership.establishment,
         bar=bar,
         subject=subject,
         title="Legacy signal A",
     )
-    _legacy_signal(
-        establishment=membership.establishment,
-        bar=bar,
-        subject=subject,
-        title="Legacy signal B",
-    )
-    observation = create_observation(membership=membership)
+    with transaction.atomic():
+        with pytest.raises(IntegrityError):
+            _legacy_signal(
+                establishment=membership.establishment,
+                bar=bar,
+                subject=subject,
+                title="Legacy signal B",
+            )
 
-    outcome = apply_pipeline_output(
-        observation=observation,
-        output=ObservationPipelineOutput(
-            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[_mojito_candidate()],
-        ),
-    ).outcome
+    observation = create_observation(membership=membership)
+    with patch(
+        "houston.signals.services.find_active_legacy_signal_for_aggregation",
+        return_value=None,
+    ):
+        outcome = apply_pipeline_output(
+            observation=observation,
+            output=ObservationPipelineOutput(
+                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                candidates=[_mojito_candidate()],
+            ),
+        ).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
-    assert Signal.objects.filter(establishment=membership.establishment).count() == 3
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 2
+    row = CandidateSignal.objects.get(observation=observation)
+    assert row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+    assert row.result_signal_id != legacy_a.id
 
 
 def test_legacy_enriched_then_different_focus_creates_new():

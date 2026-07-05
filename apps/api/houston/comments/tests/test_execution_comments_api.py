@@ -4,10 +4,6 @@ import pytest
 
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.actions.tests.conftest import (
-    assign_business_unit_scope,
-    build_api_membership_on_establishment,
-)
 from houston.comments.constants import (
     CANNOT_REPLY_TO_SIGNAL_COMMENT_FROM_EXECUTION_ERROR_DETAIL,
     NOT_EXECUTION_ROOT_COMMENT_ERROR_DETAIL,
@@ -26,6 +22,10 @@ from houston.comments.tests.conftest import (
 )
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
+from houston.testing.auth import (
+    assign_business_unit_scope,
+    build_api_membership_on_establishment,
+)
 from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
 
 pytestmark = pytest.mark.django_db

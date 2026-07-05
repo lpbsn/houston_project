@@ -1,6 +1,6 @@
 import { Pin } from 'lucide-react'
 
-import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
+import { getDisplayNameInitials } from '@/lib/display-names'
 import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { terrainFeedCardBaseClassName, terrainFeedInteractiveCardClassName } from '@/lib/terrain-styles'
 

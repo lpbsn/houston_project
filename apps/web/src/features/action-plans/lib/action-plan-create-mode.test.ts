@@ -8,7 +8,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       resolveActionPlanCreateModeConfig({
         mode: 'catalog',
         role: 'manager',
-        canCreateAction: true,
+        canCreateActionPlan: true,
       }),
     ).toEqual({
       canAccess: true,
@@ -28,7 +28,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       resolveActionPlanCreateModeConfig({
         mode: 'catalog',
         role: 'staff',
-        canCreateAction: true,
+        canCreateActionPlan: true,
       }).canAccess,
     ).toBe(false)
   })
@@ -38,7 +38,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       resolveActionPlanCreateModeConfig({
         mode: 'execution',
         role: 'manager',
-        canCreateAction: true,
+        canCreateActionPlan: true,
       }),
     ).toMatchObject({
       canAccess: true,
@@ -55,7 +55,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       resolveActionPlanCreateModeConfig({
         mode: 'execution',
         role: 'staff',
-        canCreateAction: true,
+        canCreateActionPlan: true,
         membershipId: 'member-1',
       }),
     ).toEqual({
@@ -71,12 +71,12 @@ describe('resolveActionPlanCreateModeConfig', () => {
     })
   })
 
-  it('denies execution access when can_create_action is false', () => {
+  it('denies execution access when can_create_action_plan is false', () => {
     expect(
       resolveActionPlanCreateModeConfig({
         mode: 'execution',
         role: 'manager',
-        canCreateAction: false,
+        canCreateActionPlan: false,
       }).canAccess,
     ).toBe(false)
   })
@@ -86,7 +86,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       resolveActionPlanCreateModeConfig({
         mode: 'signal-linked',
         role: 'manager',
-        canCreateAction: true,
+        canCreateActionPlan: true,
       }),
     ).toMatchObject({
       canAccess: true,
@@ -103,17 +103,17 @@ describe('resolveActionPlanCreateModeConfig', () => {
       resolveActionPlanCreateModeConfig({
         mode: 'signal-linked',
         role: 'staff',
-        canCreateAction: true,
+        canCreateActionPlan: true,
       }).canAccess,
     ).toBe(false)
   })
 
-  it('denies signal-linked access when can_create_action is false', () => {
+  it('denies signal-linked access when can_create_action_plan is false', () => {
     expect(
       resolveActionPlanCreateModeConfig({
         mode: 'signal-linked',
         role: 'manager',
-        canCreateAction: false,
+        canCreateActionPlan: false,
       }).canAccess,
     ).toBe(false)
   })

@@ -7,10 +7,8 @@ import pytest
 from django.db import close_old_connections
 from django.utils import timezone
 
-from houston.actions.services import create_action
-from houston.actions.tests.conftest import build_api_membership_on_establishment
-from houston.checklists.constants import EXECUTION_SOURCE_TEMPLATE
-from houston.checklists.models import ChecklistExecution, ChecklistTemplate
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.comments.services import create_signal_comment
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.constants import (
@@ -26,57 +24,62 @@ from houston.notifications.services import (
     mark_all_notifications_read,
     mark_notification_read,
 )
-from houston.testing.auth import build_api_membership
+from houston.testing.auth import (
+    assign_business_unit_scope,
+    build_api_membership,
+    build_api_membership_on_establishment,
+)
 from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
 
 pytestmark = pytest.mark.django_db
 
 
-def _open_action(*, owner, staff, maintenance):
-    return create_action(
+def _open_execution(*, owner, staff, maintenance):
+    assign_business_unit_scope(staff, maintenance)
+    _, execution = create_action_plan_with_execution(
         establishment_id=owner.establishment_id,
         created_by=owner,
+        pilot_business_unit_id=maintenance.id,
         title="Do not leak this title",
-        instruction="Do not leak this instruction",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timezone.timedelta(days=1),
-        responsible_business_unit_id=maintenance.id,
+        tasks=[build_task_payload(task="Inspect", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
     )
+    return execution
 
 
-def test_create_notification_for_action_assignee():
+def test_create_notification_for_action_plan_execution_assignee():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    _, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
 
     notification = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
     )
 
     assert notification is not None
-    assert notification.title == "Nouvelle action"
+    assert notification.title == "Nouveau plan d'action"
     assert "Do not leak" not in notification.body
-    assert action.title not in notification.body
+    assert execution.title not in notification.body
 
 
 def test_actor_exclusion_skips_self_notification():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=owner, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=owner, maintenance=maintenance)
 
     notification = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=owner,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
     )
@@ -90,14 +93,14 @@ def test_create_notification_skips_when_notifications_disabled():
     staff.notifications_enabled = False
     staff.save(update_fields=["notifications_enabled", "updated_at"])
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
 
     notification = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
     )
@@ -110,15 +113,15 @@ def test_actor_from_other_establishment_raises():
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     outsider = build_api_membership()
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
 
     with pytest.raises(NotificationValidationError, match="Invalid actor membership."):
         create_in_app_notification(
             establishment_id=owner.establishment_id,
             recipient_membership=staff,
-            event_key=Notification.EventKey.ACTION_CREATED,
-            subject_type=Notification.SubjectType.ACTION,
-            subject_id=action.id,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id=execution.id,
             priority=Notification.Priority.ACTION_REQUIRED,
             actor_membership=outsider,
         )
@@ -129,11 +132,11 @@ def test_concurrent_create_same_dedupe_only_one_notification():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
     dedupe_key = build_default_dedupe_key(
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
     )
     Notification.objects.filter(
         recipient_membership_id=staff.id,
@@ -146,9 +149,9 @@ def test_concurrent_create_same_dedupe_only_one_notification():
             return create_in_app_notification(
                 establishment_id=owner.establishment_id,
                 recipient_membership=staff,
-                event_key=Notification.EventKey.ACTION_CREATED,
-                subject_type=Notification.SubjectType.ACTION,
-                subject_id=action.id,
+                event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+                subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+                subject_id=execution.id,
                 priority=Notification.Priority.ACTION_REQUIRED,
                 actor_membership=owner,
                 dedupe_key=dedupe_key,
@@ -176,23 +179,23 @@ def test_default_dedupe_key_prevents_duplicate_within_window():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
 
     first = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
     )
     second = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
     )
@@ -200,9 +203,9 @@ def test_default_dedupe_key_prevents_duplicate_within_window():
     assert first is not None
     assert second is None
     assert first.dedupe_key == build_default_dedupe_key(
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
     )
 
 
@@ -210,15 +213,15 @@ def test_explicit_dedupe_key_override_dedupes_independently():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
     override = "custom:dedupe:key"
 
     first = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
         dedupe_key=override,
@@ -226,9 +229,9 @@ def test_explicit_dedupe_key_override_dedupes_independently():
     second = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
-        event_key=Notification.EventKey.ACTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.ACTION_REQUIRED,
         actor_membership=owner,
         dedupe_key=override,
@@ -243,7 +246,7 @@ def test_different_explicit_dedupe_keys_create_two_notifications():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    action = _open_action(owner=owner, staff=staff, maintenance=maintenance)
+    execution = _open_execution(owner=owner, staff=staff, maintenance=maintenance)
     comment_id_a = uuid.uuid4()
     comment_id_b = uuid.uuid4()
 
@@ -251,8 +254,8 @@ def test_different_explicit_dedupe_keys_create_two_notifications():
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
         event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.INFO,
         dedupe_key=build_mention_dedupe_key(
             comment_id=comment_id_a,
@@ -264,8 +267,8 @@ def test_different_explicit_dedupe_keys_create_two_notifications():
         establishment_id=owner.establishment_id,
         recipient_membership=staff,
         event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
-        subject_type=Notification.SubjectType.ACTION,
-        subject_id=action.id,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
         priority=Notification.Priority.INFO,
         dedupe_key=build_mention_dedupe_key(
             comment_id=comment_id_b,
@@ -284,7 +287,7 @@ def test_unsupported_subject_type_skips_creation():
     notification = create_in_app_notification(
         establishment_id=owner.establishment_id,
         recipient_membership=owner,
-        event_key=Notification.EventKey.ACTION_CREATED,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
         subject_type="unsupported",
         subject_id=uuid.uuid4(),
         priority=Notification.Priority.INFO,
@@ -292,44 +295,6 @@ def test_unsupported_subject_type_skips_creation():
     )
 
     assert notification is None
-
-
-def test_checklist_execution_subject_recheck():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    now = timezone.now()
-    template = ChecklistTemplate.objects.create(
-        establishment=owner.establishment,
-        created_by=owner,
-        business_unit=maintenance,
-        title="Secret checklist title",
-        status=ChecklistTemplate.Status.ACTIVE,
-    )
-    execution = ChecklistExecution.objects.create(
-        checklist_template=template,
-        establishment=owner.establishment,
-        assigned_to=staff,
-        assigned_by=owner,
-        business_unit=maintenance,
-        template_title=template.title,
-        status=ChecklistExecution.Status.ASSIGNED,
-        execution_source=EXECUTION_SOURCE_TEMPLATE,
-        last_activity_at=now,
-    )
-
-    notification = create_in_app_notification(
-        establishment_id=owner.establishment_id,
-        recipient_membership=staff,
-        event_key=Notification.EventKey.CHECKLIST_EXECUTION_CREATED,
-        subject_type=Notification.SubjectType.CHECKLIST_EXECUTION,
-        subject_id=execution.id,
-        priority=Notification.Priority.ACTION_REQUIRED,
-    )
-
-    assert notification is not None
-    assert "Secret checklist title" not in notification.title
-    assert "Secret checklist title" not in notification.body
 
 
 def test_comment_mention_subject_recheck_uses_parent_visibility():
@@ -420,11 +385,17 @@ def test_mark_all_read_scoped_to_recipient():
         establishment_id=owner.establishment_id,
     )
     assert updated == 2
-    assert Notification.objects.filter(
-        recipient_membership=owner,
-        status=Notification.Status.UNREAD,
-    ).count() == 0
-    assert Notification.objects.filter(
-        recipient_membership=other,
-        status=Notification.Status.UNREAD,
-    ).count() == 1
+    assert (
+        Notification.objects.filter(
+            recipient_membership=owner,
+            status=Notification.Status.UNREAD,
+        ).count()
+        == 0
+    )
+    assert (
+        Notification.objects.filter(
+            recipient_membership=other,
+            status=Notification.Status.UNREAD,
+        ).count()
+        == 1
+    )

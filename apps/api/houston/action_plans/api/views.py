@@ -966,9 +966,7 @@ class ActionPlanScheduleDetailView(EstablishmentScopedActionPlanMixin, APIView):
                 end_at=data.get("end_at"),
                 recurrence_days=data.get("recurrence_days"),
                 assignees=(
-                    _schedule_assignee_payloads(data["assignees"])
-                    if "assignees" in data
-                    else None
+                    _schedule_assignee_payloads(data["assignees"]) if "assignees" in data else None
                 ),
                 use_shared_chronology=data.get("use_shared_chronology"),
             )

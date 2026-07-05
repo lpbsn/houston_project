@@ -6,7 +6,7 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -146,7 +146,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
   return (
     <div className="space-y-3 px-3 pb-6 pt-2">
-      {feedback ? <ChecklistFeedback variant={feedback.variant} message={feedback.message} /> : null}
+      {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
 
       <TerrainCard className="space-y-3">
         <div className="flex items-center justify-between gap-2">

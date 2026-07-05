@@ -44,9 +44,7 @@ def test_priority_catalog_csv_rows_have_scope_descriptions():
         assert len(description) >= MIN_PRIORITY_DESCRIPTION_LENGTH, key
         if key == "maintenance":
             assert (
-                "Exclut" in description
-                or "exclut" in description
-                or "pas un simple" in description
+                "Exclut" in description or "exclut" in description or "pas un simple" in description
             ), key
 
     ambiguous_routing_keys = {

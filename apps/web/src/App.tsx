@@ -3,8 +3,6 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 import { getAppRouteKey, useAppRoute } from '@/app/app-routes'
 import {
-  LazyActionCreatePage,
-  LazyActionDetailPage,
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
   LazyActionPlanHubPage,
@@ -12,10 +10,6 @@ import {
   LazyChatConversationPage,
   LazyChatPage,
   LazyChatRealtimeProvider,
-  LazyChecklistExecutionDetailPage,
-  LazyChecklistHubPage,
-  LazyChecklistTemplateCreatePage,
-  LazyChecklistTemplateDetailPage,
   LazyExecutionFeedPage,
   LazyProfilePage,
   LazyProfileSwitchEstablishmentPage,
@@ -270,26 +264,6 @@ function App() {
       )
     }
 
-    if (route.kind === 'action-create') {
-      return <LazyActionCreatePage mode="free" onNavigate={navigate} />
-    }
-
-    if (route.kind === 'action-detail') {
-      return <LazyActionDetailPage actionId={route.actionId} onNavigate={navigate} />
-    }
-
-    if (route.kind === 'checklist-template-create') {
-      return <LazyChecklistTemplateCreatePage />
-    }
-
-    if (route.kind === 'checklist-template-detail') {
-      return <LazyChecklistTemplateDetailPage templateId={route.templateId} />
-    }
-
-    if (route.kind === 'checklist-execution-detail') {
-      return <LazyChecklistExecutionDetailPage executionId={route.executionId} />
-    }
-
     if (route.kind === 'action-plan-create') {
       return <LazyActionPlanCreatePage mode="catalog" backPath="/action-plans" />
     }
@@ -333,8 +307,6 @@ function App() {
     if (route.path === '/execution') {
       return (
         <LazyExecutionFeedPage
-          onOpenAction={(id) => navigate(`/actions/${id}`)}
-          onOpenChecklist={(id) => navigate(`/checklists/executions/${id}`)}
           onOpenActionPlanExecution={(id) => navigate(`/action-plans/executions/${id}`)}
           onNavigate={navigate}
         />
@@ -367,10 +339,6 @@ function App() {
 
     if (route.path === '/team/invite') {
       return <TeamInvitePage />
-    }
-
-    if (route.path === '/checklists') {
-      return <LazyChecklistHubPage onNavigate={navigate} />
     }
 
     if (route.path === '/action-plans') {

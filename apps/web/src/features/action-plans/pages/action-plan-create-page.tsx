@@ -12,11 +12,11 @@ import {
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ActionLinkedSignalCard } from '@/features/actions/components/action-linked-signal-card'
-import { ActionLinkedSignalStrip } from '@/features/actions/components/action-linked-signal-strip'
+import { ActionLinkedSignalCard } from '@/features/action-plans/components/action-linked-signal-card'
+import { ActionLinkedSignalStrip } from '@/features/action-plans/components/action-linked-signal-strip'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
-import { ChecklistFeedback } from '@/features/checklists/components/checklist-feedback'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { SignalsApiError } from '@/features/signals/api'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { useSignalDetailQuery } from '@/features/signals/hooks'
@@ -62,7 +62,7 @@ export function ActionPlanCreatePage({
   const role = activeMembership?.role ?? null
   const membershipId = activeMembership?.id
   const permissionHints = getBootstrapPermissionHints(bootstrap)
-  const canCreateAction = permissionHints.can_create_action === true
+  const canCreateActionPlan = permissionHints.can_create_action_plan === true
   const isSignalLinked = mode === 'signal-linked'
 
   const modeConfig = useMemo(
@@ -70,10 +70,10 @@ export function ActionPlanCreatePage({
       resolveActionPlanCreateModeConfig({
         mode,
         role,
-        canCreateAction,
+        canCreateActionPlan,
         membershipId,
       }),
-    [mode, role, canCreateAction, membershipId],
+    [mode, role, canCreateActionPlan, membershipId],
   )
 
   const signalDetailQuery = useSignalDetailQuery(
@@ -395,7 +395,7 @@ export function ActionPlanCreatePage({
           </TerrainCard>
         ) : null}
 
-        {submitError ? <ChecklistFeedback variant="error" message={submitError} /> : null}
+        {submitError ? <TerrainFeedback variant="error" message={submitError} /> : null}
       </div>
 
       <TerrainStickyFooter>

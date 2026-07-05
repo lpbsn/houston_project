@@ -19,7 +19,7 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
     status: 'open',
     urgency: 'normal',
     permission_hints: {
-      can_create_action: true,
+      can_create_linked_action_plan: true,
     },
     ...overrides,
   }
@@ -40,8 +40,8 @@ const { mockAuthState } = vi.hoisted(() => ({
       },
       permission_hints: {
         chat_available: false,
-        can_create_action: true,
-        can_create_checklist_template: false,
+        can_create_action_plan: true,
+        can_create_catalog_action_plan: false,
         can_invite: false,
         can_manage_runtime_config: false,
       },
@@ -119,11 +119,11 @@ vi.mock('@/features/signals/components/signal-classification-badges', () => ({
   SignalClassificationBadges: () => null,
 }))
 
-vi.mock('@/features/actions/components/action-linked-signal-strip', () => ({
+vi.mock('@/features/action-plans/components/action-linked-signal-strip', () => ({
   ActionLinkedSignalStrip: ({ children }: { children: unknown }) => children,
 }))
 
-vi.mock('@/features/actions/components/action-linked-signal-card', () => ({
+vi.mock('@/features/action-plans/components/action-linked-signal-card', () => ({
   ActionLinkedSignalCard: ({ title }: { title: string }) =>
     createElement('div', { 'data-testid': 'linked-signal-card' }, title),
 }))
@@ -178,8 +178,8 @@ describe('ActionPlanCreatePage', () => {
     }
     mockAuthState.bootstrap.permission_hints = {
       chat_available: false,
-      can_create_action: true,
-      can_create_checklist_template: false,
+      can_create_action_plan: true,
+      can_create_catalog_action_plan: false,
       can_invite: false,
       can_manage_runtime_config: false,
     }
@@ -316,7 +316,7 @@ describe('ActionPlanCreatePage', () => {
       isLoading: false,
       isError: false,
       data: buildSignalDetail({
-        permission_hints: { can_create_action: false },
+        permission_hints: { can_create_linked_action_plan: false },
       }),
       refetch: vi.fn(),
     })

@@ -87,26 +87,26 @@ class ObservationPipelineProvider(Protocol):
     def propose(self, *, input_payload: dict[str, Any]) -> ObservationPipelineProviderResponse: ...
 
 
-def _build_checklist_context(*, observation: Observation) -> dict[str, Any] | None:
-    if observation.origin != Observation.Origin.CHECKLIST_TASK:
+def _build_action_plan_context(*, observation: Observation) -> dict[str, Any] | None:
+    if observation.origin != Observation.Origin.ACTION_PLAN_TASK:
         return None
     if (
-        observation.checklist_execution_id is None
-        or observation.checklist_task_execution_id is None
+        observation.action_plan_execution_id is None
+        or observation.action_plan_execution_task_id is None
     ):
         return None
 
-    execution = observation.checklist_execution
-    task_execution = observation.checklist_task_execution
+    execution = observation.action_plan_execution
+    task_execution = observation.action_plan_execution_task
     business_unit_key = None
-    if execution.business_unit_id is not None:
-        business_unit_key = execution.business_unit.key
+    if execution.pilot_business_unit_id is not None:
+        business_unit_key = execution.pilot_business_unit.key
 
     return {
-        "origin": Observation.Origin.CHECKLIST_TASK,
-        "checklist_execution_id": str(execution.id),
-        "checklist_task_execution_id": str(task_execution.id),
-        "template_title": execution.template_title,
+        "origin": Observation.Origin.ACTION_PLAN_TASK,
+        "action_plan_execution_id": str(execution.id),
+        "action_plan_execution_task_id": str(task_execution.id),
+        "plan_title": execution.title,
         "task": task_execution.task,
         "business_unit_key": business_unit_key,
     }
@@ -115,9 +115,9 @@ def _build_checklist_context(*, observation: Observation) -> dict[str, Any] | No
 def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
     observation = Observation.objects.select_related(
         "establishment",
-        "checklist_execution",
-        "checklist_execution__business_unit",
-        "checklist_task_execution",
+        "action_plan_execution",
+        "action_plan_execution__pilot_business_unit",
+        "action_plan_execution_task",
     ).get(pk=observation.pk)
     establishment = observation.establishment
     establishment_taxonomy = build_establishment_taxonomy_snapshot(
@@ -125,7 +125,7 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
     )
     media_count = observation.media_items.count()
     active_signals_context = _build_active_signals_context(establishment_id=establishment.id)
-    checklist_context = _build_checklist_context(observation=observation)
+    action_plan_context = _build_action_plan_context(observation=observation)
 
     payload: dict[str, Any] = {
         "observation_id": str(observation.id),
@@ -138,8 +138,8 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     }
-    if checklist_context is not None:
-        payload["checklist_context"] = checklist_context
+    if action_plan_context is not None:
+        payload["action_plan_context"] = action_plan_context
     return payload
 
 
@@ -522,8 +522,8 @@ Tu structures des remontées terrain en propositions CandidateSignal pour Housto
 
 CONTEXTE
 - Le message utilisateur est un JSON. Le texte à analyser est dans "validated_text".
-- Si "checklist_context" est présent, l'observation provient d'une tâche checklist :
-  utiliser template_title, task et business_unit_key (si non null)
+- Si "action_plan_context" est présent, l'observation provient d'une tâche de plan d'action :
+  utiliser plan_title, task et business_unit_key (si non null)
   pour affiner le routage ; ne pas répéter validated_text dans les champs de sortie.
 - La taxonomie autorisée est dans "establishment_taxonomy.business_units" avec :
   key, label, unit_type (dedicated ou transversal), description, activity_subjects[].

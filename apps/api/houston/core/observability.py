@@ -234,9 +234,7 @@ def build_temporary_upload_image_type_log_context(
     error_raised_at: str,
 ) -> dict[str, Any]:
     pillow_size = (
-        f"{pillow_image_size[0]}x{pillow_image_size[1]}"
-        if pillow_image_size is not None
-        else None
+        f"{pillow_image_size[0]}x{pillow_image_size[1]}" if pillow_image_size is not None else None
     )
     context: dict[str, Any] = {
         "declared_content_type": declared_content_type,

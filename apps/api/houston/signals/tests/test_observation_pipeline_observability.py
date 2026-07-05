@@ -58,9 +58,7 @@ def test_pipeline_failure_logs_safe_ux_projection(caplog):
             run_observation_pipeline(observation.id, provider=provider)
 
     failure_records = [
-        record
-        for record in caplog.records
-        if record.getMessage() == "observation_pipeline_failed"
+        record for record in caplog.records if record.getMessage() == "observation_pipeline_failed"
     ]
     assert len(failure_records) == 1
     record = failure_records[0]

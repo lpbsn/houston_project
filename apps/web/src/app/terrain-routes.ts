@@ -39,7 +39,6 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/profile/switch-establishment',
   '/team',
   '/team/invite',
-  '/checklists',
   '/action-plans',
 ])
 
@@ -54,11 +53,6 @@ const PROTECTED_STATIC_PATHS = new Set<string>([
 const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'signal-detail',
   'signal-action-create',
-  'action-create',
-  'action-detail',
-  'checklist-template-create',
-  'checklist-template-detail',
-  'checklist-execution-detail',
   'action-plan-create',
   'execution-action-plan-create',
   'action-plan-template-detail',
@@ -66,7 +60,6 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'chat-conversation-detail',
 ])
 
-const CHECKLIST_TERRAIN_PATHS = new Set<string>(['/checklists'])
 const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
 
 const TEAM_TERRAIN_PATHS = new Set<string>(['/team'])
@@ -101,11 +94,6 @@ export function requiresActiveMembership(route: AppRoute): boolean {
   if (
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
-    route.kind === 'action-create' ||
-    route.kind === 'action-detail' ||
-    route.kind === 'checklist-template-create' ||
-    route.kind === 'checklist-template-detail' ||
-    route.kind === 'checklist-execution-detail' ||
     route.kind === 'action-plan-create' ||
     route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
@@ -126,11 +114,6 @@ export function usesTerrainShell(route: AppRoute): boolean {
   if (
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
-    route.kind === 'action-create' ||
-    route.kind === 'action-detail' ||
-    route.kind === 'checklist-template-create' ||
-    route.kind === 'checklist-template-detail' ||
-    route.kind === 'checklist-execution-detail' ||
     route.kind === 'action-plan-create' ||
     route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
@@ -140,9 +123,6 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
-    return true
-  }
-  if (route.kind === 'static' && CHECKLIST_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   if (route.kind === 'static' && ACTION_PLAN_TERRAIN_PATHS.has(route.path)) {
@@ -168,31 +148,11 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'action-detail') {
-    return {
-      topbarVariant: 'detail',
-      title: 'Action',
-      backPath: '/execution',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    }
-  }
-
   if (route.kind === 'signal-action-create') {
     return {
       topbarVariant: 'detail',
       title: "Plan d'action",
       backPath: `/signals/${route.signalId}`,
-      showBottomNav: false,
-      mainScroll: 'auto',
-    }
-  }
-
-  if (route.kind === 'action-create') {
-    return {
-      topbarVariant: 'detail',
-      title: "Plan d'action",
-      backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
     }
@@ -287,49 +247,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'static' && route.path === '/checklists') {
-    return {
-      topbarVariant: 'detail',
-      title: 'Gérer les checklists',
-      backPath: '/profile',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    }
-  }
-
-  if (route.kind === 'checklist-template-create') {
-    return {
-      topbarVariant: 'detail',
-      title: 'Nouvelle liste',
-      backPath: '/checklists',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      hideTopbar: true,
-    }
-  }
-
-  if (route.kind === 'checklist-template-detail') {
-    const backPath = '/checklists'
-    return {
-      topbarVariant: 'detail',
-      title: 'Détail checklist',
-      backPath,
-      showBottomNav: false,
-      mainScroll: 'auto',
-    }
-  }
-
-  if (route.kind === 'checklist-execution-detail') {
-    return {
-      topbarVariant: 'detail',
-      detailTitleLayout: 'belowBack',
-      backPath: '/execution',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      showTopbarBottomBorder: false,
-    }
-  }
-
   if (route.kind === 'static' && route.path === '/action-plans') {
     return {
       topbarVariant: 'detail',
@@ -400,32 +317,12 @@ export function getTerrainContentKey(route: AppRoute): string {
     return `signal-detail-${route.signalId}`
   }
 
-  if (route.kind === 'action-detail') {
-    return `action-detail-${route.actionId}`
-  }
-
   if (route.kind === 'signal-action-create') {
     return `signal-action-create-${route.signalId}`
   }
 
-  if (route.kind === 'action-create') {
-    return 'action-create'
-  }
-
   if (route.kind === 'execution-action-plan-create') {
     return 'execution-action-plan-create'
-  }
-
-  if (route.kind === 'checklist-template-create') {
-    return 'checklist-template-create'
-  }
-
-  if (route.kind === 'checklist-template-detail') {
-    return `checklist-template-detail-${route.templateId}`
-  }
-
-  if (route.kind === 'checklist-execution-detail') {
-    return `checklist-execution-detail-${route.executionId}`
   }
 
   if (route.kind === 'action-plan-create') {
@@ -456,8 +353,6 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'chat'
       case '/profile':
         return 'profile'
-      case '/checklists':
-        return 'checklists-hub'
       case '/action-plans':
         return 'action-plans-hub'
       case '/team':

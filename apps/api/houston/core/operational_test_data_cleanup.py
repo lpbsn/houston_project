@@ -147,8 +147,6 @@ def _delete_operational_data() -> tuple[OperationalCleanupCounts, list[str]]:
     counts = replace(counts, comments=_delete_comments())
 
     Observation.objects.update(
-        checklist_execution_id=None,
-        checklist_task_execution_id=None,
         action_plan_execution_id=None,
         action_plan_execution_task_id=None,
     )

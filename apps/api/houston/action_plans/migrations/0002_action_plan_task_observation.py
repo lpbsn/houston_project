@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('action_plans', '0001_initial'),
-        ('observations', '0004_observation_checklist_origin'),
+        ("action_plans", "0001_initial"),
+        ("observations", "0004_observation_checklist_origin"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='actionplanexecutiontask',
-            name='observation',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='action_plan_execution_tasks', to='observations.observation'),
+            model_name="actionplanexecutiontask",
+            name="observation",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="action_plan_execution_tasks",
+                to="observations.observation",
+            ),
         ),
     ]

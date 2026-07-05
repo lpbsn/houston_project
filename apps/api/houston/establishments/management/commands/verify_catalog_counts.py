@@ -23,10 +23,7 @@ class Command(BaseCommand):
         expected_bu = EXPECTED_CATALOG_BUSINESS_UNIT_COUNT
         expected_as = EXPECTED_CATALOG_ACTIVITY_SUBJECT_COUNT
 
-        if (
-            business_unit_count != expected_bu
-            or activity_subject_count != expected_as
-        ):
+        if business_unit_count != expected_bu or activity_subject_count != expected_as:
             self.stderr.write(
                 "catalog-check FAILED: "
                 f"CatalogBusinessUnit={business_unit_count} (expected {expected_bu}), "

@@ -1,12 +1,8 @@
-import { useState } from 'react'
-
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import type { BootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
 
 import {
-  getChecklistCreateSubmenuOptions,
   getExecutionCreateMenuOptions,
-  type ChecklistCreateSubmenuOptionId,
   type ExecutionCreateMenuOptionId,
 } from '../lib/execution-create-menu'
 
@@ -15,32 +11,17 @@ type ExecutionCreateMenuSheetProps = {
   permissionHints: BootstrapPermissionHints
   onClose: () => void
   onSelectActionPlan: () => void
-  onSelectAction: () => void
-  onSelectChecklistCreate: () => void
-  onSelectChecklistUse: () => void
 }
-
-type MenuView = 'main' | 'checklist'
 
 export function ExecutionCreateMenuSheet({
   open,
   permissionHints,
   onClose,
   onSelectActionPlan,
-  onSelectAction,
-  onSelectChecklistCreate,
-  onSelectChecklistUse,
 }: ExecutionCreateMenuSheetProps) {
-  const [view, setView] = useState<MenuView>('main')
-
-  const options =
-    view === 'main'
-      ? getExecutionCreateMenuOptions(permissionHints)
-      : getChecklistCreateSubmenuOptions(permissionHints)
-  const title = view === 'main' ? 'Créer' : 'Checklist'
+  const options = getExecutionCreateMenuOptions(permissionHints)
 
   function handleClose() {
-    setView('main')
     onClose()
   }
 
@@ -48,43 +29,14 @@ export function ExecutionCreateMenuSheet({
     if (id === 'action_plan') {
       onSelectActionPlan()
       handleClose()
-      return
     }
-
-    if (id === 'action') {
-      onSelectAction()
-      handleClose()
-      return
-    }
-
-    if (id === 'checklist') {
-      setView('checklist')
-    }
-  }
-
-  function handleChecklistSelect(id: ChecklistCreateSubmenuOptionId) {
-    if (id === 'create_registered') {
-      onSelectChecklistCreate()
-    } else {
-      onSelectChecklistUse()
-    }
-    handleClose()
   }
 
   return (
-    <TerrainBottomSheet title={title} open={open} onClose={handleClose}>
-      {view === 'checklist' ? (
-        <button
-          type="button"
-          className="mb-3 text-sm font-medium text-[#1B4FD8]"
-          onClick={() => setView('main')}
-        >
-          Retour
-        </button>
-      ) : null}
+    <TerrainBottomSheet title="Créer" open={open} onClose={handleClose}>
       <ul className="flex flex-col gap-2">
         {options.map((option) => {
-          if ('disabled' in option && option.disabled) {
+          if (option.disabled) {
             return (
               <li key={option.id}>
                 <div
@@ -93,7 +45,7 @@ export function ExecutionCreateMenuSheet({
                   className="flex min-h-11 cursor-not-allowed items-center justify-between rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5 opacity-70"
                 >
                   <span className="text-sm font-medium text-[#1a1a1a]">{option.label}</span>
-                  {'badge' in option && option.badge ? (
+                  {option.badge ? (
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[#7D7B75]">
                       {option.badge}
                     </span>
@@ -108,11 +60,7 @@ export function ExecutionCreateMenuSheet({
               <button
                 type="button"
                 className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5 text-left"
-                onClick={() =>
-                  view === 'main'
-                    ? handleMainSelect(option.id as ExecutionCreateMenuOptionId)
-                    : handleChecklistSelect(option.id as ChecklistCreateSubmenuOptionId)
-                }
+                onClick={() => handleMainSelect(option.id)}
               >
                 <span className="text-sm font-medium text-[#1a1a1a]">{option.label}</span>
               </button>

@@ -56,9 +56,7 @@ class Command(BaseCommand):
             "Preserved: users, establishments, memberships, business_units, "
             "catalog_infra (Catalog*), chat, ai_usage_logs"
         )
-        self.stdout.write(
-            "Deleted includes: ActionPlan templates, ChecklistTemplate templates"
-        )
+        self.stdout.write("Deleted includes: ActionPlan templates, ChecklistTemplate templates")
 
         if result.dry_run:
             self.stdout.write(self.style.SUCCESS("Dry run complete. No database changes applied."))

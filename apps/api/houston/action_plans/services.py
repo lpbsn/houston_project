@@ -115,16 +115,6 @@ def touch_execution_activity(*, execution: ActionPlanExecution, at=None) -> None
     )
 
 
-def _linked_legacy_actions_block_signal_sync(*, signal: Signal) -> bool:
-    from houston.actions.constants import ACTIVE_ACTION_STATUSES
-    from houston.actions.models import Action
-
-    return Action.objects.filter(
-        signal_id=signal.id,
-        status__in=ACTIVE_ACTION_STATUSES,
-    ).exists()
-
-
 def _linked_active_executions_block_signal_sync(*, signal: Signal) -> bool:
     return ActionPlanExecution.objects.filter(
         source_signal_id=signal.id,
@@ -134,9 +124,6 @@ def _linked_active_executions_block_signal_sync(*, signal: Signal) -> bool:
 
 @transaction.atomic
 def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
-    if _linked_legacy_actions_block_signal_sync(signal=signal):
-        return signal
-
     linked = ActionPlanExecution.objects.filter(source_signal_id=signal.id)
     if linked.filter(status__in=ACTIVE_EXECUTION_STATUSES).exists():
         return signal
@@ -434,9 +421,7 @@ def _validate_actor_can_assign_poles(
             business_unit=assignee.business_unit,
             pilot_business_unit=pilot_business_unit,
         ):
-            raise ActionPlanPermissionError(
-                "Not allowed to assign members to this business unit."
-            )
+            raise ActionPlanPermissionError("Not allowed to assign members to this business unit.")
 
 
 def _validate_staff_feed_create_constraints(
@@ -622,18 +607,14 @@ def _validate_active_reusable_has_tasks(
     tasks: list,
 ) -> None:
     if is_reusable and catalog_status == CATALOG_STATUS_ACTIVE and not tasks:
-        raise ActionPlanValidationError(
-            "Action plan must have at least one task to activate."
-        )
+        raise ActionPlanValidationError("Action plan must have at least one task to activate.")
 
 
 def _validate_active_catalog_has_tasks(*, action_plan: ActionPlan) -> None:
     if not action_plan.is_reusable:
         raise ActionPlanValidationError("Only reusable action plans can be activated.")
     if not ActionPlanTask.objects.filter(action_plan=action_plan).exists():
-        raise ActionPlanValidationError(
-            "Action plan must have at least one task to activate."
-        )
+        raise ActionPlanValidationError("Action plan must have at least one task to activate.")
 
 
 @transaction.atomic
@@ -1002,9 +983,7 @@ def mark_action_plan_execution_done(
     execution.last_activity_at = now
     if execution.requires_validation:
         execution.status = EXECUTION_STATUS_PENDING_VALIDATION
-        execution.save(
-            update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"]
-        )
+        execution.save(update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"])
         from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
         from houston.notifications.scheduling import (
             schedule_action_plan_execution_pending_validation_notification,
@@ -1021,9 +1000,7 @@ def mark_action_plan_execution_done(
         return execution
 
     execution.status = EXECUTION_STATUS_DONE
-    execution.save(
-        update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"]
-    )
+    execution.save(update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"])
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
     schedule_action_plan_execution_invalidation(
@@ -1050,9 +1027,7 @@ def validate_action_plan_execution(
     execution.status = EXECUTION_STATUS_DONE
     execution.validated_at = now
     execution.last_activity_at = now
-    execution.save(
-        update_fields=["status", "validated_at", "last_activity_at", "updated_at"]
-    )
+    execution.save(update_fields=["status", "validated_at", "last_activity_at", "updated_at"])
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
 
     schedule_action_plan_execution_invalidation(

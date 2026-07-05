@@ -4,20 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('action_plans', '0003_schedule_materialization_constraints'),
-        ('establishments', '0020_establishmentmembership_notifications_enabled'),
-        ('signals', '0006_signal_unique_active_aggregation_key'),
+        ("action_plans", "0003_schedule_materialization_constraints"),
+        ("establishments", "0020_establishmentmembership_notifications_enabled"),
+        ("signals", "0006_signal_unique_active_aggregation_key"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='actionplanexecution',
-            name='uniq_ap_exec_schedule_occurrence_individual',
+            model_name="actionplanexecution",
+            name="uniq_ap_exec_schedule_occurrence_individual",
         ),
         migrations.AddConstraint(
-            model_name='actionplanexecution',
-            constraint=models.UniqueConstraint(condition=models.Q(('action_plan_schedule__isnull', False), ('schedule_source_membership__isnull', False), ('use_shared_chronology', False)), fields=('action_plan_schedule', 'occurrence_date', 'schedule_source_membership'), name='uniq_ap_exec_schedule_occurrence_individual'),
+            model_name="actionplanexecution",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(
+                    ("action_plan_schedule__isnull", False),
+                    ("schedule_source_membership__isnull", False),
+                    ("use_shared_chronology", False),
+                ),
+                fields=("action_plan_schedule", "occurrence_date", "schedule_source_membership"),
+                name="uniq_ap_exec_schedule_occurrence_individual",
+            ),
         ),
     ]

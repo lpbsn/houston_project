@@ -12,19 +12,6 @@ from houston.notifications.constants import (
 
 class Notification(BaseModel):
     class EventKey(models.TextChoices):
-        ACTION_CREATED = "action.created", "Action created"
-        ACTION_REASSIGNED = "action.reassigned", "Action reassigned"
-        ACTION_PENDING_VALIDATION = "action.pending_validation", "Action pending validation"
-        ACTION_REOPENED = "action.reopened", "Action reopened"
-        ACTION_CANCELED = "action.canceled", "Action canceled"
-        CHECKLIST_EXECUTION_CREATED = (
-            "checklist.execution.created",
-            "Checklist execution created",
-        )
-        CHECKLIST_EXECUTION_CANCELED = (
-            "checklist.execution.canceled",
-            "Checklist execution canceled",
-        )
         ACTION_PLAN_EXECUTION_CREATED = (
             "action_plan.execution.created",
             "Action plan execution created",
@@ -49,8 +36,6 @@ class Notification(BaseModel):
         SIGNAL_CANCELED = "signal.canceled", "Signal canceled"
 
     class SubjectType(models.TextChoices):
-        ACTION = "action", "Action"
-        CHECKLIST_EXECUTION = "checklist_execution", "Checklist execution"
         ACTION_PLAN_EXECUTION = "action_plan_execution", "Action plan execution"
         COMMENT = "comment", "Comment"
         SIGNAL = "signal", "Signal"

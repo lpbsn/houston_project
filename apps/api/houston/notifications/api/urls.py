@@ -25,18 +25,12 @@ urlpatterns = [
         name="notifications-mark-all-read",
     ),
     path(
-        (
-            "establishments/<uuid:establishment_id>/notifications/"
-            "<uuid:notification_id>/mark-read/"
-        ),
+        ("establishments/<uuid:establishment_id>/notifications/<uuid:notification_id>/mark-read/"),
         NotificationMarkReadView.as_view(),
         name="notification-mark-read",
     ),
     path(
-        (
-            "establishments/<uuid:establishment_id>/notifications/"
-            "<uuid:notification_id>/archive/"
-        ),
+        ("establishments/<uuid:establishment_id>/notifications/<uuid:notification_id>/archive/"),
         NotificationArchiveView.as_view(),
         name="notification-archive",
     ),

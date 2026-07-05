@@ -3,15 +3,9 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from houston.action_plans.models import ActionPlanExecution
-from houston.actions.models import Action
 from houston.comments.models import Comment
-from houston.comments.permissions import (
-    serialize_comment_permission_hints,
-    serialize_execution_comment_permission_hints,
-)
+from houston.comments.permissions import serialize_execution_comment_permission_hints
 from houston.comments.selectors import (
-    ActionCommentListEntry,
-    ActionCommentThreadEntry,
     ExecutionCommentListEntry,
     ExecutionCommentThreadEntry,
     InheritedSignalCommentEntry,
@@ -27,9 +21,7 @@ def _membership_display_name(membership) -> str:
 def comment_origin(comment: Comment) -> str:
     if comment.signal_id is not None:
         return "signal"
-    if comment.action_plan_execution_id is not None:
-        return "action_plan_execution"
-    return "action"
+    return "action_plan_execution"
 
 
 def serialize_comment(comment: Comment) -> dict:
@@ -64,48 +56,11 @@ def serialize_resolved_by(comment: Comment) -> dict | None:
     }
 
 
-def serialize_action_comment_thread(
-    *,
-    entry: ActionCommentThreadEntry,
-    membership: EstablishmentMembership,
-    action: Action,
-) -> dict:
-    root = entry.root
-    return {
-        "item_type": "action_thread",
-        **serialize_comment(root),
-        "replies": [serialize_comment(reply) for reply in entry.replies],
-        "is_resolved": root.resolved_at is not None,
-        "resolved_at": root.resolved_at,
-        "resolved_by": serialize_resolved_by(root),
-        "permission_hints": serialize_comment_permission_hints(
-            membership=membership,
-            action=action,
-            comment=root,
-        ),
-    }
-
-
 def serialize_inherited_signal_comment(*, entry: InheritedSignalCommentEntry) -> dict:
     return {
         "item_type": "inherited_signal",
         **serialize_comment(entry.comment),
     }
-
-
-def serialize_action_comment_list_entry(
-    *,
-    entry: ActionCommentListEntry,
-    membership: EstablishmentMembership,
-    action: Action,
-) -> dict:
-    if entry.kind == "inherited_signal":
-        return serialize_inherited_signal_comment(entry=entry)
-    return serialize_action_comment_thread(
-        entry=entry,
-        membership=membership,
-        action=action,
-    )
 
 
 def serialize_execution_comment_thread(
@@ -158,7 +113,7 @@ class CommentMentionSerializer(serializers.Serializer):
 class CommentItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     origin = serializers.ChoiceField(
-        choices=["signal", "action", "action_plan_execution"],
+        choices=["signal", "action_plan_execution"],
     )
     body = serializers.CharField()
     author = CommentAuthorSerializer()
@@ -171,57 +126,23 @@ class CommentPermissionHintsSerializer(serializers.Serializer):
     can_resolve = serializers.BooleanField()
 
 
-class ActionCommentThreadItemSerializer(serializers.Serializer):
-    item_type = serializers.ChoiceField(choices=["action_thread"])
-    id = serializers.UUIDField()
-    origin = serializers.ChoiceField(
-        choices=["signal", "action", "action_plan_execution"],
-    )
-    body = serializers.CharField()
-    author = CommentAuthorSerializer()
-    mentions = CommentMentionSerializer(many=True)
-    created_at = serializers.DateTimeField()
-    replies = CommentItemSerializer(many=True)
-    is_resolved = serializers.BooleanField()
-    resolved_at = serializers.DateTimeField(allow_null=True)
-    resolved_by = CommentAuthorSerializer(allow_null=True)
-    permission_hints = CommentPermissionHintsSerializer()
-
-
 class InheritedSignalCommentItemSerializer(serializers.Serializer):
     item_type = serializers.ChoiceField(choices=["inherited_signal"])
     id = serializers.UUIDField()
     origin = serializers.ChoiceField(
-        choices=["signal", "action", "action_plan_execution"],
+        choices=["signal", "action_plan_execution"],
     )
     body = serializers.CharField()
     author = CommentAuthorSerializer()
     mentions = CommentMentionSerializer(many=True)
     created_at = serializers.DateTimeField()
-
-
-class ActionCommentListItemSerializer(serializers.Serializer):
-    item_type = serializers.ChoiceField(choices=["inherited_signal", "action_thread"])
-    id = serializers.UUIDField()
-    origin = serializers.ChoiceField(
-        choices=["signal", "action", "action_plan_execution"],
-    )
-    body = serializers.CharField()
-    author = CommentAuthorSerializer()
-    mentions = CommentMentionSerializer(many=True)
-    created_at = serializers.DateTimeField()
-    replies = CommentItemSerializer(many=True, required=False)
-    is_resolved = serializers.BooleanField(required=False)
-    resolved_at = serializers.DateTimeField(allow_null=True, required=False)
-    resolved_by = CommentAuthorSerializer(allow_null=True, required=False)
-    permission_hints = CommentPermissionHintsSerializer(required=False)
 
 
 class ExecutionCommentThreadItemSerializer(serializers.Serializer):
     item_type = serializers.ChoiceField(choices=["execution_thread"])
     id = serializers.UUIDField()
     origin = serializers.ChoiceField(
-        choices=["signal", "action", "action_plan_execution"],
+        choices=["signal", "action_plan_execution"],
     )
     body = serializers.CharField()
     author = CommentAuthorSerializer()
@@ -238,7 +159,7 @@ class ExecutionCommentListItemSerializer(serializers.Serializer):
     item_type = serializers.ChoiceField(choices=["inherited_signal", "execution_thread"])
     id = serializers.UUIDField()
     origin = serializers.ChoiceField(
-        choices=["signal", "action", "action_plan_execution"],
+        choices=["signal", "action_plan_execution"],
     )
     body = serializers.CharField()
     author = CommentAuthorSerializer()

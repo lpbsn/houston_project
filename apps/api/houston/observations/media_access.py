@@ -60,14 +60,12 @@ def is_observation_media_preview_authorized(
 ) -> bool:
     if media.observation.establishment_id != establishment_id:
         return False
-    return (
-        SignalSourceObservation.objects.filter(
-            observation_id=media.observation_id,
-            link_type=SignalSourceObservation.LinkType.CREATED_FROM,
-            signal__establishment_id=establishment_id,
-            signal__status__in=FEED_SIGNAL_STATUSES,
-        ).exists()
-    )
+    return SignalSourceObservation.objects.filter(
+        observation_id=media.observation_id,
+        link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+        signal__establishment_id=establishment_id,
+        signal__status__in=FEED_SIGNAL_STATUSES,
+    ).exists()
 
 
 def resolve_observation_media_preview(
@@ -85,11 +83,7 @@ def resolve_observation_media_preview(
     if token_establishment_id != establishment_id or token_media_id != media_id:
         return None
 
-    media = (
-        ObservationMedia.objects.filter(id=media_id)
-        .select_related("observation")
-        .first()
-    )
+    media = ObservationMedia.objects.filter(id=media_id).select_related("observation").first()
     if media is None:
         return None
     if not is_observation_media_preview_authorized(media=media, establishment_id=establishment_id):

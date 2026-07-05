@@ -20,13 +20,6 @@ class Comment(BaseModel):
         null=True,
         blank=True,
     )
-    action = models.ForeignKey(
-        "actions.Action",
-        on_delete=models.CASCADE,
-        related_name="comments",
-        null=True,
-        blank=True,
-    )
     action_plan_execution = models.ForeignKey(
         "action_plans.ActionPlanExecution",
         on_delete=models.CASCADE,
@@ -60,7 +53,6 @@ class Comment(BaseModel):
         ordering = ["created_at", "id"]
         indexes = [
             models.Index(fields=["establishment", "signal", "created_at", "id"]),
-            models.Index(fields=["establishment", "action", "created_at", "id"]),
             models.Index(
                 fields=["establishment", "action_plan_execution", "created_at", "id"],
             ),
@@ -71,17 +63,10 @@ class Comment(BaseModel):
                 condition=(
                     Q(
                         signal__isnull=False,
-                        action__isnull=True,
                         action_plan_execution__isnull=True,
                     )
                     | Q(
                         signal__isnull=True,
-                        action__isnull=False,
-                        action_plan_execution__isnull=True,
-                    )
-                    | Q(
-                        signal__isnull=True,
-                        action__isnull=True,
                         action_plan_execution__isnull=False,
                     )
                 ),

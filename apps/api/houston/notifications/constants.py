@@ -13,13 +13,6 @@ MENTION_DEDUPE_KEY_TEMPLATE = "comment.mention.created:{comment_id}:{mentioned_m
 
 LOT1_EVENT_KEYS: frozenset[str] = frozenset(
     {
-        "action.created",
-        "action.reassigned",
-        "action.pending_validation",
-        "action.reopened",
-        "action.canceled",
-        "checklist.execution.created",
-        "checklist.execution.canceled",
         "action_plan.execution.created",
         "action_plan.execution.pending_validation",
         "action_plan.execution.canceled",
@@ -35,34 +28,6 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
 
 # Generic copy only — never inject subject title, comment body, or observation text.
 NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
-    "action.created": (
-        "Nouvelle action",
-        "Une action vous a été assignée.",
-    ),
-    "action.reassigned": (
-        "Action réassignée",
-        "Une action a été réassignée.",
-    ),
-    "action.pending_validation": (
-        "Action à valider",
-        "Une action attend votre validation.",
-    ),
-    "action.reopened": (
-        "Action rouverte",
-        "Une action a été rouverte.",
-    ),
-    "action.canceled": (
-        "Action annulée",
-        "Une action a été annulée.",
-    ),
-    "checklist.execution.created": (
-        "Checklist assignée",
-        "Une exécution de checklist vous a été assignée.",
-    ),
-    "checklist.execution.canceled": (
-        "Checklist annulée",
-        "Une exécution de checklist a été annulée.",
-    ),
     "action_plan.execution.created": (
         "Nouveau plan d'action",
         "Une exécution de plan d'action vous a été assignée.",
@@ -131,14 +96,6 @@ def build_mention_dedupe_key(
         comment_id=comment_id,
         mentioned_membership_id=mentioned_membership_id,
     )
-
-
-def build_action_reassigned_dedupe_key(
-    *,
-    action_id: uuid.UUID,
-    reassignment_id: uuid.UUID,
-) -> str:
-    return f"action.reassigned:action:{action_id}:{reassignment_id}"
 
 
 def render_notification_copy(

@@ -52,9 +52,7 @@ FORBIDDEN_PAYLOAD_KEYS = frozenset(
 
 
 def _count_notify_calls(mock_notify, *, reason: str) -> int:
-    return sum(
-        1 for call in mock_notify.call_args_list if call.kwargs.get("reason") == reason
-    )
+    return sum(1 for call in mock_notify.call_args_list if call.kwargs.get("reason") == reason)
 
 
 def _assert_invalidate_payload_allowlist(

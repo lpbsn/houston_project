@@ -68,17 +68,11 @@ def notifications_url(establishment_id, query: str = "") -> str:
 
 
 def notification_mark_read_url(establishment_id, notification_id) -> str:
-    return (
-        f"/api/v1/establishments/{establishment_id}/notifications/"
-        f"{notification_id}/mark-read/"
-    )
+    return f"/api/v1/establishments/{establishment_id}/notifications/{notification_id}/mark-read/"
 
 
 def notification_archive_url(establishment_id, notification_id) -> str:
-    return (
-        f"/api/v1/establishments/{establishment_id}/notifications/"
-        f"{notification_id}/archive/"
-    )
+    return f"/api/v1/establishments/{establishment_id}/notifications/{notification_id}/archive/"
 
 
 def notifications_mark_all_read_url(establishment_id) -> str:
@@ -93,12 +87,12 @@ def create_test_notification(
     *,
     recipient: EstablishmentMembership,
     status: str = Notification.Status.UNREAD,
-    event_key: str = Notification.EventKey.ACTION_CREATED,
-    subject_type: str = Notification.SubjectType.ACTION,
+    event_key: str = Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+    subject_type: str = Notification.SubjectType.ACTION_PLAN_EXECUTION,
     subject_id: uuid.UUID | None = None,
     dedupe_key: str = "",
-    title: str = "Nouvelle action",
-    body: str = "Une action vous a été assignée.",
+    title: str = "Nouvelle exécution de plan",
+    body: str = "Une exécution de plan d'action est disponible.",
 ) -> Notification:
     return Notification.objects.create(
         establishment_id=recipient.establishment_id,

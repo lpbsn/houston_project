@@ -277,13 +277,7 @@ def _schedule_execution_canceled_notifications(
     execution_ids: list[uuid.UUID],
     actor_membership_id: uuid.UUID,
 ) -> None:
-    from houston.notifications.scheduling import schedule_checklist_execution_canceled_notification
-
-    for execution_id in execution_ids:
-        schedule_checklist_execution_canceled_notification(
-            execution_id=execution_id,
-            actor_membership_id=actor_membership_id,
-        )
+    return
 
 
 @transaction.atomic
@@ -939,12 +933,6 @@ def create_execution_from_template(
     )
     _create_task_execution_snapshots(execution=execution, template=template)
     _schedule_execution_invalidation(execution=execution, reason="execution.created")
-    from houston.notifications.scheduling import schedule_checklist_execution_created_notification
-
-    schedule_checklist_execution_created_notification(
-        execution_id=execution.id,
-        actor_membership_id=actor.id,
-    )
     return execution
 
 
@@ -1016,12 +1004,6 @@ def cancel_checklist_execution(
         update_fields=["status", "canceled_at", "last_activity_at", "updated_at"],
     )
     _schedule_execution_invalidation(execution=execution, reason="execution.updated")
-    from houston.notifications.scheduling import schedule_checklist_execution_canceled_notification
-
-    schedule_checklist_execution_canceled_notification(
-        execution_id=execution.id,
-        actor_membership_id=actor.id,
-    )
     return execution
 
 

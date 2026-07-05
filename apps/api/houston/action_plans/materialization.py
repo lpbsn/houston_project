@@ -711,12 +711,10 @@ def ensure_visible_action_plan_executions_materialized(
             from_date=local_today,
             until_date=local_today + timedelta(days=read_horizon_days),
         )
-        visible_occurrence_dates_by_schedule[schedule.id] = (
-            _visible_occurrence_dates_for_schedule(
-                schedule=schedule,
-                occurrence_dates=occurrence_dates,
-                resolved_now=now,
-            )
+        visible_occurrence_dates_by_schedule[schedule.id] = _visible_occurrence_dates_for_schedule(
+            schedule=schedule,
+            occurrence_dates=occurrence_dates,
+            resolved_now=now,
         )
 
     existing_dates_by_schedule = _existing_occurrence_dates_for_schedules(

@@ -48,8 +48,7 @@ def _create_execution(
         pilot_business_unit_id=business_unit.id,
         title=title,
         requires_validation=requires_validation,
-        tasks=tasks
-        or [build_task_payload(task=f"{title} task", business_unit=business_unit)],
+        tasks=tasks or [build_task_payload(task=f"{title} task", business_unit=business_unit)],
         assignees=assignees or [],
         visible_from=visible_from,
     )
@@ -65,8 +64,7 @@ def _create_execution(
 def test_action_plan_execution_feed_response_contract(api_client, owner_membership):
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -107,8 +105,7 @@ def test_action_plan_execution_feed_item_contract(
     )
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -147,8 +144,7 @@ def test_terminal_executions_excluded_from_feed(
     )
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -175,8 +171,7 @@ def test_future_execution_visible_from_excluded(
     )
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -208,8 +203,7 @@ def test_personal_feed_hides_assignee_with_future_visible_from(
 
     staff_token = login(api_client, user=staff_membership.user)
     personal = api_client.get(
-        action_plan_execution_feed_url(staff_membership.establishment_id)
-        + _feed_query("personal"),
+        action_plan_execution_feed_url(staff_membership.establishment_id) + _feed_query("personal"),
         **auth_headers(staff_token),
     )
     assert personal.status_code == 200
@@ -217,8 +211,7 @@ def test_personal_feed_hides_assignee_with_future_visible_from(
 
     owner_token = login(api_client, user=owner_membership.user)
     general = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(owner_token),
     )
     assert general.status_code == 200
@@ -261,9 +254,7 @@ def test_staff_sees_only_assigned_executions(
         owner_membership,
         business_unit=business_unit,
         title="Assigned to other",
-        assignees=[
-            build_assignee_payload(membership=other_staff, business_unit=business_unit)
-        ],
+        assignees=[build_assignee_payload(membership=other_staff, business_unit=business_unit)],
     )
     token = login(api_client, user=staff_membership.user)
     for view_mode in ("personal", "general"):
@@ -368,8 +359,7 @@ def test_pending_validation_execution_in_feed(
     )
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
@@ -432,8 +422,7 @@ def test_cross_establishment_feed_returns_empty(
     foreign = build_foreign_membership(role=EstablishmentMembership.Role.OWNER)
     token = login(api_client, user=foreign.user)
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 404
@@ -475,8 +464,7 @@ def test_feed_materializes_visible_schedule_execution(
 
     token = login(api_client, user=staff_membership.user)
     response = api_client.get(
-        action_plan_execution_feed_url(staff_membership.establishment_id)
-        + _feed_query("personal"),
+        action_plan_execution_feed_url(staff_membership.establishment_id) + _feed_query("personal"),
         **auth_headers(token),
     )
     assert response.status_code == 200

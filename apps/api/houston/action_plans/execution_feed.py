@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from houston.action_plans.constants import ExecutionFeedViewMode
 from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursor,
     apply_action_plan_execution_feed_cursor,
@@ -10,7 +11,6 @@ from houston.action_plans.materialization import (
 )
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.selectors import (
-    ExecutionFeedViewMode,
     action_plan_execution_feed_queryset,
     apply_action_plan_execution_feed_sorting,
 )

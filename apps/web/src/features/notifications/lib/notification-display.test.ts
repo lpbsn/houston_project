@@ -61,12 +61,18 @@ describe('notification display', () => {
   })
 
   it('maps business icon variants by event key', () => {
-    const pendingValidation = getNotificationIconVariant('action.pending_validation', 'action')
+    const pendingValidation = getNotificationIconVariant(
+      'action_plan.execution.pending_validation',
+      'action_plan_execution',
+    )
     const mention = getNotificationIconVariant('comment.mention.created', 'comment')
-    const checklist = getNotificationIconVariant('checklist.execution.created', 'checklist_execution')
+    const executionCreated = getNotificationIconVariant(
+      'action_plan.execution.created',
+      'action_plan_execution',
+    )
 
     expect(pendingValidation.containerClassName).toBe('bg-amber-50')
     expect(mention.containerClassName).toBe('bg-[#EEF2FF]')
-    expect(checklist.containerClassName).toBe('bg-emerald-50')
+    expect(executionCreated.containerClassName).toBe('bg-emerald-50')
   })
 })

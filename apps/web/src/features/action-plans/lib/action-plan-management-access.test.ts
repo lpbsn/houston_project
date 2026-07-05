@@ -9,37 +9,45 @@ import {
 } from './action-plan-management-access'
 
 describe('canCreateExecutionFeedActionPlan', () => {
-  it('returns true when can_create_action hint is true', () => {
+  it('returns true when can_create_action_plan hint is true', () => {
     expect(canCreateExecutionFeedActionPlan(true)).toBe(true)
   })
 
-  it('returns false when can_create_action hint is false', () => {
+  it('returns false when can_create_action_plan hint is false', () => {
     expect(canCreateExecutionFeedActionPlan(false)).toBe(false)
   })
 })
 
 describe('canCreateSignalLinkedActionPlan', () => {
-  it('allows manager when can_create_action is true', () => {
-    expect(canCreateSignalLinkedActionPlan({ role: 'manager', canCreateAction: true })).toBe(true)
+  it('allows manager when can_create_action_plan is true', () => {
+    expect(
+      canCreateSignalLinkedActionPlan({ role: 'manager', canCreateActionPlan: true }),
+    ).toBe(true)
   })
 
-  it('allows director and owner when can_create_action is true', () => {
-    expect(canCreateSignalLinkedActionPlan({ role: 'director', canCreateAction: true })).toBe(true)
-    expect(canCreateSignalLinkedActionPlan({ role: 'owner', canCreateAction: true })).toBe(true)
+  it('allows director and owner when can_create_action_plan is true', () => {
+    expect(
+      canCreateSignalLinkedActionPlan({ role: 'director', canCreateActionPlan: true }),
+    ).toBe(true)
+    expect(canCreateSignalLinkedActionPlan({ role: 'owner', canCreateActionPlan: true })).toBe(true)
   })
 
-  it('denies staff even when can_create_action is true', () => {
-    expect(canCreateSignalLinkedActionPlan({ role: 'staff', canCreateAction: true })).toBe(false)
+  it('denies staff even when can_create_action_plan is true', () => {
+    expect(canCreateSignalLinkedActionPlan({ role: 'staff', canCreateActionPlan: true })).toBe(
+      false,
+    )
   })
 
-  it('denies manager when can_create_action is false', () => {
-    expect(canCreateSignalLinkedActionPlan({ role: 'manager', canCreateAction: false })).toBe(false)
+  it('denies manager when can_create_action_plan is false', () => {
+    expect(
+      canCreateSignalLinkedActionPlan({ role: 'manager', canCreateActionPlan: false }),
+    ).toBe(false)
   })
 })
 
 describe('canCreateSignalLinkedActionPlanFromSignalHints', () => {
   it('delegates to shouldShowSignalCreateActionPlan', () => {
-    const hints = { can_create_action: true }
+    const hints = { can_create_linked_action_plan: true }
     expect(canCreateSignalLinkedActionPlanFromSignalHints(hints)).toBe(
       shouldShowSignalCreateActionPlan(hints),
     )

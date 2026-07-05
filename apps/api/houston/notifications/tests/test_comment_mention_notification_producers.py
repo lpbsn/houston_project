@@ -1,23 +1,20 @@
 from __future__ import annotations
 
-from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.db import transaction
-from django.utils import timezone
 
-from houston.actions.services import create_action
-from houston.actions.tests.conftest import (
+from houston.comments.models import Comment
+from houston.comments.services import create_signal_comment
+from houston.establishments.models import EstablishmentMembership
+from houston.notifications.constants import build_mention_dedupe_key
+from houston.notifications.models import Notification
+from houston.testing.auth import (
     assign_business_unit_scope,
     build_api_membership,
     build_api_membership_on_establishment,
 )
-from houston.comments.models import Comment
-from houston.comments.services import create_action_comment, create_signal_comment
-from houston.establishments.models import EstablishmentMembership
-from houston.notifications.constants import build_mention_dedupe_key
-from houston.notifications.models import Notification
 from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -37,22 +34,6 @@ def _signal(owner):
         hotel,
         maintenance,
     )
-
-
-def _linked_action(owner):
-    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    signal, _, maintenance = _signal(owner)
-    assign_business_unit_scope(staff, maintenance)
-    action = create_action(
-        establishment_id=owner.establishment_id,
-        created_by=owner,
-        title="Sensitive task title",
-        instruction="Sensitive task instruction",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timedelta(days=1),
-        signal_id=signal.id,
-    )
-    return staff, signal, action
 
 
 def _notifications_for_comment(*, comment_id) -> list[Notification]:
@@ -96,43 +77,6 @@ def test_signal_comment_mention_notifies_in_scope_recipient():
         mentioned_membership_id=staff.id,
     )
     _assert_generic_copy(notifications[0])
-
-
-def test_action_comment_mention_notifies_in_scope_recipient():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff, _, action = _linked_action(owner)
-
-    comment = create_action_comment(
-        author_membership=owner,
-        action=action,
-        body=SENSITIVE_COMMENT_BODY,
-        mentioned_membership_ids=[staff.id],
-    )
-
-    notifications = _notifications_for_comment(comment_id=comment.id)
-    assert len(notifications) == 1
-    assert notifications[0].recipient_membership_id == staff.id
-    assert notifications[0].event_key == Notification.EventKey.COMMENT_MENTION_CREATED
-    _assert_generic_copy(notifications[0])
-
-
-def test_action_comment_mention_skips_out_of_scope_recipient():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff_in_scope, _, action = _linked_action(owner)
-    staff_out_of_scope = build_api_membership_on_establishment(
-        owner,
-        role=EstablishmentMembership.Role.STAFF,
-    )
-
-    comment = create_action_comment(
-        author_membership=owner,
-        action=action,
-        body=SENSITIVE_COMMENT_BODY,
-        mentioned_membership_ids=[staff_out_of_scope.id],
-    )
-
-    assert staff_in_scope.id != staff_out_of_scope.id
-    assert _notifications_for_comment(comment_id=comment.id) == []
 
 
 def test_self_mention_creates_zero_notifications():

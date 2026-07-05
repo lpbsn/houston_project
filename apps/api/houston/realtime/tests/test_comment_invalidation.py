@@ -1,35 +1,25 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.db import transaction
-from django.utils import timezone
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
-from houston.actions.services import create_action
-from houston.actions.tests.conftest import (
-    assign_business_unit_scope,
-    build_api_membership_on_establishment,
-)
-from houston.comments.constants import (
-    ALREADY_RESOLVED_ERROR_DETAIL,
-    NOT_RESOLVED_ERROR_DETAIL,
-)
 from houston.comments.exceptions import CommentValidationError
 from houston.comments.services import (
-    create_action_comment,
     create_action_plan_execution_comment,
     create_signal_comment,
-    resolve_action_comment,
     resolve_action_plan_execution_comment,
-    unresolve_action_comment,
     unresolve_action_plan_execution_comment,
 )
 from houston.comments.tests.conftest import build_api_membership
 from houston.establishments.models import EstablishmentMembership
+from houston.testing.auth import (
+    assign_business_unit_scope,
+    build_api_membership_on_establishment,
+)
 from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -74,31 +64,6 @@ def _staff(owner, *, maintenance=None):
     return staff
 
 
-def _create_linked_action(*, owner, staff, signal, title: str = "Linked task"):
-    return create_action(
-        establishment_id=owner.establishment_id,
-        created_by=owner,
-        title=title,
-        instruction="Sensitive instruction text",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timedelta(days=1),
-        signal_id=signal.id,
-    )
-
-
-def _create_free_action(*, owner, staff):
-    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
-    return create_action(
-        establishment_id=owner.establishment_id,
-        created_by=owner,
-        title="Free task",
-        instruction="Sensitive instruction text",
-        assignee_ids=[staff.id],
-        due_at=timezone.now() + timedelta(days=1),
-        responsible_business_unit_id=maintenance.id,
-    )
-
-
 def _comment_calls(mock_notify):
     return [
         call.kwargs
@@ -124,7 +89,7 @@ def _assert_comment_invalidation(
     }
 
 
-def test_create_signal_comment_emits_signal_created_without_linked_action():
+def test_create_signal_comment_emits_signal_created():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _signal(owner)
 
@@ -139,60 +104,6 @@ def test_create_signal_comment_emits_signal_created_without_linked_action():
             reason="comment.signal.created",
             entity_id=signal.id,
         )
-
-
-def test_create_signal_comment_emits_inherited_for_one_linked_action():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    signal = _signal(owner)
-    action = _create_linked_action(owner=owner, staff=staff, signal=signal)
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        create_signal_comment(author_membership=owner, signal=signal, body="Sensitive body text")
-
-        comment_calls = _comment_calls(mock_notify)
-        assert len(comment_calls) == 2
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.signal.created",
-            entity_id=signal.id,
-            call_index=0,
-        )
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.signal.inherited",
-            entity_id=action.id,
-            call_index=1,
-        )
-
-
-def test_create_signal_comment_emits_inherited_for_two_linked_actions():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    signal = _signal(owner)
-    action_one = _create_linked_action(owner=owner, staff=staff, signal=signal, title="First")
-    action_two = _create_linked_action(owner=owner, staff=staff, signal=signal, title="Second")
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        create_signal_comment(author_membership=owner, signal=signal, body="Sensitive body text")
-
-        comment_calls = _comment_calls(mock_notify)
-        assert len(comment_calls) == 3
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.signal.created",
-            entity_id=signal.id,
-            call_index=0,
-        )
-        inherited_entity_ids = {
-            call["entity_id"]
-            for call in comment_calls
-            if call["reason"] == "comment.signal.inherited"
-        }
-        assert inherited_entity_ids == {action_one.id, action_two.id}
 
 
 def test_create_signal_comment_emits_inherited_execution_invalidation():
@@ -323,95 +234,6 @@ def test_unresolve_execution_comment_emits_execution_unresolved():
         )
 
 
-def test_create_action_comment_root_emits_action_created():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        create_action_comment(author_membership=owner, action=action, body="Sensitive body text")
-
-        comment_calls = _comment_calls(mock_notify)
-        assert len(comment_calls) == 1
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.action.created",
-            entity_id=action.id,
-        )
-
-
-def test_create_action_comment_reply_emits_action_created():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-    root = create_action_comment(author_membership=owner, action=action, body="root")
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        create_action_comment(
-            author_membership=staff,
-            action=action,
-            body="Sensitive reply text",
-            parent_comment_id=root.id,
-        )
-
-        comment_calls = _comment_calls(mock_notify)
-        assert len(comment_calls) == 1
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.action.created",
-            entity_id=action.id,
-        )
-
-
-def test_resolve_action_comment_emits_action_resolved():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-    root = create_action_comment(author_membership=owner, action=action, body="root")
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        resolve_action_comment(
-            action=action,
-            comment_id=root.id,
-            resolved_by_membership=owner,
-        )
-
-        comment_calls = _comment_calls(mock_notify)
-        assert len(comment_calls) == 1
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.action.resolved",
-            entity_id=action.id,
-        )
-
-
-def test_unresolve_action_comment_emits_action_unresolved():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-    root = create_action_comment(author_membership=owner, action=action, body="root")
-    resolve_action_comment(
-        action=action,
-        comment_id=root.id,
-        resolved_by_membership=owner,
-    )
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        unresolve_action_comment(action=action, comment_id=root.id)
-
-        comment_calls = _comment_calls(mock_notify)
-        assert len(comment_calls) == 1
-        _assert_comment_invalidation(
-            mock_notify,
-            establishment_id=owner.establishment_id,
-            reason="comment.action.unresolved",
-            entity_id=action.id,
-        )
-
-
 def test_create_signal_comment_invalidation_not_emitted_on_rollback():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _signal(owner)
@@ -423,26 +245,6 @@ def test_create_signal_comment_invalidation_not_emitted_on_rollback():
                     author_membership=owner,
                     signal=signal,
                     body="Sensitive body text",
-                )
-                raise RuntimeError("force rollback")
-
-        comment_calls = _comment_calls(mock_notify)
-        assert comment_calls == []
-
-
-def test_resolve_action_comment_invalidation_not_emitted_on_rollback():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-    root = create_action_comment(author_membership=owner, action=action, body="root")
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        with pytest.raises(RuntimeError, match="force rollback"):
-            with transaction.atomic():
-                resolve_action_comment(
-                    action=action,
-                    comment_id=root.id,
-                    resolved_by_membership=owner,
                 )
                 raise RuntimeError("force rollback")
 
@@ -462,51 +264,11 @@ def test_create_signal_comment_validation_failure_does_not_emit():
         assert comment_calls == []
 
 
-def test_resolve_action_comment_already_resolved_does_not_emit():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-    root = create_action_comment(author_membership=owner, action=action, body="root")
-    resolve_action_comment(
-        action=action,
-        comment_id=root.id,
-        resolved_by_membership=owner,
-    )
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        with pytest.raises(CommentValidationError, match=ALREADY_RESOLVED_ERROR_DETAIL):
-            resolve_action_comment(
-                action=action,
-                comment_id=root.id,
-                resolved_by_membership=owner,
-            )
-
-        comment_calls = _comment_calls(mock_notify)
-        assert comment_calls == []
-
-
-def test_unresolve_action_comment_not_resolved_does_not_emit():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = _staff(owner)
-    action = _create_free_action(owner=owner, staff=staff)
-    root = create_action_comment(author_membership=owner, action=action, body="root")
-
-    with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
-        with pytest.raises(CommentValidationError, match=NOT_RESOLVED_ERROR_DETAIL):
-            unresolve_action_comment(action=action, comment_id=root.id)
-
-        comment_calls = _comment_calls(mock_notify)
-        assert comment_calls == []
-
-
 @pytest.mark.parametrize(
     "reason",
     [
         "comment.signal.created",
         "comment.signal.inherited",
-        "comment.action.created",
-        "comment.action.resolved",
-        "comment.action.unresolved",
         "comment.execution.created",
         "comment.execution.resolved",
         "comment.execution.unresolved",

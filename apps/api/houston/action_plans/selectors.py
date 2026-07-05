@@ -12,6 +12,7 @@ from houston.action_plans.constants import (
     CONTRIBUTION_STATUS_IN_PROGRESS,
     EXECUTION_FEED_STATUSES,
     TERMINAL_TASK_STATUSES,
+    ExecutionFeedViewMode,
 )
 from houston.action_plans.models import (
     ActionPlan,
@@ -30,7 +31,6 @@ from houston.action_plans.permissions import (
     can_view_action_plan_catalog,
     can_view_action_plan_schedule,
 )
-from houston.actions.selectors import ExecutionFeedViewMode
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.role_constants import ADMIN_ROLES
 
@@ -234,9 +234,7 @@ def get_involved_poles(execution: ActionPlanExecution) -> list[InvolvedPoleSnaps
     snapshots: list[InvolvedPoleSnapshot] = []
     for business_unit_id in sorted(involved_business_unit_ids, key=str):
         tasks = tasks_by_business_unit.get(business_unit_id)
-        contribution_status = (
-            _contribution_status_from_tasks(tasks) if tasks else None
-        )
+        contribution_status = _contribution_status_from_tasks(tasks) if tasks else None
         snapshots.append(
             InvolvedPoleSnapshot(
                 business_unit_id=business_unit_id,
@@ -316,9 +314,9 @@ def action_plan_execution_personal_feed_q(
 ) -> Q:
     now = timezone.now()
     assigned_visible = _assignee_visible_to_membership_now_q(membership=membership, now=now)
-    return (
-        Q(created_by_id=membership.id) | assigned_visible
-    ) & Q(establishment_id=membership.establishment_id)
+    return (Q(created_by_id=membership.id) | assigned_visible) & Q(
+        establishment_id=membership.establishment_id
+    )
 
 
 def action_plan_execution_general_feed_visibility_q(

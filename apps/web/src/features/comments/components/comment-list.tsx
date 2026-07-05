@@ -2,27 +2,16 @@ import { HoustonBadge, TerrainEmptyState } from '@/components/ui/terrain'
 
 import { formatCommentRelativeTime } from '../lib/comment-display'
 import type {
-  ActionCommentListItem,
   CommentCreateRequest,
   CommentItem,
   ExecutionCommentListItem,
 } from '../types'
-import { isActionThreadItem, isExecutionInheritedSignalItem, isExecutionThreadItem, isInheritedSignalItem } from '../types'
+import { isExecutionInheritedSignalItem, isExecutionThreadItem } from '../types'
 import {
   ActionCommentThreadCard,
   InheritedSignalCommentCard,
 } from './comment-thread-item'
 
-function toActionThreadView(item: ExecutionCommentListItem): ActionCommentListItem {
-  if (item.item_type === 'execution_thread') {
-    return {
-      ...item,
-      item_type: 'action_thread',
-    }
-  }
-
-  return item as ActionCommentListItem
-}
 
 type ThreadedCommentListProps = {
   establishmentId: string
@@ -45,10 +34,6 @@ type CommentListProps =
       comments: CommentItem[]
     }
   | ({
-      mode: 'action'
-      comments: ActionCommentListItem[]
-    } & ThreadedCommentListProps)
-  | ({
       mode: 'execution'
       comments: ExecutionCommentListItem[]
     } & ThreadedCommentListProps)
@@ -62,17 +47,9 @@ function CommentOriginBadge({ origin }: { origin: CommentItem['origin'] }) {
     )
   }
 
-  if (origin === 'action_plan_execution') {
-    return (
-      <HoustonBadge variant="blue" className="text-[9px]">
-        Plan
-      </HoustonBadge>
-    )
-  }
-
   return (
     <HoustonBadge variant="blue" className="text-[9px]">
-      Action
+      Plan
     </HoustonBadge>
   )
 }
@@ -107,52 +84,6 @@ function SignalCommentList({ comments }: { comments: CommentItem[] }) {
   )
 }
 
-function ActionCommentList({
-  comments,
-  establishmentId,
-  disabled,
-  replyErrorCommentId,
-  replyErrorMessage,
-  pendingReplyCommentId,
-  isResolvePending,
-  onReply,
-  onResolve,
-  onUnresolve,
-}: Extract<CommentListProps, { mode: 'action' }>) {
-  if (comments.length === 0) {
-    return <TerrainEmptyState title="Aucun commentaire pour l'instant." />
-  }
-
-  return (
-    <ul className="mt-3 flex flex-col gap-3" aria-label="Liste des commentaires">
-      {comments.map((item) => {
-        if (isInheritedSignalItem(item)) {
-          return <InheritedSignalCommentCard key={item.id} item={item} />
-        }
-        if (isActionThreadItem(item)) {
-          return (
-            <ActionCommentThreadCard
-              key={item.id}
-              item={item}
-              establishmentId={establishmentId}
-              disabled={disabled}
-              replyErrorMessage={
-                replyErrorCommentId === item.id ? replyErrorMessage : null
-              }
-              isReplyPending={pendingReplyCommentId === item.id}
-              isResolvePending={isResolvePending}
-              onReply={onReply}
-              onResolve={onResolve}
-              onUnresolve={onUnresolve}
-            />
-          )
-        }
-        return null
-      })}
-    </ul>
-  )
-}
-
 function ExecutionCommentList({
   comments,
   establishmentId,
@@ -174,11 +105,11 @@ function ExecutionCommentList({
       {comments.map((item) => {
         if (isExecutionInheritedSignalItem(item)) {
           return (
-            <InheritedSignalCommentCard key={item.id} item={toActionThreadView(item)} />
+            <InheritedSignalCommentCard key={item.id} item={item} />
           )
         }
         if (isExecutionThreadItem(item)) {
-          const threadItem = toActionThreadView(item)
+          const threadItem = item
           return (
             <ActionCommentThreadCard
               key={item.id}
@@ -207,12 +138,7 @@ export function CommentList(props: CommentListProps) {
     return <SignalCommentList comments={props.comments} />
   }
 
-  if (props.mode === 'execution') {
-    return <ExecutionCommentList {...props} />
-  }
-
-  return <ActionCommentList {...props} />
+  return <ExecutionCommentList {...props} />
 }
 
-// Keep origin badge export for tests that may reference comment list internals.
 export { CommentOriginBadge }

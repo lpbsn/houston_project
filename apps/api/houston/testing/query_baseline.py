@@ -64,7 +64,5 @@ def assert_query_count_at_most(
     label: str,
 ) -> int:
     count = len(context.captured_queries)
-    assert count <= max_queries, (
-        f"{label}: expected at most {max_queries} queries, got {count}"
-    )
+    assert count <= max_queries, f"{label}: expected at most {max_queries} queries, got {count}"
     return count

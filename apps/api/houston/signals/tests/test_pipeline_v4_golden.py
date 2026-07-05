@@ -101,9 +101,7 @@ def _assert_apply_expectations(context: dict) -> None:
     latest_outcome_name = expected.get("latest_candidate_outcome")
     if latest_outcome_name is not None:
         latest_row = (
-            CandidateSignal.objects.filter(observation=observation)
-            .order_by("created_at")
-            .last()
+            CandidateSignal.objects.filter(observation=observation).order_by("created_at").last()
         )
         assert latest_row is not None
         assert latest_row.outcome == CANDIDATE_OUTCOME_BY_NAME[latest_outcome_name]
@@ -112,9 +110,7 @@ def _assert_apply_expectations(context: dict) -> None:
     if aggregated_into_ref is not None:
         target_signal = active_signals[aggregated_into_ref]
         latest_row = (
-            CandidateSignal.objects.filter(observation=observation)
-            .order_by("created_at")
-            .last()
+            CandidateSignal.objects.filter(observation=observation).order_by("created_at").last()
         )
         assert latest_row is not None
         assert latest_row.result_signal_id == target_signal.id

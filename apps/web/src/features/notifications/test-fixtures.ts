@@ -5,13 +5,13 @@ export function buildNotificationItem(
 ): NotificationItem {
   return {
     id: 'notif-1',
-    event_key: 'action.created',
-    subject_type: 'action',
-    subject_id: 'action-1',
+    event_key: 'action_plan.execution.created',
+    subject_type: 'action_plan_execution',
+    subject_id: 'exec-1',
     priority: 'info',
     status: 'unread',
-    title: 'Nouvelle action',
-    body: 'Une action vous a été assignée.',
+    title: 'Nouveau plan d’action',
+    body: 'Un plan d’action vous a été assigné.',
     actor: { membership_id: 'member-1', display_name: 'Alice' },
     created_at: '2026-06-23T10:00:00.000Z',
     read_at: null,

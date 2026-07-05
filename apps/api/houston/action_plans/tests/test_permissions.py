@@ -126,9 +126,13 @@ def _task_execution_for_permissions(
         requires_validation=False,
     )
     if maintenance_business_unit is not None:
-        return execution.task_executions.filter(
-            execution_team__business_unit=maintenance_business_unit,
-        ).select_related("action_plan_execution", "execution_team__business_unit").first()
+        return (
+            execution.task_executions.filter(
+                execution_team__business_unit=maintenance_business_unit,
+            )
+            .select_related("action_plan_execution", "execution_team__business_unit")
+            .first()
+        )
     return execution.task_executions.select_related(
         "action_plan_execution",
         "execution_team__business_unit",
@@ -199,10 +203,13 @@ def test_contributor_manager_can_see_cross_pole_execution(
         pilot_assignee=owner_membership,
         contributor_assignee=out_of_scope_staff,
     )
-    assert action_plan_execution_visible_to_membership(
-        contributor_manager_membership,
-        execution,
-    ) is True
+    assert (
+        action_plan_execution_visible_to_membership(
+            contributor_manager_membership,
+            execution,
+        )
+        is True
+    )
 
 
 def test_owner_can_execute_action_plan_task(
@@ -276,9 +283,13 @@ def test_staff_out_of_scope_cannot_execute_task(
         contributor_assignee=out_of_scope_staff,
         requires_validation=False,
     )
-    pilot_task = execution.task_executions.filter(
-        execution_team__business_unit=business_unit,
-    ).select_related("action_plan_execution", "execution_team__business_unit").first()
+    pilot_task = (
+        execution.task_executions.filter(
+            execution_team__business_unit=business_unit,
+        )
+        .select_related("action_plan_execution", "execution_team__business_unit")
+        .first()
+    )
     assert can_execute_action_plan_task(out_of_scope_staff, pilot_task) is False
 
 
@@ -441,65 +452,80 @@ def test_inactive_membership_denied_lifecycle(
 
 
 def test_manager_can_create_in_scope_feed_plan(manager_membership, business_unit):
-    assert can_create_action_plan(
-        manager_membership,
-        establishment_id=manager_membership.establishment_id,
-        pilot_business_unit=business_unit,
-    ) is True
+    assert (
+        can_create_action_plan(
+            manager_membership,
+            establishment_id=manager_membership.establishment_id,
+            pilot_business_unit=business_unit,
+        )
+        is True
+    )
 
 
 def test_manager_out_of_scope_cannot_create(out_of_scope_manager, business_unit):
-    assert can_create_action_plan(
-        out_of_scope_manager,
-        establishment_id=out_of_scope_manager.establishment_id,
-        pilot_business_unit=business_unit,
-    ) is False
+    assert (
+        can_create_action_plan(
+            out_of_scope_manager,
+            establishment_id=out_of_scope_manager.establishment_id,
+            pilot_business_unit=business_unit,
+        )
+        is False
+    )
 
 
 def test_staff_cannot_create_catalog_plan(staff_membership, business_unit):
-    assert can_create_action_plan(
-        staff_membership,
-        establishment_id=staff_membership.establishment_id,
-        pilot_business_unit=business_unit,
-    ) is False
+    assert (
+        can_create_action_plan(
+            staff_membership,
+            establishment_id=staff_membership.establishment_id,
+            pilot_business_unit=business_unit,
+        )
+        is False
+    )
 
 
 def test_staff_feed_create_allowed(staff_membership, business_unit):
-    assert can_create_staff_feed_execution_plan(
-        staff_membership,
-        pilot_business_unit=business_unit,
-        assignees=[
-            type(
-                "Assignee",
-                (),
-                {
-                    "membership": staff_membership,
-                    "business_unit": business_unit,
-                },
-            )()
-        ],
-        tasks=[{"business_unit": business_unit}],
-        requires_validation=False,
-    ) is True
+    assert (
+        can_create_staff_feed_execution_plan(
+            staff_membership,
+            pilot_business_unit=business_unit,
+            assignees=[
+                type(
+                    "Assignee",
+                    (),
+                    {
+                        "membership": staff_membership,
+                        "business_unit": business_unit,
+                    },
+                )()
+            ],
+            tasks=[{"business_unit": business_unit}],
+            requires_validation=False,
+        )
+        is True
+    )
 
 
 def test_staff_feed_create_rejects_requires_validation(staff_membership, business_unit):
-    assert can_create_staff_feed_execution_plan(
-        staff_membership,
-        pilot_business_unit=business_unit,
-        assignees=[
-            type(
-                "Assignee",
-                (),
-                {
-                    "membership": staff_membership,
-                    "business_unit": business_unit,
-                },
-            )()
-        ],
-        tasks=[],
-        requires_validation=True,
-    ) is False
+    assert (
+        can_create_staff_feed_execution_plan(
+            staff_membership,
+            pilot_business_unit=business_unit,
+            assignees=[
+                type(
+                    "Assignee",
+                    (),
+                    {
+                        "membership": staff_membership,
+                        "business_unit": business_unit,
+                    },
+                )()
+            ],
+            tasks=[],
+            requires_validation=True,
+        )
+        is False
+    )
 
 
 def test_staff_cannot_create_linked_action_plan(staff_membership, signal):
@@ -534,11 +560,14 @@ def test_manager_cannot_define_cross_pole_task(manager_membership):
 
 
 def test_owner_can_assign_cross_pole(owner_membership, business_unit, maintenance_business_unit):
-    assert can_assign_to_execution_business_unit(
-        owner_membership,
-        business_unit=maintenance_business_unit,
-        pilot_business_unit=business_unit,
-    ) is True
+    assert (
+        can_assign_to_execution_business_unit(
+            owner_membership,
+            business_unit=maintenance_business_unit,
+            pilot_business_unit=business_unit,
+        )
+        is True
+    )
 
 
 def test_pilot_manager_cannot_assign_out_of_scope(
@@ -546,11 +575,14 @@ def test_pilot_manager_cannot_assign_out_of_scope(
     business_unit,
     maintenance_business_unit,
 ):
-    assert can_assign_to_execution_business_unit(
-        manager_membership,
-        business_unit=maintenance_business_unit,
-        pilot_business_unit=business_unit,
-    ) is False
+    assert (
+        can_assign_to_execution_business_unit(
+            manager_membership,
+            business_unit=maintenance_business_unit,
+            pilot_business_unit=business_unit,
+        )
+        is False
+    )
 
 
 def test_manager_actionable_signal_can_create_linked(
@@ -582,11 +614,14 @@ def test_non_active_establishment_denies_create(establishment_status):
         establishment_status=establishment_status,
     )
     pilot_business_unit = create_business_unit(establishment=membership.establishment, key="bar")
-    assert can_create_action_plan(
-        membership,
-        establishment_id=membership.establishment_id,
-        pilot_business_unit=pilot_business_unit,
-    ) is False
+    assert (
+        can_create_action_plan(
+            membership,
+            establishment_id=membership.establishment_id,
+            pilot_business_unit=pilot_business_unit,
+        )
+        is False
+    )
 
 
 @pytest.mark.parametrize(
@@ -599,11 +634,14 @@ def test_non_active_organization_denies_create(organization_status):
         organization_status=organization_status,
     )
     pilot_business_unit = create_business_unit(establishment=membership.establishment, key="bar")
-    assert can_create_action_plan(
-        membership,
-        establishment_id=membership.establishment_id,
-        pilot_business_unit=pilot_business_unit,
-    ) is False
+    assert (
+        can_create_action_plan(
+            membership,
+            establishment_id=membership.establishment_id,
+            pilot_business_unit=pilot_business_unit,
+        )
+        is False
+    )
 
 
 @pytest.mark.parametrize(
@@ -616,8 +654,11 @@ def test_non_active_user_denies_create(user_status):
         user_status=user_status,
     )
     pilot_business_unit = create_business_unit(establishment=membership.establishment, key="bar")
-    assert can_create_action_plan(
-        membership,
-        establishment_id=membership.establishment_id,
-        pilot_business_unit=pilot_business_unit,
-    ) is False
+    assert (
+        can_create_action_plan(
+            membership,
+            establishment_id=membership.establishment_id,
+            pilot_business_unit=pilot_business_unit,
+        )
+        is False
+    )

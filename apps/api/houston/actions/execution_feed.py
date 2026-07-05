@@ -62,7 +62,6 @@ def _action_items(actions: list[Action]) -> list[ExecutionFeedPageItem]:
     return [ExecutionFeedPageItem(item_type="action", action=action) for action in actions]
 
 
-
 def _build_mixed_page(
     *,
     checklists: list[ChecklistExecution],

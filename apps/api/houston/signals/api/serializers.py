@@ -19,7 +19,7 @@ class PermissionHintsSerializer(serializers.Serializer):
     can_set_urgency = serializers.BooleanField()
     can_cancel = serializers.BooleanField()
     can_resolve = serializers.BooleanField()
-    can_create_action = serializers.BooleanField()
+    can_create_linked_action_plan = serializers.BooleanField()
 
 
 class SignalFeedItemSerializer(serializers.Serializer):
@@ -78,7 +78,7 @@ class SignalUrgencyRequestSerializer(serializers.Serializer):
 
 
 def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
-    from houston.actions.permissions import can_create_linked_action
+    from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
         can_cancel_signal,
         can_pin_signal,
@@ -123,7 +123,10 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
             "can_set_urgency": can_set_signal_urgency(membership, signal),
             "can_cancel": can_cancel_signal(membership, signal),
             "can_resolve": can_resolve_signal(membership, signal),
-            "can_create_action": can_create_linked_action(membership, signal=signal),
+            "can_create_linked_action_plan": can_create_linked_action_plan(
+                membership,
+                signal=signal,
+            ),
         },
     }
 

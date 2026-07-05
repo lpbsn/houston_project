@@ -2,9 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '@/app/auth-provider'
-import { checklistsQueryKeys, createChecklistTaskObservation } from '@/features/checklists/api'
-import type { ChecklistReportingContext } from '@/features/checklists/lib/checklist-reporting-context'
-import { invalidateEstablishmentChecklistQueries, invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
+import { invalidateEstablishmentSignalQueries } from '@/lib/query-invalidation'
 
 import {
   deleteTemporaryPhoto,
@@ -21,42 +19,6 @@ import {
 import type { ObservationSubmitRequest } from './types'
 
 const PROCESSING_POLL_INTERVAL_MS = 2000
-
-export function useChecklistReportSubmitMutation(
-  establishmentId: string | null,
-  checklistContext: ChecklistReportingContext | null,
-) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (input: {
-      taskExecutionId: string
-      text: string
-      temporaryUploadIds: string[]
-    }) => {
-      if (!establishmentId) {
-        throw new Error('Établissement non sélectionné.')
-      }
-      return createChecklistTaskObservation(establishmentId, input.taskExecutionId, {
-        text: input.text,
-        temporary_upload_ids:
-          input.temporaryUploadIds.length > 0 ? input.temporaryUploadIds : undefined,
-      })
-    },
-    onSuccess: () => {
-      if (!establishmentId || !checklistContext) {
-        return
-      }
-      void queryClient.invalidateQueries({
-        queryKey: checklistsQueryKeys.executionDetail(
-          establishmentId,
-          checklistContext.checklistExecutionId,
-        ),
-      })
-      invalidateEstablishmentChecklistQueries(queryClient, establishmentId)
-    },
-  })
-}
 
 export function useUploadTemporaryPhotoMutation(establishmentId: string | null) {
   useAuth()

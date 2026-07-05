@@ -167,16 +167,8 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 
 # Celery Beat (first scheduled job in Houston). Requires a `celery-beat` process;
-# lazy checklist materialization on execution-feed read remains the primary safety net.
+# lazy action-plan schedule materialization on execution-feed read remains the primary safety net.
 CELERY_BEAT_SCHEDULE = {
-    "materialize-checklist-assignments-horizon": {
-        "task": "houston.checklists.tasks.materialize_checklist_assignments_horizon_task",
-        "schedule": crontab(
-            hour=env_int("HOUSTON_CHECKLIST_HORIZON_BEAT_HOUR_UTC", 3),
-            minute=env_int("HOUSTON_CHECKLIST_HORIZON_BEAT_MINUTE_UTC", 0),
-        ),
-        "kwargs": {"establishment_id": None},
-    },
     "materialize-action-plan-schedules-horizon": {
         "task": "houston.action_plans.tasks.materialize_action_plan_schedules_horizon_task",
         "schedule": crontab(

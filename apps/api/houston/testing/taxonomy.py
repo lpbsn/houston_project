@@ -234,9 +234,7 @@ def create_v3_signal(
     from houston.signals.services import normalize_issue_focus
 
     now = timezone.now()
-    stored_issue_focus = (
-        normalize_issue_focus(title) if issue_focus is None else issue_focus
-    )
+    stored_issue_focus = normalize_issue_focus(title) if issue_focus is None else issue_focus
     return Signal.objects.create(
         establishment=establishment,
         affected_business_unit=affected_business_unit,

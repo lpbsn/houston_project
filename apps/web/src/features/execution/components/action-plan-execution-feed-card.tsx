@@ -5,7 +5,7 @@ import {
   terrainFeedCardBaseClassName,
   terrainFeedInteractiveCardClassName,
 } from '@/lib/terrain-styles'
-import { getDisplayNameInitials } from '@/features/actions/lib/action-display'
+import { getDisplayNameInitials } from '@/lib/display-names'
 import { ActionPlanStatusBadge } from '@/features/action-plans/components/action-plan-status-badge'
 import {
   formatActionPlanEndAtLabel,

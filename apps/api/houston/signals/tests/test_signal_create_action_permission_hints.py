@@ -31,25 +31,25 @@ def _fetch_hints(api_client, membership, signal):
     return response.json()["permission_hints"]
 
 
-def test_owner_open_signal_can_create_action_hint_true(api_client):
+def test_owner_open_signal_can_create_linked_action_plan_hint_true(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, status=Signal.Status.OPEN)
 
     hints = _fetch_hints(api_client, membership, signal)
 
-    assert hints["can_create_action"] is True
+    assert hints["can_create_linked_action_plan"] is True
 
 
-def test_staff_open_signal_can_create_action_hint_false(api_client):
+def test_staff_open_signal_can_create_linked_action_plan_hint_false(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
     signal = create_minimal_v3_signal(membership, status=Signal.Status.OPEN)
 
     hints = _fetch_hints(api_client, membership, signal)
 
-    assert hints["can_create_action"] is False
+    assert hints["can_create_linked_action_plan"] is False
 
 
-def test_staff_scoped_signal_can_create_action_hint_false(api_client):
+def test_staff_scoped_signal_can_create_linked_action_plan_hint_false(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(owner, status=Signal.Status.OPEN)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
@@ -74,19 +74,19 @@ def test_staff_scoped_signal_can_create_action_hint_false(api_client):
 
     hints = _fetch_hints(api_client, staff, signal)
 
-    assert hints["can_create_action"] is False
+    assert hints["can_create_linked_action_plan"] is False
 
 
-def test_resolved_signal_can_create_action_hint_false(api_client):
+def test_resolved_signal_can_create_linked_action_plan_hint_false(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(membership, status=Signal.Status.RESOLVED)
 
     hints = _fetch_hints(api_client, membership, signal)
 
-    assert hints["can_create_action"] is False
+    assert hints["can_create_linked_action_plan"] is False
 
 
-def test_manager_without_responsible_scope_can_create_action_hint_false(api_client):
+def test_manager_without_responsible_scope_can_create_linked_action_plan_hint_false(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(owner, status=Signal.Status.OPEN)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
@@ -111,10 +111,10 @@ def test_manager_without_responsible_scope_can_create_action_hint_false(api_clie
 
     hints = _fetch_hints(api_client, manager, signal)
 
-    assert hints["can_create_action"] is False
+    assert hints["can_create_linked_action_plan"] is False
 
 
-def test_manager_with_responsible_scope_can_create_action_hint_true(api_client):
+def test_manager_with_responsible_scope_can_create_linked_action_plan_hint_true(api_client):
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = create_minimal_v3_signal(owner, status=Signal.Status.OPEN)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
@@ -139,4 +139,4 @@ def test_manager_with_responsible_scope_can_create_action_hint_true(api_client):
 
     hints = _fetch_hints(api_client, manager, signal)
 
-    assert hints["can_create_action"] is True
+    assert hints["can_create_linked_action_plan"] is True

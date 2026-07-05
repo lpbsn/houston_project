@@ -56,9 +56,7 @@ def test_compare_pipeline_output_flags_routing_and_issue_focus_mismatch():
 
 def test_compare_pipeline_output_accepts_matching_signatures():
     case = get_pipeline_golden_v4_case("G01")
-    candidates = [
-        PipelineCandidateOutput(**raw) for raw in case["expected_candidates"]
-    ]
+    candidates = [PipelineCandidateOutput(**raw) for raw in case["expected_candidates"]]
     output = ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         candidates=candidates,

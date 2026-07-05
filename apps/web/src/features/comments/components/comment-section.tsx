@@ -6,15 +6,11 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { CommentsApiError } from '../api'
 import {
-  useActionCommentsQuery,
-  useCreateActionCommentMutation,
   useCreateExecutionCommentMutation,
   useCreateSignalCommentMutation,
   useExecutionCommentsQuery,
-  useResolveActionCommentMutation,
   useResolveExecutionCommentMutation,
   useSignalCommentsQuery,
-  useUnresolveActionCommentMutation,
   useUnresolveExecutionCommentMutation,
 } from '../hooks'
 import { CommentComposer, type CommentComposerHandle } from './comment-composer'
@@ -22,7 +18,7 @@ import { CommentList } from './comment-list'
 
 type CommentSectionProps = {
   establishmentId: string
-  targetType: 'signal' | 'action' | 'action-plan-execution'
+  targetType: 'signal' | 'action-plan-execution'
   targetId: string
 }
 
@@ -32,16 +28,11 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
   const [pendingReplyCommentId, setPendingReplyCommentId] = useState<string | null>(null)
 
   const isSignal = targetType === 'signal'
-  const isAction = targetType === 'action'
   const isExecution = targetType === 'action-plan-execution'
 
   const signalQuery = useSignalCommentsQuery(
     isSignal ? establishmentId : null,
     isSignal ? targetId : null,
-  )
-  const actionQuery = useActionCommentsQuery(
-    isAction ? establishmentId : null,
-    isAction ? targetId : null,
   )
   const executionQuery = useExecutionCommentsQuery(
     isExecution ? establishmentId : null,
@@ -50,22 +41,6 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
   const createSignalMutation = useCreateSignalCommentMutation(
     isSignal ? establishmentId : null,
     isSignal ? targetId : null,
-  )
-  const createRootCommentMutation = useCreateActionCommentMutation(
-    isAction ? establishmentId : null,
-    isAction ? targetId : null,
-  )
-  const createReplyMutation = useCreateActionCommentMutation(
-    isAction ? establishmentId : null,
-    isAction ? targetId : null,
-  )
-  const resolveMutation = useResolveActionCommentMutation(
-    isAction ? establishmentId : null,
-    isAction ? targetId : null,
-  )
-  const unresolveMutation = useUnresolveActionCommentMutation(
-    isAction ? establishmentId : null,
-    isAction ? targetId : null,
   )
   const createExecutionRootMutation = useCreateExecutionCommentMutation(
     isExecution ? establishmentId : null,
@@ -84,23 +59,14 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
     isExecution ? targetId : null,
   )
 
-  const commentsQuery = isSignal ? signalQuery : isAction ? actionQuery : executionQuery
-  const createMutation = isSignal
-    ? createSignalMutation
-    : isAction
-      ? createRootCommentMutation
-      : createExecutionRootMutation
-  const isThreadPending = isAction
-    ? createRootCommentMutation.isPending ||
-      createReplyMutation.isPending ||
-      resolveMutation.isPending ||
-      unresolveMutation.isPending
-    : isExecution
-      ? createExecutionRootMutation.isPending ||
-        createExecutionReplyMutation.isPending ||
-        resolveExecutionMutation.isPending ||
-        unresolveExecutionMutation.isPending
-      : false
+  const commentsQuery = isSignal ? signalQuery : executionQuery
+  const createMutation = isSignal ? createSignalMutation : createExecutionRootMutation
+  const isThreadPending = isExecution
+    ? createExecutionRootMutation.isPending ||
+      createExecutionReplyMutation.isPending ||
+      resolveExecutionMutation.isPending ||
+      unresolveExecutionMutation.isPending
+    : false
 
   const threadListProps = {
     establishmentId,
@@ -133,45 +99,6 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
 
       {commentsQuery.isSuccess && isSignal ? (
         <CommentList mode="signal" comments={commentsQuery.data} />
-      ) : null}
-
-      {actionQuery.isSuccess && isAction ? (
-        <CommentList
-          mode="action"
-          comments={actionQuery.data}
-          {...threadListProps}
-          replyErrorMessage={
-            replyErrorCommentId && createReplyMutation.error
-              ? resolveApiErrorMessage(
-                  createReplyMutation.error,
-                  CommentsApiError,
-                  'Impossible d’envoyer la réponse.',
-                )
-              : null
-          }
-          isResolvePending={resolveMutation.isPending || unresolveMutation.isPending}
-          onReply={(payload, callbacks) => {
-            const parentCommentId = payload.parent_comment_id ?? null
-            setPendingReplyCommentId(parentCommentId)
-            setReplyErrorCommentId(parentCommentId)
-            createReplyMutation.mutate(payload, {
-              onSuccess: () => {
-                setPendingReplyCommentId(null)
-                setReplyErrorCommentId(null)
-                callbacks?.onSuccess?.()
-              },
-              onError: () => {
-                setPendingReplyCommentId(null)
-              },
-            })
-          }}
-          onResolve={(commentId) => {
-            resolveMutation.mutate(commentId)
-          }}
-          onUnresolve={(commentId) => {
-            unresolveMutation.mutate(commentId)
-          }}
-        />
       ) : null}
 
       {executionQuery.isSuccess && isExecution ? (

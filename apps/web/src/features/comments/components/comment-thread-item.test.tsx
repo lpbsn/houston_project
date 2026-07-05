@@ -3,15 +3,17 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { ActionCommentListItem } from '../types'
+import type { ExecutionCommentListItem } from '../types'
 
 import { ActionCommentThreadCard } from './comment-thread-item'
 
-function buildThread(overrides: Partial<ActionCommentListItem> = {}): ActionCommentListItem {
+function buildThread(
+  overrides: Partial<ExecutionCommentListItem> = {},
+): ExecutionCommentListItem {
   return {
-    item_type: 'action_thread',
+    item_type: 'execution_thread',
     id: 'thread-a',
-    origin: 'action',
+    origin: 'action_plan_execution',
     body: 'commentaire racine',
     author: { membership_id: 'm-1', display_name: 'Alice' },
     mentions: [],

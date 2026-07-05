@@ -31,7 +31,8 @@ function bootstrap(
     pending_onboarding_memberships: [],
     permission_hints: {
       chat_available: false,
-      can_create_action: false,
+      can_create_action_plan: false,
+      can_create_catalog_action_plan: false,
       can_invite: false,
       can_manage_runtime_config: false,
     },

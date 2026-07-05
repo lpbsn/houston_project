@@ -4,8 +4,8 @@ export type BootstrapPermissionHints = BootstrapResponse['permission_hints']
 
 const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   chat_available: false,
-  can_create_action: false,
-  can_create_checklist_template: false,
+  can_create_action_plan: false,
+  can_create_catalog_action_plan: false,
   can_invite: false,
   can_manage_runtime_config: false,
 }
@@ -24,14 +24,14 @@ export function canInviteFromBootstrapHints(hints: BootstrapPermissionHints): bo
   return hints.can_invite
 }
 
-export function canCreateActionFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
-  return hints.can_create_action
+export function canCreateActionPlanFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
+  return hints.can_create_action_plan
 }
 
-export function canCreateChecklistTemplateFromBootstrapHints(
+export function canCreateCatalogActionPlanFromBootstrapHints(
   hints: BootstrapPermissionHints | null | undefined,
 ): boolean {
-  return hints?.can_create_checklist_template === true
+  return hints?.can_create_catalog_action_plan === true
 }
 
 export function canManageRuntimeConfigFromBootstrapHints(hints: BootstrapPermissionHints): boolean {

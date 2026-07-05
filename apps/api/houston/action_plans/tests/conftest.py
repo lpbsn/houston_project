@@ -19,9 +19,8 @@ from houston.action_plans.tests.helpers import (
     create_catalog_action_plan,
     create_open_signal,
 )
-from houston.actions.tests.conftest import auth_headers
 from houston.establishments.models import EstablishmentMembership
-from houston.testing.auth import login
+from houston.testing.auth import auth_headers, login
 from houston.testing.factories import create_establishment, create_membership
 from houston.testing.taxonomy import (
     create_business_unit,
@@ -34,6 +33,7 @@ __all__ = [
     "auth_headers",
     "login",
 ]
+
 
 @pytest.fixture
 def api_client():

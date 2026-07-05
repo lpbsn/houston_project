@@ -24,18 +24,6 @@ export const LazyExecutionFeedPage = lazy(() =>
   })),
 )
 
-export const LazyActionCreatePage = lazy(() =>
-  import('@/features/actions/pages/action-create-page').then((module) => ({
-    default: module.ActionCreatePage,
-  })),
-)
-
-export const LazyActionDetailPage = lazy(() =>
-  import('@/features/actions/pages/action-detail-page').then((module) => ({
-    default: module.ActionDetailPage,
-  })),
-)
-
 export const LazyChatPage = lazy(() =>
   import('@/features/chat/pages/chat-page').then((module) => ({
     default: module.ChatPage,
@@ -63,30 +51,6 @@ export const LazyProfileSwitchEstablishmentPage = lazy(() =>
 export const LazyTeamPage = lazy(() =>
   import('@/features/auth/pages/team-page').then((module) => ({
     default: module.TeamPage,
-  })),
-)
-
-export const LazyChecklistHubPage = lazy(() =>
-  import('@/features/checklists/pages/checklist-hub-page').then((module) => ({
-    default: module.ChecklistHubPage,
-  })),
-)
-
-export const LazyChecklistTemplateCreatePage = lazy(() =>
-  import('@/features/checklists/pages/checklist-template-create-page').then((module) => ({
-    default: module.ChecklistTemplateCreatePage,
-  })),
-)
-
-export const LazyChecklistTemplateDetailPage = lazy(() =>
-  import('@/features/checklists/pages/checklist-template-detail-page').then((module) => ({
-    default: module.ChecklistTemplateDetailPage,
-  })),
-)
-
-export const LazyChecklistExecutionDetailPage = lazy(() =>
-  import('@/features/checklists/pages/checklist-execution-detail-page').then((module) => ({
-    default: module.ChecklistExecutionDetailPage,
   })),
 )
 

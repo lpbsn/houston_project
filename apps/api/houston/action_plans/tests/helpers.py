@@ -21,9 +21,7 @@ def action_plan_url(establishment_id, action_plan_id, suffix: str = "") -> str:
 
 
 def action_plan_execution_url(establishment_id, execution_id, suffix: str = "") -> str:
-    base = (
-        f"/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/"
-    )
+    base = f"/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/"
     return base + suffix.lstrip("/")
 
 
@@ -41,9 +39,7 @@ def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") 
 
 
 def action_plan_schedule_url(establishment_id, action_plan_id) -> str:
-    return (
-        f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/"
-    )
+    return f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/"
 
 
 def action_plan_schedule_detail_url(establishment_id, schedule_id, suffix: str = "") -> str:

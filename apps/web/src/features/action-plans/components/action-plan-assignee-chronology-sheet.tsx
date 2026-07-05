@@ -3,8 +3,8 @@ import { Plus, Trash2 } from 'lucide-react'
 import { TerrainBottomSheet, TerrainFieldLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ActionCreateAssigneeSection } from '@/features/actions/components/action-create-assignee-section'
-import type { ScopedUserSearchResult } from '@/features/actions/types'
+import { AssigneeSection } from '@/components/domain/assignee-section'
+import type { ScopedUserSearchResult } from '@/features/users/types'
 
 import {
   createActionPlanAssigneeDraft,
@@ -114,7 +114,7 @@ export function ActionPlanAssigneeChronologySheet({
       }
     >
       <div className="space-y-4">
-        <ActionCreateAssigneeSection
+        <AssigneeSection
           mode="multiple"
           establishmentId={establishmentId}
           businessUnitId={pilotBusinessUnitId || undefined}
