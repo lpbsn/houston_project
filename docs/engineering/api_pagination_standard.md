@@ -74,13 +74,12 @@ Optional endpoint-specific fields (e.g. `applied_filters` on Signal Feed) are do
 | Endpoint | Status |
 |----------|--------|
 | `GET .../signal-feed/` | **Reference** — full cursor round-trip |
-| `GET .../execution-feed/` | **Complete** — polymorphic cursor (checklist-first merge preserved) |
+| `GET .../action-plan-execution-feed/` | **Complete** — single-type cursor (`action_plan_execution` items) |
 
-Execution Feed cursor specifics (HOU-BACKLOG-019):
+Action Plan Execution Feed cursor specifics:
 
-- Opaque server cursor with checklist phase and action phase (`action_phase_start` = action phase without item position).
-- Sort tie-breaker `-id` on checklist and action lists.
-- Action cursor encodes `as_of` to stabilize `is_overdue_rank` across paginated requests (mid-pagination rank drift possible if status changes between pages; mutations invalidate the feed).
+- Opaque server cursor; sort `last_activity_at desc`, `created_at desc`, `id desc`.
+- Terminal executions (`done` / `canceled`) excluded from feed; mutations invalidate the feed.
 
 ### Tier B — Chronological streams
 
@@ -108,7 +107,7 @@ Use for admin or catalogue lists with slower growth.
 
 **Raw array migration:** endpoints that today return `Item[]` directly should migrate to `{ items }` **directly**, one endpoint per PR, with no temporary compatibility layer. Same PR must update schema, regenerated types, frontend hooks, and tests.
 
-**Endpoints today (non-paginated):** checklist templates, checklist assignments, membership roster, onboarding proposals (session-scoped).
+**Endpoints today (non-paginated):** action plan catalog (filtered list), membership roster, onboarding proposals (session-scoped).
 
 ### Tier D — Search / typeahead / hard-capped lists
 
@@ -154,11 +153,11 @@ Signal Feed is the **existing reference** for Tier A (backend + frontend).
 
 | Envelope | Endpoints |
 |----------|-----------|
-| `{ items, next_cursor, has_more }` | Signal feed (complete), Execution feed (complete) |
+| `{ items, next_cursor, has_more }` | Signal feed (complete), Action Plan execution feed (complete) |
 | `{ items, has_more }` | Chat messages |
 | `{ items }` | Chat conversations, chat eligible memberships |
-| Raw `Item[]` | Checklist templates, checklist assignments, users search, memberships, catalog suggest, onboarding proposals |
-| Nested object | Bootstrap, business-unit tree, checklist/execution detail |
+| Raw `Item[]` | Action plan catalog list, users search, memberships, catalog suggest, onboarding proposals |
+| Nested object | Bootstrap, business-unit tree, action plan / execution detail |
 
 Target over time: paginated lists use Tier A/B envelope; non-paginated lists use `{ items }` (Tier C).
 

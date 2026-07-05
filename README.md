@@ -76,8 +76,7 @@ The project currently uses a Django modular monolith as the business authority a
 - Audio transcription endpoint (temporary audio deleted after each request)
 - Phase 4 AI observation pipeline → Signal feed/detail (Celery + fake/OpenAI providers)
 - Signal feed (`/signals`) and detail with pin/unpin/urgency/resolve/cancel commands (no manual Signal CRUD)
-- Phase 5 core implemented: Action lifecycle + Execution Feed (`/actions/`, `/execution-feed/`)
-- Phase 7 Checklists implemented: templates, assignments, executions, polymorphic Execution Feed (Actions + Checklists)
+- Action Plan catalog, executions, and execution feed (`/action-plans/`, `/action-plan-execution-feed/`) — legacy Action/Checklist domains removed Lot 10
 - Phase 8 Chat V1 core implemented: DM + free groups, REST structure/history/seen/ws-ticket, WebSocket message send/receive, Terrain UI (`/chat`), 7-day purge, membership deactivation hooks — see `docs/product/domains/chat_domain.md`
 
 ## What Is Not Implemented Yet
@@ -166,7 +165,7 @@ For a simple process bounce without reloading `.env` (e.g. bind-mounted code onl
 
 Requires Redis (`CELERY_BROKER_URL`). Without the `celery` service, submitted observations stay `queued`. Automated tests use the fake provider via pytest fixtures (no live OpenAI in CI).
 
-Optional checklist horizon materialization (shared assignments): start Beat in addition to the worker. Lazy materialization on execution-feed read still applies without Beat.
+Optional action-plan schedule horizon materialization: start Beat in addition to the worker. Lazy materialization on `action-plan-execution-feed` read still applies without Beat.
 
 ```bash
 make up-scheduler

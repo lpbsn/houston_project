@@ -23,8 +23,8 @@ def test_notification_deliver_failure_logs_on_commit(caplog: pytest.LogCaptureFi
         with transaction.atomic():
             _run_notification_after_commit(
                 deliver=deliver,
-                event_key="action.created",
-                subject_type="action",
+                event_key="action_plan.execution.created",
+                subject_type="action_plan_execution",
                 subject_id=subject_id,
             )
 
@@ -37,7 +37,7 @@ def test_notification_deliver_failure_logs_on_commit(caplog: pytest.LogCaptureFi
         for record in caplog.records
         if "Failed to create in-app notification after business commit" in record.getMessage()
     )
-    assert failure_record.event_key == "action.created"
-    assert failure_record.subject_type == "action"
+    assert failure_record.event_key == "action_plan.execution.created"
+    assert failure_record.subject_type == "action_plan_execution"
     assert failure_record.subject_id == str(subject_id)
     assert failure_record.exc_info is not None

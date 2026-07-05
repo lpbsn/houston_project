@@ -61,7 +61,7 @@ Current truth:
 - Frontend filters, tabs, or view modes do not grant visibility.
 - Feed items must not contain raw Observation text.
 - Feed items must not contain raw media URLs or signed URLs.
-- Permission hints are UX helpers only, not authorization authority (Action feed items may expose hints; Checklist items use safe summaries without per-item hints in MVP).
+- Permission hints are UX helpers only, not authorization authority.
 - Lifecycle changes must happen through owning domain command endpoints.
 - Realtime invalidates or refetches feed queries; it does not carry complete feed state.
 - Search must not leak raw Observation content.
@@ -82,24 +82,24 @@ Current truth:
 
 - `ExecutionFeed`
   - Structured execution summary view for operational follow-up.
-  - **Implemented today:** polymorphic Action and Checklist execution items (see [`checklist_domain.md`](checklist_domain.md)).
+  - **Implemented today:** Action Plan execution items only (`item_type: "action_plan_execution"`). Legacy polymorphic Action/Checklist feed removed in Lot 10 — see archive docs linked in header.
 
 - `FeedItem`
   - Safe summary of a visible domain object.
   - Signal Feed item = structured Signal summary, never raw Observation text.
-  - Execution Feed item = structured execution summary for Action or Checklist (`item_type` discriminant).
+  - Execution Feed item = structured `ActionPlanExecution` summary (`item_type: "action_plan_execution"`).
 
 - `FeedFilter`
-  - Backend query constraints such as `view_mode`, domains, statuses, urgency, item type, or `requires_my_action`.
-  - Exact supported filter set remains candidate until implemented.
+  - Backend query constraints such as `view_mode`, domains, statuses, urgency, or `requires_my_action`.
+  - Execution Feed today: required `view_mode=personal|general` only.
 
 - `FeedSort`
   - Backend-defined ordering for visible items.
-  - Exact sort rules remain candidate until implemented.
+  - Execution Feed: `last_activity_at desc`, `created_at desc`, `id desc`.
 
 - `FeedCursor`
   - Opaque pagination cursor for stable incremental loading on dynamic feeds.
-- **Implemented** for Signal Feed and Execution Feed (`cursor` query param, `next_cursor` response). See [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
+  - **Implemented** for Signal Feed and Action Plan Execution Feed (`cursor` query param, `next_cursor` response). See [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
 
 - `PermissionHint`
   - Candidate backend-provided UI hint such as visible actions or disabled actions.
@@ -111,7 +111,7 @@ Current truth:
 
 ## 6. Lifecycle / Statuses
 
-Not applicable as a business lifecycle in MVP. Feed reflects authorized read state from Signal, Action, and Checklist domains.
+Not applicable as a business lifecycle in MVP. Feed reflects authorized read state from Signal and Action Plan domains.
 
 Frontend display states may include:
 - loading
@@ -124,25 +124,28 @@ Frontend display states may include:
 
 - Feed access is establishment-scoped and backend-authorized.
 - Current code proves active members can view Signal Feed through `can_view_signal_feed(...)`. See [`signal_domain.md`](signal_domain.md) §7 for detail access and command scope rules.
-- `ExecutionFeed` applies `view_mode` in selectors before returning items.
-- **Ma vue** (`view_mode=personal`): feed-visible Signals (`open`, `in_progress`, `resolved`) matching **`MembershipScope`** (Owner/Director: all feed-visible). Empty if manager/staff has no scopes.
-- **Vue générale** (`view_mode=general`): all feed-visible establishment Signals (`open`, `in_progress`, `resolved`).
-- Feed subscription is **deferred** (future: BU-only first, then ActivitySubject subscribe/unsubscribe) — see [`feed_subscription_domain.md`](feed_subscription_domain.md). **Today:** Ma vue uses `MembershipScope` only.
-- RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering.
+- Action Plan Execution Feed applies `view_mode` in selectors before returning items (`action_plan_execution_feed_queryset`).
+- **Ma vue** (`view_mode=personal`): executions where the user is an assignee, or (Manager) executions in scoped business units via execution teams.
+- **Vue générale** (`view_mode=general`): Owner/Director see all feed-visible establishment executions; Manager sees scoped BUs + own assignments; Staff sees own assignments only.
+- Feed subscription is **deferred** (future: BU-only first, then ActivitySubject subscribe/unsubscribe) — see [`feed_subscription_domain.md`](feed_subscription_domain.md). **Today:** Signal Feed Ma vue uses `MembershipScope` only.
+- RBAC (`MembershipScope`) governs actionability; feed Ma vue uses the same scope rows for filtering where applicable.
 - Visibility does not imply actionability.
 - Notifications and realtime events do not grant access.
 - Permission hints do not grant access.
 
-### Signal Feed vs Execution Feed — personal view (validated)
+### Signal Feed vs Action Plan Execution Feed — personal view (validated)
 
 | Feed | Ma vue (`view_mode=personal`) | Vue générale (`view_mode=general`) |
 | --- | --- | --- |
 | **Signal Feed** | Feed-visible Signals (`open`, `in_progress`, `resolved`) matching **`MembershipScope`** (Owner/Director: all feed-visible). Empty if manager/staff has no scopes. | All feed-visible establishment Signals (`open`, `in_progress`, `resolved`). RBAC feed access only. |
-| **Execution Feed** (Actions + Checklists — implemented) | Active Actions where the user is **`created_by` or an assignee** (`ActionAssignee` / `assignee_ids`; all roles). Owner/Director **Ma vue** is not all establishment Actions (unlike Signal Feed). **Not** driven by feed subscriptions. **Checklist items (cible)** : exécutions où l'utilisateur est **`assigned_to`**, plus visibilité élargie Owner/Director/Manager selon [`checklist_domain.md`](checklist_domain.md) §9 (`template`, `assignment`). | **Owner/Director:** all active establishment Actions + all visible checklist executions. **Manager:** own Actions plus Actions in **`MembershipScope`**, plus checklist executions in scoped BU (+ own assignments). **Staff:** created/assigned Actions + checklist executions **assigned to them** (scope-visible catalogue usage does not add feed items unless assigned). **Not** subscription-based. |
+| **Action Plan Execution Feed** | Executions where user is **assignee**, plus Manager scope via execution teams (`action_plan_execution_personal_feed_q`). Owner/Director Ma vue is not all establishment executions (unlike Signal Feed general). | **Owner/Director:** all feed-visible establishment executions. **Manager:** scoped BUs + own assignments. **Staff:** own assignments only. |
 
-**Execution Feed — Checklist items (cible Lot 0):** rules in [`checklist_domain.md`](checklist_domain.md) §5.6 and §9. Inclusion requires `status IN (assigned, in_progress)` AND `(visible_from IS NULL OR now >= visible_from)`. **`execution_source = assignment`** : `visible_from = start_at - 1 hour`. **`template`** : `visible_from` null (immediate). Terminal `done` / `canceled` excluded from active feed. `end_at` overdue does not remove items (`is_overdue` indicator only). Feed cards expose `execution_source` — no Flash To-do label, no badge Process/To-do.
-
-**Execution Feed — Action items (MVP):** inclusion requires `status IN (open, reopened, in_progress, pending_validation)` per [`action_domain.md`](action_domain.md). Terminal `done` / `canceled` **excluded** from active feed; detail remains accessible. No terminal history section in MVP (future reporting/workspace).
+**Action Plan Execution Feed — inclusion rules (implemented):**
+- `status IN (in_progress, pending_validation)` (`EXECUTION_FEED_STATUSES`).
+- `(visible_from IS NULL OR now >= visible_from)`.
+- Terminal `done` / `canceled` excluded from active feed; detail remains accessible.
+- `end_at` overdue does not remove items (`is_overdue` indicator only).
+- Lazy schedule materialization on feed read (`ensure_visible_action_plan_executions_materialized`) — horizon 3 days, stale guard 30 min. See [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md).
 
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
@@ -155,6 +158,8 @@ Candidate events only:
 - `FeedFilterChanged` for frontend analytics.
 - `FeedInvalidated` for internal or realtime coordination.
 
+Realtime invalidation for execution feed uses `action_plan_execution.*` events (see [`realtime_domain.md`](realtime_domain.md)).
+
 ## 9. API Surface
 
 Current API truth is `apps/api/schema.yml`.
@@ -162,19 +167,19 @@ Current API truth is `apps/api/schema.yml`.
 Implemented endpoints (establishment-scoped):
 
 - `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_keys`, `activity_subject_ids`. **Cursor pagination implemented** (reference).
-- `GET /api/v1/establishments/{establishment_id}/execution-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size` (default 25, max 50). **Cursor pagination implemented** (checklist-first page merge preserved; polymorphic opaque cursor).
+- `GET /api/v1/establishments/{establishment_id}/action-plan-execution-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size` (default 25, max 50). **Cursor pagination implemented** (single-type feed; opaque cursor).
 
 Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
 
+Each execution feed item: `{ item_type: "action_plan_execution", action_plan_execution: { ... } }`.
+
 Pagination standard: [`api_pagination_standard.md`](../../engineering/api_pagination_standard.md).
 
-Candidate / not implemented: advanced search, feed counts, saved views, global cross-type sort interleaving (checklist-first merge remains).
+Candidate / not implemented: advanced search, feed counts, saved views.
 
-**Execution Feed page merge (implemented):** checklist items sorted by `last_activity_at desc` among themselves; Actions sorted by existing Action keys (`requires_me_rank`, overdue, status, etc.) among themselves. Page assembly: checklists consume up to `page_size` slots first; Actions fill `page_size - checklist_count` remaining slots. Checklist feed items expose `end_at`, `is_overdue`, `execution_source`; overdue does not affect inclusion or sort. Frontend renders checklist cards above grouped Action sections ([`execution-checklist-card.tsx`](../../../apps/web/src/features/execution/components/execution-checklist-card.tsx)).
+**Execution Feed `+` menu (implemented):** mobile-first bottom sheet with **Plan d'action** only when `can_create_action_plan` bootstrap hint is true. Routes to action plan create (ponctuel or catalogue). See [`besoin_evolution_action.md`](../../evolution_action/besoin_evolution_action.md) §25.
 
-**Execution Feed `+` menu (cible, Lot 0):** mobile-first bottom sheet with **Action** (Owner/Director/Manager) and **Checklist** (Owner/Director/Manager : créer ou utiliser enregistrée ; Staff : utiliser enregistrée — « Lancer pour moi » uniquement). See [`checklist_domain.md`](checklist_domain.md) §5.16.
-
-Detail routes belong to owning domains, not Feed.
+Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Feed.
 
 ## 10. Frontend Expectations
 
@@ -187,23 +192,23 @@ Detail routes belong to owning domains, not Feed.
 - Mobile-first UI may adapt the Kanban representation into columns, grouped sections, tabs, or horizontally scrollable lanes.
 - Do not hardcode exact columns, layout, drag-and-drop, animations, or component choices in this domain doc.
 - Frontend must use generated OpenAPI clients only for implemented routes.
-- TanStack Query owns server state.
+- TanStack Query owns server state. Query key: `['action-plans', 'action-plan-execution-feed', establishmentId, viewMode]`.
 - Frontend may expose filters, search, tabs, or view modes, but backend query remains authority.
 - Frontend must not infer visibility from local state.
 - Frontend must not display raw Observation text.
 - Frontend must not request signed media URLs until an authorized detail or media flow requires them.
 - Frontend must not treat notifications or realtime payloads as full feed state.
-- Frontend should refetch or invalidate after realtime events.
+- Frontend should refetch or invalidate after realtime events (`action_plan_execution.*`).
 - Frontend may render permission hints as UX helpers only.
 - Mobile-first operational ergonomics matter, but exact layout belongs elsewhere.
+- Component: [`action-plan-execution-feed-card.tsx`](../../../apps/web/src/features/execution/components/action-plan-execution-feed-card.tsx).
 
 ## 11. AI Agent Notes
 
 - Inspect current code before claiming feed models, selectors, endpoints, filters, or sorting exist.
 - Inspect `apps/api/schema.yml` before naming any feed API as implemented.
 - Inspect `signal_domain.md` before changing Signal Feed item rules.
-- Inspect `action_domain.md` before changing Execution Feed Action item rules.
-- Inspect checklist source docs before adding checklist items to Execution Feed.
+- Inspect [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md) and `action_plans/selectors.py` before changing Execution Feed item rules.
 - Inspect `rbac_permissions_domain.md` before changing visibility or actionability assumptions.
 - Inspect `security_rgpd_domain.md` and `observation_domain.md` before changing raw-text, search, media, or logging boundaries.
 - Do not make Feed a lifecycle owner.
@@ -211,6 +216,7 @@ Detail routes belong to owning domains, not Feed.
 - Do not perform frontend-only authorization.
 - Do not include signed media URLs directly in feed items unless separately validated.
 - Do not claim candidate APIs are implemented beyond what exists in `schema.yml`.
+- Do not reference legacy `/execution-feed/`, `execution-checklist-card.tsx`, or `execution-action-card.tsx` — removed in Lot 10.
 - When feed APIs change, update backend authorization, OpenAPI, generated clients, tests, and this document together.
 
 ## 12. Acceptance test matrix (implemented feeds)
@@ -242,5 +248,4 @@ Vue générale for each role above must still return **all** feed-visible establ
 
 - Feed items expose safe structured summaries only (no raw Observation text).
 - Signal Feed items expose BusinessUnit / ActivitySubject labels and keys for UI badges.
-- Execution Feed Action items expose BU/AS fields per `action_domain.md`.
-- Execution Feed Checklist items expose safe summary: title, progress, `execution_source`, `end_at`, `is_overdue`, `business_unit` label, status per [`checklist_domain.md`](checklist_domain.md) §12.
+- Action Plan Execution Feed items expose safe summary: title, progress, assignees, `end_at`, `is_overdue`, business unit labels, status, linked signal summary when present.

@@ -433,7 +433,10 @@ def _signal_lifecycle_command_response(
             signal = resolve_signal(signal=signal, actor_membership=membership)
     except SignalBusinessConflictError as exc:
         return Response(
-            {"code": exc.error_code, "detail": "Cannot resolve signal with active linked actions."},
+            {
+                "code": exc.error_code, 
+                "detail": "Cannot resolve signal with active linked action plans."
+            },
             status=status.HTTP_409_CONFLICT,
         )
     except SignalStateError as exc:

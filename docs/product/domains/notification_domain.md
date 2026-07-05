@@ -143,10 +143,11 @@ Current code (Lot 1):
 
 Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
 
-- Action: `action.created`, `action.reassigned`, `action.pending_validation`, `action.reopened`, `action.canceled`
-- Checklist: `checklist.execution.created`, `checklist.execution.canceled`
+- Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
 - Comment: `comment.mention.created`
 - Signal: `signal.created`, `signal.urgency_changed`, `signal.pinned`, `signal.resolved`, `signal.canceled`
+
+Legacy `action.*` and `checklist.execution.*` keys removed in Lot 10A (migration `0004_remove_legacy_notification_enums`).
 
 Intentionally no Lot 1 notification for: `accept_action`, `validate_action`, direct-done without validation, signal aggregation.
 

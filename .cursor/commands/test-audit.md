@@ -17,8 +17,7 @@ Audit:
 
 Protected areas:
 - Signal lifecycle
-- Action lifecycle
-- Checklist
+- Action plan lifecycle
 - Chat WebSocket
 - Bootstrap/Auth/RBAC
 - Observation pipeline

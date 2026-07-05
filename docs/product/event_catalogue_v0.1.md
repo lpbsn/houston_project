@@ -1,6 +1,8 @@
 # Event Catalogue v0.1
 
-Status: authoritative (documentary contract)  
+> **ARCHIVED POST-LOT 10:** Legacy `action.*` and `checklist.*` events below describe removed domains. Live event/realtime contract: [`contracts/operational-realtime-invalidation.json`](../../contracts/operational-realtime-invalidation.json) and [`realtime_domain.md`](domains/realtime_domain.md). Live notification keys: `LOT1_EVENT_KEYS` in `apps/api/houston/notifications/constants.py`.
+
+Status: archived reference (documentary contract)  
 Last reviewed: 2026-06-22  
 Implementation status: documentary only — no `EventEnvelope`, no event persistence, no notification dispatcher
 

@@ -193,8 +193,10 @@ Expected endpoints:
 GET  /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/
 POST /api/v1/establishments/{establishment_id}/signals/{signal_id}/comments/
 
-GET  /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/
-POST /api/v1/establishments/{establishment_id}/actions/{action_id}/comments/
+GET  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/
+POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/
+POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/{comment_id}/resolve/
+POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/comments/{comment_id}/unresolve/
 ```
 
 POST request:

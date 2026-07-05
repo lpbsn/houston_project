@@ -79,21 +79,19 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 | `action_plan_execution_task` | `action_plan_execution_task.updated` | task execution id | yes — mark-done, skip, observation handoff | action-plan-execution-feed, execution-detail prefix, signals |
 | `action_plan_assignee` | `action_plan_assignee.updated` | **assignee row id** (not execution id) | yes — materialization structure repair only | execution-detail prefix (establishment-scoped sweep; feed unchanged) |
 | `comment` | `comment.signal.created` | signal id | yes — sync signal comment create | signal comment list |
-| `comment` | `comment.signal.inherited` | linked action id | yes — sync signal comment create when action is linked | action comment list (inherited signal comments) |
-| `comment` | `comment.action.created` | action id | yes — sync action comment create (root or reply) | action comment list |
-| `comment` | `comment.action.resolved` | action id | yes — sync action comment resolve | action comment list |
-| `comment` | `comment.action.unresolved` | action id | yes — sync action comment unresolve | action comment list |
+| `comment` | `comment.signal.inherited` | linked action plan execution id | yes — sync signal comment create when execution is linked | execution comment list (inherited signal comments) |
+| `comment` | `comment.execution.created` | action plan execution id | yes — sync execution comment create (root or reply) | execution comment list |
+| `comment` | `comment.execution.resolved` | action plan execution id | yes — sync execution comment resolve | execution comment list |
+| `comment` | `comment.execution.unresolved` | action plan execution id | yes — sync execution comment unresolve | execution comment list |
 | `notification` | `notification.created` | notification id | yes — membership-scoped | notification list + badge |
 | `notification` | `notification.updated` | notification id | yes — mark-read / archive | notification list + badge |
 | `notification` | `notification.bulk_updated` | recipient membership id (bulk) | yes — mark-all-read | notification list + badge |
 
 `notification.bulk_updated` is a membership-level bulk event: `entity_id` is the recipient membership id, not an individual notification id. Delivery uses the membership Channels group (`realtime_est_{establishment_id}_mbr_{membership_id}`), not the establishment-wide invalidation group.
 
-`execution.updated` includes sync checklist task transitions that change execution detail and may start or complete an execution visible on the execution feed.
-
 Action plan notifications (Lot 7): in-app events `action_plan.execution.created`, `.pending_validation`, `.canceled`, `.reopened`. No `action_plan.execution.reassigned` in V1 — runtime assignee reassignment API does not exist; schedule assignee changes surface via `action_plan_execution.created` / `.canceled`.
 
-Legacy `action` / `checklist` / `execution` invalidation handlers are unchanged until Lot 10. Action plan events do **not** invalidate legacy `actions.execution-feed`.
+Legacy `action` / `checklist` / `execution` invalidation handlers removed in Lot 10. Action plan events invalidate `action-plan-execution-feed` and execution-detail queries.
 
 ## 3. Out of Scope
 
@@ -122,7 +120,7 @@ Legacy `action` / `checklist` / `execution` invalidation handlers are unchanged 
 - Missed or dropped realtime delivery must not corrupt business state.
 - Reconnect should trigger safe refetch of relevant active queries.
 - Feed remains a backend-authorized projection; realtime only helps refresh it.
-- Terminal checklist executions (`done` / `canceled`) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
+- Terminal action plan executions (`done` / `canceled`) disappear from the active Execution Feed through authorized Feed refetch, not realtime local deletion as authority.
 - Notifications remain persisted attention messages; operational realtime notification refresh invalidates the recipient's notification list and unread badge via membership-scoped `invalidate` events.
 - Generic Realtime invalidation must not transport raw Chat messages.
 - Chat V1 message transport is defined only in [`chat_domain.md`](chat_domain.md) and is not a precedent for generic invalidation payloads.
@@ -222,26 +220,13 @@ Domain services publish transport messages for view-changing sync writes. Realti
 Source domains with invalidation emission today:
 
 - Signal — sync lifecycle → `signal.updated`; observation async pipeline → `signal.created`, `signal.updated`
-- Action — create and lifecycle → `action.created`, `action.updated`
-- Checklist — sync template / assignment writers → `checklist.updated`; execution writers (sync + async materialization) → `execution.created`, `execution.updated`
-- Comment — sync create / resolve → `comment.signal.*`, `comment.action.*`
+- Action Plan — catalog create/update → `action_plan.created`, `action_plan.updated`; execution lifecycle → `action_plan_execution.*`; task updates → `action_plan_execution_task.updated`; assignee repair → `action_plan_assignee.updated`
+- Comment — sync create / resolve → `comment.signal.*`, `comment.execution.*` (action plan execution comments)
 - Notification — create / read / archive / mark-all-read → membership-scoped `notification.created`, `notification.updated`, `notification.bulk_updated` (emitted from `notifications/services.py`, not domain lifecycle writers)
 
-### Action lifecycle side-effects on Signal (refetch contract)
+### Action Plan lifecycle side-effects on Signal (refetch contract)
 
-When an Action lifecycle write also mutates a linked Signal, transport depends on the mutation:
-
-| Mutation | Transport |
-|---|---|
-| Linked `create_action`: `OPEN → IN_PROGRESS` (no unpin) | `action.created` only |
-| Linked `create_action` with unpin | `action.created` + `signal.updated` |
-| All linked actions canceled → Signal reopens to `OPEN` | `action.updated` + `signal.updated` |
-| `reopen_action`: Signal `RESOLVED → IN_PROGRESS` | `action.updated` + `signal.updated` |
-| `mark_done` / `validate` → auto `resolve_signal` | `action.updated` + `signal.updated` |
-
-Houston web also invalidates Signal queries on `action.created` / `action.updated` via `invalidateActionMutationSurfaces` (defense-in-depth).
-
-Direct `signal.updated` / `signal.created` emissions from signal-domain writers remain owned by `signals/services.py` and the observation async pipeline; linked-action reopen paths schedule `signal.updated` from `actions/services.py` when the Signal is mutated.
+When an Action Plan execution lifecycle write also mutates a linked Signal, transport depends on the mutation. Signal-linked plan create and resolve/cancel cascades schedule `signal.updated` alongside `action_plan_execution.*` events when the Signal status changes. See `action_plans/services.py` and `signals/services.py`.
 
 See **Operational WebSocket invalidation** under section 2 for the reason matrix.
 
@@ -310,13 +295,13 @@ Current implementation note (operational realtime):
 - Frontend must not render sensitive business content directly from realtime payloads.
 - Frontend must not infer authorization from channel names or local subscription state.
 - Feed order, insertion, removal, and filtering remain backend-owned through Feed refetch.
-- Open Signal and Action detail views refetch when matching operational invalidation messages arrive.
-- On reconnect, refetch active signal, action, checklist, and notification queries that are still visible and authorized (operational provider). Comment lists are not refetched on reconnect — a known limitation ; live comment threads still refresh via `comment.*` invalidation during the session.
+- Open Signal and Action Plan execution detail views refetch when matching operational invalidation messages arrive.
+- On reconnect, refetch active signal, action plan, and notification queries that are still visible and authorized (operational provider). Comment lists are not refetched on reconnect — a known limitation; live comment threads still refresh via `comment.*` invalidation during the session.
 - Notification Center refetch via realtime is implemented: membership-scoped `notification.created`, `notification.updated`, and `notification.bulk_updated` invalidate `['notifications','list', establishmentId]` (see `apply-operational-invalidation.ts`).
 - Comment surfaces refetch via operational `comment` invalidation (implemented).
-- Checklist execution surfaces refetch via operational `execution` / `checklist` invalidation (implemented).
-- Chat V1 follows [`chat_domain.md`](chat_domain.md) ; do not apply generic invalidation-only rules to Chat message WebSocket delivery.
-- Operational Signal / Action / Checklist invalidation follows invalidation/refetch rules in this document.
+- Action plan execution surfaces refetch via operational `action_plan_execution.*` invalidation (implemented).
+- Chat V1 follows [`chat_domain.md`](chat_domain.md); do not apply generic invalidation-only rules to Chat message WebSocket delivery.
+- Operational Signal / Action Plan invalidation follows invalidation/refetch rules in this document.
 
 Current code truth:
 

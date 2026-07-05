@@ -1,6 +1,6 @@
 # Domain lifecycle change
 
-Implement a lifecycle change for Signal, Action, Checklist, Observation, or Chat.
+Implement a lifecycle change for Signal, Action Plan, Observation, or Chat.
 
 Before editing:
 - inspect current statuses/enums

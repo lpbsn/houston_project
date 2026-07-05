@@ -16,13 +16,13 @@ import {
 
 const markNotificationRead = vi.fn(async () => ({
   id: 'notif-1',
-  event_key: 'action.created',
-  subject_type: 'action' as const,
-  subject_id: 'action-1',
+  event_key: 'action_plan.execution.created',
+  subject_type: 'action_plan_execution' as const,
+  subject_id: 'exec-1',
   priority: 'info' as const,
   status: 'read' as const,
-  title: 'Nouvelle action',
-  body: 'Une action vous a été assignée.',
+  title: 'Nouvelle exécution de plan',
+  body: 'Une exécution de plan vous a été assignée.',
   actor: null,
   created_at: '2026-06-23T10:00:00.000Z',
   read_at: '2026-06-23T10:05:00.000Z',
