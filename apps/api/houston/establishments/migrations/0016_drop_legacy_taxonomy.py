@@ -13,7 +13,6 @@ class Migration(migrations.Migration):
     dependencies = [
         ("establishments", "0015_runtime_vocabulary_business_unit"),
         ("signals", "0004_remove_legacy_operational_taxonomy_fks"),
-        ("actions", "0004_remove_legacy_operational_taxonomy_fks"),
     ]
 
     operations = [

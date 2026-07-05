@@ -2,7 +2,8 @@
 
 Status: consolidated roadmap (living — Wave 0 scoped deliverables complete; Wave 1 scoped deliverables complete ROADMAP-05..14)
 
-> **Post-Lot-4 note (action_plans):** New-domain schedule materialization uses beat + sync-on-create only (see `docs/evolution_action/action_plan_materialization.md`). **MAT-01** legacy checklist read-path debt remains open until Lot 10.  
+> **Post-Lot-4 note (action_plans):** New-domain schedule materialization uses beat + sync-on-create only (see `docs/evolution_action/action_plan_materialization.md`). ~~**MAT-01** legacy checklist read-path debt remains open until Lot 10.~~ **Closed Lot 10 (2026-07-05).**  
+> **Post-Lot-10 note (legacy purge):** Apps `houston.actions` / `houston.checklists` removed. Debts **MAT-01**, **CL-01**, **EF-01**, **EF-02**, **EF-07**, **ACT-04**, **GUARD-01 remainder** (legacy routes), **TQ-E8** (checklist filter slice) → **CLOSED_LOT_10** (N/A). **CACHE-01** parent theme (invalidation registry architecture) remains open.
 Date: 2026-06-26 (Wave 0 closure pass: 2026-06-27; Wave 1 closure pass: 2026-06-27; Wave 1 remainder closure pass: 2026-06-27)  
 Mode: audit consolidation + Wave 0–1 status tracking
 
@@ -29,9 +30,9 @@ Mode: audit consolidation + Wave 0–1 status tracking
 
 **Done (scoped — Wave 1 remainder, 2026-06-27):** ROADMAP-12..14 — **HYGIENE-01** slice, **AUTH-CACHE-01**, **TQ-E8**. Parent themes **not** closed.
 
-**Still open (parent themes — do not treat as Wave 1 closure):** **MOBILE-01** parent (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG/Apple, device QA); **GUARD-01** parent (**API-O5**, **FE-E8**, GUARD-01-FU-1/FU-2, TS-E9 remainder, FE-E4/FE-E7); **HYGIENE-01** parent (**CI-E7** remainder, **R10**, **RT-E4/R5**, link checker CI, **API-O7** session cancel); **MAT-01** / **DB-01**, **TS-E1**, **INDEX-01**, **DB-07** / **DB-09** / **DB-10**, **CACHE-01**.
+**Still open (parent themes — do not treat as Wave 1 closure):** **MOBILE-01** parent (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG/Apple, device QA); **HYGIENE-01** parent (**CI-E7** remainder, **R10**, **RT-E4/R5**, link checker CI, **API-O7** session cancel); **TS-E1**, **INDEX-01**, **DB-07** / **DB-09** / **DB-10**, **CACHE-01**. ~~**GUARD-01** parent~~ legacy UX slices **CLOSED_LOT_10**; ~~**MAT-01** / **DB-01**~~ **CLOSED_LOT_10**.
 
-**Next:** Wave 2 guard **TS-E1** before MAT-01 decouple work; then **TEST-ONB-01**.
+**Next:** Wave 2 guard **TS-E1**; then **TEST-ONB-01**.
 
 ---
 
@@ -43,7 +44,7 @@ Residual work is **not** 90+ independent tasks. It clusters into **five root the
 
 | Root theme | Canonical ID | Consolidated from | Pilot impact |
 |------------|--------------|-------------------|--------------|
-| Materialization-on-read | **MAT-01** | RT-E1, CA-E1, DB-01, EF-02, EF-07, OR-10 | Supervision freshness + feed latency at scale |
+| Materialization-on-read (legacy) | ~~**MAT-01**~~ | RT-E1, CA-E1, DB-01, EF-02, EF-07, OR-10 | **CLOSED_LOT_10** — legacy apps removed |
 | CI / contract gates | **GATE-01** | API-O1, CI-E3, CI-E8, PWA-E5, TS-E2, API-O8 | Green CI ≠ safe merge during Phase 2 fixes |
 | Cache / WS invalidation drift | **CACHE-01** | TQ-E1, TQ-E2, RT-E5, NR-09, TS-E4 | Silent stale UI after refactors |
 | Field mobile readiness | **MOBILE-01** | PWA-E1–E8, FE-E5 | **01a–01e done scoped**; parent theme open (**FE-E5**, **TEST-RPT-01**, PWA-E5–E8, PNG-Apple) |

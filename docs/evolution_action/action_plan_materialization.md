@@ -12,9 +12,9 @@ Définir comment les exécutions récurrentes sont créées à partir d'un `Acti
 |--------|-------------|--------|
 | Celery Beat proactif | Oui | Horizon 14 jours (`MATERIALIZATION_HORIZON_DAYS`), cron daily UTC (`HOUSTON_ACTION_PLAN_HORIZON_BEAT_*`) |
 | Sync on schedule create | Oui | Occurrences **visibles** dans l'horizon (`visible_from <= now`) |
-| Read-path sur GET feed legacy | **Non** | Legacy `execution-feed/` inchangé ; pas de write-on-read |
+| Read-path sur GET feed legacy | **N/A (Lot 10)** | Endpoint `execution-feed/` supprimé |
 | Read-path sur `GET action-plan-execution-feed/` | **Oui (Lot 5)** | Horizon 3 jours (`READ_PATH_MATERIALIZATION_HORIZON_DAYS`), stale guard 30 min |
-| `ensure_visible_action_plan_executions_materialized` | **Oui (Lot 5)** | Branché **uniquement** sur `GET /establishments/{id}/action-plan-execution-feed/` via `build_action_plan_execution_feed_page` — jamais sur legacy `execution-feed/` |
+| `ensure_visible_action_plan_executions_materialized` | **Oui (Lot 5)** | Branché sur `GET /establishments/{id}/action-plan-execution-feed/` via `build_action_plan_execution_feed_page` |
 | WebSocket / notifications | **Oui (Lot 7)** | `action_plan_execution.created` (+ lifecycle events §22) ; notifications in-app created / pending_validation / canceled / reopened — pas de `reassigned` (V1) |
 
 ## Chronologie partagée vs individuelle (§9)
@@ -55,4 +55,4 @@ Interdit si le schedule a déjà ≥1 exécution matérialisée (`400`).
 
 ## Rapport MAT-01 / roadmap
 
-Le nouveau domaine absorbe une stratégie **beat + sync-on-create** explicite. La dette MAT-01 sur le legacy checklist (`execution_feed` read-path) reste ouverte jusqu'au Lot 10.
+**Lot 10 (2026-07-05):** apps legacy `actions` / `checklists` supprimées. La dette MAT-01 (materialization-on-read legacy checklist) est **clôturée** — le domaine plan d'action conserve beat + sync-on-create + read-path ciblé sur `action-plan-execution-feed/` uniquement.

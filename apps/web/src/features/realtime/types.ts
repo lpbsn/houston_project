@@ -8,9 +8,6 @@ export type OperationalRealtimeInvalidateEvent = {
   type: 'invalidate'
   subject_type:
     | 'signal'
-    | 'action'
-    | 'checklist'
-    | 'execution'
     | 'action_plan'
     | 'action_plan_execution'
     | 'action_plan_execution_task'

@@ -1,8 +1,8 @@
 # Feed Domain
 
 Status: authoritative  
-Last reviewed: 2026-07-04
-Implementation status: implemented (Signal Feed Phase 4 + Execution Feed Phase 5/7 — polymorphic Actions + Checklists + Action Plan Execution Feed Lot 5). Checklist feed rules alignées sur [`checklist_domain.md`](checklist_domain.md) (Lot 0 doc closure).
+Last reviewed: 2026-07-05  
+Implementation status: implemented (Signal Feed Phase 4 + Action Plan Execution Feed Lot 5/10). Legacy polymorphic Action/Checklist execution feed removed in Lot 10 — archived domain docs: [`action_domain.md`](../../archive/product/domains/action_domain.md), [`checklist_domain.md`](../../archive/product/domains/checklist_domain.md).
 
 ## 1. Purpose
 
@@ -12,7 +12,7 @@ Feed owns Houston's authorized operational read projections:
 - safe feed items, backend-applied filters, backend-applied sorting, pagination, and optional permission hints.
 
 Feed does not own:
-- Signal, Action, or Checklist lifecycle rules.
+- Signal or Action Plan lifecycle rules.
 - Notification Center behavior.
 - realtime transport.
 - RBAC policy definition.
@@ -35,14 +35,9 @@ Feed is a read/projection domain. It is not business truth.
 
 Current truth:
 - `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
-- `GET execution-feed/` implemented (Phase 5 Actions + Phase 7 Checklists) with required `view_mode=personal|general`.
-- Response envelope: `items`, `next_cursor`, `has_more`; each item has `item_type: "action" | "checklist"`.
-- **`GET action-plan-execution-feed/` implemented (Lot 5 Plan d'action)** with required `view_mode=personal|general`. Response envelope identical; each item has `item_type: "action_plan_execution"` and payload `action_plan_execution` (projection légère §18 besoin). **Coexistence dual feed** with legacy `execution-feed/` until Lot 10 — do not merge cursors client-side.
-- Execution Feed merge: visible checklist items are **prioritized** — up to `page_size` checklists first (sorted by `last_activity_at desc`), then Actions fill remaining slots (Action sort unchanged). Not a single cross-type `last_activity_at` interleave.
-- Lazy checklist materialization runs on feed read (`ensure_visible_executions_materialized`) before querying checklist items on **legacy** `execution-feed/` only.
-- Lazy action plan schedule materialization runs on feed read (`ensure_visible_action_plan_executions_materialized`) before querying items on **`action-plan-execution-feed/` only** (horizon 3 days, stale guard 30 min).
-- Execution Feed **Vue globale** for Staff: created/assigned Actions only (not scope-based); **Ma vue** uses the same rule for Staff. Checklist visibility follows [`checklist_domain.md`](checklist_domain.md) §9 (exécutions assignées + scope ; lancements depuis modèle selon RBAC).
-- **Feed Exécution `+` (cible)** : menu **Action** / **Checklist** — voir [`checklist_domain.md`](checklist_domain.md) §5.16. Staff : Checklist → « Lancer pour moi » uniquement.
+- **`GET action-plan-execution-feed/`** (Lot 5 Plan d'action, seul feed exécution post-Lot 10) with required `view_mode=personal|general`. Response envelope: `items`, `next_cursor`, `has_more`; each item has `item_type: "action_plan_execution"` and payload `action_plan_execution`.
+- Lazy action plan schedule materialization runs on feed read (`ensure_visible_action_plan_executions_materialized`) before querying items on **`action-plan-execution-feed/`** (horizon 3 days, stale guard 30 min).
+- **Feed Exécution `+` (cible Lot 10):** menu **Plan ponctuel** / **Catalogue** — voir [`besoin_evolution_action.md`](../../evolution_action/besoin_evolution_action.md) §25.
 
 ## 3. Out of Scope
 

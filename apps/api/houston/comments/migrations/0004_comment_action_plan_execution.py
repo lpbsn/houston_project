@@ -32,19 +32,12 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=(
                     Q(
-                        ("action__isnull", True),
-                        ("action_plan_execution__isnull", True),
-                        ("signal__isnull", False),
+                        signal__isnull=False,
+                        action_plan_execution__isnull=True,
                     )
                     | Q(
-                        ("action__isnull", False),
-                        ("action_plan_execution__isnull", True),
-                        ("signal__isnull", True),
-                    )
-                    | Q(
-                        ("action__isnull", True),
-                        ("action_plan_execution__isnull", False),
-                        ("signal__isnull", True),
+                        signal__isnull=True,
+                        action_plan_execution__isnull=False,
                     )
                 ),
                 name="comment_exactly_one_parent",
