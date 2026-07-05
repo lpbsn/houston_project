@@ -1,7 +1,7 @@
 # Notification Matrix v0.2
 
-> **Status: Lot 1 implemented / Lot 2+ draft reference**  
-> **Canonical Lot 1 keys:** `LOT1_EVENT_KEYS` in `apps/api/houston/notifications/constants.py`  
+> **Status: Lot 1 implemented / Lot 2+ draft reference — legacy Action/Checklist rows archived post-Lot 10**  
+> **Canonical Lot 1 keys:** `LOT1_EVENT_KEYS` in `apps/api/houston/notifications/constants.py` (`action_plan.execution.*` only for execution domain)  
 > **Implementation:** `houston/notifications/` models + services + `scheduling.py` + `apps/api/schema.yml`  
 > **Business-fact reference:** [event_catalogue_v0.1.md](event_catalogue_v0.1.md)
 
@@ -154,7 +154,7 @@ Use **`MembershipScope` on BusinessUnit** — not legacy `operational_domains`.
 
 For `action.pending_validation`:
 - Owner/Director: may validate any action in establishment
-- Manager: only when canonical responsible BU ∈ `MembershipScope` ([action_domain.md](domains/action_domain.md))
+- Manager: only when canonical responsible BU ∈ `MembershipScope` (see [`action_plan_materialization.md`](../evolution_action/action_plan_materialization.md); legacy [`action_domain.md`](../archive/product/domains/action_domain.md) archived)
 
 ---
 

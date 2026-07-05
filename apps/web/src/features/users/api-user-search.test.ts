@@ -22,7 +22,7 @@ describe('searchEstablishmentUsers', () => {
     })
   })
 
-  it('does not send business_unit_id without checklist scope filter', async () => {
+  it('does not send business_unit_id when scope filter omitted', async () => {
     await searchEstablishmentUsers('est-1', 'marie')
 
     expect(getMock).toHaveBeenCalledWith(

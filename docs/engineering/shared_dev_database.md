@@ -25,7 +25,7 @@ Never commit `.env.shared-dev`. Use [`.env.shared-dev.example`](../../.env.share
    ```bash
    make shared-dev-bootstrap
    ```
-   `shared-dev-bootstrap` does **not** start `celery-beat`. For scheduled jobs (checklist horizon materialization, chat message purge, upload TTL cleanup), start Beat against the **shared-dev** Compose merge — see [Scheduler in shared-dev mode](#scheduler-in-shared-dev-mode). Lazy read-path checklist materialization remains available without Beat.
+   `shared-dev-bootstrap` does **not** start `celery-beat`. For scheduled jobs (action-plan schedule horizon materialization, chat message purge, upload TTL cleanup), start Beat against the **shared-dev** Compose merge — see [Scheduler in shared-dev mode](#scheduler-in-shared-dev-mode). Lazy read-path action-plan materialization on execution feed remains available without Beat.
 6. Frontend (unchanged):
    ```bash
    make web-dev

@@ -68,7 +68,7 @@ recreate-backend: assert-local-dev-db
 		$(COMPOSE) --profile scheduler up -d --force-recreate --no-deps celery-beat; \
 	fi
 
-# Celery Beat (profile scheduler): checklist horizon, chat purge, upload TTL cleanup.
+# Celery Beat (profile scheduler): action-plan schedule horizon, chat purge, upload TTL cleanup.
 # Not started by bootstrap-dev — run explicitly after local or shared-dev bootstrap.
 up-scheduler: assert-local-dev-db up-backend
 	$(COMPOSE) --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
@@ -151,7 +151,7 @@ catalog-check:
 
 bootstrap-dev: assert-local-dev-db up-backend migrate import-catalog check catalog-check
 	@echo ""
-	@echo "Optional: run 'make up-scheduler' to start celery-beat (checklist horizon, chat purge, upload TTL)."
+	@echo "Optional: run 'make up-scheduler' to start celery-beat (action-plan schedule horizon, chat purge, upload TTL)."
 	@echo "Lazy read-path materialization remains available without Beat."
 
 reset-dev-db: assert-local-dev-db
@@ -202,7 +202,7 @@ shared-dev-up-scheduler: shared-dev-up
 shared-dev-bootstrap: shared-dev-up shared-dev-migrate shared-dev-import-catalog shared-dev-check
 	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py verify_catalog_counts'
 	@echo ""
-	@echo "Optional: run 'make shared-dev-up-scheduler' to start celery-beat (checklist horizon, chat purge, upload TTL)."
+	@echo "Optional: run 'make shared-dev-up-scheduler' to start celery-beat (action-plan schedule horizon, chat purge, upload TTL)."
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac

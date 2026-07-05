@@ -42,8 +42,6 @@ export const actionPlansQueryKeys = {
     ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode] as const,
   executionDetail: (establishmentId: string, executionId: string) =>
     ['action-plans', 'execution-detail', establishmentId, executionId] as const,
-  scheduleDetail: (establishmentId: string, scheduleId: string) =>
-    ['action-plans', 'schedule-detail', establishmentId, scheduleId] as const,
 }
 
 export class ActionPlansApiError extends Error {

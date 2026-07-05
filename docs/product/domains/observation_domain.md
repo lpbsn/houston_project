@@ -18,7 +18,7 @@ Observation does not own:
 - media lifecycle, access, or cleanup
 - transcription contracts or AI pipeline contracts
 - Signal lifecycle or aggregation rules
-- Checklist lifecycle
+- Action Plan lifecycle
 - RBAC internals
 - Security / RGPD policy details
 
@@ -34,7 +34,7 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 - Processing enqueue after persistence.
 - Local-only frontend draft before submit.
 - Simplified post-submit feedback for analysis progress and outcome.
-- Checklist-origin Observation (implemented): via `POST .../checklist-task-executions/{id}/create-observation/` (task command; not a public extension of `POST observations/`), with context linkage (`checklist_execution_id`, `checklist_task_execution_id`, `origin=checklist_task`). Same 10–1,000 character validation as direct report — no shorter-text exception. See [`checklist_domain.md`](checklist_domain.md) §3.8.
+- Action plan task-origin Observation (implemented): via `POST .../action-plan-execution-tasks/{task_execution_id}/create-observation/` (task command; not a public extension of `POST observations/`), with context linkage (`action_plan_execution_id`, `action_plan_task_execution_id`, `origin=action_plan_task`). Same 10–1,000 character validation as direct report — no shorter-text exception.
 
 ## 3. Out of Scope
 
@@ -53,10 +53,10 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
 ## 4. Core Invariants
 
 - Observation is raw user-validated field input.
-- Observation is not a Signal, Action, or ChecklistTask.
+- Observation is not a Signal, Action Plan, or ActionPlanTask.
 - Observation is persisted on submit and remains unique even if later processing creates or aggregates Signals.
 - Text is required as typed input or validated transcription text; photo-only Observation is forbidden.
-- Validation is 10 to 1,000 characters for all origins, including checklist-origin (Checklist MVP). No shorter-text exception in MVP.
+- Validation is 10 to 1,000 characters for all origins, including action-plan-task-origin. No shorter-text exception in MVP.
 - Photos are optional and follow Upload / Media rules.
 - Audio is temporary; only validated transcription text persists in MVP.
 - Images are not sent to AI in MVP.
@@ -88,8 +88,8 @@ The processing pipeline may use AI, but Observation does not own AI contracts or
   - Owned here only as a relationship boundary, not as a media lifecycle contract.
 
 - `ObservationOrigin`
-  - Source context for the submission, such as direct reporting or checklist task handoff.
-  - Checklist-origin: `origin=checklist_task` with `checklist_execution_id` and `checklist_task_execution_id` linkage (see §2 MVP Scope).
+  - Source context for the submission, such as direct reporting or action plan task handoff.
+  - Action-plan-task-origin: `origin=action_plan_task` with `action_plan_execution_id` and `action_plan_task_execution_id` linkage (see §2 MVP Scope).
 
 - `LocalObservationDraft`
   - Frontend-only draft state before submit.
@@ -135,13 +135,13 @@ See [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md)
 - Resulting Signals, not raw Observations, are the normal supervised product surface.
 - Any exceptional raw Observation access must remain backend-authorized and follow Security / RGPD constraints.
 - No anonymous Observation submission is allowed.
-- Checklist MVP: checklist-origin Observation requires authorized access to the originating checklist task execution (see [`checklist_domain.md`](checklist_domain.md) §3.8).
+- Action plan task-origin Observation requires authorized access to the originating task execution.
 - `GET .../observations/{id}/processing-status/` is visible to the submitter and establishment admins (owner/director) only; other submit-capable peers receive 404.
 
 | Path | Endpoint | Who may submit | Backend check |
 |------|----------|----------------|---------------|
 | Direct report | `POST .../observations/` | Any active establishment member | `CanSubmitObservation` → `can_create_observation` |
-| Checklist task | `POST .../checklist-task-executions/{id}/create-observation/` | Checklist execution assignee only | `can_execute_checklist_tasks` + task `pending` |
+| Action plan task | `POST .../action-plan-execution-tasks/{task_execution_id}/create-observation/` | Execution assignee with task access | action plan execution permissions + task pending |
 
 ## 8. Events
 
@@ -168,8 +168,8 @@ Implemented endpoints confirmed in `apps/api/schema.yml`:
 - `POST /api/v1/establishments/{establishment_id}/observations/` — submit with `text` (maps to internal `raw_text`) and optional `temporary_upload_ids`; response includes `id`, `submitted_at`, `media_count`, `processing_status` only (no raw text).
 - `GET /api/v1/establishments/{establishment_id}/observations/{observation_id}/processing-status/` — pipeline status projection for submitter or establishment admin (owner/director); no raw text.
 
-Implemented checklist-origin endpoint (see `schema.yml`):
-- `POST /api/v1/establishments/{establishment_id}/checklist-task-executions/{task_execution_id}/create-observation/` — task command only; do not extend public `POST observations/`
+Implemented action-plan-task-origin endpoint (see `schema.yml`):
+- `POST /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/create-observation/` — task command only; do not extend public `POST observations/`
 
 Candidate API capabilities only:
 - internal or admin retry processing command (future)
@@ -195,7 +195,7 @@ Upload, transcription, and media endpoints are documented in [`upload_media_doma
 - Inspect Upload / Media before changing photo or audio rules.
 - Inspect AI documentation and [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md) before changing transcription or processing contracts.
 - Inspect Signal documentation before changing create, aggregate, or outcome behavior.
-- Inspect Checklist documentation before changing checklist-origin context.
+- Inspect action plan documentation before changing action-plan-task-origin context.
 - Inspect Security / RGPD before changing raw-text visibility, logging, retention, notification, or realtime rules.
 - Inspect RBAC / Permissions before changing who may submit or access related resources.
 - Keep the photo limit aligned with `upload_media_domain.md`.

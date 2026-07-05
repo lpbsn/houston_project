@@ -47,12 +47,6 @@ vi.mock('@/features/observations/hooks', () => ({
       return mockSubmitPending.current
     },
   }),
-  useChecklistReportSubmitMutation: () => ({
-    mutateAsync: vi.fn(),
-    get isPending() {
-      return mockSubmitPending.current
-    },
-  }),
   useObservationProcessingStatusQuery: () => ({
     isLoading: false,
     isFetching: false,

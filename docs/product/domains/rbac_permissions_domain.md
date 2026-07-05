@@ -1,8 +1,8 @@
 # RBAC / Permissions Domain
 
 Status: authoritative
-Last reviewed: 2026-06-12
-Implementation status: implemented (Checklist RBAC unifié : [`checklist_domain.md`](checklist_domain.md) §9 — Lots 2–7 clos, plus personal/shared supprimés)
+Last reviewed: 2026-07-05
+Implementation status: implemented (Action Plan RBAC in [`action_plans/permissions.py`](../../../apps/api/houston/action_plans/permissions.py); legacy Action/Checklist domains removed Lot 10)
 
 ## 1. Purpose
 
@@ -17,7 +17,7 @@ Identity, organization, establishment, membership lifecycle, and membership sele
 - Membership-backed BusinessUnit scope through `MembershipScope` rows.
 - Establishment visibility checks, action permission checks, and BusinessUnit scope access checks.
 - Backend permission enforcement for API reads, writes, command endpoints, feeds, realtime subscriptions, signed media access, notifications, comments, and chat access.
-- Frontend permission hints as convenience only, never as security authority (implemented on Actions and Checklists API responses; see [`checklist_domain.md`](checklist_domain.md) §9.1).
+- Frontend permission hints as convenience only, never as security authority (implemented on Action Plan and Signal API responses).
 
 ## 3. Out of Scope
 
@@ -107,7 +107,7 @@ Permission outcomes are:
 - Staff
   - Reporting and execution role, not management authority.
   - Current implemented helpers allow app access, signal-feed access, and observation creation.
-  - **Actions (implemented):** Staff may create **free Actions** when the responsible BusinessUnit is in their `MembershipScope` (`can_create_free_action` + `establishments.permissions.can_create_action`). Staff **cannot** create **linked Actions** from a Signal (`can_create_linked_action` returns false; service rejects with `Staff members cannot create linked actions.`). Staff may only create Actions **assigned to themselves** (single assignee = self; no multi-assignee to others). Staff **cannot validate** Actions (`can_validate_action` excludes Staff).
+  - **Action Plans (implemented):** Staff may create action plans when permitted by `can_create_action_plan` (establishment helper `can_create_action`). Staff **cannot** create **signal-linked** action plans from a Signal when denied by role rules. Staff execution permissions follow `action_plans/permissions.py`. Staff **cannot validate** action plan executions when validation is required and role excludes validator (`can_validate_action` establishment helper).
   - BusinessUnit scope coverage required for visibility and free-action creation (or owner/director broad access).
 
 - Signal Feed — list scope vs detail access (validated 2026-06-11, audit BE-RBAC02)
@@ -178,28 +178,11 @@ Implemented response truths:
 Additional implemented establishment-scoped endpoints with backend RBAC (confirm paths in `apps/api/schema.yml` before use):
 
 - Signal feed: `GET .../signal-feed/`
-- Execution feed (Actions + Checklists): `GET .../execution-feed/`
-- Actions lifecycle and commands under `.../actions/`
-- Checklists templates, assignments, executions, and task commands under `.../checklist-*`
+- Action Plan execution feed: `GET .../action-plan-execution-feed/`
+- Action Plan catalog, executions, schedules, and task commands under `.../action-plans/`, `.../action-plan-executions/`, `.../action-plan-execution-tasks/`
 - Observations submit and processing status under `.../observations/`
 
-Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`action_domain.md`](action_domain.md), [`checklist_domain.md`](checklist_domain.md) §9, [`feed_domain.md`](feed_domain.md) §7.
-
-### Checklist RBAC (cible — Lot 0)
-
-Le domaine Checklist = **processus opérationnel enregistré** (`ChecklistTemplate`) uniquement. Plus de Flash To-do, plus de badge Process/To-do, plus de concepts personal/shared.
-
-| Rôle | Résumé |
-| --- | --- |
-| **Owner / Director** | CRUD de toutes les checklists enregistrées de l'établissement ; lancer exécutions pour soi ou autrui ; créer et gérer `ChecklistAssignment` ; assigner à tout membre actif |
-| **Manager** | CRUD dans son **`MembershipScope`** BU ; lancer exécutions pour soi ou autrui dans scope ; créer et gérer assignments dans scope ; assigné compatible scope |
-| **Staff** | **Lecture seule** sur la bibliothèque (modèles accessibles dans scope) ; **pas** de création, modification ou suppression de processus ; **pas** de `ChecklistAssignment` ; lancer exécution ponctuelle **pour soi uniquement** (« Lancer pour moi ») ; exécuter et annuler si assigné |
-
-Les permission hints pilotent l'UI ; le backend enforce toute commande (`403` si non autorisé).
-
-Helpers existants à réutiliser : `membership_scope_covers_business_unit`, `membership_covers_checklist_business_unit` ([`checklists/permissions.py`](../../../apps/api/houston/checklists/permissions.py)). Matrice détaillée : [`checklist_domain.md`](checklist_domain.md) §9.1.
-
-**Supprimé (produit)** : Flash To-do ; badge Process/To-do ; catalogue Staff « personal only » ; distinction RBAC shared vs personal ; Staff CRUD sur `created_by = self`.
+Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`feed_domain.md`](feed_domain.md) §7, [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md). Legacy Action/Checklist matrices archived: [`action_domain.md`](../../archive/product/domains/action_domain.md), [`checklist_domain.md`](../../archive/product/domains/checklist_domain.md).
 
 Candidate endpoints only:
 

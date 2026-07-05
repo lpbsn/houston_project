@@ -170,7 +170,7 @@ Not validated yet:
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
 
-API responses expose `permission_hints` (`can_pin`, `can_set_urgency`, `can_cancel`, `can_resolve`, `can_create_action`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_action` is signal-scoped: it indicates whether the current membership may create a linked Action from this Signal (aligned with `can_create_linked_action`). `POST /actions/` enforcement remains the final authority.
+API responses expose `permission_hints` (`can_pin`, `can_set_urgency`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
 
 ## 8. Events
 
@@ -206,7 +206,7 @@ Not implemented in current schema:
 - archive Signal
 - fetch Signal timeline or events
 
-Action creation is via `POST .../actions/` with optional `signal` (Phase 5 core implemented), not a nested Signal sub-resource.
+Action Plan creation from a Signal is via `POST .../action-plans/` with optional `signal_id` (linked plan), not a nested Signal sub-resource.
 
 Do not treat any Signal route as implemented until it exists in `apps/api/schema.yml`.
 

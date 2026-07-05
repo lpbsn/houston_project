@@ -25,7 +25,7 @@ export function ActionDetailTabs({ activeTab, onChange }: ActionDetailTabsProps)
   return (
     <div
       role="group"
-      aria-label="Sections de l'action"
+      aria-label="Sections du plan d'action"
       className="grid w-full grid-cols-2 gap-2"
     >
       {tabOptions.map(({ value, label }) => (

@@ -163,7 +163,7 @@ describe('auth api cache isolation', () => {
   })
 
   it('clears the entire query cache on clearAuthState', () => {
-    queryClient.setQueryData(['actions', 'detail', 'est-a', 'act-1'], { id: 'act-1' })
+    queryClient.setQueryData(['action-plans', 'detail', 'est-a', 'plan-1'], { id: 'plan-1' })
     queryClient.setQueryData(['chat', 'conversations', 'est-a'], { items: [] })
     queryClient.setQueryData(['reporting', 'kpi', 'est-a'], { kpi: 1 })
     queryClient.setQueryData(bootstrapQueryKey, bootstrapPayload)
@@ -171,7 +171,7 @@ describe('auth api cache isolation', () => {
     clearAuthState()
 
     expect(clearAccessTokenMock).toHaveBeenCalledOnce()
-    expect(queryClient.getQueryData(['actions', 'detail', 'est-a', 'act-1'])).toBeUndefined()
+    expect(queryClient.getQueryData(['action-plans', 'detail', 'est-a', 'plan-1'])).toBeUndefined()
     expect(queryClient.getQueryData(['chat', 'conversations', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(['reporting', 'kpi', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(bootstrapQueryKey)).toBeUndefined()

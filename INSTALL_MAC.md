@@ -128,9 +128,9 @@ docker compose ps
 
 Les services `postgres`, `redis`, `api` et `celery` doivent être **Up**. `make catalog-check` doit afficher **14** `CatalogBusinessUnit` et **134** `CatalogActivitySubject`.
 
-### Scheduler optionnel (checklists horizon)
+### Scheduler optionnel (action-plan schedule horizon)
 
-Pour la matérialisation planifiée des assignments partagés (en plus du worker Celery) :
+Pour la matérialisation planifiée des exécutions récurrentes (en plus du worker Celery) :
 
 ```bash
 make up-scheduler
