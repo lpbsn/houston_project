@@ -110,7 +110,7 @@ def test_schedule_patch_use_shared_chronology_blocked_after_materialization(
     assert patch_response.status_code == 400
 
 
-def test_staff_schedule_create_on_catalog_returns_404(
+def test_staff_schedule_create_on_in_scope_catalog_returns_201(
     api_client,
     staff_membership,
     catalog_action_plan,
@@ -122,6 +122,51 @@ def test_staff_schedule_create_on_catalog_returns_404(
         api_recurring_schedule_payload(
             staff_membership=staff_membership,
             business_unit=business_unit,
+            assignees=[],
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.json()
+    assert response.json()["assignees"][0]["membership_id"] == str(staff_membership.id)
+
+
+def test_staff_schedule_create_rejects_third_party_assignee(
+    api_client,
+    owner_membership,
+    staff_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        action_plan_schedule_url(staff_membership.establishment_id, catalog_action_plan.id),
+        api_recurring_schedule_payload(
+            staff_membership=owner_membership,
+            business_unit=business_unit,
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+
+
+def test_staff_schedule_create_rejects_cross_pole_catalog(
+    api_client,
+    staff_membership,
+    cross_pole_catalog_action_plan,
+    business_unit,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        action_plan_schedule_url(
+            staff_membership.establishment_id,
+            cross_pole_catalog_action_plan.id,
+        ),
+        api_recurring_schedule_payload(
+            staff_membership=staff_membership,
+            business_unit=business_unit,
+            assignees=[],
         ),
         format="json",
         **auth_headers(token),

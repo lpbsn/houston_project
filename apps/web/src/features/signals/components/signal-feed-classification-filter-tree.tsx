@@ -27,7 +27,7 @@ export function SignalFeedClassificationFilterTree({
   selection,
 }: SignalFeedClassificationFilterTreeProps) {
   const [expandedBusinessUnitId, setExpandedBusinessUnitId] = useState<string | undefined>(
-    businessUnits[0]?.id,
+    undefined,
   )
 
   const effectiveExpandedBusinessUnitId = useMemo(() => {
@@ -37,7 +37,7 @@ export function SignalFeedClassificationFilterTree({
     ) {
       return expandedBusinessUnitId
     }
-    return businessUnits[0]?.id
+    return undefined
   }, [businessUnits, expandedBusinessUnitId])
 
   if (businessUnits.length === 0) {
@@ -53,8 +53,8 @@ export function SignalFeedClassificationFilterTree({
       className="space-y-2"
       collapsible
       type="single"
-      value={effectiveExpandedBusinessUnitId}
-      onValueChange={setExpandedBusinessUnitId}
+      value={effectiveExpandedBusinessUnitId ?? ''}
+      onValueChange={(value) => setExpandedBusinessUnitId(value || undefined)}
     >
       {businessUnits.map((businessUnit) => (
         <Accordion.Item

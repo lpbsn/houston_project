@@ -85,15 +85,17 @@ def can_view_signal_detail(
     return False
 
 
-def can_pin_signal(
+def _signal_commandable_by_membership(
     membership: EstablishmentMembership | None,
     signal: Signal,
+    *,
+    statuses: frozenset[str],
 ) -> bool:
     if membership is None:
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
-    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+    if signal.status not in statuses:
         return False
     if membership.role == EstablishmentMembership.Role.STAFF:
         return False
@@ -102,11 +104,26 @@ def can_pin_signal(
     return signal_actionable_by_membership(membership, signal)
 
 
+def can_pin_signal(
+    membership: EstablishmentMembership | None,
+    signal: Signal,
+) -> bool:
+    return _signal_commandable_by_membership(
+        membership,
+        signal,
+        statuses=frozenset({Signal.Status.OPEN}),
+    )
+
+
 def can_set_signal_urgency(
     membership: EstablishmentMembership | None,
     signal: Signal,
 ) -> bool:
-    return can_pin_signal(membership, signal)
+    return _signal_commandable_by_membership(
+        membership,
+        signal,
+        statuses=ACTIVE_SIGNAL_STATUSES,
+    )
 
 
 def can_cancel_signal(

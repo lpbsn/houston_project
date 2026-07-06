@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SignalFeedItem } from '../types'
 import { SignalCard } from './signal-card'
+
+const onSelect = vi.fn()
+const onOpenActions = vi.fn()
 
 function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem {
   return {
@@ -37,6 +40,10 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
   }
 }
 
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
 afterEach(() => {
   cleanup()
 })
@@ -44,7 +51,7 @@ afterEach(() => {
 describe('SignalCard feed variant', () => {
   it('does not show aggregation counter when aggregation_count is zero', () => {
     render(
-      <SignalCard item={buildFeedItem()} onSelect={vi.fn()} variant="feed" />,
+      <SignalCard item={buildFeedItem()} onSelect={onSelect} variant="feed" />,
     )
 
     expect(screen.queryByText('x1')).toBeNull()
@@ -56,7 +63,7 @@ describe('SignalCard feed variant', () => {
     render(
       <SignalCard
         item={buildFeedItem({ aggregation_count: 2 })}
-        onSelect={vi.fn()}
+        onSelect={onSelect}
         variant="feed"
       />,
     )
@@ -64,5 +71,108 @@ describe('SignalCard feed variant', () => {
     expect(screen.getByText('x2')).toBeTruthy()
     expect(screen.getByLabelText('2 agrégations')).toBeTruthy()
     expect(screen.getByText('En attente')).toBeTruthy()
+  })
+})
+
+describe('SignalCard actions menu', () => {
+  it('does not show actions menu when no permissions', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem()}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        variant="feed"
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Actions du signal' })).toBeNull()
+  })
+
+  it('does not show actions menu when onOpenActions is not provided', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          permission_hints: {
+            can_pin: true,
+            can_set_urgency: false,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+          },
+        })}
+        onSelect={onSelect}
+        variant="feed"
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Actions du signal' })).toBeNull()
+  })
+
+  it('shows actions menu when can_pin is true', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          permission_hints: {
+            can_pin: true,
+            can_set_urgency: false,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+          },
+        })}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        variant="feed"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
+  })
+
+  it('shows actions menu when can_set_urgency is true', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          permission_hints: {
+            can_pin: false,
+            can_set_urgency: true,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+          },
+        })}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        variant="pinned"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
+  })
+
+  it('calls onOpenActions without navigating to detail', () => {
+    const item = buildFeedItem({
+      permission_hints: {
+        can_pin: true,
+        can_set_urgency: false,
+        can_cancel: false,
+        can_resolve: false,
+        can_create_linked_action_plan: false,
+      },
+    })
+
+    render(
+      <SignalCard
+        item={item}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        variant="feed"
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du signal' }))
+
+    expect(onOpenActions).toHaveBeenCalledWith(item)
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })

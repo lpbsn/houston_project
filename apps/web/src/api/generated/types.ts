@@ -1587,6 +1587,7 @@ export interface components {
             visible_from?: string | null;
             /** Format: date */
             occurrence_date?: string | null;
+            schedule?: components["schemas"]["ActionPlanScheduleCreateRequest"] | null;
         };
         ActionPlanDetail: {
             /** Format: uuid */
@@ -1672,6 +1673,8 @@ export interface components {
             /** Format: date-time */
             end_at: string | null;
             is_overdue: boolean;
+            task_count: number;
+            treated_task_count: number;
             task_executions: components["schemas"]["ActionPlanExecutionFeedTaskPreview"][];
             /** Format: date-time */
             last_activity_at: string;
@@ -1725,6 +1728,7 @@ export interface components {
             can_activate: boolean;
             can_deactivate: boolean;
             can_use: boolean;
+            can_schedule: boolean;
         };
         ActionPlanScheduleAssignee: {
             /** Format: uuid */
@@ -1956,6 +1960,7 @@ export interface components {
             chat_available: boolean;
             can_create_action_plan: boolean;
             can_create_catalog_action_plan: boolean;
+            can_view_action_plan_catalog: boolean;
             can_invite: boolean;
             can_manage_runtime_config: boolean;
         };
@@ -2707,6 +2712,7 @@ export interface components {
             structured_summary: string;
             source_context: components["schemas"]["SourceContext"];
             media_items: components["schemas"]["SignalDetailMediaItem"][];
+            linked_action_plan_executions: components["schemas"]["SignalLinkedActionPlanExecution"][];
         };
         SignalDetailMediaItem: {
             /** Format: uuid */
@@ -2751,6 +2757,18 @@ export interface components {
             applied_filters: {
                 [key: string]: unknown;
             };
+        };
+        SignalLinkedActionPlanExecution: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            status: string;
+            requires_validation: boolean;
+            pilot_business_unit: components["schemas"]["ActionPlanBusinessUnit"];
+            /** Format: date-time */
+            last_activity_at: string;
+            /** Format: date-time */
+            created_at: string;
         };
         SourceContext: {
             /** Format: date-time */

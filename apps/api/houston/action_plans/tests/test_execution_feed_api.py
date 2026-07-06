@@ -8,8 +8,9 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    TASK_STATUS_DONE,
 )
-from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecution
+from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecution, ActionPlanExecutionTask
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import (
@@ -118,6 +119,43 @@ def test_action_plan_execution_feed_item_contract(
     assert len(payload["involved_poles"]) >= 1
     assert "permission_hints" in payload
     assert payload["permission_hints"]["can_mark_done"] is True
+    assert payload["task_count"] == 1
+    assert payload["treated_task_count"] == 0
+
+
+def test_action_plan_execution_feed_item_task_counts(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Multi-task feed",
+        tasks=[
+            build_task_payload(task="Task 1", business_unit=business_unit, position=1),
+            build_task_payload(task="Task 2", business_unit=business_unit, position=2),
+            build_task_payload(task="Task 3", business_unit=business_unit, position=3),
+            build_task_payload(task="Task 4", business_unit=business_unit, position=4),
+        ],
+    )
+    first_task = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution=execution,
+        position=1,
+    ).first()
+    first_task.status = TASK_STATUS_DONE
+    first_task.save(update_fields=["status", "updated_at"])
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    payload = response.json()["items"][0]["action_plan_execution"]
+    assert payload["task_count"] == 4
+    assert payload["treated_task_count"] == 1
+    assert len(payload["task_executions"]) == 3
 
 
 def test_terminal_executions_excluded_from_feed(

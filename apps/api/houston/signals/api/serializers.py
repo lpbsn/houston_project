@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from houston.action_plans.api.serializers import (
+    ActionPlanBusinessUnitSerializer,
+    _serialize_business_unit,
+)
+from houston.action_plans.models import ActionPlanExecution
 from houston.observations.media_access import build_observation_media_preview_url
 from houston.signals.models import Signal
 from houston.signals.reporter_display import (
@@ -67,10 +72,21 @@ class SignalDetailMediaItemSerializer(serializers.Serializer):
     observation_id = serializers.UUIDField()
 
 
+class SignalLinkedActionPlanExecutionSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    status = serializers.CharField()
+    requires_validation = serializers.BooleanField()
+    pilot_business_unit = ActionPlanBusinessUnitSerializer()
+    last_activity_at = serializers.DateTimeField()
+    created_at = serializers.DateTimeField()
+
+
 class SignalDetailSerializer(SignalFeedItemSerializer):
     structured_summary = serializers.CharField()
     source_context = SourceContextSerializer()
     media_items = SignalDetailMediaItemSerializer(many=True)
+    linked_action_plan_executions = SignalLinkedActionPlanExecutionSerializer(many=True)
 
 
 class SignalUrgencyRequestSerializer(serializers.Serializer):
@@ -154,7 +170,23 @@ def _serialize_signal_detail_media_items(*, signal: Signal, request) -> list[dic
     ]
 
 
+def serialize_linked_action_plan_execution_for_signal_detail(
+    execution: ActionPlanExecution,
+) -> dict:
+    return {
+        "id": execution.id,
+        "title": execution.title,
+        "status": execution.status,
+        "requires_validation": execution.requires_validation,
+        "pilot_business_unit": _serialize_business_unit(execution.pilot_business_unit),
+        "last_activity_at": execution.last_activity_at,
+        "created_at": execution.created_at,
+    }
+
+
 def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
+    from houston.action_plans.selectors import linked_action_plan_executions_for_signal_detail
+
     payload = serialize_signal_feed_item(signal=signal, membership=membership)
     payload["structured_summary"] = signal.structured_summary
 
@@ -179,4 +211,11 @@ def serialize_signal_detail(*, signal: Signal, membership, request) -> dict:
             signal=signal,
             request=request,
         )
+    payload["linked_action_plan_executions"] = [
+        serialize_linked_action_plan_execution_for_signal_detail(execution)
+        for execution in linked_action_plan_executions_for_signal_detail(
+            membership=membership,
+            signal=signal,
+        )
+    ]
     return payload

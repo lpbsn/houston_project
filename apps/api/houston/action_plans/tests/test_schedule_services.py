@@ -12,7 +12,11 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
 )
-from houston.action_plans.exceptions import ActionPlanConflictError, ActionPlanValidationError
+from houston.action_plans.exceptions import (
+    ActionPlanConflictError,
+    ActionPlanPermissionError,
+    ActionPlanValidationError,
+)
 from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
     deactivate_action_plan_schedule,
@@ -27,6 +31,63 @@ from houston.action_plans.tests.helpers import (
 )
 
 pytestmark = pytest.mark.django_db
+
+
+def test_manager_cannot_assign_out_of_scope_on_schedule_create(
+    manager_membership,
+    cross_pole_catalog_action_plan,
+    out_of_scope_staff,
+    maintenance_business_unit,
+):
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to assign"):
+        create_action_plan_schedule(
+            action_plan=cross_pole_catalog_action_plan,
+            actor=manager_membership,
+            recurrence_days=recurrence_days_for_visible_today(),
+            assignees=[
+                build_schedule_assignee_payload(
+                    membership=out_of_scope_staff,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+            use_shared_chronology=True,
+            **visible_schedule_window(),
+        )
+
+
+def test_manager_cannot_assign_out_of_scope_on_schedule_update(
+    manager_membership,
+    cross_pole_catalog_action_plan,
+    staff_membership,
+    business_unit,
+    out_of_scope_staff,
+    maintenance_business_unit,
+):
+    schedule = create_action_plan_schedule(
+        action_plan=cross_pole_catalog_action_plan,
+        actor=manager_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **visible_schedule_window(),
+    )
+
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to assign"):
+        update_action_plan_schedule(
+            schedule=schedule,
+            actor=manager_membership,
+            assignees=[
+                build_schedule_assignee_payload(
+                    membership=out_of_scope_staff,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+        )
 
 
 def _create_schedule(owner_membership, catalog_action_plan, staff_membership, business_unit):

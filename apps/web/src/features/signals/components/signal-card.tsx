@@ -1,4 +1,4 @@
-import { Pin } from 'lucide-react'
+import { MoreHorizontal, Pin } from 'lucide-react'
 
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
@@ -15,6 +15,7 @@ import {
   getSignalCardLeftAccentColor,
   getSignalCardSurfaceClass,
 } from '../lib/signal-display'
+import { canOpenSignalFeedCardActions } from '../lib/signal-feed-card-actions'
 import type { SignalFeedItem } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
 import { SignalClassificationBadges } from './signal-classification-badges'
@@ -23,16 +24,45 @@ import { SignalUrgencyBadge } from './signal-urgency-badge'
 type SignalCardProps = {
   item: SignalFeedItem
   onSelect: (signalId: string) => void
+  onOpenActions?: (item: SignalFeedItem) => void
   variant?: 'feed' | 'pinned'
 }
 
-function FeedSignalCard({ item, onSelect }: SignalCardProps) {
+function stopCardNavigation(event: { stopPropagation: () => void }) {
+  event.stopPropagation()
+}
+
+type SignalCardActionsButtonProps = {
+  item: SignalFeedItem
+  onOpenActions: (item: SignalFeedItem) => void
+}
+
+function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButtonProps) {
+  return (
+    <button
+      type="button"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#7D7B75] hover:bg-black/5"
+      aria-label="Actions du signal"
+      onClick={(event) => {
+        stopCardNavigation(event)
+        onOpenActions(item)
+      }}
+      onKeyDown={stopCardNavigation}
+    >
+      <MoreHorizontal className="h-4 w-4" aria-hidden />
+    </button>
+  )
+}
+
+function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
   const reporterName = item.reporter_display_name?.trim() ?? ''
   const reporterInitials = reporterName
     ? getDisplayNameInitials(reporterName)
     : null
+  const showActions =
+    onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
 
   return (
     <article
@@ -48,9 +78,14 @@ function FeedSignalCard({ item, onSelect }: SignalCardProps) {
           <SignalUrgencyBadge urgency={item.urgency} />
           <SignalClassificationBadges signal={item} />
         </div>
-        <span className="shrink-0 text-[11px] text-[#888]">
-          {formatSignalRelativeTime(item.last_activity_at)}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-[11px] text-[#888]">
+            {formatSignalRelativeTime(item.last_activity_at)}
+          </span>
+          {showActions ? (
+            <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
+          ) : null}
+        </div>
       </div>
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
@@ -94,7 +129,10 @@ function FeedSignalCard({ item, onSelect }: SignalCardProps) {
   )
 }
 
-function PinnedSignalCard({ item, onSelect }: SignalCardProps) {
+function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
+  const showActions =
+    onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
+
   return (
     <article
       className={terrainFeedCardBaseClassName(getPinnedSignalCardClassName())}
@@ -110,9 +148,14 @@ function PinnedSignalCard({ item, onSelect }: SignalCardProps) {
             {PINNED_SIGNAL_CARD_BANNER_LABEL}
           </span>
         </div>
-        <span className="shrink-0 text-[11px] text-[#888]">
-          {formatSignalRelativeTime(item.last_activity_at)}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-[11px] text-[#888]">
+            {formatSignalRelativeTime(item.last_activity_at)}
+          </span>
+          {showActions ? (
+            <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
+          ) : null}
+        </div>
       </div>
 
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
@@ -144,9 +187,9 @@ function PinnedSignalCard({ item, onSelect }: SignalCardProps) {
   )
 }
 
-export function SignalCard({ item, onSelect, variant = 'feed' }: SignalCardProps) {
+export function SignalCard({ item, onSelect, onOpenActions, variant = 'feed' }: SignalCardProps) {
   if (variant === 'pinned') {
-    return <PinnedSignalCard item={item} onSelect={onSelect} />
+    return <PinnedSignalCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
   }
-  return <FeedSignalCard item={item} onSelect={onSelect} />
+  return <FeedSignalCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
 }

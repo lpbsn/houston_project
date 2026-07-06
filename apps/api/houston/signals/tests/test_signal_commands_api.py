@@ -4,6 +4,7 @@ import pytest
 
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
+from houston.signals.models import Signal
 from houston.signals.tests.conftest import (
     auth_headers,
     build_api_membership,
@@ -45,6 +46,23 @@ def test_director_can_pin_open_signal(api_client):
 
     assert response.status_code == 200
     assert response.json()["is_pinned"] is True
+
+
+def test_director_cannot_pin_in_progress_signal(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
+    signal = create_minimal_v3_signal(
+        membership,
+        title="In progress issue",
+        status=Signal.Status.IN_PROGRESS,
+    )
+    token = login(api_client, user=membership.user)
+
+    response = api_client.post(
+        signal_detail_url(membership.establishment_id, signal.id) + "pin/",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 403
 
 
 def test_manager_pin_requires_scope(api_client):

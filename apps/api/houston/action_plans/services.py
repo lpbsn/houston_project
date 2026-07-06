@@ -55,6 +55,7 @@ from houston.action_plans.permissions import (
     can_reopen_action_plan_execution,
     can_use_action_plan,
     can_validate_action_plan_execution,
+    staff_catalog_action_plan_in_scope,
 )
 from houston.establishments.membership_scope import (
     membership_covers_business_unit_including_admins,
@@ -433,6 +434,50 @@ def _validate_assignee_payloads(
     return validated
 
 
+def _assert_staff_self_assignee_payload(
+    *,
+    actor: EstablishmentMembership,
+    pilot_business_unit: BusinessUnit,
+    assignees: list[dict] | None,
+) -> None:
+    if not assignees:
+        return
+    for assignee_item in assignees:
+        if not isinstance(assignee_item, dict):
+            raise ActionPlanPermissionError("Not allowed to assign other members.")
+        membership_id = assignee_item.get("membership_id")
+        business_unit_id = assignee_item.get("business_unit_id")
+        if membership_id is not None and membership_id != actor.id:
+            raise ActionPlanPermissionError("Not allowed to assign other members.")
+        if business_unit_id is not None and business_unit_id != pilot_business_unit.id:
+            raise ActionPlanPermissionError(
+                "Not allowed to assign members to this business unit."
+            )
+
+
+def _resolve_staff_catalog_self_assignees(
+    *,
+    actor: EstablishmentMembership,
+    pilot_business_unit: BusinessUnit,
+    establishment_id: uuid.UUID,
+    assignees: list[dict] | None,
+) -> list[ValidatedAssigneePayload]:
+    _assert_staff_self_assignee_payload(
+        actor=actor,
+        pilot_business_unit=pilot_business_unit,
+        assignees=assignees,
+    )
+    return _validate_assignee_payloads(
+        establishment_id=establishment_id,
+        assignees=[
+            {
+                "membership_id": actor.id,
+                "business_unit_id": pilot_business_unit.id,
+            }
+        ],
+    )
+
+
 def _validate_execution_has_content(
     *,
     task_count: int,
@@ -469,7 +514,6 @@ def _validate_actor_can_assign_poles(
         if not can_assign_to_execution_business_unit(
             actor,
             business_unit=assignee.business_unit,
-            pilot_business_unit=pilot_business_unit,
         ):
             raise ActionPlanPermissionError("Not allowed to assign members to this business unit.")
 
@@ -969,16 +1013,27 @@ def create_execution_from_action_plan(
     if action_plan.catalog_status != CATALOG_STATUS_ACTIVE:
         raise ActionPlanValidationError("Action plan catalog entry is not active.")
 
-    validated_assignees = _validate_assignee_payloads(
-        establishment_id=action_plan.establishment_id,
-        assignees=assignees or [],
-    )
-    _validate_actor_can_assign_poles(
-        actor=actor,
-        pilot_business_unit=action_plan.pilot_business_unit,
-        validated_assignees=validated_assignees,
-    )
     plan_tasks = list(action_plan.tasks.order_by("position", "created_at"))
+
+    if actor.role == EstablishmentMembership.Role.STAFF:
+        if not staff_catalog_action_plan_in_scope(actor, action_plan):
+            raise ActionPlanPermissionError("Not allowed to use this action plan.")
+        validated_assignees = _resolve_staff_catalog_self_assignees(
+            actor=actor,
+            pilot_business_unit=action_plan.pilot_business_unit,
+            establishment_id=action_plan.establishment_id,
+            assignees=assignees,
+        )
+    else:
+        validated_assignees = _validate_assignee_payloads(
+            establishment_id=action_plan.establishment_id,
+            assignees=assignees or [],
+        )
+        _validate_actor_can_assign_poles(
+            actor=actor,
+            pilot_business_unit=action_plan.pilot_business_unit,
+            validated_assignees=validated_assignees,
+        )
     _validate_execution_has_content(
         task_count=len(plan_tasks),
         assignee_count=len(validated_assignees),
@@ -1309,3 +1364,94 @@ def create_observation_from_execution_task(
         actor=actor,
         observation=observation,
     )
+
+
+@transaction.atomic
+def create_action_plan_with_optional_schedule(
+    *,
+    establishment_id: uuid.UUID,
+    created_by: EstablishmentMembership,
+    pilot_business_unit_id: uuid.UUID,
+    title: str,
+    description: str = "",
+    requires_validation: bool = True,
+    tasks: list[dict] | None = None,
+    schedule: dict,
+    assignees: list[dict] | None = None,
+    source_signal_id: uuid.UUID | None = None,
+    use_shared_chronology: bool = False,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    visible_from: datetime | None = None,
+    occurrence_date=None,
+) -> tuple[ActionPlan, ActionPlanExecution | None]:
+    if created_by.role == EstablishmentMembership.Role.STAFF:
+        raise ActionPlanPermissionError("Not allowed to create a schedule for this action plan.")
+    if source_signal_id is not None:
+        raise ActionPlanValidationError("Schedule cannot be combined with signal-linked creation.")
+
+    from houston.action_plans.schedule_services import create_action_plan_schedule
+    from houston.establishments.timezone_utils import establishment_local_date
+
+    action_plan = create_action_plan(
+        establishment_id=establishment_id,
+        created_by=created_by,
+        pilot_business_unit_id=pilot_business_unit_id,
+        title=title,
+        description=description,
+        requires_validation=requires_validation,
+        is_reusable=True,
+        catalog_status=CATALOG_STATUS_ACTIVE,
+        tasks=tasks,
+    )
+
+    schedule_assignees = [
+        {
+            "membership_id": item["membership_id"],
+            "business_unit_id": item["business_unit_id"],
+            "start_at": item.get("start_at"),
+            "end_at": item.get("end_at"),
+        }
+        for item in (schedule.get("assignees") or [])
+    ]
+    create_action_plan_schedule(
+        action_plan=action_plan,
+        actor=created_by,
+        start_date=schedule.get("start_date")
+        or establishment_local_date(establishment=action_plan.establishment),
+        end_date=schedule["end_date"],
+        start_at=schedule["start_at"],
+        end_at=schedule["end_at"],
+        recurrence_days=schedule["recurrence_days"],
+        assignees=schedule_assignees,
+        use_shared_chronology=schedule.get("use_shared_chronology", False),
+    )
+
+    one_shot_assignees = _assignee_payloads_from_dicts(assignees or [])
+    if not one_shot_assignees:
+        return action_plan, None
+
+    execution = create_execution_from_action_plan(
+        action_plan_id=action_plan.id,
+        actor=created_by,
+        assignees=one_shot_assignees,
+        use_shared_chronology=use_shared_chronology,
+        start_at=start_at,
+        end_at=end_at,
+        visible_from=visible_from,
+        occurrence_date=occurrence_date,
+    )
+    return action_plan, execution
+
+
+def _assignee_payloads_from_dicts(assignees_data: list[dict]) -> list[dict]:
+    return [
+        {
+            "membership_id": item["membership_id"],
+            "business_unit_id": item["business_unit_id"],
+            "start_at": item.get("start_at"),
+            "visible_from": item.get("visible_from"),
+            "end_at": item.get("end_at"),
+        }
+        for item in assignees_data
+    ]

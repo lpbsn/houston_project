@@ -9,7 +9,10 @@ from houston.action_plans.api.serializers import (
     _serialize_involved_poles,
     _serialize_signal_summary,
 )
-from houston.action_plans.constants import ACTION_PLAN_DESCRIPTION_MAX_LENGTH
+from houston.action_plans.constants import (
+    ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    TASK_STATUS_PENDING,
+)
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.permission_hints import build_action_plan_execution_permission_hints
 from houston.action_plans.selectors import action_plan_execution_overdue
@@ -58,6 +61,8 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     assignees = ActionPlanExecutionFeedAssigneeSerializer(many=True)
     end_at = serializers.DateTimeField(allow_null=True)
     is_overdue = serializers.BooleanField()
+    task_count = serializers.IntegerField()
+    treated_task_count = serializers.IntegerField()
     task_executions = ActionPlanExecutionFeedTaskPreviewSerializer(many=True)
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
@@ -84,7 +89,12 @@ def serialize_action_plan_execution_feed_item(
     overdue = (
         is_overdue if is_overdue is not None else action_plan_execution_overdue(execution=execution)
     )
-    task_executions = list(execution.task_executions.all())[:FEED_TASK_PREVIEW_LIMIT]
+    all_task_executions = list(execution.task_executions.all())
+    task_count = len(all_task_executions)
+    treated_task_count = sum(
+        1 for task_execution in all_task_executions if task_execution.status != TASK_STATUS_PENDING
+    )
+    task_executions = all_task_executions[:FEED_TASK_PREVIEW_LIMIT]
     assignees = [
         {
             "membership_id": assignee.membership_id,
@@ -104,6 +114,8 @@ def serialize_action_plan_execution_feed_item(
         "assignees": assignees,
         "end_at": execution.end_at,
         "is_overdue": overdue,
+        "task_count": task_count,
+        "treated_task_count": treated_task_count,
         "task_executions": [
             {
                 "position": task_execution.position,

@@ -12,7 +12,13 @@ import {
   signalsQueryKeys,
   unpinSignal,
 } from './api'
+import {
+  applySignalQuickActionSuccess,
+  type SignalQuickActionCacheContext,
+} from './lib/signal-feed-cache'
 import type { SignalDetail, SignalFeedFilters, SignalViewMode } from './types'
+
+export type { SignalQuickActionCacheContext } from './lib/signal-feed-cache'
 
 export function useSignalFeedQuery(
   establishmentId: string | null,
@@ -58,53 +64,92 @@ export function useSignalDetailQuery(establishmentId: string | null, signalId: s
   })
 }
 
-export function usePinSignalMutation(establishmentId: string | null, signalId: string | null) {
+export function usePinSignalMutation(
+  establishmentId: string | null,
+  cacheContext?: SignalQuickActionCacheContext | null,
+) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async () => {
-      if (!establishmentId || !signalId) {
+    mutationFn: async (signalId: string) => {
+      if (!establishmentId) {
         throw new Error('Signal introuvable.')
       }
       return pinSignal(establishmentId, signalId)
     },
-    onSuccess: () => {
-      if (establishmentId) {
-        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    onSuccess: (detail, signalId) => {
+      if (!establishmentId || !cacheContext) {
+        return
       }
+      applySignalQuickActionSuccess(queryClient, {
+        establishmentId,
+        signalId,
+        detail,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        mutationKind: 'pin',
+      })
     },
   })
 }
 
-export function useUnpinSignalMutation(establishmentId: string | null, signalId: string | null) {
+export function useUnpinSignalMutation(
+  establishmentId: string | null,
+  cacheContext?: SignalQuickActionCacheContext | null,
+) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async () => {
-      if (!establishmentId || !signalId) {
+    mutationFn: async (signalId: string) => {
+      if (!establishmentId) {
         throw new Error('Signal introuvable.')
       }
       return unpinSignal(establishmentId, signalId)
     },
-    onSuccess: () => {
-      if (establishmentId) {
-        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    onSuccess: (detail, signalId) => {
+      if (!establishmentId || !cacheContext) {
+        return
       }
+      applySignalQuickActionSuccess(queryClient, {
+        establishmentId,
+        signalId,
+        detail,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        mutationKind: 'unpin',
+      })
     },
   })
 }
 
-export function useSignalUrgencyMutation(establishmentId: string | null, signalId: string | null) {
+export function useSignalUrgencyMutation(
+  establishmentId: string | null,
+  cacheContext?: SignalQuickActionCacheContext | null,
+) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (urgency: 'normal' | 'high') => {
-      if (!establishmentId || !signalId) {
+    mutationFn: async ({
+      signalId,
+      urgency,
+    }: {
+      signalId: string
+      urgency: 'normal' | 'high'
+    }) => {
+      if (!establishmentId) {
         throw new Error('Signal introuvable.')
       }
       return setSignalUrgency(establishmentId, signalId, urgency)
     },
-    onSuccess: () => {
-      if (establishmentId) {
-        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+    onSuccess: (detail, { signalId }) => {
+      if (!establishmentId || !cacheContext) {
+        return
       }
+      applySignalQuickActionSuccess(queryClient, {
+        establishmentId,
+        signalId,
+        detail,
+        viewMode: cacheContext.viewMode,
+        filters: cacheContext.filters,
+        mutationKind: 'urgency',
+      })
     },
   })
 }

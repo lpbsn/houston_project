@@ -14,6 +14,7 @@ import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
 import {
   useActivateActionPlanMutation,
   useActionPlanDetailQuery,
+  useCreateActionPlanScheduleMutation,
   useDeactivateActionPlanMutation,
   useUpdateActionPlanMutation,
   useUseActionPlanMutation,
@@ -23,9 +24,11 @@ import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
   canShowActionPlanActivate,
   canShowActionPlanDeactivate,
+  canShowActionPlanSchedule,
   canShowActionPlanUpdate,
   canShowActionPlanUse,
 } from '../lib/action-plan-permission-hints'
+import { isStaffActionPlanUsageRole } from '../lib/action-plan-management-access'
 
 type ActionPlanTemplateDetailPageProps = {
   actionPlanId: string
@@ -35,12 +38,14 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const { navigate } = useAppRoute()
   const { activeMembership } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
+  const staffUseMode = isStaffActionPlanUsageRole(activeMembership?.role ?? null)
 
   const detailQuery = useActionPlanDetailQuery(establishmentId, actionPlanId)
   const updateMutation = useUpdateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const activateMutation = useActivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const deactivateMutation = useDeactivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const useMutation = useUseActionPlanMutation(establishmentId ?? '', actionPlanId)
+  const scheduleMutation = useCreateActionPlanScheduleMutation(establishmentId ?? '', actionPlanId)
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null)
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null)
@@ -144,6 +149,20 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     }
   }
 
+  async function handleSchedule(body: Parameters<typeof scheduleMutation.mutateAsync>[0]) {
+    setFeedback(null)
+    try {
+      await scheduleMutation.mutateAsync(body)
+      setUseSheetOpen(false)
+      setFeedback({ variant: 'success', message: 'Planification récurrente enregistrée.' })
+    } catch (error) {
+      setFeedback({
+        variant: 'error',
+        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'),
+      })
+    }
+  }
+
   return (
     <div className="space-y-3 px-3 pb-6 pt-2">
       {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
@@ -238,8 +257,12 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         establishmentId={establishmentId}
         pilotBusinessUnitId={plan.pilot_business_unit.id}
         isPending={useMutation.isPending}
+        isSchedulePending={scheduleMutation.isPending}
+        staffUseMode={staffUseMode}
+        canSchedule={canShowActionPlanSchedule(hints)}
         onClose={() => setUseSheetOpen(false)}
         onConfirm={(body) => void handleUse(body)}
+        onScheduleConfirm={(body) => void handleSchedule(body)}
       />
     </div>
   )

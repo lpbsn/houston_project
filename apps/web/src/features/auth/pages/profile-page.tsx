@@ -1,4 +1,4 @@
-import { useId, type ComponentType } from 'react'
+import { type ComponentType } from 'react'
 import { ArrowLeftRight, Building2, ChevronRight, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -6,11 +6,13 @@ import {
   HoustonBadge,
   TerrainCard,
   TerrainSectionLabel,
+  TerrainSwitch,
 } from '@/components/ui/terrain'
 import {
   canAccessManagementSpace,
   canCreateCatalogActionPlanFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
+  canViewActionPlanCatalogFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
@@ -94,49 +96,6 @@ function buildRoleEstablishmentLine(
   return roleLabel ?? establishmentName ?? null
 }
 
-function ProfileSettingSwitch({
-  label,
-  checked,
-  disabled = false,
-  onCheckedChange,
-}: {
-  label: string
-  checked: boolean
-  disabled?: boolean
-  onCheckedChange: (checked: boolean) => void
-}) {
-  const labelId = useId()
-
-  return (
-    <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-3.5">
-      <span id={labelId} className="text-sm text-[#1a1a1a]">
-        {label}
-      </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-labelledby={labelId}
-        disabled={disabled}
-        className={cn(
-          'relative h-7 w-12 shrink-0 rounded-full transition-colors',
-          checked ? 'bg-[#1D9E75]' : 'bg-[#E8E6DF]',
-          disabled && 'opacity-60',
-        )}
-        onClick={() => onCheckedChange(!checked)}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform',
-            checked ? 'translate-x-5' : 'translate-x-0',
-          )}
-        />
-      </button>
-    </div>
-  )
-}
-
 type ProfileManagementNavCardProps = {
   icon: ComponentType<{ className?: string }>
   iconClassName: string
@@ -188,7 +147,10 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
-  const canShowActionPlansNav = canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
+  const canShowActionPlansNav =
+    canViewActionPlanCatalogFromBootstrapHints(permissionHints) ||
+    canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
+  const canShowStaffActionPlansNav = canShowActionPlansNav && !canAccessManagement
   const displayName = buildDisplayName(firstName, lastName, identityLabel)
   const initials = buildInitials(firstName, lastName, identityLabel)
   const roleEstablishmentLine = buildRoleEstablishmentLine(
@@ -248,7 +210,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           />
         ) : null}
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
-          <ProfileSettingSwitch
+          <TerrainSwitch
             label="Notifications"
             checked={notificationsEnabled}
             disabled={isNotificationTogglePending}
@@ -272,6 +234,16 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </div>
         </TerrainCard>
       </div>
+
+      {canShowStaffActionPlansNav ? (
+        <ProfileManagementNavCard
+          icon={Library}
+          iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+          title="Bibliothèque"
+          subtitle="Plans d’action réutilisables"
+          onClick={() => onNavigate?.('/action-plans')}
+        />
+      ) : null}
 
       {canAccessManagement ? (
         <div className="space-y-2">

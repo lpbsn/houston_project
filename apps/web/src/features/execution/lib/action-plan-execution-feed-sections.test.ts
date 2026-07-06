@@ -20,6 +20,8 @@ function buildFeedItem(
     assignees: [],
     end_at: null,
     is_overdue: false,
+    task_count: 0,
+    treated_task_count: 0,
     task_executions: [],
     last_activity_at: '2026-06-13T12:00:00Z',
     created_at: '2026-06-13T12:00:00Z',

@@ -1,7 +1,8 @@
 import {
-  canCreateActionPlanCatalogEntry,
+  canCreateActionPlanCatalogEntryFromHints,
   canCreateSignalLinkedActionPlan,
   canDefineCrossPoleTasks,
+  canManageActionPlanCatalog,
 } from './action-plan-management-access'
 
 export type ActionPlanCreateMode = 'catalog' | 'execution' | 'signal-linked'
@@ -12,6 +13,7 @@ export type ActionPlanCreateModeConfig = {
   showValidationToggle: boolean
   showAssigneeSheet: boolean
   showStaffSelfAssignee: boolean
+  showScheduleSection: boolean
   filterBusinessUnitsByScope: boolean
   canDefineCrossPoleTasks: boolean
   lockPilotBusinessUnit: boolean
@@ -27,30 +29,65 @@ function shouldFilterBusinessUnitsByScope(role: string | null): boolean {
   return role === 'manager' || role === 'staff'
 }
 
+function resolveStaffCreateOptions(): ActionPlanCreateModeConfig {
+  return {
+    canAccess: true,
+    showLibraryToggle: false,
+    showValidationToggle: false,
+    showAssigneeSheet: false,
+    showStaffSelfAssignee: true,
+    showScheduleSection: false,
+    filterBusinessUnitsByScope: true,
+    canDefineCrossPoleTasks: false,
+    lockPilotBusinessUnit: false,
+    defaultRequiresValidation: false,
+    defaultSaveToLibrary: false,
+  }
+}
+
+function resolveManagementCreateOptions(role: string | null): ActionPlanCreateModeConfig {
+  const canCrossPole = canDefineCrossPoleTasks(role)
+  return {
+    canAccess: true,
+    showLibraryToggle: true,
+    showValidationToggle: true,
+    showAssigneeSheet: true,
+    showStaffSelfAssignee: false,
+    showScheduleSection: true,
+    filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
+    canDefineCrossPoleTasks: canCrossPole,
+    lockPilotBusinessUnit: false,
+    defaultRequiresValidation: true,
+    defaultSaveToLibrary: false,
+  }
+}
+
+function resolveDeniedCreateOptions(role: string | null): ActionPlanCreateModeConfig {
+  return {
+    canAccess: false,
+    showLibraryToggle: false,
+    showValidationToggle: false,
+    showAssigneeSheet: false,
+    showStaffSelfAssignee: false,
+    showScheduleSection: false,
+    filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
+    canDefineCrossPoleTasks: false,
+    lockPilotBusinessUnit: false,
+    defaultRequiresValidation: true,
+    defaultSaveToLibrary: false,
+  }
+}
+
 export function resolveActionPlanCreateModeConfig(input: {
   mode: ActionPlanCreateMode
   role: string | null
   canCreateActionPlan: boolean
+  canCreateCatalogActionPlan?: boolean
   membershipId?: string
 }): ActionPlanCreateModeConfig {
   const { mode, role, canCreateActionPlan } = input
   const isStaff = isStaffRole(role)
   const canCrossPole = canDefineCrossPoleTasks(role)
-
-  if (mode === 'catalog') {
-    return {
-      canAccess: canCreateActionPlanCatalogEntry(role),
-      showLibraryToggle: true,
-      showValidationToggle: true,
-      showAssigneeSheet: true,
-      showStaffSelfAssignee: false,
-      filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
-      canDefineCrossPoleTasks: canCrossPole,
-      lockPilotBusinessUnit: false,
-      defaultRequiresValidation: true,
-      defaultSaveToLibrary: false,
-    }
-  }
 
   if (mode === 'signal-linked') {
     return {
@@ -59,6 +96,7 @@ export function resolveActionPlanCreateModeConfig(input: {
       showValidationToggle: true,
       showAssigneeSheet: true,
       showStaffSelfAssignee: false,
+      showScheduleSection: false,
       filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
       canDefineCrossPoleTasks: canCrossPole,
       lockPilotBusinessUnit: true,
@@ -67,46 +105,24 @@ export function resolveActionPlanCreateModeConfig(input: {
     }
   }
 
-  if (!canCreateActionPlan) {
-    return {
-      canAccess: false,
-      showLibraryToggle: false,
-      showValidationToggle: false,
-      showAssigneeSheet: false,
-      showStaffSelfAssignee: false,
-      filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
-      canDefineCrossPoleTasks: false,
-      lockPilotBusinessUnit: false,
-      defaultRequiresValidation: true,
-      defaultSaveToLibrary: false,
+  if (mode === 'catalog') {
+    if (!canCreateActionPlanCatalogEntryFromHints(input.canCreateCatalogActionPlan)) {
+      return resolveDeniedCreateOptions(role)
     }
+    return resolveManagementCreateOptions(role)
+  }
+
+  if (!canCreateActionPlan) {
+    return resolveDeniedCreateOptions(role)
   }
 
   if (isStaff) {
-    return {
-      canAccess: true,
-      showLibraryToggle: false,
-      showValidationToggle: false,
-      showAssigneeSheet: false,
-      showStaffSelfAssignee: true,
-      filterBusinessUnitsByScope: true,
-      canDefineCrossPoleTasks: false,
-      lockPilotBusinessUnit: false,
-      defaultRequiresValidation: false,
-      defaultSaveToLibrary: false,
-    }
+    return resolveStaffCreateOptions()
   }
 
-  return {
-    canAccess: true,
-    showLibraryToggle: false,
-    showValidationToggle: true,
-    showAssigneeSheet: true,
-    showStaffSelfAssignee: false,
-    filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
-    canDefineCrossPoleTasks: canCrossPole,
-    lockPilotBusinessUnit: false,
-    defaultRequiresValidation: true,
-    defaultSaveToLibrary: false,
+  if (canManageActionPlanCatalog(role)) {
+    return resolveManagementCreateOptions(role)
   }
+
+  return resolveDeniedCreateOptions(role)
 }

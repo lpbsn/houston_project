@@ -1,4 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
+import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
@@ -8,17 +9,18 @@ import { cn } from '@/lib/utils'
 
 import { SignalDetailPhotoSection } from '../components/signal-detail-photo-section'
 import { SignalDetailStickyFooter } from '../components/signal-detail-sticky-footer'
-import { SignalPinUrgencyActions } from '../components/signal-pin-urgency-actions'
+import {
+  SignalDetailTabs,
+  type SignalDetailTab,
+} from '../components/signal-detail-tabs'
+import { SignalLinkedActionPlansSection } from '../components/signal-linked-action-plans-section'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
 import { SignalUrgencyBadge } from '../components/signal-urgency-badge'
 import {
   useCancelSignalMutation,
-  usePinSignalMutation,
   useResolveSignalMutation,
   useSignalDetailQuery,
-  useSignalUrgencyMutation,
-  useUnpinSignalMutation,
 } from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
@@ -38,14 +40,14 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
+  const [activeTab, setActiveTab] = useState<SignalDetailTab>('details')
+  const [hasOpenedComments, setHasOpenedComments] = useState(false)
+
   const lifecycleClosed = () => {
     onNavigate('/signals')
   }
 
   const detailQuery = useSignalDetailQuery(establishmentId, signalId)
-  const pinMutation = usePinSignalMutation(establishmentId, signalId)
-  const unpinMutation = useUnpinSignalMutation(establishmentId, signalId)
-  const urgencyMutation = useSignalUrgencyMutation(establishmentId, signalId)
   const cancelMutation = useCancelSignalMutation(establishmentId, signalId, {
     onClosed: lifecycleClosed,
   })
@@ -54,12 +56,14 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const lifecycleError =
     cancelMutation.error ?? resolveMutation.error ?? null
 
-  const isPending =
-    pinMutation.isPending ||
-    unpinMutation.isPending ||
-    urgencyMutation.isPending ||
-    cancelMutation.isPending ||
-    resolveMutation.isPending
+  const isPending = cancelMutation.isPending || resolveMutation.isPending
+
+  const handleTabChange = (tab: SignalDetailTab) => {
+    if (tab === 'comments') {
+      setHasOpenedComments(true)
+    }
+    setActiveTab(tab)
+  }
 
   if (detailQuery.isLoading) {
     return (
@@ -84,66 +88,80 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
   const hasLifecycleSticky =
     signal.permission_hints.can_resolve || signal.permission_hints.can_cancel
-  const showStickyFooter = hasLifecycleSticky || showStickyCreateActionFooter
+  const canShowStickyFooter = hasLifecycleSticky || showStickyCreateActionFooter
+  const showStickyFooter = activeTab === 'details' && canShowStickyFooter
 
   return (
     <div className="flex min-h-full flex-col">
+      <div className="px-3 pt-2">
+        <SignalDetailTabs activeTab={activeTab} onChange={handleTabChange} />
+      </div>
+
       <div
         className={cn(
           'flex flex-1 flex-col gap-2.5 px-3 pt-2',
           showStickyFooter ? 'pb-40' : 'pb-4',
         )}
       >
-        <TerrainCard>
-          <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <SignalUrgencyBadge urgency={signal.urgency} />
-            <SignalStatusBadge status={signal.status} variant="detail" />
-          </div>
-          <p className="mt-2 text-[11px] text-[#aaa]">
-            il y a {formatSignalRelativeTime(signal.last_activity_at)}
-          </p>
-          {(reporterName || signal.aggregation_count > 0) ? (
-            <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
-              <span className="min-w-0 truncate">
-                {reporterName ? `Signalé par ${reporterName}` : '\u00a0'}
-              </span>
-              {signal.aggregation_count > 0 ? (
-                <span className="shrink-0">
-                  {formatSignalAggregationLabel(signal.aggregation_count)}
-                </span>
-              ) : null}
+        <div
+          role="tabpanel"
+          id="signal-detail-panel-details"
+          aria-labelledby="signal-detail-tab-details"
+          className={cn('flex flex-col gap-2.5', activeTab !== 'details' && 'hidden')}
+        >
+          <TerrainCard>
+            <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <SignalUrgencyBadge urgency={signal.urgency} />
+              <SignalStatusBadge status={signal.status} variant="detail" />
             </div>
-          ) : null}
-        </TerrainCard>
+            <p className="mt-2 text-[11px] text-[#aaa]">
+              il y a {formatSignalRelativeTime(signal.last_activity_at)}
+            </p>
+            {(reporterName || signal.aggregation_count > 0) ? (
+              <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
+                <span className="min-w-0 truncate">
+                  {reporterName ? `Signalé par ${reporterName}` : '\u00a0'}
+                </span>
+                {signal.aggregation_count > 0 ? (
+                  <span className="shrink-0">
+                    {formatSignalAggregationLabel(signal.aggregation_count)}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </TerrainCard>
 
-        <SignalDetailClassificationSection signal={signal} />
+          <SignalDetailClassificationSection signal={signal} />
 
-        <TerrainCard>
-          <TerrainFieldLabel>Description</TerrainFieldLabel>
-          <p className="mt-2 text-[13px] leading-relaxed text-[#444]">
-            {formatDescriptionContent(signal.structured_summary)}
-          </p>
-        </TerrainCard>
+          <TerrainCard>
+            <TerrainFieldLabel>Description</TerrainFieldLabel>
+            <p className="mt-2 text-[13px] leading-relaxed text-[#444]">
+              {formatDescriptionContent(signal.structured_summary)}
+            </p>
+          </TerrainCard>
 
-        <SignalPinUrgencyActions
-          hints={signal.permission_hints}
-          isPinned={signal.is_pinned}
-          urgency={signal.urgency}
-          isPending={isPending}
-          onPin={() => void pinMutation.mutate()}
-          onUnpin={() => void unpinMutation.mutate()}
-          onSetUrgency={(urgency) => void urgencyMutation.mutate(urgency)}
-        />
+          <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
 
-        <SignalDetailPhotoSection mediaItems={signal.media_items ?? []} />
-
-        {establishmentId ? (
-          <CommentSection
-            establishmentId={establishmentId}
-            targetType="signal"
-            targetId={signalId}
+          <SignalLinkedActionPlansSection
+            executions={signal.linked_action_plan_executions}
+            onSelect={(executionId) => onNavigate(`/action-plans/executions/${executionId}`)}
           />
+        </div>
+
+        {hasOpenedComments && establishmentId ? (
+          <div
+            role="tabpanel"
+            id="signal-detail-panel-comments"
+            aria-labelledby="signal-detail-tab-comments"
+            className={cn(activeTab !== 'comments' && 'hidden')}
+          >
+            <CommentSection
+              establishmentId={establishmentId}
+              targetType="signal"
+              targetId={signalId}
+            />
+          </div>
         ) : null}
       </div>
 

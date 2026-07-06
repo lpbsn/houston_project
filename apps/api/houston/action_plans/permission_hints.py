@@ -15,6 +15,7 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.permissions import (
     can_cancel_action_plan_execution,
+    can_create_action_plan_schedule,
     can_execute_action_plan_task,
     can_manage_action_plan,
     can_manage_action_plan_schedule,
@@ -51,6 +52,7 @@ def _build_action_plan_permission_hints_core(
         "can_activate": can_manage and is_inactive and has_tasks and action_plan.is_reusable,
         "can_deactivate": can_manage and is_active and action_plan.is_reusable,
         "can_use": can_use_action_plan(membership, action_plan),
+        "can_schedule": can_create_action_plan_schedule(membership, action_plan),
     }
 
 

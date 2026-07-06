@@ -80,6 +80,7 @@ export function ExecutionFeedPage({
         permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
         onSelectActionPlan={() => onNavigate?.('/execution/plans/new')}
+        onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
       <TerrainHubSubheader>
         <TerrainHubViewToolbar trailing={createAction}>

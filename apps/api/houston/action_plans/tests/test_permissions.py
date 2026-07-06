@@ -6,10 +6,12 @@ from houston.accounts.models import User
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.permissions import (
     action_plan_execution_visible_to_membership,
+    action_plan_has_cross_pole_tasks,
     action_plan_visible_to_membership,
     can_assign_to_execution_business_unit,
     can_cancel_action_plan_execution,
     can_create_action_plan,
+    can_create_action_plan_schedule,
     can_create_linked_action_plan,
     can_create_staff_feed_execution_plan,
     can_define_cross_pole_task,
@@ -154,8 +156,8 @@ def test_out_of_scope_manager_cannot_manage_catalog_plan(
     assert can_manage_action_plan(out_of_scope_manager, catalog_action_plan) is False
 
 
-def test_staff_cannot_view_catalog(staff_membership):
-    assert can_view_action_plan_catalog(staff_membership) is False
+def test_staff_can_view_catalog(staff_membership):
+    assert can_view_action_plan_catalog(staff_membership) is True
 
 
 def test_manager_can_view_catalog(manager_membership):
@@ -547,8 +549,31 @@ def test_manager_cannot_use_catalog_when_pilot_out_of_scope(
     assert can_use_action_plan(out_of_scope_manager, cross_pole_catalog_action_plan) is False
 
 
-def test_staff_cannot_use_catalog(staff_membership, catalog_action_plan):
-    assert can_use_action_plan(staff_membership, catalog_action_plan) is False
+def test_staff_can_use_in_scope_catalog(staff_membership, catalog_action_plan):
+    assert action_plan_visible_to_membership(staff_membership, catalog_action_plan) is True
+    assert can_use_action_plan(staff_membership, catalog_action_plan) is True
+    assert can_create_action_plan_schedule(staff_membership, catalog_action_plan) is True
+
+
+def test_staff_cannot_use_cross_pole_catalog(
+    staff_membership,
+    cross_pole_catalog_action_plan,
+):
+    assert action_plan_has_cross_pole_tasks(cross_pole_catalog_action_plan) is True
+    assert (
+        action_plan_visible_to_membership(staff_membership, cross_pole_catalog_action_plan)
+        is False
+    )
+    assert can_use_action_plan(staff_membership, cross_pole_catalog_action_plan) is False
+    assert (
+        can_create_action_plan_schedule(staff_membership, cross_pole_catalog_action_plan)
+        is False
+    )
+
+
+def test_staff_cannot_use_inactive_catalog(staff_membership, inactive_catalog_action_plan):
+    assert can_use_action_plan(staff_membership, inactive_catalog_action_plan) is False
+    assert can_create_action_plan_schedule(staff_membership, inactive_catalog_action_plan) is False
 
 
 def test_owner_can_define_cross_pole_task(owner_membership):
@@ -564,7 +589,6 @@ def test_owner_can_assign_cross_pole(owner_membership, business_unit, maintenanc
         can_assign_to_execution_business_unit(
             owner_membership,
             business_unit=maintenance_business_unit,
-            pilot_business_unit=business_unit,
         )
         is True
     )
@@ -579,7 +603,6 @@ def test_pilot_manager_cannot_assign_out_of_scope(
         can_assign_to_execution_business_unit(
             manager_membership,
             business_unit=maintenance_business_unit,
-            pilot_business_unit=business_unit,
         )
         is False
     )
@@ -662,3 +685,17 @@ def test_non_active_user_denies_create(user_status):
         )
         is False
     )
+
+
+def test_staff_catalog_list_excludes_cross_pole_catalog(
+    staff_membership,
+    catalog_action_plan,
+    cross_pole_catalog_action_plan,
+):
+    from houston.action_plans.selectors import catalog_action_plans_for_list
+
+    listed_ids = set(
+        catalog_action_plans_for_list(membership=staff_membership).values_list("id", flat=True)
+    )
+    assert catalog_action_plan.id in listed_ids
+    assert cross_pole_catalog_action_plan.id not in listed_ids

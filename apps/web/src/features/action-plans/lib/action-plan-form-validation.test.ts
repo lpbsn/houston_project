@@ -4,7 +4,12 @@ import { buildActionPlanCreateRequest } from '@/features/action-plans/lib/action
 import {
   createActionPlanTaskDraft,
   validateActionPlanCreateForm,
+  validateActionPlanCreatePlanningErrors,
 } from '@/features/action-plans/lib/action-plan-form-validation'
+import { createActionPlanEventPlanningDraft } from '@/features/action-plans/lib/action-plan-event-planning-form'
+import { createActionPlanScheduleDraft } from '@/features/action-plans/lib/action-plan-schedule-form'
+
+const emptySchedule = createActionPlanScheduleDraft()
 
 describe('validateActionPlanCreateForm', () => {
   it('requires title, pilot business unit, and tasks', () => {
@@ -21,6 +26,7 @@ describe('validateActionPlanCreateForm', () => {
         sharedVisibleFrom: '',
         tasks: [createActionPlanTaskDraft()],
         assignees: [],
+        schedule: emptySchedule,
       },
       { canDefineCrossPoleTasks: false },
     )
@@ -28,6 +34,25 @@ describe('validateActionPlanCreateForm', () => {
     expect(errors.title).toBeTruthy()
     expect(errors.pilotBusinessUnitId).toBeTruthy()
     expect(errors.tasks).toBeTruthy()
+  })
+})
+
+describe('validateActionPlanCreatePlanningErrors', () => {
+  it('surfaces recurrence end date errors with planning field keys', () => {
+    const errors = validateActionPlanCreatePlanningErrors(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        repeatEnabled: true,
+        startDate: '2026-07-01',
+        recurrenceDays: ['monday'],
+        recurrenceEndDate: '',
+        startTime: '09:00',
+        endTime: '10:00',
+      },
+      { saveToLibrary: true },
+    )
+
+    expect(errors.recurrenceEndDate).toBeTruthy()
   })
 })
 
@@ -45,6 +70,7 @@ describe('buildActionPlanCreateRequest', () => {
       sharedVisibleFrom: '',
       tasks: [{ id: '1', task: 'Task 1', businessUnitId: 'bu-1' }],
       assignees: [],
+      schedule: emptySchedule,
     })
 
     expect(payload.is_reusable).toBe(true)
@@ -68,6 +94,7 @@ describe('buildActionPlanCreateRequest', () => {
       sharedVisibleFrom: '',
       tasks: [{ id: '1', task: 'Task 1', businessUnitId: 'bu-1' }],
       assignees: [],
+      schedule: emptySchedule,
       sourceSignalId: 'sig-1',
     })
 
@@ -98,6 +125,7 @@ describe('validateActionPlanCreateForm staff execution filet', () => {
         visibleFrom: '',
       },
     ],
+    schedule: emptySchedule,
   }
 
   const staffMode = { membershipId: 'member-1', pilotBusinessUnitId: 'bu-1' }

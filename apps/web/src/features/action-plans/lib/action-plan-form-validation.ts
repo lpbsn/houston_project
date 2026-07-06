@@ -1,3 +1,10 @@
+import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
+import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
+import {
+  validateActionPlanEventPlanningDraft,
+  type ActionPlanEventPlanningDraft,
+} from './action-plan-event-planning-form'
+
 export type ActionPlanTaskDraft = {
   id: string
   task: string
@@ -44,6 +51,7 @@ export type ActionPlanCreateFormValues = {
   sharedVisibleFrom: string
   tasks: ActionPlanTaskDraft[]
   assignees: ActionPlanAssigneeDraft[]
+  schedule: ActionPlanScheduleDraft
   sourceSignalId?: string | null
 }
 
@@ -55,6 +63,12 @@ export type ActionPlanCreateFormErrors = Partial<
     | 'assignees'
     | 'sharedStartAt'
     | 'sharedEndAt'
+    | 'recurrenceDays'
+    | 'recurrenceEndDate'
+    | 'endDate'
+    | 'startAt'
+    | 'startTime'
+    | 'endTime'
     | 'submit',
     string
   >
@@ -102,20 +116,11 @@ export function validateActionPlanCreateForm(
     }
   }
 
-  if (!values.saveToLibrary) {
-    const validAssignees = values.assignees.filter((assignee) => assignee.membershipId)
-    if (validAssignees.length === 0) {
-      errors.assignees = 'Ajoutez au moins un assigné pour lancer le plan.'
-    }
-    for (const assignee of validAssignees) {
+  if (!values.saveToLibrary && !isActionPlanScheduleConfigured(values.schedule)) {
+    for (const assignee of values.assignees.filter((item) => item.membershipId)) {
       if (!assignee.businessUnitId) {
         errors.assignees = 'Chaque assigné doit être rattaché à un pôle.'
         break
-      }
-    }
-    if (values.useSharedChronology && values.sharedEndAt && values.sharedStartAt) {
-      if (Date.parse(values.sharedEndAt) <= Date.parse(values.sharedStartAt)) {
-        errors.sharedEndAt = 'La fin doit être postérieure au début.'
       }
     }
   }
@@ -128,6 +133,9 @@ export function validateActionPlanCreateForm(
     }
     if (values.requiresValidation) {
       errors.submit = 'Les plans staff ne peuvent pas exiger une validation.'
+    }
+    if (isActionPlanScheduleConfigured(values.schedule)) {
+      errors.submit = 'Le staff ne peut pas planifier un plan à la création.'
     }
 
     const validAssignees = values.assignees.filter((assignee) => assignee.membershipId)
@@ -152,6 +160,19 @@ export function validateActionPlanCreateForm(
   }
 
   return errors
+}
+
+export function validateActionPlanCreatePlanningErrors(
+  planningDraft: ActionPlanEventPlanningDraft,
+  options: {
+    saveToLibrary: boolean
+    staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
+  },
+): Record<string, string> {
+  return validateActionPlanEventPlanningDraft(planningDraft, {
+    requireAssignees: !options.saveToLibrary || planningDraft.repeatEnabled,
+    allowRepeat: !options.staffExecutionMode,
+  })
 }
 
 export function hasActionPlanCreateFormErrors(errors: ActionPlanCreateFormErrors): boolean {

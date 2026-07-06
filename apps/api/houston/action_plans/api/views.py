@@ -69,6 +69,7 @@ from houston.action_plans.services import (
     cancel_action_plan_execution,
     create_action_plan,
     create_action_plan_with_execution,
+    create_action_plan_with_optional_schedule,
     create_execution_from_action_plan,
     create_observation_from_execution_task,
     deactivate_action_plan,
@@ -290,8 +291,48 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
         body = ActionPlanCreateRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         data = body.validated_data
+        schedule_data = data.get("schedule")
 
         try:
+            if schedule_data is not None:
+                action_plan, execution = create_action_plan_with_optional_schedule(
+                    establishment_id=self.establishment_id,
+                    created_by=membership,
+                    pilot_business_unit_id=data["pilot_business_unit_id"],
+                    title=data["title"],
+                    description=data.get("description", ""),
+                    requires_validation=data.get("requires_validation", True),
+                    tasks=_task_payloads(data.get("tasks") or []),
+                    schedule=schedule_data,
+                    assignees=_assignee_payloads(data.get("assignees") or []),
+                    source_signal_id=data.get("source_signal_id"),
+                    use_shared_chronology=data.get("use_shared_chronology", False),
+                    start_at=data.get("start_at"),
+                    end_at=data.get("end_at"),
+                    visible_from=data.get("visible_from"),
+                    occurrence_date=data.get("occurrence_date"),
+                )
+                if execution is not None:
+                    execution = get_action_plan_execution_for_detail(
+                        membership=membership,
+                        execution_id=execution.id,
+                    )
+                    payload = serialize_execution_detail(execution, membership=membership)
+                    return Response(
+                        ActionPlanExecutionDetailSerializer(payload).data,
+                        status=status.HTTP_201_CREATED,
+                    )
+
+                action_plan = get_action_plan_for_detail(
+                    membership=membership,
+                    action_plan_id=action_plan.id,
+                )
+                payload = serialize_action_plan_detail(action_plan, membership=membership)
+                return Response(
+                    ActionPlanDetailSerializer(payload).data,
+                    status=status.HTTP_201_CREATED,
+                )
+
             if _is_catalog_create(validated_data=data, membership=membership):
                 action_plan = create_action_plan(
                     establishment_id=self.establishment_id,

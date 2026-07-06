@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from houston.action_plans.constants import ACTIVE_EXECUTION_STATUSES
+from django.db.models import Exists, OuterRef
+
+from houston.action_plans.constants import ACTIVE_EXECUTION_STATUSES, CATALOG_STATUS_ACTIVE
 from houston.action_plans.models import (
     ActionPlan,
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionTask,
     ActionPlanSchedule,
+    ActionPlanTask,
 )
 from houston.establishments.membership_scope import (
     _iter_membership_scopes,
@@ -142,6 +145,58 @@ def can_manage_action_plan(
     return manages_business_unit(membership, action_plan.pilot_business_unit)
 
 
+def task_business_units_include_cross_pole_task(
+    *,
+    pilot_business_unit_id,
+    task_business_unit_ids,
+) -> bool:
+    return any(bu_id != pilot_business_unit_id for bu_id in task_business_unit_ids)
+
+
+def action_plan_has_cross_pole_tasks(action_plan: ActionPlan) -> bool:
+    prefetched = getattr(action_plan, "_prefetched_objects_cache", None)
+    if prefetched is not None and "tasks" in prefetched:
+        tasks = action_plan.tasks.all()
+    else:
+        tasks = ActionPlanTask.objects.filter(action_plan_id=action_plan.id)
+    return task_business_units_include_cross_pole_task(
+        pilot_business_unit_id=action_plan.pilot_business_unit_id,
+        task_business_unit_ids=[task.business_unit_id for task in tasks],
+    )
+
+
+def action_plan_cross_pole_tasks_exist_subquery() -> Exists:
+    cross_pole_tasks = ActionPlanTask.objects.filter(
+        action_plan_id=OuterRef("pk"),
+    ).exclude(business_unit_id=OuterRef("pilot_business_unit_id"))
+    return Exists(cross_pole_tasks)
+
+
+def _action_plan_tasks_all_on_pilot_business_unit(action_plan: ActionPlan) -> bool:
+    return not action_plan_has_cross_pole_tasks(action_plan)
+
+
+def staff_catalog_action_plan_in_scope(
+    membership: EstablishmentMembership | None,
+    action_plan: ActionPlan,
+) -> bool:
+    if membership is None:
+        return False
+    if membership.role != EstablishmentMembership.Role.STAFF:
+        return False
+    if action_plan.establishment_id != membership.establishment_id:
+        return False
+    if not establishment_can_create_action(membership):
+        return False
+    if not action_plan.is_reusable:
+        return False
+    if action_plan.catalog_status != CATALOG_STATUS_ACTIVE:
+        return False
+    if not membership_scope_covers_business_unit(membership, action_plan.pilot_business_unit):
+        return False
+    return not action_plan_has_cross_pole_tasks(action_plan)
+
+
 def can_view_action_plan_catalog(membership: EstablishmentMembership | None) -> bool:
     if membership is None:
         return False
@@ -151,6 +206,8 @@ def can_view_action_plan_catalog(membership: EstablishmentMembership | None) -> 
         return True
     if membership.role == EstablishmentMembership.Role.MANAGER:
         return True
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return establishment_can_create_action(membership)
     return False
 
 
@@ -196,6 +253,8 @@ def action_plan_visible_to_membership(
             membership,
             action_plan.pilot_business_unit,
         )
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return staff_catalog_action_plan_in_scope(membership, action_plan)
     return False
 
 
@@ -209,9 +268,7 @@ def can_assign_to_execution_business_unit(
     membership: EstablishmentMembership | None,
     *,
     business_unit: BusinessUnit,
-    pilot_business_unit: BusinessUnit,
 ) -> bool:
-    del pilot_business_unit
     if membership is None:
         return False
     if membership.role in ADMIN_ROLES:
@@ -251,11 +308,13 @@ def can_create_staff_feed_execution_plan(
         return False
     if assignee.business_unit.id != pilot_business_unit.id:
         return False
+    if task_business_units_include_cross_pole_task(
+        pilot_business_unit_id=pilot_business_unit.id,
+        task_business_unit_ids=[task_item["business_unit"].id for task_item in tasks],
+    ):
+        return False
     for task_item in tasks:
-        task_business_unit = task_item["business_unit"]
-        if task_business_unit.id != pilot_business_unit.id:
-            return False
-        if not membership_scope_covers_business_unit(membership, task_business_unit):
+        if not membership_scope_covers_business_unit(membership, task_item["business_unit"]):
             return False
     return True
 
@@ -415,8 +474,6 @@ def can_use_action_plan(
     membership: EstablishmentMembership | None,
     action_plan: ActionPlan,
 ) -> bool:
-    from houston.action_plans.constants import CATALOG_STATUS_ACTIVE
-
     if not action_plan.is_reusable:
         return False
     if action_plan.catalog_status != CATALOG_STATUS_ACTIVE:
@@ -428,6 +485,10 @@ def can_create_action_plan_schedule(
     membership: EstablishmentMembership | None,
     action_plan: ActionPlan,
 ) -> bool:
+    if membership is None:
+        return False
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return staff_catalog_action_plan_in_scope(membership, action_plan)
     return can_use_action_plan(membership, action_plan)
 
 

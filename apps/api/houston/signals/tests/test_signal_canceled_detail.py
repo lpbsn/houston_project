@@ -237,8 +237,8 @@ def test_detail_canceled_query_count_with_source_observation(api_client):
     )
     token = login(api_client, user=owner.user)
 
-    # Measured post-fix on PostgreSQL test DB (ORM-QW-01 / DB-04).
-    max_queries = 10
+    # Measured post-fix on PostgreSQL test DB (ORM-QW-01 / DB-04 + linked_action_plan_executions).
+    max_queries = 11
 
     with capture_queries() as context:
         response = api_client.get(

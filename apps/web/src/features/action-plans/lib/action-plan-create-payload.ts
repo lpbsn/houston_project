@@ -4,6 +4,7 @@ import type {
   ActionPlanCreateFormValues,
   ActionPlanTaskDraft,
 } from './action-plan-form-validation'
+import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
 
 function toIsoDateTime(value: string): string | undefined {
   const trimmed = value.trim()
@@ -62,7 +63,8 @@ function buildTaskPayloads(tasks: ActionPlanTaskDraft[]): ActionPlanCreateReques
 export function buildActionPlanCreateRequest(
   values: ActionPlanCreateFormValues,
 ): ActionPlanCreateRequest {
-  const assignees = values.saveToLibrary
+  const scheduleEnabled = values.schedule.enabled
+  const assignees = values.saveToLibrary && !scheduleEnabled
     ? []
     : buildAssigneePayloads(values.assignees, {
         useSharedChronology: values.useSharedChronology,
@@ -71,12 +73,18 @@ export function buildActionPlanCreateRequest(
         sharedVisibleFrom: values.sharedVisibleFrom,
       })
 
+  const schedule = buildActionPlanScheduleCreateRequest({
+    schedule: values.schedule,
+    assignees: values.assignees,
+    useSharedChronology: values.useSharedChronology,
+  })
+
   return {
     title: values.title.trim(),
     description: values.description.trim(),
     pilot_business_unit_id: values.pilotBusinessUnitId,
     requires_validation: values.requiresValidation,
-    is_reusable: values.saveToLibrary,
+    is_reusable: values.saveToLibrary || scheduleEnabled,
     tasks: buildTaskPayloads(values.tasks),
     assignees,
     use_shared_chronology: values.useSharedChronology,
@@ -86,6 +94,7 @@ export function buildActionPlanCreateRequest(
       ? toIsoDateTime(values.sharedVisibleFrom) ?? null
       : null,
     ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
+    ...(schedule ? { schedule } : {}),
   }
 }
 

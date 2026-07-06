@@ -30,6 +30,12 @@ export function canShowActionPlanUse(
   return hints?.can_use === true
 }
 
+export function canShowActionPlanSchedule(
+  hints: ActionPlanPermissionHints | null | undefined,
+): boolean {
+  return hints?.can_schedule === true
+}
+
 export function canShowActionPlanExecutionMarkDone(
   hints: ActionPlanExecutionPermissionHints | null | undefined,
 ): boolean {

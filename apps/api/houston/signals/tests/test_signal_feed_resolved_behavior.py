@@ -211,3 +211,29 @@ def test_detail_resolved_returns_200(api_client):
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
     assert hints["can_create_linked_action_plan"] is False
+
+
+def test_in_progress_permission_hints_allow_urgency_not_pin(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
+    signal = _create_signal(membership, title="Progress", status=Signal.Status.IN_PROGRESS)
+    token = login(api_client, user=membership.user)
+
+    feed_response = api_client.get(
+        signal_feed_url(membership.establishment_id) + "?view_mode=general",
+        **auth_headers(token),
+    )
+    assert feed_response.status_code == 200
+    feed_item = next(
+        item for item in feed_response.json()["items"] if item["id"] == str(signal.id)
+    )
+    assert feed_item["permission_hints"]["can_pin"] is False
+    assert feed_item["permission_hints"]["can_set_urgency"] is True
+
+    detail_response = api_client.get(
+        signal_detail_url(membership.establishment_id, signal.id),
+        **auth_headers(token),
+    )
+    assert detail_response.status_code == 200
+    hints = detail_response.json()["permission_hints"]
+    assert hints["can_pin"] is False
+    assert hints["can_set_urgency"] is True

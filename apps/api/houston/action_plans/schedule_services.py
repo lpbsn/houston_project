@@ -39,8 +39,12 @@ from houston.action_plans.permissions import (
     can_create_action_plan_schedule,
     can_manage_action_plan_schedule,
     can_use_action_plan,
+    staff_catalog_action_plan_in_scope,
 )
 from houston.action_plans.services import (
+    ValidatedAssigneePayload,
+    _assert_staff_self_assignee_payload,
+    _validate_actor_can_assign_poles,
     _validate_assignee_covers_business_unit,
     _validate_business_unit_in_establishment,
     _validate_execution_has_content,
@@ -127,12 +131,15 @@ def get_active_started_execution_for_schedule(
     now: datetime | None = None,
 ) -> ActionPlanExecution | None:
     resolved_now = now or timezone.now()
-    for execution in schedule.executions.only("id", "status", "start_at"):
-        if classify_schedule_linked_execution(execution=execution, now=resolved_now) == (
-            "active_started"
-        ):
-            return execution
-    return None
+    return (
+        schedule.executions.filter(
+            status=EXECUTION_STATUS_IN_PROGRESS,
+            start_at__lte=resolved_now,
+        )
+        .only("id", "status", "start_at", "action_plan_schedule_id")
+        .order_by("start_at")
+        .first()
+    )
 
 
 def _cancel_schedule_future_execution(*, execution: ActionPlanExecution) -> None:
@@ -354,6 +361,47 @@ def _validate_schedule_assignee_payloads(
     return validated
 
 
+def _schedule_assignees_as_validated_payloads(
+    validated_assignees: list[dict],
+) -> list[ValidatedAssigneePayload]:
+    return [
+        ValidatedAssigneePayload(
+            membership=item["membership"],
+            business_unit=item["business_unit"],
+            start_at=item.get("start_at"),
+            end_at=item.get("end_at"),
+        )
+        for item in validated_assignees
+    ]
+
+
+def _resolve_staff_catalog_schedule_assignees(
+    *,
+    actor: EstablishmentMembership,
+    pilot_business_unit,
+    establishment_id: uuid.UUID,
+    assignees: list[dict] | None,
+    schedule_start_at: time,
+    schedule_end_at: time,
+) -> list[dict]:
+    _assert_staff_self_assignee_payload(
+        actor=actor,
+        pilot_business_unit=pilot_business_unit,
+        assignees=assignees,
+    )
+    return _validate_schedule_assignee_payloads(
+        establishment_id=establishment_id,
+        assignees=[
+            {
+                "membership_id": actor.id,
+                "business_unit_id": pilot_business_unit.id,
+            }
+        ],
+        schedule_start_at=schedule_start_at,
+        schedule_end_at=schedule_end_at,
+    )
+
+
 def _create_schedule_assignees(
     *,
     schedule: ActionPlanSchedule,
@@ -417,12 +465,31 @@ def create_action_plan_schedule(
         end_at=end_at,
     )
     normalized_recurrence_days = normalize_recurring_recurrence_days(recurrence_days)
-    validated_assignees = _validate_schedule_assignee_payloads(
-        establishment_id=action_plan.establishment_id,
-        assignees=assignees or [],
-        schedule_start_at=start_at,
-        schedule_end_at=end_at,
-    )
+    if actor.role == EstablishmentMembership.Role.STAFF:
+        if not staff_catalog_action_plan_in_scope(actor, action_plan):
+            raise ActionPlanPermissionError(
+                "Not allowed to create a schedule for this action plan."
+            )
+        validated_assignees = _resolve_staff_catalog_schedule_assignees(
+            actor=actor,
+            pilot_business_unit=action_plan.pilot_business_unit,
+            establishment_id=action_plan.establishment_id,
+            assignees=assignees,
+            schedule_start_at=start_at,
+            schedule_end_at=end_at,
+        )
+    else:
+        validated_assignees = _validate_schedule_assignee_payloads(
+            establishment_id=action_plan.establishment_id,
+            assignees=assignees or [],
+            schedule_start_at=start_at,
+            schedule_end_at=end_at,
+        )
+        _validate_actor_can_assign_poles(
+            actor=actor,
+            pilot_business_unit=action_plan.pilot_business_unit,
+            validated_assignees=_schedule_assignees_as_validated_payloads(validated_assignees),
+        )
     task_count = ActionPlanTask.objects.filter(action_plan=action_plan).count()
     _validate_execution_has_content(
         task_count=task_count,
@@ -574,6 +641,12 @@ def update_action_plan_schedule(
             assignees=assignees,
             schedule_start_at=next_start_at,
             schedule_end_at=next_end_at,
+        )
+        action_plan = schedule.action_plan
+        _validate_actor_can_assign_poles(
+            actor=actor,
+            pilot_business_unit=action_plan.pilot_business_unit,
+            validated_assignees=_schedule_assignees_as_validated_payloads(validated_assignees),
         )
         task_count = ActionPlanTask.objects.filter(action_plan=schedule.action_plan_id).count()
         _validate_execution_has_content(

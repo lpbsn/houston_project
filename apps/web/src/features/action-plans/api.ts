@@ -17,6 +17,8 @@ import type {
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
   ActionPlanListItem,
+  ActionPlanScheduleCreateRequest,
+  ActionPlanScheduleDetail,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskCreateObservationResponse,
   ActionPlanTaskExecution,
@@ -268,6 +270,26 @@ export async function launchActionPlanExecution(
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function createActionPlanSchedule(
+  establishmentId: string,
+  actionPlanId: string,
+  body: ActionPlanScheduleCreateRequest,
+): Promise<ActionPlanScheduleDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/',
+        {
+          params: actionPlanPath(establishmentId, actionPlanId),
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanScheduleDetail>(result)
 }
 
 export async function fetchActionPlanExecutionDetail(

@@ -46,7 +46,8 @@ const { mockAuthState, mockBusinessUnitTree } = vi.hoisted(() => ({
       permission_hints: {
         chat_available: false,
         can_create_action_plan: true,
-        can_create_catalog_action_plan: false,
+        can_create_catalog_action_plan: true,
+        can_view_action_plan_catalog: true,
         can_invite: false,
         can_manage_runtime_config: false,
       },
@@ -83,34 +84,34 @@ vi.mock('../hooks', () => ({
   }),
 }))
 
-vi.mock('../components/action-plan-assignee-chronology-sheet', () => ({
-  ActionPlanAssigneeChronologySheet: ({
-    open,
-    onAssigneesChange,
-    onConfirm,
+vi.mock('../components/action-plan-event-planning-form', () => ({
+  ActionPlanEventPlanningForm: ({
+    draft,
+    onDraftChange,
   }: {
-    open: boolean
-    onAssigneesChange: (assignees: Array<Record<string, string>>) => void
-    onConfirm: () => void
+    draft: { assignees: Array<Record<string, string>> }
+    onDraftChange: (draft: Record<string, unknown>) => void
   }) => {
     useEffect(() => {
-      if (!open) {
+      if (draft.assignees.length > 0) {
         return
       }
-      onAssigneesChange([
-        {
-          id: 'a1',
-          membershipId: 'member-1',
-          businessUnitId: 'bu-1',
-          displayName: 'Marie Dupont',
-          startAt: '',
-          endAt: '',
-          visibleFrom: '',
-        },
-      ])
-      onConfirm()
-    }, [open, onAssigneesChange, onConfirm])
-    return null
+      onDraftChange({
+        ...draft,
+        assignees: [
+          {
+            id: 'a1',
+            membershipId: 'member-1',
+            businessUnitId: 'bu-1',
+            displayName: 'Marie Dupont',
+            startAt: '',
+            endAt: '',
+            visibleFrom: '',
+          },
+        ],
+      })
+    }, [draft, onDraftChange])
+    return createElement('div', { 'data-testid': 'event-planning-form' })
   },
 }))
 
@@ -182,7 +183,8 @@ describe('ActionPlanCreatePage', () => {
     mockAuthState.bootstrap.permission_hints = {
       chat_available: false,
       can_create_action_plan: true,
-      can_create_catalog_action_plan: false,
+      can_create_catalog_action_plan: true,
+      can_view_action_plan_catalog: true,
       can_invite: false,
       can_manage_runtime_config: false,
     }
@@ -199,6 +201,32 @@ describe('ActionPlanCreatePage', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('selects pilot pole via pill wheel and submits with pilot_business_unit_id', async () => {
+    mockBusinessUnitTree.business_units = [
+      { id: 'bu-restaurant', label: 'Restaurant', key: 'restaurant', unit_type: 'service' },
+      { id: 'bu-maintenance', label: 'Maintenance', key: 'maintenance', unit_type: 'service' },
+    ]
+
+    renderPage({ mode: 'catalog' })
+
+    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité pilote" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Maintenance' }))
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan maintenance pilote' } })
+    fireEvent.change(screen.getByLabelText('Tâche'), { target: { value: 'Tâche 1' } })
+    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Plan maintenance pilote',
+          pilot_business_unit_id: 'bu-maintenance',
+        }),
+      )
+    })
   })
 
   it('submits owner catalog create with multi-pole tasks when pilot pole is not explicitly selected', async () => {
@@ -231,7 +259,7 @@ describe('ActionPlanCreatePage', () => {
     const poleSelects = screen.getAllByLabelText('Pôle d’activité de la tâche')
     fireEvent.change(poleSelects[1], { target: { value: 'bu-maintenance' } })
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
 
     await waitFor(() => {
@@ -256,7 +284,7 @@ describe('ActionPlanCreatePage', () => {
     const textInputs = screen.getAllByRole('textbox')
     fireEvent.change(textInputs[0], { target: { value: 'Plan catalogue' } })
     fireEvent.change(screen.getByLabelText('Tâche'), { target: { value: 'Task 1' } })
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Enregistrer dans la bibliothèque' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' }))
 
     await waitFor(() => {
@@ -323,13 +351,12 @@ describe('ActionPlanCreatePage', () => {
       backPath: '/signals/sig-1',
     })
 
-    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByRole('button', { name: "Pôle d'activité pilote" })).toBeNull()
     expect(screen.getByText('Rooftop')).toBeTruthy()
 
     const titleInput = screen.getAllByRole('textbox')[0]
     fireEvent.change(titleInput, { target: { value: 'Plan signal' } })
     fireEvent.change(screen.getByLabelText('Tâche'), { target: { value: 'Tâche signal' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Configurer les assignés' }))
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
 
     await waitFor(() => {

@@ -11,6 +11,7 @@ type ExecutionCreateMenuSheetProps = {
   permissionHints: BootstrapPermissionHints
   onClose: () => void
   onSelectActionPlan: () => void
+  onSelectCatalog: () => void
 }
 
 export function ExecutionCreateMenuSheet({
@@ -18,6 +19,7 @@ export function ExecutionCreateMenuSheet({
   permissionHints,
   onClose,
   onSelectActionPlan,
+  onSelectCatalog,
 }: ExecutionCreateMenuSheetProps) {
   const options = getExecutionCreateMenuOptions(permissionHints)
 
@@ -28,6 +30,11 @@ export function ExecutionCreateMenuSheet({
   function handleMainSelect(id: ExecutionCreateMenuOptionId) {
     if (id === 'action_plan') {
       onSelectActionPlan()
+      handleClose()
+      return
+    }
+    if (id === 'catalog') {
+      onSelectCatalog()
       handleClose()
     }
   }

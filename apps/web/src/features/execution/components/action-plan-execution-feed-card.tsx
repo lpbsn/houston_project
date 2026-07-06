@@ -7,17 +7,14 @@ import {
 } from '@/lib/terrain-styles'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { ActionPlanStatusBadge } from '@/features/action-plans/components/action-plan-status-badge'
-import {
-  formatActionPlanEndAtLabel,
-  formatActionPlanTaskStatusLabel,
-} from '@/features/action-plans/lib/action-plan-display'
+import { formatActionPlanEndAtLabel } from '@/features/action-plans/lib/action-plan-display'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 
 import {
   actionPlanFeedSignalClassificationInput,
   formatActionPlanFeedAssigneeDisplay,
-  formatActionPlanFeedInvolvedPoleLabels,
+  formatActionPlanFeedTaskProgressLabel,
   isActionPlanFeedPendingValidationCard,
 } from '../lib/action-plan-execution-feed-card-display'
 
@@ -26,26 +23,37 @@ type ActionPlanExecutionFeedCardProps = {
   onSelect: (executionId: string) => void
 }
 
-function ActionPlanFeedTaskPreviews({ item }: { item: ActionPlanExecutionFeedItem }) {
-  if (item.task_executions.length === 0) {
+type ActionPlanFeedAssigneeRowProps = {
+  item: ActionPlanExecutionFeedItem
+  showStatusBadge?: boolean
+}
+
+function ActionPlanFeedMetaRow({ item }: { item: ActionPlanExecutionFeedItem }) {
+  const progressLabel = formatActionPlanFeedTaskProgressLabel(item)
+  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
+
+  if (!progressLabel && !endAtLabel) {
     return null
   }
 
   return (
-    <ul className="mt-3 space-y-1 border-t border-[#F0EFE9] pt-3">
-      {item.task_executions.map((task) => (
-        <li key={`${item.id}-${task.position}`} className="flex items-start justify-between gap-2 text-[11px]">
-          <span className="min-w-0 flex-1 truncate text-[#555]">{task.task}</span>
-          <span className="shrink-0 text-[#888]">{formatActionPlanTaskStatusLabel(task.status)}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#888]">
+      {progressLabel ? (
+        <span className="font-medium tabular-nums text-[#555]">{progressLabel}</span>
+      ) : null}
+      {progressLabel && endAtLabel ? <span aria-hidden>·</span> : null}
+      {endAtLabel ? (
+        <span className={item.is_overdue ? 'font-medium text-[#E24B4A]' : undefined}>
+          Échéance : {endAtLabel}
+        </span>
+      ) : null}
+    </div>
   )
 }
 
-function ActionPlanFeedAssigneeRow({ item }: { item: ActionPlanExecutionFeedItem }) {
+function ActionPlanFeedAssigneeRow({ item, showStatusBadge = true }: ActionPlanFeedAssigneeRowProps) {
   const { visible, overflow } = formatActionPlanFeedAssigneeDisplay(item.assignees)
-  if (visible.length === 0) {
+  if (visible.length === 0 && !showStatusBadge) {
     return null
   }
 
@@ -55,23 +63,26 @@ function ActionPlanFeedAssigneeRow({ item }: { item: ActionPlanExecutionFeedItem
 
   return (
     <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0EFE9] pt-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <div
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#1B4FD8]"
-          aria-hidden
-        >
-          {primaryInitials}
+      {visible.length > 0 ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <div
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#1B4FD8]"
+            aria-hidden
+          >
+            {primaryInitials}
+          </div>
+          <span className="truncate text-[11px] text-[#888]">{assigneeLabel}</span>
         </div>
-        <span className="truncate text-[11px] text-[#888]">{assigneeLabel}</span>
-      </div>
-      <ActionPlanStatusBadge status={item.status} />
+      ) : (
+        <span />
+      )}
+      {showStatusBadge ? <ActionPlanStatusBadge status={item.status} /> : null}
     </div>
   )
 }
 
 function PendingValidationActionPlanFeedCard({ item, onSelect }: ActionPlanExecutionFeedCardProps) {
   const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
 
   return (
     <article
@@ -97,28 +108,18 @@ function PendingValidationActionPlanFeedCard({ item, onSelect }: ActionPlanExecu
       ) : null}
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-      {item.description_short ? (
-        <p className="mt-1 line-clamp-2 text-[12px] text-[#666]">{item.description_short}</p>
-      ) : null}
+
+      <ActionPlanFeedMetaRow item={item} />
 
       <p className="mt-2 text-[11px] text-[#888]">Pôle pilote : {item.pilot_business_unit.label}</p>
 
-      {endAtLabel ? (
-        <p className={`mt-1 text-[11px] ${item.is_overdue ? 'text-[#E24B4A]' : 'text-[#888]'}`}>
-          Échéance : {endAtLabel}
-        </p>
-      ) : null}
-
-      <ActionPlanFeedTaskPreviews item={item} />
-      <ActionPlanFeedAssigneeRow item={item} />
+      <ActionPlanFeedAssigneeRow item={item} showStatusBadge={false} />
     </article>
   )
 }
 
 function ClassicActionPlanFeedCard({ item, onSelect }: ActionPlanExecutionFeedCardProps) {
   const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
-  const involvedPoleLabels = formatActionPlanFeedInvolvedPoleLabels(item.involved_poles)
-  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
 
   return (
     <article
@@ -136,19 +137,11 @@ function ClassicActionPlanFeedCard({ item, onSelect }: ActionPlanExecutionFeedCa
       ) : null}
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-      {item.description_short ? (
-        <p className="mt-1 line-clamp-2 text-[12px] text-[#666]">{item.description_short}</p>
-      ) : null}
 
-      <div className="mt-2 space-y-1 text-[11px] text-[#888]">
-        <p>Pôle pilote : {item.pilot_business_unit.label}</p>
-        {involvedPoleLabels ? <p>Pôles impliqués : {involvedPoleLabels}</p> : null}
-        {endAtLabel ? (
-          <p className={item.is_overdue ? 'text-[#E24B4A]' : undefined}>Échéance : {endAtLabel}</p>
-        ) : null}
-      </div>
+      <ActionPlanFeedMetaRow item={item} />
 
-      <ActionPlanFeedTaskPreviews item={item} />
+      <p className="mt-2 text-[11px] text-[#888]">Pôle pilote : {item.pilot_business_unit.label}</p>
+
       <ActionPlanFeedAssigneeRow item={item} />
     </article>
   )

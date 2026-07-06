@@ -3,6 +3,11 @@ import { useMemo, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
+import {
+  canViewActionPlanCatalogFromBootstrapHints,
+  canCreateCatalogActionPlanFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { terrain } from '@/lib/terrain-styles'
@@ -11,14 +16,19 @@ import { cn } from '@/lib/utils'
 import { ActionPlanCatalogSectionView } from '../components/action-plan-catalog-section'
 import { ActionPlanHubFilters } from '../components/action-plan-hub-filters'
 import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
-import { useActionPlanCatalogQuery, useUseActionPlanFromCatalogMutation } from '../hooks'
+import {
+  useActionPlanCatalogQuery,
+  useScheduleActionPlanFromCatalogMutation,
+  useUseActionPlanFromCatalogMutation,
+} from '../hooks'
 import { filterActionPlansByTitle } from '../lib/action-plan-catalog-filters'
 import {
   canAccessActionPlanCatalog,
-  canCreateActionPlanCatalogEntry,
+  isStaffActionPlanUsageRole,
 } from '../lib/action-plan-management-access'
 import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
+import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
 import type { ActionPlanCatalogListFilters } from '../types'
 
 type ActionPlanHubPageProps = {
@@ -28,17 +38,20 @@ type ActionPlanHubPageProps = {
 export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   const { navigate } = useAppRoute()
   const navigateTo = onNavigate ?? navigate
-  const { activeMembership, isBootstrapping, isReady } = useAuth()
+  const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
   const membershipId = activeMembership?.id ?? null
   const role = activeMembership?.role ?? null
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
 
   const canAccessLibrary = canAccessActionPlanCatalog({
     establishmentId,
     activeMembershipId: membershipId,
     role,
+    canViewActionPlanCatalog: canViewActionPlanCatalogFromBootstrapHints(permissionHints),
   })
-  const canCreate = canCreateActionPlanCatalogEntry(role)
+  const canCreate = canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
+  const staffUseMode = isStaffActionPlanUsageRole(role)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [businessUnitId, setBusinessUnitId] = useState('')
@@ -62,6 +75,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     filters,
   )
   const useMutation = useUseActionPlanFromCatalogMutation(establishmentId ?? '')
+  const scheduleMutation = useScheduleActionPlanFromCatalogMutation(establishmentId ?? '')
 
   const filteredItems = useMemo(() => {
     const items = catalogQuery.data ?? []
@@ -103,6 +117,19 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           </TerrainCard>
         </div>
       )
+    }
+  }
+
+  async function handleSchedule(body: Parameters<typeof scheduleMutation.mutateAsync>[0]['body']) {
+    if (!usePlanId) {
+      return
+    }
+    setUseError(null)
+    try {
+      await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body })
+      setUsePlanId(null)
+    } catch (error) {
+      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'))
     }
   }
 
@@ -158,7 +185,9 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
         <TerrainCard className="space-y-2 py-6 text-center">
           <p className="text-sm font-semibold text-[#1a1a1a]">Aucun plan trouvé</p>
           <p className={cn('text-xs leading-5', terrain.muted)}>
-            Ajustez les filtres ou créez un nouveau plan dans la bibliothèque.
+            {staffUseMode
+              ? 'Aucun modèle actif disponible pour votre pôle.'
+              : 'Ajustez les filtres ou créez un nouveau plan dans la bibliothèque.'}
           </p>
         </TerrainCard>
       ) : (
@@ -180,8 +209,12 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           establishmentId={establishmentId ?? ''}
           pilotBusinessUnitId={usePlan.pilot_business_unit.id}
           isPending={useMutation.isPending}
+          isSchedulePending={scheduleMutation.isPending}
+          staffUseMode={staffUseMode}
+          canSchedule={canShowActionPlanSchedule(usePlan.permission_hints)}
           onClose={() => setUsePlanId(null)}
           onConfirm={(body) => void handleUse(body)}
+          onScheduleConfirm={(body) => void handleSchedule(body)}
         />
       ) : null}
     </div>

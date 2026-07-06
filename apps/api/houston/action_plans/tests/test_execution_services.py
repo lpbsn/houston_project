@@ -471,6 +471,50 @@ def test_create_execution_from_inactive_catalog_rejected(
         )
 
 
+def test_staff_create_execution_from_catalog_self_assigns(
+    staff_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    execution = create_execution_from_action_plan(
+        action_plan_id=catalog_action_plan.id,
+        actor=staff_membership,
+        assignees=[],
+    )
+
+    assignee = execution.assignees.get()
+    assert assignee.membership_id == staff_membership.id
+    assert assignee.execution_team.business_unit_id == business_unit.id
+
+
+def test_staff_create_execution_from_catalog_rejects_third_party_assignee(
+    staff_membership,
+    owner_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to assign other members"):
+        create_execution_from_action_plan(
+            action_plan_id=catalog_action_plan.id,
+            actor=staff_membership,
+            assignees=[
+                build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+            ],
+        )
+
+
+def test_staff_create_execution_from_cross_pole_catalog_rejected(
+    staff_membership,
+    cross_pole_catalog_action_plan,
+):
+    with pytest.raises(ActionPlanPermissionError, match="Not allowed to use"):
+        create_execution_from_action_plan(
+            action_plan_id=cross_pole_catalog_action_plan.id,
+            actor=staff_membership,
+            assignees=[],
+        )
+
+
 def test_mark_done_with_validation_goes_pending(
     owner_membership,
     execution_with_assignee,

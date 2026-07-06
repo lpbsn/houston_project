@@ -5256,6 +5256,10 @@ components:
           type: string
           format: date
           nullable: true
+        schedule:
+          allOf:
+          - $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
+          nullable: true
       required:
       - pilot_business_unit_id
       - title
@@ -5477,6 +5481,10 @@ components:
           nullable: true
         is_overdue:
           type: boolean
+        task_count:
+          type: integer
+        treated_task_count:
+          type: integer
         task_executions:
           type: array
           items:
@@ -5503,8 +5511,10 @@ components:
       - requires_validation
       - signal_summary
       - status
+      - task_count
       - task_executions
       - title
+      - treated_task_count
     ActionPlanExecutionFeedItemWrapper:
       type: object
       properties:
@@ -5626,9 +5636,12 @@ components:
           type: boolean
         can_use:
           type: boolean
+        can_schedule:
+          type: boolean
       required:
       - can_activate
       - can_deactivate
+      - can_schedule
       - can_update
       - can_use
     ActionPlanScheduleAssignee:
@@ -6206,6 +6219,8 @@ components:
           type: boolean
         can_create_catalog_action_plan:
           type: boolean
+        can_view_action_plan_catalog:
+          type: boolean
         can_invite:
           type: boolean
         can_manage_runtime_config:
@@ -6215,6 +6230,7 @@ components:
       - can_create_catalog_action_plan
       - can_invite
       - can_manage_runtime_config
+      - can_view_action_plan_catalog
       - chat_available
     BootstrapResponse:
       type: object
@@ -8043,12 +8059,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignalDetailMediaItem'
+        linked_action_plan_executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalLinkedActionPlanExecution'
       required:
       - aggregation_count
       - created_at
       - id
       - is_pinned
       - last_activity_at
+      - linked_action_plan_executions
       - location_text
       - media_count
       - media_items
@@ -8173,6 +8194,34 @@ components:
       - has_more
       - items
       - next_cursor
+    SignalLinkedActionPlanExecution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+        requires_validation:
+          type: boolean
+        pilot_business_unit:
+          $ref: '#/components/schemas/ActionPlanBusinessUnit'
+        last_activity_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - last_activity_at
+      - pilot_business_unit
+      - requires_validation
+      - status
+      - title
     SourceContext:
       type: object
       properties:

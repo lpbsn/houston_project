@@ -6,6 +6,7 @@ const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   chat_available: false,
   can_create_action_plan: false,
   can_create_catalog_action_plan: false,
+  can_view_action_plan_catalog: false,
   can_invite: false,
   can_manage_runtime_config: false,
 }
@@ -32,6 +33,12 @@ export function canCreateCatalogActionPlanFromBootstrapHints(
   hints: BootstrapPermissionHints | null | undefined,
 ): boolean {
   return hints?.can_create_catalog_action_plan === true
+}
+
+export function canViewActionPlanCatalogFromBootstrapHints(
+  hints: BootstrapPermissionHints | null | undefined,
+): boolean {
+  return hints?.can_view_action_plan_catalog === true
 }
 
 export function canManageRuntimeConfigFromBootstrapHints(hints: BootstrapPermissionHints): boolean {

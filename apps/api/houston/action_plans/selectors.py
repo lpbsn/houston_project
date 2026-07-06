@@ -8,6 +8,7 @@ from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet
 from django.utils import timezone
 
 from houston.action_plans.constants import (
+    CATALOG_STATUS_ACTIVE,
     CONTRIBUTION_STATUS_DONE,
     CONTRIBUTION_STATUS_IN_PROGRESS,
     EXECUTION_FEED_STATUSES,
@@ -25,6 +26,7 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.permissions import (
     _scope_business_unit_ids,
+    action_plan_cross_pole_tasks_exist_subquery,
     action_plan_execution_visible_to_membership,
     action_plan_visible_to_membership,
     can_execute_action_plan_task,
@@ -118,6 +120,19 @@ def catalog_action_plans_for_list(
         if not bu_ids:
             return ActionPlan.objects.none()
         filtered = queryset.filter(pilot_business_unit_id__in=bu_ids)
+    elif membership.role == EstablishmentMembership.Role.STAFF:
+        bu_ids = _scope_business_unit_ids(membership)
+        if not bu_ids:
+            return ActionPlan.objects.none()
+        cross_pole_tasks = action_plan_cross_pole_tasks_exist_subquery()
+        filtered = (
+            queryset.filter(
+                pilot_business_unit_id__in=bu_ids,
+                catalog_status=CATALOG_STATUS_ACTIVE,
+            )
+            .annotate(has_cross_pole_tasks=cross_pole_tasks)
+            .filter(has_cross_pole_tasks=False)
+        )
     else:
         return ActionPlan.objects.none()
 
@@ -168,6 +183,26 @@ def get_action_plan_execution_for_detail(
     if not action_plan_execution_visible_to_membership(membership, execution):
         return None
     return execution
+
+
+def linked_action_plan_executions_for_signal_detail(
+    *,
+    membership: EstablishmentMembership,
+    signal,
+) -> list[ActionPlanExecution]:
+    queryset = (
+        ActionPlanExecution.objects.filter(
+            establishment_id=membership.establishment_id,
+            source_signal_id=signal.id,
+        )
+        .select_related("pilot_business_unit")
+        .order_by("-last_activity_at", "-created_at")
+    )
+    return [
+        execution
+        for execution in queryset
+        if action_plan_execution_visible_to_membership(membership, execution)
+    ]
 
 
 def get_action_plan_execution_task_for_command(

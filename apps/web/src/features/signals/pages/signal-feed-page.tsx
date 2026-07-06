@@ -11,12 +11,14 @@ import {
 } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { SignalCard } from '../components/signal-card'
+import { SignalFeedCardActionsSheet } from '../components/signal-feed-card-actions-sheet'
 import {
   EMPTY_SIGNAL_FEED_FILTERS,
   SignalFeedFiltersBar,
 } from '../components/signal-feed-filters-bar'
 import { SignalFeedTabs } from '../components/signal-feed-tabs'
 import { useSignalFeedQuery } from '../hooks'
+import { useSignalFeedQuickActions } from '../hooks/use-signal-feed-quick-actions'
 import { SignalsApiError } from '../api'
 import { groupFeedItemsByStatus, partitionFeedPinnedItems } from '../lib/signal-display'
 import {
@@ -39,6 +41,11 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
   const normalizedFilters = normalizeSignalFeedFilters(filters)
   const feedQuery = useSignalFeedQuery(establishmentId, viewMode, normalizedFilters)
   const filtersActive = hasActiveSignalFeedFilters(normalizedFilters)
+  const quickActions = useSignalFeedQuickActions({
+    establishmentId,
+    viewMode,
+    filters: normalizedFilters,
+  })
 
   if (!establishmentId) {
     return (
@@ -66,6 +73,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           item={item}
           variant={variant}
           onSelect={onOpenSignal}
+          onOpenActions={quickActions.openActions}
         />
       ))}
     </div>
@@ -180,6 +188,16 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           </div>
         ) : null}
       </div>
+
+      {quickActions.activeItem ? (
+        <SignalFeedCardActionsSheet
+          item={quickActions.activeItem}
+          open={quickActions.actionsOpen}
+          isPending={quickActions.isPending}
+          onClose={quickActions.closeActions}
+          onSelectAction={quickActions.runAction}
+        />
+      ) : null}
     </div>
   )
 }

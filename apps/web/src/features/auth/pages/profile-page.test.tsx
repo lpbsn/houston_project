@@ -26,6 +26,7 @@ const { authState } = vi.hoisted(() => ({
           chat_available: false,
           can_create_action_plan: false,
           can_create_catalog_action_plan: true,
+          can_view_action_plan_catalog: true,
           can_invite: true,
           can_manage_runtime_config: true,
         },
@@ -138,6 +139,7 @@ describe('ProfilePage', () => {
           chat_available: false,
           can_create_action_plan: false,
           can_create_catalog_action_plan: false,
+          can_view_action_plan_catalog: false,
           can_invite: false,
           can_manage_runtime_config: false,
         },
@@ -163,6 +165,7 @@ describe('ProfilePage', () => {
           chat_available: false,
           can_create_action_plan: false,
           can_create_catalog_action_plan: true,
+          can_view_action_plan_catalog: true,
           can_invite: true,
           can_manage_runtime_config: true,
         },
@@ -194,6 +197,7 @@ describe('ProfilePage', () => {
           chat_available: false,
           can_create_action_plan: false,
           can_create_catalog_action_plan: false,
+          can_view_action_plan_catalog: false,
           can_invite: true,
           can_manage_runtime_config: false,
         },
@@ -211,7 +215,7 @@ describe('ProfilePage', () => {
     expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
   })
 
-  it('hides action plans nav when catalog hint is false', () => {
+  it('hides action plans nav when catalog hints are false', () => {
     authState.current = {
       ...authState.current,
       bootstrap: {
@@ -219,6 +223,7 @@ describe('ProfilePage', () => {
           chat_available: false,
           can_create_action_plan: false,
           can_create_catalog_action_plan: false,
+          can_view_action_plan_catalog: false,
           can_invite: true,
           can_manage_runtime_config: true,
         },
@@ -234,6 +239,39 @@ describe('ProfilePage', () => {
 
     expect(screen.queryByRole('button', { name: /Bibliothèque/i })).toBeNull()
     expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
+  })
+
+  it('shows action plans nav for staff with catalog view hint outside management section', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'staff',
+      },
+      bootstrap: {
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: true,
+          can_create_catalog_action_plan: false,
+          can_view_action_plan_catalog: true,
+          can_invite: false,
+          can_manage_runtime_config: false,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByText("Gestion de l'établissement")).toBeNull()
+    expect(screen.queryByRole('button', { name: /Établissement/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Équipe/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Bibliothèque/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/action-plans')
   })
 
   it('calls onSignOut from logout button', () => {

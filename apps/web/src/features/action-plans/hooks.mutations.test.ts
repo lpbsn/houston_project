@@ -7,11 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestQueryClient } from '@/test-utils'
 
-import { useCreateActionPlanMutation } from './hooks'
+import { useCreateActionPlanMutation, useCreateActionPlanScheduleMutation } from './hooks'
 
 const createActionPlan = vi.fn(async () => ({
   id: 'exec-1',
   status: 'in_progress',
+  action_plan_id: 'plan-1',
+}))
+
+const createActionPlanSchedule = vi.fn(async () => ({
+  id: 'schedule-1',
   action_plan_id: 'plan-1',
 }))
 
@@ -20,12 +25,14 @@ vi.mock('./api', async (importOriginal) => {
   return {
     ...actual,
     createActionPlan: (...args: unknown[]) => createActionPlan(...args),
+    createActionPlanSchedule: (...args: unknown[]) => createActionPlanSchedule(...args),
   }
 })
 
 describe('useCreateActionPlanMutation', () => {
   beforeEach(() => {
     createActionPlan.mockClear()
+    createActionPlanSchedule.mockClear()
   })
 
   it('invalidates execution and signal queries when create returns an execution', async () => {
@@ -57,5 +64,39 @@ describe('useCreateActionPlanMutation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
+  })
+})
+
+describe('useCreateActionPlanScheduleMutation', () => {
+  beforeEach(() => {
+    createActionPlanSchedule.mockClear()
+  })
+
+  it('invalidates catalog and schedule queries after schedule create', async () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useCreateActionPlanScheduleMutation('est-1', 'plan-1'), {
+      wrapper: ({ children }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    })
+
+    result.current.mutate({
+      end_date: '2026-12-31',
+      start_at: '09:00:00',
+      end_at: '10:00:00',
+      recurrence_days: ['monday'],
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'catalog', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'detail', 'est-1', 'plan-1'],
+    })
   })
 })

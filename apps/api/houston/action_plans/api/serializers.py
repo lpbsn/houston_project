@@ -110,6 +110,7 @@ class ActionPlanPermissionHintsSerializer(serializers.Serializer):
     can_activate = serializers.BooleanField()
     can_deactivate = serializers.BooleanField()
     can_use = serializers.BooleanField()
+    can_schedule = serializers.BooleanField()
 
 
 class ActionPlanListItemSerializer(serializers.Serializer):
@@ -145,45 +146,6 @@ class ActionPlanAssigneeInputSerializer(serializers.Serializer):
     end_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
-class ActionPlanCreateRequestSerializer(serializers.Serializer):
-    title = serializers.CharField(max_length=ACTION_PLAN_TITLE_MAX_LENGTH)
-    description = serializers.CharField(
-        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
-        required=False,
-        allow_blank=True,
-        default="",
-    )
-    pilot_business_unit_id = serializers.UUIDField()
-    requires_validation = serializers.BooleanField(required=False, default=True)
-    is_reusable = serializers.BooleanField(required=False, default=False)
-    tasks = ActionPlanTaskInputSerializer(many=True, required=False, default=list)
-    assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
-    source_signal_id = serializers.UUIDField(required=False, allow_null=True)
-    use_shared_chronology = serializers.BooleanField(required=False, default=False)
-    start_at = serializers.DateTimeField(required=False, allow_null=True)
-    end_at = serializers.DateTimeField(required=False, allow_null=True)
-    visible_from = serializers.DateTimeField(required=False, allow_null=True)
-    occurrence_date = serializers.DateField(required=False, allow_null=True)
-
-
-class ActionPlanUpdateRequestSerializer(serializers.Serializer):
-    title = serializers.CharField(max_length=ACTION_PLAN_TITLE_MAX_LENGTH, required=False)
-    description = serializers.CharField(
-        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
-        required=False,
-        allow_blank=True,
-    )
-
-
-class ActionPlanUseRequestSerializer(serializers.Serializer):
-    assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
-    use_shared_chronology = serializers.BooleanField(required=False, default=False)
-    start_at = serializers.DateTimeField(required=False, allow_null=True)
-    end_at = serializers.DateTimeField(required=False, allow_null=True)
-    visible_from = serializers.DateTimeField(required=False, allow_null=True)
-    occurrence_date = serializers.DateField(required=False, allow_null=True)
-
-
 class ActionPlanScheduleAssigneeInputSerializer(serializers.Serializer):
     membership_id = serializers.UUIDField()
     business_unit_id = serializers.UUIDField()
@@ -206,6 +168,46 @@ class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
         default=list,
     )
     use_shared_chronology = serializers.BooleanField(required=False, default=False)
+
+
+class ActionPlanCreateRequestSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=ACTION_PLAN_TITLE_MAX_LENGTH)
+    description = serializers.CharField(
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    pilot_business_unit_id = serializers.UUIDField()
+    requires_validation = serializers.BooleanField(required=False, default=True)
+    is_reusable = serializers.BooleanField(required=False, default=False)
+    tasks = ActionPlanTaskInputSerializer(many=True, required=False, default=list)
+    assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
+    source_signal_id = serializers.UUIDField(required=False, allow_null=True)
+    use_shared_chronology = serializers.BooleanField(required=False, default=False)
+    start_at = serializers.DateTimeField(required=False, allow_null=True)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+    visible_from = serializers.DateTimeField(required=False, allow_null=True)
+    occurrence_date = serializers.DateField(required=False, allow_null=True)
+    schedule = ActionPlanScheduleCreateRequestSerializer(required=False, allow_null=True)
+
+
+class ActionPlanUpdateRequestSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=ACTION_PLAN_TITLE_MAX_LENGTH, required=False)
+    description = serializers.CharField(
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+        required=False,
+        allow_blank=True,
+    )
+
+
+class ActionPlanUseRequestSerializer(serializers.Serializer):
+    assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
+    use_shared_chronology = serializers.BooleanField(required=False, default=False)
+    start_at = serializers.DateTimeField(required=False, allow_null=True)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+    visible_from = serializers.DateTimeField(required=False, allow_null=True)
+    occurrence_date = serializers.DateField(required=False, allow_null=True)
 
 
 class ActionPlanScheduleUpdateRequestSerializer(serializers.Serializer):

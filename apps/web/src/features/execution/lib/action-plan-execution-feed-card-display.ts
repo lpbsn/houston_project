@@ -69,3 +69,12 @@ export function formatActionPlanFeedAssigneeDisplay(
     overflow: Math.max(0, names.length - MAX_VISIBLE_ASSIGNEES),
   }
 }
+
+export function formatActionPlanFeedTaskProgressLabel(
+  item: Pick<ActionPlanExecutionFeedItem, 'task_count' | 'treated_task_count'>,
+): string | null {
+  if (item.task_count <= 0) {
+    return null
+  }
+  return `Tâches ${item.treated_task_count}/${item.task_count}`
+}

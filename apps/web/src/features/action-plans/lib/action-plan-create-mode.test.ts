@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { resolveActionPlanCreateModeConfig } from './action-plan-create-mode'
 
 describe('resolveActionPlanCreateModeConfig', () => {
-  it('returns catalog config for manager with library and validation toggles', () => {
+  it('returns catalog config for manager with full management options', () => {
     expect(
       resolveActionPlanCreateModeConfig({
         mode: 'catalog',
         role: 'manager',
         canCreateActionPlan: true,
+        canCreateCatalogActionPlan: true,
       }),
     ).toEqual({
       canAccess: true,
@@ -16,6 +17,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       showValidationToggle: true,
       showAssigneeSheet: true,
       showStaffSelfAssignee: false,
+      showScheduleSection: true,
       filterBusinessUnitsByScope: true,
       canDefineCrossPoleTasks: false,
       lockPilotBusinessUnit: false,
@@ -30,11 +32,23 @@ describe('resolveActionPlanCreateModeConfig', () => {
         mode: 'catalog',
         role: 'staff',
         canCreateActionPlan: true,
+        canCreateCatalogActionPlan: false,
       }).canAccess,
     ).toBe(false)
   })
 
-  it('returns execution config for manager without library toggle', () => {
+  it('denies catalog access for manager when bootstrap hint is false', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'catalog',
+        role: 'manager',
+        canCreateActionPlan: true,
+        canCreateCatalogActionPlan: false,
+      }).canAccess,
+    ).toBe(false)
+  })
+
+  it('returns the same management options for execution mode manager', () => {
     expect(
       resolveActionPlanCreateModeConfig({
         mode: 'execution',
@@ -43,9 +57,10 @@ describe('resolveActionPlanCreateModeConfig', () => {
       }),
     ).toMatchObject({
       canAccess: true,
-      showLibraryToggle: false,
+      showLibraryToggle: true,
       showValidationToggle: true,
       showAssigneeSheet: true,
+      showScheduleSection: true,
       showStaffSelfAssignee: false,
       defaultSaveToLibrary: false,
     })
@@ -65,6 +80,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       showValidationToggle: false,
       showAssigneeSheet: false,
       showStaffSelfAssignee: true,
+      showScheduleSection: false,
       filterBusinessUnitsByScope: true,
       canDefineCrossPoleTasks: false,
       lockPilotBusinessUnit: false,
@@ -95,6 +111,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       showLibraryToggle: false,
       showValidationToggle: true,
       showAssigneeSheet: true,
+      showScheduleSection: false,
       showStaffSelfAssignee: false,
       lockPilotBusinessUnit: true,
       defaultSaveToLibrary: false,

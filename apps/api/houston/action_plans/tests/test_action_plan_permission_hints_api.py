@@ -34,6 +34,7 @@ def test_catalog_detail_hints_for_owner(
     hints = _hints(response)
     assert hints["can_update"] is True
     assert hints["can_use"] is True
+    assert hints["can_schedule"] is True
     assert hints["can_deactivate"] is True
 
 

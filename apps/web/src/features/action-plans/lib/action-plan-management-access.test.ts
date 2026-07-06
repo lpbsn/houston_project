@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { shouldShowSignalCreateActionPlan } from '@/features/signals/lib/signal-create-action'
 
 import {
+  canAccessActionPlanCatalog,
+  canCreateActionPlanCatalogEntryFromHints,
   canCreateExecutionFeedActionPlan,
   canCreateSignalLinkedActionPlan,
   canCreateSignalLinkedActionPlanFromSignalHints,
+  canManageActionPlanCatalog,
 } from './action-plan-management-access'
 
 describe('canCreateExecutionFeedActionPlan', () => {
@@ -56,5 +59,62 @@ describe('canCreateSignalLinkedActionPlanFromSignalHints', () => {
   it('returns false when hint is absent', () => {
     expect(canCreateSignalLinkedActionPlanFromSignalHints({})).toBe(false)
     expect(canCreateSignalLinkedActionPlanFromSignalHints(null)).toBe(false)
+  })
+})
+
+describe('canAccessActionPlanCatalog', () => {
+  it('allows staff when bootstrap catalog hint is true', () => {
+    expect(
+      canAccessActionPlanCatalog({
+        establishmentId: 'est-1',
+        activeMembershipId: 'member-1',
+        role: 'staff',
+        canViewActionPlanCatalog: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('denies staff without catalog hint', () => {
+    expect(
+      canAccessActionPlanCatalog({
+        establishmentId: 'est-1',
+        activeMembershipId: 'member-1',
+        role: 'staff',
+        canViewActionPlanCatalog: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows manager without catalog hint', () => {
+    expect(
+      canAccessActionPlanCatalog({
+        establishmentId: 'est-1',
+        activeMembershipId: 'member-1',
+        role: 'manager',
+      }),
+    ).toBe(true)
+  })
+
+  it('denies manager when catalog view hint is explicitly false', () => {
+    expect(
+      canAccessActionPlanCatalog({
+        establishmentId: 'est-1',
+        activeMembershipId: 'member-1',
+        role: 'manager',
+        canViewActionPlanCatalog: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('canCreateActionPlanCatalogEntryFromHints', () => {
+  it('returns false for manager when bootstrap hint is false', () => {
+    expect(canCreateActionPlanCatalogEntryFromHints(false)).toBe(false)
+  })
+})
+
+describe('canManageActionPlanCatalog', () => {
+  it('returns false for staff', () => {
+    expect(canManageActionPlanCatalog('staff')).toBe(false)
   })
 })

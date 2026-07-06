@@ -9,6 +9,7 @@ import {
   TerrainFieldLabel,
   TerrainSectionLabel,
   TerrainStickyFooter,
+  TerrainSwitch,
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +25,11 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-import { ActionPlanAssigneeChronologySheet } from '../components/action-plan-assignee-chronology-sheet'
+import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
+import {
+  PlanningOptionRow,
+  type PlanningOptionPickerTarget,
+} from '../components/planning/planning-option-row'
 import {
   ActionPlanTaskDraftEditor,
 } from '../components/action-plan-task-draft-editor'
@@ -37,9 +42,14 @@ import { canCreateSignalLinkedActionPlanFromSignalHints } from '../lib/action-pl
 import {
   createActionPlanAssigneeDraft,
   createActionPlanTaskDraft,
-  type ActionPlanAssigneeDraft,
   type ActionPlanCreateFormValues,
 } from '../lib/action-plan-form-validation'
+import {
+  createActionPlanEventPlanningDraft,
+  toCreateFormPlanningSlice,
+  type ActionPlanEventPlanningDraft,
+} from '../lib/action-plan-event-planning-form'
+import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
 
 const SIGNAL_LINKED_PERMISSION_MESSAGE =
   "Vous n'avez pas la permission de créer un plan d'action."
@@ -63,6 +73,7 @@ export function ActionPlanCreatePage({
   const membershipId = activeMembership?.id
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canCreateActionPlan = permissionHints.can_create_action_plan === true
+  const canCreateCatalogActionPlan = permissionHints.can_create_catalog_action_plan === true
   const isSignalLinked = mode === 'signal-linked'
 
   const modeConfig = useMemo(
@@ -71,9 +82,10 @@ export function ActionPlanCreatePage({
         mode,
         role,
         canCreateActionPlan,
+        canCreateCatalogActionPlan,
         membershipId,
       }),
-    [mode, role, canCreateActionPlan, membershipId],
+    [mode, role, canCreateActionPlan, canCreateCatalogActionPlan, membershipId],
   )
 
   const signalDetailQuery = useSignalDetailQuery(
@@ -88,13 +100,11 @@ export function ActionPlanCreatePage({
     modeConfig.defaultRequiresValidation,
   )
   const [saveToLibrary, setSaveToLibrary] = useState(modeConfig.defaultSaveToLibrary)
-  const [useSharedChronology, setUseSharedChronology] = useState(true)
-  const [sharedStartAt, setSharedStartAt] = useState('')
-  const [sharedEndAt, setSharedEndAt] = useState('')
-  const [sharedVisibleFrom, setSharedVisibleFrom] = useState('')
   const [tasks, setTasks] = useState([createActionPlanTaskDraft()])
-  const [assignees, setAssignees] = useState<ActionPlanAssigneeDraft[]>([])
-  const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
+  const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
+    createActionPlanEventPlanningDraft,
+  )
+  const [openPilotPicker, setOpenPilotPicker] = useState<PlanningOptionPickerTarget>(null)
 
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = useMemo(
@@ -140,6 +150,11 @@ export function ActionPlanCreatePage({
     visibleBusinessUnits,
   ])
 
+  const pilotBusinessUnitOptions = useMemo(
+    () => visibleBusinessUnits.map((unit) => ({ value: unit.id, label: unit.label })),
+    [visibleBusinessUnits],
+  )
+
   const canCrossPole = modeConfig.canDefineCrossPoleTasks
 
   const resolvedTasks = useMemo(() => {
@@ -164,14 +179,23 @@ export function ActionPlanCreatePage({
         }),
       ]
     }
-    return assignees
+    return planningDraft.assignees
   }, [
-    assignees,
     membershipId,
     modeConfig.showStaffSelfAssignee,
+    planningDraft.assignees,
     resolvedPilotBusinessUnitId,
     staffDisplayName,
   ])
+
+  const planningSlice = useMemo(
+    () =>
+      toCreateFormPlanningSlice({
+        ...planningDraft,
+        assignees: effectiveAssignees,
+      }),
+    [effectiveAssignees, planningDraft],
+  )
 
   const formValues = useMemo<ActionPlanCreateFormValues>(
     () => ({
@@ -180,12 +204,13 @@ export function ActionPlanCreatePage({
       pilotBusinessUnitId: resolvedPilotBusinessUnitId,
       requiresValidation,
       saveToLibrary,
-      useSharedChronology,
-      sharedStartAt,
-      sharedEndAt,
-      sharedVisibleFrom,
+      useSharedChronology: planningSlice.useSharedChronology,
+      sharedStartAt: planningSlice.sharedStartAt,
+      sharedEndAt: planningSlice.sharedEndAt,
+      sharedVisibleFrom: planningSlice.sharedVisibleFrom,
       tasks: resolvedTasks,
       assignees: effectiveAssignees,
+      schedule: planningSlice.schedule,
       sourceSignalId: isSignalLinked ? signalId : undefined,
     }),
     [
@@ -194,12 +219,9 @@ export function ActionPlanCreatePage({
       resolvedPilotBusinessUnitId,
       requiresValidation,
       saveToLibrary,
-      sharedEndAt,
-      sharedStartAt,
-      sharedVisibleFrom,
+      planningSlice,
       resolvedTasks,
       title,
-      useSharedChronology,
       isSignalLinked,
       signalId,
     ],
@@ -281,8 +303,17 @@ export function ActionPlanCreatePage({
 
   const signalDetail = isSignalLinked ? signalDetailQuery.data : null
 
-  const showAssigneeSection = !saveToLibrary && modeConfig.showAssigneeSheet
+  const scheduleConfigured = isActionPlanScheduleConfigured(planningSlice.schedule)
+  const showPlanningForm =
+    !saveToLibrary || modeConfig.showStaffSelfAssignee || modeConfig.showScheduleSection
   const showToggleSection = modeConfig.showLibraryToggle || modeConfig.showValidationToggle
+  const submitLabel = scheduleConfigured
+    ? saveToLibrary
+      ? 'Enregistrer et planifier'
+      : 'Créer et planifier'
+    : saveToLibrary
+      ? 'Enregistrer dans la bibliothèque'
+      : 'Créer le plan d’action'
 
   return (
     <div className="flex min-h-full flex-col">
@@ -325,29 +356,22 @@ export function ActionPlanCreatePage({
               className="min-h-20 w-full rounded-xl border border-[#E8E6DF] px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <TerrainFieldLabel>Pôle d&apos;activité pilote</TerrainFieldLabel>
-            {modeConfig.lockPilotBusinessUnit ? (
-              <TerrainCard className="px-3 py-2.5 text-sm text-[#1a1a1a]">
-                {signalDetail?.responsible_business_unit_label ?? '—'}
-              </TerrainCard>
-            ) : (
-              <select
-                value={resolvedPilotBusinessUnitId}
-                onChange={(event) => setPilotBusinessUnitId(event.target.value)}
-                className="h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-sm"
-              >
-                {visibleBusinessUnits.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.label}
-                  </option>
-                ))}
-              </select>
-            )}
-            {fieldErrors.pilotBusinessUnitId ? (
-              <p className="mt-1 text-xs text-destructive">{fieldErrors.pilotBusinessUnitId}</p>
-            ) : null}
-          </div>
+          <PlanningOptionRow
+            rowId="pilot-business-unit"
+            label="Pôle d'activité pilote"
+            value={resolvedPilotBusinessUnitId}
+            displayValue={
+              modeConfig.lockPilotBusinessUnit
+                ? (signalDetail?.responsible_business_unit_label ?? '—')
+                : undefined
+            }
+            options={pilotBusinessUnitOptions}
+            disabled={modeConfig.lockPilotBusinessUnit}
+            openPicker={openPilotPicker}
+            onOpenPickerChange={setOpenPilotPicker}
+            onChange={setPilotBusinessUnitId}
+            error={fieldErrors.pilotBusinessUnitId}
+          />
         </TerrainCard>
 
         <ActionPlanTaskDraftEditor
@@ -361,59 +385,50 @@ export function ActionPlanCreatePage({
           <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
         ) : null}
 
-        {showAssigneeSection ? (
-          <section className="space-y-2">
-            <TerrainSectionLabel>Assignés et chronologie</TerrainSectionLabel>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl"
-              onClick={() => setAssigneeSheetOpen(true)}
-            >
-              Configurer les assignés
-            </Button>
-            {fieldErrors.assignees ? (
-              <p className="text-xs text-destructive">{fieldErrors.assignees}</p>
-            ) : null}
-          </section>
-        ) : null}
-
-        {modeConfig.showStaffSelfAssignee ? (
-          <section className="space-y-2">
-            <TerrainSectionLabel>Assigné</TerrainSectionLabel>
-            <TerrainCard className="px-3 py-2.5 text-sm text-[#1a1a1a]">{staffDisplayName}</TerrainCard>
-            {fieldErrors.assignees ? (
-              <p className="text-xs text-destructive">{fieldErrors.assignees}</p>
-            ) : null}
-          </section>
+        {showPlanningForm ? (
+          <ActionPlanEventPlanningForm
+            draft={{ ...planningDraft, assignees: effectiveAssignees }}
+            config={{
+              canEditAssignees: !saveToLibrary && modeConfig.showAssigneeSheet,
+              canSchedule: modeConfig.showScheduleSection,
+              staffMode: modeConfig.showStaffSelfAssignee,
+              showAdvancedChronology: !saveToLibrary && modeConfig.showAssigneeSheet,
+              hideAssignees: saveToLibrary,
+              staffDisplayName,
+            }}
+            establishmentId={establishmentId}
+            pilotBusinessUnitId={resolvedPilotBusinessUnitId}
+            fieldErrors={fieldErrors}
+            onDraftChange={(next) => {
+              if (modeConfig.showStaffSelfAssignee) {
+                setPlanningDraft({ ...next, assignees: effectiveAssignees })
+                return
+              }
+              setPlanningDraft(next)
+            }}
+          />
         ) : null}
 
         {showToggleSection ? (
-          <TerrainCard className="space-y-3">
+          <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
             {modeConfig.showValidationToggle ? (
-              <label className="flex items-center justify-between gap-3 text-sm text-[#1a1a1a]">
-                <span>Validation requise</span>
-                <input
-                  type="checkbox"
-                  checked={requiresValidation}
-                  onChange={(event) => setRequiresValidation(event.target.checked)}
-                />
-              </label>
+              <TerrainSwitch
+                label="Validation requise"
+                checked={requiresValidation}
+                onCheckedChange={setRequiresValidation}
+              />
             ) : null}
             {modeConfig.showLibraryToggle ? (
-              <>
-                <label className="flex items-center justify-between gap-3 text-sm text-[#1a1a1a]">
-                  <span>Enregistrer dans la bibliothèque</span>
-                  <input
-                    type="checkbox"
-                    checked={saveToLibrary}
-                    onChange={(event) => setSaveToLibrary(event.target.checked)}
-                  />
-                </label>
-                <p className={cn('text-xs', terrain.muted)}>
+              <div className="px-4 py-3.5">
+                <TerrainSwitch
+                  label="Enregistrer dans la bibliothèque"
+                  checked={saveToLibrary}
+                  onCheckedChange={setSaveToLibrary}
+                />
+                <p className={cn('mt-2 text-xs', terrain.muted)}>
                   Un modèle bibliothèque est réutilisable sans assignés à la création.
                 </p>
-              </>
+              </div>
             ) : null}
           </TerrainCard>
         ) : null}
@@ -426,31 +441,13 @@ export function ActionPlanCreatePage({
           type="button"
           className="h-11 w-full rounded-xl"
           disabled={isSubmitting}
-          onClick={() => void submit(formValues)}
+          onClick={() =>
+            void submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
+          }
         >
-          {saveToLibrary ? 'Enregistrer dans la bibliothèque' : 'Créer le plan d’action'}
+          {submitLabel}
         </Button>
       </TerrainStickyFooter>
-
-      {showAssigneeSection ? (
-        <ActionPlanAssigneeChronologySheet
-          open={assigneeSheetOpen}
-          establishmentId={establishmentId}
-          pilotBusinessUnitId={resolvedPilotBusinessUnitId}
-          assignees={assignees}
-          useSharedChronology={useSharedChronology}
-          sharedStartAt={sharedStartAt}
-          sharedEndAt={sharedEndAt}
-          sharedVisibleFrom={sharedVisibleFrom}
-          onAssigneesChange={setAssignees}
-          onUseSharedChronologyChange={setUseSharedChronology}
-          onSharedStartAtChange={setSharedStartAt}
-          onSharedEndAtChange={setSharedEndAt}
-          onSharedVisibleFromChange={setSharedVisibleFrom}
-          onClose={() => setAssigneeSheetOpen(false)}
-          onConfirm={() => setAssigneeSheetOpen(false)}
-        />
-      ) : null}
     </div>
   )
 }

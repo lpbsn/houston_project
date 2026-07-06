@@ -3,101 +3,132 @@ import { useState } from 'react'
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 
+import { ActionPlanEventPlanningForm } from './action-plan-event-planning-form'
 import { buildActionPlanUseRequest } from '../lib/action-plan-create-payload'
-import type { ActionPlanAssigneeDraft } from '../lib/action-plan-form-validation'
-import { ActionPlanAssigneeChronologySheet } from './action-plan-assignee-chronology-sheet'
+import {
+  createActionPlanEventPlanningDraft,
+  toScheduleDraft,
+  toUseRequestOptions,
+  validateActionPlanEventPlanningDraft,
+  type ActionPlanEventPlanningDraft,
+} from '../lib/action-plan-event-planning-form'
+import { buildActionPlanScheduleCreateRequest } from '../lib/action-plan-schedule-payload'
+import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
+import type { ActionPlanScheduleCreateRequest } from '../types'
 
 type ActionPlanUseSheetProps = {
   open: boolean
   establishmentId: string
   pilotBusinessUnitId: string
   isPending: boolean
+  isSchedulePending?: boolean
+  staffUseMode?: boolean
+  staffDisplayName?: string
+  canSchedule?: boolean
   onClose: () => void
   onConfirm: (body: ReturnType<typeof buildActionPlanUseRequest>) => void
+  onScheduleConfirm?: (body: ActionPlanScheduleCreateRequest) => void
 }
 
-export function ActionPlanUseSheet({
-  open,
+type ActionPlanUseSheetBodyProps = Omit<ActionPlanUseSheetProps, 'open'>
+
+export function ActionPlanUseSheet({ open, ...rest }: ActionPlanUseSheetProps) {
+  if (!open) {
+    return null
+  }
+
+  return <ActionPlanUseSheetBody {...rest} />
+}
+
+function ActionPlanUseSheetBody({
   establishmentId,
   pilotBusinessUnitId,
   isPending,
+  isSchedulePending = false,
+  staffUseMode = false,
+  staffDisplayName = 'Moi',
+  canSchedule = false,
   onClose,
   onConfirm,
-}: ActionPlanUseSheetProps) {
-  const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
-  const [assignees, setAssignees] = useState<ActionPlanAssigneeDraft[]>([])
-  const [useSharedChronology, setUseSharedChronology] = useState(true)
-  const [sharedStartAt, setSharedStartAt] = useState('')
-  const [sharedEndAt, setSharedEndAt] = useState('')
-  const [sharedVisibleFrom, setSharedVisibleFrom] = useState('')
+  onScheduleConfirm,
+}: ActionPlanUseSheetBodyProps) {
+  const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
+    createActionPlanEventPlanningDraft,
+  )
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  function handleOpenAssignees() {
-    setAssigneeSheetOpen(true)
-  }
+  const scheduleConfigured = isActionPlanScheduleConfigured(toScheduleDraft(planningDraft))
 
-  function handleConfirmUse() {
+  const isRepeatSubmit = planningDraft.repeatEnabled && canSchedule
+
+  function handlePrimaryAction() {
+    const errors = validateActionPlanEventPlanningDraft(planningDraft, {
+      requireAssignees: false,
+      allowRepeat: canSchedule,
+    })
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      return
+    }
+
+    if (isRepeatSubmit) {
+      const body = buildActionPlanScheduleCreateRequest({
+        schedule: toScheduleDraft(planningDraft),
+        assignees: staffUseMode ? [] : planningDraft.assignees,
+        useSharedChronology: !planningDraft.usePerAssigneeChronology,
+      })
+      if (!body || !onScheduleConfirm) {
+        return
+      }
+      onScheduleConfirm(body)
+      return
+    }
+
+    const useOptions = toUseRequestOptions(planningDraft)
     onConfirm(
       buildActionPlanUseRequest({
-        assignees,
-        useSharedChronology,
-        sharedStartAt,
-        sharedEndAt,
-        sharedVisibleFrom,
+        ...useOptions,
+        assignees: staffUseMode ? [] : useOptions.assignees,
       }),
     )
   }
 
-  return (
-    <>
-      <TerrainBottomSheet
-        title="Utiliser ce plan"
-        open={open && !assigneeSheetOpen}
-        onClose={onClose}
-        footer={
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl"
-              onClick={handleOpenAssignees}
-            >
-              Configurer assignés et chronologie
-            </Button>
-            <Button
-              type="button"
-              className="h-11 w-full rounded-xl"
-              disabled={isPending}
-              onClick={handleConfirmUse}
-            >
-              Lancer l&apos;exécution
-            </Button>
-          </div>
-        }
-      >
-        <p className="text-sm text-[#7D7B75]">
-          {assignees.length > 0
-            ? `${assignees.length} assigné(s) configuré(s).`
-            : 'Aucun assigné — vous pouvez lancer sans assigné ou en ajouter.'}
-        </p>
-      </TerrainBottomSheet>
+  const primaryLabel = isRepeatSubmit ? 'Planifier la récurrence' : "Lancer l'exécution"
+  const primaryPending = isRepeatSubmit ? isSchedulePending : isPending
+  const primaryDisabled =
+    isRepeatSubmit ? !scheduleConfigured || primaryPending : primaryPending
 
-      <ActionPlanAssigneeChronologySheet
-        open={open && assigneeSheetOpen}
+  return (
+    <TerrainBottomSheet
+      title="Utiliser ce plan"
+      open
+      onClose={onClose}
+      footer={
+        <Button
+          type="button"
+          className="h-11 w-full rounded-xl"
+          disabled={primaryDisabled}
+          onClick={handlePrimaryAction}
+        >
+          {primaryLabel}
+        </Button>
+      }
+    >
+      <ActionPlanEventPlanningForm
+        draft={planningDraft}
+        config={{
+          canEditAssignees: !staffUseMode,
+          canSchedule,
+          staffMode: staffUseMode,
+          showAdvancedChronology: !staffUseMode,
+          hideAssignees: false,
+          staffDisplayName,
+        }}
         establishmentId={establishmentId}
         pilotBusinessUnitId={pilotBusinessUnitId}
-        assignees={assignees}
-        useSharedChronology={useSharedChronology}
-        sharedStartAt={sharedStartAt}
-        sharedEndAt={sharedEndAt}
-        sharedVisibleFrom={sharedVisibleFrom}
-        onAssigneesChange={setAssignees}
-        onUseSharedChronologyChange={setUseSharedChronology}
-        onSharedStartAtChange={setSharedStartAt}
-        onSharedEndAtChange={setSharedEndAt}
-        onSharedVisibleFromChange={setSharedVisibleFrom}
-        onClose={() => setAssigneeSheetOpen(false)}
-        onConfirm={() => setAssigneeSheetOpen(false)}
+        fieldErrors={fieldErrors}
+        onDraftChange={setPlanningDraft}
       />
-    </>
+    </TerrainBottomSheet>
   )
 }

@@ -5,8 +5,10 @@ import { buildActionPlanCreateRequest } from '../lib/action-plan-create-payload'
 import {
   hasActionPlanCreateFormErrors,
   validateActionPlanCreateForm,
+  validateActionPlanCreatePlanningErrors,
   type ActionPlanCreateFormValues,
 } from '../lib/action-plan-form-validation'
+import type { ActionPlanEventPlanningDraft } from '../lib/action-plan-event-planning-form'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { useCreateActionPlanMutation } from '../hooks'
 
@@ -27,14 +29,22 @@ export function useActionPlanCreateSubmit({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  async function submit(values: ActionPlanCreateFormValues) {
+  async function submit(
+    values: ActionPlanCreateFormValues,
+    planningDraft: ActionPlanEventPlanningDraft,
+  ) {
     setSubmitError(null)
     const errors = validateActionPlanCreateForm(values, {
       canDefineCrossPoleTasks,
       staffExecutionMode,
     })
-    setFieldErrors(errors)
-    if (hasActionPlanCreateFormErrors(errors)) {
+    const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
+      saveToLibrary: values.saveToLibrary,
+      staffExecutionMode,
+    })
+    const mergedErrors = { ...errors, ...planningErrors }
+    setFieldErrors(mergedErrors)
+    if (hasActionPlanCreateFormErrors(mergedErrors)) {
       return false
     }
 

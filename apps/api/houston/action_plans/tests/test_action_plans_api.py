@@ -57,7 +57,7 @@ def test_catalog_list_manager_sees_scoped_plans(
     assert len(response.json()) == 1
 
 
-def test_catalog_list_staff_returns_404(
+def test_catalog_list_staff_sees_in_scope_active_plans(
     api_client,
     owner_membership,
     staff_membership,
@@ -69,7 +69,26 @@ def test_catalog_list_staff_returns_404(
         action_plans_url(staff_membership.establishment_id),
         **auth_headers(token),
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["permission_hints"]["can_use"] is True
+    assert response.json()[0]["permission_hints"]["can_schedule"] is True
+    assert response.json()[0]["permission_hints"]["can_update"] is False
+
+
+def test_catalog_list_staff_does_not_see_cross_pole_plan(
+    api_client,
+    owner_membership,
+    staff_membership,
+    cross_pole_catalog_action_plan,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.get(
+        action_plans_url(staff_membership.establishment_id),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_catalog_create_returns_plan_detail(api_client, owner_membership, business_unit):
@@ -309,7 +328,7 @@ def test_out_of_scope_manager_use_returns_404(
     assert response.status_code == 404
 
 
-def test_staff_catalog_detail_returns_404(
+def test_staff_catalog_detail_returns_in_scope_plan(
     api_client,
     owner_membership,
     staff_membership,
@@ -321,7 +340,9 @@ def test_staff_catalog_detail_returns_404(
         action_plan_url(staff_membership.establishment_id, plan["id"]),
         **auth_headers(token),
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["permission_hints"]["can_update"] is False
+    assert response.json()["permission_hints"]["can_use"] is True
 
 
 def test_list_and_detail_involved_pole_count_match(
@@ -398,6 +419,179 @@ def test_deactivate_non_reusable_plan_returns_400(
     )
     assert deactivate.status_code == 400
     assert deactivate.json()["code"] == "validation_error"
+
+
+def test_staff_use_catalog_self_only_returns_execution(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    catalog_action_plan,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        action_plan_url(staff_membership.establishment_id, catalog_action_plan.id, "use/"),
+        {"assignees": []},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    pole = body["assignees_by_pole"][0]
+    assert pole["business_unit"]["id"] == str(business_unit.id)
+    assert pole["assignees"][0]["membership_id"] == str(staff_membership.id)
+
+
+def test_staff_use_catalog_rejects_third_party_assignee(
+    api_client,
+    owner_membership,
+    staff_membership,
+    catalog_action_plan,
+    business_unit,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        action_plan_url(staff_membership.establishment_id, catalog_action_plan.id, "use/"),
+        {
+            "assignees": [
+                api_assignee_payload(membership=owner_membership, business_unit=business_unit)
+            ]
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+
+
+def test_staff_cannot_save_feed_plan_to_library(
+    api_client,
+    staff_membership,
+    business_unit,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        action_plans_url(staff_membership.establishment_id),
+        {
+            "title": "Staff library attempt",
+            "pilot_business_unit_id": str(business_unit.id),
+            "requires_validation": False,
+            "is_reusable": True,
+            "tasks": [api_task_payload(task="Self task", business_unit=business_unit)],
+            "assignees": [
+                api_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+
+
+def test_staff_cannot_patch_catalog_plan(
+    api_client,
+    owner_membership,
+    staff_membership,
+    catalog_action_plan,
+):
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.patch(
+        action_plan_url(staff_membership.establishment_id, catalog_action_plan.id),
+        {"title": "Hacked"},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+
+
+def test_create_with_schedule_returns_plan_detail(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    from houston.action_plans.models import ActionPlanSchedule
+    from houston.action_plans.tests.helpers import api_recurring_schedule_payload
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        {
+            "title": "Scheduled catalog plan",
+            "pilot_business_unit_id": str(business_unit.id),
+            "tasks": [api_task_payload(task="Weekly check", business_unit=business_unit)],
+            "schedule": api_recurring_schedule_payload(
+                staff_membership=owner_membership,
+                business_unit=business_unit,
+                assignees=[],
+            ),
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    assert body["is_reusable"] is True
+    assert body["catalog_status"] == CATALOG_STATUS_ACTIVE
+    assert ActionPlanSchedule.objects.filter(action_plan_id=body["id"]).count() == 1
+
+
+def test_create_with_schedule_and_one_shot_returns_execution_detail(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    from houston.action_plans.tests.helpers import api_recurring_schedule_payload
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        {
+            "title": "Scheduled and launched plan",
+            "pilot_business_unit_id": str(business_unit.id),
+            "tasks": [api_task_payload(task="Weekly check", business_unit=business_unit)],
+            "assignees": [
+                api_assignee_payload(membership=owner_membership, business_unit=business_unit)
+            ],
+            "schedule": api_recurring_schedule_payload(
+                staff_membership=owner_membership,
+                business_unit=business_unit,
+            ),
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    assert body["status"] == ActionPlanExecution.Status.IN_PROGRESS
+    assert body["action_plan_id"] is not None
+
+
+def test_staff_create_with_schedule_returns_403(
+    api_client,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.tests.helpers import api_recurring_schedule_payload
+
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.post(
+        action_plans_url(staff_membership.establishment_id),
+        {
+            "title": "Staff schedule attempt",
+            "pilot_business_unit_id": str(business_unit.id),
+            "requires_validation": False,
+            "tasks": [api_task_payload(task="Self task", business_unit=business_unit)],
+            "assignees": [
+                api_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+            "schedule": api_recurring_schedule_payload(
+                staff_membership=staff_membership,
+                business_unit=business_unit,
+            ),
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
 
 
 def test_openapi_post_action_plans_create_documents_dual_201_response():

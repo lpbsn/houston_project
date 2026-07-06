@@ -11,6 +11,7 @@ import {
   type ActionPlanExecutionFeedViewMode,
   cancelActionPlanExecution,
   createActionPlan,
+  createActionPlanSchedule,
   createObservationFromActionPlanTask,
   deactivateActionPlan,
   fetchActionPlanCatalog,
@@ -28,6 +29,7 @@ import {
 import type {
   ActionPlanCatalogListFilters,
   ActionPlanCreateRequest,
+  ActionPlanScheduleCreateRequest,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskSkipRequest,
   ActionPlanUseRequest,
@@ -196,6 +198,42 @@ export function useUseActionPlanFromCatalogMutation(establishmentId: string) {
     onSuccess: (data, variables) => {
       invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
       invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.id)
+    },
+  })
+}
+
+export function useCreateActionPlanScheduleMutation(
+  establishmentId: string,
+  actionPlanId: string,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ActionPlanScheduleCreateRequest) =>
+      createActionPlanSchedule(establishmentId, actionPlanId, body),
+    onSuccess: () => {
+      invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
+      void queryClient.invalidateQueries({
+        queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
+      })
+    },
+  })
+}
+
+export function useScheduleActionPlanFromCatalogMutation(establishmentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      actionPlanId,
+      body,
+    }: {
+      actionPlanId: string
+      body: ActionPlanScheduleCreateRequest
+    }) => createActionPlanSchedule(establishmentId, actionPlanId, body),
+    onSuccess: (_data, variables) => {
+      invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
+      void queryClient.invalidateQueries({
+        queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
+      })
     },
   })
 }

@@ -80,6 +80,7 @@ class BootstrapPermissionHintsSerializer(serializers.Serializer):
     chat_available = serializers.BooleanField()
     can_create_action_plan = serializers.BooleanField()
     can_create_catalog_action_plan = serializers.BooleanField()
+    can_view_action_plan_catalog = serializers.BooleanField()
     can_invite = serializers.BooleanField()
     can_manage_runtime_config = serializers.BooleanField()
 

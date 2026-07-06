@@ -4,9 +4,10 @@ import pytest
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
+from houston.accounts.permission_hints import build_bootstrap_permission_hints
 from houston.action_plans.permissions import (
-    can_create_action_plan,
     can_create_catalog_action_plan,
+    can_view_action_plan_catalog,
 )
 from houston.chat.permissions import can_access_chat
 from houston.establishments.models import Establishment, EstablishmentMembership
@@ -59,28 +60,18 @@ def fetch_bootstrap_hints(
 
 
 @pytest.mark.parametrize(
-    (
-        "role",
-        "expected_can_create_action_plan",
-        "expected_can_invite",
-        "expected_can_manage_runtime_config",
-        "expected_can_create_catalog_action_plan",
-    ),
+    "role",
     [
-        (EstablishmentMembership.Role.OWNER, True, True, True, True),
-        (EstablishmentMembership.Role.DIRECTOR, True, True, True, True),
-        (EstablishmentMembership.Role.MANAGER, True, True, False, True),
-        (EstablishmentMembership.Role.STAFF, False, False, False, False),
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
     ],
 )
 def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
     api_client,
     active_user,
     role,
-    expected_can_create_action_plan,
-    expected_can_invite,
-    expected_can_manage_runtime_config,
-    expected_can_create_catalog_action_plan,
 ):
     membership = create_membership(user=active_user, role=role)
     membership.establishment.chat_enabled = True
@@ -88,22 +79,27 @@ def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
 
     hints = fetch_bootstrap_hints(api_client, active_user=active_user)
 
-    assert hints == {
-        "chat_available": can_access_chat(membership),
-        "can_create_action_plan": expected_can_create_action_plan,
-        "can_create_catalog_action_plan": expected_can_create_catalog_action_plan,
-        "can_invite": expected_can_invite,
-        "can_manage_runtime_config": expected_can_manage_runtime_config,
-    }
-    assert hints["can_create_action_plan"] is can_create_action_plan(
-        membership,
-        establishment_id=membership.establishment_id,
-    )
+    assert hints == build_bootstrap_permission_hints(membership)
     assert hints["can_create_catalog_action_plan"] is can_create_catalog_action_plan(
         membership,
     )
+    assert hints["can_view_action_plan_catalog"] is can_view_action_plan_catalog(membership)
     assert hints["can_invite"] is can_invite_memberships(membership)
     assert hints["can_manage_runtime_config"] is can_manage_runtime_context(membership)
+    assert hints["chat_available"] is can_access_chat(membership)
+
+
+def test_bootstrap_permission_hints_staff_create_hint_for_execution_menu(
+    api_client,
+    active_user,
+):
+    create_membership(user=active_user, role=EstablishmentMembership.Role.STAFF)
+
+    hints = fetch_bootstrap_hints(api_client, active_user=active_user)
+
+    assert hints["can_create_action_plan"] is True
+    assert hints["can_view_action_plan_catalog"] is True
+    assert hints["can_create_catalog_action_plan"] is False
 
 
 def test_bootstrap_permission_hints_chat_available_requires_chat_enabled(
@@ -130,13 +126,7 @@ def test_bootstrap_permission_hints_are_false_without_active_membership(
 
     hints = fetch_bootstrap_hints(api_client, active_user=active_user)
 
-    assert hints == {
-        "chat_available": False,
-        "can_create_action_plan": False,
-        "can_create_catalog_action_plan": False,
-        "can_invite": False,
-        "can_manage_runtime_config": False,
-    }
+    assert hints == build_bootstrap_permission_hints(None)
 
 
 def test_bootstrap_permission_hints_fail_closed_for_inactive_establishment(
@@ -164,13 +154,7 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_establishment(
 
     assert response.status_code == 200
     assert response.json()["active_membership"] is None
-    assert response.json()["permission_hints"] == {
-        "chat_available": False,
-        "can_create_action_plan": False,
-        "can_create_catalog_action_plan": False,
-        "can_invite": False,
-        "can_manage_runtime_config": False,
-    }
+    assert response.json()["permission_hints"] == build_bootstrap_permission_hints(None)
     assert membership.establishment_id not in {
         item["establishment_id"] for item in response.json()["memberships"]
     }
@@ -187,10 +171,4 @@ def test_bootstrap_permission_hints_fail_closed_for_inactive_organization(
 
     hints = fetch_bootstrap_hints(api_client, active_user=active_user)
 
-    assert hints == {
-        "chat_available": False,
-        "can_create_action_plan": False,
-        "can_create_catalog_action_plan": False,
-        "can_invite": False,
-        "can_manage_runtime_config": False,
-    }
+    assert hints == build_bootstrap_permission_hints(None)
