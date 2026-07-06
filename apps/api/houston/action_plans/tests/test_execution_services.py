@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from django.db import close_old_connections
+from django.utils import timezone
 
 from houston.action_plans.constants import CANCEL_ORIGIN_MANUAL, CATALOG_STATUS_ACTIVE
 from houston.action_plans.exceptions import (
@@ -130,6 +131,65 @@ def test_create_from_signal_sets_execution_signal_only(
 
     assert execution.source_signal_id == signal.id
     assert not hasattr(plan, "source_signal_id")
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+
+def test_create_from_signal_rejects_terminal_signal(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Resolved signal",
+        status=Signal.Status.RESOLVED,
+    )
+    with pytest.raises(ActionPlanValidationError, match="Signal is not active"):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Should fail",
+            source_signal_id=signal.id,
+            tasks=[build_task_payload(task="Inspect leak", business_unit=business_unit)],
+            assignees=[
+                build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            ],
+        )
+
+    assert ActionPlanExecution.objects.filter(source_signal_id=signal.id).count() == 0
+
+
+def test_create_from_pinned_open_signal_unpins_and_sets_in_progress(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    signal,
+):
+    signal.is_pinned = True
+    signal.pinned_at = timezone.now()
+    signal.pinned_by_membership = owner_membership
+    signal.save()
+
+    create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Pinned signal plan",
+        source_signal_id=signal.id,
+        tasks=[build_task_payload(task="Inspect leak", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.is_pinned is False
+    assert signal.pinned_at is None
+    assert signal.pinned_by_membership is None
 
 
 def test_manager_linked_signal_rejects_out_of_scope_pilot(

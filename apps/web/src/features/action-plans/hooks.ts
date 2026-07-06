@@ -33,6 +33,7 @@ import type {
   ActionPlanUseRequest,
   PatchedActionPlanUpdateRequest,
 } from './types'
+import { isActionPlanExecutionDetail } from './lib/action-plan-create-response'
 
 function invalidateCatalogSurfaces(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -129,7 +130,11 @@ export function useCreateActionPlanMutation(establishmentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: ActionPlanCreateRequest) => createActionPlan(establishmentId, body),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (isActionPlanExecutionDetail(data)) {
+        invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.id)
+        return
+      }
       invalidateCatalogSurfaces(queryClient, establishmentId)
     },
   })

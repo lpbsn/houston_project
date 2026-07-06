@@ -117,7 +117,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 
 - `in_progress`
   - Active situation with linked execution work underway.
-  - Exact automatic transition rule is not validated in code yet, but current product direction ties this state to Action activity.
+  - Automatic transition from `open` when a linked Action Plan execution is created (`create_action_plan_with_execution` with `source_signal_id`).
 
 - `resolved`
   - Situation considered operationally handled.
@@ -142,13 +142,13 @@ Validated target transition rules:
 
 Validated in current code:
 - Manual cancel and resolve from `open` or `in_progress` only (active statuses).
+- Linked Action Plan creation from an active Signal (`open` or `in_progress`) transitions `open` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`).
 - Default Signal Feed includes `open`, `in_progress`, and `resolved`; `canceled` and `archived` are excluded.
 - Feed sorting places all active Signals before any `resolved` Signal (`status_group_rank` before pin/urgency).
 - `resolved` Signals are readable on detail (read-only via `permission_hints`); `canceled` and `archived` are not exposed on detail by default.
 - Resolve transition forces unpin (clears pin fields) and resets `high` urgency to `normal` (model has `normal` / `high` only).
 
 Not validated yet:
-- exact automatic transition from `open` to `in_progress`
 - exact automatic transition from active states to `resolved` via Action completion
 - exact reopen behavior
 - exact archival timing

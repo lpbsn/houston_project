@@ -232,6 +232,41 @@ def _reopen_linked_signal_after_execution_reopen(*, execution: ActionPlanExecuti
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")
 
 
+def _validate_linked_signal_active(*, signal: Signal) -> None:
+    from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
+
+    if signal.status not in ACTIVE_SIGNAL_STATUSES:
+        raise ActionPlanValidationError("Signal is not active.")
+
+
+def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
+    from houston.signals.services import (
+        _schedule_signal_invalidation,
+        touch_signal_activity,
+    )
+
+    status_changed = signal.status == Signal.Status.OPEN
+    unpin_changed = signal.is_pinned
+    if not status_changed and not unpin_changed:
+        return
+
+    if status_changed:
+        signal.status = Signal.Status.IN_PROGRESS
+    if unpin_changed:
+        signal.is_pinned = False
+        signal.pinned_at = None
+        signal.pinned_by_membership = None
+
+    touch_signal_activity(signal=signal)
+    update_fields = ["last_activity_at", "updated_at"]
+    if status_changed:
+        update_fields.append("status")
+    if unpin_changed:
+        update_fields.extend(["is_pinned", "pinned_at", "pinned_by_membership"])
+    signal.save(update_fields=update_fields)
+    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+
+
 def _normalize_title(title: str) -> str:
     normalized = (title or "").strip()
     if not normalized:
@@ -794,6 +829,7 @@ def create_action_plan_with_execution(
         ).first()
         if signal is None:
             raise ActionPlanValidationError("Invalid signal.")
+        _validate_linked_signal_active(signal=signal)
         if not can_create_linked_action_plan(created_by, signal=signal):
             raise ActionPlanPermissionError("Not allowed to create this action plan.")
         if not can_create_action_plan(
@@ -858,6 +894,8 @@ def create_action_plan_with_execution(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
+    if signal is not None:
+        _activate_linked_signal_on_execution_create(signal=signal)
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
     from houston.notifications.scheduling import (
         schedule_action_plan_execution_created_notification,
