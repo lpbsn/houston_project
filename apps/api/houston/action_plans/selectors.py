@@ -314,9 +314,14 @@ def action_plan_execution_personal_feed_q(
 ) -> Q:
     now = timezone.now()
     assigned_visible = _assignee_visible_to_membership_now_q(membership=membership, now=now)
-    return (Q(created_by_id=membership.id) | assigned_visible) & Q(
-        establishment_id=membership.establishment_id
-    )
+    personal_q = Q(created_by_id=membership.id) | assigned_visible
+
+    if membership.role == EstablishmentMembership.Role.MANAGER:
+        scope_bu_ids = _scope_business_unit_ids(membership)
+        if scope_bu_ids:
+            personal_q |= Q(execution_teams__business_unit_id__in=scope_bu_ids)
+
+    return personal_q & Q(establishment_id=membership.establishment_id)
 
 
 def action_plan_execution_general_feed_visibility_q(

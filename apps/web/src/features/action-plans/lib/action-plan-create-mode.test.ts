@@ -18,6 +18,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       showStaffSelfAssignee: false,
       filterBusinessUnitsByScope: true,
       canDefineCrossPoleTasks: false,
+      lockPilotBusinessUnit: false,
       defaultRequiresValidation: true,
       defaultSaveToLibrary: false,
     })
@@ -66,6 +67,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       showStaffSelfAssignee: true,
       filterBusinessUnitsByScope: true,
       canDefineCrossPoleTasks: false,
+      lockPilotBusinessUnit: false,
       defaultRequiresValidation: false,
       defaultSaveToLibrary: false,
     })
@@ -94,6 +96,7 @@ describe('resolveActionPlanCreateModeConfig', () => {
       showValidationToggle: true,
       showAssigneeSheet: true,
       showStaffSelfAssignee: false,
+      lockPilotBusinessUnit: true,
       defaultSaveToLibrary: false,
     })
   })

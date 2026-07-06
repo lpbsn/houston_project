@@ -18,6 +18,8 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
     location_text: 'Cuisine',
     status: 'open',
     urgency: 'normal',
+    responsible_business_unit_key: 'rooftop',
+    responsible_business_unit_label: 'Rooftop',
     permission_hints: {
       can_create_linked_action_plan: true,
     },
@@ -314,12 +316,15 @@ describe('ActionPlanCreatePage', () => {
     })
   })
 
-  it('submits signal-linked create with source_signal_id', async () => {
+  it('locks pilot pole and submits signal-linked create with coherent pilot_business_unit_id', async () => {
     renderPage({
       mode: 'signal-linked',
       signalId: 'sig-1',
       backPath: '/signals/sig-1',
     })
+
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.getByText('Rooftop')).toBeTruthy()
 
     const titleInput = screen.getAllByRole('textbox')[0]
     fireEvent.change(titleInput, { target: { value: 'Plan signal' } })
@@ -332,6 +337,7 @@ describe('ActionPlanCreatePage', () => {
         expect.objectContaining({
           title: 'Plan signal',
           source_signal_id: 'sig-1',
+          pilot_business_unit_id: 'bu-1',
         }),
       )
     })

@@ -227,7 +227,7 @@ describe('applyRealtimeAccessEvent', () => {
     invalidateSpy.mockRestore()
   })
 
-  it('invalidates bootstrap and workspace on membership.updated without team roster keys', () => {
+  it('invalidates bootstrap, workspace, and operational feeds on active membership.updated', () => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
     applyRealtimeAccessEvent(
@@ -251,6 +251,40 @@ describe('applyRealtimeAccessEvent', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: businessUnitTreeQueryKey('est-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['action-plans', 'catalog', 'est-1'] })
+    invalidateSpy.mockRestore()
+  })
+
+  it('does not invalidate operational feeds when membership.updated targets another member', () => {
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    applyRealtimeAccessEvent(
+      {
+        type: 'access',
+        reason: 'membership.updated',
+        membership_id: 'mbr-other',
+        establishment_id: 'est-1',
+        occurred_at: '2026-06-19T12:00:00Z',
+      },
+      {
+        queryClient,
+        establishmentId: 'est-1',
+        activeMembershipId: 'mbr-1',
+        onIntentionalClose: vi.fn(),
+        onActiveMembershipDeactivated: vi.fn(),
+      },
+    )
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['action-plans', 'catalog', 'est-1'] })
     invalidateSpy.mockRestore()
   })
 })

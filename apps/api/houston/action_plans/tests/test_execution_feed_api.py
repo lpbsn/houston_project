@@ -342,7 +342,7 @@ def test_manager_sees_scoped_execution_in_general_view(
     )
     assert personal.status_code == 200
     personal_ids = {item["action_plan_execution"]["id"] for item in personal.json()["items"]}
-    assert str(scoped.id) not in personal_ids
+    assert str(scoped.id) in personal_ids
 
 
 def test_pending_validation_execution_in_feed(
@@ -529,3 +529,228 @@ def test_action_plan_execution_feed_query_count_with_one_item(
         max_queries=ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES,
         label="action_plan_execution_feed_general_one_item",
     )
+
+
+def test_manager_late_scope_sees_pre_existing_execution_in_personal_view(
+    api_client,
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    from houston.establishments.membership_scope import (
+        MembershipScopeInput,
+        MembershipScopeType,
+        replace_membership_scopes,
+    )
+    from houston.testing.factories import create_membership
+    from houston.testing.taxonomy import create_membership_with_business_unit_scope
+
+    restaurant_staff = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=restaurant_staff,
+        business_unit=business_unit,
+    )
+
+    pre_existing = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Pre-existing restaurant execution",
+        assignees=[
+            build_assignee_payload(membership=restaurant_staff, business_unit=business_unit)
+        ],
+    )
+
+    manager = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager,
+        business_unit=maintenance_business_unit,
+    )
+    replace_membership_scopes(
+        membership=manager,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, business_unit.id),
+        ],
+    )
+
+    token = login(api_client, user=manager.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(manager.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(pre_existing.id) in ids
+
+
+def test_manager_late_scope_excludes_out_of_pole_execution_in_personal_view(
+    api_client,
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    from houston.establishments.membership_scope import (
+        MembershipScopeInput,
+        MembershipScopeType,
+        replace_membership_scopes,
+    )
+    from houston.testing.factories import create_membership
+    from houston.testing.taxonomy import create_membership_with_business_unit_scope
+
+    maintenance_staff = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=maintenance_staff,
+        business_unit=maintenance_business_unit,
+    )
+
+    out_of_scope = _create_execution(
+        owner_membership,
+        business_unit=maintenance_business_unit,
+        title="Maintenance out of manager restaurant scope",
+        assignees=[
+            build_assignee_payload(
+                membership=maintenance_staff,
+                business_unit=maintenance_business_unit,
+            )
+        ],
+    )
+
+    manager = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    replace_membership_scopes(
+        membership=manager,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, business_unit.id),
+        ],
+    )
+
+    token = login(api_client, user=manager.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(manager.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(out_of_scope.id) not in ids
+
+
+def test_staff_late_scope_does_not_see_pole_execution_without_assignment(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    from houston.establishments.membership_scope import (
+        MembershipScopeInput,
+        MembershipScopeType,
+        replace_membership_scopes,
+    )
+    from houston.testing.factories import create_membership
+    from houston.testing.taxonomy import create_membership_with_business_unit_scope
+
+    other_staff = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(
+        membership=other_staff,
+        business_unit=business_unit,
+    )
+
+    pole_execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Restaurant execution assigned to other staff",
+        assignees=[
+            build_assignee_payload(membership=other_staff, business_unit=business_unit)
+        ],
+    )
+
+    staff = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    replace_membership_scopes(
+        membership=staff,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, business_unit.id),
+        ],
+    )
+
+    token = login(api_client, user=staff.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(staff.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(pole_execution.id) not in ids
+
+
+def test_owner_personal_feed_includes_all_establishment_executions(
+    api_client,
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    restaurant_execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Restaurant execution",
+    )
+    maintenance_execution = _create_execution(
+        owner_membership,
+        business_unit=maintenance_business_unit,
+        title="Maintenance execution",
+    )
+
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert ids == {str(restaurant_execution.id), str(maintenance_execution.id)}
+
+
+def test_director_personal_feed_includes_all_establishment_executions(
+    api_client,
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    from houston.testing.factories import create_membership
+
+    director = create_membership(
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    restaurant_execution = _create_execution(
+        director,
+        business_unit=business_unit,
+        title="Restaurant execution",
+    )
+    maintenance_execution = _create_execution(
+        director,
+        business_unit=maintenance_business_unit,
+        title="Maintenance execution",
+    )
+
+    token = login(api_client, user=director.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(director.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert ids == {str(restaurant_execution.id), str(maintenance_execution.id)}

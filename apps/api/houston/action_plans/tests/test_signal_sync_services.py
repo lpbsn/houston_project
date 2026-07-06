@@ -23,22 +23,27 @@ pytestmark = pytest.mark.django_db
 def _create_linked_execution(
     *,
     owner_membership,
-    business_unit,
-    staff_membership,
     signal,
     title: str,
     requires_validation: bool = False,
 ) -> ActionPlanExecution:
+    responsible_business_unit = signal.responsible_business_unit
+    assert responsible_business_unit is not None
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
+        pilot_business_unit_id=responsible_business_unit.id,
         title=title,
         source_signal_id=signal.id,
         requires_validation=requires_validation,
-        tasks=[build_task_payload(task=f"Task for {title}", business_unit=business_unit)],
+        tasks=[
+            build_task_payload(task=f"Task for {title}", business_unit=responsible_business_unit)
+        ],
         assignees=[
-            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=responsible_business_unit,
+            )
         ],
     )
     return execution
@@ -56,16 +61,12 @@ def test_sync_auto_resolves_when_one_done_one_canceled(
     )
     done_execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Done execution",
         requires_validation=False,
     )
     canceled_execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Canceled execution",
     )
@@ -100,15 +101,11 @@ def test_sync_reopens_to_open_when_all_canceled_without_done(
 
     execution_a = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Execution A",
     )
     execution_b = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Execution B",
     )
@@ -135,8 +132,6 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
     )
     _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Canceled execution",
     )
@@ -156,8 +151,6 @@ def test_mark_done_without_validation_auto_resolves_linked_signal(
 ):
     execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Auto resolve",
         requires_validation=False,
@@ -180,8 +173,6 @@ def test_validate_execution_auto_resolves_linked_signal(
 ):
     execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Validate resolve",
         requires_validation=True,
@@ -211,8 +202,6 @@ def test_lifecycle_resolves_signal_after_validation_cycle(
     )
     execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Validation cycle",
         requires_validation=True,
@@ -252,8 +241,6 @@ def test_reopen_linked_execution_sets_signal_in_progress(
     )
     execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Resolved execution",
         requires_validation=False,
@@ -283,15 +270,11 @@ def test_resolve_signal_cancels_active_executions_and_resolves(
     )
     execution_a = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Active A",
     )
     execution_b = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Active B",
     )
@@ -322,16 +305,12 @@ def test_sync_idempotent_when_signal_already_resolved_with_done_execution(
     )
     done_execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Done execution",
         requires_validation=False,
     )
     _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Active execution",
     )
@@ -361,16 +340,12 @@ def test_cancel_after_manual_resolve_does_not_rollback(
     )
     done_execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Done execution",
         requires_validation=False,
     )
     active_execution = _create_linked_execution(
         owner_membership=owner_membership,
-        business_unit=business_unit,
-        staff_membership=staff_membership,
         signal=signal,
         title="Active execution",
     )

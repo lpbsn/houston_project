@@ -4,15 +4,15 @@ import pytest
 
 from houston.action_plans.constants import CATALOG_STATUS_ACTIVE, CATALOG_STATUS_INACTIVE
 from houston.action_plans.models import ActionPlanExecution
-from houston.signals.models import Signal
-from houston.testing.taxonomy import create_minimal_v3_signal
 from houston.action_plans.tests.helpers import (
     action_plan_url,
     action_plans_url,
     api_assignee_payload,
     api_task_payload,
 )
+from houston.signals.models import Signal
 from houston.testing.auth import auth_headers, login
+from houston.testing.taxonomy import create_minimal_v3_signal
 
 pytestmark = pytest.mark.django_db
 
@@ -105,7 +105,7 @@ def test_feed_create_returns_execution_detail(api_client, staff_membership, busi
 def test_signal_create_returns_execution_detail(
     api_client,
     owner_membership,
-    business_unit,
+    maintenance_business_unit,
     signal,
 ):
     token = login(api_client, user=owner_membership.user)
@@ -113,11 +113,16 @@ def test_signal_create_returns_execution_detail(
         action_plans_url(owner_membership.establishment_id),
         {
             "title": "Signal plan",
-            "pilot_business_unit_id": str(business_unit.id),
+            "pilot_business_unit_id": str(maintenance_business_unit.id),
             "source_signal_id": str(signal.id),
-            "tasks": [api_task_payload(task="Fix leak", business_unit=business_unit)],
+            "tasks": [
+                api_task_payload(task="Fix leak", business_unit=maintenance_business_unit)
+            ],
             "assignees": [
-                api_assignee_payload(membership=owner_membership, business_unit=business_unit)
+                api_assignee_payload(
+                    membership=owner_membership,
+                    business_unit=maintenance_business_unit,
+                )
             ],
         },
         format="json",
@@ -128,6 +133,37 @@ def test_signal_create_returns_execution_detail(
 
     signal.refresh_from_db()
     assert signal.status == Signal.Status.IN_PROGRESS
+
+
+def test_signal_create_rejects_inconsistent_pilot(
+    api_client,
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    signal,
+):
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        {
+            "title": "Signal plan",
+            "pilot_business_unit_id": str(business_unit.id),
+            "source_signal_id": str(signal.id),
+            "tasks": [
+                api_task_payload(task="Fix leak", business_unit=maintenance_business_unit)
+            ],
+            "assignees": [
+                api_assignee_payload(
+                    membership=owner_membership,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400, response.json()
+    assert ActionPlanExecution.objects.filter(source_signal_id=signal.id).count() == 0
 
 
 def test_signal_create_rejects_terminal_signal(

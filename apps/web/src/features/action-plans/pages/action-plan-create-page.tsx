@@ -117,8 +117,28 @@ export function ActionPlanCreatePage({
     )
   }, [activeMembership?.scopes, businessUnits, modeConfig.filterBusinessUnitsByScope])
 
-  const resolvedPilotBusinessUnitId =
-    pilotBusinessUnitId || visibleBusinessUnits[0]?.id || ''
+  const signalPilotBusinessUnitId = useMemo(() => {
+    if (!modeConfig.lockPilotBusinessUnit) {
+      return ''
+    }
+    const responsibleKey = signalDetailQuery.data?.responsible_business_unit_key
+    if (!responsibleKey) {
+      return ''
+    }
+    return businessUnits.find((unit) => unit.key === responsibleKey)?.id ?? ''
+  }, [businessUnits, modeConfig.lockPilotBusinessUnit, signalDetailQuery.data])
+
+  const resolvedPilotBusinessUnitId = useMemo(() => {
+    if (modeConfig.lockPilotBusinessUnit) {
+      return signalPilotBusinessUnitId
+    }
+    return pilotBusinessUnitId || visibleBusinessUnits[0]?.id || ''
+  }, [
+    modeConfig.lockPilotBusinessUnit,
+    pilotBusinessUnitId,
+    signalPilotBusinessUnitId,
+    visibleBusinessUnits,
+  ])
 
   const canCrossPole = modeConfig.canDefineCrossPoleTasks
 
@@ -307,17 +327,23 @@ export function ActionPlanCreatePage({
           </div>
           <div>
             <TerrainFieldLabel>Pôle d&apos;activité pilote</TerrainFieldLabel>
-            <select
-              value={resolvedPilotBusinessUnitId}
-              onChange={(event) => setPilotBusinessUnitId(event.target.value)}
-              className="h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-sm"
-            >
-              {visibleBusinessUnits.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.label}
-                </option>
-              ))}
-            </select>
+            {modeConfig.lockPilotBusinessUnit ? (
+              <TerrainCard className="px-3 py-2.5 text-sm text-[#1a1a1a]">
+                {signalDetail?.responsible_business_unit_label ?? '—'}
+              </TerrainCard>
+            ) : (
+              <select
+                value={resolvedPilotBusinessUnitId}
+                onChange={(event) => setPilotBusinessUnitId(event.target.value)}
+                className="h-11 w-full rounded-xl border border-[#E8E6DF] px-3 text-sm"
+              >
+                {visibleBusinessUnits.map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.label}
+                  </option>
+                ))}
+              </select>
+            )}
             {fieldErrors.pilotBusinessUnitId ? (
               <p className="mt-1 text-xs text-destructive">{fieldErrors.pilotBusinessUnitId}</p>
             ) : null}

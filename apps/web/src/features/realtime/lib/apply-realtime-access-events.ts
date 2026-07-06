@@ -9,7 +9,12 @@ import {
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
 import type { BootstrapResponse } from '@/features/auth/types'
-import { purgeNonAuthQueries } from '@/lib/query-invalidation'
+import {
+  invalidateActionPlanExecutionFeedQueries,
+  invalidateEstablishmentActionPlanCatalogQueries,
+  invalidateEstablishmentSignalQueries,
+  purgeNonAuthQueries,
+} from '@/lib/query-invalidation'
 
 import type { OperationalRealtimeAccessEvent } from '../types'
 
@@ -87,6 +92,11 @@ export function applyRealtimeAccessEvent(
       void queryClient.invalidateQueries({
         queryKey: businessUnitTreeQueryKey(establishmentId),
       })
+      if (event.membership_id && event.membership_id === activeMembershipId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+        invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)
+        invalidateEstablishmentActionPlanCatalogQueries(queryClient, establishmentId)
+      }
       return
     default:
       return

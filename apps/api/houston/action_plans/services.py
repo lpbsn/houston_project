@@ -239,6 +239,21 @@ def _validate_linked_signal_active(*, signal: Signal) -> None:
         raise ActionPlanValidationError("Signal is not active.")
 
 
+def _validate_linked_signal_pilot_consistency(
+    *,
+    signal: Signal,
+    pilot_business_unit: BusinessUnit,
+) -> None:
+    if signal.responsible_business_unit_id is None:
+        raise ActionPlanValidationError(
+            "Linked action plan requires a signal with a responsible business unit."
+        )
+    if pilot_business_unit.id != signal.responsible_business_unit_id:
+        raise ActionPlanValidationError(
+            "Pilot business unit must match the signal responsible business unit."
+        )
+
+
 def _activate_linked_signal_on_execution_create(*, signal: Signal) -> None:
     from houston.signals.services import (
         _schedule_signal_invalidation,
@@ -830,6 +845,10 @@ def create_action_plan_with_execution(
         if signal is None:
             raise ActionPlanValidationError("Invalid signal.")
         _validate_linked_signal_active(signal=signal)
+        _validate_linked_signal_pilot_consistency(
+            signal=signal,
+            pilot_business_unit=pilot_business_unit,
+        )
         if not can_create_linked_action_plan(created_by, signal=signal):
             raise ActionPlanPermissionError("Not allowed to create this action plan.")
         if not can_create_action_plan(

@@ -370,19 +370,24 @@ def test_invalidation_not_emitted_on_cancel_rollback(
 
 def test_signal_resolve_cancels_linked_executions_with_canceled_invalidation(
     owner_membership,
-    business_unit,
-    staff_membership,
     signal,
 ):
+    responsible_business_unit = signal.responsible_business_unit
+    assert responsible_business_unit is not None
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
+        pilot_business_unit_id=responsible_business_unit.id,
         title="Signal linked plan",
         source_signal_id=signal.id,
-        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        tasks=[
+            build_task_payload(task="Task", business_unit=responsible_business_unit)
+        ],
         assignees=[
-            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=responsible_business_unit,
+            )
         ],
     )
 

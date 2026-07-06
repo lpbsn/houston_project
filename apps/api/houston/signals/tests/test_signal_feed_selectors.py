@@ -273,3 +273,84 @@ def test_visibility_and_actionability_are_separated_for_golden_signals():
 
     assert signal_visible_in_membership_scope(membership, salle_signal) is True
     assert signal_actionable_by_membership(membership, salle_signal) is False
+
+
+def test_staff_late_scope_sees_pre_existing_signal_in_personal_feed():
+    establishment = create_establishment(name="Staff late scope signal")
+    taxonomy = create_restaurant_v3_taxonomy(establishment)
+    assert taxonomy.restaurant is not None
+
+    restaurant_signal = _create_signal(
+        establishment=establishment,
+        title="Pre-existing restaurant signal",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.restaurant,
+    )
+
+    staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    replace_membership_scopes(
+        membership=staff,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, taxonomy.restaurant.id),
+        ],
+    )
+    staff = EstablishmentMembership.objects.prefetch_related("scope_links").get(pk=staff.pk)
+
+    assert restaurant_signal.id in _feed_personal_ids(membership=staff)
+
+
+def test_manager_late_scope_sees_pre_existing_signal_in_personal_feed():
+    establishment = create_establishment(name="Manager late scope signal")
+    taxonomy = create_restaurant_v3_taxonomy(establishment)
+    assert taxonomy.restaurant is not None
+
+    restaurant_signal = _create_signal(
+        establishment=establishment,
+        title="Pre-existing restaurant signal",
+        affected_business_unit=taxonomy.restaurant,
+        responsible_business_unit=taxonomy.restaurant,
+    )
+
+    manager = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    replace_membership_scopes(
+        membership=manager,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, taxonomy.restaurant.id),
+        ],
+    )
+    manager = EstablishmentMembership.objects.prefetch_related("scope_links").get(pk=manager.pk)
+
+    assert restaurant_signal.id in _feed_personal_ids(membership=manager)
+
+
+def test_manager_late_scope_excludes_out_of_pole_signal_in_personal_feed():
+    establishment = create_establishment(name="Manager late scope signal exclusion")
+    taxonomy = create_restaurant_v3_taxonomy(establishment)
+    assert taxonomy.maintenance is not None
+
+    maintenance_signal = _create_signal(
+        establishment=establishment,
+        title="Maintenance out of manager restaurant scope",
+        affected_business_unit=taxonomy.maintenance,
+        responsible_business_unit=taxonomy.maintenance,
+    )
+
+    manager = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    replace_membership_scopes(
+        membership=manager,
+        scope_inputs=[
+            MembershipScopeInput(MembershipScopeType.BUSINESS_UNIT, taxonomy.restaurant.id),
+        ],
+    )
+    manager = EstablishmentMembership.objects.prefetch_related("scope_links").get(pk=manager.pk)
+
+    assert maintenance_signal.id not in _feed_personal_ids(membership=manager)

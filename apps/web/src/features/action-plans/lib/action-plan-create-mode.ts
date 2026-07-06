@@ -14,6 +14,7 @@ export type ActionPlanCreateModeConfig = {
   showStaffSelfAssignee: boolean
   filterBusinessUnitsByScope: boolean
   canDefineCrossPoleTasks: boolean
+  lockPilotBusinessUnit: boolean
   defaultRequiresValidation: boolean
   defaultSaveToLibrary: boolean
 }
@@ -45,6 +46,7 @@ export function resolveActionPlanCreateModeConfig(input: {
       showStaffSelfAssignee: false,
       filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
       canDefineCrossPoleTasks: canCrossPole,
+      lockPilotBusinessUnit: false,
       defaultRequiresValidation: true,
       defaultSaveToLibrary: false,
     }
@@ -59,6 +61,7 @@ export function resolveActionPlanCreateModeConfig(input: {
       showStaffSelfAssignee: false,
       filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
       canDefineCrossPoleTasks: canCrossPole,
+      lockPilotBusinessUnit: true,
       defaultRequiresValidation: true,
       defaultSaveToLibrary: false,
     }
@@ -73,6 +76,7 @@ export function resolveActionPlanCreateModeConfig(input: {
       showStaffSelfAssignee: false,
       filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
       canDefineCrossPoleTasks: false,
+      lockPilotBusinessUnit: false,
       defaultRequiresValidation: true,
       defaultSaveToLibrary: false,
     }
@@ -87,6 +91,7 @@ export function resolveActionPlanCreateModeConfig(input: {
       showStaffSelfAssignee: true,
       filterBusinessUnitsByScope: true,
       canDefineCrossPoleTasks: false,
+      lockPilotBusinessUnit: false,
       defaultRequiresValidation: false,
       defaultSaveToLibrary: false,
     }
@@ -100,6 +105,7 @@ export function resolveActionPlanCreateModeConfig(input: {
     showStaffSelfAssignee: false,
     filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
     canDefineCrossPoleTasks: canCrossPole,
+    lockPilotBusinessUnit: false,
     defaultRequiresValidation: true,
     defaultSaveToLibrary: false,
   }

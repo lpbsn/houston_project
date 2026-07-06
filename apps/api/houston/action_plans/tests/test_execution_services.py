@@ -113,19 +113,23 @@ def test_create_ponctuel_rejects_empty_execution(owner_membership, business_unit
 
 def test_create_from_signal_sets_execution_signal_only(
     owner_membership,
-    business_unit,
-    staff_membership,
+    maintenance_business_unit,
     signal,
 ):
     plan, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
+        pilot_business_unit_id=maintenance_business_unit.id,
         title="Signal plan",
         source_signal_id=signal.id,
-        tasks=[build_task_payload(task="Inspect leak", business_unit=business_unit)],
+        tasks=[
+            build_task_payload(task="Inspect leak", business_unit=maintenance_business_unit)
+        ],
         assignees=[
-            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=maintenance_business_unit,
+            )
         ],
     )
 
@@ -164,8 +168,7 @@ def test_create_from_signal_rejects_terminal_signal(
 
 def test_create_from_pinned_open_signal_unpins_and_sets_in_progress(
     owner_membership,
-    business_unit,
-    staff_membership,
+    maintenance_business_unit,
     signal,
 ):
     signal.is_pinned = True
@@ -176,12 +179,17 @@ def test_create_from_pinned_open_signal_unpins_and_sets_in_progress(
     create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
+        pilot_business_unit_id=maintenance_business_unit.id,
         title="Pinned signal plan",
         source_signal_id=signal.id,
-        tasks=[build_task_payload(task="Inspect leak", business_unit=business_unit)],
+        tasks=[
+            build_task_payload(task="Inspect leak", business_unit=maintenance_business_unit)
+        ],
         assignees=[
-            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=maintenance_business_unit,
+            )
         ],
     )
 
@@ -190,6 +198,60 @@ def test_create_from_pinned_open_signal_unpins_and_sets_in_progress(
     assert signal.is_pinned is False
     assert signal.pinned_at is None
     assert signal.pinned_by_membership is None
+
+
+def test_owner_linked_signal_allows_responsible_pilot(
+    owner_membership,
+    maintenance_business_unit,
+    signal,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=signal.responsible_business_unit_id,
+        title="Responsible pilot plan",
+        source_signal_id=signal.id,
+        tasks=[
+            build_task_payload(task="Inspect leak", business_unit=maintenance_business_unit)
+        ],
+        assignees=[
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=maintenance_business_unit,
+            )
+        ],
+    )
+
+    assert execution.source_signal_id == signal.id
+    assert execution.pilot_business_unit_id == signal.responsible_business_unit_id
+
+
+def test_owner_linked_signal_rejects_inconsistent_pilot(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    signal,
+):
+    with pytest.raises(
+        ActionPlanValidationError,
+        match="Pilot business unit must match the signal responsible business unit",
+    ):
+        create_action_plan_with_execution(
+            establishment_id=owner_membership.establishment_id,
+            created_by=owner_membership,
+            pilot_business_unit_id=business_unit.id,
+            title="Inconsistent pilot plan",
+            source_signal_id=signal.id,
+            tasks=[
+                build_task_payload(task="Inspect leak", business_unit=maintenance_business_unit)
+            ],
+            assignees=[
+                build_assignee_payload(
+                    membership=owner_membership,
+                    business_unit=maintenance_business_unit,
+                )
+            ],
+        )
 
 
 def test_manager_linked_signal_rejects_out_of_scope_pilot(
@@ -203,7 +265,10 @@ def test_manager_linked_signal_rejects_out_of_scope_pilot(
         title="Maintenance signal",
         status=Signal.Status.OPEN,
     )
-    with pytest.raises(ActionPlanPermissionError, match="Not allowed to create"):
+    with pytest.raises(
+        ActionPlanValidationError,
+        match="Pilot business unit must match the signal responsible business unit",
+    ):
         create_action_plan_with_execution(
             establishment_id=contributor_manager_membership.establishment_id,
             created_by=contributor_manager_membership,
