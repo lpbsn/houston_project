@@ -105,6 +105,7 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 Prod-test V1 runs on Railway (Option A: one public `api-web` service, private worker/beat/postgres/redis). Cloudflare is out of scope for V1.
 
+* **Operator runbook:** [`docs/deploy/prod_test_runbook.md`](docs/deploy/prod_test_runbook.md)
 * Deploy contract: [`docs/deploy/railway_deploy_contract.md`](docs/deploy/railway_deploy_contract.md)
 * Variables: [`docs/deploy/railway_variables.md`](docs/deploy/railway_variables.md)
 * Architecture: [`docs/deploy/railway_architecture.md`](docs/deploy/railway_architecture.md)

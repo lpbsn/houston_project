@@ -84,6 +84,8 @@ PWA service worker (`vite-plugin-pwa`) denies navigation fallback for `/api` and
 
 ## Smoke tests
 
+For health, SPA routing, and PWA assets, prefer [`scripts/smoke/readonly.sh`](../../scripts/smoke/readonly.sh) with `BASE_URL=http://localhost:8080` after `make up-prod-test`.
+
 With the stack running on port 8080:
 
 ### Deep-link SPA reload

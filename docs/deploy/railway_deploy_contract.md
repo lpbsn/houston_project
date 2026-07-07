@@ -313,29 +313,13 @@ No bind-mount `.env` in prod-test — all config via Railway variables.
 
 ## Smoke tests (manual, post-deploy)
 
-Replace `<railway-domain>` with the public Railway hostname.
+Run the readonly script from the repository root (single source of truth for infra curls):
 
 ```bash
-# Health
-curl -fsS https://<railway-domain>/api/v1/health/
-# → {"status":"ok"}
-
-# SPA deep-link → index.html
-curl -fsS https://<railway-domain>/signals | grep 'id="root"'
-
-# Invalid API → NOT SPA HTML
-curl -fsS https://<railway-domain>/api/foo | grep -v 'id="root"'
-
-# WebSocket path → NOT SPA HTML
-curl -fsS https://<railway-domain>/ws/v1/establishments/00000000-0000-0000-0000-000000000000/realtime/ | grep -v 'id="root"'
+BASE_URL=https://<railway-domain> ./scripts/smoke/readonly.sh
 ```
 
-Also verify:
-
-* [ ] `celery-worker` logs show worker ready
-* [ ] `celery-beat` logs show scheduler running
-* [ ] `import_business_unit_catalog` run after first migrate
-* [ ] Photo upload + read works (api-web volume)
+Local prod-test: `BASE_URL=http://localhost:8080` after `make up-prod-test`. See [`scripts/smoke/readonly.sh`](../../scripts/smoke/readonly.sh) and [`railway_smoke_checklist.md`](railway_smoke_checklist.md) for manual worker/beat/media checks.
 
 ---
 
@@ -365,6 +349,7 @@ make backend-deploy-check
 
 ## Related documents
 
+* [`prod_test_runbook.md`](prod_test_runbook.md) — operator hub (day-0 → sign-off)
 * [`railway_variables.md`](railway_variables.md) — variable mapping and per-service matrix
 * [`railway_architecture.md`](railway_architecture.md) — architecture overview
 * [`railway_security.md`](railway_security.md) — secrets and `check --deploy`
