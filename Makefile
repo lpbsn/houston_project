@@ -1,6 +1,6 @@
 .PHONY: \
-	build build-backend build-web \
-	up up-build up-backend up-scheduler restart-backend recreate-backend down \
+	build build-backend build-web build-prod-test-web \
+	up up-build up-backend up-scheduler up-prod-test down-prod-test migrate-prod-test restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
@@ -12,6 +12,7 @@
 # -----------------------------------------------------------------------------
 
 COMPOSE := docker compose
+COMPOSE_PROD_TEST := $(COMPOSE) -f docker-compose.prod-test.yml -p houston-prod-test
 API_EXEC := $(COMPOSE) exec -T api
 API_EXEC_INTERACTIVE := $(COMPOSE) exec api
 API_CMD := $(API_EXEC) sh -lc
@@ -71,6 +72,25 @@ up-scheduler: assert-local-dev-db up-backend
 
 down:
 	$(COMPOSE) down
+
+# -----------------------------------------------------------------------------
+# Prod-test local stack (PR3) — gateway on :8080, static SPA + API same-origin
+# -----------------------------------------------------------------------------
+
+build-prod-test-web:
+	docker build -f infra/docker/web/Dockerfile -t houston-web:prod .
+
+up-prod-test: assert-local-dev-db
+	$(COMPOSE_PROD_TEST) up --build -d gateway
+	@echo ""
+	@echo "Prod-test gateway: http://localhost:8080"
+	@echo "First boot: make migrate-prod-test"
+
+migrate-prod-test: assert-local-dev-db
+	$(COMPOSE_PROD_TEST) exec -T api sh -lc 'cd /app/apps/api && uv run python manage.py migrate'
+
+down-prod-test:
+	$(COMPOSE_PROD_TEST) down
 
 shell:
 	$(API_EXEC_INTERACTIVE) sh

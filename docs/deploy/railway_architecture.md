@@ -18,7 +18,10 @@ Railway Project (prod-test V1)
 └── (shared storage) private media   same logical path on api-web + celery-worker (mount TBD PR5)
 ```
 
-Local analogue: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery`, `celery-beat`, `postgres`, `redis`, `private_media` volume).
+Local analogues:
+
+* Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery`, `celery-beat`, `postgres`, `redis`, `private_media` volume).
+* Prod-test static + gateway (PR3, local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — see [`railway_static_frontend.md`](railway_static_frontend.md).
 
 ## Public routing (same-origin)
 
@@ -28,7 +31,7 @@ All traffic hits `https://<railway-domain>`:
 |---|---|---|
 | `/api/*` | Django / DRF / Daphne | Implemented |
 | `/ws/*` | Django Channels / Daphne (WSS) | Implemented |
-| `/*` | Frontend static SPA | Future — served from `api-web` in a later PR |
+| `/*` | Frontend static SPA | **PR3** validates static + gateway locally; **PR5** integrates into `api-web` on Railway |
 
 The frontend API client uses `baseUrl: ''` ([`apps/web/src/api/client.ts`](../../apps/web/src/api/client.ts)), so prod-test does not need a `VITE_*` API URL.
 
@@ -38,7 +41,7 @@ PWA workbox config is shell-only: `runtimeCaching: []`, `navigateFallbackDenylis
 
 | Service | Visibility | Image / command | Role |
 |---|---|---|---|
-| `api-web` | Public (Railway Public Networking, HTTPS) | Backend image; [`infra/docker/api/entrypoint.sh`](../../infra/docker/api/entrypoint.sh) → `daphne -b 0.0.0.0 -p 8000 config.asgi:application` | HTTP API, WebSocket, future SPA static, authorized private media reads |
+| `api-web` | Public (Railway Public Networking, HTTPS) | Backend image; [`infra/docker/api/entrypoint.sh`](../../infra/docker/api/entrypoint.sh) → `daphne -b 0.0.0.0 -p 8000 config.asgi:application` | HTTP API, WebSocket; SPA static added in **PR5** (pattern validated locally in PR3) |
 | `celery-worker` | Private | Same backend image; `celery -A config worker` | Observation → signal pipeline, upload purge, chat purge, action-plan materialization |
 | `celery-beat` | Private | Same backend image; `celery -A config beat` | Scheduled tasks (horizon materialization, chat purge, upload TTL, stuck observation recovery) |
 | `postgres` | Private | Railway PostgreSQL plugin | Business source of truth |
@@ -176,4 +179,5 @@ Future PR10+ may add Cloudflare for DNS, edge cache, or WAF **after** Railway pr
 ## Related documents
 
 * [`prod_test_decisions.md`](prod_test_decisions.md) — decision log
+* [`railway_static_frontend.md`](railway_static_frontend.md) — PR3 local static + gateway validation
 * [`.env.prod-test.example`](../../.env.prod-test.example) — environment template

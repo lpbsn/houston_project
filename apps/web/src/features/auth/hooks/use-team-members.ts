@@ -105,7 +105,7 @@ export function useUpdateProfileMutation() {
 
   return useMutation({
     mutationFn: (input: UserProfileUpdateRequest) => updateUserProfile(input),
-    onSuccess: async (_data, _variables, _context) => {
+    onSuccess: async () => {
       if (establishmentId && activeMembership?.id) {
         await queryClient.invalidateQueries({
           queryKey: membershipListQueryKey(establishmentId),
