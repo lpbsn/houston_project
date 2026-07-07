@@ -101,6 +101,16 @@ The project currently uses a Django modular monolith as the business authority a
 
 Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the Phase 1 product contract. They must not be expanded into product UI.
 
+## Prod-test deployment
+
+Prod-test V1 runs on Railway (Option A: one public `api-web` service, private worker/beat/postgres/redis). Cloudflare is out of scope for V1.
+
+* Decisions: [`docs/deploy/prod_test_decisions.md`](docs/deploy/prod_test_decisions.md)
+* Architecture and variables: [`docs/deploy/railway_architecture.md`](docs/deploy/railway_architecture.md)
+* Environment template: [`.env.prod-test.example`](.env.prod-test.example)
+
+Local development uses [`.env.example`](.env.example). Prod-test uses `.env.prod-test.example` as the contractual reference (set values in Railway, do not commit secrets).
+
 ## Local Setup
 
 **macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Par défaut, chaque machine a sa propre base Postgres (volume Docker local).
