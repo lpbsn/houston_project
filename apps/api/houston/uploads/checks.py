@@ -7,7 +7,27 @@ from django.core.checks import Error, register
 
 
 @register()
+def check_private_media_root_configured(app_configs, **kwargs):
+    if settings.DEBUG:
+        return []
+
+    media_root = (settings.HOUSTON_PRIVATE_MEDIA_ROOT or "").strip()
+    if not media_root:
+        return [
+            Error(
+                "HOUSTON_PRIVATE_MEDIA_ROOT is empty.",
+                hint="Set HOUSTON_PRIVATE_MEDIA_ROOT to a writable private storage path.",
+                id="uploads.E002",
+            )
+        ]
+    return []
+
+
+@register()
 def check_private_media_root_writable(app_configs, **kwargs):
+    if settings.DEBUG:
+        return []
+
     media_root = Path(settings.HOUSTON_PRIVATE_MEDIA_ROOT)
     probe = media_root / ".write-check"
 

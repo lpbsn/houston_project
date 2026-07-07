@@ -145,6 +145,16 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 * Configure Railway healthcheck on `api-web` against this path over HTTPS.
 * Healthcheck validates the API process only; it does not prove Celery or Redis are healthy. Monitor worker logs separately.
 
+## Django security
+
+Prod-test must pass the production security gate before traffic:
+
+```bash
+make backend-deploy-check
+```
+
+Operational detail, secret generation, Railway-required variables, local HTTP exceptions, and API docs policy: [`railway_security.md`](railway_security.md).
+
 ## Logs
 
 * Structured stdout via Django logging (`HOUSTON_LOG_LEVEL`, default `INFO`).
@@ -180,4 +190,5 @@ Future PR10+ may add Cloudflare for DNS, edge cache, or WAF **after** Railway pr
 
 * [`prod_test_decisions.md`](prod_test_decisions.md) — decision log
 * [`railway_static_frontend.md`](railway_static_frontend.md) — PR3 local static + gateway validation
+* [`railway_security.md`](railway_security.md) — production security gate and secrets
 * [`.env.prod-test.example`](../../.env.prod-test.example) — environment template
