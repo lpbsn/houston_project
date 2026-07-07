@@ -5,7 +5,14 @@ from houston.chat.models import ChatConversation, ChatParticipant
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
 from houston.chat.tests.test_rest_api import chat_url, create_dm, create_group
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.services import deactivate_membership_for_management
+from houston.establishments.services import (
+    MembershipManagementForbiddenError,
+    deactivate_membership_for_management,
+)
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 
 @pytest.mark.django_db
@@ -58,6 +65,19 @@ def test_membership_deactivation_removes_group_participant(api_client):
         establishment=establishment,
         role=EstablishmentMembership.Role.STAFF,
     )
+    housekeeping = create_business_unit(
+        establishment=establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=housekeeping,
+    )
+    create_membership_with_business_unit_scope(
+        membership=staff_membership,
+        business_unit=housekeeping,
+    )
     token = login(api_client, user=manager)
 
     group_response = create_group(
@@ -80,6 +100,65 @@ def test_membership_deactivation_removes_group_participant(api_client):
         membership=staff_membership,
     )
     assert participant.left_at is not None
+    assert ChatConversation.objects.filter(id=conversation_id).exists()
+
+
+@pytest.mark.django_db
+def test_membership_deactivation_forbidden_leaves_chat_unchanged(api_client):
+    establishment = create_establishment()
+    manager = create_user(username="chat_forbidden_manager")
+    staff = create_user(username="chat_forbidden_staff")
+    manager_membership = create_membership(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    staff_membership = create_membership(
+        user=staff,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    actor_unit = create_business_unit(
+        establishment=establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    foreign_unit = create_business_unit(
+        establishment=establishment,
+        key="security",
+        label="Security",
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=actor_unit,
+    )
+    create_membership_with_business_unit_scope(
+        membership=staff_membership,
+        business_unit=foreign_unit,
+    )
+    token = login(api_client, user=manager)
+
+    group_response = create_group(
+        api_client,
+        token=token,
+        establishment_id=establishment.id,
+        title="Ops",
+        membership_ids=[staff_membership.id],
+    )
+    conversation_id = group_response.json()["conversation"]["id"]
+
+    with pytest.raises(MembershipManagementForbiddenError):
+        deactivate_membership_for_management(
+            current_membership=manager_membership,
+            establishment_id=establishment.id,
+            membership_id=staff_membership.id,
+        )
+
+    participant = ChatParticipant.objects.get(
+        conversation_id=conversation_id,
+        membership=staff_membership,
+    )
+    assert participant.left_at is None
     assert ChatConversation.objects.filter(id=conversation_id).exists()
 
 

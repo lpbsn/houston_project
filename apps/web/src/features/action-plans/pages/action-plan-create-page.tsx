@@ -22,8 +22,6 @@ import { SignalsApiError } from '@/features/signals/api'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { useSignalDetailQuery } from '@/features/signals/hooks'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { terrain } from '@/lib/terrain-styles'
-import { cn } from '@/lib/utils'
 
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
 import {

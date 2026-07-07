@@ -17,7 +17,10 @@ from houston.establishments.models import (
     EstablishmentMembership,
     MembershipScope,
 )
-from houston.establishments.tests.taxonomy_helpers import create_business_unit
+from houston.establishments.tests.taxonomy_helpers import (
+    assert_business_unit_scope_response,
+    create_business_unit,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -163,13 +166,10 @@ def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
         establishment=membership.establishment,
         key="housekeeping",
     )
-    assert body["memberships"][0]["scopes"] == [
-        {
-            "scope_type": "business_unit",
-            "scope_id": str(housekeeping_business_unit.id),
-        }
-    ]
-    assert body["memberships"][0]["scope_summary"] == {"business_unit_count": 1}
+    assert_business_unit_scope_response(
+        body["memberships"][0],
+        business_unit=housekeeping_business_unit,
+    )
     assert "module_count" not in body["memberships"][0]["scope_summary"]
     assert body["active_membership"]["establishment_name"] == "Demo Hotel"
     assert "access_token" in body
@@ -282,12 +282,10 @@ def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, a
         establishment=membership.establishment,
         key="housekeeping",
     )
-    assert body["memberships"][0]["scopes"] == [
-        {
-            "scope_type": "business_unit",
-            "scope_id": str(housekeeping_business_unit.id),
-        }
-    ]
+    assert_business_unit_scope_response(
+        body["memberships"][0],
+        business_unit=housekeeping_business_unit,
+    )
 
 
 def test_bootstrap_without_bearer_returns_unauthorized(api_client):

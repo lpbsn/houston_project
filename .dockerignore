@@ -6,7 +6,6 @@
 .env
 .env.*
 !.env.example
-!.env.shared-dev.example
 
 # OS / editors
 .DS_Store

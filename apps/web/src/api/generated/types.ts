@@ -2052,6 +2052,7 @@ export interface components {
             scope_type: string;
             /** Format: uuid */
             scope_id: string;
+            scope_label: string;
         };
         AuthMembershipScopeSummary: {
             business_unit_count: number;

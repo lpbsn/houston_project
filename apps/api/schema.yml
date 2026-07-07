@@ -6464,8 +6464,11 @@ components:
         scope_id:
           type: string
           format: uuid
+        scope_label:
+          type: string
       required:
       - scope_id
+      - scope_label
       - scope_type
     AuthMembershipScopeSummary:
       type: object

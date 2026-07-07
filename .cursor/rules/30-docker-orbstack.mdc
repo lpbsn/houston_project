@@ -14,8 +14,7 @@ Preferred local workflow:
 - backend stack: `make up-backend`
 - frontend local: `make web-dev`
 - full stack only when needed: `make up` (no rebuild; use `make up-build` after image changes)
-- optional scheduler (celery-beat): `make up-scheduler` (local `.env`) or `make shared-dev-up-scheduler` (`.env.shared-dev`)
-- **Scheduler trap (shared-dev):** after `make shared-dev-up`, never use `make up-scheduler` — it runs against local `.env`. Use `make shared-dev-up-scheduler` (see `docs/engineering/shared_dev_database.md` § Scheduler in shared-dev mode)
+- optional scheduler (celery-beat): `make up-scheduler`
 
 Build / restart:
 - backend image `houston-api:dev` (api + celery + celery-beat): `make build-backend`
@@ -23,16 +22,8 @@ Build / restart:
 - bounce process (does not reload `.env`): `make restart-backend`
 - after `.env` changes (recreates api/celery, `--no-deps`): `make recreate-backend`
 - guard script tests (no DB): `make infra-check`
-
-Shared-dev (remote PostgreSQL, `.env.shared-dev`):
-- `make shared-dev-up` — runs compose preflight (`assert-shared-dev-compose.sh`) before `up`
-- `make shared-dev-check` / `make shared-dev-bootstrap` / `make shared-dev-migrate`
-- see `docs/engineering/shared_dev_database.md` (mode-switch checklist: `make down` then correct up target)
-- never run `make reset-dev-db` or `make test` against shared-dev credentials in `.env`
-- local `make up*` targets refuse remote DB (Compose-effective guard)
-- mode switch: `make down` then `make up-backend` or `make shared-dev-up` — never assume `.env` alone retargets containers
-- `make recreate-backend` does not switch modes (in-mode `.env` reload only)
-- after shared-dev session: `make down` before `make test` / `make migrate` / `make reset-dev-db`
+- local `make up*` targets refuse remote DB (Compose-effective guard via `assert-local-dev-db.sh`)
+- after changing `.env` with containers already running: `make recreate-backend` (or `make down` then `make up-backend`)
 
 Do not run `docker compose up` without explicit service/profile unless requested.
 

@@ -9,6 +9,7 @@ from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
     MembershipScopeType,
+    membership_scope_rows_for_membership,
     normalize_membership_scope_inputs,
     parse_membership_scope_inputs,
     replace_membership_scopes,
@@ -17,12 +18,39 @@ from houston.establishments.models import (
     MembershipScope,
 )
 from houston.establishments.tests.taxonomy_helpers import (
+    assert_business_unit_scope_response,
     create_business_unit,
     create_establishment,
     create_membership,
+    create_membership_with_business_unit_scope,
 )
 
 pytestmark = pytest.mark.django_db
+
+
+def test_membership_scope_rows_for_membership_includes_scope_label():
+    establishment = create_establishment()
+    membership = create_membership(establishment=establishment)
+    business_unit = create_business_unit(
+        establishment=establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=business_unit,
+    )
+    membership = type(membership).objects.prefetch_related(
+        "scope_links__business_unit",
+    ).get(pk=membership.pk)
+
+    scopes_payload, scope_summary = membership_scope_rows_for_membership(membership)
+
+    assert scope_summary == {"business_unit_count": 1}
+    assert_business_unit_scope_response(
+        {"scopes": scopes_payload, "scope_summary": scope_summary},
+        business_unit=business_unit,
+    )
 
 
 def test_membership_scope_model_requires_exactly_one_target():

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Refuses local-only operations when Compose would target a shared/remote database.
+# Refuses local-only operations when Compose would target a remote database.
 # Validates effective POSTGRES_HOST from `docker compose config`, not just the env file.
 set -eu
 
@@ -14,35 +14,16 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-basename_env="$(basename "$ENV_FILE")"
-if [ "$basename_env" = ".env.shared-dev" ]; then
-  echo "FATAL: $ENV_FILE is for shared-dev only." >&2
-  echo "  Do not run local-only targets with the shared-dev env file." >&2
-  echo "  Use .env for local Docker Postgres (POSTGRES_HOST=postgres)." >&2
-  exit 1
-fi
-
-houston_mode=""
 file_postgres_host=""
 
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
     \#*) continue ;;
-    HOUSTON_DEV_DB_MODE=*)
-      houston_mode="$(printf '%s' "$line" | cut -d= -f2- | tr '[:upper:]' '[:lower:]' | tr -d ' \"')"
-      ;;
     POSTGRES_HOST=*)
       file_postgres_host="$(printf '%s' "$line" | cut -d= -f2- | tr '[:upper:]' '[:lower:]' | tr -d ' \"')"
       ;;
   esac
 done <"$ENV_FILE"
-
-if [ "$houston_mode" = "shared" ]; then
-  echo "FATAL: HOUSTON_DEV_DB_MODE=shared in $ENV_FILE." >&2
-  echo "  Local-only operations require .env with POSTGRES_HOST=postgres." >&2
-  echo "  Use make shared-dev-* for remote database work." >&2
-  exit 1
-fi
 
 is_local_host() {
   host="$1"
@@ -59,7 +40,7 @@ if [ -n "${POSTGRES_HOST:-}" ]; then
   if ! is_local_host "$shell_postgres_host"; then
     echo "FATAL: POSTGRES_HOST=$shell_postgres_host in shell environment (overrides $ENV_FILE)." >&2
     echo "  Unset POSTGRES_HOST or use a local host: $LOCAL_POSTGRES_HOSTS" >&2
-    echo "  For shared-dev, use make shared-dev-* with .env.shared-dev." >&2
+    echo "  Use .env with POSTGRES_HOST=postgres for local Docker Postgres." >&2
     exit 1
   fi
 fi
@@ -96,7 +77,7 @@ if ! is_local_host "$effective_postgres_host"; then
     echo "  $ENV_FILE has POSTGRES_HOST=$file_postgres_host." >&2
   fi
   echo "  Local-only operations require POSTGRES_HOST in: $LOCAL_POSTGRES_HOSTS" >&2
-  echo "  For shared-dev, use make shared-dev-* with .env.shared-dev." >&2
+  echo "  Use .env with POSTGRES_HOST=postgres for local Docker Postgres." >&2
   exit 1
 fi
 

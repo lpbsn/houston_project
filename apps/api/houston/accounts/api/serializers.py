@@ -60,6 +60,7 @@ class UserProfileUpdateRequestSerializer(serializers.Serializer):
 class MembershipScopeItemSerializer(serializers.Serializer):
     scope_type = serializers.CharField()
     scope_id = serializers.UUIDField()
+    scope_label = serializers.CharField()
 
 
 @extend_schema_serializer(component_name="AuthMembershipScopeSummary")

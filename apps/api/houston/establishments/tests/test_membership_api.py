@@ -693,6 +693,96 @@ def test_manager_can_patch_staff_in_scope(api_client):
     assert response.json()["role"] == EstablishmentMembership.Role.MANAGER
 
 
+def test_manager_can_deactivate_staff_in_scope(api_client):
+    actor = create_user(username="manager_deactivate_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.MANAGER,
+        name="Nice",
+    )
+    housekeeping = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    create_membership_with_business_unit_scope(
+        membership=actor_membership,
+        business_unit=housekeeping,
+    )
+    target_user = create_user(username="scoped_staff_deactivate")
+    target_membership = EstablishmentMembership.objects.create(
+        user=target_user,
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=target_membership,
+        business_unit=housekeeping,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == EstablishmentMembership.Status.DEACTIVATED
+    target_membership.refresh_from_db()
+    assert target_membership.status == EstablishmentMembership.Status.DEACTIVATED
+
+
+def test_manager_cannot_deactivate_staff_out_of_scope(api_client):
+    actor = create_user(username="manager_deactivate_out_scope")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.MANAGER,
+        name="Nice",
+    )
+    actor_unit = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    foreign_unit = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="security",
+        label="Security",
+    )
+    create_membership_with_business_unit_scope(
+        membership=actor_membership,
+        business_unit=actor_unit,
+    )
+    target_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="foreign_staff_deactivate"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=target_membership,
+        business_unit=foreign_unit,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+
+
 def test_manager_cannot_patch_staff_out_of_scope(api_client):
     actor = create_user(username="manager_out_scope")
     actor_membership = create_membership(

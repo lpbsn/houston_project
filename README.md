@@ -103,7 +103,7 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 ## Local Setup
 
-**macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Par défaut, chaque machine a sa propre base Postgres (volume Docker local). Pour partager une DB distante entre développeurs : [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) (`make shared-dev-up` + `.env.shared-dev`).
+**macOS (guide détaillé pour un nouvel arrivant)** : voir [`INSTALL_MAC.md`](INSTALL_MAC.md) — backend Docker + frontend npm local (`make up-backend` + `make web-dev`). Par défaut, chaque machine a sa propre base Postgres (volume Docker local).
 
 **Fresh install backend** (après `cp .env.example .env` et `make build-backend` sur une machine neuve) :
 
@@ -116,10 +116,6 @@ Enchaîne migrations, import du catalogue global (`CatalogBusinessUnit` / `Catal
 **Reset local destructif** (DB + volumes Docker effacés) : `make reset-dev-db` — détails et parcours machine neuve vs reset dans [`INSTALL_MAC.md`](INSTALL_MAC.md). Validation E2E : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
 
 **Workflow quotidien (recommandé macOS / OrbStack)** : `make up-backend` + `make web-dev` — backend dans Docker, frontend npm local.
-
-**Shared-dev (DB PostgreSQL distante partagée)** : `cp .env.shared-dev.example .env.shared-dev` (secrets via 1Password) → `make shared-dev-bootstrap` → `make web-dev`. Voir [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md).
-
-**Important (scheduler + shared-dev):** after `make shared-dev-up`, do **not** use `make up-scheduler` (it targets local `.env`). Use `make shared-dev-up-scheduler` instead. See [`docs/engineering/shared_dev_database.md`](docs/engineering/shared_dev_database.md) § Scheduler in shared-dev mode.
 
 **Stack complète Docker** : `make up` — démarre `api`, `celery` et le conteneur `web` (port 5173), sans rebuild. Utiliser `make up-build` pour reconstruire les images avant démarrage.
 

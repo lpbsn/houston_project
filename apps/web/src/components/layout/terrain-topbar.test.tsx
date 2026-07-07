@@ -54,6 +54,6 @@ describe('TerrainTopbar', () => {
       name: 'Page introuvable avec un titre très long qui doit être tronqué',
     })
     expect(heading.className).toContain('truncate')
-    expect(heading.className).toContain('text-xl')
+    expect(heading.className).toContain('text-2xl')
   })
 })

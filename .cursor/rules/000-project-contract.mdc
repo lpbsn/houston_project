@@ -51,4 +51,3 @@ Frontend commands may run natively from apps/web:
 cd apps/web && npm test
 cd apps/web && npm run typecheck
 cd apps/web && npm run build
-Shared-dev commands must be explicit and must never be used for tests, reset, or bootstrap

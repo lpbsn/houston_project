@@ -5,8 +5,7 @@
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
-	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data \
-	shared-dev-up shared-dev-up-scheduler shared-dev-bootstrap shared-dev-migrate shared-dev-import-catalog shared-dev-check
+	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data
 
 # -----------------------------------------------------------------------------
 # Compose / env
@@ -27,10 +26,6 @@ PYTEST_EXTRA_ARGS ?=
 ifdef ARGS
 PYTEST_EXTRA_ARGS := $(ARGS)
 endif
-
-SHARED_ENV_FILE := .env.shared-dev
-SHARED_COMPOSE := $(COMPOSE) --env-file $(SHARED_ENV_FILE) \
-	-f docker-compose.yml -f docker-compose.shared-dev.yml
 
 # -----------------------------------------------------------------------------
 # Docker lifecycle
@@ -69,7 +64,7 @@ recreate-backend: assert-local-dev-db
 	fi
 
 # Celery Beat (profile scheduler): action-plan schedule horizon, chat purge, upload TTL cleanup.
-# Not started by bootstrap-dev — run explicitly after local or shared-dev bootstrap.
+# Not started by bootstrap-dev — run explicitly after local bootstrap.
 up-scheduler: assert-local-dev-db up-backend
 	$(COMPOSE) --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
 	$(COMPOSE) --profile scheduler up -d celery-beat
@@ -165,44 +160,6 @@ reset-dev-db: assert-local-dev-db
 
 clean-operational-test-data: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py clean_operational_test_data $(ARGS)'
-
-# -----------------------------------------------------------------------------
-# Shared-dev — explicit only
-# -----------------------------------------------------------------------------
-
-shared-dev-up:
-	@test -f $(SHARED_ENV_FILE) || (echo "FATAL: $(SHARED_ENV_FILE) missing. Copy from .env.shared-dev.example and fill from 1Password." >&2; exit 1)
-	@infra/scripts/assert-shared-dev-compose.sh $(SHARED_ENV_FILE)
-	$(SHARED_COMPOSE) up -d redis api celery
-	$(SHARED_COMPOSE) exec -u 0 api chown -R houston:houston /app/apps/api/private_media
-
-shared-dev-migrate:
-	@test -f $(SHARED_ENV_FILE) || (echo "FATAL: $(SHARED_ENV_FILE) missing. Copy from .env.shared-dev.example and fill from 1Password." >&2; exit 1)
-	@infra/scripts/assert-shared-dev-compose.sh $(SHARED_ENV_FILE)
-	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py migrate'
-
-shared-dev-import-catalog:
-	@test -f $(SHARED_ENV_FILE) || (echo "FATAL: $(SHARED_ENV_FILE) missing. Copy from .env.shared-dev.example and fill from 1Password." >&2; exit 1)
-	@infra/scripts/assert-shared-dev-compose.sh $(SHARED_ENV_FILE)
-	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py import_business_unit_catalog'
-
-shared-dev-check:
-	@test -f $(SHARED_ENV_FILE) || (echo "FATAL: $(SHARED_ENV_FILE) missing. Copy from .env.shared-dev.example and fill from 1Password." >&2; exit 1)
-	@infra/scripts/assert-shared-dev-compose.sh $(SHARED_ENV_FILE)
-	@if $(SHARED_COMPOSE) ps --status running --services 2>/dev/null | grep -qx api; then \
-		$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py check'; \
-	else \
-		$(SHARED_COMPOSE) run --rm --no-deps -T api sh -lc 'cd $(API_DIR) && uv run python manage.py check'; \
-	fi
-
-shared-dev-up-scheduler: shared-dev-up
-	$(SHARED_COMPOSE) --profile scheduler run --rm -u 0 --no-deps -T celery-beat chown -R houston:houston /var/lib/celerybeat
-	$(SHARED_COMPOSE) --profile scheduler up -d celery-beat
-
-shared-dev-bootstrap: shared-dev-up shared-dev-migrate shared-dev-import-catalog shared-dev-check
-	$(SHARED_COMPOSE) exec -T api sh -lc 'cd $(API_DIR) && uv run python manage.py verify_catalog_counts'
-	@echo ""
-	@echo "Optional: run 'make shared-dev-up-scheduler' to start celery-beat (action-plan schedule horizon, chat purge, upload TTL)."
 
 # -----------------------------------------------------------------------------
 # Frontend — native Mac
