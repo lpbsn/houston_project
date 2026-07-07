@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -123,12 +123,14 @@ export function ActionPlanCreatePage({
       return
     }
     const plan = templateDetailQuery.data
-    setTitle(plan.title)
-    setDescription(plan.description)
-    setPilotBusinessUnitId(plan.pilot_business_unit.id)
-    setRequiresValidation(plan.requires_validation)
-    setTasks(plan.tasks.map(actionPlanTaskTemplateToDraft))
-    setIsTemplateHydrated(true)
+    startTransition(() => {
+      setTitle(plan.title)
+      setDescription(plan.description)
+      setPilotBusinessUnitId(plan.pilot_business_unit.id)
+      setRequiresValidation(plan.requires_validation)
+      setTasks(plan.tasks.map(actionPlanTaskTemplateToDraft))
+      setIsTemplateHydrated(true)
+    })
   }, [isTemplateEdit, isTemplateHydrated, templateDetailQuery.data])
 
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
