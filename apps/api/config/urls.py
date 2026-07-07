@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from houston.core.views import AppHomeView, HomeView
@@ -17,6 +18,10 @@ urlpatterns = [
     path("api/v1/", include("houston.realtime.api.urls")),
     path("api/v1/", include("houston.comments.api.urls")),
     path("api/v1/", include("houston.notifications.api.urls")),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
 ]
+
+if settings.HOUSTON_ENABLE_API_DOCS:
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
+    ]

@@ -2,7 +2,7 @@
 	build build-backend build-web build-prod-test-web \
 	up up-build up-backend up-scheduler up-prod-test down-prod-test migrate-prod-test restart-backend recreate-backend down \
 	check test lint schema schema-check shell migrate migrations-check \
-	backend-lint backend-migrations-check backend-schema backend-schema-check backend-test backend-check backend-rebuild \
+	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
 	import-catalog catalog-check bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data
@@ -141,6 +141,19 @@ backend-schema:
 
 backend-schema-check: backend-schema
 	git diff --exit-code apps/api/schema.yml
+
+backend-deploy-check:
+	$(API_CMD) 'cd $(API_DIR) && DJANGO_DEBUG=0 \
+	  DJANGO_SECRET_KEY=deploy-check-secret-with-sufficient-length-and-entropy \
+	  DJANGO_ALLOWED_HOSTS=example.railway.app \
+	  CSRF_TRUSTED_ORIGINS=https://example.railway.app \
+	  HOUSTON_AUTH_TOKEN_PEPPER=deploy-check-pepper-distinct \
+	  HOUSTON_AUTH_TOKEN_SALT=deploy-check-auth-salt \
+	  HOUSTON_CHAT_WS_TICKET_SALT=deploy-check-chat-salt \
+	  HOUSTON_REALTIME_WS_TICKET_SALT=deploy-check-realtime-salt \
+	  OPENAI_API_KEY=sk-deploy-check \
+	  HOUSTON_PRIVATE_MEDIA_ROOT=/tmp/houston-deploy-check-media \
+	  uv run python manage.py check --deploy'
 
 backend-test: assert-local-dev-db
 	$(API_CMD) 'cd $(API_DIR) && uv run pytest $(PYTEST_ARGS) $(PYTEST_EXTRA_ARGS)'
