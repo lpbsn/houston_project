@@ -28,6 +28,14 @@ jobs:
     env:
       DJANGO_SECRET_KEY: ci-secret-key
       DJANGO_DEBUG: "0"
+      DJANGO_ALLOWED_HOSTS: ci.example.test,localhost,127.0.0.1,testserver
+      CSRF_TRUSTED_ORIGINS: https://ci.example.test
+      HOUSTON_AUTH_TOKEN_PEPPER: ci-auth-token-pepper-distinct
+      HOUSTON_AUTH_TOKEN_SALT: ci-auth-token-salt
+      HOUSTON_CHAT_WS_TICKET_SALT: ci-chat-ws-ticket-salt
+      HOUSTON_REALTIME_WS_TICKET_SALT: ci-realtime-ws-ticket-salt
+      OPENAI_API_KEY: sk-ci-placeholder
+      HOUSTON_ENABLE_API_DOCS: "0"
       POSTGRES_DB: houston
       POSTGRES_USER: houston
       POSTGRES_PASSWORD: houston
