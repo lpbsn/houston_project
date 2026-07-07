@@ -1,0 +1,65 @@
+# Railway api-web: Django + Daphne + SPA static + nginx edge (same-origin).
+# Build context: repository root (Root Directory / on Railway).
+
+FROM node:24-alpine AS web-build
+
+WORKDIR /app
+
+COPY apps/web/package.json apps/web/package-lock.json* apps/web/
+COPY contracts/ contracts/
+COPY apps/web/ apps/web/
+
+WORKDIR /app/apps/web
+
+RUN npm ci && npm run build
+
+FROM python:3.13.13-slim AS api-base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:/usr/local/bin:${PATH}"
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && mv /root/.local/bin/uv /usr/local/bin/uv \
+    && chmod 755 /usr/local/bin/uv
+
+RUN groupadd --gid 1000 houston \
+    && useradd --uid 1000 --gid houston --create-home --shell /bin/sh houston
+
+COPY pyproject.toml uv.lock README.md /app/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --group dev
+
+COPY . /app
+
+RUN chown -R houston:houston /opt/venv
+
+WORKDIR /app/apps/api
+
+FROM api-base AS railway-api-web
+
+USER root
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/apps/api/private_media /usr/share/nginx/html \
+    && chown -R houston:houston /app/apps/api/private_media /usr/share/nginx/html
+
+COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
+COPY infra/docker/railway/nginx.conf /app/infra/docker/railway/nginx.conf
+COPY infra/docker/railway/start-api-web.sh /app/infra/docker/railway/start-api-web.sh
+
+RUN chmod +x /app/infra/docker/railway/start-api-web.sh
+
+WORKDIR /app/apps/api
+
+CMD ["/app/infra/docker/railway/start-api-web.sh"]

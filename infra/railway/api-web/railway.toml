@@ -1,0 +1,11 @@
+# Houston api-web — Railway prod-test V1
+# Wiring: Root Directory /, Config File /infra/railway/api-web/railway.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "infra/docker/railway/Dockerfile.api-web"
+
+[deploy]
+startCommand = "/app/infra/docker/railway/start-api-web.sh"
+healthcheckPath = "/api/v1/health/"
+preDeployCommand = "cd /app/apps/api && uv run python manage.py migrate"

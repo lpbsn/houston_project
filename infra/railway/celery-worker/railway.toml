@@ -1,0 +1,9 @@
+# Houston celery-worker — Railway prod-test V1 (mandatory)
+# Wiring: Root Directory /, Config File /infra/railway/celery-worker/railway.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "infra/docker/api/Dockerfile"
+
+[deploy]
+startCommand = "cd /app/apps/api && uv run celery -A config worker -l info -n houston-worker@%h"

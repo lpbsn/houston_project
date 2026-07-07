@@ -105,8 +105,11 @@ Legacy Django `/login/`, `/logout/`, and `/app/` routes still exist outside the 
 
 Prod-test V1 runs on Railway (Option A: one public `api-web` service, private worker/beat/postgres/redis). Cloudflare is out of scope for V1.
 
+* Deploy contract: [`docs/deploy/railway_deploy_contract.md`](docs/deploy/railway_deploy_contract.md)
+* Variables: [`docs/deploy/railway_variables.md`](docs/deploy/railway_variables.md)
+* Architecture: [`docs/deploy/railway_architecture.md`](docs/deploy/railway_architecture.md)
 * Decisions: [`docs/deploy/prod_test_decisions.md`](docs/deploy/prod_test_decisions.md)
-* Architecture and variables: [`docs/deploy/railway_architecture.md`](docs/deploy/railway_architecture.md)
+* Railway config wiring: [`infra/railway/README.md`](infra/railway/README.md)
 * Environment template: [`.env.prod-test.example`](.env.prod-test.example)
 
 Local development uses [`.env.example`](.env.example). Prod-test uses `.env.prod-test.example` as the contractual reference (set values in Railway, do not commit secrets).
