@@ -62,6 +62,8 @@ jobs:
         run: uv run ruff check .
       - name: Generate OpenAPI schema
         working-directory: apps/api
+        env:
+          HOUSTON_ENABLE_API_DOCS: "1"
         run: uv run python manage.py spectacular --file schema.yml
       - name: Verify schema.yml is committed
         run: git diff --exit-code apps/api/schema.yml
