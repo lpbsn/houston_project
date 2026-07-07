@@ -20,7 +20,7 @@ export default defineConfig({
         id: '/',
         name: 'Spore',
         short_name: 'Spore',
-        description: 'Houston — signalement opérationnel terrain.',
+        description: 'App terrain pour signaler, structurer et suivre les problèmes opérationnels.',
         lang: 'fr',
         start_url: '/',
         scope: '/',
@@ -50,6 +50,7 @@ export default defineConfig({
       },
       workbox: {
         runtimeCaching: [],
+        navigateFallbackDenylist: [/^\/api/, /^\/ws/],
       },
     }),
   ],

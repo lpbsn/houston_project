@@ -230,10 +230,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               La mise à jour des notifications a échoué.
             </p>
           ) : null}
-          <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-3.5">
-            <span className="text-sm text-[#1a1a1a]">Langue</span>
-            <span className={cn('text-sm', terrain.muted)}>Français</span>
-          </div>
         </TerrainCard>
       </div>
 
