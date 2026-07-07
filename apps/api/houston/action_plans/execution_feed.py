@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
+
+from django.utils import timezone
+
 from houston.action_plans.constants import ExecutionFeedViewMode
 from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursor,
@@ -38,7 +42,7 @@ def build_action_plan_execution_feed_page(
     view_mode: ExecutionFeedViewMode,
     page_size: int,
     cursor: ActionPlanExecutionFeedCursor | None = None,
-) -> tuple[list[ActionPlanExecution], bool, str | None]:
+) -> tuple[list[ActionPlanExecution], bool, str | None, datetime]:
     membership = _membership_for_action_plan_execution_feed(membership)
     ensure_visible_action_plan_executions_materialized(
         membership=membership,
@@ -49,14 +53,24 @@ def build_action_plan_execution_feed_page(
         view_mode=view_mode,
     )
     if cursor is not None:
-        sorted_qs = apply_action_plan_execution_feed_cursor(queryset, cursor)
+        as_of = cursor.as_of
+        sorted_qs = apply_action_plan_execution_feed_cursor(
+            queryset,
+            cursor,
+            membership=membership,
+        )
     else:
-        sorted_qs = apply_action_plan_execution_feed_sorting(queryset)
+        as_of = timezone.now()
+        sorted_qs = apply_action_plan_execution_feed_sorting(
+            queryset,
+            membership=membership,
+            as_of=as_of,
+        )
 
     candidates = list(sorted_qs[: page_size + 1])
     has_more = len(candidates) > page_size
     served = candidates[:page_size]
     next_cursor = None
     if has_more and served:
-        next_cursor = encode_action_plan_execution_feed_cursor(served[-1])
-    return served, has_more, next_cursor
+        next_cursor = encode_action_plan_execution_feed_cursor(served[-1], as_of=as_of)
+    return served, has_more, next_cursor, as_of

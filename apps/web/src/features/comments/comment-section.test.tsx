@@ -145,7 +145,7 @@ function openReplyComposer(threadIndex = 0) {
 }
 
 function submitReplyDraft(text = 'Ma réponse') {
-  fireEvent.change(screen.getByPlaceholderText('Répondre...'), {
+  fireEvent.change(screen.getByPlaceholderText(/Répondre à /), {
     target: { value: text },
   })
   const publishButtons = screen.getAllByLabelText('Publier le commentaire')
@@ -196,9 +196,11 @@ describe('CommentSection', () => {
 
     expect(screen.getByText('note signal héritée')).toBeTruthy()
     expect(screen.getByText('note execution')).toBeTruthy()
+    expect(screen.getAllByText('Signal')).toHaveLength(1)
+    expect(screen.queryByText('Plan')).toBeNull()
     expect(screen.getAllByLabelText('Répondre au commentaire')).toHaveLength(1)
-    expect(screen.getByText('Résolu')).toBeTruthy()
     expect(screen.getByLabelText('Marquer le commentaire comme non résolu')).toBeTruthy()
+    expect(screen.queryByLabelText('Marquer le commentaire comme résolu', { exact: true })).toBeNull()
   })
 
   it('keeps reply composer open and shows error on the failing thread', () => {
@@ -222,7 +224,7 @@ describe('CommentSection', () => {
     openReplyComposer()
     submitReplyDraft()
 
-    expect(screen.getByPlaceholderText('Répondre...')).toBeTruthy()
+    expect(screen.getByPlaceholderText(/Répondre à /)).toBeTruthy()
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByRole('alert').textContent).toBe('Erreur réponse thread A')
   })
@@ -252,7 +254,7 @@ describe('CommentSection', () => {
     const alerts = screen.queryAllByRole('alert')
     expect(alerts).toHaveLength(1)
     expect(alerts[0]?.textContent).toBe('Erreur réponse thread A')
-    expect(screen.getAllByPlaceholderText('Répondre...')).toHaveLength(2)
+    expect(screen.getAllByPlaceholderText(/Répondre à /)).toHaveLength(2)
   })
 
   it('does not show reply error in the root composer', () => {
@@ -312,7 +314,7 @@ describe('CommentSection', () => {
     openReplyComposer()
 
     expect(screen.getAllByRole('alert')).toHaveLength(1)
-    expect(screen.getByPlaceholderText('Répondre...')).toBeTruthy()
+    expect(screen.getByPlaceholderText(/Répondre à /)).toBeTruthy()
   })
 })
 

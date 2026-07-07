@@ -79,6 +79,20 @@ def test_create_ponctuel_with_tasks_only(owner_membership, business_unit):
     assert ActionPlanExecutionTask.objects.filter(action_plan_execution=execution).count() == 1
 
 
+def test_create_task_without_business_unit_defaults_to_pilot(owner_membership, business_unit):
+    plan, _execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Pilot default task plan",
+        tasks=[{"task": "Implicit pilot task", "position": 1}],
+        assignees=[],
+    )
+
+    task = ActionPlanTask.objects.get(action_plan=plan)
+    assert task.business_unit_id == business_unit.id
+
+
 def test_create_ponctuel_with_assignees_only(
     owner_membership,
     business_unit,
@@ -318,16 +332,39 @@ def test_manager_linked_signal_allows_in_scope_pilot(
 
 
 def test_create_catalog_plan_without_execution(owner_membership, business_unit):
-    with pytest.raises(ActionPlanValidationError, match="at least one task"):
-        create_action_plan(
-            establishment_id=owner_membership.establishment_id,
-            created_by=owner_membership,
-            pilot_business_unit_id=business_unit.id,
-            title="Catalog entry",
-            is_reusable=True,
-            catalog_status=CATALOG_STATUS_ACTIVE,
-            tasks=[],
-        )
+    plan = create_action_plan(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Catalog entry",
+        is_reusable=True,
+        catalog_status=CATALOG_STATUS_ACTIVE,
+        tasks=[],
+    )
+
+    assert plan.is_reusable is True
+    assert plan.catalog_status == CATALOG_STATUS_ACTIVE
+    assert ActionPlanTask.objects.filter(action_plan=plan).count() == 0
+
+
+def test_activate_catalog_plan_without_tasks(owner_membership, business_unit):
+    from houston.action_plans.constants import CATALOG_STATUS_INACTIVE
+    from houston.action_plans.services import activate_action_plan
+
+    plan = create_action_plan(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Inactive catalog entry",
+        is_reusable=True,
+        catalog_status=CATALOG_STATUS_INACTIVE,
+        tasks=[],
+    )
+
+    activated = activate_action_plan(action_plan=plan, actor=owner_membership)
+
+    assert activated.catalog_status == CATALOG_STATUS_ACTIVE
+    assert ActionPlanTask.objects.filter(action_plan=activated).count() == 0
 
 
 def test_create_inactive_reusable_without_tasks_allowed(owner_membership, business_unit):

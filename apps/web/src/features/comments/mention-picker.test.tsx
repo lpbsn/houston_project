@@ -33,6 +33,7 @@ describe('MentionPicker', () => {
             id: 'user-1',
             username: 'marie',
             email: 'marie@example.com',
+            business_unit_ids: [],
           },
         ]}
         isLoading={false}

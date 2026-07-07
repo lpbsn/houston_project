@@ -1,48 +1,38 @@
-import { TerrainCard } from '@/components/ui/terrain'
-
-import {
-  countActionPlanTreatedTasks,
-  formatActionPlanEndAtLabel,
-} from '../lib/action-plan-display'
 import type { ActionPlanExecutionDetail } from '../types'
-import { ActionPlanStatusBadge } from './action-plan-status-badge'
+import { ActionPlanExecutionDetailAssigneesSection } from './action-plan-execution-detail-assignees-section'
+import { ActionPlanExecutionDetailDeadlineSection } from './action-plan-execution-detail-deadline-section'
+import { ActionPlanExecutionDetailDescriptionSection } from './action-plan-execution-detail-description-section'
+import { ActionPlanExecutionDetailPoleSummarySection } from './action-plan-execution-detail-pole-summary-section'
+import { ActionPlanExecutionDetailTitleSection } from './action-plan-execution-detail-title-section'
+import { isActionPlanExecutionTerminal } from '../lib/action-plan-display'
 
 type ActionPlanExecutionDetailHeaderProps = {
   execution: ActionPlanExecutionDetail
   isOverdue: boolean
+  currentMembershipId?: string | null
 }
 
 export function ActionPlanExecutionDetailHeader({
   execution,
   isOverdue,
+  currentMembershipId,
 }: ActionPlanExecutionDetailHeaderProps) {
-  const treatedCount = countActionPlanTreatedTasks(execution.task_executions)
-  const totalCount = execution.task_executions.length
-  const endAtLabel = formatActionPlanEndAtLabel(execution.end_at)
+  const isTerminal = isActionPlanExecutionTerminal(execution.status)
 
   return (
-    <TerrainCard className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <h1 className="text-base font-semibold text-[#1a1a1a]">{execution.title}</h1>
-        <ActionPlanStatusBadge status={execution.status} />
-      </div>
-      {execution.description ? (
-        <p className="text-sm text-[#555]">{execution.description}</p>
-      ) : null}
-      <div className="flex flex-wrap gap-2 text-xs text-[#7D7B75]">
-        <span>Pôle pilote : {execution.pilot_business_unit.label}</span>
-        {totalCount > 0 ? (
-          <span>
-            Tâches : {treatedCount}/{totalCount}
-          </span>
-        ) : null}
-        {endAtLabel ? (
-          <span className={isOverdue ? 'text-[#E24B4A]' : undefined}>Échéance : {endAtLabel}</span>
-        ) : null}
-      </div>
-      {execution.signal_summary ? (
-        <p className="text-xs text-[#1B4FD8]">Signal lié : {execution.signal_summary.title}</p>
-      ) : null}
-    </TerrainCard>
+    <div className="flex flex-col gap-2.5">
+      <ActionPlanExecutionDetailTitleSection execution={execution} />
+      <ActionPlanExecutionDetailDeadlineSection
+        execution={execution}
+        isOverdue={isOverdue}
+        isTerminal={isTerminal}
+      />
+      <ActionPlanExecutionDetailAssigneesSection
+        execution={execution}
+        currentMembershipId={currentMembershipId}
+      />
+      <ActionPlanExecutionDetailDescriptionSection execution={execution} />
+      <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
+    </div>
   )
 }

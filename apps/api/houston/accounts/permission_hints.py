@@ -18,6 +18,7 @@ def build_bootstrap_permission_hints(
     from houston.establishments.permissions import (
         can_invite_memberships,
         can_manage_runtime_context,
+        can_view_team_memberships,
     )
 
     can_create_action_plan_hint = False
@@ -39,4 +40,5 @@ def build_bootstrap_permission_hints(
         "can_view_action_plan_catalog": can_view_action_plan_catalog(active_membership),
         "can_invite": can_invite_memberships(active_membership),
         "can_manage_runtime_config": can_manage_runtime_context(active_membership),
+        "can_view_team": can_view_team_memberships(active_membership),
     }

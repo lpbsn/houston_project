@@ -5,6 +5,7 @@ import {
   businessUnitTreeQueryKey,
   clearAuthState,
   fetchBootstrap,
+  membershipDetailQueryKey,
   membershipListQueryKey,
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
@@ -250,6 +251,9 @@ describe('applyRealtimeAccessEvent', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: membershipDetailQueryKey('est-1', 'mbr-1'),
+    })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: businessUnitTreeQueryKey('est-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({
@@ -280,6 +284,10 @@ describe('applyRealtimeAccessEvent', () => {
     )
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: membershipDetailQueryKey('est-1', 'mbr-other'),
+    })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],

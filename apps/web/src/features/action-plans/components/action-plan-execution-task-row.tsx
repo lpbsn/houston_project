@@ -1,18 +1,25 @@
-import { AlertCircle, Check, MoreVertical } from 'lucide-react'
+import { AlertCircle, Check, Minus } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
-import { formatActionPlanTaskStatusLabel } from '@/features/action-plans/lib/action-plan-display'
+import { FeedCardActionsButton } from '@/components/domain/feed-card-meta-row'
+import {
+  formatActionPlanTaskAssigneePoleLine,
+  formatActionPlanTaskDeadlineLabel,
+  formatActionPlanTaskStatusLabel,
+} from '@/features/action-plans/lib/action-plan-display'
 import type { ActionPlanTaskExecution } from '@/features/action-plans/types'
-import { terrainCardClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
+
+import { ActionPlanTaskDetailLayout } from './action-plan-task-detail-layout'
 
 type ActionPlanExecutionTaskRowProps = {
   task: ActionPlanTaskExecution
-  canShowActions: boolean
+  canShowMarkDone: boolean
+  canShowUnmarkDone: boolean
+  canShowSecondaryActions: boolean
   isMutationPending: boolean
   onMarkDone: () => void
-  onCreateObservation: () => void
-  onSkipRequest: () => void
+  onUnmarkDone: () => void
+  onOpenActions: () => void
 }
 
 function TaskCheckbox({
@@ -26,9 +33,25 @@ function TaskCheckbox({
   onClick?: () => void
   ariaLabel: string
 }) {
+  if (checked && onClick) {
+    return (
+      <button
+        type="button"
+        className="flex h-10 w-10 shrink-0 items-center justify-center disabled:opacity-50"
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#1D9E75]">
+          <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+        </span>
+      </button>
+    )
+  }
+
   if (checked) {
     return (
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center" aria-hidden>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
         <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#1D9E75]">
           <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
         </span>
@@ -40,7 +63,7 @@ function TaskCheckbox({
     return (
       <button
         type="button"
-        className="flex h-11 w-11 shrink-0 items-center justify-center disabled:opacity-50"
+        className="flex h-10 w-10 shrink-0 items-center justify-center disabled:opacity-50"
         aria-label={ariaLabel}
         disabled={disabled}
         onClick={onClick}
@@ -51,7 +74,7 @@ function TaskCheckbox({
   }
 
   return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center" aria-hidden>
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
       <span className="h-5 w-5 rounded-md border-2 border-[#D4D2CB] bg-white" />
     </span>
   )
@@ -59,93 +82,97 @@ function TaskCheckbox({
 
 export function ActionPlanExecutionTaskRow({
   task,
-  canShowActions,
+  canShowMarkDone,
+  canShowUnmarkDone,
+  canShowSecondaryActions,
   isMutationPending,
   onMarkDone,
-  onCreateObservation,
-  onSkipRequest,
+  onUnmarkDone,
+  onOpenActions,
 }: ActionPlanExecutionTaskRowProps) {
   const isDone = task.status === 'done'
   const isPending = task.status === 'pending'
   const isObservationCreated = task.status === 'observation_created'
   const isSkipped = task.status === 'skipped'
-  const showPendingActions = isPending && canShowActions
+  const showMarkDone = isPending && canShowMarkDone
+  const showUnmarkDone = isDone && canShowUnmarkDone
+  const showSecondaryActions = isPending && canShowSecondaryActions
+  const poleLabel = task.business_unit?.label ?? null
+  const deadlineLabel = formatActionPlanTaskDeadlineLabel(task.deadline_at)
+  const assigneePoleLine = formatActionPlanTaskAssigneePoleLine({
+    assigneeDisplayName: task.assigned_display_name,
+    poleLabel,
+  })
+
+  const statusIndicator = isObservationCreated ? (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
+      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#E24B4A]">
+        <AlertCircle className="h-3.5 w-3.5 text-white" />
+      </span>
+    </span>
+  ) : isSkipped ? (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
+      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#D4D2CB] bg-[#E8E6DF]">
+        <Minus className="h-3 w-3 text-[#7D7B75]" strokeWidth={2.5} />
+      </span>
+    </span>
+  ) : (
+    <TaskCheckbox
+      checked={isDone}
+      disabled={(!showMarkDone && !showUnmarkDone) || isMutationPending}
+      onClick={showMarkDone ? onMarkDone : showUnmarkDone ? onUnmarkDone : undefined}
+      ariaLabel={
+        showUnmarkDone
+          ? `Marquer « ${task.task} » comme non terminée`
+          : `Marquer « ${task.task} » comme terminée`
+      }
+    />
+  )
 
   return (
-    <div
+    <ActionPlanTaskDetailLayout
       className={cn(
-        terrainCardClassName('px-3 py-3'),
-        isDone && 'opacity-70',
-        isSkipped && 'opacity-60',
-        isObservationCreated && 'border-[#f0d4cf] bg-[#fff5f3]',
+        isDone && 'bg-[#F8FBF9]',
+        isSkipped && 'bg-[#F5F4F0]',
+        isObservationCreated && 'rounded-lg border border-[#f0d4cf] bg-[#fff5f3]',
       )}
-    >
-      <div className="flex items-start gap-1">
-        {isObservationCreated ? (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center" aria-hidden>
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#E24B4A]">
-              <AlertCircle className="h-3.5 w-3.5 text-white" />
-            </span>
-          </span>
-        ) : (
-          <TaskCheckbox
-            checked={isDone}
-            disabled={!showPendingActions || isMutationPending}
-            onClick={showPendingActions ? onMarkDone : undefined}
-            ariaLabel={`Marquer « ${task.task} » comme terminée`}
+      leading={statusIndicator}
+      title={
+        <p
+          className={cn(
+            'text-sm font-medium text-[#1a1a1a]',
+            isDone && 'text-[#7D7B75] line-through decoration-[#B8B6B0]',
+            isSkipped && 'text-[#7D7B75]',
+          )}
+        >
+          {task.task}
+        </p>
+      }
+      meta={assigneePoleLine}
+      actions={
+        showSecondaryActions ? (
+          <FeedCardActionsButton
+            ariaLabel="Actions sur la tâche"
+            disabled={isMutationPending}
+            onClick={onOpenActions}
           />
-        )}
-
-        <div className="min-w-0 flex-1 pt-2">
-          <p className="text-sm font-medium text-[#1a1a1a]">{task.task}</p>
-          {!isPending ? (
-            <p className="mt-0.5 text-xs text-[#7D7B75]">
-              {formatActionPlanTaskStatusLabel(task.status)}
-            </p>
-          ) : null}
-        </div>
-
-        {showPendingActions ? (
-          <div className="flex shrink-0 items-center">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-11 w-11 rounded-xl"
-              aria-label="Actions sur la tâche"
-              disabled={isMutationPending}
-              onClick={onSkipRequest}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : null}
-      </div>
-
-      {showPendingActions ? (
-        <div className="mt-2 flex gap-2 pl-12">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-9 flex-1 rounded-xl text-xs"
-            disabled={isMutationPending}
-            onClick={onCreateObservation}
+        ) : null
+      }
+      deadline={deadlineLabel ? `Échéance : ${deadlineLabel}` : null}
+      status={
+        !isPending ? (
+          <span
+            className={cn(
+              isDone && 'text-[#1D9E75]',
+              isSkipped && 'text-[#7D7B75]',
+              isObservationCreated && 'text-[#E24B4A]',
+            )}
           >
-            Observation
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-9 flex-1 rounded-xl text-xs"
-            disabled={isMutationPending}
-            onClick={onSkipRequest}
-          >
-            Passer
-          </Button>
-        </div>
-      ) : null}
-    </div>
+            {formatActionPlanTaskStatusLabel(task.status)}
+          </span>
+        ) : null
+      }
+      description={task.description || null}
+    />
   )
 }

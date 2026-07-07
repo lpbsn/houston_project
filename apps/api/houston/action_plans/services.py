@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -58,9 +59,11 @@ from houston.action_plans.permissions import (
     staff_catalog_action_plan_in_scope,
 )
 from houston.establishments.membership_scope import (
+    membership_business_unit_scope_ids,
     membership_covers_business_unit_including_admins,
 )
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.observations.exceptions import ObservationValidationError
 from houston.observations.models import Observation
 from houston.observations.services import submit_observation
@@ -74,6 +77,18 @@ class ValidatedAssigneePayload:
     start_at: datetime | None = None
     visible_from: datetime | None = None
     end_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class AssigneeChronologyDefaults:
+    start_at: datetime | None = None
+    visible_from: datetime | None = None
+    end_at: datetime | None = None
+
+
+def _membership_display_name(membership: EstablishmentMembership) -> str:
+    user = membership.user
+    return user.get_full_name() or user.email or user.username
 
 
 def _normalize_skipped_reason(skipped_reason: str | None) -> str | None:
@@ -308,6 +323,13 @@ def _normalize_task_text(task: str) -> str:
     return normalized
 
 
+def _normalize_task_description(description: str | None) -> str:
+    normalized = (description or "").strip()
+    if len(normalized) > ACTION_PLAN_DESCRIPTION_MAX_LENGTH:
+        raise ActionPlanValidationError("Task description is too long.")
+    return normalized
+
+
 def _validate_membership_in_establishment(
     *,
     establishment_id: uuid.UUID,
@@ -347,10 +369,68 @@ def _validate_assignee_covers_business_unit(
         raise ActionPlanValidationError("Assignee is out of scope for the business unit.")
 
 
+def _resolve_task_business_unit(
+    *,
+    establishment_id: uuid.UUID,
+    task_item: dict,
+    assigned_membership: EstablishmentMembership | None,
+    pilot_business_unit: BusinessUnit | None,
+) -> BusinessUnit:
+    business_unit_id = task_item.get("business_unit_id")
+
+    if assigned_membership is not None:
+        if assigned_membership.role in ADMIN_ROLES:
+            if business_unit_id is not None:
+                return _validate_business_unit_in_establishment(
+                    establishment_id=establishment_id,
+                    business_unit_id=business_unit_id,
+                )
+            if pilot_business_unit is not None:
+                return pilot_business_unit
+            raise ActionPlanValidationError("Task business unit is required.")
+
+        assignee_scope_ids = membership_business_unit_scope_ids(assigned_membership)
+        if business_unit_id is None:
+            if len(assignee_scope_ids) == 1:
+                business_unit_id = next(iter(assignee_scope_ids))
+            elif len(assignee_scope_ids) > 1:
+                raise ActionPlanValidationError(
+                    "Task business unit is required when assignee has multiple scopes."
+                )
+            elif pilot_business_unit is not None:
+                business_unit_id = pilot_business_unit.id
+            else:
+                raise ActionPlanValidationError("Task business unit is required.")
+        elif assignee_scope_ids and business_unit_id not in assignee_scope_ids:
+            raise ActionPlanValidationError("Assignee is out of scope for the business unit.")
+
+        business_unit = _validate_business_unit_in_establishment(
+            establishment_id=establishment_id,
+            business_unit_id=business_unit_id,
+        )
+        _validate_assignee_covers_business_unit(
+            membership=assigned_membership,
+            business_unit=business_unit,
+        )
+        return business_unit
+
+    if business_unit_id is None:
+        if pilot_business_unit is None:
+            raise ActionPlanValidationError("Task business unit is required.")
+        return pilot_business_unit
+
+    return _validate_business_unit_in_establishment(
+        establishment_id=establishment_id,
+        business_unit_id=business_unit_id,
+    )
+
+
 def _validate_task_payloads(
     *,
     establishment_id: uuid.UUID,
     tasks: list[dict],
+    pilot_business_unit: BusinessUnit | None = None,
+    actor: EstablishmentMembership | None = None,
 ) -> list[dict]:
     if len(tasks) > MAX_TASKS_PER_PLAN:
         raise ActionPlanValidationError("Too many tasks.")
@@ -370,16 +450,32 @@ def _validate_task_payloads(
             raise ActionPlanValidationError("Duplicate task positions are not allowed.")
         positions.add(position)
 
-        business_unit_id = task_item.get("business_unit_id")
-        if business_unit_id is None:
-            raise ActionPlanValidationError("Task business unit is required.")
-        business_unit = _validate_business_unit_in_establishment(
+        assigned_membership = None
+        assigned_membership_id = task_item.get("assigned_membership_id")
+        if assigned_membership_id is not None:
+            assigned_membership = _validate_membership_in_establishment(
+                establishment_id=establishment_id,
+                membership_id=assigned_membership_id,
+            )
+        business_unit = _resolve_task_business_unit(
             establishment_id=establishment_id,
-            business_unit_id=business_unit_id,
+            task_item=task_item,
+            assigned_membership=assigned_membership,
+            pilot_business_unit=pilot_business_unit,
         )
+        if (
+            actor is not None
+            and assigned_membership is not None
+            and actor.role != EstablishmentMembership.Role.STAFF
+            and not can_assign_to_execution_business_unit(actor, business_unit=business_unit)
+        ):
+            raise ActionPlanPermissionError("Not allowed to assign members to this business unit.")
         validated.append(
             {
                 "task": _normalize_task_text(str(task_item.get("task", ""))),
+                "description": _normalize_task_description(task_item.get("description", "")),
+                "deadline_at": task_item.get("deadline_at"),
+                "assigned_membership": assigned_membership,
                 "business_unit": business_unit,
                 "position": position,
             }
@@ -432,6 +528,132 @@ def _validate_assignee_payloads(
             )
         )
     return validated
+
+
+def _resolve_merge_chronology(
+    *,
+    use_shared_chronology: bool,
+    start_at: datetime | None,
+    end_at: datetime | None,
+    visible_from: datetime | None,
+    validated_assignees: list[ValidatedAssigneePayload],
+) -> AssigneeChronologyDefaults:
+    chronology_values = (start_at, end_at, visible_from)
+    if use_shared_chronology and any(value is not None for value in chronology_values):
+        return AssigneeChronologyDefaults(
+            start_at=start_at,
+            end_at=end_at,
+            visible_from=visible_from,
+        )
+    if validated_assignees:
+        first = validated_assignees[0]
+        return AssigneeChronologyDefaults(
+            start_at=first.start_at,
+            end_at=first.end_at,
+            visible_from=first.visible_from,
+        )
+    return AssigneeChronologyDefaults()
+
+
+def _merge_validated_task_assignees_into_assignee_payloads(
+    *,
+    validated_tasks: list[dict],
+    assignee_payloads: list[dict],
+    chronology: AssigneeChronologyDefaults,
+) -> list[dict]:
+    seen_membership_ids = {
+        item.get("membership_id")
+        for item in assignee_payloads
+        if isinstance(item, dict) and item.get("membership_id") is not None
+    }
+    merged = list(assignee_payloads)
+    for task_item in validated_tasks:
+        assigned_membership = task_item.get("assigned_membership")
+        if assigned_membership is None:
+            continue
+        if assigned_membership.id in seen_membership_ids:
+            continue
+        seen_membership_ids.add(assigned_membership.id)
+        merged.append(
+            {
+                "membership_id": assigned_membership.id,
+                "business_unit_id": task_item["business_unit"].id,
+                "start_at": chronology.start_at,
+                "visible_from": chronology.visible_from,
+                "end_at": chronology.end_at,
+            }
+        )
+    return merged
+
+
+def _merge_plan_task_assignees_into_assignee_payloads(
+    *,
+    plan_tasks: list[ActionPlanTask],
+    assignee_payloads: list[dict],
+    chronology: AssigneeChronologyDefaults,
+) -> list[dict]:
+    seen_membership_ids = {
+        item.get("membership_id")
+        for item in assignee_payloads
+        if isinstance(item, dict) and item.get("membership_id") is not None
+    }
+    merged = list(assignee_payloads)
+    for plan_task in plan_tasks:
+        if plan_task.assigned_membership_id is None:
+            continue
+        if plan_task.assigned_membership_id in seen_membership_ids:
+            continue
+        seen_membership_ids.add(plan_task.assigned_membership_id)
+        merged.append(
+            {
+                "membership_id": plan_task.assigned_membership_id,
+                "business_unit_id": plan_task.business_unit_id,
+                "start_at": chronology.start_at,
+                "visible_from": chronology.visible_from,
+                "end_at": chronology.end_at,
+            }
+        )
+    return merged
+
+
+def _execution_task_snapshot_fields(*, plan_task: ActionPlanTask) -> dict:
+    assigned_display_name = ""
+    if plan_task.assigned_membership is not None:
+        assigned_display_name = _membership_display_name(plan_task.assigned_membership)
+    return {
+        "description": plan_task.description,
+        "deadline_at": plan_task.deadline_at,
+        "assigned_membership": plan_task.assigned_membership,
+        "assigned_display_name": assigned_display_name,
+    }
+
+
+def merge_plan_task_assignees_into_validated_assignees(
+    *,
+    establishment_id: uuid.UUID,
+    plan_tasks: list[ActionPlanTask],
+    assignees: list[ValidatedAssigneePayload],
+    chronology: AssigneeChronologyDefaults,
+) -> list[ValidatedAssigneePayload]:
+    assignee_payloads = [
+        {
+            "membership_id": assignee.membership.id,
+            "business_unit_id": assignee.business_unit.id,
+            "start_at": assignee.start_at,
+            "visible_from": assignee.visible_from,
+            "end_at": assignee.end_at,
+        }
+        for assignee in assignees
+    ]
+    merged_payloads = _merge_plan_task_assignees_into_assignee_payloads(
+        plan_tasks=plan_tasks,
+        assignee_payloads=assignee_payloads,
+        chronology=chronology,
+    )
+    return _validate_assignee_payloads(
+        establishment_id=establishment_id,
+        assignees=merged_payloads,
+    )
 
 
 def _assert_staff_self_assignee_payload(
@@ -556,6 +778,9 @@ def _create_plan_tasks(
                 action_plan=action_plan,
                 business_unit=task_item["business_unit"],
                 task=task_item["task"],
+                description=task_item["description"],
+                deadline_at=task_item.get("deadline_at"),
+                assigned_membership=task_item.get("assigned_membership"),
                 position=task_item["position"],
             )
             for task_item in validated_tasks
@@ -638,6 +863,7 @@ def _materialize_execution_structure(
                     task=plan_task.task,
                     position=plan_task.position,
                     status=TASK_STATUS_PENDING,
+                    **_execution_task_snapshot_fields(plan_task=plan_task),
                 )
                 for plan_task in plan_tasks
             ]
@@ -694,23 +920,6 @@ def _lock_execution_for_transition(*, execution_id: uuid.UUID) -> ActionPlanExec
     return ActionPlanExecution.objects.select_for_update().get(pk=execution_id)
 
 
-def _validate_active_reusable_has_tasks(
-    *,
-    is_reusable: bool,
-    catalog_status: str | None,
-    tasks: list,
-) -> None:
-    if is_reusable and catalog_status == CATALOG_STATUS_ACTIVE and not tasks:
-        raise ActionPlanValidationError("Action plan must have at least one task to activate.")
-
-
-def _validate_active_catalog_has_tasks(*, action_plan: ActionPlan) -> None:
-    if not action_plan.is_reusable:
-        raise ActionPlanValidationError("Only reusable action plans can be activated.")
-    if not ActionPlanTask.objects.filter(action_plan=action_plan).exists():
-        raise ActionPlanValidationError("Action plan must have at least one task to activate.")
-
-
 @transaction.atomic
 def update_action_plan(
     *,
@@ -718,6 +927,8 @@ def update_action_plan(
     actor: EstablishmentMembership,
     title: str | None = None,
     description: str | None = None,
+    requires_validation: bool | None = None,
+    tasks: list[dict] | None = None,
 ) -> ActionPlan:
     if not can_manage_action_plan(actor, action_plan):
         raise ActionPlanPermissionError("Not allowed to update this action plan.")
@@ -729,11 +940,46 @@ def update_action_plan(
     if description is not None:
         action_plan.description = _normalize_description(description)
         update_fields.append("description")
+    if requires_validation is not None:
+        action_plan.requires_validation = requires_validation
+        update_fields.append("requires_validation")
     action_plan.save(update_fields=update_fields)
+    if tasks is not None:
+        replace_action_plan_tasks(
+            action_plan=action_plan,
+            actor=actor,
+            tasks=tasks,
+        )
     from houston.action_plans.realtime import schedule_action_plan_invalidation
 
     schedule_action_plan_invalidation(action_plan=action_plan, reason="action_plan.updated")
     return action_plan
+
+
+@transaction.atomic
+def replace_action_plan_tasks(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+    tasks: list[dict],
+) -> list[ActionPlanTask]:
+    if not can_manage_action_plan(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to update this action plan.")
+
+    validated_tasks = _validate_task_payloads(
+        establishment_id=action_plan.establishment_id,
+        tasks=tasks,
+        pilot_business_unit=action_plan.pilot_business_unit,
+        actor=actor,
+    )
+    _validate_cross_pole_tasks_allowed(
+        actor=actor,
+        pilot_business_unit=action_plan.pilot_business_unit,
+        validated_tasks=validated_tasks,
+        creation_context="direct",
+    )
+    ActionPlanTask.objects.filter(action_plan=action_plan).delete()
+    return _create_plan_tasks(action_plan=action_plan, validated_tasks=validated_tasks)
 
 
 @transaction.atomic
@@ -745,7 +991,8 @@ def activate_action_plan(
     if not can_manage_action_plan(actor, action_plan):
         raise ActionPlanPermissionError("Not allowed to activate this action plan.")
 
-    _validate_active_catalog_has_tasks(action_plan=action_plan)
+    if not action_plan.is_reusable:
+        raise ActionPlanValidationError("Only reusable action plans can be activated.")
     action_plan.catalog_status = CATALOG_STATUS_ACTIVE
     action_plan.save(update_fields=["catalog_status", "updated_at"])
     from houston.action_plans.realtime import schedule_action_plan_invalidation
@@ -802,17 +1049,14 @@ def create_action_plan(
     validated_tasks = _validate_task_payloads(
         establishment_id=establishment_id,
         tasks=tasks or [],
+        pilot_business_unit=pilot_business_unit,
+        actor=created_by,
     )
     _validate_cross_pole_tasks_allowed(
         actor=created_by,
         pilot_business_unit=pilot_business_unit,
         validated_tasks=validated_tasks,
         creation_context="direct",
-    )
-    _validate_active_reusable_has_tasks(
-        is_reusable=is_reusable,
-        catalog_status=catalog_status,
-        tasks=validated_tasks,
     )
 
     action_plan = ActionPlan.objects.create(
@@ -859,11 +1103,35 @@ def create_action_plan_with_execution(
     validated_tasks = _validate_task_payloads(
         establishment_id=establishment_id,
         tasks=tasks or [],
+        pilot_business_unit=pilot_business_unit,
+        actor=created_by,
     )
-    validated_assignees = _validate_assignee_payloads(
-        establishment_id=establishment_id,
-        assignees=assignees or [],
-    )
+    if created_by.role == EstablishmentMembership.Role.STAFF:
+        validated_assignees = _validate_assignee_payloads(
+            establishment_id=establishment_id,
+            assignees=assignees or [],
+        )
+    else:
+        initial_assignees = _validate_assignee_payloads(
+            establishment_id=establishment_id,
+            assignees=assignees or [],
+        )
+        chronology = _resolve_merge_chronology(
+            use_shared_chronology=use_shared_chronology,
+            start_at=start_at,
+            end_at=end_at,
+            visible_from=visible_from,
+            validated_assignees=initial_assignees,
+        )
+        merged_assignee_payloads = _merge_validated_task_assignees_into_assignee_payloads(
+            validated_tasks=validated_tasks,
+            assignee_payloads=assignees or [],
+            chronology=chronology,
+        )
+        validated_assignees = _validate_assignee_payloads(
+            establishment_id=establishment_id,
+            assignees=merged_assignee_payloads,
+        )
     _validate_execution_has_content(
         task_count=len(validated_tasks),
         assignee_count=len(validated_assignees),
@@ -1003,7 +1271,15 @@ def create_execution_from_action_plan(
             "responsible_business_unit",
             "activity_subject",
         )
-        .prefetch_related("tasks")
+        .prefetch_related(
+            Prefetch(
+                "tasks",
+                queryset=ActionPlanTask.objects.select_related(
+                    "assigned_membership__user",
+                    "business_unit",
+                ).order_by("position", "created_at"),
+            )
+        )
         .get(pk=action_plan.id)
     )
 
@@ -1025,9 +1301,25 @@ def create_execution_from_action_plan(
             assignees=assignees,
         )
     else:
-        validated_assignees = _validate_assignee_payloads(
+        initial_assignees = _validate_assignee_payloads(
             establishment_id=action_plan.establishment_id,
             assignees=assignees or [],
+        )
+        chronology = _resolve_merge_chronology(
+            use_shared_chronology=use_shared_chronology,
+            start_at=start_at,
+            end_at=end_at,
+            visible_from=visible_from,
+            validated_assignees=initial_assignees,
+        )
+        merged_assignee_payloads = _merge_plan_task_assignees_into_assignee_payloads(
+            plan_tasks=plan_tasks,
+            assignee_payloads=assignees or [],
+            chronology=chronology,
+        )
+        validated_assignees = _validate_assignee_payloads(
+            establishment_id=action_plan.establishment_id,
+            assignees=merged_assignee_payloads,
         )
         _validate_actor_can_assign_poles(
             actor=actor,
@@ -1113,7 +1405,10 @@ def mark_action_plan_execution_done(
 
     execution.status = EXECUTION_STATUS_DONE
     execution.save(update_fields=["status", "marked_done_at", "last_activity_at", "updated_at"])
+    from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    delete_action_plan_execution_feed_pins(execution_id=execution.id)
 
     schedule_action_plan_execution_invalidation(
         execution=execution,
@@ -1140,7 +1435,10 @@ def validate_action_plan_execution(
     execution.validated_at = now
     execution.last_activity_at = now
     execution.save(update_fields=["status", "validated_at", "last_activity_at", "updated_at"])
+    from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+
+    delete_action_plan_execution_feed_pins(execution_id=execution.id)
 
     schedule_action_plan_execution_invalidation(
         execution=execution,
@@ -1226,11 +1524,14 @@ def cancel_action_plan_execution(
             "updated_at",
         ]
     )
+    from houston.action_plans.feed_pin_services import delete_action_plan_execution_feed_pins
     _sync_linked_signal_after_execution_change(execution=execution)
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
     from houston.notifications.scheduling import (
         schedule_action_plan_execution_canceled_notification,
     )
+
+    delete_action_plan_execution_feed_pins(execution_id=execution.id)
 
     schedule_action_plan_execution_invalidation(
         execution=execution,
@@ -1261,6 +1562,32 @@ def mark_execution_task_done(
     now = timezone.now()
     task_execution.status = TASK_STATUS_DONE
     task_execution.completed_at = now
+    task_execution.save(update_fields=["status", "completed_at", "updated_at"])
+    touch_execution_activity(execution=execution, at=now)
+    from houston.action_plans.realtime import schedule_action_plan_execution_task_invalidation
+
+    schedule_action_plan_execution_task_invalidation(task=task_execution)
+    return task_execution
+
+
+@transaction.atomic
+def mark_execution_task_pending(
+    *,
+    task_execution: ActionPlanExecutionTask,
+    actor: EstablishmentMembership,
+) -> ActionPlanExecutionTask:
+    task_execution = _lock_execution_task_for_transition(task_execution_id=task_execution.id)
+    execution = task_execution.action_plan_execution
+    if not can_execute_action_plan_task(actor, task_execution):
+        raise ActionPlanPermissionError("Not allowed to execute this action plan task.")
+    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+        raise ActionPlanValidationError("Action plan execution is not active.")
+    if task_execution.status != TASK_STATUS_DONE:
+        raise ActionPlanValidationError("Task cannot be marked pending in its current state.")
+
+    now = timezone.now()
+    task_execution.status = TASK_STATUS_PENDING
+    task_execution.completed_at = None
     task_execution.save(update_fields=["status", "completed_at", "updated_at"])
     touch_execution_activity(execution=execution, at=now)
     from houston.action_plans.realtime import schedule_action_plan_execution_task_invalidation

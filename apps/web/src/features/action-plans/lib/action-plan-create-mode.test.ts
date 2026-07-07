@@ -137,4 +137,26 @@ describe('resolveActionPlanCreateModeConfig', () => {
       }).canAccess,
     ).toBe(false)
   })
+
+  it('returns template edit config without library or planning sections', () => {
+    expect(
+      resolveActionPlanCreateModeConfig({
+        mode: 'template-edit',
+        role: 'manager',
+        canCreateActionPlan: true,
+      }),
+    ).toEqual({
+      canAccess: true,
+      showLibraryToggle: false,
+      showValidationToggle: true,
+      showAssigneeSheet: false,
+      showStaffSelfAssignee: false,
+      showScheduleSection: false,
+      filterBusinessUnitsByScope: true,
+      canDefineCrossPoleTasks: false,
+      lockPilotBusinessUnit: true,
+      defaultRequiresValidation: true,
+      defaultSaveToLibrary: false,
+    })
+  })
 })

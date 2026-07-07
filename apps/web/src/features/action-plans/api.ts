@@ -16,6 +16,7 @@ import type {
   ActionPlanExecutionFeedItem,
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
+  ActionPlanExecutionPinState,
   ActionPlanListItem,
   ActionPlanScheduleCreateRequest,
   ActionPlanScheduleDetail,
@@ -400,6 +401,24 @@ export async function markActionPlanTaskDone(
   return assertActionPlanData<ActionPlanTaskExecution>(result)
 }
 
+export async function markActionPlanTaskPending(
+  establishmentId: string,
+  taskExecutionId: string,
+): Promise<ActionPlanTaskExecution> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-pending/',
+        {
+          params: taskExecutionPath(establishmentId, taskExecutionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanTaskExecution>(result)
+}
+
 export async function skipActionPlanTask(
   establishmentId: string,
   taskExecutionId: string,
@@ -438,4 +457,40 @@ export async function createObservationFromActionPlanTask(
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanTaskCreateObservationResponse>(result)
+}
+
+export async function pinActionPlanExecution(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionPinState> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionPinState>(result)
+}
+
+export async function unpinActionPlanExecution(
+  establishmentId: string,
+  executionId: string,
+): Promise<ActionPlanExecutionPinState> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/',
+        {
+          params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionPinState>(result)
 }

@@ -159,17 +159,49 @@ def build_assignee_payload(*, membership, business_unit) -> dict:
     }
 
 
-def build_task_payload(*, task: str, business_unit, position: int = 1) -> dict:
-    return {
+def build_task_payload(
+    *,
+    task: str,
+    business_unit,
+    position: int = 1,
+    description: str = "",
+    deadline_at=None,
+    assigned_membership=None,
+) -> dict:
+    payload = {
         "task": task,
         "business_unit_id": business_unit.id,
         "position": position,
+        "description": description,
+        "deadline_at": deadline_at,
     }
+    if assigned_membership is not None:
+        payload["assigned_membership_id"] = assigned_membership.id
+    return payload
 
 
-def api_task_payload(*, task: str, business_unit, position: int = 1) -> dict:
-    payload = build_task_payload(task=task, business_unit=business_unit, position=position)
+def api_task_payload(
+    *,
+    task: str,
+    business_unit,
+    position: int = 1,
+    description: str = "",
+    deadline_at=None,
+    assigned_membership=None,
+) -> dict:
+    payload = build_task_payload(
+        task=task,
+        business_unit=business_unit,
+        position=position,
+        description=description,
+        deadline_at=deadline_at,
+        assigned_membership=assigned_membership,
+    )
     payload["business_unit_id"] = str(payload["business_unit_id"])
+    if payload.get("assigned_membership_id") is not None:
+        payload["assigned_membership_id"] = str(payload["assigned_membership_id"])
+    if payload.get("deadline_at") is not None:
+        payload["deadline_at"] = payload["deadline_at"].isoformat().replace("+00:00", "Z")
     return payload
 
 

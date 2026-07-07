@@ -41,6 +41,19 @@ class UserPublicSerializer(serializers.Serializer):
     username = serializers.CharField()
     email = serializers.EmailField(allow_null=True)
     identity_type = serializers.CharField()
+    first_name = serializers.CharField(allow_blank=True)
+    last_name = serializers.CharField(allow_blank=True)
+
+
+class UserProfileUpdateRequestSerializer(serializers.Serializer):
+    first_name = serializers.CharField(trim_whitespace=True, required=False, allow_blank=True)
+    last_name = serializers.CharField(trim_whitespace=True, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("At least one field must be provided.")
+        return attrs
 
 
 @extend_schema_serializer(component_name="AuthMembershipScopeItem")
@@ -83,6 +96,7 @@ class BootstrapPermissionHintsSerializer(serializers.Serializer):
     can_view_action_plan_catalog = serializers.BooleanField()
     can_invite = serializers.BooleanField()
     can_manage_runtime_config = serializers.BooleanField()
+    can_view_team = serializers.BooleanField()
 
 
 class BootstrapResponseSerializer(serializers.Serializer):

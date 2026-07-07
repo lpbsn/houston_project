@@ -20,6 +20,7 @@ from houston.action_plans.api.serializers import (
     ActionPlanCreateRequestSerializer,
     ActionPlanDetailSerializer,
     ActionPlanExecutionDetailSerializer,
+    ActionPlanExecutionPinStateSerializer,
     ActionPlanListItemSerializer,
     ActionPlanScheduleCreateRequestSerializer,
     ActionPlanScheduleDetailSerializer,
@@ -47,6 +48,10 @@ from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursorError,
     parse_action_plan_execution_feed_cursor,
 )
+from houston.action_plans.feed_pin_services import (
+    pin_action_plan_execution_for_membership,
+    unpin_action_plan_execution_for_membership,
+)
 from houston.action_plans.feed_serializers import (
     ActionPlanExecutionFeedResponseSerializer,
     serialize_action_plan_execution_feed_item,
@@ -58,6 +63,7 @@ from houston.action_plans.schedule_services import (
     update_action_plan_schedule,
 )
 from houston.action_plans.selectors import (
+    action_plan_execution_overdue,
     catalog_action_plans_for_list,
     get_action_plan_execution_for_detail,
     get_action_plan_execution_task_for_command,
@@ -75,6 +81,7 @@ from houston.action_plans.services import (
     deactivate_action_plan,
     mark_action_plan_execution_done,
     mark_execution_task_done,
+    mark_execution_task_pending,
     reopen_action_plan_execution,
     skip_execution_task,
     update_action_plan,
@@ -147,6 +154,9 @@ def _task_payloads(tasks_data: list[dict]) -> list[dict]:
             "task": item["task"],
             "business_unit_id": item["business_unit_id"],
             "position": item.get("position"),
+            "description": item.get("description", ""),
+            "deadline_at": item.get("deadline_at"),
+            "assigned_membership_id": item.get("assigned_membership_id"),
         }
         for item in tasks_data
     ]
@@ -282,6 +292,10 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
+        description=(
+            "Creates an action plan. Reusable catalog entries may omit tasks; "
+            "execution or schedule flows require at least one task or assignee."
+        ),
     )
     def post(self, request, establishment_id):
         membership = _resolve_membership(request, self.establishment_id)
@@ -438,11 +452,14 @@ class ActionPlanDetailView(EstablishmentScopedActionPlanMixin, APIView):
         body.is_valid(raise_exception=True)
 
         try:
+            tasks_data = body.validated_data.get("tasks")
             action_plan = update_action_plan(
                 action_plan=action_plan,
                 actor=membership,
                 title=body.validated_data.get("title"),
                 description=body.validated_data.get("description"),
+                requires_validation=body.validated_data.get("requires_validation"),
+                tasks=_task_payloads(tasks_data) if tasks_data is not None else None,
             )
         except (ActionPlanPermissionError, ActionPlanValidationError) as exc:
             return _action_plan_error_response(exc)
@@ -749,6 +766,81 @@ class ActionPlanExecutionCancelView(EstablishmentScopedActionPlanMixin, APIView)
         )
 
 
+def _execution_feed_pin_response(
+    *,
+    request,
+    establishment_id,
+    execution_id,
+    pin: bool,
+) -> Response:
+    membership = _resolve_membership(request, establishment_id)
+    if isinstance(membership, Response):
+        return membership
+
+    execution_uuid = uuid.UUID(str(execution_id))
+    try:
+        if pin:
+            pin_action_plan_execution_for_membership(
+                membership=membership,
+                execution_id=execution_uuid,
+            )
+            payload = {"is_pinned": True}
+        else:
+            unpin_action_plan_execution_for_membership(
+                membership=membership,
+                execution_id=execution_uuid,
+            )
+            payload = {"is_pinned": False}
+    except ActionPlanValidationError:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(ActionPlanExecutionPinStateSerializer(payload).data)
+
+
+class ActionPlanExecutionPinView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["action-plans"],
+        request=None,
+        responses={
+            200: ActionPlanExecutionPinStateSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, execution_id):
+        return _execution_feed_pin_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            execution_id=execution_id,
+            pin=True,
+        )
+
+
+class ActionPlanExecutionUnpinView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["action-plans"],
+        request=None,
+        responses={
+            200: ActionPlanExecutionPinStateSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, execution_id):
+        return _execution_feed_pin_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            execution_id=execution_id,
+            pin=False,
+        )
+
+
 def _task_command_response(*, request, establishment_id, task_execution_id, service_fn, body=None):
     membership = _resolve_membership(request, establishment_id)
     if isinstance(membership, Response):
@@ -795,6 +887,30 @@ class ActionPlanExecutionTaskMarkDoneView(EstablishmentScopedActionPlanMixin, AP
             establishment_id=self.establishment_id,
             task_execution_id=task_execution_id,
             service_fn=mark_execution_task_done,
+        )
+
+
+class ActionPlanExecutionTaskMarkPendingView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["action-plans"],
+        request=None,
+        responses={
+            200: ActionPlanTaskExecutionSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, task_execution_id):
+        return _task_command_response(
+            request=request,
+            establishment_id=self.establishment_id,
+            task_execution_id=task_execution_id,
+            service_fn=mark_execution_task_pending,
         )
 
 
@@ -1128,7 +1244,7 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        executions, has_more, next_cursor = build_action_plan_execution_feed_page(
+        executions, has_more, next_cursor, as_of = build_action_plan_execution_feed_page(
             membership=membership,
             view_mode=view_mode,  # type: ignore[arg-type]
             page_size=page_size,
@@ -1141,6 +1257,10 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
                 "action_plan_execution": serialize_action_plan_execution_feed_item(
                     execution=execution,
                     membership=membership,
+                    is_overdue=action_plan_execution_overdue(
+                        execution=execution,
+                        now=as_of,
+                    ),
                 ),
             }
             for execution in executions

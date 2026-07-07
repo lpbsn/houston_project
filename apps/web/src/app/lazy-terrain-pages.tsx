@@ -54,6 +54,12 @@ export const LazyTeamPage = lazy(() =>
   })),
 )
 
+export const LazyTeamMemberDetailPage = lazy(() =>
+  import('@/features/auth/pages/team-member-detail-page').then((module) => ({
+    default: module.TeamMemberDetailPage,
+  })),
+)
+
 export const LazyActionPlanHubPage = lazy(() =>
   import('@/features/action-plans/pages/action-plan-hub-page').then((module) => ({
     default: module.ActionPlanHubPage,

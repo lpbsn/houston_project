@@ -1,4 +1,4 @@
-import type { ActionPlanCreateRequest, ActionPlanUseRequest } from '../types'
+import type { ActionPlanCreateRequest, ActionPlanUseRequest, PatchedActionPlanUpdateRequest } from '../types'
 import type {
   ActionPlanAssigneeDraft,
   ActionPlanCreateFormValues,
@@ -50,14 +50,41 @@ function buildAssigneePayloads(
     })
 }
 
-function buildTaskPayloads(tasks: ActionPlanTaskDraft[]): ActionPlanCreateRequest['tasks'] {
+export function buildActionPlanTaskInputPayloads(
+  tasks: ActionPlanTaskDraft[],
+  pilotBusinessUnitId: string,
+): NonNullable<ActionPlanCreateRequest['tasks']> {
+  return buildTaskPayloads(tasks, pilotBusinessUnitId)
+}
+
+function buildTaskPayloads(
+  tasks: ActionPlanTaskDraft[],
+  pilotBusinessUnitId: string,
+): ActionPlanCreateRequest['tasks'] {
   return tasks
-    .filter((task) => task.task.trim() && task.businessUnitId)
+    .filter((task) => task.task.trim())
     .map((task, index) => ({
       task: task.task.trim(),
-      business_unit_id: task.businessUnitId,
+      business_unit_id: task.businessUnitId || pilotBusinessUnitId,
       position: index + 1,
+      description: task.description.trim(),
+      deadline_at: task.deadlineAt ? (toIsoDateTime(task.deadlineAt) ?? null) : null,
+      assigned_membership_id: task.assigneeMembershipId || null,
     }))
+}
+
+export function buildActionPlanUpdateRequest(
+  values: Pick<
+    ActionPlanCreateFormValues,
+    'title' | 'description' | 'requiresValidation' | 'tasks' | 'pilotBusinessUnitId'
+  >,
+): PatchedActionPlanUpdateRequest {
+  return {
+    title: values.title.trim(),
+    description: values.description.trim(),
+    requires_validation: values.requiresValidation,
+    tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
+  }
 }
 
 export function buildActionPlanCreateRequest(
@@ -85,7 +112,7 @@ export function buildActionPlanCreateRequest(
     pilot_business_unit_id: values.pilotBusinessUnitId,
     requires_validation: values.requiresValidation,
     is_reusable: values.saveToLibrary || scheduleEnabled,
-    tasks: buildTaskPayloads(values.tasks),
+    tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
     assignees,
     use_shared_chronology: values.useSharedChronology,
     start_at: values.useSharedChronology ? toIsoDateTime(values.sharedStartAt) ?? null : null,

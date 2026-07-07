@@ -11,6 +11,7 @@ from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.services import (
     create_action_plan_with_execution,
     mark_execution_task_done,
+    mark_execution_task_pending,
     skip_execution_task,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
@@ -212,3 +213,142 @@ def test_cannot_mark_done_when_task_not_pending(
 
     with pytest.raises(ActionPlanValidationError, match="current state"):
         mark_execution_task_done(task_execution=task, actor=staff_membership)
+
+
+def test_mark_pending_reverts_done_task_and_activity(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+    mark_execution_task_done(task_execution=task, actor=staff_membership)
+    task.refresh_from_db()
+    previous_activity = execution.last_activity_at
+
+    mark_execution_task_pending(task_execution=task, actor=staff_membership)
+    execution.refresh_from_db()
+    task.refresh_from_db()
+
+    assert task.status == "pending"
+    assert task.completed_at is None
+    assert execution.status == EXECUTION_STATUS_IN_PROGRESS
+    assert execution.last_activity_at >= previous_activity
+
+
+def test_mark_pending_allowed_when_execution_pending_validation(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+    mark_execution_task_done(task_execution=task, actor=staff_membership)
+    execution.status = ActionPlanExecution.Status.PENDING_VALIDATION
+    execution.save(update_fields=["status", "updated_at"])
+
+    mark_execution_task_pending(task_execution=task, actor=staff_membership)
+    task.refresh_from_db()
+    assert task.status == "pending"
+
+
+def test_cannot_mark_pending_when_execution_not_active(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+    mark_execution_task_done(task_execution=task, actor=staff_membership)
+    execution.status = ActionPlanExecution.Status.DONE
+    execution.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(ActionPlanPermissionError):
+        mark_execution_task_pending(task_execution=task, actor=staff_membership)
+
+
+def test_cannot_mark_pending_when_execution_canceled(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+    mark_execution_task_done(task_execution=task, actor=staff_membership)
+    execution.status = ActionPlanExecution.Status.CANCELED
+    execution.save(update_fields=["status", "updated_at"])
+
+    with pytest.raises(ActionPlanPermissionError):
+        mark_execution_task_pending(task_execution=task, actor=staff_membership)
+
+
+def test_cannot_mark_pending_when_task_not_done(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+
+    with pytest.raises(ActionPlanValidationError, match="current state"):
+        mark_execution_task_pending(task_execution=task, actor=staff_membership)
+
+
+def test_cannot_mark_pending_when_task_skipped(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+    )
+    task = execution.task_executions.order_by("position").first()
+    skip_execution_task(task_execution=task, actor=staff_membership)
+
+    with pytest.raises(ActionPlanValidationError, match="current state"):
+        mark_execution_task_pending(task_execution=task, actor=staff_membership)
+
+
+def test_staff_cannot_mark_pending_out_of_scope(
+    owner_membership,
+    staff_membership,
+    business_unit,
+    maintenance_business_unit,
+    out_of_scope_staff,
+):
+    execution = _execution_with_tasks(
+        owner_membership=owner_membership,
+        staff_membership=staff_membership,
+        business_unit=business_unit,
+        maintenance_business_unit=maintenance_business_unit,
+        contributor_staff=out_of_scope_staff,
+    )
+    pilot_task = execution.task_executions.filter(
+        execution_team__business_unit=business_unit,
+    ).first()
+    mark_execution_task_done(task_execution=pilot_task, actor=staff_membership)
+
+    with pytest.raises(ActionPlanPermissionError):
+        mark_execution_task_pending(task_execution=pilot_task, actor=out_of_scope_staff)

@@ -16,6 +16,7 @@ from houston.action_plans.selectors import (
 from houston.action_plans.services import (
     create_action_plan_with_execution,
     mark_execution_task_done,
+    mark_execution_task_pending,
     skip_execution_task,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
@@ -79,6 +80,33 @@ def test_partial_contribution_is_in_progress(
     poles = {pole.business_unit_id: pole.contribution_status for pole in get_involved_poles(loaded)}
 
     assert poles[business_unit.id] == CONTRIBUTION_STATUS_DONE
+    assert poles[maintenance_business_unit.id] == CONTRIBUTION_STATUS_IN_PROGRESS
+
+
+def test_unmark_reverts_pole_contribution_to_in_progress(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    staff_membership,
+    out_of_scope_staff,
+):
+    execution = _multi_pole_execution(
+        owner_membership=owner_membership,
+        business_unit=business_unit,
+        maintenance_business_unit=maintenance_business_unit,
+        staff_membership=staff_membership,
+        out_of_scope_staff=out_of_scope_staff,
+    )
+    pilot_task = execution.task_executions.filter(
+        execution_team__business_unit=business_unit,
+    ).first()
+    mark_execution_task_done(task_execution=pilot_task, actor=staff_membership)
+    mark_execution_task_pending(task_execution=pilot_task, actor=staff_membership)
+
+    loaded = execution_with_contribution_context(execution_id=execution.id)
+    poles = {pole.business_unit_id: pole.contribution_status for pole in get_involved_poles(loaded)}
+
+    assert poles[business_unit.id] == CONTRIBUTION_STATUS_IN_PROGRESS
     assert poles[maintenance_business_unit.id] == CONTRIBUTION_STATUS_IN_PROGRESS
 
 

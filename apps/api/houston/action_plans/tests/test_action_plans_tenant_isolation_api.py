@@ -95,6 +95,7 @@ def test_execution_command_cross_establishment_returns_404(
     "suffix",
     [
         "mark-done/",
+        "mark-pending/",
         "skip/",
         "create-observation/",
     ],

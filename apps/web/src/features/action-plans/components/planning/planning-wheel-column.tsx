@@ -19,8 +19,25 @@ export type WheelColumnProps = {
   onChange: (next: string) => void
 }
 
+function releaseScrollSync(
+  container: HTMLDivElement,
+  targetTop: number,
+  previousBehavior: string,
+  isSyncingScrollRef: { current: boolean },
+) {
+  if (Math.abs(container.scrollTop - targetTop) <= 1) {
+    container.style.scrollBehavior = previousBehavior
+    isSyncingScrollRef.current = false
+    return
+  }
+  window.requestAnimationFrame(() =>
+    releaseScrollSync(container, targetTop, previousBehavior, isSyncingScrollRef),
+  )
+}
+
 export function WheelColumn({ label, options, value, onChange }: WheelColumnProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const isSyncingScrollRef = useRef(false)
   const selectedIndex = Math.max(
     0,
     options.findIndex((option) => option.value === value),
@@ -31,10 +48,37 @@ export function WheelColumn({ label, options, value, onChange }: WheelColumnProp
     if (!container) {
       return
     }
-    container.scrollTop = selectedIndex * WHEEL_ITEM_HEIGHT
+    isSyncingScrollRef.current = true
+    const previousBehavior = container.style.scrollBehavior
+    const targetTop = selectedIndex * WHEEL_ITEM_HEIGHT
+    container.style.scrollBehavior = 'auto'
+    container.scrollTop = targetTop
+
+    const handleScrollEnd = () => {
+      container.style.scrollBehavior = previousBehavior
+      isSyncingScrollRef.current = false
+    }
+
+    if ('onscrollend' in container) {
+      container.addEventListener('scrollend', handleScrollEnd, { once: true })
+      return () => {
+        container.removeEventListener('scrollend', handleScrollEnd)
+        isSyncingScrollRef.current = false
+      }
+    }
+
+    window.requestAnimationFrame(() =>
+      releaseScrollSync(container, targetTop, previousBehavior, isSyncingScrollRef),
+    )
+    return () => {
+      isSyncingScrollRef.current = false
+    }
   }, [selectedIndex])
 
   function handleScroll() {
+    if (isSyncingScrollRef.current) {
+      return
+    }
     const container = containerRef.current
     if (!container) {
       return

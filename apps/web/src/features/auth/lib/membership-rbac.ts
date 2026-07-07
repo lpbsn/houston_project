@@ -3,7 +3,7 @@ import type { RoleEnum } from '@/features/auth/types'
 const MANAGEABLE_TARGET_ROLES_BY_ACTOR: Record<RoleEnum, RoleEnum[]> = {
   owner: ['owner', 'director', 'manager', 'staff'],
   director: ['manager', 'staff'],
-  manager: [],
+  manager: ['staff', 'manager'],
   staff: [],
 }
 

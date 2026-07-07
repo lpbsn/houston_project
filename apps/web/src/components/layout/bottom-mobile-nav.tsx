@@ -3,8 +3,8 @@ import {
   CirclePlay,
   MessageCircle,
   Plus,
+  Settings,
   Signal,
-  UserRound,
 } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 
@@ -32,7 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/execution', label: 'Exécution', icon: CirclePlay },
   { path: '/reporting', label: '', icon: Plus, isPrimary: true },
   { path: '/chat', label: 'Chat', icon: MessageCircle },
-  { path: '/profile', label: 'Profil', icon: UserRound },
+  { path: '/general', label: 'Général', icon: Settings },
 ]
 
 const MotionA = motion.a
@@ -54,7 +54,7 @@ export function BottomMobileNav({
     <nav
       aria-label="Navigation terrain"
       className={cn(
-        'w-full shrink-0 overflow-visible border-t border-[#E8E6DF] bg-white',
+        'relative z-20 w-full shrink-0 overflow-visible border-t border-[#E8E6DF] bg-white',
         className,
       )}
     >

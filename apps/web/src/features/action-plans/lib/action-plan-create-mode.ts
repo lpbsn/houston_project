@@ -5,7 +5,7 @@ import {
   canManageActionPlanCatalog,
 } from './action-plan-management-access'
 
-export type ActionPlanCreateMode = 'catalog' | 'execution' | 'signal-linked'
+export type ActionPlanCreateMode = 'catalog' | 'execution' | 'signal-linked' | 'template-edit'
 
 export type ActionPlanCreateModeConfig = {
   canAccess: boolean
@@ -95,6 +95,22 @@ export function resolveActionPlanCreateModeConfig(input: {
       showLibraryToggle: false,
       showValidationToggle: true,
       showAssigneeSheet: true,
+      showStaffSelfAssignee: false,
+      showScheduleSection: false,
+      filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),
+      canDefineCrossPoleTasks: canCrossPole,
+      lockPilotBusinessUnit: true,
+      defaultRequiresValidation: true,
+      defaultSaveToLibrary: false,
+    }
+  }
+
+  if (mode === 'template-edit') {
+    return {
+      canAccess: true,
+      showLibraryToggle: false,
+      showValidationToggle: true,
+      showAssigneeSheet: false,
       showStaffSelfAssignee: false,
       showScheduleSection: false,
       filterBusinessUnitsByScope: shouldFilterBusinessUnitsByScope(role),

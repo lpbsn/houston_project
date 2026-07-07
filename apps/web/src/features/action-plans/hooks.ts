@@ -21,8 +21,11 @@ import {
   launchActionPlanExecution,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
+  markActionPlanTaskPending,
+  pinActionPlanExecution,
   reopenActionPlanExecution,
   skipActionPlanTask,
+  unpinActionPlanExecution,
   updateActionPlan,
   validateActionPlanExecution,
 } from './api'
@@ -36,6 +39,7 @@ import type {
   PatchedActionPlanUpdateRequest,
 } from './types'
 import { isActionPlanExecutionDetail } from './lib/action-plan-create-response'
+import { applyActionPlanExecutionPinSuccess } from './lib/action-plan-execution-feed-cache'
 
 function invalidateCatalogSurfaces(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -284,6 +288,58 @@ export function useCancelActionPlanExecutionMutation(
   return useExecutionCommandMutation(establishmentId, executionId, cancelActionPlanExecution)
 }
 
+export function usePinActionPlanExecutionMutation(
+  establishmentId: string | null,
+  viewMode: ActionPlanExecutionFeedViewMode,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (executionId: string) => {
+      if (!establishmentId) {
+        throw new Error('Plan d’action introuvable.')
+      }
+      return pinActionPlanExecution(establishmentId, executionId)
+    },
+    onSuccess: (result, executionId) => {
+      if (!establishmentId) {
+        return
+      }
+      applyActionPlanExecutionPinSuccess(queryClient, {
+        establishmentId,
+        executionId,
+        isPinned: result.is_pinned,
+        viewMode,
+      })
+    },
+  })
+}
+
+export function useUnpinActionPlanExecutionMutation(
+  establishmentId: string | null,
+  viewMode: ActionPlanExecutionFeedViewMode,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (executionId: string) => {
+      if (!establishmentId) {
+        throw new Error('Plan d’action introuvable.')
+      }
+      return unpinActionPlanExecution(establishmentId, executionId)
+    },
+    onSuccess: (result, executionId) => {
+      if (!establishmentId) {
+        return
+      }
+      applyActionPlanExecutionPinSuccess(queryClient, {
+        establishmentId,
+        executionId,
+        isPinned: result.is_pinned,
+        viewMode,
+      })
+    },
+  })
+}
+
 export function useMarkActionPlanTaskDoneMutation(
   establishmentId: string,
   executionId: string,
@@ -292,6 +348,20 @@ export function useMarkActionPlanTaskDoneMutation(
   return useMutation({
     mutationFn: (taskExecutionId: string) =>
       markActionPlanTaskDone(establishmentId, taskExecutionId),
+    onSuccess: () => {
+      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
+    },
+  })
+}
+
+export function useMarkActionPlanTaskPendingMutation(
+  establishmentId: string,
+  executionId: string,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (taskExecutionId: string) =>
+      markActionPlanTaskPending(establishmentId, taskExecutionId),
     onSuccess: () => {
       invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
     },

@@ -49,6 +49,37 @@ afterEach(() => {
 })
 
 describe('SignalCard feed variant', () => {
+  it('keeps relative time and actions on the same row as badges with title below', () => {
+    render(
+      <SignalCard
+        item={buildFeedItem({
+          urgency: 'high',
+          responsible_business_unit_label: 'Cuisine',
+          permission_hints: {
+            can_pin: true,
+            can_set_urgency: false,
+            can_cancel: false,
+            can_resolve: false,
+            can_create_linked_action_plan: false,
+          },
+        })}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+        variant="feed"
+      />,
+    )
+
+    const title = screen.getByRole('heading', { level: 3, name: 'Fuite d eau' })
+    const actionsButton = screen.getByRole('button', { name: 'Actions du signal' })
+    const metaRow = actionsButton.parentElement?.parentElement
+
+    expect(metaRow?.className).toContain('items-center')
+    expect(metaRow?.className).toContain('justify-between')
+    expect(metaRow?.className).toContain('mb-1')
+    expect(metaRow?.contains(actionsButton)).toBe(true)
+    expect(metaRow?.nextElementSibling).toBe(title)
+  })
+
   it('does not show aggregation counter when aggregation_count is zero', () => {
     render(
       <SignalCard item={buildFeedItem()} onSelect={onSelect} variant="feed" />,

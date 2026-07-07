@@ -50,19 +50,20 @@ export function TerrainTopbar({
           'pt-[max(0.75rem,env(safe-area-inset-top))] pb-1.5',
         )}
       >
-        <div className="flex flex-col gap-0.5 px-3">
-          <div className="grid h-16 grid-cols-[2.5rem_1fr_2.5rem] items-center">
-            <span aria-hidden />
-            <div className="flex justify-center">
-              <HoustonLogo />
-            </div>
-            <TrailingSlot trailing={trailing} />
-          </div>
+        <div className="grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
           {pageTitle ? (
-            <h1 className="text-left text-xl font-semibold leading-tight text-[#1a1a1a]">
+            <h1 className="min-w-0 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
               {pageTitle}
             </h1>
-          ) : null}
+          ) : (
+            <span aria-hidden />
+          )}
+          <div className="flex shrink-0 justify-center">
+            <HoustonLogo />
+          </div>
+          <div className="flex justify-end">
+            <TrailingSlot trailing={trailing} />
+          </div>
         </div>
       </header>
     )

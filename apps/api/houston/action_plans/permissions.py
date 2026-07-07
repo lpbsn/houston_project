@@ -129,6 +129,54 @@ def _scope_business_unit_ids(membership: EstablishmentMembership) -> set:
     return bu_ids
 
 
+def _is_non_pilot_unassigned_task(task_execution: ActionPlanExecutionTask) -> bool:
+    if task_execution.assigned_membership_id is not None:
+        return False
+    execution = task_execution.action_plan_execution
+    return (
+        task_execution.execution_team.business_unit_id != execution.pilot_business_unit_id
+    )
+
+
+def is_open_pole_task_for_membership(
+    membership: EstablishmentMembership,
+    task_execution: ActionPlanExecutionTask,
+) -> bool:
+    if not _is_non_pilot_unassigned_task(task_execution):
+        return False
+    return membership_scope_covers_business_unit(
+        membership,
+        task_execution.execution_team.business_unit,
+    )
+
+
+def execution_has_open_pole_task_in_member_scopes(
+    membership: EstablishmentMembership,
+    execution: ActionPlanExecution,
+) -> bool:
+    if membership.role != EstablishmentMembership.Role.STAFF:
+        return False
+    scope_bu_ids = _scope_business_unit_ids(membership)
+    if not scope_bu_ids:
+        return False
+    prefetched = getattr(execution, "_prefetched_objects_cache", None)
+    if prefetched is not None and "task_executions" in prefetched:
+        for task_execution in execution.task_executions.all():
+            if (
+                _is_non_pilot_unassigned_task(task_execution)
+                and task_execution.execution_team.business_unit_id in scope_bu_ids
+            ):
+                return True
+        return False
+    return ActionPlanExecutionTask.objects.filter(
+        action_plan_execution=execution,
+        assigned_membership_id__isnull=True,
+        execution_team__business_unit_id__in=scope_bu_ids,
+    ).exclude(
+        execution_team__business_unit_id=execution.pilot_business_unit_id,
+    ).exists()
+
+
 def can_manage_action_plan(
     membership: EstablishmentMembership | None,
     action_plan: ActionPlan,
@@ -235,6 +283,8 @@ def action_plan_execution_visible_to_membership(
         else:
             teams = execution.execution_teams.select_related("business_unit").all()
         return any(manages_business_unit(membership, team.business_unit) for team in teams)
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        return execution_has_open_pole_task_in_member_scopes(membership, execution)
     return False
 
 
@@ -542,6 +592,8 @@ def can_execute_action_plan_task(
         return True
     if membership.role != EstablishmentMembership.Role.STAFF:
         return False
+    if is_open_pole_task_for_membership(membership, task_execution):
+        return True
     return is_action_plan_execution_assignee(
         membership,
         execution,

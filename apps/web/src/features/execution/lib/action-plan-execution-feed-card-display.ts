@@ -1,5 +1,6 @@
 import type { SignalClassificationInput } from '@/lib/signal-classification'
 
+import { formatActionPlanEndAtLabel } from '@/features/action-plans/lib/action-plan-display'
 import type {
   ActionPlanExecutionFeedAssignee,
   ActionPlanExecutionFeedItem,
@@ -70,11 +71,26 @@ export function formatActionPlanFeedAssigneeDisplay(
   }
 }
 
+export type ActionPlanFeedMetaParts = {
+  deadlineLabel: string | null
+  taskProgressLabel: string | null
+}
+
 export function formatActionPlanFeedTaskProgressLabel(
   item: Pick<ActionPlanExecutionFeedItem, 'task_count' | 'treated_task_count'>,
 ): string | null {
   if (item.task_count <= 0) {
     return null
   }
-  return `Tâches ${item.treated_task_count}/${item.task_count}`
+  return `Tâche ${item.treated_task_count}/${item.task_count}`
+}
+
+export function formatActionPlanFeedMetaParts(
+  item: Pick<ActionPlanExecutionFeedItem, 'end_at' | 'task_count' | 'treated_task_count'>,
+): ActionPlanFeedMetaParts {
+  const endAtLabel = formatActionPlanEndAtLabel(item.end_at)
+  return {
+    deadlineLabel: endAtLabel ? `Échéance : ${endAtLabel}` : null,
+    taskProgressLabel: formatActionPlanFeedTaskProgressLabel(item),
+  }
 }

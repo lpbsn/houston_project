@@ -24,6 +24,7 @@ from houston.accounts.api.serializers import (
     RegistrationRequestSerializer,
     RegistrationResponseSerializer,
     SwitchEstablishmentRequestSerializer,
+    UserProfileUpdateRequestSerializer,
     ValidationErrorResponseSerializer,
 )
 from houston.accounts.authentication import (
@@ -40,6 +41,7 @@ from houston.accounts.services import (
     InvalidRefreshTokenError,
     InvalidRegistrationInviteCodeError,
     InvalidSelectedEstablishmentError,
+    ProfileDuplicateEmailError,
     RefreshTokenReuseError,
     RegistrationDuplicateEmailError,
     authenticate_user,
@@ -51,6 +53,7 @@ from houston.accounts.services import (
     revoke_session,
     set_refresh_cookie,
     switch_selected_establishment,
+    update_user_profile,
     validate_onboarding_owner_registration,
 )
 from houston.establishments.services import (
@@ -418,6 +421,45 @@ class BootstrapView(APIView):
         description="Returns the authenticated bootstrap payload for the current bearer token.",
     )
     def get(self, request):
+        return Response(build_bootstrap_payload(request.user, session=request.auth.session))
+
+
+class UserProfileView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["auth"],
+        request=UserProfileUpdateRequestSerializer,
+        responses={
+            200: BootstrapResponseSerializer,
+            400: OpenApiResponse(response=ValidationErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description="Updates the authenticated user's personal profile fields.",
+    )
+    def patch(self, request):
+        serializer = UserProfileUpdateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        validated = serializer.validated_data
+        try:
+            update_user_profile(
+                user=request.user,
+                first_name=validated.get("first_name"),
+                last_name=validated.get("last_name"),
+                email=validated.get("email"),
+            )
+        except ProfileDuplicateEmailError:
+            return Response(
+                {
+                    "code": "profile_duplicate_email",
+                    "detail": "An account with this email already exists.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         return Response(build_bootstrap_payload(request.user, session=request.auth.session))
 
 

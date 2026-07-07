@@ -1,16 +1,11 @@
 import { CheckCircle2, Copy, LoaderCircle, UserPlus } from 'lucide-react'
-import { useMemo, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { BusinessUnitScopeSelector } from '@/components/domain/business-unit-scope-selector'
-import { inviteMembership } from '@/features/auth/api'
-import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
-import {
-  type BusinessUnitScopeSelection,
-} from '@/features/auth/lib/business-unit-scope'
+import { useMembershipInviteForm } from '@/features/auth/hooks/use-membership-invite-form'
 import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
 
 type MembershipInviteCardProps = {
@@ -18,133 +13,28 @@ type MembershipInviteCardProps = {
   allowedTargetRoles?: MembershipInvitationRequestRoleEnum[]
 }
 
-type InviteForm = {
-  email: string
-  first_name: string
-  last_name: string
-  role: 'staff' | 'manager'
-}
-
-const emptyForm: InviteForm = {
-  email: '',
-  first_name: '',
-  last_name: '',
-  role: 'staff',
-}
-
-const DEFAULT_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['staff', 'manager']
-
-function buildInvitationAcceptUrl(acceptPath: string) {
-  if (acceptPath.startsWith('http://') || acceptPath.startsWith('https://')) {
-    return acceptPath
-  }
-
-  return `${window.location.origin}${acceptPath.startsWith('/') ? acceptPath : `/${acceptPath}`}`
-}
-
 export function MembershipInviteCard({
   establishmentId,
   allowedTargetRoles,
 }: MembershipInviteCardProps) {
-  const [form, setForm] = useState<InviteForm>(emptyForm)
-  const [selectedBusinessUnitScopes, setSelectedBusinessUnitScopes] = useState<
-    BusinessUnitScopeSelection[]
-  >([])
-  const [invitationLink, setInvitationLink] = useState<string | null>(null)
-  const [copyMessage, setCopyMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
-
-  const roleOptions = useMemo(() => {
-    if (allowedTargetRoles) {
-      const seen = new Set<MembershipInvitationRequestRoleEnum>()
-      const deduped: MembershipInvitationRequestRoleEnum[] = []
-      for (const role of allowedTargetRoles) {
-        if (role === 'staff' || role === 'manager') {
-          if (!seen.has(role)) {
-            deduped.push(role)
-            seen.add(role)
-          }
-        }
-      }
-      return deduped
-    }
-    return DEFAULT_TARGET_ROLES
-  }, [allowedTargetRoles])
-
-  const hasRoleOptions = roleOptions.length > 0
-  const selectedRole = hasRoleOptions
-    ? roleOptions.includes(form.role)
-      ? form.role
-      : roleOptions[0]
-    : null
-  const isRoleAllowed = selectedRole ? roleOptions.includes(selectedRole) : false
-  const isManagerRestrictedToStaff =
-    hasRoleOptions && roleOptions.length === 1 && roleOptions[0] === 'staff'
-
-  const canSubmit = useMemo(() => {
-    if (!hasRoleOptions || !isRoleAllowed) {
-      return false
-    }
-
-    if (!form.email.trim() || !form.first_name.trim() || !form.last_name.trim()) {
-      return false
-    }
-
-    return selectedBusinessUnitScopes.length > 0
-  }, [form, hasRoleOptions, isRoleAllowed, selectedBusinessUnitScopes.length])
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setErrorMessage(null)
-    setCopyMessage(null)
-    setIsSubmitting(true)
-
-    try {
-      if (!hasRoleOptions) {
-        throw new Error('Aucun rôle invitable pour votre profil.')
-      }
-
-      if (!selectedRole || !roleOptions.includes(selectedRole)) {
-        throw new Error('Le rôle sélectionné n’est pas autorisé pour votre profil.')
-      }
-
-      if (selectedBusinessUnitScopes.length === 0) {
-        throw new Error('Sélectionnez au moins un pôle d’activité.')
-      }
-
-      const result = await inviteMembership(establishmentId, {
-        email: form.email.trim(),
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        role: selectedRole as MembershipInvitationRequestRoleEnum,
-        scopes: selectedBusinessUnitScopes,
-      })
-
-      setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
-      setForm(emptyForm)
-      setSelectedBusinessUnitScopes([])
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Invitation could not be created.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleCopyLink() {
-    if (!invitationLink) {
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(invitationLink)
-      setCopyMessage('Invitation link copied.')
-    } catch {
-      setCopyMessage('Copy failed. Select and copy the link manually.')
-    }
-  }
+  const {
+    form,
+    setForm,
+    selectedBusinessUnitScopes,
+    setSelectedBusinessUnitScopes,
+    invitationLink,
+    copyMessage,
+    errorMessage,
+    isSubmitting,
+    businessUnitQuery,
+    roleOptions,
+    hasRoleOptions,
+    selectedRole,
+    isManagerRestrictedToStaff,
+    canSubmit,
+    handleSubmit,
+    handleCopyLink,
+  } = useMembershipInviteForm({ establishmentId, allowedTargetRoles })
 
   return (
     <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">

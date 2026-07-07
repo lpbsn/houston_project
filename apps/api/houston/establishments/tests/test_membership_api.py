@@ -149,12 +149,18 @@ def test_owner_and_director_can_list_only_current_establishment_memberships(
         EstablishmentMembership.Role.STAFF,
     ],
 )
-def test_manager_and_staff_cannot_list_memberships(api_client, actor_role):
+def test_manager_and_staff_can_list_memberships(api_client, actor_role):
     actor = create_user(username=f"{actor_role}_actor")
     actor_membership = create_membership(
         user=actor,
         role=actor_role,
         name="Nice",
+    )
+    visible_target = EstablishmentMembership.objects.create(
+        user=create_user(username=f"{actor_role}_staff"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
     )
 
     access_token = login(api_client, identifier=actor.email)
@@ -163,7 +169,13 @@ def test_manager_and_staff_cannot_list_memberships(api_client, actor_role):
         **auth_headers(access_token),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    body = response.json()
+    assert {item["id"] for item in body} == {
+        str(actor_membership.id),
+        str(visible_target.id),
+    }
+    assert all("permission_hints" in item for item in body)
 
 
 def test_membership_list_returns_not_found_when_path_establishment_is_outside_current_context(
@@ -607,3 +619,236 @@ def test_director_can_patch_manager_membership(api_client):
 
     assert response.status_code == 200
     assert response.json()["role"] == EstablishmentMembership.Role.STAFF
+
+
+def test_staff_cannot_patch_other_membership(api_client):
+    actor = create_user(username="staff_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.STAFF,
+        name="Nice",
+    )
+    target_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="other_staff"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.MANAGER},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+
+
+def test_manager_can_patch_staff_in_scope(api_client):
+    actor = create_user(username="manager_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.MANAGER,
+        name="Nice",
+    )
+    housekeeping = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    create_membership_with_business_unit_scope(
+        membership=actor_membership,
+        business_unit=housekeeping,
+    )
+    target_user = create_user(username="scoped_staff")
+    target_membership = EstablishmentMembership.objects.create(
+        user=target_user,
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=target_membership,
+        business_unit=housekeeping,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.MANAGER},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == EstablishmentMembership.Role.MANAGER
+
+
+def test_manager_cannot_patch_staff_out_of_scope(api_client):
+    actor = create_user(username="manager_out_scope")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.MANAGER,
+        name="Nice",
+    )
+    actor_unit = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    foreign_unit = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="security",
+        label="Security",
+    )
+    create_membership_with_business_unit_scope(
+        membership=actor_membership,
+        business_unit=actor_unit,
+    )
+    target_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="foreign_staff"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=target_membership,
+        business_unit=foreign_unit,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.MANAGER},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+
+
+def test_manager_cannot_patch_owner_membership(api_client):
+    actor = create_user(username="manager_owner_patch")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.MANAGER,
+        name="Nice",
+    )
+    owner_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="owner_target"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.OWNER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{owner_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.STAFF},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+
+
+def test_activate_deactivated_membership(api_client):
+    actor = create_user(username="owner_activate")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    target_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="deactivated_staff"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/activate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == EstablishmentMembership.Status.ACTIVE
+
+
+def test_activate_invited_membership_is_rejected(api_client):
+    actor = create_user(username="owner_invited_activate")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    invited_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="invited_staff"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.INVITED,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{invited_membership.id}/activate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invited_membership_activation_forbidden"
+
+
+def test_membership_detail_includes_permission_hints(api_client):
+    actor = create_user(username="owner_hints")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    staff_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="staff_hints"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.get(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{staff_membership.id}/"
+        ),
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    hints = response.json()["permission_hints"]
+    assert hints["can_edit_role"] is True
+    assert hints["can_edit_scopes"] is True
+    assert hints["can_edit_status"] is True
+    assert hints["can_edit_personal_info"] is False

@@ -10,15 +10,22 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_PENDING_VALIDATION,
     TASK_STATUS_DONE,
 )
-from houston.action_plans.models import ActionPlanAssignee, ActionPlanExecution, ActionPlanExecutionTask
+from houston.action_plans.models import (
+    ActionPlanAssignee,
+    ActionPlanExecution,
+    ActionPlanExecutionTask,
+)
 from houston.action_plans.schedule_services import create_action_plan_schedule
+from houston.action_plans.selectors import action_plan_execution_overdue
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import (
     action_plan_execution_feed_url,
+    action_plan_task_url,
     build_assignee_payload,
     build_schedule_assignee_payload,
     build_task_payload,
-    schedule_window_from_datetime,
+    recurrence_days_for_visible_today,
+    visible_schedule_window,
 )
 from houston.establishments.models import EstablishmentMembership
 from houston.testing.auth import auth_headers, login
@@ -41,6 +48,7 @@ def _create_execution(
     status=EXECUTION_STATUS_IN_PROGRESS,
     visible_from=None,
     last_activity_at=None,
+    end_at=None,
     requires_validation=False,
 ):
     _, execution = create_action_plan_with_execution(
@@ -58,8 +66,15 @@ def _create_execution(
     if last_activity_at is not None:
         execution.last_activity_at = last_activity_at
         update_fields.append("last_activity_at")
+    if end_at is not None:
+        execution.end_at = end_at
+        update_fields.append("end_at")
     execution.save(update_fields=update_fields + ["updated_at"])
     return execution
+
+
+def _feed_execution_ids(response_body) -> list[str]:
+    return [item["action_plan_execution"]["id"] for item in response_body["items"]]
 
 
 def test_action_plan_execution_feed_response_contract(api_client, owner_membership):
@@ -119,6 +134,8 @@ def test_action_plan_execution_feed_item_contract(
     assert len(payload["involved_poles"]) >= 1
     assert "permission_hints" in payload
     assert payload["permission_hints"]["can_mark_done"] is True
+    assert payload["permission_hints"]["can_pin"] is True
+    assert payload["is_pinned"] is False
     assert payload["task_count"] == 1
     assert payload["treated_task_count"] == 0
 
@@ -156,6 +173,57 @@ def test_action_plan_execution_feed_item_task_counts(
     assert payload["task_count"] == 4
     assert payload["treated_task_count"] == 1
     assert len(payload["task_executions"]) == 3
+
+
+def test_action_plan_execution_feed_item_task_counts_decrement_after_mark_pending(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Unmark feed",
+        tasks=[
+            build_task_payload(task="Task 1", business_unit=business_unit, position=1),
+            build_task_payload(task="Task 2", business_unit=business_unit, position=2),
+        ],
+        assignees=[
+            build_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            ),
+        ],
+    )
+    task = ActionPlanExecutionTask.objects.filter(
+        action_plan_execution=execution,
+        position=1,
+    ).first()
+    token = login(api_client, user=staff_membership.user)
+    mark_done = api_client.post(
+        action_plan_task_url(staff_membership.establishment_id, task.id, "mark-done/"),
+        **auth_headers(token),
+    )
+    assert mark_done.status_code == 200
+
+    feed_after_done = api_client.get(
+        action_plan_execution_feed_url(staff_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert feed_after_done.json()["items"][0]["action_plan_execution"]["treated_task_count"] == 1
+
+    mark_pending = api_client.post(
+        action_plan_task_url(staff_membership.establishment_id, task.id, "mark-pending/"),
+        **auth_headers(token),
+    )
+    assert mark_pending.status_code == 200
+
+    feed_after_pending = api_client.get(
+        action_plan_execution_feed_url(staff_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert feed_after_pending.json()["items"][0]["action_plan_execution"]["treated_task_count"] == 0
 
 
 def test_terminal_executions_excluded_from_feed(
@@ -227,6 +295,13 @@ def test_personal_feed_hides_assignee_with_future_visible_from(
         owner_membership,
         business_unit=business_unit,
         title="Individual chronology",
+        tasks=[
+            build_task_payload(
+                task="Individual chronology task",
+                business_unit=business_unit,
+                assigned_membership=staff_membership,
+            )
+        ],
         assignees=[
             build_assignee_payload(membership=staff_membership, business_unit=business_unit)
         ],
@@ -284,6 +359,13 @@ def test_staff_sees_only_assigned_executions(
         owner_membership,
         business_unit=business_unit,
         title="Assigned to staff",
+        tasks=[
+            build_task_payload(
+                task="Assigned to staff task",
+                business_unit=business_unit,
+                assigned_membership=staff_membership,
+            )
+        ],
         assignees=[
             build_assignee_payload(membership=staff_membership, business_unit=business_unit)
         ],
@@ -292,6 +374,13 @@ def test_staff_sees_only_assigned_executions(
         owner_membership,
         business_unit=business_unit,
         title="Assigned to other",
+        tasks=[
+            build_task_payload(
+                task="Assigned to other task",
+                business_unit=business_unit,
+                assigned_membership=other_staff,
+            )
+        ],
         assignees=[build_assignee_payload(membership=other_staff, business_unit=business_unit)],
     )
     token = login(api_client, user=staff_membership.user)
@@ -413,12 +502,15 @@ def test_feed_pagination_cursor_is_stable(
     business_unit,
 ):
     now = timezone.now()
+    executions = []
     for index in range(4):
-        _create_execution(
-            owner_membership,
-            business_unit=business_unit,
-            title=f"Feed page {index}",
-            last_activity_at=now - timezone.timedelta(minutes=index),
+        executions.append(
+            _create_execution(
+                owner_membership,
+                business_unit=business_unit,
+                title=f"Feed page {index}",
+                end_at=now + timezone.timedelta(hours=index + 1),
+            )
         )
     token = login(api_client, user=owner_membership.user)
     first = api_client.get(
@@ -432,6 +524,10 @@ def test_feed_pagination_cursor_is_stable(
     assert len(first_body["items"]) == 2
     assert first_body["has_more"] is True
     assert first_body["next_cursor"]
+    assert _feed_execution_ids(first_body) == [
+        str(executions[0].id),
+        str(executions[1].id),
+    ]
 
     second = api_client.get(
         action_plan_execution_feed_url(owner_membership.establishment_id)
@@ -442,9 +538,225 @@ def test_feed_pagination_cursor_is_stable(
     assert second.status_code == 200
     second_body = second.json()
     assert len(second_body["items"]) == 2
+    assert _feed_execution_ids(second_body) == [
+        str(executions[2].id),
+        str(executions[3].id),
+    ]
     first_ids = {item["action_plan_execution"]["id"] for item in first_body["items"]}
     second_ids = {item["action_plan_execution"]["id"] for item in second_body["items"]}
     assert first_ids.isdisjoint(second_ids)
+
+
+def test_feed_sorts_overdue_before_upcoming_before_null_within_status(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    no_deadline = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Sans échéance",
+    )
+    upcoming = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="À venir",
+        end_at=now + timezone.timedelta(days=2),
+    )
+    overdue = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="En retard",
+        end_at=now - timezone.timedelta(hours=2),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _feed_execution_ids(response.json()) == [
+        str(overdue.id),
+        str(upcoming.id),
+        str(no_deadline.id),
+    ]
+
+
+def test_feed_sorts_by_nearest_end_at_within_same_bucket(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    later_overdue = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Retard récent",
+        end_at=now - timezone.timedelta(hours=1),
+    )
+    earlier_overdue = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Retard ancien",
+        end_at=now - timezone.timedelta(hours=5),
+    )
+    sooner_upcoming = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Échéance proche",
+        end_at=now + timezone.timedelta(hours=1),
+    )
+    later_upcoming = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Échéance lointaine",
+        end_at=now + timezone.timedelta(days=3),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _feed_execution_ids(response.json()) == [
+        str(earlier_overdue.id),
+        str(later_overdue.id),
+        str(sooner_upcoming.id),
+        str(later_upcoming.id),
+    ]
+
+
+def test_feed_pending_validation_before_in_progress_globally(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    in_progress = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="En cours urgent",
+        status=EXECUTION_STATUS_IN_PROGRESS,
+        end_at=now + timezone.timedelta(hours=1),
+    )
+    pending = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="À valider plus tard",
+        status=EXECUTION_STATUS_PENDING_VALIDATION,
+        requires_validation=True,
+        end_at=now + timezone.timedelta(days=7),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _feed_execution_ids(response.json()) == [
+        str(pending.id),
+        str(in_progress.id),
+    ]
+
+
+def test_feed_pagination_preserves_deadline_order(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    executions = [
+        _create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Ordered {index}",
+            end_at=now + timezone.timedelta(hours=index + 1),
+        )
+        for index in range(3)
+    ]
+    token = login(api_client, user=owner_membership.user)
+    first = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + "&page_size=2",
+        **auth_headers(token),
+    )
+    second = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + f"&page_size=2&cursor={first.json()['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    merged_ids = _feed_execution_ids(first.json()) + _feed_execution_ids(second.json())
+    assert merged_ids == [str(execution.id) for execution in executions]
+
+
+def test_feed_invalid_cursor_returns_400(api_client, owner_membership):
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + "&cursor=not-a-valid-cursor",
+        **auth_headers(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
+
+
+def test_action_plan_execution_overdue_respects_as_of_reference_time(
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Frontière échéance",
+        end_at=now - timezone.timedelta(hours=1),
+    )
+    assert action_plan_execution_overdue(execution=execution, now=now) is True
+    assert (
+        action_plan_execution_overdue(
+            execution=execution,
+            now=now - timezone.timedelta(hours=2),
+        )
+        is False
+    )
+
+
+def test_feed_marks_overdue_using_request_as_of(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    overdue = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Retard feed",
+        end_at=now - timezone.timedelta(minutes=30),
+    )
+    upcoming = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="À venir feed",
+        end_at=now + timezone.timedelta(hours=2),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    items_by_id = {
+        item["action_plan_execution"]["id"]: item["action_plan_execution"]
+        for item in response.json()["items"]
+    }
+    assert items_by_id[str(overdue.id)]["is_overdue"] is True
+    assert items_by_id[str(upcoming.id)]["is_overdue"] is False
 
 
 def test_cross_establishment_feed_returns_empty(
@@ -473,22 +785,10 @@ def test_feed_materializes_visible_schedule_execution(
     staff_membership,
     business_unit,
 ):
-    now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
-    weekday_names = [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    ]
-    recurrence_days = [weekday_names[now.weekday()]]
-    window = schedule_window_from_datetime(now)
     schedule = create_action_plan_schedule(
         action_plan=catalog_action_plan,
         actor=owner_membership,
-        recurrence_days=recurrence_days,
+        recurrence_days=recurrence_days_for_visible_today(),
         assignees=[
             build_schedule_assignee_payload(
                 membership=staff_membership,
@@ -496,7 +796,7 @@ def test_feed_materializes_visible_schedule_execution(
             )
         ],
         use_shared_chronology=True,
-        **window,
+        **visible_schedule_window(),
     )
     ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
 
@@ -708,6 +1008,13 @@ def test_staff_late_scope_does_not_see_pole_execution_without_assignment(
         owner_membership,
         business_unit=business_unit,
         title="Restaurant execution assigned to other staff",
+        tasks=[
+            build_task_payload(
+                task="Restaurant execution task",
+                business_unit=business_unit,
+                assigned_membership=other_staff,
+            )
+        ],
         assignees=[
             build_assignee_payload(membership=other_staff, business_unit=business_unit)
         ],
@@ -732,6 +1039,62 @@ def test_staff_late_scope_does_not_see_pole_execution_without_assignment(
     assert response.status_code == 200
     ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
     assert str(pole_execution.id) not in ids
+
+
+def test_staff_sees_open_pole_task_execution_in_personal_feed(
+    api_client,
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    out_of_scope_staff,
+):
+    open_execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Open pole task execution",
+        tasks=[
+            build_task_payload(task="Open pole task", business_unit=maintenance_business_unit)
+        ],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
+    )
+
+    token = login(api_client, user=out_of_scope_staff.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(out_of_scope_staff.establishment_id)
+        + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(open_execution.id) in ids
+
+
+def test_staff_does_not_see_pilot_open_pole_task_execution_in_personal_feed(
+    api_client,
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    pilot_open_execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Pilot open pole task execution",
+        tasks=[build_task_payload(task="Open pilot pole task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
+    )
+
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(staff_membership.establishment_id) + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(pilot_open_execution.id) not in ids
 
 
 def test_owner_personal_feed_includes_all_establishment_executions(

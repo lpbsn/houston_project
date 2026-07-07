@@ -51,6 +51,32 @@ def test_mark_done_does_not_change_execution_status(
     assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
 
 
+def test_mark_pending_does_not_change_execution_status(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    execution = _execution_with_tasks(owner_membership, staff_membership, business_unit)
+    task = execution.task_executions.order_by("position").first()
+    token = login(api_client, user=staff_membership.user)
+    mark_done = api_client.post(
+        action_plan_task_url(staff_membership.establishment_id, task.id, "mark-done/"),
+        **auth_headers(token),
+    )
+    assert mark_done.status_code == 200
+
+    response = api_client.post(
+        action_plan_task_url(staff_membership.establishment_id, task.id, "mark-pending/"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending"
+    assert response.json()["completed_at"] is None
+    execution.refresh_from_db()
+    assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
+
+
 def test_skip_transition(api_client, owner_membership, staff_membership, business_unit):
     execution = _execution_with_tasks(owner_membership, staff_membership, business_unit)
     task = execution.task_executions.order_by("position").first()

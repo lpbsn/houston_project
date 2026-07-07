@@ -483,6 +483,64 @@ export async function deactivateMembership(establishmentId: string, membershipId
   return result.data as EstablishmentMembershipResponse
 }
 
+export async function activateMembership(establishmentId: string, membershipId: string) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/memberships/{membership_id}/activate/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              membership_id: membershipId,
+            },
+          },
+          headers: accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+              }
+            : undefined,
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'This membership could not be activated.')
+  }
+
+  await queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
+  return result.data as EstablishmentMembershipResponse
+}
+
+export type UserProfileUpdateRequest = {
+  first_name?: string
+  last_name?: string
+  email?: string | null
+}
+
+export async function updateUserProfile(input: UserProfileUpdateRequest) {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH('/api/v1/auth/me/', {
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Profile changes were not saved.')
+  }
+
+  queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
 export async function getWorkspaceSummary(establishmentId: string) {
   const result = await withAuthRetry(
     (accessToken) =>

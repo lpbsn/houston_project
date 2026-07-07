@@ -5,6 +5,7 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import {
   getActionPlanExecutionFeedSection,
   groupActionPlanExecutionsBySection,
+  partitionActionPlanExecutionFeedPinnedItems,
 } from './action-plan-execution-feed-sections'
 
 function buildFeedItem(
@@ -25,12 +26,14 @@ function buildFeedItem(
     task_executions: [],
     last_activity_at: '2026-06-13T12:00:00Z',
     created_at: '2026-06-13T12:00:00Z',
+    is_pinned: false,
     permission_hints: {
       can_mark_done: true,
       can_validate: false,
       can_reopen: false,
       can_cancel: false,
       is_pilot_pole_assignee: true,
+      can_pin: true,
     },
     ...overrides,
   }
@@ -66,5 +69,20 @@ describe('groupActionPlanExecutionsBySection', () => {
     expect(groups.map((group) => group.section)).toEqual(['pending_validation', 'in_progress'])
     expect(groups[0]?.items.map((item) => item.id)).toEqual(['pending'])
     expect(groups[1]?.items.map((item) => item.id)).toEqual(['in-progress'])
+  })
+})
+
+describe('partitionActionPlanExecutionFeedPinnedItems', () => {
+  it('splits pinned and unpinned items preserving order', () => {
+    const pinned = buildFeedItem({ id: 'pinned', status: 'in_progress', is_pinned: true })
+    const unpinned = buildFeedItem({ id: 'unpinned', status: 'pending_validation' })
+
+    const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems([
+      pinned,
+      unpinned,
+    ])
+
+    expect(pinnedItems.map((item) => item.id)).toEqual(['pinned'])
+    expect(unpinnedItems.map((item) => item.id)).toEqual(['unpinned'])
   })
 })

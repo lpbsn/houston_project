@@ -107,6 +107,35 @@ def replace_membership_scopes(
     return created
 
 
+def membership_business_unit_scope_ids(membership: EstablishmentMembership) -> set[UUID]:
+    bu_ids: set[UUID] = set()
+    for scope in _iter_membership_scopes(membership):
+        bu_id = _scope_business_unit_id(scope)
+        if bu_id is not None:
+            bu_ids.add(bu_id)
+    return bu_ids
+
+
+def membership_is_assignable_by_actor(
+    *,
+    actor: EstablishmentMembership,
+    target: EstablishmentMembership,
+) -> bool:
+    if actor.establishment_id != target.establishment_id:
+        return False
+    if actor.role in ADMIN_ROLES:
+        return True
+    if actor.role != EstablishmentMembership.Role.MANAGER:
+        return False
+    actor_scope_ids = membership_business_unit_scope_ids(actor)
+    if not actor_scope_ids:
+        return False
+    if target.role in ADMIN_ROLES:
+        return True
+    target_scope_ids = membership_business_unit_scope_ids(target)
+    return bool(actor_scope_ids & target_scope_ids)
+
+
 def membership_scope_covers_business_unit(
     membership: EstablishmentMembership,
     business_unit: BusinessUnit,
@@ -229,6 +258,13 @@ def _scope_business_unit_id(scope: MembershipScope) -> UUID | None:
     return scope.business_unit_id
 
 
+def _scope_business_unit_label(scope: MembershipScope) -> str:
+    business_unit = getattr(scope, "business_unit", None)
+    if business_unit is None:
+        return ""
+    return business_unit.label or business_unit.key or str(business_unit.id)
+
+
 def parse_membership_scope_inputs(
     scopes: Iterable[dict[str, object]],
 ) -> list[MembershipScopeInput]:
@@ -270,6 +306,7 @@ def membership_scope_rows_for_membership(
             {
                 "scope_type": MembershipScopeType.BUSINESS_UNIT,
                 "scope_id": str(bu_id),
+                "scope_label": _scope_business_unit_label(scope),
             }
         )
         business_unit_count += 1

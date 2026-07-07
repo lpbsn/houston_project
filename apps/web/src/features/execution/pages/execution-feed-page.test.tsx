@@ -13,7 +13,11 @@ import { ExecutionFeedPage } from './execution-feed-page'
 const planFetchNextPage = vi.fn()
 const planFeedQueryMock = vi.fn()
 
-function buildPlanFeedWrapper(id: string, title: string): ActionPlanExecutionFeedItemWrapper {
+function buildPlanFeedWrapper(
+  id: string,
+  title: string,
+  overrides: Partial<ActionPlanExecutionFeedItemWrapper['action_plan_execution']> = {},
+): ActionPlanExecutionFeedItemWrapper {
   return {
     item_type: 'action_plan_execution',
     action_plan_execution: {
@@ -33,13 +37,16 @@ function buildPlanFeedWrapper(id: string, title: string): ActionPlanExecutionFee
       task_executions: [],
       last_activity_at: '2026-06-13T12:00:00Z',
       created_at: '2026-06-13T12:00:00Z',
+      is_pinned: false,
       permission_hints: {
         can_mark_done: true,
         can_validate: false,
         can_reopen: false,
         can_cancel: false,
         is_pilot_pole_assignee: true,
+        can_pin: true,
       },
+      ...overrides,
     },
   }
 }
@@ -77,6 +84,17 @@ vi.mock('@/features/auth/lib/bootstrap-permission-hints', () => ({
 
 vi.mock('@/features/action-plans/hooks', () => ({
   useActionPlanExecutionFeedQuery: () => planFeedQueryMock(),
+}))
+
+vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions', () => ({
+  useActionPlanExecutionFeedQuickActions: () => ({
+    activeItem: null,
+    actionsOpen: false,
+    openActions: vi.fn(),
+    closeActions: vi.fn(),
+    runAction: vi.fn(),
+    isPending: false,
+  }),
 }))
 
 function renderExecutionFeedPage() {
@@ -192,6 +210,34 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     expect(screen.getByText('Aucune exécution')).toBeTruthy()
+  })
+
+  it('renders pinned items before section labels', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('plan-pinned', 'Plan épinglé', { is_pinned: true }),
+                buildPlanFeedWrapper('plan-regular', 'Plan normal'),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    const pinned = screen.getByText('Plan épinglé')
+    const sectionLabel = screen.getByText(/En cours · 1/)
+    const regular = screen.getByText('Plan normal')
+
+    expect(pinned.compareDocumentPosition(sectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(sectionLabel.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('shows loading more label while fetching next page', () => {

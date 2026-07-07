@@ -4,15 +4,43 @@ import {
   validateActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from './action-plan-event-planning-form'
+import type { ActionPlanTaskTemplate } from '../types'
 
 export type ActionPlanTaskDraft = {
   id: string
   task: string
+  description: string
   businessUnitId: string
+  deadlineAt: string
+  assigneeMembershipId: string
+  assigneeDisplayName: string
+  assigneeBusinessUnitIds: string[]
 }
 
 export function createActionPlanTaskDraft(businessUnitId = ''): ActionPlanTaskDraft {
-  return { id: crypto.randomUUID(), task: '', businessUnitId }
+  return {
+    id: crypto.randomUUID(),
+    task: '',
+    description: '',
+    businessUnitId,
+    deadlineAt: '',
+    assigneeMembershipId: '',
+    assigneeDisplayName: '',
+    assigneeBusinessUnitIds: [],
+  }
+}
+
+export function actionPlanTaskTemplateToDraft(task: ActionPlanTaskTemplate): ActionPlanTaskDraft {
+  return {
+    id: task.id,
+    task: task.task,
+    description: task.description ?? '',
+    businessUnitId: task.business_unit.id,
+    deadlineAt: task.deadline_at ?? '',
+    assigneeMembershipId: task.assigned_membership_id ?? '',
+    assigneeDisplayName: task.assigned_display_name ?? '',
+    assigneeBusinessUnitIds: [task.business_unit.id],
+  }
 }
 
 export type ActionPlanAssigneeDraft = {
@@ -94,22 +122,37 @@ export function validateActionPlanCreateForm(
   }
 
   const nonEmptyTasks = values.tasks.filter((task) => task.task.trim())
-  if (nonEmptyTasks.length === 0) {
-    errors.tasks = 'Ajoutez au moins une tâche.'
-  }
   if (nonEmptyTasks.length > MAX_TASKS) {
     errors.tasks = `Maximum ${MAX_TASKS} tâches.`
   }
 
   for (const task of nonEmptyTasks) {
-    if (!task.businessUnitId) {
-      errors.tasks = 'Chaque tâche doit avoir un pôle d’activité.'
+    if (
+      task.assigneeMembershipId &&
+      !task.businessUnitId &&
+      task.assigneeBusinessUnitIds.length > 1
+    ) {
+      errors.tasks = 'Choisissez le pôle de l’assigné pour chaque tâche concernée.'
+      break
+    }
+    if (
+      task.assigneeMembershipId &&
+      task.assigneeBusinessUnitIds.length === 0 &&
+      !task.businessUnitId
+    ) {
+      errors.tasks =
+        'Sélectionnez un pôle d’activité pour chaque tâche assignée à un Owner ou un Director.'
+      break
+    }
+    const effectiveBusinessUnitId = task.businessUnitId || values.pilotBusinessUnitId
+    if (!effectiveBusinessUnitId) {
+      errors.tasks = 'Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.'
       break
     }
     if (
       !options.canDefineCrossPoleTasks &&
       values.pilotBusinessUnitId &&
-      task.businessUnitId !== values.pilotBusinessUnitId
+      effectiveBusinessUnitId !== values.pilotBusinessUnitId
     ) {
       errors.tasks = 'Les tâches hors pôle pilote sont réservées aux administrateurs.'
       break
@@ -152,7 +195,8 @@ export function validateActionPlanCreateForm(
     }
 
     for (const task of nonEmptyTasks) {
-      if (task.businessUnitId !== pilotBusinessUnitId) {
+      const effectiveBusinessUnitId = task.businessUnitId || pilotBusinessUnitId
+      if (effectiveBusinessUnitId !== pilotBusinessUnitId) {
         errors.tasks = 'Les tâches staff doivent rester sur le pôle pilote.'
         break
       }

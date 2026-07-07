@@ -8,10 +8,13 @@ from houston.action_plans.api.views import (
     ActionPlanExecutionDetailView,
     ActionPlanExecutionFeedView,
     ActionPlanExecutionMarkDoneView,
+    ActionPlanExecutionPinView,
     ActionPlanExecutionReopenView,
     ActionPlanExecutionTaskCreateObservationView,
     ActionPlanExecutionTaskMarkDoneView,
+    ActionPlanExecutionTaskMarkPendingView,
     ActionPlanExecutionTaskSkipView,
+    ActionPlanExecutionUnpinView,
     ActionPlanExecutionValidateView,
     ActionPlanListCreateView,
     ActionPlanScheduleCreateView,
@@ -95,12 +98,30 @@ urlpatterns = [
         name="action-plan-execution-cancel",
     ),
     path(
+        "establishments/<uuid:establishment_id>/action-plan-executions/<uuid:execution_id>/pin/",
+        ActionPlanExecutionPinView.as_view(),
+        name="action-plan-execution-pin",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/action-plan-executions/<uuid:execution_id>/unpin/",
+        ActionPlanExecutionUnpinView.as_view(),
+        name="action-plan-execution-unpin",
+    ),
+    path(
         (
             "establishments/<uuid:establishment_id>/action-plan-execution-tasks/"
             "<uuid:task_execution_id>/mark-done/"
         ),
         ActionPlanExecutionTaskMarkDoneView.as_view(),
         name="action-plan-execution-task-mark-done",
+    ),
+    path(
+        (
+            "establishments/<uuid:establishment_id>/action-plan-execution-tasks/"
+            "<uuid:task_execution_id>/mark-pending/"
+        ),
+        ActionPlanExecutionTaskMarkPendingView.as_view(),
+        name="action-plan-execution-task-mark-pending",
     ),
     path(
         (

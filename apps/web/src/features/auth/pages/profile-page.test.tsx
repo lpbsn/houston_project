@@ -29,6 +29,7 @@ const { authState } = vi.hoisted(() => ({
           can_view_action_plan_catalog: true,
           can_invite: true,
           can_manage_runtime_config: true,
+          can_view_team: true,
         },
       },
       memberships: [
@@ -142,6 +143,7 @@ describe('ProfilePage', () => {
           can_view_action_plan_catalog: false,
           can_invite: false,
           can_manage_runtime_config: false,
+          can_view_team: false,
         },
       },
     }
@@ -168,6 +170,7 @@ describe('ProfilePage', () => {
           can_view_action_plan_catalog: true,
           can_invite: true,
           can_manage_runtime_config: true,
+          can_view_team: true,
         },
       },
     }
@@ -200,6 +203,7 @@ describe('ProfilePage', () => {
           can_view_action_plan_catalog: false,
           can_invite: true,
           can_manage_runtime_config: false,
+          can_view_team: true,
         },
       },
     }
@@ -226,6 +230,7 @@ describe('ProfilePage', () => {
           can_view_action_plan_catalog: false,
           can_invite: true,
           can_manage_runtime_config: true,
+          can_view_team: true,
         },
       },
     }
@@ -256,6 +261,7 @@ describe('ProfilePage', () => {
           can_view_action_plan_catalog: true,
           can_invite: false,
           can_manage_runtime_config: false,
+          can_view_team: true,
         },
       },
     }
@@ -269,7 +275,8 @@ describe('ProfilePage', () => {
 
     expect(screen.queryByText("Gestion de l'établissement")).toBeNull()
     expect(screen.queryByRole('button', { name: /Établissement/i })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Équipe/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
+    expect(screen.getByText("Voir l'équipe")).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Bibliothèque/i }))
     expect(onNavigate).toHaveBeenCalledWith('/action-plans')
   })
@@ -324,6 +331,6 @@ describe('ProfilePage', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Changer d'établissement/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/profile/switch-establishment')
+    expect(onNavigate).toHaveBeenCalledWith('/general/switch-establishment')
   })
 })

@@ -245,6 +245,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/auth/me/:
+    patch:
+      operationId: v1_auth_me_partial_update
+      description: Updates the authenticated user's personal profile fields.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/auth/refresh/:
     post:
       operationId: v1_auth_refresh_create
@@ -580,6 +624,57 @@ paths:
   /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-done/:
     post:
       operationId: v1_establishments_action_plan_execution_tasks_mark_done_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: task_execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanTaskExecution'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-pending/:
+    post:
+      operationId: v1_establishments_action_plan_execution_tasks_mark_pending_create
       parameters:
       - in: path
         name: establishment_id
@@ -1035,6 +1130,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/:
+    post:
+      operationId: v1_establishments_action_plan_executions_pin_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionPinState'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/reopen/:
     post:
       operationId: v1_establishments_action_plan_executions_reopen_create
@@ -1075,6 +1209,45 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/:
+    post:
+      operationId: v1_establishments_action_plan_executions_unpin_create
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionPinState'
+          description: ''
+        '401':
           content:
             application/json:
               schema:
@@ -1339,6 +1512,8 @@ paths:
           description: ''
     post:
       operationId: v1_establishments_action_plans_create
+      description: Creates an action plan. Reusable catalog entries may omit tasks;
+        execution or schedule flows require at least one task or assignee.
       parameters:
       - in: path
         name: establishment_id
@@ -2913,7 +3088,7 @@ paths:
     get:
       operationId: v1_establishments_memberships_list
       description: Lists memberships for the current active establishment context.
-        Requires an active selected establishment and owner or director authority.
+        Requires an active selected establishment membership.
       parameters:
       - in: path
         name: establishment_id
@@ -2956,7 +3131,7 @@ paths:
     get:
       operationId: v1_establishments_memberships_retrieve
       description: Returns one membership inside the current active establishment
-        context. Requires owner or director authority.
+        context.
       parameters:
       - in: path
         name: establishment_id
@@ -3029,6 +3204,59 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/PatchedMembershipUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentMembershipResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/memberships/{membership_id}/activate/:
+    post:
+      operationId: v1_establishments_memberships_activate_create
+      description: Activates one membership in the current active establishment context.
+        Invited memberships cannot be activated until the invitation is accepted.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
       security:
       - BearerAccessToken: []
       responses:
@@ -4169,8 +4397,8 @@ paths:
     get:
       operationId: v1_establishments_users_search_list
       description: Searches active users in the current active establishment context.
-        Results are tenant-filtered before serialization and return only a minimal
-        membership-backed user summary.
+        Use context=assignee for scope-aware assignment pickers; context=mention for
+        comment @mentions. Results are tenant-filtered before serialization.
       parameters:
       - in: query
         name: business_unit_id
@@ -5229,6 +5457,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActionPlanTaskInput'
+          description: Optional for reusable catalog plans. Direct execution or schedule
+            create still requires at least one task or assignee.
         assignees:
           type: array
           items:
@@ -5290,6 +5520,11 @@ components:
           format: date-time
         permission_hints:
           $ref: '#/components/schemas/ActionPlanPermissionHints'
+        created_by_id:
+          type: string
+          format: uuid
+        created_by_display_name:
+          type: string
         tasks:
           type: array
           items:
@@ -5301,6 +5536,8 @@ components:
       required:
       - catalog_status
       - created_at
+      - created_by_display_name
+      - created_by_id
       - description
       - id
       - involved_pole_count
@@ -5495,6 +5732,8 @@ components:
         created_at:
           type: string
           format: date-time
+        is_pinned:
+          type: boolean
         permission_hints:
           $ref: '#/components/schemas/ActionPlanExecutionPermissionHints'
       required:
@@ -5505,6 +5744,7 @@ components:
       - id
       - involved_poles
       - is_overdue
+      - is_pinned
       - last_activity_at
       - permission_hints
       - pilot_business_unit
@@ -5570,12 +5810,22 @@ components:
           type: boolean
         is_pilot_pole_assignee:
           type: boolean
+        can_pin:
+          type: boolean
       required:
       - can_cancel
       - can_mark_done
+      - can_pin
       - can_reopen
       - can_validate
       - is_pilot_pole_assignee
+    ActionPlanExecutionPinState:
+      type: object
+      properties:
+        is_pinned:
+          type: boolean
+      required:
+      - is_pinned
     ActionPlanInvolvedPole:
       type: object
       properties:
@@ -5839,6 +6089,19 @@ components:
           format: uuid
         task:
           type: string
+        description:
+          type: string
+        deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        assigned_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_display_name:
+          type: string
+          nullable: true
         position:
           type: integer
         status:
@@ -5867,8 +6130,12 @@ components:
         permission_hints:
           $ref: '#/components/schemas/ActionPlanTaskExecutionPermissionHints'
       required:
+      - assigned_display_name
+      - assigned_membership_id
       - business_unit
       - completed_at
+      - deadline_at
+      - description
       - id
       - observation_created_at
       - observation_id
@@ -5883,6 +6150,8 @@ components:
       properties:
         can_mark_done:
           type: boolean
+        can_unmark_done:
+          type: boolean
         can_skip:
           type: boolean
         can_create_observation:
@@ -5891,6 +6160,7 @@ components:
       - can_create_observation
       - can_mark_done
       - can_skip
+      - can_unmark_done
     ActionPlanTaskInput:
       type: object
       properties:
@@ -5903,6 +6173,18 @@ components:
         position:
           type: integer
           minimum: 1
+        description:
+          type: string
+          default: ''
+          maxLength: 2000
+        deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        assigned_membership_id:
+          type: string
+          format: uuid
+          nullable: true
       required:
       - business_unit_id
       - task
@@ -5921,12 +6203,29 @@ components:
           format: uuid
         task:
           type: string
+        description:
+          type: string
+        deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        assigned_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        assigned_display_name:
+          type: string
+          nullable: true
         position:
           type: integer
         business_unit:
           $ref: '#/components/schemas/ActionPlanBusinessUnit'
       required:
+      - assigned_display_name
+      - assigned_membership_id
       - business_unit
+      - deadline_at
+      - description
       - id
       - position
       - task
@@ -6225,12 +6524,15 @@ components:
           type: boolean
         can_manage_runtime_config:
           type: boolean
+        can_view_team:
+          type: boolean
       required:
       - can_create_action_plan
       - can_create_catalog_action_plan
       - can_invite
       - can_manage_runtime_config
       - can_view_action_plan_catalog
+      - can_view_team
       - chat_available
     BootstrapResponse:
       type: object
@@ -6772,6 +7074,22 @@ components:
       - invitation_expires_at
       - invitation_token
       - membership
+    EstablishmentMembershipPermissionHints:
+      type: object
+      properties:
+        can_edit_role:
+          type: boolean
+        can_edit_scopes:
+          type: boolean
+        can_edit_status:
+          type: boolean
+        can_edit_personal_info:
+          type: boolean
+      required:
+      - can_edit_personal_info
+      - can_edit_role
+      - can_edit_scopes
+      - can_edit_status
     EstablishmentMembershipResponse:
       type: object
       properties:
@@ -6803,12 +7121,17 @@ components:
           allOf:
           - $ref: '#/components/schemas/EstablishmentMembershipScopeSummary'
           readOnly: true
+        permission_hints:
+          allOf:
+          - $ref: '#/components/schemas/EstablishmentMembershipPermissionHints'
+          readOnly: true
       required:
       - establishment_id
       - establishment_name
       - id
       - organization_id
       - organization_name
+      - permission_hints
       - role
       - scope_summary
       - scopes
@@ -6822,8 +7145,11 @@ components:
         scope_id:
           type: string
           format: uuid
+        scope_label:
+          type: string
       required:
       - scope_id
+      - scope_label
       - scope_type
     EstablishmentMembershipScopeSummary:
       type: object
@@ -7078,10 +7404,16 @@ components:
           type: string
           format: email
           nullable: true
+        first_name:
+          type: string
+        last_name:
+          type: string
       required:
       - display_name
       - email
+      - first_name
       - id
+      - last_name
       - username
     NotificationActor:
       type: object
@@ -7596,6 +7928,12 @@ components:
         description:
           type: string
           maxLength: 2000
+        requires_validation:
+          type: boolean
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanTaskInput'
     PatchedActivityDescriptionRequest:
       type: object
       properties:
@@ -7647,6 +7985,17 @@ components:
       properties:
         urgency:
           $ref: '#/components/schemas/UrgencyEnum'
+    PatchedUserProfileUpdateRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
     PendingOnboardingMembership:
       type: object
       properties:
@@ -7990,7 +8339,13 @@ components:
         membership_id:
           type: string
           format: uuid
+        business_unit_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
       required:
+      - business_unit_ids
       - display_name
       - email
       - id
@@ -8314,10 +8669,16 @@ components:
           nullable: true
         identity_type:
           type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
       required:
       - email
+      - first_name
       - id
       - identity_type
+      - last_name
       - username
     ValidationErrorResponse:
       type: object

@@ -71,6 +71,16 @@ export function canShowActionPlanTaskMarkDone(
   return isActionPlanTaskPending(options.task)
 }
 
+export function canShowActionPlanTaskUnmarkDone(
+  hints: ActionPlanTaskExecutionPermissionHints | null | undefined,
+  options: { isTerminal: boolean; task: ActionPlanTaskExecution },
+): boolean {
+  if (!hints?.can_unmark_done || options.isTerminal) {
+    return false
+  }
+  return options.task.status === 'done'
+}
+
 export function canShowActionPlanTaskSkip(
   hints: ActionPlanTaskExecutionPermissionHints | null | undefined,
   options: { isTerminal: boolean; task: ActionPlanTaskExecution },
@@ -89,11 +99,4 @@ export function canShowActionPlanTaskCreateObservation(
     return false
   }
   return isActionPlanTaskPending(options.task)
-}
-
-export function shouldShowContributionStatusForPole(options: {
-  contributionStatus: string | null
-  taskCount: number
-}): boolean {
-  return options.taskCount > 0 && options.contributionStatus != null
 }

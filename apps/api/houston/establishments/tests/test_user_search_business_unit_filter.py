@@ -113,7 +113,7 @@ def test_user_search_without_business_unit_id_is_unchanged(api_client):
 
     actor = create_membership(
         establishment=establishment,
-        role=EstablishmentMembership.Role.MANAGER,
+        role=EstablishmentMembership.Role.OWNER,
     )
 
     out_staff = create_membership(
@@ -133,6 +133,48 @@ def test_user_search_without_business_unit_id_is_unchanged(api_client):
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["membership_id"] == str(out_staff.id)
+    assert response.json()[0]["business_unit_ids"] == [str(restaurant.id)]
+
+
+def test_manager_search_without_business_unit_id_filters_to_scope(api_client):
+    establishment = create_establishment(name="Manager scope hotel")
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+    bar = create_business_unit(establishment=establishment, key="bar")
+
+    manager = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+    )
+    create_membership_with_business_unit_scope(membership=manager, business_unit=restaurant)
+
+    scoped_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    scoped_staff.user.first_name = "Scoped"
+    scoped_staff.user.username = "scoped_member"
+    scoped_staff.user.save(update_fields=["first_name", "username"])
+    create_membership_with_business_unit_scope(membership=scoped_staff, business_unit=restaurant)
+
+    out_staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    out_staff.user.first_name = "Outside"
+    out_staff.user.username = "outside_member"
+    out_staff.user.save(update_fields=["first_name", "username"])
+    create_membership_with_business_unit_scope(membership=out_staff, business_unit=bar)
+
+    access_token = login(api_client, membership=manager)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/?q=member",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    membership_ids = {item["membership_id"] for item in response.json()}
+    assert str(scoped_staff.id) in membership_ids
+    assert str(out_staff.id) not in membership_ids
 
 
 def test_user_search_rejects_invalid_business_unit_id(api_client):
@@ -148,3 +190,59 @@ def test_user_search_rejects_invalid_business_unit_id(api_client):
 
     assert response.status_code == 400
     assert response.json()["errors"]["business_unit_id"] == ["Invalid business unit."]
+
+
+def test_staff_search_with_mention_context_returns_establishment_members(api_client):
+    establishment = create_establishment(name="Mention Hotel")
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+
+    staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(membership=staff, business_unit=restaurant)
+
+    colleague = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    colleague.user.first_name = "Marie"
+    colleague.user.save(update_fields=["first_name"])
+
+    access_token = login(api_client, membership=staff)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/"
+        f"?q=mar&context=mention",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    membership_ids = {item["membership_id"] for item in response.json()}
+    assert str(colleague.id) in membership_ids
+
+
+def test_staff_search_assignee_context_without_business_unit_stays_empty(api_client):
+    establishment = create_establishment(name="Assignee scope hotel")
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+
+    staff = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_membership_with_business_unit_scope(membership=staff, business_unit=restaurant)
+
+    colleague = create_membership(
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    colleague.user.first_name = "Marie"
+    colleague.user.save(update_fields=["first_name"])
+
+    access_token = login(api_client, membership=staff)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/?q=mar",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []

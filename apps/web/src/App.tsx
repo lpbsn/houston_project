@@ -14,6 +14,7 @@ import {
   LazyProfilePage,
   LazyProfileSwitchEstablishmentPage,
   LazyTeamPage,
+  LazyTeamMemberDetailPage,
   LazyReportPage,
   LazySignalDetailPage,
   LazySignalFeedPage,
@@ -276,8 +277,22 @@ function App() {
       return <LazyActionPlanTemplateDetailPage actionPlanId={route.actionPlanId} />
     }
 
+    if (route.kind === 'action-plan-template-edit') {
+      return (
+        <LazyActionPlanCreatePage
+          mode="template-edit"
+          actionPlanId={route.actionPlanId}
+          backPath={`/action-plans/${route.actionPlanId}`}
+        />
+      )
+    }
+
     if (route.kind === 'action-plan-execution-detail') {
       return <LazyActionPlanExecutionDetailPage executionId={route.executionId} />
+    }
+
+    if (route.kind === 'team-member-detail') {
+      return <LazyTeamMemberDetailPage membershipId={route.membershipId} />
     }
 
     if (route.kind === 'chat-conversation-detail') {
@@ -319,11 +334,11 @@ function App() {
       )
     }
 
-    if (route.path === '/profile/switch-establishment') {
+    if (route.path === '/general/switch-establishment') {
       return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
     }
 
-    if (route.path === '/profile') {
+    if (route.path === '/general') {
       return (
         <LazyProfilePage
           onNavigate={navigate}
@@ -462,14 +477,7 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
-      : route.kind === 'static' && route.path === '/team/invite'
-        ? {
-            headingBadge: 'Compte',
-            title: 'Inviter un membre',
-            description: "Créez un lien d'invitation pour un nouveau membre de l'équipe.",
-            actions: signOutAction,
-          }
-        : route.kind === 'static' && route.path === '/app'
+      : route.kind === 'static' && route.path === '/app'
           ? {
               title: "Gérer l'établissement",
               description: 'Manage your establishment, team memberships, and invitations.',

@@ -9,6 +9,7 @@ const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   can_view_action_plan_catalog: false,
   can_invite: false,
   can_manage_runtime_config: false,
+  can_view_team: false,
 }
 
 export function getBootstrapPermissionHints(
@@ -43,6 +44,10 @@ export function canViewActionPlanCatalogFromBootstrapHints(
 
 export function canManageRuntimeConfigFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
   return hints.can_manage_runtime_config
+}
+
+export function canViewTeamFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
+  return hints.can_view_team
 }
 
 export function canAccessManagementSpace(hints: BootstrapPermissionHints): boolean {

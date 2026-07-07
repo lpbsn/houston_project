@@ -49,6 +49,26 @@ export function getActionPlanExecutionFeedSection(
   }
 }
 
+export function partitionActionPlanExecutionFeedPinnedItems(
+  items: ActionPlanExecutionFeedItem[],
+): {
+  pinnedItems: ActionPlanExecutionFeedItem[]
+  unpinnedItems: ActionPlanExecutionFeedItem[]
+} {
+  const pinnedItems: ActionPlanExecutionFeedItem[] = []
+  const unpinnedItems: ActionPlanExecutionFeedItem[] = []
+
+  for (const item of items) {
+    if (item.is_pinned) {
+      pinnedItems.push(item)
+    } else {
+      unpinnedItems.push(item)
+    }
+  }
+
+  return { pinnedItems, unpinnedItems }
+}
+
 export function groupActionPlanExecutionsBySection(
   items: ActionPlanExecutionFeedItem[],
 ): ActionPlanExecutionFeedSectionGroup[] {

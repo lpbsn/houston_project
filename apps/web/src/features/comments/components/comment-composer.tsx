@@ -24,6 +24,7 @@ type CommentComposerProps = {
   disabled?: boolean
   errorMessage?: string | null
   placeholder?: string
+  variant?: 'default' | 'reply'
   showCancel?: boolean
   onCancel?: () => void
   onSubmit: (payload: { body: string; mentionedMembershipIds: string[] }) => void
@@ -36,6 +37,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       disabled = false,
       errorMessage = null,
       placeholder = 'Ajouter un commentaire...',
+      variant = 'default',
       showCancel = false,
       onCancel,
       onSubmit,
@@ -46,6 +48,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
     const [draft, setDraft] = useState('')
     const [selectedMentions, setSelectedMentions] = useState<SelectedMention[]>([])
     const [cursorPosition, setCursorPosition] = useState(0)
+    const isReply = variant === 'reply'
 
     const mentionQuery = getActiveMentionQuery(draft, cursorPosition) ?? ''
     const usersQuery = useMentionUserSearchQuery(establishmentId, mentionQuery)
@@ -126,7 +129,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
 
     return (
       <div className={showCancel ? undefined : 'mt-3'}>
-        <div className="flex items-end gap-2">
+        <div className={cn('flex gap-2', isReply ? 'items-center' : 'items-end')}>
           <textarea
             ref={textareaRef}
             value={draft}
@@ -138,12 +141,15 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             onKeyUp={updateCursorPosition}
             onSelect={updateCursorPosition}
             placeholder={placeholder}
-            rows={3}
+            rows={isReply ? 1 : 3}
             disabled={disabled}
             aria-label="Ajouter un commentaire"
             className={cn(
-              'min-h-24 max-h-40 flex-1 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3 text-sm',
-              'text-[#1a1a1a] placeholder:text-[#a3a19a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
+              'flex-1 resize-none text-sm text-[#1a1a1a] placeholder:text-[#65676B]',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
+              isReply
+                ? 'min-h-11 max-h-24 rounded-full border border-[#E4E6EB] bg-[#F0F2F5] px-4 py-2.5'
+                : 'min-h-24 max-h-40 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3',
             )}
           />
           <Button
@@ -172,9 +178,11 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
           </div>
         ) : null}
 
-        <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">
-          {draft.length}/{MAX_COMMENT_LENGTH}
-        </p>
+        {!isReply ? (
+          <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">
+            {draft.length}/{MAX_COMMENT_LENGTH}
+          </p>
+        ) : null}
 
         <SelectedMentionChips
           mentions={selectedMentions}

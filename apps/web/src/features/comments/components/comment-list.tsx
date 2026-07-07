@@ -39,17 +39,13 @@ type CommentListProps =
     } & ThreadedCommentListProps)
 
 function CommentOriginBadge({ origin }: { origin: CommentItem['origin'] }) {
-  if (origin === 'signal') {
-    return (
-      <HoustonBadge variant="gray" className="text-[9px]">
-        Signal
-      </HoustonBadge>
-    )
+  if (origin !== 'signal') {
+    return null
   }
 
   return (
-    <HoustonBadge variant="blue" className="text-[9px]">
-      Plan
+    <HoustonBadge variant="gray" className="text-[9px]">
+      Signal
     </HoustonBadge>
   )
 }
@@ -101,7 +97,7 @@ function ExecutionCommentList({
   }
 
   return (
-    <ul className="mt-3 flex flex-col gap-3" aria-label="Liste des commentaires">
+    <ul className="mt-3 flex flex-col gap-4" aria-label="Liste des commentaires">
       {comments.map((item) => {
         if (isExecutionInheritedSignalItem(item)) {
           return (

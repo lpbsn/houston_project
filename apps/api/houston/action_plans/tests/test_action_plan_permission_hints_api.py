@@ -128,8 +128,43 @@ def test_task_execution_hints_on_detail(
     )
     task_hints = response.json()["task_executions"][0]["permission_hints"]
     assert task_hints["can_mark_done"] is True
+    assert task_hints["can_unmark_done"] is False
     assert task_hints["can_skip"] is True
     assert task_hints["can_create_observation"] is True
+
+
+def test_done_task_execution_hints_on_detail(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from houston.action_plans.services import mark_execution_task_done
+
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Done task hints",
+        requires_validation=False,
+        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit)
+        ],
+    )
+    task = execution.task_executions.first()
+    mark_execution_task_done(task_execution=task, actor=staff_membership)
+
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.get(
+        action_plan_execution_url(staff_membership.establishment_id, execution.id),
+        **auth_headers(token),
+    )
+    task_hints = response.json()["task_executions"][0]["permission_hints"]
+    assert task_hints["can_mark_done"] is False
+    assert task_hints["can_unmark_done"] is True
+    assert task_hints["can_skip"] is False
+    assert task_hints["can_create_observation"] is False
 
 
 def test_list_item_includes_permission_hints(

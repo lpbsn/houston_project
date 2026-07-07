@@ -215,7 +215,7 @@ export async function searchEstablishmentUsersForMentions(
       apiClient.GET('/api/v1/establishments/{establishment_id}/users/search/', {
         params: {
           path: { establishment_id: establishmentId },
-          query: { q: query },
+          query: { q: query, context: 'mention' },
         },
         headers: getAuthHeaders(accessToken),
       }),

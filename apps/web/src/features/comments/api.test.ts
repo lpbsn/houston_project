@@ -71,7 +71,7 @@ describe('comments api', () => {
       expect.objectContaining({
         params: {
           path: { establishment_id: 'est-1' },
-          query: { q: 'marie' },
+          query: { q: 'marie', context: 'mention' },
         },
       }),
     )

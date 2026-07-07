@@ -7,7 +7,7 @@ export type TerrainNavPath =
   | '/signals'
   | '/execution'
   | '/chat'
-  | '/profile'
+  | '/general'
 
 export type TerrainMainScroll = 'auto' | 'hidden'
 
@@ -35,8 +35,8 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/signals',
   '/execution',
   '/chat',
-  '/profile',
-  '/profile/switch-establishment',
+  '/general',
+  '/general/switch-establishment',
   '/team',
   '/team/invite',
   '/action-plans',
@@ -56,22 +56,24 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'action-plan-create',
   'execution-action-plan-create',
   'action-plan-template-detail',
+  'action-plan-template-edit',
   'action-plan-execution-detail',
   'chat-conversation-detail',
+  'team-member-detail',
 ])
 
 const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
 
-const TEAM_TERRAIN_PATHS = new Set<string>(['/team'])
+const TEAM_TERRAIN_PATHS = new Set<string>(['/team', '/team/invite'])
 
-const PROFILE_TERRAIN_PATHS = new Set<string>(['/profile/switch-establishment'])
+const PROFILE_TERRAIN_PATHS = new Set<string>(['/general/switch-establishment'])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
   '/reporting',
   '/signals',
   '/execution',
   '/chat',
-  '/profile',
+  '/general',
 ])
 
 export function isProtectedRoute(route: AppRoute): boolean {
@@ -97,8 +99,10 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'action-plan-create' ||
     route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
-    route.kind === 'chat-conversation-detail'
+    route.kind === 'chat-conversation-detail' ||
+    route.kind === 'team-member-detail'
   ) {
     return true
   }
@@ -117,8 +121,10 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'action-plan-create' ||
     route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
+    route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
-    route.kind === 'chat-conversation-detail'
+    route.kind === 'chat-conversation-detail' ||
+    route.kind === 'team-member-detail'
   ) {
     return true
   }
@@ -178,10 +184,20 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
+  if (route.kind === 'team-member-detail') {
+    return {
+      topbarVariant: 'detail',
+      backPath: '/team',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
+    }
+  }
+
   if (route.kind === 'static' && route.path === '/reporting') {
     return {
       topbarVariant: 'hub',
-      pageTitle: 'Nouvelle Observation',
+      pageTitle: 'Observation',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'auto',
@@ -218,11 +234,12 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'static' && route.path === '/profile') {
+  if (route.kind === 'static' && route.path === '/general') {
     return {
       topbarVariant: 'hub',
+      pageTitle: 'Général',
       showBottomNav: true,
-      activeNavPath: '/profile',
+      activeNavPath: '/general',
       mainScroll: 'auto',
     }
   }
@@ -231,17 +248,27 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     return {
       topbarVariant: 'detail',
       title: 'Équipe',
-      backPath: '/profile',
+      backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
     }
   }
 
-  if (route.kind === 'static' && route.path === '/profile/switch-establishment') {
+  if (route.kind === 'static' && route.path === '/team/invite') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Inviter un membre',
+      backPath: '/team',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/general/switch-establishment') {
     return {
       topbarVariant: 'detail',
       title: "Changer d'établissement",
-      backPath: '/profile',
+      backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
     }
@@ -251,7 +278,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     return {
       topbarVariant: 'detail',
       title: 'Bibliothèque',
-      backPath: '/profile',
+      backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
     }
@@ -271,21 +298,33 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'action-plan-template-detail') {
     return {
       topbarVariant: 'detail',
+      detailTitleLayout: 'belowBack',
       title: 'Détail du plan',
       backPath: '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
+      showTopbarBottomBorder: false,
+    }
+  }
+
+  if (route.kind === 'action-plan-template-edit') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Modifier le plan',
+      backPath: `/action-plans/${route.actionPlanId}`,
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
     }
   }
 
   if (route.kind === 'action-plan-execution-detail') {
     return {
       topbarVariant: 'detail',
-      detailTitleLayout: 'belowBack',
+      title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
-      showTopbarBottomBorder: false,
     }
   }
 
@@ -306,7 +345,7 @@ export function resolveTerrainTopbarShowBottomBorder(
       route.kind === 'static' &&
       (route.path === '/signals' ||
         route.path === '/execution' ||
-        route.path === '/profile')
+        route.path === '/general')
     )
   )
 }
@@ -333,12 +372,20 @@ export function getTerrainContentKey(route: AppRoute): string {
     return `action-plan-template-detail-${route.actionPlanId}`
   }
 
+  if (route.kind === 'action-plan-template-edit') {
+    return `action-plan-template-edit-${route.actionPlanId}`
+  }
+
   if (route.kind === 'action-plan-execution-detail') {
     return `action-plan-execution-detail-${route.executionId}`
   }
 
   if (route.kind === 'chat-conversation-detail') {
     return `chat-conversation-detail-${route.conversationId}`
+  }
+
+  if (route.kind === 'team-member-detail') {
+    return `team-member-detail-${route.membershipId}`
   }
 
   if (route.kind === 'static') {
@@ -351,14 +398,16 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'execution'
       case '/chat':
         return 'chat'
-      case '/profile':
-        return 'profile'
+      case '/general':
+        return 'general'
       case '/action-plans':
         return 'action-plans-hub'
       case '/team':
         return 'team'
-      case '/profile/switch-establishment':
-        return 'profile-switch-establishment'
+      case '/team/invite':
+        return 'team-invite'
+      case '/general/switch-establishment':
+        return 'general-switch-establishment'
       default:
         break
     }

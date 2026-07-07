@@ -68,7 +68,7 @@ describe('ActionCommentThreadCard reply composer', () => {
     submitReply()
 
     expect(onReply).toHaveBeenCalledTimes(1)
-    expect(screen.getByPlaceholderText('Répondre...')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Répondre à Alice…')).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toBe('Impossible d’envoyer la réponse.')
   })
 
@@ -91,6 +91,90 @@ describe('ActionCommentThreadCard reply composer', () => {
     submitReply()
 
     expect(onReply).toHaveBeenCalledTimes(1)
-    expect(screen.queryByPlaceholderText('Répondre...')).toBeNull()
+    expect(screen.queryByPlaceholderText('Répondre à Alice…')).toBeNull()
+  })
+})
+
+describe('ActionCommentThreadCard resolve toggle', () => {
+  it('does not show Résolu when can_resolve is false', () => {
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({ permission_hints: { can_reply: true, can_resolve: false } })}
+        establishmentId="est-1"
+        onReply={vi.fn()}
+        onResolve={vi.fn()}
+        onUnresolve={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByLabelText('Marquer le commentaire comme résolu')).toBeNull()
+    expect(screen.queryByLabelText('Marquer le commentaire comme non résolu')).toBeNull()
+  })
+
+  it('calls onResolve when Résolu is clicked on an unresolved thread', () => {
+    const onResolve = vi.fn()
+
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({ permission_hints: { can_reply: true, can_resolve: true } })}
+        establishmentId="est-1"
+        onReply={vi.fn()}
+        onResolve={onResolve}
+        onUnresolve={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByLabelText('Marquer le commentaire comme résolu'))
+
+    expect(onResolve).toHaveBeenCalledWith('thread-a')
+  })
+
+  it('calls onUnresolve when Résolu is clicked on a resolved thread', () => {
+    const onUnresolve = vi.fn()
+
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({
+          is_resolved: true,
+          permission_hints: { can_reply: true, can_resolve: true },
+        })}
+        establishmentId="est-1"
+        onReply={vi.fn()}
+        onResolve={vi.fn()}
+        onUnresolve={onUnresolve}
+      />,
+    )
+
+    fireEvent.click(screen.getByLabelText('Marquer le commentaire comme non résolu'))
+
+    expect(onUnresolve).toHaveBeenCalledWith('thread-a')
+  })
+
+  it('keeps replies collapsed by default when resolved', () => {
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({
+          is_resolved: true,
+          replies: [
+            {
+              id: 'reply-1',
+              origin: 'action_plan_execution',
+              body: 'réponse cachée',
+              author: { membership_id: 'm-2', display_name: 'Bob' },
+              mentions: [],
+              created_at: '2026-06-15T11:00:00Z',
+            },
+          ],
+          permission_hints: { can_reply: true, can_resolve: true },
+        })}
+        establishmentId="est-1"
+        onReply={vi.fn()}
+        onResolve={vi.fn()}
+        onUnresolve={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('réponse cachée')).toBeNull()
+    expect(screen.getByRole('button', { name: /Voir 1 réponse/ })).toBeTruthy()
   })
 })

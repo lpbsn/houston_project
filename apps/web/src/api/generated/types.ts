@@ -94,6 +94,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Updates the authenticated user's personal profile fields. */
+        patch: operations["v1_auth_me_partial_update"];
+        trace?: never;
+    };
     "/api/v1/auth/refresh/": {
         parameters: {
             query?: never;
@@ -244,6 +261,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/mark-pending/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plan_execution_tasks_mark_pending_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/{task_execution_id}/skip/": {
         parameters: {
             query?: never;
@@ -360,6 +393,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plan_executions_pin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/reopen/": {
         parameters: {
             query?: never;
@@ -370,6 +419,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["v1_establishments_action_plan_executions_reopen_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plan_executions_unpin_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -433,6 +498,7 @@ export interface paths {
         };
         get: operations["v1_establishments_action_plans_list"];
         put?: never;
+        /** @description Creates an action plan. Reusable catalog entries may omit tasks; execution or schedule flows require at least one task or assignee. */
         post: operations["v1_establishments_action_plans_create"];
         delete?: never;
         options?: never;
@@ -854,7 +920,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Lists memberships for the current active establishment context. Requires an active selected establishment and owner or director authority. */
+        /** @description Lists memberships for the current active establishment context. Requires an active selected establishment membership. */
         get: operations["v1_establishments_memberships_list"];
         put?: never;
         post?: never;
@@ -871,7 +937,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns one membership inside the current active establishment context. Requires owner or director authority. */
+        /** @description Returns one membership inside the current active establishment context. */
         get: operations["v1_establishments_memberships_retrieve"];
         put?: never;
         post?: never;
@@ -880,6 +946,23 @@ export interface paths {
         head?: never;
         /** @description Updates the role and active operational-domain assignments for one membership in the current active establishment context. */
         patch: operations["v1_establishments_memberships_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/memberships/{membership_id}/activate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Activates one membership in the current active establishment context. Invited memberships cannot be activated until the invitation is accepted. */
+        post: operations["v1_establishments_memberships_activate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/": {
@@ -1236,7 +1319,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Searches active users in the current active establishment context. Results are tenant-filtered before serialization and return only a minimal membership-backed user summary. */
+        /** @description Searches active users in the current active establishment context. Use context=assignee for scope-aware assignment pickers; context=mention for comment @mentions. Results are tenant-filtered before serialization. */
         get: operations["v1_establishments_users_search_list"];
         put?: never;
         post?: never;
@@ -1573,6 +1656,7 @@ export interface components {
             requires_validation: boolean;
             /** @default false */
             is_reusable: boolean;
+            /** @description Optional for reusable catalog plans. Direct execution or schedule create still requires at least one task or assignee. */
             tasks?: components["schemas"]["ActionPlanTaskInput"][];
             assignees?: components["schemas"]["ActionPlanAssigneeInput"][];
             /** Format: uuid */
@@ -1603,6 +1687,9 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             permission_hints: components["schemas"]["ActionPlanPermissionHints"];
+            /** Format: uuid */
+            created_by_id: string;
+            created_by_display_name: string;
             tasks: components["schemas"]["ActionPlanTaskTemplate"][];
             requires_validation: boolean;
             is_reusable: boolean;
@@ -1680,6 +1767,7 @@ export interface components {
             last_activity_at: string;
             /** Format: date-time */
             created_at: string;
+            is_pinned: boolean;
             permission_hints: components["schemas"]["ActionPlanExecutionPermissionHints"];
         };
         ActionPlanExecutionFeedItemWrapper: {
@@ -1703,6 +1791,10 @@ export interface components {
             can_reopen: boolean;
             can_cancel: boolean;
             is_pilot_pole_assignee: boolean;
+            can_pin: boolean;
+        };
+        ActionPlanExecutionPinState: {
+            is_pinned: boolean;
         };
         ActionPlanInvolvedPole: {
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
@@ -1812,6 +1904,12 @@ export interface components {
             /** Format: uuid */
             id: string;
             task: string;
+            description: string;
+            /** Format: date-time */
+            deadline_at: string | null;
+            /** Format: uuid */
+            assigned_membership_id: string | null;
+            assigned_display_name: string | null;
             position: number;
             status: string;
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
@@ -1828,6 +1926,7 @@ export interface components {
         };
         ActionPlanTaskExecutionPermissionHints: {
             can_mark_done: boolean;
+            can_unmark_done: boolean;
             can_skip: boolean;
             can_create_observation: boolean;
         };
@@ -1836,6 +1935,12 @@ export interface components {
             /** Format: uuid */
             business_unit_id: string;
             position?: number;
+            /** @default  */
+            description: string;
+            /** Format: date-time */
+            deadline_at?: string | null;
+            /** Format: uuid */
+            assigned_membership_id?: string | null;
         };
         ActionPlanTaskSkipRequest: {
             skipped_reason?: string | null;
@@ -1844,6 +1949,12 @@ export interface components {
             /** Format: uuid */
             id: string;
             task: string;
+            description: string;
+            /** Format: date-time */
+            deadline_at: string | null;
+            /** Format: uuid */
+            assigned_membership_id: string | null;
+            assigned_display_name: string | null;
             position: number;
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
         };
@@ -1963,6 +2074,7 @@ export interface components {
             can_view_action_plan_catalog: boolean;
             can_invite: boolean;
             can_manage_runtime_config: boolean;
+            can_view_team: boolean;
         };
         BootstrapResponse: {
             authenticated: boolean;
@@ -2174,6 +2286,12 @@ export interface components {
             invitation_expires_at: string;
             invitation_accept_path: string;
         };
+        EstablishmentMembershipPermissionHints: {
+            can_edit_role: boolean;
+            can_edit_scopes: boolean;
+            can_edit_status: boolean;
+            can_edit_personal_info: boolean;
+        };
         EstablishmentMembershipResponse: {
             /** Format: uuid */
             id: string;
@@ -2188,11 +2306,13 @@ export interface components {
             status: string;
             readonly scopes: components["schemas"]["EstablishmentMembershipScopeItem"][];
             readonly scope_summary: components["schemas"]["EstablishmentMembershipScopeSummary"];
+            readonly permission_hints: components["schemas"]["EstablishmentMembershipPermissionHints"];
         };
         EstablishmentMembershipScopeItem: {
             scope_type: components["schemas"]["ScopeTypeEnum"];
             /** Format: uuid */
             scope_id: string;
+            scope_label: string;
         };
         EstablishmentMembershipScopeSummary: {
             business_unit_count: number;
@@ -2298,6 +2418,8 @@ export interface components {
             username: string;
             /** Format: email */
             email: string | null;
+            first_name: string;
+            last_name: string;
         };
         NotificationActor: {
             /** Format: uuid */
@@ -2510,6 +2632,8 @@ export interface components {
         PatchedActionPlanUpdateRequest: {
             title?: string;
             description?: string;
+            requires_validation?: boolean;
+            tasks?: components["schemas"]["ActionPlanTaskInput"][];
         };
         PatchedActivityDescriptionRequest: {
             description?: string;
@@ -2537,6 +2661,12 @@ export interface components {
         };
         PatchedSignalUrgencyRequest: {
             urgency?: components["schemas"]["UrgencyEnum"];
+        };
+        PatchedUserProfileUpdateRequest: {
+            first_name?: string;
+            last_name?: string;
+            /** Format: email */
+            email?: string | null;
         };
         PendingOnboardingMembership: {
             /** Format: uuid */
@@ -2684,6 +2814,7 @@ export interface components {
             role: string;
             /** Format: uuid */
             membership_id: string;
+            readonly business_unit_ids: string[];
         };
         SignalDetail: {
             /** Format: uuid */
@@ -2819,6 +2950,8 @@ export interface components {
             /** Format: email */
             email: string | null;
             identity_type: string;
+            first_name: string;
+            last_name: string;
         };
         ValidationErrorResponse: {
             code: string;
@@ -3005,6 +3138,55 @@ export interface operations {
                 content?: never;
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_auth_me_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUserProfileUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUserProfileUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedUserProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3357,6 +3539,60 @@ export interface operations {
         };
     };
     v1_establishments_action_plan_execution_tasks_mark_done_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                task_execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanTaskExecution"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_execution_tasks_mark_pending_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -3800,6 +4036,44 @@ export interface operations {
             };
         };
     };
+    v1_establishments_action_plan_executions_pin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionPinState"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_action_plan_executions_reopen_create: {
         parameters: {
             query?: never;
@@ -3837,6 +4111,44 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_executions_unpin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionPinState"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5840,6 +6152,60 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["PatchedMembershipUpdateRequest"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstablishmentMembershipResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_memberships_activate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

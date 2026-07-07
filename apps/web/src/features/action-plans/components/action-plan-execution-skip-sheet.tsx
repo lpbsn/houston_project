@@ -1,21 +1,16 @@
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 type ActionPlanExecutionSkipSheetProps = {
   open: boolean
-  skipReason: string
   isPending: boolean
-  onSkipReasonChange: (value: string) => void
   onConfirm: () => void
   onClose: () => void
 }
 
 export function ActionPlanExecutionSkipSheet({
   open,
-  skipReason,
   isPending,
-  onSkipReasonChange,
   onConfirm,
   onClose,
 }: ActionPlanExecutionSkipSheetProps) {
@@ -49,12 +44,7 @@ export function ActionPlanExecutionSkipSheet({
         </div>
       }
     >
-      <Input
-        value={skipReason}
-        onChange={(event) => onSkipReasonChange(event.target.value)}
-        placeholder="Raison (optionnel)"
-        className="h-10 border-[#E8E6DF] text-sm"
-      />
+      <p className="text-sm text-[#555]">Cette tâche sera marquée comme passée.</p>
     </TerrainBottomSheet>
   )
 }

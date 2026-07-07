@@ -33,6 +33,7 @@ export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanE
 export type ActionPlanExecutionFeedItemWrapper =
   components['schemas']['ActionPlanExecutionFeedItemWrapper']
 export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecutionFeedItem']
+export type ActionPlanExecutionPinState = components['schemas']['ActionPlanExecutionPinState']
 export type ActionPlanExecutionFeedAssignee =
   components['schemas']['ActionPlanExecutionFeedAssignee']
 export type ActionPlanExecutionFeedTaskPreview =

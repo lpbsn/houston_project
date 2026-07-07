@@ -14,6 +14,7 @@ from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import (
     can_invite_memberships,
     can_manage_runtime_context,
+    can_view_team_memberships,
 )
 from houston.organizations.models import Organization
 
@@ -86,6 +87,7 @@ def test_bootstrap_permission_hints_match_rbac_helpers_for_active_membership(
     assert hints["can_view_action_plan_catalog"] is can_view_action_plan_catalog(membership)
     assert hints["can_invite"] is can_invite_memberships(membership)
     assert hints["can_manage_runtime_config"] is can_manage_runtime_context(membership)
+    assert hints["can_view_team"] is can_view_team_memberships(membership)
     assert hints["chat_available"] is can_access_chat(membership)
 
 

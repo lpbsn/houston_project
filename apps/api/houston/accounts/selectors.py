@@ -177,6 +177,8 @@ def _serialize_user(user: User) -> dict:
         "username": user.username,
         "email": user.email,
         "identity_type": user.identity_type,
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
     }
 
 

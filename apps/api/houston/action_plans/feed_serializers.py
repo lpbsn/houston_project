@@ -66,6 +66,7 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     task_executions = ActionPlanExecutionFeedTaskPreviewSerializer(many=True)
     last_activity_at = serializers.DateTimeField()
     created_at = serializers.DateTimeField()
+    is_pinned = serializers.BooleanField()
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
 
 
@@ -129,8 +130,10 @@ def serialize_action_plan_execution_feed_item(
         ],
         "last_activity_at": execution.last_activity_at,
         "created_at": execution.created_at,
+        "is_pinned": bool(getattr(execution, "is_feed_pinned", False)),
         "permission_hints": build_action_plan_execution_permission_hints(
             membership=membership,
             execution=execution,
+            in_feed=True,
         ),
     }

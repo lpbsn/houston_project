@@ -22,8 +22,8 @@ export type AppPath =
   | '/signals'
   | '/execution'
   | '/chat'
-  | '/profile/switch-establishment'
-  | '/profile'
+  | '/general/switch-establishment'
+  | '/general'
   | '/team'
   | '/team/invite'
   | '/action-plans'
@@ -35,8 +35,10 @@ export type AppRoute =
   | { kind: 'action-plan-create' }
   | { kind: 'execution-action-plan-create' }
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
+  | { kind: 'action-plan-template-edit'; actionPlanId: string }
   | { kind: 'action-plan-execution-detail'; executionId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
+  | { kind: 'team-member-detail'; membershipId: string }
   | { kind: 'invitation'; token: string }
   | { kind: 'unknown'; pathname: string }
 
@@ -60,10 +62,14 @@ export function getAppRouteKey(route: AppRoute): string {
       return 'execution-action-plan-create'
     case 'action-plan-template-detail':
       return `action-plan-template-detail:${route.actionPlanId}`
+    case 'action-plan-template-edit':
+      return `action-plan-template-edit:${route.actionPlanId}`
     case 'action-plan-execution-detail':
       return `action-plan-execution-detail:${route.executionId}`
     case 'chat-conversation-detail':
       return `chat-conversation-detail:${route.conversationId}`
+    case 'team-member-detail':
+      return `team-member-detail:${route.membershipId}`
     case 'invitation':
       return `invitation:${route.token}`
     case 'unknown':
@@ -114,6 +120,14 @@ function parseActionPlanRoute(pathname: string): AppRoute | null {
     return { kind: 'action-plan-create' }
   }
 
+  const editMatch = pathname.match(/^\/action-plans\/([^/]+)\/edit$/)
+  if (editMatch?.[1]) {
+    return {
+      kind: 'action-plan-template-edit',
+      actionPlanId: editMatch[1],
+    }
+  }
+
   const detailMatch = pathname.match(/^\/action-plans\/([^/]+)$/)
   if (detailMatch?.[1]) {
     const segment = detailMatch[1]
@@ -131,6 +145,15 @@ function parseActionPlanRoute(pathname: string): AppRoute | null {
 function parseChatConversationId(pathname: string): string | null {
   const match = pathname.match(/^\/chat\/([^/]+)$/)
   return match?.[1] ?? null
+}
+
+function parseTeamMemberId(pathname: string): string | null {
+  const match = pathname.match(/^\/team\/([^/]+)$/)
+  const membershipId = match?.[1] ?? null
+  if (!membershipId || membershipId === 'invite') {
+    return null
+  }
+  return membershipId
 }
 
 export function parseAppRoute(input: string): AppRoute {
@@ -161,6 +184,11 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'chat-conversation-detail', conversationId: chatConversationId }
   }
 
+  const teamMemberId = parseTeamMemberId(pathname)
+  if (teamMemberId) {
+    return { kind: 'team-member-detail', membershipId: teamMemberId }
+  }
+
   if (pathname === '/execution/plans/new') {
     return { kind: 'execution-action-plan-create' }
   }
@@ -179,8 +207,8 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/signals' ||
     pathname === '/execution' ||
     pathname === '/chat' ||
-    pathname === '/profile/switch-establishment' ||
-    pathname === '/profile' ||
+    pathname === '/general/switch-establishment' ||
+    pathname === '/general' ||
     pathname === '/team' ||
     pathname === '/team/invite' ||
     pathname === '/action-plans'

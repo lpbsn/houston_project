@@ -1,30 +1,34 @@
-import { LoaderCircle } from 'lucide-react'
+import { LoaderCircle, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainCard, TerrainErrorState, TerrainSectionLabel, TerrainStickyFooter } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
+import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
+import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
+import { ActionPlanTemplateDetailHeader } from '../components/action-plan-template-detail-header'
 import {
   useActivateActionPlanMutation,
   useActionPlanDetailQuery,
-  useCreateActionPlanScheduleMutation,
   useDeactivateActionPlanMutation,
-  useUpdateActionPlanMutation,
   useUseActionPlanMutation,
 } from '../hooks'
-import { formatCatalogStatusLabel } from '../lib/action-plan-display'
+import { buildActionPlanUseRequest } from '../lib/action-plan-create-payload'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
+import {
+  createActionPlanEventPlanningDraft,
+  toUseRequestOptions,
+  validateActionPlanEventPlanningDraft,
+  type ActionPlanEventPlanningDraft,
+} from '../lib/action-plan-event-planning-form'
 import {
   canShowActionPlanActivate,
   canShowActionPlanDeactivate,
-  canShowActionPlanSchedule,
   canShowActionPlanUpdate,
   canShowActionPlanUse,
 } from '../lib/action-plan-permission-hints'
@@ -36,20 +40,21 @@ type ActionPlanTemplateDetailPageProps = {
 
 export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplateDetailPageProps) {
   const { navigate } = useAppRoute()
-  const { activeMembership } = useAuth()
+  const { activeMembership, bootstrap } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
   const staffUseMode = isStaffActionPlanUsageRole(activeMembership?.role ?? null)
+  const staffDisplayName = bootstrap?.user?.username ?? 'Moi'
 
   const detailQuery = useActionPlanDetailQuery(establishmentId, actionPlanId)
-  const updateMutation = useUpdateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const activateMutation = useActivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const deactivateMutation = useDeactivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const useMutation = useUseActionPlanMutation(establishmentId ?? '', actionPlanId)
-  const scheduleMutation = useCreateActionPlanScheduleMutation(establishmentId ?? '', actionPlanId)
 
-  const [titleDraft, setTitleDraft] = useState<string | null>(null)
-  const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null)
-  const [useSheetOpen, setUseSheetOpen] = useState(false)
+  const [executionPanelOpen, setExecutionPanelOpen] = useState(false)
+  const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
+    createActionPlanEventPlanningDraft,
+  )
+  const [planningFieldErrors, setPlanningFieldErrors] = useState<Record<string, string>>({})
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
@@ -81,32 +86,16 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   }
 
   const plan = detailQuery.data
-  const title = titleDraft ?? plan.title
-  const description = descriptionDraft ?? plan.description
   const hints = plan.permission_hints
   const canUpdate = canShowActionPlanUpdate(hints)
+  const canUse = canShowActionPlanUse(hints)
   const isBusy =
-    updateMutation.isPending ||
-    activateMutation.isPending ||
-    deactivateMutation.isPending ||
-    useMutation.isPending
+    activateMutation.isPending || deactivateMutation.isPending || useMutation.isPending
 
-  async function handleSaveMetadata() {
-    setFeedback(null)
-    try {
-      await updateMutation.mutateAsync({
-        title: title.trim(),
-        description: description.trim(),
-      })
-      setTitleDraft(null)
-      setDescriptionDraft(null)
-      setFeedback({ variant: 'success', message: 'Plan mis à jour.' })
-    } catch (error) {
-      setFeedback({
-        variant: 'error',
-        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être mis à jour.'),
-      })
-    }
+  function resetExecutionPanel() {
+    setExecutionPanelOpen(false)
+    setPlanningDraft(createActionPlanEventPlanningDraft())
+    setPlanningFieldErrors({})
   }
 
   async function handleActivate() {
@@ -135,135 +124,151 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     }
   }
 
-  async function handleUse(body: Parameters<typeof useMutation.mutateAsync>[0]) {
+  async function handleLaunchExecution() {
+    const errors = validateActionPlanEventPlanningDraft(planningDraft, {
+      requireAssignees: false,
+      allowRepeat: false,
+    })
+    setPlanningFieldErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      return
+    }
+
     setFeedback(null)
     try {
-      const execution = await useMutation.mutateAsync(body)
-      setUseSheetOpen(false)
+      const useOptions = toUseRequestOptions(planningDraft)
+      const execution = await useMutation.mutateAsync(
+        buildActionPlanUseRequest({
+          ...useOptions,
+          assignees: staffUseMode ? [] : useOptions.assignees,
+        }),
+      )
+      resetExecutionPanel()
       navigate(`/action-plans/executions/${execution.id}`)
     } catch (error) {
       setFeedback({
         variant: 'error',
-        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être utilisé.'),
+        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être lancé.'),
       })
     }
   }
 
-  async function handleSchedule(body: Parameters<typeof scheduleMutation.mutateAsync>[0]) {
-    setFeedback(null)
-    try {
-      await scheduleMutation.mutateAsync(body)
-      setUseSheetOpen(false)
-      setFeedback({ variant: 'success', message: 'Planification récurrente enregistrée.' })
-    } catch (error) {
-      setFeedback({
-        variant: 'error',
-        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'),
-      })
-    }
-  }
+  const sortedTasks = [...plan.tasks].sort((left, right) => left.position - right.position)
 
   return (
-    <div className="space-y-3 px-3 pb-6 pt-2">
-      {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
+    <div className="flex min-h-full flex-col">
+      <div className={cn('space-y-3 px-3 pt-2', executionPanelOpen ? 'pb-28' : 'pb-6')}>
+        {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
 
-      <TerrainCard className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-[#7D7B75]">
-            Statut bibliothèque : {formatCatalogStatusLabel(plan.catalog_status)}
-          </p>
-          <p className="text-xs text-[#7D7B75]">Pôle pilote : {plan.pilot_business_unit.label}</p>
-        </div>
-        <Input
-          value={title}
-          onChange={(event) => setTitleDraft(event.target.value)}
-          disabled={!canUpdate || isBusy}
-          aria-label="Titre du plan"
-          className="h-11 border-[#E8E6DF] text-sm font-semibold"
-        />
-        <textarea
-          value={description}
-          onChange={(event) => setDescriptionDraft(event.target.value)}
-          disabled={!canUpdate || isBusy}
-          aria-label="Description"
-          className="min-h-20 w-full rounded-xl border border-[#E8E6DF] px-3 py-2 text-sm"
-        />
-        {canUpdate ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-full rounded-xl"
-            disabled={isBusy}
-            onClick={() => void handleSaveMetadata()}
-          >
-            Enregistrer
-          </Button>
-        ) : null}
-      </TerrainCard>
+        <ActionPlanTemplateDetailHeader plan={plan} />
 
-      <section className="space-y-2">
-        <TerrainSectionLabel>Tâches</TerrainSectionLabel>
-        <TerrainCard className="divide-y divide-[#F0EFE9] p-0">
-          {plan.tasks.length === 0 ? (
-            <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Aucune tâche.</p>
+        <section className="space-y-2">
+          <TerrainSectionLabel>Tâches</TerrainSectionLabel>
+          {sortedTasks.length === 0 ? (
+            <TerrainCard className="p-0">
+              <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Aucune tâche.</p>
+            </TerrainCard>
           ) : (
-            plan.tasks.map((task) => (
-              <div key={task.id} className="px-3 py-3 text-sm text-[#1a1a1a]">
-                <p>{task.task}</p>
-                <p className="mt-1 text-xs text-[#7D7B75]">{task.business_unit.label}</p>
-              </div>
-            ))
+            <div className="space-y-1">
+              {sortedTasks.map((task) => (
+                <TerrainCard key={task.id} className="p-0">
+                  <ActionPlanTaskReadOnlyRow task={task} />
+                </TerrainCard>
+              ))}
+            </div>
           )}
-        </TerrainCard>
-      </section>
+        </section>
 
-      <div className="flex flex-col gap-2">
-        {canShowActionPlanUse(hints) ? (
+        <div className="flex flex-col gap-2">
+          {canUpdate ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full rounded-xl"
+              disabled={isBusy}
+              onClick={() => navigate(`/action-plans/${actionPlanId}/edit`)}
+            >
+              Modifier
+            </Button>
+          ) : null}
+          {canShowActionPlanActivate(hints) ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full rounded-xl"
+              disabled={isBusy}
+              onClick={() => void handleActivate()}
+            >
+              Activer dans la bibliothèque
+            </Button>
+          ) : null}
+          {canShowActionPlanDeactivate(hints) ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full rounded-xl text-[#E24B4A]"
+              disabled={isBusy}
+              onClick={() => void handleDeactivate()}
+            >
+              Désactiver
+            </Button>
+          ) : null}
+        </div>
+
+        {executionPanelOpen ? (
+          <ActionPlanEventPlanningForm
+            draft={planningDraft}
+            config={{
+              canEditAssignees: !staffUseMode,
+              canSchedule: false,
+              staffMode: staffUseMode,
+              showAdvancedChronology: !staffUseMode,
+              hideAssignees: false,
+              staffDisplayName,
+            }}
+            establishmentId={establishmentId}
+            pilotBusinessUnitId={plan.pilot_business_unit.id}
+            fieldErrors={planningFieldErrors}
+            onDraftChange={setPlanningDraft}
+          />
+        ) : null}
+
+        {canUse && !executionPanelOpen ? (
           <Button
             type="button"
             className="h-11 w-full rounded-xl"
             disabled={isBusy}
-            onClick={() => setUseSheetOpen(true)}
+            onClick={() => setExecutionPanelOpen(true)}
           >
-            Utiliser
-          </Button>
-        ) : null}
-        {canShowActionPlanActivate(hints) ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 w-full rounded-xl"
-            disabled={isBusy}
-            onClick={() => void handleActivate()}
-          >
-            Activer dans la bibliothèque
-          </Button>
-        ) : null}
-        {canShowActionPlanDeactivate(hints) ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 w-full rounded-xl text-[#E24B4A]"
-            disabled={isBusy}
-            onClick={() => void handleDeactivate()}
-          >
-            Désactiver
+            <Plus className="mr-2 h-4 w-4" aria-hidden />
+            Exécution
           </Button>
         ) : null}
       </div>
 
-      <ActionPlanUseSheet
-        open={useSheetOpen}
-        establishmentId={establishmentId}
-        pilotBusinessUnitId={plan.pilot_business_unit.id}
-        isPending={useMutation.isPending}
-        isSchedulePending={scheduleMutation.isPending}
-        staffUseMode={staffUseMode}
-        canSchedule={canShowActionPlanSchedule(hints)}
-        onClose={() => setUseSheetOpen(false)}
-        onConfirm={(body) => void handleUse(body)}
-        onScheduleConfirm={(body) => void handleSchedule(body)}
-      />
+      {executionPanelOpen ? (
+        <TerrainStickyFooter>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 rounded-xl"
+              disabled={useMutation.isPending}
+              onClick={resetExecutionPanel}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              className="h-11 flex-1 rounded-xl"
+              disabled={useMutation.isPending}
+              onClick={() => void handleLaunchExecution()}
+            >
+              Lancer l&apos;exécution
+            </Button>
+          </div>
+        </TerrainStickyFooter>
+      ) : null}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 
-from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet
+from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from houston.action_plans.constants import (
@@ -15,10 +15,17 @@ from houston.action_plans.constants import (
     TERMINAL_TASK_STATUSES,
     ExecutionFeedViewMode,
 )
+from houston.action_plans.feed_cursor import (
+    DEADLINE_BUCKET_OVERDUE,
+    action_plan_execution_feed_order_by,
+    action_plan_execution_feed_sort_case_expressions,
+    execution_deadline_bucket,
+)
 from houston.action_plans.models import (
     ActionPlan,
     ActionPlanAssignee,
     ActionPlanExecution,
+    ActionPlanExecutionFeedPin,
     ActionPlanExecutionTask,
     ActionPlanSchedule,
     ActionPlanScheduleAssignee,
@@ -47,7 +54,10 @@ _PLAN_DETAIL_SELECT_RELATED = (
 )
 _PLAN_TASK_DETAIL_PREFETCH = Prefetch(
     "tasks",
-    queryset=ActionPlanTask.objects.select_related("business_unit").order_by(
+    queryset=ActionPlanTask.objects.select_related(
+        "business_unit",
+        "assigned_membership__user",
+    ).order_by(
         "position",
         "created_at",
     ),
@@ -343,6 +353,21 @@ def _is_assigned_to_membership_q(*, membership: EstablishmentMembership) -> Exis
     )
 
 
+def _has_open_pole_task_in_member_scopes_q(*, membership: EstablishmentMembership) -> Exists:
+    scope_bu_ids = _scope_business_unit_ids(membership)
+    if not scope_bu_ids:
+        return Exists(ActionPlanExecutionTask.objects.none())
+    return Exists(
+        ActionPlanExecutionTask.objects.filter(
+            action_plan_execution_id=OuterRef("pk"),
+            assigned_membership_id__isnull=True,
+            execution_team__business_unit_id__in=scope_bu_ids,
+        ).exclude(
+            execution_team__business_unit_id=OuterRef("pilot_business_unit_id"),
+        )
+    )
+
+
 def action_plan_execution_personal_feed_q(
     *,
     membership: EstablishmentMembership,
@@ -355,6 +380,9 @@ def action_plan_execution_personal_feed_q(
         scope_bu_ids = _scope_business_unit_ids(membership)
         if scope_bu_ids:
             personal_q |= Q(execution_teams__business_unit_id__in=scope_bu_ids)
+
+    if membership.role == EstablishmentMembership.Role.STAFF:
+        personal_q |= _has_open_pole_task_in_member_scopes_q(membership=membership)
 
     return personal_q & Q(establishment_id=membership.establishment_id)
 
@@ -408,10 +436,53 @@ def action_plan_execution_feed_queryset(
     )
 
 
+def action_plan_execution_pinnable_by_membership(
+    membership: EstablishmentMembership,
+    execution: ActionPlanExecution,
+) -> bool:
+    if execution.establishment_id != membership.establishment_id:
+        return False
+    for view_mode in ("personal", "general"):
+        if action_plan_execution_feed_queryset(
+            membership=membership,
+            view_mode=view_mode,  # type: ignore[arg-type]
+        ).filter(pk=execution.pk).exists():
+            return True
+    return False
+
+
+def annotate_action_plan_execution_feed_pins(
+    queryset: QuerySet[ActionPlanExecution],
+    *,
+    membership: EstablishmentMembership,
+) -> QuerySet[ActionPlanExecution]:
+    pin_filter = ActionPlanExecutionFeedPin.objects.filter(
+        membership_id=membership.id,
+        action_plan_execution_id=OuterRef("pk"),
+    )
+    return queryset.annotate(
+        is_feed_pinned=Exists(pin_filter),
+        feed_pinned_at=Subquery(pin_filter.values("pinned_at")[:1]),
+    )
+
+
 def apply_action_plan_execution_feed_sorting(
     queryset: QuerySet[ActionPlanExecution],
+    *,
+    membership: EstablishmentMembership,
+    as_of=None,
 ) -> QuerySet[ActionPlanExecution]:
-    return queryset.order_by("-last_activity_at", "-created_at", "-id")
+    effective_as_of = as_of or timezone.now()
+    status_rank, deadline_bucket = action_plan_execution_feed_sort_case_expressions(
+        effective_as_of,
+    )
+    return annotate_action_plan_execution_feed_pins(
+        queryset,
+        membership=membership,
+    ).annotate(
+        status_rank=status_rank,
+        deadline_bucket=deadline_bucket,
+    ).order_by(*action_plan_execution_feed_order_by())
 
 
 def action_plan_execution_overdue(
@@ -419,11 +490,15 @@ def action_plan_execution_overdue(
     execution: ActionPlanExecution,
     now=None,
 ) -> bool:
-    if execution.end_at is None:
-        return False
-    if execution.status not in EXECUTION_FEED_STATUSES:
-        return False
-    return execution.end_at < (now or timezone.now())
+    effective_as_of = now or timezone.now()
+    return (
+        execution_deadline_bucket(
+            end_at=execution.end_at,
+            status=execution.status,
+            as_of=effective_as_of,
+        )
+        == DEADLINE_BUCKET_OVERDUE
+    )
 
 
 def get_action_plan_schedule_for_detail(

@@ -6,6 +6,7 @@ from django.db.models import Q
 from houston.accounts.models import User
 from houston.establishments.membership_scope import (
     membership_covers_business_unit_including_admins,
+    membership_is_assignable_by_actor,
     membership_scope_prefetch,
 )
 from houston.establishments.models import (
@@ -19,6 +20,7 @@ from houston.establishments.models import (
     OnboardingSession,
     OperationalUnit,
 )
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.organizations.models import Organization
 
 _ONBOARDING_MANAGEMENT_ROLES = (
@@ -31,7 +33,16 @@ _ONBOARDING_ESTABLISHMENT_STATUSES = (
 )
 
 
-def list_memberships_for_management(
+_TEAM_MEMBERSHIP_ROLE_ORDER = models.Case(
+    models.When(role=EstablishmentMembership.Role.OWNER, then=0),
+    models.When(role=EstablishmentMembership.Role.DIRECTOR, then=1),
+    models.When(role=EstablishmentMembership.Role.MANAGER, then=2),
+    models.When(role=EstablishmentMembership.Role.STAFF, then=3),
+    default=4,
+)
+
+
+def list_memberships_for_team(
     *,
     current_membership: EstablishmentMembership | None,
     establishment_id,
@@ -39,7 +50,40 @@ def list_memberships_for_management(
     if current_membership is None or current_membership.establishment_id != establishment_id:
         return None
 
-    return list(_management_membership_queryset(establishment_id=establishment_id))
+    return list(
+        _management_membership_queryset(establishment_id=establishment_id).order_by(
+            _TEAM_MEMBERSHIP_ROLE_ORDER,
+            "user__first_name",
+            "user__last_name",
+            "user__username",
+            "user__email",
+            "id",
+        )
+    )
+
+
+def list_memberships_for_management(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+) -> list[EstablishmentMembership] | None:
+    return list_memberships_for_team(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+
+
+def get_membership_for_team_detail(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    membership_id,
+) -> EstablishmentMembership | None:
+    return get_membership_for_management(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+        membership_id=membership_id,
+    )
 
 
 def get_membership_for_management(
@@ -153,6 +197,7 @@ def search_users_for_establishment(
     establishment_id,
     query: str,
     business_unit: BusinessUnit | None = None,
+    context: str = "assignee",
 ) -> list[EstablishmentMembership] | None:
     if current_membership is None or current_membership.establishment_id != establishment_id:
         return None
@@ -177,8 +222,28 @@ def search_users_for_establishment(
         )
     )
 
-    if business_unit is None:
+    if context == "mention":
+        if business_unit is not None:
+            return [
+                membership
+                for membership in memberships
+                if membership_covers_business_unit_including_admins(membership, business_unit)
+            ]
         return memberships
+
+    if business_unit is None:
+        if current_membership.role in ADMIN_ROLES:
+            return memberships
+        if current_membership.role == EstablishmentMembership.Role.MANAGER:
+            return [
+                membership
+                for membership in memberships
+                if membership_is_assignable_by_actor(
+                    actor=current_membership,
+                    target=membership,
+                )
+            ]
+        return []
 
     return [
         membership

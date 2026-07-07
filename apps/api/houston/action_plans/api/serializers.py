@@ -101,6 +101,10 @@ class ActionPlanActivitySubjectSerializer(serializers.Serializer):
 class ActionPlanTaskTemplateSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     task = serializers.CharField()
+    description = serializers.CharField()
+    deadline_at = serializers.DateTimeField(allow_null=True)
+    assigned_membership_id = serializers.UUIDField(allow_null=True)
+    assigned_display_name = serializers.CharField(allow_null=True)
     position = serializers.IntegerField()
     business_unit = ActionPlanBusinessUnitSerializer()
 
@@ -127,6 +131,8 @@ class ActionPlanListItemSerializer(serializers.Serializer):
 
 
 class ActionPlanDetailSerializer(ActionPlanListItemSerializer):
+    created_by_id = serializers.UUIDField()
+    created_by_display_name = serializers.CharField()
     tasks = ActionPlanTaskTemplateSerializer(many=True)
     requires_validation = serializers.BooleanField()
     is_reusable = serializers.BooleanField()
@@ -136,6 +142,14 @@ class ActionPlanTaskInputSerializer(serializers.Serializer):
     task = serializers.CharField(max_length=ACTION_PLAN_TASK_MAX_LENGTH)
     business_unit_id = serializers.UUIDField()
     position = serializers.IntegerField(required=False, min_value=1)
+    description = serializers.CharField(
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+    deadline_at = serializers.DateTimeField(required=False, allow_null=True)
+    assigned_membership_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class ActionPlanAssigneeInputSerializer(serializers.Serializer):
@@ -181,7 +195,15 @@ class ActionPlanCreateRequestSerializer(serializers.Serializer):
     pilot_business_unit_id = serializers.UUIDField()
     requires_validation = serializers.BooleanField(required=False, default=True)
     is_reusable = serializers.BooleanField(required=False, default=False)
-    tasks = ActionPlanTaskInputSerializer(many=True, required=False, default=list)
+    tasks = ActionPlanTaskInputSerializer(
+        many=True,
+        required=False,
+        default=list,
+        help_text=(
+            "Optional for reusable catalog plans. Direct execution or schedule create "
+            "still requires at least one task or assignee."
+        ),
+    )
     assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
     source_signal_id = serializers.UUIDField(required=False, allow_null=True)
     use_shared_chronology = serializers.BooleanField(required=False, default=False)
@@ -199,6 +221,8 @@ class ActionPlanUpdateRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
+    requires_validation = serializers.BooleanField(required=False)
+    tasks = ActionPlanTaskInputSerializer(many=True, required=False)
 
 
 class ActionPlanUseRequestSerializer(serializers.Serializer):
@@ -270,10 +294,16 @@ class ActionPlanExecutionPermissionHintsSerializer(serializers.Serializer):
     can_reopen = serializers.BooleanField()
     can_cancel = serializers.BooleanField()
     is_pilot_pole_assignee = serializers.BooleanField()
+    can_pin = serializers.BooleanField()
+
+
+class ActionPlanExecutionPinStateSerializer(serializers.Serializer):
+    is_pinned = serializers.BooleanField()
 
 
 class ActionPlanTaskExecutionPermissionHintsSerializer(serializers.Serializer):
     can_mark_done = serializers.BooleanField()
+    can_unmark_done = serializers.BooleanField()
     can_skip = serializers.BooleanField()
     can_create_observation = serializers.BooleanField()
 
@@ -296,6 +326,10 @@ class ActionPlanInvolvedPoleSerializer(serializers.Serializer):
 class ActionPlanTaskExecutionSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     task = serializers.CharField()
+    description = serializers.CharField()
+    deadline_at = serializers.DateTimeField(allow_null=True)
+    assigned_membership_id = serializers.UUIDField(allow_null=True)
+    assigned_display_name = serializers.CharField(allow_null=True)
     position = serializers.IntegerField()
     status = serializers.CharField()
     business_unit = ActionPlanBusinessUnitSerializer()
@@ -368,9 +402,16 @@ class ActionPlanTaskCreateObservationResponseSerializer(serializers.Serializer):
 
 
 def serialize_task_template(task: ActionPlanTask) -> dict:
+    assigned_display_name = None
+    if task.assigned_membership is not None:
+        assigned_display_name = _membership_display_name(task.assigned_membership)
     return {
         "id": task.id,
         "task": task.task,
+        "description": task.description,
+        "deadline_at": task.deadline_at,
+        "assigned_membership_id": task.assigned_membership_id,
+        "assigned_display_name": assigned_display_name,
         "position": task.position,
         "business_unit": _serialize_business_unit(task.business_unit),
     }
@@ -425,6 +466,8 @@ def serialize_action_plan_detail(
     )
     payload["requires_validation"] = action_plan.requires_validation
     payload["is_reusable"] = action_plan.is_reusable
+    payload["created_by_id"] = action_plan.created_by_id
+    payload["created_by_display_name"] = _membership_display_name(action_plan.created_by)
     payload["tasks"] = [serialize_task_template(task) for task in action_plan.tasks.all()]
     return payload
 
@@ -477,6 +520,10 @@ def serialize_task_execution(
     return {
         "id": task_execution.id,
         "task": task_execution.task,
+        "description": task_execution.description,
+        "deadline_at": task_execution.deadline_at,
+        "assigned_membership_id": task_execution.assigned_membership_id,
+        "assigned_display_name": task_execution.assigned_display_name or None,
         "position": task_execution.position,
         "status": task_execution.status,
         "business_unit": _serialize_business_unit(task_execution.execution_team.business_unit),

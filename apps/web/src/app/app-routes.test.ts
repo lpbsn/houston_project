@@ -45,14 +45,28 @@ describe('parseAppRoute', () => {
     })
   })
 
-  it('parses profile switch establishment before profile', () => {
-    expect(parseAppRoute('/profile/switch-establishment')).toEqual({
-      kind: 'static',
-      path: '/profile/switch-establishment',
+  it('parses team member detail route', () => {
+    expect(parseAppRoute('/team/member-123')).toEqual({
+      kind: 'team-member-detail',
+      membershipId: 'member-123',
     })
-    expect(parseAppRoute('/profile')).toEqual({
+  })
+
+  it('does not treat team invite as member detail', () => {
+    expect(parseAppRoute('/team/invite')).toEqual({
       kind: 'static',
-      path: '/profile',
+      path: '/team/invite',
+    })
+  })
+
+  it('parses general switch establishment before general', () => {
+    expect(parseAppRoute('/general/switch-establishment')).toEqual({
+      kind: 'static',
+      path: '/general/switch-establishment',
+    })
+    expect(parseAppRoute('/general')).toEqual({
+      kind: 'static',
+      path: '/general',
     })
   })
 
@@ -73,6 +87,10 @@ describe('parseAppRoute', () => {
     })
     expect(parseAppRoute('/action-plans/plan-1')).toEqual({
       kind: 'action-plan-template-detail',
+      actionPlanId: 'plan-1',
+    })
+    expect(parseAppRoute('/action-plans/plan-1/edit')).toEqual({
+      kind: 'action-plan-template-edit',
       actionPlanId: 'plan-1',
     })
     expect(parseAppRoute('/action-plans/executions/exec-1')).toEqual({
@@ -128,6 +146,9 @@ describe('getAppRouteKey', () => {
     )
     expect(getAppRouteKey({ kind: 'chat-conversation-detail', conversationId: 'conv-1' })).toBe(
       'chat-conversation-detail:conv-1',
+    )
+    expect(getAppRouteKey({ kind: 'team-member-detail', membershipId: 'member-1' })).toBe(
+      'team-member-detail:member-1',
     )
     expect(getAppRouteKey({ kind: 'unknown', pathname: '/foo/bar' })).toBe('unknown:/foo/bar')
   })

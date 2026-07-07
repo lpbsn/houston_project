@@ -13,6 +13,7 @@ import {
   canCreateCatalogActionPlanFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   canViewActionPlanCatalogFromBootstrapHints,
+  canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
@@ -146,6 +147,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const identityLabel = user ? (user.email ?? user.username) : null
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
+  const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
   const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
   const canShowActionPlansNav =
     canViewActionPlanCatalogFromBootstrapHints(permissionHints) ||
@@ -206,7 +208,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
                 ? `Actuellement : ${activeMembership.establishment_name}`
                 : 'Basculer vers un autre site'
             }
-            onClick={() => onNavigate?.('/profile/switch-establishment')}
+            onClick={() => onNavigate?.('/general/switch-establishment')}
           />
         ) : null}
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
@@ -234,6 +236,16 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </div>
         </TerrainCard>
       </div>
+
+      {canViewTeam && !canAccessManagement ? (
+        <ProfileManagementNavCard
+          icon={Users}
+          iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
+          title="Équipe"
+          subtitle="Voir l'équipe"
+          onClick={() => onNavigate?.('/team')}
+        />
+      ) : null}
 
       {canShowStaffActionPlansNav ? (
         <ProfileManagementNavCard
@@ -281,7 +293,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
               icon={Users}
               iconClassName="bg-[#E8F7F0] text-[#1D9E75]"
               title="Équipe"
-              subtitle="Ajouter, supprimer, gérer les autorisations"
+              subtitle="Gérer les membres et autorisations"
               onClick={() => onNavigate?.('/team')}
             />
           </div>

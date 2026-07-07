@@ -1,9 +1,12 @@
+import type { SignalClassificationInput } from '@/lib/signal-classification'
+
 import type {
   ActionPlanAssigneesByPole,
+  ActionPlanDetail,
   ActionPlanExecutionDetail,
-  ActionPlanInvolvedPole,
   ActionPlanListItem,
   ActionPlanTaskExecution,
+  ActionPlanTaskTemplate,
 } from '../types'
 
 export function formatActionPlanExecutionStatusLabel(status: string): string {
@@ -95,6 +98,319 @@ export function formatActionPlanEndAtLabel(endAt: string | null): string | null 
   })
 }
 
+export function formatActionPlanCreatedAtLabel(createdAt: string | null): string | null {
+  return formatActionPlanEndAtLabel(createdAt)
+}
+
+export type ActionPlanExecutionAssignee = {
+  membership_id: string
+  display_name: string
+}
+
+export function flattenActionPlanAssignees(
+  assigneesByPole: ActionPlanAssigneesByPole[],
+): ActionPlanExecutionAssignee[] {
+  const seen = new Set<string>()
+  const assignees: ActionPlanExecutionAssignee[] = []
+
+  for (const group of assigneesByPole) {
+    for (const assignee of group.assignees) {
+      if (seen.has(assignee.membership_id)) {
+        continue
+      }
+      seen.add(assignee.membership_id)
+      assignees.push({
+        membership_id: assignee.membership_id,
+        display_name: assignee.display_name,
+      })
+    }
+  }
+
+  return assignees
+}
+
+export type ActionPlanExecutionClassificationDisplay = {
+  poleLabel: string | null
+  subjectLabel: string | null
+}
+
+export function buildActionPlanExecutionClassificationDisplay(
+  execution: Pick<
+    ActionPlanExecutionDetail,
+    'pilot_business_unit' | 'responsible_business_unit' | 'activity_subject'
+  >,
+): ActionPlanExecutionClassificationDisplay {
+  const poleLabel =
+    execution.responsible_business_unit?.label?.trim() ||
+    execution.pilot_business_unit.label?.trim() ||
+    null
+  const subjectLabel = execution.activity_subject?.label?.trim() || null
+
+  return { poleLabel, subjectLabel }
+}
+
+export function buildActionPlanExecutionClassificationInput(
+  execution: Pick<
+    ActionPlanExecutionDetail,
+    | 'pilot_business_unit'
+    | 'responsible_business_unit'
+    | 'affected_business_unit'
+    | 'activity_subject'
+  >,
+): SignalClassificationInput {
+  return {
+    responsible_business_unit_key: execution.responsible_business_unit?.key ?? null,
+    responsible_business_unit_label:
+      execution.responsible_business_unit?.label ??
+      execution.pilot_business_unit.label ??
+      null,
+    affected_business_unit_key: execution.affected_business_unit?.key ?? null,
+    affected_business_unit_label: execution.affected_business_unit?.label ?? null,
+    activity_subject_key: execution.activity_subject?.normalized_name ?? null,
+    activity_subject_label: execution.activity_subject?.label ?? null,
+    activity_subject_normalized_name: execution.activity_subject?.normalized_name ?? null,
+  }
+}
+
+export type ActionPlanPoleTaskSummary = {
+  businessUnitId: string
+  label: string
+  role: 'pilot' | 'contributor'
+  treated: number
+  total: number
+}
+
+export function buildActionPlanPoleTaskSummaries(
+  execution: Pick<ActionPlanExecutionDetail, 'pilot_business_unit' | 'task_executions'>,
+): ActionPlanPoleTaskSummary[] {
+  const grouped = new Map<string, { label: string; tasks: ActionPlanTaskExecution[] }>()
+
+  for (const task of execution.task_executions) {
+    const businessUnitId = task.business_unit.id
+    const existing = grouped.get(businessUnitId)
+    if (existing) {
+      existing.tasks.push(task)
+      continue
+    }
+    grouped.set(businessUnitId, {
+      label: task.business_unit.label,
+      tasks: [task],
+    })
+  }
+
+  const summaries = Array.from(grouped.entries()).map(([businessUnitId, entry]) => ({
+    businessUnitId,
+    label: entry.label,
+    role:
+      businessUnitId === execution.pilot_business_unit.id
+        ? ('pilot' as const)
+        : ('contributor' as const),
+    treated: countActionPlanTreatedTasks(entry.tasks),
+    total: entry.tasks.length,
+  }))
+
+  return summaries.sort((left, right) => {
+    if (left.role !== right.role) {
+      return left.role === 'pilot' ? -1 : 1
+    }
+    return left.label.localeCompare(right.label, 'fr')
+  })
+}
+
+export function buildActionPlanTemplatePoleSummaries(
+  plan: Pick<ActionPlanDetail, 'pilot_business_unit' | 'tasks'>,
+): ActionPlanPoleTaskSummary[] {
+  const grouped = new Map<string, { label: string; tasks: ActionPlanTaskTemplate[] }>()
+
+  for (const task of plan.tasks) {
+    const businessUnitId = task.business_unit.id
+    const existing = grouped.get(businessUnitId)
+    if (existing) {
+      existing.tasks.push(task)
+      continue
+    }
+    grouped.set(businessUnitId, {
+      label: task.business_unit.label,
+      tasks: [task],
+    })
+  }
+
+  const summaries = Array.from(grouped.entries()).map(([businessUnitId, entry]) => ({
+    businessUnitId,
+    label: entry.label,
+    role:
+      businessUnitId === plan.pilot_business_unit.id
+        ? ('pilot' as const)
+        : ('contributor' as const),
+    treated: 0,
+    total: entry.tasks.length,
+  }))
+
+  return summaries.sort((left, right) => {
+    if (left.role !== right.role) {
+      return left.role === 'pilot' ? -1 : 1
+    }
+    return left.label.localeCompare(right.label, 'fr')
+  })
+}
+
+export type ActionPlanDeadlineState = {
+  mode: 'progress' | 'simple'
+  progressPct: number | null
+  remainingLabel: string | null
+  beforeLabel: string | null
+  endAtLabel: string | null
+  isOverdue: boolean
+}
+
+function formatActionPlanDeadlineBeforeLabel(endAt: string): string | null {
+  const date = new Date(endAt)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  const timeLabel = date.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `avant ${timeLabel}`
+}
+
+function formatActionPlanRemainingMinutesLabel(remainingMs: number): string {
+  const remainingMinutes = Math.max(1, Math.ceil(remainingMs / (60 * 1000)))
+  return `${remainingMinutes} min restante${remainingMinutes > 1 ? 's' : ''}`
+}
+
+export function computeActionPlanDeadlineState(options: {
+  startAt: string | null
+  endAt: string | null
+  isTerminal: boolean
+  now?: number
+}): ActionPlanDeadlineState | null {
+  const { startAt, endAt, isTerminal, now = Date.now() } = options
+  if (!endAt) {
+    return null
+  }
+
+  const endAtLabel = formatActionPlanEndAtLabel(endAt)
+  const isOverdue = isActionPlanExecutionOverdue(endAt, isTerminal)
+
+  if (!startAt || isTerminal) {
+    return {
+      mode: 'simple',
+      progressPct: null,
+      remainingLabel: null,
+      beforeLabel: null,
+      endAtLabel,
+      isOverdue,
+    }
+  }
+
+  const startMs = Date.parse(startAt)
+  const endMs = Date.parse(endAt)
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+    return {
+      mode: 'simple',
+      progressPct: null,
+      remainingLabel: null,
+      beforeLabel: formatActionPlanDeadlineBeforeLabel(endAt),
+      endAtLabel,
+      isOverdue,
+    }
+  }
+
+  const totalMs = endMs - startMs
+  const elapsedMs = Math.max(0, now - startMs)
+  const progressPct = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)))
+  const remainingMs = endMs - now
+
+  return {
+    mode: 'progress',
+    progressPct,
+    remainingLabel:
+      remainingMs > 0
+        ? formatActionPlanRemainingMinutesLabel(remainingMs)
+        : 'Échéance dépassée',
+    beforeLabel: formatActionPlanDeadlineBeforeLabel(endAt),
+    endAtLabel,
+    isOverdue,
+  }
+}
+
+export function formatActionPlanTaskDeadlineLabel(deadlineAt: string | null | undefined): string | null {
+  if (!deadlineAt) {
+    return null
+  }
+  return formatActionPlanEndAtLabel(deadlineAt)
+}
+
+function joinActionPlanTaskMetaParts(parts: string[]): string | null {
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+export function formatActionPlanTaskAssigneePoleLine(options: {
+  assigneeDisplayName?: string | null
+  poleLabel?: string | null
+}): string | null {
+  const parts: string[] = []
+  if (options.assigneeDisplayName) {
+    parts.push(options.assigneeDisplayName)
+  }
+  if (options.poleLabel) {
+    parts.push(options.poleLabel)
+  }
+  return parts.length > 0 ? parts.join(' - ') : null
+}
+
+export function formatActionPlanTaskEditorMetaLine(options: {
+  assigneeDisplayName?: string | null
+  deadlineAt?: string | null
+}): string | null {
+  const parts: string[] = []
+  if (options.assigneeDisplayName) {
+    parts.push(options.assigneeDisplayName)
+  }
+  const deadlineLabel = formatActionPlanTaskDeadlineLabel(options.deadlineAt)
+  if (deadlineLabel) {
+    parts.push(deadlineLabel)
+  }
+  return joinActionPlanTaskMetaParts(parts)
+}
+
+/** @deprecated Use formatActionPlanTaskAssigneePoleLine for assignee/pole and formatActionPlanTaskDeadlineLabel for deadline */
+export function formatActionPlanTaskDetailMetaLine(options: {
+  includePole?: boolean
+  poleLabel?: string | null
+  assigneeDisplayName?: string | null
+  deadlineAt?: string | null
+}): string | null {
+  const parts: string[] = []
+  if (options.includePole && options.poleLabel) {
+    parts.push(options.poleLabel)
+  }
+  if (options.assigneeDisplayName) {
+    parts.push(options.assigneeDisplayName)
+  }
+  const deadlineLabel = formatActionPlanTaskDeadlineLabel(options.deadlineAt)
+  if (deadlineLabel) {
+    parts.push(deadlineLabel)
+  }
+  return joinActionPlanTaskMetaParts(parts)
+}
+
+/** @deprecated Use formatActionPlanTaskEditorMetaLine or formatActionPlanTaskDetailMetaLine */
+export function formatActionPlanTaskMetaLine(options: {
+  poleLabel?: string | null
+  assigneeDisplayName?: string | null
+  deadlineAt?: string | null
+}): string | null {
+  return formatActionPlanTaskDetailMetaLine({
+    includePole: true,
+    poleLabel: options.poleLabel,
+    assigneeDisplayName: options.assigneeDisplayName,
+    deadlineAt: options.deadlineAt,
+  })
+}
+
 export function countActionPlanTreatedTasks(tasks: ActionPlanTaskExecution[]): number {
   return tasks.filter((task) => task.status !== 'pending').length
 }
@@ -125,61 +441,6 @@ export function groupActionPlansByPilotBusinessUnit(
   return Array.from(sections.values()).sort((a, b) =>
     a.businessUnitLabel.localeCompare(b.businessUnitLabel, 'fr'),
   )
-}
-
-export type ActionPlanPoleSection = {
-  businessUnitId: string
-  businessUnitLabel: string
-  contributionStatus: string | null
-  assignees: ActionPlanAssigneesByPole['assignees']
-  tasks: ActionPlanTaskExecution[]
-}
-
-export function buildActionPlanPoleSections(
-  execution: ActionPlanExecutionDetail,
-): ActionPlanPoleSection[] {
-  const assigneesByPole = new Map(
-    execution.assignees_by_pole.map((pole) => [pole.business_unit.id, pole.assignees]),
-  )
-  const contributionByPole = new Map(
-    execution.involved_poles.map((pole: ActionPlanInvolvedPole) => [
-      pole.business_unit.id,
-      pole.contribution_status,
-    ]),
-  )
-  const tasksByPole = new Map<string, ActionPlanTaskExecution[]>()
-  for (const task of execution.task_executions) {
-    const businessUnitId = task.business_unit.id
-    const existing = tasksByPole.get(businessUnitId) ?? []
-    existing.push(task)
-    tasksByPole.set(businessUnitId, existing)
-  }
-
-  const poleIds = new Set<string>([
-    ...assigneesByPole.keys(),
-    ...tasksByPole.keys(),
-  ])
-
-  const sections: ActionPlanPoleSection[] = []
-  for (const businessUnitId of Array.from(poleIds).sort()) {
-    const tasks = (tasksByPole.get(businessUnitId) ?? []).sort(
-      (a, b) => a.position - b.position,
-    )
-    const assigneePole = execution.assignees_by_pole.find(
-      (pole) => pole.business_unit.id === businessUnitId,
-    )
-    const taskPole = tasks[0]?.business_unit
-    sections.push({
-      businessUnitId,
-      businessUnitLabel:
-        assigneePole?.business_unit.label ?? taskPole?.label ?? businessUnitId,
-      contributionStatus: contributionByPole.get(businessUnitId) ?? null,
-      assignees: assigneesByPole.get(businessUnitId) ?? [],
-      tasks,
-    })
-  }
-
-  return sections.sort((a, b) => a.businessUnitLabel.localeCompare(b.businessUnitLabel, 'fr'))
 }
 
 export function truncateActionPlanDescription(description: string, maxLength = 120): string {

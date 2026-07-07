@@ -164,8 +164,14 @@ describe('ActionPlanEventPlanningForm', () => {
       },
       baseConfig,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Chronologie avancée' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
     expect(screen.getAllByLabelText('Début — heure').length).toBeGreaterThan(0)
     expect(screen.getAllByLabelText('Fin — heure').length).toBeGreaterThan(0)
+  })
+
+  it('shows chronologie par assigné toggle under assignés without advanced section', () => {
+    renderForm()
+    expect(screen.getByRole('switch', { name: 'Chronologie par assigné' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Chronologie avancée' })).toBeNull()
   })
 })

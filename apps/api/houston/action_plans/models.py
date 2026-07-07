@@ -119,6 +119,19 @@ class ActionPlanTask(BaseModel):
         related_name="action_plan_tasks",
     )
     task = models.CharField(max_length=ACTION_PLAN_TASK_MAX_LENGTH)
+    description = models.TextField(
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    deadline_at = models.DateTimeField(null=True, blank=True)
+    assigned_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_tasks_assigned",
+        null=True,
+        blank=True,
+    )
     position = models.PositiveIntegerField()
 
     class Meta:
@@ -388,6 +401,40 @@ class ActionPlanExecution(BaseModel):
         return f"ActionPlanExecution {self.id} [{self.status}]"
 
 
+class ActionPlanExecutionFeedPin(BaseModel):
+    membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.CASCADE,
+        related_name="action_plan_execution_feed_pins",
+    )
+    action_plan_execution = models.ForeignKey(
+        ActionPlanExecution,
+        on_delete=models.CASCADE,
+        related_name="feed_pins",
+    )
+    pinned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["membership", "action_plan_execution"],
+                name="uniq_action_plan_execution_feed_pin",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["membership", "pinned_at"],
+                name="ap_exec_feed_pin_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"ActionPlanExecutionFeedPin membership={self.membership_id} "
+            f"execution={self.action_plan_execution_id}"
+        )
+
+
 class ActionPlanExecutionTeam(BaseModel):
     action_plan_execution = models.ForeignKey(
         ActionPlanExecution,
@@ -481,6 +528,20 @@ class ActionPlanExecutionTask(BaseModel):
         blank=True,
     )
     task = models.CharField(max_length=ACTION_PLAN_TASK_MAX_LENGTH)
+    description = models.TextField(
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+        blank=True,
+        default="",
+    )
+    deadline_at = models.DateTimeField(null=True, blank=True)
+    assigned_membership = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.SET_NULL,
+        related_name="action_plan_execution_tasks_assigned",
+        null=True,
+        blank=True,
+    )
+    assigned_display_name = models.CharField(max_length=255, blank=True, default="")
     position = models.PositiveIntegerField()
     status = models.CharField(
         max_length=32,

@@ -1,5 +1,6 @@
-import { MoreHorizontal, Pin } from 'lucide-react'
+import { Pin } from 'lucide-react'
 
+import { FeedCardActionsButton, FeedCardMetaRow } from '@/components/domain/feed-card-meta-row'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { terrainFeedCardBaseClassName, terrainFeedInteractiveCardClassName } from '@/lib/terrain-styles'
@@ -39,18 +40,13 @@ type SignalCardActionsButtonProps = {
 
 function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButtonProps) {
   return (
-    <button
-      type="button"
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#7D7B75] hover:bg-black/5"
-      aria-label="Actions du signal"
+    <FeedCardActionsButton
+      ariaLabel="Actions du signal"
       onClick={(event) => {
         stopCardNavigation(event)
         onOpenActions(item)
       }}
-      onKeyDown={stopCardNavigation}
-    >
-      <MoreHorizontal className="h-4 w-4" aria-hidden />
-    </button>
+    />
   )
 }
 
@@ -73,20 +69,20 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       role="button"
       tabIndex={0}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-1">
-          <SignalUrgencyBadge urgency={item.urgency} />
-          <SignalClassificationBadges signal={item} />
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="text-[11px] text-[#888]">
-            {formatSignalRelativeTime(item.last_activity_at)}
-          </span>
-          {showActions ? (
+      <FeedCardMetaRow
+        timeLabel={formatSignalRelativeTime(item.last_activity_at)}
+        badges={
+          <>
+            <SignalUrgencyBadge urgency={item.urgency} />
+            <SignalClassificationBadges signal={item} />
+          </>
+        }
+        actions={
+          showActions ? (
             <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
-          ) : null}
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
 
@@ -148,8 +144,8 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
             {PINNED_SIGNAL_CARD_BANNER_LABEL}
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="text-[11px] text-[#888]">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="text-[11px] leading-none text-[#888]">
             {formatSignalRelativeTime(item.last_activity_at)}
           </span>
           {showActions ? (
@@ -160,7 +156,7 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
 
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
 
-      <div className="mb-2 flex flex-wrap gap-1">
+      <div className="mb-1 flex flex-wrap items-center gap-1">
         <SignalUrgencyBadge urgency={item.urgency} />
         <SignalClassificationBadges signal={item} />
       </div>

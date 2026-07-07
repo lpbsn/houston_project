@@ -12,33 +12,34 @@ const tabOptions: Array<{ value: ActionDetailTab; label: string }> = [
   { value: 'comments', label: 'Commentaires' },
 ]
 
-function tabButtonClassName(active: boolean) {
-  return cn(
-    'min-h-11 rounded-xl border px-3 text-[14px] font-semibold transition',
-    active
-      ? 'border-[#1B4FD8] bg-[#1B4FD8] text-white'
-      : 'border-[#E8E6DF] bg-white text-[#555]',
-  )
-}
-
 export function ActionDetailTabs({ activeTab, onChange }: ActionDetailTabsProps) {
   return (
     <div
-      role="group"
+      role="tablist"
       aria-label="Sections du plan d'action"
-      className="grid w-full grid-cols-2 gap-2"
+      className="grid w-full grid-cols-2 gap-1 rounded-xl bg-[#F5F4F0] p-1"
     >
-      {tabOptions.map(({ value, label }) => (
-        <button
-          key={value}
-          type="button"
-          aria-pressed={activeTab === value}
-          className={tabButtonClassName(activeTab === value)}
-          onClick={() => onChange(value)}
-        >
-          {label}
-        </button>
-      ))}
+      {tabOptions.map(({ value, label }) => {
+        const isActive = activeTab === value
+
+        return (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            id={`execution-detail-tab-${value}`}
+            aria-selected={isActive}
+            aria-controls={`execution-detail-panel-${value}`}
+            className={cn(
+              'min-h-11 rounded-lg px-3 text-[14px] font-semibold transition',
+              isActive ? 'bg-white text-[#1a1a1a] shadow-sm' : 'bg-transparent text-[#888]',
+            )}
+            onClick={() => onChange(value)}
+          >
+            {label}
+          </button>
+        )
+      })}
     </div>
   )
 }

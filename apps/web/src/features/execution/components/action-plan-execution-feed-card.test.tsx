@@ -46,12 +46,14 @@ function buildFeedItem(
     ],
     last_activity_at: '2026-07-06T10:00:00Z',
     created_at: '2026-07-06T08:00:00Z',
+    is_pinned: false,
     permission_hints: {
       can_mark_done: true,
       can_validate: false,
       can_reopen: false,
       can_cancel: false,
       is_pilot_pole_assignee: true,
+      can_pin: true,
     },
     ...overrides,
   }
@@ -70,9 +72,16 @@ describe('ActionPlanExecutionFeedCard', () => {
     render(<ActionPlanExecutionFeedCard item={buildFeedItem()} onSelect={onSelect} />)
 
     expect(screen.getByText('Plan incendie')).toBeTruthy()
-    expect(screen.getByText('Tâches 1/4')).toBeTruthy()
+    expect(screen.getByText('Tâche 1/4')).toBeTruthy()
     expect(screen.getByText(/Échéance :/)).toBeTruthy()
-    expect(screen.getByText('Pôle pilote : Restaurant')).toBeTruthy()
+
+    const deadlineNode = screen.getByText(/Échéance :/)
+    const taskProgressNode = screen.getByText('Tâche 1/4')
+    expect(
+      deadlineNode.compareDocumentPosition(taskProgressNode) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    expect(screen.queryByText('Pôle pilote : Restaurant')).toBeNull()
     expect(screen.getByText('Alice Martin')).toBeTruthy()
     expect(screen.getByText('En cours')).toBeTruthy()
 
@@ -102,7 +111,19 @@ describe('ActionPlanExecutionFeedCard', () => {
       />,
     )
 
-    expect(screen.queryByText(/Tâches \d+\/\d+/)).toBeNull()
+    expect(screen.queryByText(/Tâche \d+\/\d+/)).toBeNull()
+  })
+
+  it('shows task progress only when end_at is null', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ end_at: null })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.queryByText(/Échéance :/)).toBeNull()
+    expect(screen.getByText('Tâche 1/4')).toBeTruthy()
   })
 
   it('renders distinct pending validation card without duplicate status badge', () => {
@@ -124,5 +145,104 @@ describe('ActionPlanExecutionFeedCard', () => {
     fireEvent.click(screen.getByRole('button'))
 
     expect(onSelect).toHaveBeenCalledWith('execution-1')
+  })
+
+  it('shows pilot pole badge on the meta row with title below', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem()}
+        onSelect={onSelect}
+        onOpenActions={vi.fn()}
+      />,
+    )
+
+    const title = screen.getByRole('heading', { level: 3, name: 'Plan incendie' })
+    const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
+    const metaRow = actionsButton.parentElement?.parentElement
+
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    expect(metaRow?.className).toContain('items-center')
+    expect(metaRow?.contains(actionsButton)).toBe(true)
+    expect(metaRow?.nextElementSibling).toBe(title)
+  })
+
+  it('keeps relative time and actions on the same row as badges with title below', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({
+          signal_summary: {
+            affected_business_unit_key: 'hotel',
+            affected_business_unit_label: 'Hôtel',
+            responsible_business_unit_key: 'linge',
+            responsible_business_unit_label: 'Linge',
+            activity_subject_normalized_name: null,
+            activity_subject_label: null,
+          },
+        })}
+        onSelect={onSelect}
+        onOpenActions={vi.fn()}
+      />,
+    )
+
+    const title = screen.getByRole('heading', { level: 3, name: 'Plan incendie' })
+    const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
+    const metaRow = actionsButton.parentElement?.parentElement
+
+    expect(screen.getByText('Linge')).toBeTruthy()
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    expect(metaRow?.className).toContain('items-center')
+    expect(metaRow?.contains(actionsButton)).toBe(true)
+    expect(metaRow?.nextElementSibling).toBe(title)
+  })
+
+  it('shows pinned badge to the left of status badge when is_pinned is true', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ is_pinned: true })}
+        onSelect={onSelect}
+      />,
+    )
+
+    const pinnedBadge = screen.getByText('Épinglé')
+    const statusBadge = screen.getByText('En cours')
+
+    expect(pinnedBadge).toBeTruthy()
+    expect(
+      pinnedBadge.compareDocumentPosition(statusBadge) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('hides pinned badge when is_pinned is false', () => {
+    render(<ActionPlanExecutionFeedCard item={buildFeedItem({ is_pinned: false })} onSelect={onSelect} />)
+
+    expect(screen.queryByText('Épinglé')).toBeNull()
+    expect(screen.getByText('En cours')).toBeTruthy()
+  })
+
+  it('hides pinned badge on pending validation cards', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ status: 'pending_validation', is_pinned: true })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.queryByText('Épinglé')).toBeNull()
+  })
+
+  it('shows actions menu when can_pin is true', () => {
+    const onOpenActions = vi.fn()
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem()}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+      />,
+    )
+
+    fireEvent.click(screen.getByLabelText('Actions du plan d’action'))
+
+    expect(onOpenActions).toHaveBeenCalled()
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })

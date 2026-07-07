@@ -145,6 +145,8 @@ Frontend display states may include:
 - `(visible_from IS NULL OR now >= visible_from)`.
 - Terminal `done` / `canceled` excluded from active feed; detail remains accessible.
 - `end_at` overdue does not remove items (`is_overdue` indicator only).
+- **Sorting (implemented):** backend-owned. Personal feed pins (`ActionPlanExecutionFeedPin`, per membership) sort first: pinned items at the top of the feed regardless of status (`-is_feed_pinned`, `pinned_at ASC` among pins), then `pending_validation` before `in_progress`, then within each status: overdue (`end_at < as_of`) → upcoming → no `end_at` (nulls last), nearest `end_at` ascending, tie-break `created_at desc`, `id desc`. Frontend renders pinned items in a flat block at the top (no section label), then groups unpinned items by status without re-sorting. Pagination cursor freezes `as_of` for stable overdue buckets and `is_overdue` across pages.
+- **Personal pin (implemented):** `POST .../action-plan-executions/{id}/pin/` and `.../unpin/` — preference per membership, not shared (distinct from establishment-wide Signal pin). Any member who sees the item in feed may pin for themselves (`can_pin` hint). No visual card change; order only.
 - Lazy schedule materialization on feed read (`ensure_visible_action_plan_executions_materialized`) — horizon 3 days, stale guard 30 min. See [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md).
 
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
@@ -168,6 +170,8 @@ Implemented endpoints (establishment-scoped):
 
 - `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_keys`, `activity_subject_ids`. **Cursor pagination implemented** (reference).
 - `GET /api/v1/establishments/{establishment_id}/action-plan-execution-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size` (default 25, max 50). **Cursor pagination implemented** (single-type feed; opaque cursor).
+- `POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/` — personal feed pin (membership-scoped).
+- `POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/` — remove personal feed pin.
 
 Response envelope: `{ items, next_cursor, has_more }` (Signal Feed may include `applied_filters`).
 

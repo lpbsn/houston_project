@@ -36,6 +36,7 @@ export function ActionPlanAssigneesSheet({
       username: assignee.displayName,
       role: 'staff',
       email: null,
+      business_unit_ids: assignee.businessUnitId ? [assignee.businessUnitId] : [],
     }))
 
   function handleAssigneesChange(_ids: string[], users: ScopedUserSearchResult[]) {

@@ -94,7 +94,6 @@ export function ActionPlanEventPlanningForm({
   onDraftChange,
 }: ActionPlanEventPlanningFormProps) {
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
-  const [advancedExpanded, setAdvancedExpanded] = useState(false)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
 
   function updateDraft(patch: Partial<ActionPlanEventPlanningDraft>) {
@@ -140,6 +139,119 @@ export function ActionPlanEventPlanningForm({
               disabled={!config.canEditAssignees}
               error={fieldErrors.assignees}
             />
+          ) : null}
+
+          {config.showAdvancedChronology ? (
+            <>
+              <TerrainSwitch
+                variant="bordered"
+                label="Chronologie par assigné"
+                checked={draft.usePerAssigneeChronology}
+                onCheckedChange={(usePerAssigneeChronology) =>
+                  updateDraft({ usePerAssigneeChronology })
+                }
+              />
+              {draft.usePerAssigneeChronology ? (
+                <div className="space-y-3 border-b border-[#E8E6DF] px-3 pb-3">
+                  {draft.assignees.map((assignee) => {
+                    const startParts = splitIsoToDateAndTime(assignee.startAt)
+                    const endParts = splitIsoToDateAndTime(assignee.endAt)
+                    return (
+                      <div
+                        key={assignee.id}
+                        className="overflow-hidden rounded-xl border border-[#E8E6DF]"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-[#E8E6DF] px-3 py-2">
+                          <p className="text-sm font-medium text-[#1a1a1a]">
+                            {assignee.displayName || 'Assigné'}
+                          </p>
+                          <button
+                            type="button"
+                            className="rounded-lg p-2 text-[#E24B4A]"
+                            aria-label="Retirer l’assigné"
+                            onClick={() =>
+                              updateDraft({
+                                assignees: draft.assignees.filter(
+                                  (candidate) => candidate.id !== assignee.id,
+                                ),
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <PlanningDateTimeRow
+                          rowId={`assignee-${assignee.id}-start`}
+                          label="Début"
+                          date={startParts.date}
+                          time={startParts.time}
+                          hideTime={false}
+                          openPicker={openPicker}
+                          onOpenPickerChange={setOpenPicker}
+                          onDateChange={(date) =>
+                            updateAssignee(assignee.id, {
+                              startAt: combineDateAndTimeToIso(
+                                date,
+                                startParts.time,
+                                'start',
+                              ),
+                            })
+                          }
+                          onTimeChange={(time) =>
+                            updateAssignee(assignee.id, {
+                              startAt: combineDateAndTimeToIso(
+                                startParts.date,
+                                snapTimeToFiveMinutes(time),
+                                'start',
+                              ),
+                            })
+                          }
+                        />
+                        <PlanningDateTimeRow
+                          rowId={`assignee-${assignee.id}-end`}
+                          label="Fin"
+                          date={endParts.date}
+                          time={endParts.time}
+                          hideTime={false}
+                          openPicker={openPicker}
+                          onOpenPickerChange={setOpenPicker}
+                          onDateChange={(date) =>
+                            updateAssignee(assignee.id, {
+                              endAt: combineDateAndTimeToIso(date, endParts.time, 'end'),
+                            })
+                          }
+                          onTimeChange={(time) =>
+                            updateAssignee(assignee.id, {
+                              endAt: combineDateAndTimeToIso(
+                                endParts.date,
+                                snapTimeToFiveMinutes(time),
+                                'end',
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                    )
+                  })}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full rounded-xl border-dashed"
+                    onClick={() =>
+                      updateDraft({
+                        assignees: [
+                          ...draft.assignees,
+                          createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
+                        ],
+                      })
+                    }
+                  >
+                    <Plus className="mr-2 h-4 w-4" aria-hidden />
+                    Ajouter un créneau assigné
+                  </Button>
+                </div>
+              ) : null}
+            </>
           ) : null}
 
           <TerrainSwitch
@@ -240,137 +352,6 @@ export function ActionPlanEventPlanningForm({
           ) : null}
         </TerrainCard>
       </section>
-
-      {config.showAdvancedChronology ? (
-        <section className="space-y-2">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-2 text-left"
-            onClick={() => setAdvancedExpanded((value) => !value)}
-            aria-expanded={advancedExpanded}
-          >
-            <TerrainSectionLabel>Chronologie avancée</TerrainSectionLabel>
-            <ChevronRight
-              className={cn(
-                'size-4 shrink-0 text-[#7D7B75] transition-transform',
-                advancedExpanded && 'rotate-90',
-              )}
-            />
-          </button>
-          {advancedExpanded ? (
-            <TerrainCard className="space-y-3 overflow-hidden p-0">
-              <TerrainSwitch
-                variant="bordered"
-                label="Chronologie par assigné"
-                checked={draft.usePerAssigneeChronology}
-                onCheckedChange={(usePerAssigneeChronology) =>
-                  updateDraft({ usePerAssigneeChronology })
-                }
-              />
-              {draft.usePerAssigneeChronology ? (
-                <div className="space-y-3 px-3 pb-3">
-                  {draft.assignees.map((assignee) => {
-                    const startParts = splitIsoToDateAndTime(assignee.startAt)
-                    const endParts = splitIsoToDateAndTime(assignee.endAt)
-                    return (
-                      <div
-                        key={assignee.id}
-                        className="overflow-hidden rounded-xl border border-[#E8E6DF]"
-                      >
-                        <div className="flex items-center justify-between gap-2 border-b border-[#E8E6DF] px-3 py-2">
-                          <p className="text-sm font-medium text-[#1a1a1a]">
-                            {assignee.displayName || 'Assigné'}
-                          </p>
-                          <button
-                            type="button"
-                            className="rounded-lg p-2 text-[#E24B4A]"
-                            aria-label="Retirer l’assigné"
-                            onClick={() =>
-                              updateDraft({
-                                assignees: draft.assignees.filter(
-                                  (candidate) => candidate.id !== assignee.id,
-                                ),
-                              })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <PlanningDateTimeRow
-                          rowId={`assignee-${assignee.id}-start`}
-                          label="Début"
-                          date={startParts.date}
-                          time={startParts.time}
-                          hideTime={false}
-                          openPicker={openPicker}
-                          onOpenPickerChange={setOpenPicker}
-                          onDateChange={(date) =>
-                            updateAssignee(assignee.id, {
-                              startAt: combineDateAndTimeToIso(
-                                date,
-                                startParts.time,
-                                'start',
-                              ),
-                            })
-                          }
-                          onTimeChange={(time) =>
-                            updateAssignee(assignee.id, {
-                              startAt: combineDateAndTimeToIso(
-                                startParts.date,
-                                snapTimeToFiveMinutes(time),
-                                'start',
-                              ),
-                            })
-                          }
-                        />
-                        <PlanningDateTimeRow
-                          rowId={`assignee-${assignee.id}-end`}
-                          label="Fin"
-                          date={endParts.date}
-                          time={endParts.time}
-                          hideTime={false}
-                          openPicker={openPicker}
-                          onOpenPickerChange={setOpenPicker}
-                          onDateChange={(date) =>
-                            updateAssignee(assignee.id, {
-                              endAt: combineDateAndTimeToIso(date, endParts.time, 'end'),
-                            })
-                          }
-                          onTimeChange={(time) =>
-                            updateAssignee(assignee.id, {
-                              endAt: combineDateAndTimeToIso(
-                                endParts.date,
-                                snapTimeToFiveMinutes(time),
-                                'end',
-                              ),
-                            })
-                          }
-                        />
-                      </div>
-                    )
-                  })}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 w-full rounded-xl border-dashed"
-                    onClick={() =>
-                      updateDraft({
-                        assignees: [
-                          ...draft.assignees,
-                          createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
-                        ],
-                      })
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" aria-hidden />
-                    Ajouter un créneau assigné
-                  </Button>
-                </div>
-              ) : null}
-            </TerrainCard>
-          ) : null}
-        </section>
-      ) : null}
 
       {config.canEditAssignees ? (
         <ActionPlanAssigneesSheet

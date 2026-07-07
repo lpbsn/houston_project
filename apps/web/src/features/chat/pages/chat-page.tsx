@@ -5,7 +5,7 @@ import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { ChatApiError } from '../api'
@@ -13,7 +13,7 @@ import { ChatCreateSheet } from '../components/chat-create-sheet'
 import { ChatReconnectBanner } from '../components/chat-reconnect-banner'
 import { ConversationRow } from '../components/conversation-row'
 import { useOptionalChatRealtime } from '../components/chat-realtime-provider'
-import { filterConversationsByQuery } from '../lib/chat-display'
+import { filterConversationsByQuery, groupConversationsByType } from '../lib/chat-display'
 import { useChatConversationsQuery, useChatStatusQuery } from '../hooks'
 
 type ChatPageProps = {
@@ -34,10 +34,22 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
   const realtime = useOptionalChatRealtime()
   const connectionStatus = realtime?.connectionStatus ?? 'idle'
 
+  const allConversations = conversationsQuery.data?.items ?? []
   const filteredConversations = useMemo(() => {
-    const items = conversationsQuery.data?.items ?? []
-    return filterConversationsByQuery(items, search, viewerMembershipId)
-  }, [conversationsQuery.data?.items, search, viewerMembershipId])
+    return filterConversationsByQuery(allConversations, search, viewerMembershipId)
+  }, [allConversations, search, viewerMembershipId])
+  const conversationGroups = useMemo(() => {
+    return groupConversationsByType(filteredConversations)
+  }, [filteredConversations])
+
+  const searchActive = search.trim().length > 0
+  const showGlobalEmpty =
+    conversationsQuery.isSuccess && allConversations.length === 0
+  const showSearchEmpty =
+    conversationsQuery.isSuccess &&
+    allConversations.length > 0 &&
+    searchActive &&
+    filteredConversations.length === 0
 
   if (!establishmentId) {
     return <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
@@ -114,7 +126,7 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
           />
         ) : null}
 
-        {conversationsQuery.isSuccess && filteredConversations.length === 0 ? (
+        {showGlobalEmpty ? (
           <TerrainEmptyState
             className="mx-3 mt-6"
             title="Aucune conversation"
@@ -122,15 +134,30 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
           />
         ) : null}
 
-        {conversationsQuery.isSuccess && filteredConversations.length > 0 ? (
-          <div className="flex flex-col gap-3 px-3">
-            {filteredConversations.map((conversation) => (
-              <ConversationRow
-                key={conversation.id}
-                conversation={conversation}
-                viewerMembershipId={viewerMembershipId}
-                onSelect={onOpenConversation}
-              />
+        {showSearchEmpty ? (
+          <TerrainEmptyState
+            className="mx-3 mt-6"
+            title="Aucun résultat"
+            description="Aucune conversation ne correspond à cette recherche."
+          />
+        ) : null}
+
+        {conversationsQuery.isSuccess && conversationGroups.length > 0 ? (
+          <div className="flex flex-col gap-5 px-3">
+            {conversationGroups.map((group) => (
+              <section key={group.section}>
+                <TerrainSectionLabel className="px-0">{group.label}</TerrainSectionLabel>
+                <div className="mt-2 flex flex-col gap-3">
+                  {group.items.map((conversation) => (
+                    <ConversationRow
+                      key={conversation.id}
+                      conversation={conversation}
+                      viewerMembershipId={viewerMembershipId}
+                      onSelect={onOpenConversation}
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         ) : null}

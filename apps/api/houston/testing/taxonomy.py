@@ -80,7 +80,11 @@ def create_membership_with_business_unit_scope(
 
 
 def business_unit_scope_payload(business_unit: BusinessUnit) -> dict[str, str]:
-    return {"scope_type": "business_unit", "scope_id": str(business_unit.id)}
+    return {
+        "scope_type": "business_unit",
+        "scope_id": str(business_unit.id),
+        "scope_label": business_unit.label or business_unit.key or str(business_unit.id),
+    }
 
 
 def assert_business_unit_scope_response(body: dict, *, business_unit: BusinessUnit) -> None:

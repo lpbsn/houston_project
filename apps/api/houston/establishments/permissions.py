@@ -29,6 +29,10 @@ def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
     return _has_role(membership, ADMIN_ROLES)
 
 
+def can_view_team_memberships(membership: EstablishmentMembership | None) -> bool:
+    return is_valid_membership(membership)
+
+
 def can_invite_memberships(membership: EstablishmentMembership | None) -> bool:
     return _is_valid_invitation_membership(membership) and membership.role in _INVITATION_ROLES
 
@@ -120,6 +124,14 @@ class CanManageMemberships(BasePermission):
     def has_permission(self, request, view) -> bool:
         access_context = get_api_access_context(request)
         return can_manage_memberships(access_context.active_membership)
+
+
+class CanViewTeamMemberships(BasePermission):
+    message = "You do not have permission to view team memberships."
+
+    def has_permission(self, request, view) -> bool:
+        access_context = get_api_access_context(request)
+        return can_view_team_memberships(access_context.active_membership)
 
 
 class CanInviteMemberships(BasePermission):

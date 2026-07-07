@@ -5,6 +5,7 @@ import {
   businessUnitTreeQueryKey,
   clearAuthState,
   fetchBootstrap,
+  membershipDetailQueryKey,
   membershipListQueryKey,
   workspaceSummaryQueryKey,
 } from '@/features/auth/api'
@@ -80,6 +81,11 @@ export function applyRealtimeAccessEvent(
       void queryClient.invalidateQueries({
         queryKey: membershipListQueryKey(establishmentId),
       })
+      if (event.membership_id) {
+        void queryClient.invalidateQueries({
+          queryKey: membershipDetailQueryKey(establishmentId, event.membership_id),
+        })
+      }
       return
     case 'membership.updated':
       void queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
@@ -92,6 +98,11 @@ export function applyRealtimeAccessEvent(
       void queryClient.invalidateQueries({
         queryKey: businessUnitTreeQueryKey(establishmentId),
       })
+      if (event.membership_id) {
+        void queryClient.invalidateQueries({
+          queryKey: membershipDetailQueryKey(establishmentId, event.membership_id),
+        })
+      }
       if (event.membership_id && event.membership_id === activeMembershipId) {
         invalidateEstablishmentSignalQueries(queryClient, establishmentId)
         invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)

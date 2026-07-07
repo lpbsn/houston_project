@@ -295,7 +295,7 @@ def test_staff_out_of_scope_cannot_execute_task(
     assert can_execute_action_plan_task(out_of_scope_staff, pilot_task) is False
 
 
-def test_staff_non_assignee_cannot_execute_task(
+def test_staff_non_assignee_cannot_execute_assigned_task(
     owner_membership,
     business_unit,
     out_of_scope_staff,
@@ -307,6 +307,59 @@ def test_staff_non_assignee_cannot_execute_task(
         pilot_assignee=staff_membership,
     )
     assert can_execute_action_plan_task(out_of_scope_staff, task_execution) is False
+
+
+def test_staff_can_execute_open_pole_task_without_plan_assignment(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+    out_of_scope_staff,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Open pole task plan",
+        requires_validation=False,
+        tasks=[
+            build_task_payload(task="Open task", business_unit=maintenance_business_unit)
+        ],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
+    )
+    task_execution = execution.task_executions.select_related(
+        "execution_team__business_unit",
+        "action_plan_execution",
+    ).first()
+    assert task_execution.assigned_membership_id is None
+    assert can_execute_action_plan_task(out_of_scope_staff, task_execution) is True
+    assert action_plan_execution_visible_to_membership(out_of_scope_staff, execution) is True
+
+
+def test_staff_cannot_execute_open_pole_task_on_pilot_without_assignment(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Pilot open pole task plan",
+        requires_validation=False,
+        tasks=[build_task_payload(task="Open pilot task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit)
+        ],
+    )
+    task_execution = execution.task_executions.select_related(
+        "execution_team__business_unit",
+        "action_plan_execution",
+    ).first()
+    assert task_execution.assigned_membership_id is None
+    assert can_execute_action_plan_task(staff_membership, task_execution) is False
+    assert action_plan_execution_visible_to_membership(staff_membership, execution) is False
 
 
 def test_pilot_assignee_can_mark_done(

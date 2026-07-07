@@ -5,6 +5,7 @@ from houston.action_plans.constants import (
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
     SCHEDULE_STATUS_ACTIVE,
+    TASK_STATUS_DONE,
     TASK_STATUS_PENDING,
 )
 from houston.action_plans.models import (
@@ -82,6 +83,7 @@ def build_action_plan_execution_permission_hints(
     *,
     membership: EstablishmentMembership,
     execution: ActionPlanExecution,
+    in_feed: bool = False,
 ) -> dict[str, bool]:
     is_active = execution.status in ACTIVE_EXECUTION_STATUSES
     return {
@@ -90,6 +92,7 @@ def build_action_plan_execution_permission_hints(
         "can_reopen": can_reopen_action_plan_execution(membership, execution),
         "can_cancel": is_active and can_cancel_action_plan_execution(membership, execution),
         "is_pilot_pole_assignee": is_pilot_pole_assignee(membership, execution),
+        "can_pin": in_feed,
     }
 
 
@@ -106,8 +109,15 @@ def build_action_plan_task_execution_permission_hints(
         and is_active_execution
         and can_execute_action_plan_task(membership, task_execution)
     )
+    is_done = task_execution.status == TASK_STATUS_DONE
+    can_unmark_done = (
+        is_done
+        and is_active_execution
+        and can_execute_action_plan_task(membership, task_execution)
+    )
     return {
         "can_mark_done": can_execute,
+        "can_unmark_done": can_unmark_done,
         "can_skip": can_execute,
         "can_create_observation": can_execute,
     }

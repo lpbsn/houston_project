@@ -1,5 +1,56 @@
 import type { ChatConversationListItem, ChatMessage } from '../types'
 
+export type ChatConversationSectionKey = 'dm' | 'group'
+
+export type ChatConversationSectionGroup = {
+  section: ChatConversationSectionKey
+  label: string
+  items: ChatConversationListItem[]
+}
+
+const SECTION_ORDER: ChatConversationSectionKey[] = ['dm', 'group']
+
+const SECTION_LABELS: Record<ChatConversationSectionKey, string> = {
+  dm: 'Messages directs',
+  group: 'Groupes',
+}
+
+export function getConversationSectionKey(
+  conversation: Pick<ChatConversationListItem, 'type'>,
+): ChatConversationSectionKey {
+  return conversation.type === 'dm' ? 'dm' : 'group'
+}
+
+export function groupConversationsByType(
+  conversations: ChatConversationListItem[],
+): ChatConversationSectionGroup[] {
+  const buckets = new Map<ChatConversationSectionKey, ChatConversationListItem[]>()
+
+  for (const conversation of conversations) {
+    const section = getConversationSectionKey(conversation)
+    const bucket = buckets.get(section)
+    if (bucket) {
+      bucket.push(conversation)
+    } else {
+      buckets.set(section, [conversation])
+    }
+  }
+
+  return SECTION_ORDER.flatMap((section) => {
+    const items = buckets.get(section)
+    if (!items || items.length === 0) {
+      return []
+    }
+    return [
+      {
+        section,
+        label: SECTION_LABELS[section],
+        items,
+      },
+    ]
+  })
+}
+
 export function getConversationTitle(
   conversation: Pick<ChatConversationListItem, 'title' | 'type' | 'participants'>,
   viewerMembershipId: string | null,

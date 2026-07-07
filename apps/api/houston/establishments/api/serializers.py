@@ -3,13 +3,17 @@ from __future__ import annotations
 from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 
-from houston.establishments.membership_scope import membership_scope_rows_for_membership
+from houston.establishments.membership_scope import (
+    membership_business_unit_scope_ids,
+    membership_scope_rows_for_membership,
+)
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     BusinessUnit,
     EstablishmentMembership,
     OnboardingSession,
 )
+from houston.establishments.role_constants import ADMIN_ROLES
 
 
 class MembershipUserSummarySerializer(serializers.Serializer):
@@ -17,6 +21,8 @@ class MembershipUserSummarySerializer(serializers.Serializer):
     display_name = serializers.SerializerMethodField()
     username = serializers.CharField()
     email = serializers.EmailField(allow_blank=True, allow_null=True)
+    first_name = serializers.CharField(allow_blank=True)
+    last_name = serializers.CharField(allow_blank=True)
 
     def get_display_name(self, user) -> str:
         full_name = user.get_full_name().strip()
@@ -36,6 +42,15 @@ class MembershipUserSummarySerializer(serializers.Serializer):
 class MembershipScopeItemSerializer(serializers.Serializer):
     scope_type = serializers.ChoiceField(choices=["business_unit"])
     scope_id = serializers.UUIDField()
+    scope_label = serializers.CharField()
+
+
+@extend_schema_serializer(component_name="EstablishmentMembershipPermissionHints")
+class MembershipPermissionHintsSerializer(serializers.Serializer):
+    can_edit_role = serializers.BooleanField()
+    can_edit_scopes = serializers.BooleanField()
+    can_edit_status = serializers.BooleanField()
+    can_edit_personal_info = serializers.BooleanField()
 
 
 @extend_schema_serializer(component_name="EstablishmentMembershipScopeWriteItem")
@@ -60,6 +75,7 @@ class EstablishmentMembershipResponseSerializer(serializers.Serializer):
     status = serializers.CharField()
     scopes = serializers.SerializerMethodField()
     scope_summary = serializers.SerializerMethodField()
+    permission_hints = serializers.SerializerMethodField()
 
     @extend_schema_field(MembershipScopeItemSerializer(many=True))
     def get_scopes(self, membership: EstablishmentMembership) -> list[dict[str, str]]:
@@ -70,6 +86,16 @@ class EstablishmentMembershipResponseSerializer(serializers.Serializer):
     def get_scope_summary(self, membership: EstablishmentMembership) -> dict[str, int]:
         _, summary = membership_scope_rows_for_membership(membership)
         return summary
+
+    @extend_schema_field(MembershipPermissionHintsSerializer)
+    def get_permission_hints(self, membership: EstablishmentMembership) -> dict[str, bool]:
+        from houston.establishments.permission_hints import build_membership_permission_hints
+
+        actor_membership = self.context.get("actor_membership")
+        return build_membership_permission_hints(
+            actor_membership=actor_membership,
+            target_membership=membership,
+        )
 
 
 class MembershipUpdateRequestSerializer(serializers.Serializer):
@@ -157,6 +183,15 @@ class ScopedUserSearchRequestSerializer(serializers.Serializer):
         min_length=2,
     )
     business_unit_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    context = serializers.ChoiceField(
+        choices=["assignee", "mention"],
+        required=False,
+        default="assignee",
+        help_text=(
+            "assignee: scope-aware search for task/plan assignment. "
+            "mention: establishment-wide active member search for comments."
+        ),
+    )
 
     def validate(self, attrs):
         business_unit_id = attrs.get("business_unit_id")
@@ -238,9 +273,16 @@ class ScopedUserSearchResultSerializer(serializers.Serializer):
     email = serializers.EmailField(source="user.email", allow_blank=True, allow_null=True)
     role = serializers.CharField()
     membership_id = serializers.UUIDField(source="id")
+    business_unit_ids = serializers.SerializerMethodField()
 
     def get_display_name(self, membership: EstablishmentMembership) -> str:
         return MembershipUserSummarySerializer().get_display_name(membership.user)
+
+    def get_business_unit_ids(self, membership: EstablishmentMembership) -> list[str]:
+        if membership.role in ADMIN_ROLES:
+            return []
+        scope_ids = membership_business_unit_scope_ids(membership)
+        return [str(bu_id) for bu_id in sorted(scope_ids, key=str)]
 
 
 class OnboardingOrganizationSummarySerializer(serializers.Serializer):

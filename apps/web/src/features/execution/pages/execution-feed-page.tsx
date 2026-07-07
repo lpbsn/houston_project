@@ -15,7 +15,12 @@ import type { ExecutionViewMode } from '@/features/execution/lib/types'
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
-import { groupActionPlanExecutionsBySection } from '../lib/action-plan-execution-feed-sections'
+import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
+import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
+import {
+  groupActionPlanExecutionsBySection,
+  partitionActionPlanExecutionFeedPinnedItems,
+} from '../lib/action-plan-execution-feed-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
 import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
 
@@ -34,11 +39,16 @@ export function ExecutionFeedPage({
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
 
   const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode)
+  const quickActions = useActionPlanExecutionFeedQuickActions({
+    establishmentId,
+    viewMode,
+  })
 
   const planItems = planFeedQuery.isSuccess
     ? unwrapActionPlanExecutionFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
     : []
-  const planGroups = groupActionPlanExecutionsBySection(planItems)
+  const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
+  const planGroups = groupActionPlanExecutionsBySection(unpinnedItems)
 
   const permissionHints = auth.bootstrap
     ? getBootstrapPermissionHints(auth.bootstrap)
@@ -51,6 +61,7 @@ export function ExecutionFeedPage({
   const isInitialLoading = planFeedQuery.isLoading
   const showGlobalEmpty =
     planItems.length === 0 && planFeedQuery.isSuccess && !planFeedQuery.isLoading
+  const hasVisibleItems = pinnedItems.length > 0 || planGroups.length > 0
   const hasMore = planFeedQuery.hasNextPage
   const isFetchingMore = planFeedQuery.isFetchingNextPage
 
@@ -107,8 +118,22 @@ export function ExecutionFeedPage({
               />
             ) : null}
 
-            {planFeedQuery.isSuccess && planGroups.length > 0
-              ? planGroups.map((group) => (
+            {planFeedQuery.isSuccess && hasVisibleItems ? (
+              <>
+                {pinnedItems.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {pinnedItems.map((item) => (
+                      <ActionPlanExecutionFeedCard
+                        key={`plan-pinned-${item.id}`}
+                        item={item}
+                        onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                        onOpenActions={quickActions.openActions}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+
+                {planGroups.map((group) => (
                   <section key={`plan-${group.section}`}>
                     <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
                       {group.label} · {group.items.length}
@@ -119,12 +144,14 @@ export function ExecutionFeedPage({
                           key={`plan-${item.id}`}
                           item={item}
                           onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                          onOpenActions={quickActions.openActions}
                         />
                       ))}
                     </div>
                   </section>
-                ))
-              : null}
+                ))}
+              </>
+            ) : null}
 
             {showGlobalEmpty ? (
               <TerrainEmptyState
@@ -149,6 +176,16 @@ export function ExecutionFeedPage({
           </div>
         ) : null}
       </div>
+
+      {quickActions.activeItem ? (
+        <ActionPlanExecutionFeedCardActionsSheet
+          item={quickActions.activeItem}
+          open={quickActions.actionsOpen}
+          isPending={quickActions.isPending}
+          onClose={quickActions.closeActions}
+          onSelectAction={quickActions.runAction}
+        />
+      ) : null}
     </div>
   )
 }

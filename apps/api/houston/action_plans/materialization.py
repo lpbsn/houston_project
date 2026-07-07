@@ -34,8 +34,11 @@ from houston.action_plans.permissions import _scope_business_unit_ids
 from houston.action_plans.services import (
     ValidatedAssigneePayload,
     _create_execution_record,
+    _execution_task_snapshot_fields,
     _materialize_execution_structure,
+    _resolve_merge_chronology,
     _validate_execution_has_content,
+    merge_plan_task_assignees_into_validated_assignees,
 )
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.timezone_utils import (
@@ -234,6 +237,7 @@ def _ensure_execution_structure_if_needed(
                         task=plan_task.task,
                         position=plan_task.position,
                         status=TASK_STATUS_PENDING,
+                        **_execution_task_snapshot_fields(plan_task=plan_task),
                     )
                     for plan_task in plan_tasks
                 ]
@@ -375,7 +379,12 @@ def materialize_execution_from_schedule(
 
     _assert_can_materialize_from_schedule(schedule=schedule, action_plan=action_plan)
 
-    plan_tasks = list(action_plan.tasks.order_by("position", "created_at"))
+    plan_tasks = list(
+        action_plan.tasks.select_related("assigned_membership__user", "business_unit").order_by(
+            "position",
+            "created_at",
+        )
+    )
     schedule_assignees = list(schedule.schedule_assignees.all())
     if schedule.use_shared_chronology:
         assignees = [
@@ -405,6 +414,20 @@ def materialize_execution_from_schedule(
             schedule_assignee=schedule_assignee,
         )
         source_membership = schedule_assignee.membership
+
+    chronology = _resolve_merge_chronology(
+        use_shared_chronology=schedule.use_shared_chronology,
+        start_at=occurrence_start,
+        end_at=occurrence_end,
+        visible_from=visible_from,
+        validated_assignees=assignees,
+    )
+    assignees = merge_plan_task_assignees_into_validated_assignees(
+        establishment_id=schedule.establishment_id,
+        plan_tasks=plan_tasks,
+        assignees=assignees,
+        chronology=chronology,
+    )
 
     _validate_execution_has_content(
         task_count=len(plan_tasks),

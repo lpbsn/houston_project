@@ -17,6 +17,7 @@ from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
     assign_membership_scopes,
+    membership_business_unit_scope_ids,
     membership_scope_covers_business_unit,
     normalize_membership_scope_inputs,
     scopes_not_allowed_for_role,
@@ -60,6 +61,10 @@ class CannotDemoteLastActiveOwnerError(Exception):
 
 
 class MembershipManagementForbiddenError(Exception):
+    pass
+
+
+class InvitedMembershipActivationError(Exception):
     pass
 
 
@@ -1563,14 +1568,38 @@ def _can_actor_manage_target_membership(
     actor_membership: EstablishmentMembership | None,
     target_membership: EstablishmentMembership,
 ) -> bool:
+    return can_actor_manage_target_membership(
+        actor_membership=actor_membership,
+        target_membership=target_membership,
+    )
+
+
+def can_actor_manage_target_membership(
+    *,
+    actor_membership: EstablishmentMembership | None,
+    target_membership: EstablishmentMembership,
+) -> bool:
     if actor_membership is None:
+        return False
+
+    if actor_membership.establishment_id != target_membership.establishment_id:
         return False
 
     allowed_targets = _MANAGEABLE_TARGET_ROLES_BY_ACTOR.get(actor_membership.role)
     if allowed_targets is None:
         return False
 
-    return target_membership.role in allowed_targets
+    if target_membership.role not in allowed_targets:
+        return False
+
+    if actor_membership.role == EstablishmentMembership.Role.MANAGER:
+        actor_scope_ids = membership_business_unit_scope_ids(actor_membership)
+        if not actor_scope_ids:
+            return False
+        target_scope_ids = membership_business_unit_scope_ids(target_membership)
+        return bool(actor_scope_ids & target_scope_ids)
+
+    return True
 
 
 def _can_actor_manage_target_role(
@@ -1595,7 +1624,7 @@ def _can_actor_invite_role(*, actor_role: str, invited_role: str) -> bool:
     }:
         return False
 
-    allowed_targets = _MANAGEABLE_TARGET_ROLES_BY_ACTOR.get(actor_role)
+    allowed_targets = _INVITABLE_TARGET_ROLES_BY_ACTOR.get(actor_role)
     if allowed_targets is None:
         return False
 
@@ -1606,7 +1635,7 @@ def _can_actor_invite_memberships(
     *,
     current_membership: EstablishmentMembership,
 ) -> bool:
-    return current_membership.role in _MANAGEABLE_TARGET_ROLES_BY_ACTOR
+    return current_membership.role in _INVITABLE_TARGET_ROLES_BY_ACTOR
 
 
 def _ensure_manager_scope_covers_invited_scopes(
@@ -1626,6 +1655,22 @@ _MANAGEABLE_TARGET_ROLES_BY_ACTOR = {
     EstablishmentMembership.Role.OWNER: {
         EstablishmentMembership.Role.OWNER,
         EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    },
+    EstablishmentMembership.Role.DIRECTOR: {
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.STAFF,
+    },
+    EstablishmentMembership.Role.MANAGER: {
+        EstablishmentMembership.Role.STAFF,
+        EstablishmentMembership.Role.MANAGER,
+    },
+    EstablishmentMembership.Role.STAFF: set(),
+}
+
+_INVITABLE_TARGET_ROLES_BY_ACTOR = {
+    EstablishmentMembership.Role.OWNER: {
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.STAFF,
     },
@@ -1892,6 +1937,46 @@ def deactivate_membership_for_management(
     )
 
     _clear_selected_establishment_for_membership(membership)
+
+    membership.refresh_from_db()
+    return _reload_membership_for_response(membership.id)
+
+
+@transaction.atomic
+def activate_membership_for_management(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    membership_id,
+) -> EstablishmentMembership:
+    membership = get_membership_for_management(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+        membership_id=membership_id,
+    )
+    if membership is None:
+        raise MembershipManagementNotFoundError
+
+    if not _can_actor_manage_target_membership(
+        actor_membership=current_membership,
+        target_membership=membership,
+    ):
+        raise MembershipManagementForbiddenError
+
+    if membership.status == EstablishmentMembership.Status.INVITED:
+        raise InvitedMembershipActivationError
+
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        membership.status = EstablishmentMembership.Status.ACTIVE
+        membership.save(update_fields=["status", "updated_at"])
+
+        from houston.realtime.broadcast import schedule_access_event
+
+        schedule_access_event(
+            reason="membership.updated",
+            establishment_id=membership.establishment_id,
+            membership_id=membership.id,
+        )
 
     membership.refresh_from_db()
     return _reload_membership_for_response(membership.id)

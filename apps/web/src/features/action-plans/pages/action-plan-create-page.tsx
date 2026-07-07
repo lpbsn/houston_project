@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -34,15 +34,18 @@ import {
   ActionPlanTaskDraftEditor,
 } from '../components/action-plan-task-draft-editor'
 import { useActionPlanCreateSubmit } from '../hooks/use-action-plan-create-submit'
+import { useActionPlanEditSubmit } from '../hooks/use-action-plan-edit-submit'
+import { useActionPlanDetailQuery } from '../hooks'
 import {
   type ActionPlanCreateMode,
   resolveActionPlanCreateModeConfig,
 } from '../lib/action-plan-create-mode'
 import { canCreateSignalLinkedActionPlanFromSignalHints } from '../lib/action-plan-management-access'
 import {
+  actionPlanTaskTemplateToDraft,
   createActionPlanAssigneeDraft,
-  createActionPlanTaskDraft,
   type ActionPlanCreateFormValues,
+  type ActionPlanTaskDraft,
 } from '../lib/action-plan-form-validation'
 import {
   createActionPlanEventPlanningDraft,
@@ -50,6 +53,8 @@ import {
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
 import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
+import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
+import { canShowActionPlanUpdate } from '../lib/action-plan-permission-hints'
 
 const SIGNAL_LINKED_PERMISSION_MESSAGE =
   "Vous n'avez pas la permission de créer un plan d'action."
@@ -58,12 +63,14 @@ type ActionPlanCreatePageProps = {
   mode?: ActionPlanCreateMode
   backPath?: string
   signalId?: string
+  actionPlanId?: string
 }
 
 export function ActionPlanCreatePage({
   mode = 'catalog',
   backPath = '/action-plans',
   signalId,
+  actionPlanId,
 }: ActionPlanCreatePageProps) {
   const { navigate } = useAppRoute()
   const auth = useAuth()
@@ -75,6 +82,7 @@ export function ActionPlanCreatePage({
   const canCreateActionPlan = permissionHints.can_create_action_plan === true
   const canCreateCatalogActionPlan = permissionHints.can_create_catalog_action_plan === true
   const isSignalLinked = mode === 'signal-linked'
+  const isTemplateEdit = mode === 'template-edit'
 
   const modeConfig = useMemo(
     () =>
@@ -93,6 +101,11 @@ export function ActionPlanCreatePage({
     isSignalLinked ? (signalId ?? null) : null,
   )
 
+  const templateDetailQuery = useActionPlanDetailQuery(
+    establishmentId,
+    isTemplateEdit ? (actionPlanId ?? null) : null,
+  )
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [pilotBusinessUnitId, setPilotBusinessUnitId] = useState('')
@@ -100,11 +113,25 @@ export function ActionPlanCreatePage({
     modeConfig.defaultRequiresValidation,
   )
   const [saveToLibrary, setSaveToLibrary] = useState(modeConfig.defaultSaveToLibrary)
-  const [tasks, setTasks] = useState([createActionPlanTaskDraft()])
+  const [tasks, setTasks] = useState<ActionPlanTaskDraft[]>([])
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
   )
   const [openPilotPicker, setOpenPilotPicker] = useState<PlanningOptionPickerTarget>(null)
+  const [isTemplateHydrated, setIsTemplateHydrated] = useState(false)
+
+  useEffect(() => {
+    if (!isTemplateEdit || !templateDetailQuery.data || isTemplateHydrated) {
+      return
+    }
+    const plan = templateDetailQuery.data
+    setTitle(plan.title)
+    setDescription(plan.description)
+    setPilotBusinessUnitId(plan.pilot_business_unit.id)
+    setRequiresValidation(plan.requires_validation)
+    setTasks(plan.tasks.map(actionPlanTaskTemplateToDraft))
+    setIsTemplateHydrated(true)
+  }, [isTemplateEdit, isTemplateHydrated, templateDetailQuery.data])
 
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = useMemo(
@@ -112,20 +139,21 @@ export function ActionPlanCreatePage({
     [businessUnitQuery.data?.business_units],
   )
 
-  const visibleBusinessUnits = useMemo(() => {
-    if (!modeConfig.filterBusinessUnitsByScope) {
-      return businessUnits
-    }
-    const scopes = activeMembership?.scopes ?? []
-    if (scopes.length === 0) {
-      return businessUnits
-    }
-    return businessUnits.filter((unit) =>
-      scopes.some(
-        (scope) => scope.scope_type === 'business_unit' && scope.scope_id === unit.id,
-      ),
-    )
-  }, [activeMembership?.scopes, businessUnits, modeConfig.filterBusinessUnitsByScope])
+  const visibleBusinessUnits = useMemo(
+    () =>
+      resolveVisibleBusinessUnits({
+        role,
+        scopes: activeMembership?.scopes,
+        businessUnits,
+        filterByScope: modeConfig.filterBusinessUnitsByScope,
+      }),
+    [
+      activeMembership?.scopes,
+      businessUnits,
+      modeConfig.filterBusinessUnitsByScope,
+      role,
+    ],
+  )
 
   const signalPilotBusinessUnitId = useMemo(() => {
     if (!modeConfig.lockPilotBusinessUnit) {
@@ -139,14 +167,19 @@ export function ActionPlanCreatePage({
   }, [businessUnits, modeConfig.lockPilotBusinessUnit, signalDetailQuery.data])
 
   const resolvedPilotBusinessUnitId = useMemo(() => {
+    if (isTemplateEdit && templateDetailQuery.data) {
+      return templateDetailQuery.data.pilot_business_unit.id
+    }
     if (modeConfig.lockPilotBusinessUnit) {
       return signalPilotBusinessUnitId
     }
     return pilotBusinessUnitId || visibleBusinessUnits[0]?.id || ''
   }, [
+    isTemplateEdit,
     modeConfig.lockPilotBusinessUnit,
     pilotBusinessUnitId,
     signalPilotBusinessUnitId,
+    templateDetailQuery.data,
     visibleBusinessUnits,
   ])
 
@@ -156,16 +189,6 @@ export function ActionPlanCreatePage({
   )
 
   const canCrossPole = modeConfig.canDefineCrossPoleTasks
-
-  const resolvedTasks = useMemo(() => {
-    if (!resolvedPilotBusinessUnitId) {
-      return tasks
-    }
-    return tasks.map((task) => ({
-      ...task,
-      businessUnitId: task.businessUnitId || resolvedPilotBusinessUnitId,
-    }))
-  }, [resolvedPilotBusinessUnitId, tasks])
 
   const staffDisplayName = bootstrap?.user?.username ?? 'Moi'
 
@@ -208,7 +231,7 @@ export function ActionPlanCreatePage({
       sharedStartAt: planningSlice.sharedStartAt,
       sharedEndAt: planningSlice.sharedEndAt,
       sharedVisibleFrom: planningSlice.sharedVisibleFrom,
-      tasks: resolvedTasks,
+      tasks,
       assignees: effectiveAssignees,
       schedule: planningSlice.schedule,
       sourceSignalId: isSignalLinked ? signalId : undefined,
@@ -220,7 +243,7 @@ export function ActionPlanCreatePage({
       requiresValidation,
       saveToLibrary,
       planningSlice,
-      resolvedTasks,
+      tasks,
       title,
       isSignalLinked,
       signalId,
@@ -239,6 +262,25 @@ export function ActionPlanCreatePage({
     onNavigate: navigate,
   })
 
+  const templateEditBackPath =
+    isTemplateEdit && actionPlanId ? `/action-plans/${actionPlanId}` : backPath
+
+  const {
+    submit: submitEdit,
+    fieldErrors: editFieldErrors,
+    submitError: editSubmitError,
+    isSubmitting: isEditSubmitting,
+  } = useActionPlanEditSubmit({
+    establishmentId: establishmentId ?? '',
+    actionPlanId: actionPlanId ?? '',
+    canDefineCrossPoleTasks: canCrossPole,
+    onNavigate: navigate,
+  })
+
+  const resolvedFieldErrors = isTemplateEdit ? editFieldErrors : fieldErrors
+  const resolvedSubmitError = isTemplateEdit ? editSubmitError : submitError
+  const resolvedIsSubmitting = isTemplateEdit ? isEditSubmitting : isSubmitting
+
   if (!establishmentId) {
     return null
   }
@@ -253,7 +295,47 @@ export function ActionPlanCreatePage({
     )
   }
 
-  if (!modeConfig.canAccess) {
+  if (isTemplateEdit) {
+    if (!actionPlanId) {
+      return (
+        <TerrainErrorState
+          className="mx-3 mt-3"
+          message="Plan introuvable."
+          onRetry={() => navigate('/action-plans')}
+        />
+      )
+    }
+
+    if (templateDetailQuery.isLoading || !isTemplateHydrated) {
+      return (
+        <div className="flex items-center justify-center py-16 text-[#7D7B75]">
+          <LoaderCircle className="h-6 w-6 animate-spin" />
+        </div>
+      )
+    }
+
+    if (templateDetailQuery.isError || !templateDetailQuery.data) {
+      return (
+        <TerrainErrorState
+          className="mx-3 mt-3"
+          message="Ce plan est introuvable ou inaccessible."
+          onRetry={() => void templateDetailQuery.refetch()}
+        />
+      )
+    }
+
+    if (!canShowActionPlanUpdate(templateDetailQuery.data.permission_hints)) {
+      return (
+        <TerrainErrorState
+          className="mx-3 mt-3"
+          message="Vous n’avez pas la permission de modifier ce plan."
+          onRetry={() => navigate(templateEditBackPath)}
+        />
+      )
+    }
+  }
+
+  if (!modeConfig.canAccess && !isTemplateEdit) {
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
@@ -305,15 +387,20 @@ export function ActionPlanCreatePage({
 
   const scheduleConfigured = isActionPlanScheduleConfigured(planningSlice.schedule)
   const showPlanningForm =
-    !saveToLibrary || modeConfig.showStaffSelfAssignee || modeConfig.showScheduleSection
-  const showToggleSection = modeConfig.showLibraryToggle || modeConfig.showValidationToggle
-  const submitLabel = scheduleConfigured
-    ? saveToLibrary
-      ? 'Enregistrer et planifier'
-      : 'Créer et planifier'
-    : saveToLibrary
-      ? 'Enregistrer dans la bibliothèque'
-      : 'Créer le plan d’action'
+    !isTemplateEdit &&
+    (!saveToLibrary || modeConfig.showStaffSelfAssignee || modeConfig.showScheduleSection)
+  const showToggleSection = isTemplateEdit
+    ? modeConfig.showValidationToggle
+    : modeConfig.showLibraryToggle || modeConfig.showValidationToggle
+  const submitLabel = isTemplateEdit
+    ? 'Enregistrer les modifications'
+    : scheduleConfigured
+      ? saveToLibrary
+        ? 'Enregistrer et planifier'
+        : 'Créer et planifier'
+      : saveToLibrary
+        ? 'Enregistrer dans la bibliothèque'
+        : 'Créer le plan d’action'
 
   return (
     <div className="flex min-h-full flex-col">
@@ -345,7 +432,7 @@ export function ActionPlanCreatePage({
               className="h-11 border-[#E8E6DF] text-sm"
             />
             {fieldErrors.title ? (
-              <p className="mt-1 text-xs text-destructive">{fieldErrors.title}</p>
+              <p className="mt-1 text-xs text-destructive">{resolvedFieldErrors.title}</p>
             ) : null}
           </div>
           <div>
@@ -359,30 +446,33 @@ export function ActionPlanCreatePage({
           <PlanningOptionRow
             rowId="pilot-business-unit"
             label="Pôle d'activité pilote"
-            value={resolvedPilotBusinessUnitId}
+            value={pilotBusinessUnitId}
             displayValue={
               modeConfig.lockPilotBusinessUnit
                 ? (signalDetail?.responsible_business_unit_label ?? '—')
-                : undefined
+                : pilotBusinessUnitOptions.find((option) => option.value === resolvedPilotBusinessUnitId)
+                    ?.label
             }
             options={pilotBusinessUnitOptions}
             disabled={modeConfig.lockPilotBusinessUnit}
             openPicker={openPilotPicker}
             onOpenPickerChange={setOpenPilotPicker}
             onChange={setPilotBusinessUnitId}
-            error={fieldErrors.pilotBusinessUnitId}
+            error={resolvedFieldErrors.pilotBusinessUnitId}
           />
         </TerrainCard>
 
         <ActionPlanTaskDraftEditor
-          tasks={resolvedTasks}
+          tasks={tasks}
+          establishmentId={establishmentId ?? ''}
           pilotBusinessUnitId={resolvedPilotBusinessUnitId}
           canDefineCrossPoleTasks={canCrossPole}
+          staffMode={modeConfig.showStaffSelfAssignee}
           businessUnits={visibleBusinessUnits}
           onTasksChange={setTasks}
         />
-        {fieldErrors.tasks ? (
-          <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
+        {resolvedFieldErrors.tasks ? (
+          <p className="text-xs text-destructive">{resolvedFieldErrors.tasks}</p>
         ) : null}
 
         {showPlanningForm ? (
@@ -398,7 +488,7 @@ export function ActionPlanCreatePage({
             }}
             establishmentId={establishmentId}
             pilotBusinessUnitId={resolvedPilotBusinessUnitId}
-            fieldErrors={fieldErrors}
+            fieldErrors={resolvedFieldErrors}
             onDraftChange={(next) => {
               if (modeConfig.showStaffSelfAssignee) {
                 setPlanningDraft({ ...next, assignees: effectiveAssignees })
@@ -419,34 +509,53 @@ export function ActionPlanCreatePage({
               />
             ) : null}
             {modeConfig.showLibraryToggle ? (
-              <div className="px-4 py-3.5">
-                <TerrainSwitch
-                  label="Enregistrer dans la bibliothèque"
-                  checked={saveToLibrary}
-                  onCheckedChange={setSaveToLibrary}
-                />
-                <p className={cn('mt-2 text-xs', terrain.muted)}>
-                  Un modèle bibliothèque est réutilisable sans assignés à la création.
-                </p>
-              </div>
+              <TerrainSwitch
+                label="Enregistrer dans la bibliothèque"
+                checked={saveToLibrary}
+                onCheckedChange={setSaveToLibrary}
+              />
             ) : null}
           </TerrainCard>
         ) : null}
 
-        {submitError ? <TerrainFeedback variant="error" message={submitError} /> : null}
+        {resolvedSubmitError ? (
+          <TerrainFeedback variant="error" message={resolvedSubmitError} />
+        ) : null}
       </div>
 
       <TerrainStickyFooter>
-        <Button
-          type="button"
-          className="h-11 w-full rounded-xl"
-          disabled={isSubmitting}
-          onClick={() =>
-            void submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
-          }
-        >
-          {submitLabel}
-        </Button>
+        {isTemplateEdit ? (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 rounded-xl"
+              disabled={resolvedIsSubmitting}
+              onClick={() => navigate(templateEditBackPath)}
+            >
+              Retour
+            </Button>
+            <Button
+              type="button"
+              className="h-11 flex-1 rounded-xl"
+              disabled={resolvedIsSubmitting}
+              onClick={() => void submitEdit(formValues)}
+            >
+              {submitLabel}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            className="h-11 w-full rounded-xl"
+            disabled={resolvedIsSubmitting}
+            onClick={() =>
+              void submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
+            }
+          >
+            {submitLabel}
+          </Button>
+        )}
       </TerrainStickyFooter>
     </div>
   )

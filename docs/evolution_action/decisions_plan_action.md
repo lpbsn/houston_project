@@ -34,6 +34,7 @@ Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 
 | [26.13](#decision-26-13) | Création staff (feed execution) | Voir détail ci-dessous | 2B, 3 |
 | [26.14](#decision-26-14) | Manager — utilisation catalogue | Voir détail ci-dessous | 2B, 3 |
 | [26.15](#decision-26-15) | Cross-pôle — création directe vs catalogue | Voir détail ci-dessous | 2B, 3 |
+| [26.16](#decision-26-16) | Catalogue actif sans tâche | Voir détail ci-dessous | 1, 2B |
 
 ---
 
@@ -173,6 +174,10 @@ Défaut = pôle pilote
 
 Création (formulaire initial, snapshot catalogue) :
   tâche cross-pôle explicite → Director / Owner uniquement
+  brouillon sans pôle explicite → à la soumission, business_unit = pôle pilote
+    (sauf si un assigné impose un pôle : 1 scope → dérivé ; N scopes → choix obligatoire)
+  draft : effacer l'assigné → vider le pôle de la tâche
+  draft : assigné Owner/Director → pôle choisi manuellement (non verrouillé, obligatoire à la soumission)
 
 Runtime (exécution en cours) :
   manager pilote → ajouter / modifier / supprimer tâches sur tous les pôles
@@ -186,8 +191,16 @@ Voir aussi l'arbitrage §10 vs §26.6–26.7 ci-dessous.
 Règle d'**action sur les tâches** (pas la création de plan — voir [26.13](#decision-26-13)).
 
 ```txt
-Un staff multi-pôle peut agir sur les tâches de tous ses scopes actifs
-Condition : il est assigné à l'exécution ET task.business_unit ∈ ses scopes actifs
+Tâche avec assigned_membership :
+  un staff multi-pôle peut agir sur les tâches de tous ses scopes actifs
+  condition : il est assigné à l'exécution ET task.business_unit ∈ ses scopes actifs
+
+Tâche ouverte au pôle (sans assigned_membership, pôle ≠ pilote) :
+  tout membre actif du pôle (scope couvrant task.business_unit) peut exécuter la tâche
+  visibilité feed / exécution : même règle de scope pôle (sans exiger l'assignation plan)
+
+Tâche sans assigné sur le pôle pilote :
+  règle standard — staff doit être assigné à l'exécution ET couvrir le pôle de la tâche
 ```
 
 ### Decision 26.9 — Retrait pôle impliqué {#decision-26-9}
@@ -308,6 +321,16 @@ Catalogue : le manager in-scope sur le pilote hérite les tâches multi-pôles d
 Assignation §26.2 : toujours appliquée sur les assignés ajoutés à l'exécution, y compris depuis catalogue
 ```
 
+### Decision 26.16 — Catalogue actif sans tâche {#decision-26-16}
+
+Un modèle catalogue **actif** peut avoir **0 tâche** (alignement besoin §14 : tâches optionnelles, 0 à 10).
+
+```txt
+Création catalogue active avec tasks=[] : autorisée
+Activation catalogue sans tâche modèle : autorisée
+Statut de contribution : inchangé — calculé uniquement pour les pôles ayant au moins une tâche (§15)
+```
+
 ---
 
 ## Arbitrages {#arbitrages}
@@ -322,6 +345,8 @@ Assignation §26.2 : toujours appliquée sur les assignés ajoutés à l'exécut
 | Runtime (exécution en cours) | Manager pilote (tous pôles) ; manager contributeur (son pôle) |
 
 Le besoin §10 (« ajouter des tâches sur tous les pôles ») s'applique au **runtime**. Les restrictions cross-pôle à la **création** sont dans les décisions [26.6](#decision-26-6), [26.7](#decision-26-7) et [26.15](#decision-26-15) (directe vs catalogue).
+
+**Écart code live (2026-07) :** l'édition catalogue (`can_manage_action_plan` / PATCH) autorise aussi un **manager in-scope** sur le pôle pilote, pas seulement Director/Owner. L'UI et les tests suivent ce comportement tant qu'il n'est pas revu produit.
 
 ---
 

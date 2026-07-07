@@ -10,7 +10,7 @@ import {
 
 describe('usesTerrainShell', () => {
   it('returns true for terrain hub routes', () => {
-    for (const path of ['/reporting', '/signals', '/execution', '/chat', '/profile'] as const) {
+    for (const path of ['/reporting', '/signals', '/execution', '/chat', '/general'] as const) {
       expect(usesTerrainShell({ kind: 'static', path })).toBe(true)
     }
   })
@@ -26,6 +26,9 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       true,
     )
+    expect(usesTerrainShell({ kind: 'action-plan-template-edit', actionPlanId: 'plan-1' })).toBe(
+      true,
+    )
     expect(usesTerrainShell({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       true,
     )
@@ -33,7 +36,8 @@ describe('usesTerrainShell', () => {
 
   it('returns true for team and action plan hub routes', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/team' })).toBe(true)
-    expect(usesTerrainShell({ kind: 'static', path: '/profile/switch-establishment' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/team/invite' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/general/switch-establishment' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
   })
 
@@ -48,7 +52,7 @@ describe('getTerrainRouteConfig', () => {
   it('configures hub routes with bottom nav, page title, and main scroll', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/reporting' })).toEqual({
       topbarVariant: 'hub',
-      pageTitle: 'Nouvelle Observation',
+      pageTitle: 'Observation',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'auto',
@@ -78,10 +82,11 @@ describe('getTerrainRouteConfig', () => {
       mainScroll: 'auto',
     })
 
-    expect(getTerrainRouteConfig({ kind: 'static', path: '/profile' })).toEqual({
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/general' })).toEqual({
       topbarVariant: 'hub',
+      pageTitle: 'Général',
       showBottomNav: true,
-      activeNavPath: '/profile',
+      activeNavPath: '/general',
       mainScroll: 'auto',
     })
   })
@@ -90,7 +95,17 @@ describe('getTerrainRouteConfig', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/team' })).toEqual({
       topbarVariant: 'detail',
       title: 'Équipe',
-      backPath: '/profile',
+      backPath: '/general',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures team invite route as detail shell without bottom nav', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/team/invite' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Inviter un membre',
+      backPath: '/team',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -98,11 +113,11 @@ describe('getTerrainRouteConfig', () => {
 
   it('configures profile switch establishment route as detail shell without bottom nav', () => {
     expect(
-      getTerrainRouteConfig({ kind: 'static', path: '/profile/switch-establishment' }),
+      getTerrainRouteConfig({ kind: 'static', path: '/general/switch-establishment' }),
     ).toEqual({
       topbarVariant: 'detail',
       title: "Changer d'établissement",
-      backPath: '/profile',
+      backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -112,7 +127,7 @@ describe('getTerrainRouteConfig', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/action-plans' })).toEqual({
       topbarVariant: 'detail',
       title: 'Bibliothèque',
-      backPath: '/profile',
+      backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -120,11 +135,10 @@ describe('getTerrainRouteConfig', () => {
       getTerrainRouteConfig({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),
     ).toEqual({
       topbarVariant: 'detail',
-      detailTitleLayout: 'belowBack',
+      title: "Plan d'action",
       backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
-      showTopbarBottomBorder: false,
     })
     expect(getTerrainRouteConfig({ kind: 'action-plan-create' })).toEqual({
       topbarVariant: 'detail',
@@ -138,10 +152,22 @@ describe('getTerrainRouteConfig', () => {
       getTerrainRouteConfig({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
     ).toEqual({
       topbarVariant: 'detail',
+      detailTitleLayout: 'belowBack',
       title: 'Détail du plan',
       backPath: '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
+      showTopbarBottomBorder: false,
+    })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-template-edit', actionPlanId: 'plan-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Modifier le plan',
+      backPath: '/action-plans/plan-1',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
     })
   })
 
@@ -202,12 +228,13 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'static', path: '/signals' })).toBe('signals')
     expect(getTerrainContentKey({ kind: 'static', path: '/execution' })).toBe('execution')
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
-    expect(getTerrainContentKey({ kind: 'static', path: '/profile' })).toBe('profile')
-    expect(getTerrainContentKey({ kind: 'static', path: '/profile/switch-establishment' })).toBe(
-      'profile-switch-establishment',
+    expect(getTerrainContentKey({ kind: 'static', path: '/general' })).toBe('general')
+    expect(getTerrainContentKey({ kind: 'static', path: '/general/switch-establishment' })).toBe(
+      'general-switch-establishment',
     )
     expect(getTerrainContentKey({ kind: 'static', path: '/action-plans' })).toBe('action-plans-hub')
     expect(getTerrainContentKey({ kind: 'static', path: '/team' })).toBe('team')
+    expect(getTerrainContentKey({ kind: 'static', path: '/team/invite' })).toBe('team-invite')
   })
 
   it('includes signal id for detail routes', () => {
@@ -236,6 +263,12 @@ describe('getTerrainContentKey', () => {
     expect(
       getTerrainContentKey({ kind: 'chat-conversation-detail', conversationId: 'conv-1' }),
     ).toBe('chat-conversation-detail-conv-1')
+  })
+
+  it('includes team member id for detail routes', () => {
+    expect(getTerrainContentKey({ kind: 'team-member-detail', membershipId: 'member-1' })).toBe(
+      'team-member-detail-member-1',
+    )
   })
 
   it('throws for non-terrain routes', () => {
@@ -285,8 +318,8 @@ describe('requiresActiveMembership', () => {
       '/signals',
       '/execution',
       '/chat',
-      '/profile',
-      '/profile/switch-establishment',
+      '/general',
+      '/general/switch-establishment',
       '/team',
       '/team/invite',
       '/action-plans',

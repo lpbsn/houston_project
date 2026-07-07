@@ -10,6 +10,10 @@ from houston.establishments.models import (
     Establishment,
     EstablishmentMembership,
 )
+from houston.establishments.tests.taxonomy_helpers import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 from houston.organizations.models import Organization
 
 pytestmark = pytest.mark.django_db
@@ -75,28 +79,18 @@ def auth_headers(access_token: str) -> dict:
     return {"HTTP_AUTHORIZATION": f"Bearer {access_token}"}
 
 
-@pytest.mark.parametrize(
-    "actor_role",
-    [
-        EstablishmentMembership.Role.MANAGER,
-        EstablishmentMembership.Role.STAFF,
-    ],
-)
-def test_active_member_can_search_current_establishment_users_with_minimal_fields(
-    api_client,
-    actor_role,
-):
+def test_owner_can_search_current_establishment_users_with_minimal_fields(api_client):
     organization = Organization.objects.create(name=f"Nice Group {uuid.uuid4().hex[:6]}")
     establishment = Establishment.objects.create(
         name="Nice",
         organization=organization,
         status=Establishment.Status.ACTIVE,
     )
-    actor = create_user(username=f"{actor_role}_actor")
+    actor = create_user(username="owner_actor")
     create_membership(
         user=actor,
         establishment=establishment,
-        role=actor_role,
+        role=EstablishmentMembership.Role.OWNER,
         status=EstablishmentMembership.Status.ACTIVE,
     )
     name_match = create_membership(
@@ -149,6 +143,7 @@ def test_active_member_can_search_current_establishment_users_with_minimal_field
         "email",
         "role",
         "membership_id",
+        "business_unit_ids",
     }
     assert all(set(item.keys()) == expected_keys for item in body)
     mario_row = next(item for item in body if item["membership_id"] == str(name_match.id))
@@ -159,7 +154,104 @@ def test_active_member_can_search_current_establishment_users_with_minimal_field
         "email": "mario@example.com",
         "role": EstablishmentMembership.Role.STAFF,
         "membership_id": str(name_match.id),
+        "business_unit_ids": [],
     }
+
+
+def test_manager_search_without_business_unit_id_returns_scoped_members(api_client):
+    organization = Organization.objects.create(name=f"Nice Group {uuid.uuid4().hex[:6]}")
+    establishment = Establishment.objects.create(
+        name="Nice",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    restaurant = create_business_unit(establishment=establishment, key="restaurant")
+    actor_membership = create_membership(
+        user=create_user(username="manager_actor"),
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=actor_membership,
+        business_unit=restaurant,
+    )
+    in_scope_match = create_membership(
+        user=create_user(
+            username="mario",
+            email="mario@example.com",
+            first_name="Mario",
+            last_name="Rossi",
+        ),
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=in_scope_match,
+        business_unit=restaurant,
+    )
+    out_of_scope_match = create_membership(
+        user=create_user(
+            username="marina_ops",
+            email="ops@example.com",
+        ),
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    bar = create_business_unit(establishment=establishment, key="bar")
+    create_membership_with_business_unit_scope(
+        membership=out_of_scope_match,
+        business_unit=bar,
+    )
+
+    access_token = login(api_client, identifier=actor_membership.user.email)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/?q=mar",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    membership_ids = {item["membership_id"] for item in response.json()}
+    assert str(in_scope_match.id) in membership_ids
+    assert str(out_of_scope_match.id) not in membership_ids
+
+
+def test_staff_search_without_business_unit_id_returns_empty(api_client):
+    organization = Organization.objects.create(name=f"Nice Group {uuid.uuid4().hex[:6]}")
+    establishment = Establishment.objects.create(
+        name="Nice",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    actor = create_user(username="staff_actor")
+    create_membership(
+        user=actor,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership(
+        user=create_user(
+            username="mario",
+            email="mario@example.com",
+            first_name="Mario",
+            last_name="Rossi",
+        ),
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/users/search/?q=mar",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_search_returns_not_found_when_path_establishment_is_outside_current_context(
@@ -232,11 +324,11 @@ def test_search_excludes_inactive_and_foreign_memberships(api_client):
         organization=organization,
         status=Establishment.Status.ACTIVE,
     )
-    actor = create_user(username="staff_actor")
+    actor = create_user(username="owner_actor")
     create_membership(
         user=actor,
         establishment=establishment,
-        role=EstablishmentMembership.Role.STAFF,
+        role=EstablishmentMembership.Role.OWNER,
     )
     visible_membership = create_membership(
         user=create_user(username="caroline", first_name="Caroline"),
@@ -283,6 +375,7 @@ def test_search_excludes_inactive_and_foreign_memberships(api_client):
             "email": "caroline@example.com",
             "role": EstablishmentMembership.Role.STAFF,
             "membership_id": str(visible_membership.id),
+            "business_unit_ids": [],
         }
     ]
 

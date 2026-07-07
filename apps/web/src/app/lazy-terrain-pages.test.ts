@@ -12,6 +12,7 @@ const LAZY_EXPORTS = [
   'LazyProfilePage',
   'LazyProfileSwitchEstablishmentPage',
   'LazyTeamPage',
+  'LazyTeamMemberDetailPage',
   'LazyActionPlanHubPage',
   'LazyActionPlanCreatePage',
   'LazyActionPlanTemplateDetailPage',

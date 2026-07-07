@@ -24,6 +24,7 @@ from houston.action_plans.schedule_services import (
 )
 from houston.action_plans.services import cancel_action_plan_execution
 from houston.action_plans.tests.helpers import (
+    _RECURRENCE_DAY_NAMES,
     build_schedule_assignee_payload,
     recurrence_days_for_visible_today,
     schedule_window_from_datetime,
@@ -112,6 +113,8 @@ def test_update_cancels_future_execution_outside_recurrence(
     staff_membership,
     business_unit,
 ):
+    # Schedule sync cancels on occurrence_date membership in recurrence_days,
+    # not on the weekday of start_at after manual window edits.
     schedule = _create_schedule(
         owner_membership,
         catalog_action_plan,
@@ -127,11 +130,16 @@ def test_update_cancels_future_execution_outside_recurrence(
         update_fields=["start_at", "end_at", "visible_from", "updated_at"],
     )
     occurrence_date = future_execution.occurrence_date
+    excluded_day = next(
+        day
+        for weekday, day in enumerate(_RECURRENCE_DAY_NAMES)
+        if weekday != occurrence_date.weekday()
+    )
 
     update_action_plan_schedule(
         schedule=schedule,
         actor=owner_membership,
-        recurrence_days=["tuesday"],
+        recurrence_days=[excluded_day],
     )
 
     future_execution.refresh_from_db()

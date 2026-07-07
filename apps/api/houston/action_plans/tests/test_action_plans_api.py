@@ -228,6 +228,171 @@ def test_patch_updates_title_and_description(api_client, owner_membership, busin
     assert body["description"] == "Updated description"
 
 
+def test_patch_updates_requires_validation(api_client, owner_membership, business_unit):
+    token = login(api_client, user=owner_membership.user)
+    create = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        _catalog_create_payload(business_unit=business_unit, requires_validation=True),
+        format="json",
+        **auth_headers(token),
+    )
+    assert create.status_code == 201, create.json()
+    plan_id = create.json()["id"]
+    response = api_client.patch(
+        action_plan_url(owner_membership.establishment_id, plan_id),
+        {"requires_validation": False},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["requires_validation"] is False
+
+
+def test_catalog_detail_includes_created_by(api_client, owner_membership, catalog_action_plan):
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_url(owner_membership.establishment_id, catalog_action_plan.id),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created_by_id"] == str(catalog_action_plan.created_by_id)
+    assert body["created_by_display_name"]
+
+
+def test_manager_creator_in_scope_can_patch_catalog_plan(
+    api_client,
+    manager_membership,
+    business_unit,
+):
+    token = login(api_client, user=manager_membership.user)
+    create = api_client.post(
+        action_plans_url(manager_membership.establishment_id),
+        _catalog_create_payload(business_unit=business_unit, title="Manager catalog"),
+        format="json",
+        **auth_headers(token),
+    )
+    assert create.status_code == 201, create.json()
+    plan_id = create.json()["id"]
+    response = api_client.patch(
+        action_plan_url(manager_membership.establishment_id, plan_id),
+        {"title": "Manager updated"},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == "Manager updated"
+
+
+def test_manager_non_creator_in_scope_can_patch_catalog_plan(
+    api_client,
+    owner_membership,
+    manager_membership,
+    catalog_action_plan,
+):
+    token = login(api_client, user=manager_membership.user)
+    response = api_client.patch(
+        action_plan_url(manager_membership.establishment_id, catalog_action_plan.id),
+        {"title": "Manager updated owner plan"},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == "Manager updated owner plan"
+
+
+def test_out_of_scope_manager_cannot_patch_catalog_plan(
+    api_client,
+    out_of_scope_manager,
+    catalog_action_plan,
+):
+    token = login(api_client, user=out_of_scope_manager.user)
+    response = api_client.patch(
+        action_plan_url(out_of_scope_manager.establishment_id, catalog_action_plan.id),
+        {"title": "Hacked"},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 404
+
+
+def test_manager_creator_cannot_patch_cross_pole_task(
+    api_client,
+    manager_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    token = login(api_client, user=manager_membership.user)
+    create = api_client.post(
+        action_plans_url(manager_membership.establishment_id),
+        _catalog_create_payload(business_unit=business_unit, title="Manager catalog"),
+        format="json",
+        **auth_headers(token),
+    )
+    assert create.status_code == 201, create.json()
+    plan_id = create.json()["id"]
+    response = api_client.patch(
+        action_plan_url(manager_membership.establishment_id, plan_id),
+        {
+            "tasks": [
+                api_task_payload(task="Pilot task", business_unit=business_unit, position=1),
+                api_task_payload(
+                    task="Cross pole task",
+                    business_unit=maintenance_business_unit,
+                    position=2,
+                ),
+            ],
+        },
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 403
+
+
+def test_use_catalog_plan_snapshots_enriched_task_fields(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    token = login(api_client, user=owner_membership.user)
+    deadline = timezone.now() + timedelta(days=2)
+    create = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        _catalog_create_payload(
+            business_unit=business_unit,
+            tasks=[
+                api_task_payload(
+                    task="Enriched task",
+                    business_unit=business_unit,
+                    description="Task description",
+                    deadline_at=deadline,
+                    assigned_membership=staff_membership,
+                )
+            ],
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    assert create.status_code == 201, create.json()
+    plan_id = create.json()["id"]
+    use = api_client.post(
+        action_plan_url(owner_membership.establishment_id, plan_id, "use/"),
+        {"assignees": []},
+        format="json",
+        **auth_headers(token),
+    )
+    assert use.status_code == 201, use.json()
+    task_execution = use.json()["task_executions"][0]
+    assert task_execution["description"] == "Task description"
+    assert task_execution["assigned_membership_id"] == str(staff_membership.id)
+    assert task_execution["deadline_at"] is not None
+
+
 def test_activate_and_deactivate_catalog_plan(api_client, owner_membership, business_unit):
     token = login(api_client, user=owner_membership.user)
     create = api_client.post(
@@ -370,7 +535,7 @@ def test_list_and_detail_involved_pole_count_match(
     assert list_item["involved_pole_count"] == detail_item["involved_pole_count"] == 1
 
 
-def test_catalog_create_without_tasks_returns_400(
+def test_catalog_create_without_tasks_returns_201(
     api_client,
     owner_membership,
     business_unit,
@@ -384,8 +549,10 @@ def test_catalog_create_without_tasks_returns_400(
         format="json",
         **auth_headers(token),
     )
-    assert response.status_code == 400
-    assert response.json()["code"] == "validation_error"
+    assert response.status_code == 201
+    body = response.json()
+    assert body["task_count"] == 0
+    assert body["is_reusable"] is True
 
 
 def test_deactivate_non_reusable_plan_returns_400(

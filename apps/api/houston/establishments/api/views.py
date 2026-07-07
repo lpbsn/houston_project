@@ -59,8 +59,8 @@ from houston.establishments.models import (
     OnboardingSession,
 )
 from houston.establishments.permissions import (
-    CanManageMemberships,
     CanManageRuntimeContext,
+    CanViewTeamMemberships,
     HasActiveMembership,
     can_invite_memberships,
 )
@@ -68,12 +68,12 @@ from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
     get_business_units_for_establishment,
     get_membership_for_invitation,
-    get_membership_for_management,
+    get_membership_for_team_detail,
     get_onboarding_proposal_for_actor,
     get_onboarding_session_for_actor,
     get_runtime_config_for_session,
     get_workspace_summary_for_establishment,
-    list_memberships_for_management,
+    list_memberships_for_team,
     list_onboarding_proposals_for_actor,
     search_users_for_establishment,
     serialize_activity_subject_tree_item,
@@ -93,6 +93,7 @@ from houston.establishments.services import (
     InvalidMembershipScopeAssignmentError,
     InvalidOnboardingActivationStateError,
     InvalidOnboardingSessionScopeError,
+    InvitedMembershipActivationError,
     MembershipInvitationRoleNotAllowedError,
     MembershipManagementForbiddenError,
     MembershipManagementNotFoundError,
@@ -105,6 +106,7 @@ from houston.establishments.services import (
     RuntimeConfigConflictError,
     RuntimeConfigNotFoundError,
     UnsupportedOnboardingSessionSourceModeError,
+    activate_membership_for_management,
     activate_onboarding_session,
     apply_onboarding_proposal,
     build_activation_summary,
@@ -128,12 +130,20 @@ from houston.establishments.services import (
 from houston.organizations.models import Organization
 
 
+def _membership_response(membership, *, actor_membership) -> Response:
+    serializer = EstablishmentMembershipResponseSerializer(
+        membership,
+        context={"actor_membership": actor_membership},
+    )
+    return Response(serializer.data)
+
+
 class MembershipListView(APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [
         permissions.IsAuthenticated,
         HasActiveMembership,
-        CanManageMemberships,
+        CanViewTeamMemberships,
     ]
 
     @extend_schema(
@@ -146,19 +156,23 @@ class MembershipListView(APIView):
         },
         description=(
             "Lists memberships for the current active establishment context. Requires "
-            "an active selected establishment and owner or director authority."
+            "an active selected establishment membership."
         ),
     )
     def get(self, request, establishment_id):
         access_context = get_api_access_context(request)
-        memberships = list_memberships_for_management(
+        memberships = list_memberships_for_team(
             current_membership=access_context.active_membership,
             establishment_id=establishment_id,
         )
         if memberships is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = EstablishmentMembershipResponseSerializer(memberships, many=True)
+        serializer = EstablishmentMembershipResponseSerializer(
+            memberships,
+            many=True,
+            context={"actor_membership": access_context.active_membership},
+        )
         return Response(serializer.data)
 
 
@@ -167,7 +181,7 @@ class MembershipDetailView(APIView):
     permission_classes = [
         permissions.IsAuthenticated,
         HasActiveMembership,
-        CanManageMemberships,
+        CanViewTeamMemberships,
     ]
 
     @extend_schema(
@@ -179,13 +193,12 @@ class MembershipDetailView(APIView):
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
         description=(
-            "Returns one membership inside the current active establishment context. "
-            "Requires owner or director authority."
+            "Returns one membership inside the current active establishment context."
         ),
     )
     def get(self, request, establishment_id, membership_id):
         access_context = get_api_access_context(request)
-        membership = get_membership_for_management(
+        membership = get_membership_for_team_detail(
             current_membership=access_context.active_membership,
             establishment_id=establishment_id,
             membership_id=membership_id,
@@ -193,8 +206,10 @@ class MembershipDetailView(APIView):
         if membership is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = EstablishmentMembershipResponseSerializer(membership)
-        return Response(serializer.data)
+        return _membership_response(
+            membership,
+            actor_membership=access_context.active_membership,
+        )
 
     @extend_schema(
         tags=["memberships"],
@@ -252,7 +267,10 @@ class MembershipDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        response_serializer = EstablishmentMembershipResponseSerializer(membership)
+        response_serializer = EstablishmentMembershipResponseSerializer(
+            membership,
+            context={"actor_membership": access_context.active_membership},
+        )
         return Response(response_serializer.data)
 
 
@@ -261,7 +279,7 @@ class MembershipDeactivateView(APIView):
     permission_classes = [
         permissions.IsAuthenticated,
         HasActiveMembership,
-        CanManageMemberships,
+        CanViewTeamMemberships,
     ]
 
     @extend_schema(
@@ -304,7 +322,68 @@ class MembershipDeactivateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = EstablishmentMembershipResponseSerializer(membership)
+        serializer = EstablishmentMembershipResponseSerializer(
+            membership,
+            context={"actor_membership": access_context.active_membership},
+        )
+        return Response(serializer.data)
+
+
+class MembershipActivateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewTeamMemberships,
+    ]
+
+    @extend_schema(
+        tags=["memberships"],
+        request=None,
+        responses={
+            200: EstablishmentMembershipResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description=(
+            "Activates one membership in the current active establishment context. "
+            "Invited memberships cannot be activated until the invitation is accepted."
+        ),
+    )
+    def post(self, request, establishment_id, membership_id):
+        access_context = get_api_access_context(request)
+
+        try:
+            membership = activate_membership_for_management(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                membership_id=membership_id,
+            )
+        except MembershipManagementNotFoundError:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        except InvitedMembershipActivationError:
+            return Response(
+                {
+                    "code": "invited_membership_activation_forbidden",
+                    "detail": "Invited memberships cannot be activated until accepted.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except MembershipManagementForbiddenError:
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot manage this membership.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = EstablishmentMembershipResponseSerializer(
+            membership,
+            context={"actor_membership": access_context.active_membership},
+        )
         return Response(serializer.data)
 
 
@@ -795,8 +874,9 @@ class ScopedUserSearchView(APIView):
         },
         description=(
             "Searches active users in the current active establishment context. "
-            "Results are tenant-filtered before serialization and return only a "
-            "minimal membership-backed user summary."
+            "Use context=assignee for scope-aware assignment pickers; "
+            "context=mention for comment @mentions. "
+            "Results are tenant-filtered before serialization."
         ),
     )
     def get(self, request, establishment_id):
@@ -812,6 +892,7 @@ class ScopedUserSearchView(APIView):
             establishment_id=establishment_id,
             query=query_serializer.validated_data["q"],
             business_unit=query_serializer.validated_data.get("business_unit"),
+            context=query_serializer.validated_data.get("context", "assignee"),
         )
         if memberships is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)

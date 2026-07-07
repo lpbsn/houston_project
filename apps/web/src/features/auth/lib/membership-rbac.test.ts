@@ -16,4 +16,10 @@ describe('membership-rbac', () => {
     expect(canActorManageTargetRole('director', 'owner')).toBe(false)
     expect(canActorManageTargetRole('director', 'manager')).toBe(true)
   })
+
+  it('allows managers to target staff and manager roles', () => {
+    expect(getEditableRoleOptions('manager')).toEqual(['staff', 'manager'])
+    expect(canActorManageTargetRole('manager', 'staff')).toBe(true)
+    expect(canActorManageTargetRole('manager', 'owner')).toBe(false)
+  })
 })
