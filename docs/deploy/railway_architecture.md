@@ -1,6 +1,6 @@
 # Railway Architecture — Prod-test V1
 
-Contract document for prod-test V1. **PR2 is docs-only** — no effective Railway or Cloudflare configuration is committed here.
+Architecture overview for prod-test V1. **Operational contract (PR5):** [`railway_deploy_contract.md`](railway_deploy_contract.md). **Variables:** [`railway_variables.md`](railway_variables.md). **Config wiring:** [`infra/railway/README.md`](../../infra/railway/README.md).
 
 Decisions are frozen in [`prod_test_decisions.md`](prod_test_decisions.md). Environment template: [`.env.prod-test.example`](../../.env.prod-test.example).
 
@@ -10,12 +10,12 @@ One Railway Project. One public service. No separate frontend service. No Cloudf
 
 ```txt
 Railway Project (prod-test V1)
-├── api-web          [PUBLIC HTTPS]   Django + Daphne + Channels + future SPA static
-├── celery-worker    [PRIVATE]       Celery worker (same backend image)
-├── celery-beat      [PRIVATE]       Celery Beat scheduler (same backend image)
+├── api-web          [PUBLIC HTTPS]   nginx + SPA + Daphne + Channels
+├── celery-worker    [PRIVATE]       Celery worker (mandatory)
+├── celery-beat      [PRIVATE]       Celery Beat scheduler (mandatory)
 ├── postgres         [PRIVATE]       Railway PostgreSQL
 ├── redis            [PRIVATE]       Railway Redis
-└── (shared storage) private media   same logical path on api-web + celery-worker (mount TBD PR5)
+└── private media    volume on api-web only (worker ephemeral — see deploy contract)
 ```
 
 Local analogues:
@@ -31,7 +31,7 @@ All traffic hits `https://<railway-domain>`:
 |---|---|---|
 | `/api/*` | Django / DRF / Daphne | Implemented |
 | `/ws/*` | Django Channels / Daphne (WSS) | Implemented |
-| `/*` | Frontend static SPA | **PR3** validates static + gateway locally; **PR5** integrates into `api-web` on Railway |
+| `/*` | Frontend static SPA | Integrated in `api-web` on Railway ([`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web)); validated locally in PR3 |
 
 The frontend API client uses `baseUrl: ''` ([`apps/web/src/api/client.ts`](../../apps/web/src/api/client.ts)), so prod-test does not need a `VITE_*` API URL.
 
@@ -41,20 +41,20 @@ PWA workbox config is shell-only: `runtimeCaching: []`, `navigateFallbackDenylis
 
 | Service | Visibility | Image / command | Role |
 |---|---|---|---|
-| `api-web` | Public (Railway Public Networking, HTTPS) | Backend image; [`infra/docker/api/entrypoint.sh`](../../infra/docker/api/entrypoint.sh) → `daphne -b 0.0.0.0 -p 8000 config.asgi:application` | HTTP API, WebSocket; SPA static added in **PR5** (pattern validated locally in PR3) |
-| `celery-worker` | Private | Same backend image; `celery -A config worker` | Observation → signal pipeline, upload purge, chat purge, action-plan materialization |
-| `celery-beat` | Private | Same backend image; `celery -A config beat` | Scheduled tasks (horizon materialization, chat purge, upload TTL, stuck observation recovery) |
+| `api-web` | Public (Railway Public Networking, HTTPS) | [`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web); [`start-api-web.sh`](../../infra/docker/railway/start-api-web.sh) → nginx on `$PORT` + Daphne on `127.0.0.1:8000` | HTTP API, WebSocket, SPA static (same-origin) |
+| `celery-worker` | Private | [`infra/docker/api/Dockerfile`](../../infra/docker/api/Dockerfile); `celery -A config worker` (**mandatory**) | Observation → signal pipeline, upload purge, chat purge, action-plan materialization |
+| `celery-beat` | Private | Same backend Dockerfile; `celery -A config beat` (**mandatory**) | Scheduled tasks (horizon materialization, chat purge, upload TTL, stuck observation recovery) |
 | `postgres` | Private | Railway PostgreSQL plugin | Business source of truth |
 | `redis` | Private | Railway Redis plugin | Channels, Celery broker/result, cache/throttle |
 
-`celery-beat` needs persistent schedule state (local dev uses a `celerybeat_data` volume in Compose). The Railway persistence approach will be defined in the deploy PR.
+`celery-beat` needs persistent schedule state: Railway volume at `/var/lib/celerybeat` (local dev uses `celerybeat_data` in Compose). See [`railway_deploy_contract.md`](railway_deploy_contract.md).
 
 ## Dependencies
 
 ```txt
-api-web        → postgres, redis, shared private media storage
-celery-worker  → postgres, redis, shared private media storage
-celery-beat    → postgres, redis
+api-web        → postgres, redis, private media volume
+celery-worker  → postgres, redis (ephemeral media path — no shared volume)
+celery-beat    → postgres, redis, beat schedule volume
 ```
 
 Startup order: `postgres` and `redis` healthy before app services. `api-web` does not depend on Celery for the health endpoint, but observation processing requires a running worker.
@@ -70,11 +70,11 @@ All backend services (`api-web`, `celery-worker`, `celery-beat`) share the same 
 | Redis / Celery (`REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL`) | yes | yes | yes |
 | OpenAI / AI providers | yes | yes | yes (pipeline runs on worker; beat does not call OpenAI directly) |
 | Auth salts / peppers | yes | yes | yes |
-| `HOUSTON_PRIVATE_MEDIA_ROOT` | yes | yes | no (beat does not touch media files) |
+| `HOUSTON_PRIVATE_MEDIA_ROOT` | yes (persistent volume) | yes (ephemeral path) | no (beat does not touch media files) |
 | `HOUSTON_REGISTRATION_INVITE_CODES` | yes | no | no |
 | `PORT` (Railway) | yes (Railway injects) | no public port | no public port |
 
-Full template: [`.env.prod-test.example`](../../.env.prod-test.example).
+Full reference: [`railway_variables.md`](railway_variables.md). Template: [`.env.prod-test.example`](../../.env.prod-test.example).
 
 ## Variable classification
 
@@ -84,7 +84,7 @@ Full template: [`.env.prod-test.example`](../../.env.prod-test.example).
 | **Backend-only** | `HOUSTON_PRIVATE_MEDIA_ROOT`, `HOUSTON_LOG_LEVEL`, beat schedule tuning vars | Set on relevant backend services |
 | **Secrets (manual)** | `DJANGO_SECRET_KEY`, `OPENAI_API_KEY`, `HOUSTON_AUTH_TOKEN_PEPPER`, `HOUSTON_AUTH_TOKEN_SALT`, `HOUSTON_CHAT_WS_TICKET_SALT`, `HOUSTON_REALTIME_WS_TICKET_SALT` | Generate strong random values before first deploy; store in Railway service variables |
 | **Railway-generated** | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `REDIS_URL` (from plugins) | Copy from Railway Postgres/Redis plugin reference vars into Houston names |
-| **Manual (operator)** | `DJANGO_ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `HOUSTON_REGISTRATION_INVITE_CODES` | Set from public Railway domain; invite codes per onboarding policy |
+| **Manual (operator)** | `DJANGO_ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `HOUSTON_REGISTRATION_INVITE_CODES` | Public Railway domain + `healthcheck.railway.app` in allowed hosts; CSRF `https://` origin |
 
 ### Derived / mapped Redis URLs
 
@@ -110,7 +110,7 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 
 * Railway PostgreSQL plugin, private network only.
 * `POSTGRES_SSLMODE=require` in prod-test ([`.env.prod-test.example`](../../.env.prod-test.example)).
-* **Migrations:** run `python manage.py migrate` as a pre-deploy step or documented one-shot command before traffic.
+* **Migrations:** `api-web` pre-deploy only (`preDeployCommand` in [`infra/railway/api-web/railway.toml`](../../infra/railway/api-web/railway.toml)).
 * **Bootstrap data:** after first migrate, run `python manage.py import_business_unit_catalog` (same as local `make bootstrap-dev` catalog step).
 * **Backup (minimum before public testers):**
   * enable Railway Postgres daily backups (or equivalent `pg_dump` cron)
@@ -122,8 +122,8 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 * Photos linked to observations are persisted in `HOUSTON_PRIVATE_MEDIA_ROOT` (default `/app/apps/api/private_media`).
 * Raw audio is never persisted; transcription uses temporary files only.
 * No public `/media` URL — [`PrivateMediaStorage`](../../apps/api/houston/uploads/private_storage.py) raises on `.url()`; access is API-authorized only.
-* **Shared storage requirement:** `api-web` and `celery-worker` must read/write/purge the same private storage at the same logical path. The exact Railway volume mount or alternative is validated in **PR5**.
-* **Backup:** private photos must be backed up separately from PostgreSQL. Document a periodic export or volume snapshot procedure in the deploy PR.
+* **Railway V1:** persistent volume on `api-web` at `HOUSTON_PRIVATE_MEDIA_ROOT=/app/apps/api/private_media`. Worker uses ephemeral path only — cross-service purge/delete is **not fully guaranteed** (Railway cannot share volumes across services). Details: [`railway_deploy_contract.md`](railway_deploy_contract.md#known-limitations-v1--private-media).
+* **Backup:** private photos must be backed up separately from PostgreSQL (volume snapshot or export). See deploy contract.
 
 ## PWA strategy
 
@@ -142,7 +142,8 @@ Redis must remain on the Railway private network. **Do not expose Redis publicly
 ## Healthcheck
 
 * **Endpoint:** `GET /api/v1/health/` on `api-web` (returns `{"status": "ok"}`).
-* Configure Railway healthcheck on `api-web` against this path over HTTPS.
+* Configure Railway healthcheck on `api-web` via [`infra/railway/api-web/railway.toml`](../../infra/railway/api-web/railway.toml) (`healthcheckPath = "/api/v1/health/"`).
+* Include `healthcheck.railway.app` in `DJANGO_ALLOWED_HOSTS`.
 * Healthcheck validates the API process only; it does not prove Celery or Redis are healthy. Monitor worker logs separately.
 
 ## Django security
@@ -188,6 +189,9 @@ Future PR10+ may add Cloudflare for DNS, edge cache, or WAF **after** Railway pr
 
 ## Related documents
 
+* [`railway_deploy_contract.md`](railway_deploy_contract.md) — operational deploy playbook (PR5)
+* [`railway_variables.md`](railway_variables.md) — variable mapping and per-service matrix
+* [`infra/railway/README.md`](../../infra/railway/README.md) — Railway config file wiring
 * [`prod_test_decisions.md`](prod_test_decisions.md) — decision log
 * [`railway_static_frontend.md`](railway_static_frontend.md) — PR3 local static + gateway validation
 * [`railway_security.md`](railway_security.md) — production security gate and secrets

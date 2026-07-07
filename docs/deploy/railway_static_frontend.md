@@ -147,9 +147,9 @@ cd apps/web && npm test
 docker build -f infra/docker/web/Dockerfile .
 ```
 
-## What PR5 will add
+## What PR5 added
 
-Integrate the gateway routing pattern into the single Railway `api-web` service (nginx/Caddy + Daphne in one container or equivalent). See [`railway_architecture.md`](railway_architecture.md).
+Railway deploy contract: [`railway_deploy_contract.md`](railway_deploy_contract.md). Same-origin routing is implemented in [`infra/docker/railway/Dockerfile.api-web`](../../infra/docker/railway/Dockerfile.api-web) + [`infra/docker/railway/nginx.conf`](../../infra/docker/railway/nginx.conf).
 
 ## Related
 
