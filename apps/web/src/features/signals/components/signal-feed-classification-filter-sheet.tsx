@@ -104,7 +104,7 @@ export function SignalFeedClassificationFilterSheet({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="Rechercher un pôle ou un sujet…"
-          className="h-9 border-[#E8E6DF] bg-white text-sm"
+          className="h-9 border-[#E8E6DF] bg-white"
         />
         {filteredBusinessUnits.length === 0 ? (
           <p className="py-4 text-center text-sm text-[#7D7B75]">Aucun pôle ou sujet trouvé.</p>

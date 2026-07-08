@@ -40,7 +40,7 @@ export function ActionPlanHubFilters({
         onChange={(event) => onSearchQueryChange(event.target.value)}
         placeholder="Rechercher par titre"
         aria-label="Rechercher par titre"
-        className="h-10 border-[#E8E6DF] text-sm"
+        className="h-10 border-[#E8E6DF]"
       />
       <div className="flex flex-wrap gap-2">
         <button

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { ActionLinkedSignalCard } from '@/features/action-plans/components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '@/features/action-plans/components/action-linked-signal-strip'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
@@ -429,7 +430,7 @@ export function ActionPlanCreatePage({
             <Input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className="h-11 border-[#E8E6DF] text-sm"
+              className="h-11 border-[#E8E6DF]"
             />
             {fieldErrors.title ? (
               <p className="mt-1 text-xs text-destructive">{resolvedFieldErrors.title}</p>
@@ -437,10 +438,10 @@ export function ActionPlanCreatePage({
           </div>
           <div>
             <TerrainFieldLabel>Description</TerrainFieldLabel>
-            <textarea
+            <Textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className="min-h-20 w-full rounded-xl border border-[#E8E6DF] px-3 py-2 text-sm"
+              className="min-h-20 border-[#E8E6DF]"
             />
           </div>
           <PlanningOptionRow

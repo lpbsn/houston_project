@@ -1,5 +1,6 @@
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 type ActionPlanExecutionObservationSheetProps = {
   open: boolean
@@ -47,11 +48,11 @@ export function ActionPlanExecutionObservationSheet({
         </div>
       }
     >
-      <textarea
+      <Textarea
         value={text}
         onChange={(event) => onTextChange(event.target.value)}
         placeholder="Décrivez l’observation..."
-        className="min-h-28 w-full rounded-xl border border-[#E8E6DF] px-3 py-2 text-sm"
+        className="min-h-28 border-[#E8E6DF]"
       />
     </TerrainBottomSheet>
   )

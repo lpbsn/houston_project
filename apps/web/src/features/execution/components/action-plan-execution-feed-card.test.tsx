@@ -245,4 +245,57 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(onOpenActions).toHaveBeenCalled()
     expect(onSelect).not.toHaveBeenCalled()
   })
+
+  it('shows a single actions button on pending validation cards', () => {
+    const onOpenActions = vi.fn()
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ status: 'pending_validation' })}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+      />,
+    )
+
+    expect(
+      screen.getAllByRole('button', { name: 'Actions du plan d’action' }),
+    ).toHaveLength(1)
+  })
+
+  it('keeps actions on the meta row below pending validation banner', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ status: 'pending_validation' })}
+        onSelect={onSelect}
+        onOpenActions={vi.fn()}
+      />,
+    )
+
+    const title = screen.getByRole('heading', { level: 3, name: 'Plan incendie' })
+    const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
+    const metaRow = actionsButton.parentElement?.parentElement
+
+    expect(screen.getByText('En attente de validation')).toBeTruthy()
+    expect(screen.getByText('Restaurant')).toBeTruthy()
+    expect(metaRow?.className).toContain('items-center')
+    expect(metaRow?.contains(actionsButton)).toBe(true)
+    expect(metaRow?.nextElementSibling).toBe(title)
+  })
+
+  it('opens actions sheet from pending validation meta row without navigating', () => {
+    const onOpenActions = vi.fn()
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ status: 'pending_validation' })}
+        onSelect={onSelect}
+        onOpenActions={onOpenActions}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions du plan d’action' }))
+
+    expect(onOpenActions).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'execution-1', status: 'pending_validation' }),
+    )
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })

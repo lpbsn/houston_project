@@ -177,19 +177,12 @@ function PendingValidationActionPlanFeedCard({
       role="button"
       tabIndex={0}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Bell className="h-4 w-4 shrink-0 text-[#E69138]" aria-hidden />
-          <span className="truncate text-[13px] font-bold text-[#B45309]">
-            En attente de validation
-          </span>
-        </div>
-        {showActions ? (
-          <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-        ) : null}
+      <div className="mb-2 flex min-w-0 items-center gap-1.5">
+        <Bell className="h-4 w-4 shrink-0 text-[#E69138]" aria-hidden />
+        <span className="truncate text-[13px] font-bold text-[#B45309]">
+          En attente de validation
+        </span>
       </div>
-
-      <div className="my-2 border-t border-[#F0DFC8]" />
 
       <ActionPlanFeedCardHeader
         item={item}

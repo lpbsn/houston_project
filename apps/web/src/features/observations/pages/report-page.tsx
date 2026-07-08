@@ -294,7 +294,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
           <textarea
             id="observation-text"
             className={cn(
-              'mt-2 min-h-[72px] w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed outline-none',
+              'mt-2 min-h-[72px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed outline-none md:text-[13px]',
               terrain.foreground,
               'placeholder:text-[#aaa]',
             )}

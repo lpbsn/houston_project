@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import type { BusinessUnitTreeItem } from '@/features/establishment-config/api'
 import {
   useCreateRuntimeActivitySubject,
@@ -142,14 +143,14 @@ export function OperationalConfigBusinessUnitCard({
           <label className="text-sm font-medium" htmlFor={`description-${businessUnit.id}`}>
             Description libre
           </label>
-          <textarea
+          <Textarea
             id={`description-${businessUnit.id}`}
             value={description}
             maxLength={DESCRIPTION_MAX_LENGTH}
             disabled={isBusy}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Décrivez le rôle opérationnel de ce pôle…"
-            className="min-h-28 w-full rounded-[1rem] border border-[#e7dfd1] bg-white px-3 py-2 text-sm"
+            className="min-h-28 rounded-[1rem] border-[#e7dfd1] bg-white"
           />
           <div className="flex justify-end">
             <Button

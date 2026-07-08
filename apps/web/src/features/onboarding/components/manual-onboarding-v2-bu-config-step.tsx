@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { useActivitySubjectSuggestions } from '@/features/onboarding/hooks'
 import {
   createDraftActivitySubject,
@@ -190,7 +191,7 @@ function ActivitySubjectEditor({
         >
           Description du pôle (optionnel)
         </label>
-        <textarea
+        <Textarea
           id={`bu-description-${businessUnit.client_key}`}
           disabled={disabled}
           value={businessUnit.description}
@@ -199,7 +200,7 @@ function ActivitySubjectEditor({
             onBusinessUnitDescriptionChange(businessUnit.client_key, event.target.value)
           }}
           placeholder="Décrivez ce que couvre ce pôle pour votre établissement."
-          className="min-h-24 w-full rounded-[0.9rem] border border-[#e7dfd1] bg-white px-3 py-2 text-sm"
+          className="min-h-24 rounded-[0.9rem] border-[#e7dfd1] bg-white"
         />
         <p className="text-xs text-muted-foreground">
           {businessUnit.description.length}/{BUSINESS_UNIT_DESCRIPTION_MAX_LENGTH} caractères

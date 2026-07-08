@@ -81,7 +81,7 @@ export function TeamPage({ onNavigate }: TeamPageProps) {
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="Rechercher un membre…"
-          className="h-10 border-[#E8E6DF] pl-9 text-sm"
+          className="h-10 border-[#E8E6DF] pl-9"
           autoComplete="off"
         />
       </div>

@@ -145,7 +145,7 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
             disabled={disabled}
             aria-label="Ajouter un commentaire"
             className={cn(
-              'flex-1 resize-none text-sm text-[#1a1a1a] placeholder:text-[#65676B]',
+              'flex-1 resize-none text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
               isReply
                 ? 'min-h-11 max-h-24 rounded-full border border-[#E4E6EB] bg-[#F0F2F5] px-4 py-2.5'

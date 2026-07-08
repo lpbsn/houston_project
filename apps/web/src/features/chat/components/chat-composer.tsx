@@ -38,7 +38,7 @@ export function ChatComposer({ disabled = false, onSend }: ChatComposerProps) {
           rows={1}
           disabled={disabled}
           className={cn(
-            'min-h-11 max-h-32 flex-1 resize-none rounded-2xl border border-[#E8E6DF] bg-white px-3 py-2.5 text-sm',
+            'min-h-11 max-h-32 flex-1 resize-none rounded-2xl border border-[#E8E6DF] bg-white px-3 py-2.5 text-base md:text-sm',
             'text-[#1a1a1a] placeholder:text-[#a3a19a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
           )}
           onKeyDown={(event) => {

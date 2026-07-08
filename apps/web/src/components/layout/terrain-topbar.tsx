@@ -52,7 +52,7 @@ export function TerrainTopbar({
       >
         <div className="grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
           {pageTitle ? (
-            <h1 className="min-w-0 truncate text-left text-xl font-semibold leading-tight text-[#1a1a1a]">
+            <h1 className="min-w-0 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
               {pageTitle}
             </h1>
           ) : (

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 import {
@@ -153,7 +154,7 @@ function ActionPlanTaskDraftCard({
               onChange={(event) => onChange({ ...task, task: event.target.value })}
               placeholder="Ex. Contrôler la température"
               aria-label="Titre de la tâche"
-              className="h-10 border-[#E8E6DF] text-sm"
+              className="h-10 border-[#E8E6DF]"
             />
             {metaLine ? (
               <p className="max-w-[45%] shrink-0 pt-2.5 text-right text-xs text-[#7D7B75]">
@@ -161,12 +162,12 @@ function ActionPlanTaskDraftCard({
               </p>
             ) : null}
           </div>
-          <textarea
+          <Textarea
             value={task.description}
             onChange={(event) => onChange({ ...task, description: event.target.value })}
             placeholder="Description (optionnelle)"
             aria-label="Description de la tâche"
-            className="min-h-16 w-full rounded-xl border border-[#E8E6DF] px-3 py-2 text-sm"
+            className="min-h-16 border-[#E8E6DF]"
           />
         </div>
         <button
