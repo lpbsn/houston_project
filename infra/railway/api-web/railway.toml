@@ -8,4 +8,4 @@ dockerfilePath = "infra/docker/railway/Dockerfile.api-web"
 [deploy]
 startCommand = "/app/infra/docker/railway/start-api-web.sh"
 healthcheckPath = "/api/v1/health/"
-preDeployCommand = "cd /app/apps/api && uv run python manage.py migrate"
+preDeployCommand = "cd /app/apps/api && python manage.py migrate"
