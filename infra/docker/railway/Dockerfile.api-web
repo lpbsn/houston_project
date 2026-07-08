@@ -56,8 +56,10 @@ RUN apt-get update \
 COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
 COPY infra/docker/railway/nginx.conf /app/infra/docker/railway/nginx.conf
 COPY infra/docker/railway/start-api-web.sh /app/infra/docker/railway/start-api-web.sh
+COPY infra/docker/railway/start-api-web-debug.sh /app/infra/docker/railway/start-api-web-debug.sh
 
 RUN chmod +x /app/infra/docker/railway/start-api-web.sh
+RUN chmod +x /app/infra/docker/railway/start-api-web-debug.sh
 
 WORKDIR /app/apps/api
 
