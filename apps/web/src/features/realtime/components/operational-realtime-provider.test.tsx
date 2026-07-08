@@ -18,6 +18,7 @@ vi.mock('@/features/realtime/hooks/use-operational-realtime-websocket', () => ({
   useOperationalRealtimeWebSocket: vi.fn(() => ({
     connectionStatus: 'connected',
     requestIntentionalClose: vi.fn(),
+    reconnect: vi.fn(async () => undefined),
   })),
 }))
 
@@ -54,6 +55,7 @@ describe('OperationalRealtimeProvider', () => {
       return {
         connectionStatus: 'connected',
         requestIntentionalClose: vi.fn(),
+        reconnect: vi.fn(async () => undefined),
       }
     })
 
@@ -95,6 +97,7 @@ describe('OperationalRealtimeProvider', () => {
     mockUseOperationalRealtimeWebSocket.mockImplementation(() => ({
       connectionStatus: 'reconnecting',
       requestIntentionalClose: vi.fn(),
+      reconnect: vi.fn(async () => undefined),
     }))
 
     const queryClient = new QueryClient()

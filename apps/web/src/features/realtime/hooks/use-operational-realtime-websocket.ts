@@ -17,6 +17,18 @@ function buildOperationalRealtimeWebSocketUrl(establishmentId: string): string {
   return `${protocol}//${window.location.host}/ws/v1/establishments/${establishmentId}/realtime/`
 }
 
+function logWsCloseDev(channel: string, event: CloseEvent) {
+  if (!import.meta.env.DEV) {
+    return
+  }
+
+  console.info(`[houston:${channel}] ws closed`, {
+    code: event.code,
+    reason: event.reason,
+    wasClean: event.wasClean,
+  })
+}
+
 function parseServerEvent(payload: unknown): OperationalRealtimeServerEvent | null {
   if (!payload || typeof payload !== 'object') {
     return null
@@ -45,7 +57,7 @@ export function useOperationalRealtimeWebSocket({
   onAccess,
   onReconnect,
 }: UseOperationalRealtimeWebSocketOptions) {
-  const [connectionStatus, setConnectionStatus] =
+  const [connectionStatus, setConnectionStatusState] =
     useState<OperationalRealtimeConnectionStatus>('idle')
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectAttemptRef = useRef(0)
@@ -53,10 +65,22 @@ export function useOperationalRealtimeWebSocket({
   const intentionalCloseRef = useRef(false)
   const hasConnectedOnceRef = useRef(false)
   const connectRef = useRef<(() => Promise<void>) | null>(null)
+  const connectGenerationRef = useRef(0)
+  const connectionStatusRef = useRef<OperationalRealtimeConnectionStatus>('idle')
+  const enabledRef = useRef(enabled)
+
+  const setConnectionStatus = useCallback((status: OperationalRealtimeConnectionStatus) => {
+    connectionStatusRef.current = status
+    setConnectionStatusState(status)
+  }, [])
 
   const onInvalidateRef = useRef(onInvalidate)
   const onAccessRef = useRef(onAccess)
   const onReconnectRef = useRef(onReconnect)
+
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
 
   useEffect(() => {
     onInvalidateRef.current = onInvalidate
@@ -74,7 +98,10 @@ export function useOperationalRealtimeWebSocket({
   const closeSocket = useCallback(() => {
     const socket = socketRef.current
     socketRef.current = null
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    if (!socket) {
+      return
+    }
+    if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
       socket.close()
     }
   }, [])
@@ -89,12 +116,14 @@ export function useOperationalRealtimeWebSocket({
     reconnectTimerRef.current = window.setTimeout(() => {
       void connectRef.current?.()
     }, delay)
-  }, [])
+  }, [setConnectionStatus])
 
   const connect = useCallback(async () => {
     if (!establishmentId || !enabled) {
       return
     }
+
+    const generation = ++connectGenerationRef.current
 
     clearReconnectTimer()
     closeSocket()
@@ -104,21 +133,43 @@ export function useOperationalRealtimeWebSocket({
 
     try {
       const ticketResponse = await issueOperationalRealtimeWsTicket(establishmentId)
+      if (generation !== connectGenerationRef.current) {
+        return
+      }
+
       const socket = new WebSocket(buildOperationalRealtimeWebSocketUrl(establishmentId))
-      socketRef.current = socket
-
-      let authTimer: number | null = window.setTimeout(() => {
-        intentionalCloseRef.current = true
+      if (generation !== connectGenerationRef.current) {
         socket.close()
-      }, AUTH_TIMEOUT_MS)
+        return
+      }
 
-      socket.onopen = () => {
+      socketRef.current = socket
+      let authTimer: number | null = null
+
+      const sendAuth = () => {
+        if (socketRef.current !== socket) {
+          return
+        }
+
         socket.send(
           JSON.stringify({
             type: 'auth',
             ticket: ticketResponse.ticket,
           }),
         )
+
+        if (authTimer === null) {
+          authTimer = window.setTimeout(() => {
+            if (socketRef.current === socket) {
+              socket.close()
+            }
+          }, AUTH_TIMEOUT_MS)
+        }
+      }
+
+      socket.onopen = sendAuth
+      if (socket.readyState === WebSocket.OPEN) {
+        sendAuth()
       }
 
       socket.onmessage = (event) => {
@@ -159,15 +210,20 @@ export function useOperationalRealtimeWebSocket({
         }
       }
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        if (socketRef.current !== socket) {
+          return
+        }
+
         if (authTimer !== null) {
           window.clearTimeout(authTimer)
           authTimer = null
         }
 
         socketRef.current = null
+        logWsCloseDev('realtime', event)
 
-        if (intentionalCloseRef.current || !enabled) {
+        if (intentionalCloseRef.current || !enabledRef.current) {
           intentionalCloseRef.current = false
           setConnectionStatus('disconnected')
           return
@@ -180,9 +236,11 @@ export function useOperationalRealtimeWebSocket({
         // onclose handles reconnection
       }
     } catch {
-      scheduleReconnect()
+      if (generation === connectGenerationRef.current) {
+        scheduleReconnect()
+      }
     }
-  }, [clearReconnectTimer, closeSocket, enabled, establishmentId, scheduleReconnect])
+  }, [clearReconnectTimer, closeSocket, enabled, establishmentId, scheduleReconnect, setConnectionStatus])
 
   useEffect(() => {
     connectRef.current = connect
@@ -208,6 +266,36 @@ export function useOperationalRealtimeWebSocket({
     }
   }, [clearReconnectTimer, closeSocket, connect, enabled, establishmentId])
 
+  useEffect(() => {
+    if (!establishmentId || !enabled) {
+      return
+    }
+
+    const resumeIfDisconnected = () => {
+      if (connectionStatusRef.current !== 'connected') {
+        void connectRef.current?.()
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        resumeIfDisconnected()
+      }
+    }
+
+    const onOnline = () => {
+      resumeIfDisconnected()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('online', onOnline)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [enabled, establishmentId])
+
   const requestIntentionalClose = useCallback(() => {
     intentionalCloseRef.current = true
     closeSocket()
@@ -216,5 +304,6 @@ export function useOperationalRealtimeWebSocket({
   return {
     connectionStatus: enabled ? connectionStatus : 'idle',
     requestIntentionalClose,
+    reconnect: connect,
   }
 }

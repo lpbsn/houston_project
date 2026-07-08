@@ -19,6 +19,18 @@ function buildChatWebSocketUrl(establishmentId: string): string {
   return `${protocol}//${window.location.host}/ws/v1/establishments/${establishmentId}/chat/`
 }
 
+function logWsCloseDev(channel: string, event: CloseEvent) {
+  if (!import.meta.env.DEV) {
+    return
+  }
+
+  console.info(`[houston:${channel}] ws closed`, {
+    code: event.code,
+    reason: event.reason,
+    wasClean: event.wasClean,
+  })
+}
+
 function parseServerEvent(payload: unknown): ChatWsServerEvent | null {
   if (!payload || typeof payload !== 'object') {
     return null
@@ -51,19 +63,31 @@ export function useChatWebSocket({
   onConversationAccessRevoked,
   onReconnect,
 }: UseChatWebSocketOptions) {
-  const [connectionStatus, setConnectionStatus] = useState<ChatConnectionStatus>('idle')
+  const [connectionStatus, setConnectionStatusState] = useState<ChatConnectionStatus>('idle')
   const socketRef = useRef<WebSocket | null>(null)
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<number | null>(null)
   const intentionalCloseRef = useRef(false)
   const hasConnectedOnceRef = useRef(false)
   const connectRef = useRef<(() => Promise<void>) | null>(null)
+  const connectGenerationRef = useRef(0)
+  const connectionStatusRef = useRef<ChatConnectionStatus>('idle')
+  const enabledRef = useRef(enabled)
+
+  const setConnectionStatus = useCallback((status: ChatConnectionStatus) => {
+    connectionStatusRef.current = status
+    setConnectionStatusState(status)
+  }, [])
 
   const onMessageCreatedRef = useRef(onMessageCreated)
   const onMessageRejectedRef = useRef(onMessageRejected)
   const onGlobalAccessRevokedRef = useRef(onGlobalAccessRevoked)
   const onConversationAccessRevokedRef = useRef(onConversationAccessRevoked)
   const onReconnectRef = useRef(onReconnect)
+
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
 
   useEffect(() => {
     onMessageCreatedRef.current = onMessageCreated
@@ -89,7 +113,10 @@ export function useChatWebSocket({
   const closeSocket = useCallback(() => {
     const socket = socketRef.current
     socketRef.current = null
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    if (!socket) {
+      return
+    }
+    if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
       socket.close()
     }
   }, [])
@@ -104,12 +131,14 @@ export function useChatWebSocket({
     reconnectTimerRef.current = window.setTimeout(() => {
       void connectRef.current?.()
     }, delay)
-  }, [])
+  }, [setConnectionStatus])
 
   const connect = useCallback(async () => {
     if (!establishmentId || !enabled) {
       return
     }
+
+    const generation = ++connectGenerationRef.current
 
     clearReconnectTimer()
     closeSocket()
@@ -119,21 +148,43 @@ export function useChatWebSocket({
 
     try {
       const ticketResponse = await issueChatWsTicket(establishmentId)
+      if (generation !== connectGenerationRef.current) {
+        return
+      }
+
       const socket = new WebSocket(buildChatWebSocketUrl(establishmentId))
-      socketRef.current = socket
-
-      let authTimer: number | null = window.setTimeout(() => {
-        intentionalCloseRef.current = true
+      if (generation !== connectGenerationRef.current) {
         socket.close()
-      }, AUTH_TIMEOUT_MS)
+        return
+      }
 
-      socket.onopen = () => {
+      socketRef.current = socket
+      let authTimer: number | null = null
+
+      const sendAuth = () => {
+        if (socketRef.current !== socket) {
+          return
+        }
+
         socket.send(
           JSON.stringify({
             type: 'auth',
             ticket: ticketResponse.ticket,
           }),
         )
+
+        if (authTimer === null) {
+          authTimer = window.setTimeout(() => {
+            if (socketRef.current === socket) {
+              socket.close()
+            }
+          }, AUTH_TIMEOUT_MS)
+        }
+      }
+
+      socket.onopen = sendAuth
+      if (socket.readyState === WebSocket.OPEN) {
+        sendAuth()
       }
 
       socket.onmessage = (event) => {
@@ -184,15 +235,20 @@ export function useChatWebSocket({
         }
       }
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
+        if (socketRef.current !== socket) {
+          return
+        }
+
         if (authTimer !== null) {
           window.clearTimeout(authTimer)
           authTimer = null
         }
 
         socketRef.current = null
+        logWsCloseDev('chat', event)
 
-        if (intentionalCloseRef.current || !enabled) {
+        if (intentionalCloseRef.current || !enabledRef.current) {
           intentionalCloseRef.current = false
           setConnectionStatus('disconnected')
           return
@@ -205,9 +261,11 @@ export function useChatWebSocket({
         // onclose handles reconnection
       }
     } catch {
-      scheduleReconnect()
+      if (generation === connectGenerationRef.current) {
+        scheduleReconnect()
+      }
     }
-  }, [clearReconnectTimer, closeSocket, enabled, establishmentId, scheduleReconnect])
+  }, [clearReconnectTimer, closeSocket, enabled, establishmentId, scheduleReconnect, setConnectionStatus])
 
   useEffect(() => {
     connectRef.current = connect
@@ -232,6 +290,36 @@ export function useChatWebSocket({
       closeSocket()
     }
   }, [clearReconnectTimer, closeSocket, connect, enabled, establishmentId])
+
+  useEffect(() => {
+    if (!establishmentId || !enabled) {
+      return
+    }
+
+    const resumeIfDisconnected = () => {
+      if (connectionStatusRef.current !== 'connected') {
+        void connectRef.current?.()
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        resumeIfDisconnected()
+      }
+    }
+
+    const onOnline = () => {
+      resumeIfDisconnected()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('online', onOnline)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [enabled, establishmentId])
 
   const sendMessage = useCallback(
     (payload: { conversationId: string; clientMessageId: string; body: string }) => {

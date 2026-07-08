@@ -3,13 +3,16 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const issueChatWsTicket = vi.fn(async () => ({ ticket: 'ws-ticket-1', expires_in: 60 }))
-
-vi.mock('../api', () => ({
-  issueChatWsTicket: (...args: unknown[]) => issueChatWsTicket(...args),
+const issueOperationalRealtimeWsTicket = vi.fn(async () => ({
+  ticket: 'ws-ticket-1',
+  expires_in: 60,
 }))
 
-import { useChatWebSocket } from './use-chat-websocket'
+vi.mock('../api', () => ({
+  issueOperationalRealtimeWsTicket: (...args: unknown[]) => issueOperationalRealtimeWsTicket(...args),
+}))
+
+import { useOperationalRealtimeWebSocket } from './use-operational-realtime-websocket'
 
 class MockWebSocket {
   static instances: MockWebSocket[] = []
@@ -61,10 +64,10 @@ async function connectSocket(result: { current: { connectionStatus: string } }) 
   return socket
 }
 
-describe('useChatWebSocket', () => {
+describe('useOperationalRealtimeWebSocket', () => {
   beforeEach(() => {
     MockWebSocket.instances = []
-    issueChatWsTicket.mockClear()
+    issueOperationalRealtimeWsTicket.mockClear()
     vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
   })
 
@@ -74,22 +77,22 @@ describe('useChatWebSocket', () => {
   })
 
   it('fetches ws ticket and authenticates on connect', async () => {
-    const onMessageCreated = vi.fn()
+    const onInvalidate = vi.fn()
 
     const { result } = renderHook(() =>
-      useChatWebSocket({
+      useOperationalRealtimeWebSocket({
         establishmentId: 'est-1',
         enabled: true,
-        onMessageCreated,
+        onInvalidate,
       }),
     )
 
     await waitFor(() => {
-      expect(issueChatWsTicket).toHaveBeenCalledWith('est-1')
+      expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledWith('est-1')
     })
 
     const socket = MockWebSocket.instances[0]
-    expect(socket?.url).toContain('/ws/v1/establishments/est-1/chat/')
+    expect(socket?.url).toContain('/ws/v1/establishments/est-1/realtime/')
     expect(socket?.readyState).toBe(MockWebSocket.CONNECTING)
     socket?.open()
 
@@ -104,96 +107,9 @@ describe('useChatWebSocket', () => {
     })
   })
 
-  it('handles global access.revoked without scheduling reconnect', async () => {
-    const onGlobalAccessRevoked = vi.fn()
-
-    const { result } = renderHook(() =>
-      useChatWebSocket({
-        establishmentId: 'est-1',
-        enabled: true,
-        onGlobalAccessRevoked,
-      }),
-    )
-
-    const socket = await connectSocket(result)
-    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
-
-    socket?.emitMessage({ type: 'access.revoked', reason: 'session_revoked' })
-    socket?.close()
-
-    await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('disconnected')
-    })
-
-    expect(onGlobalAccessRevoked).toHaveBeenCalledWith({
-      type: 'access.revoked',
-      reason: 'session_revoked',
-    })
-
-    await new Promise((resolve) => window.setTimeout(resolve, 1_500))
-    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps network reconnect behavior after unplanned close', async () => {
-    const { result } = renderHook(() =>
-      useChatWebSocket({
-        establishmentId: 'est-1',
-        enabled: true,
-      }),
-    )
-
-    const socket = await connectSocket(result)
-    socket?.close()
-
-    await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('reconnecting')
-    })
-
-    await waitFor(
-      () => {
-        expect(issueChatWsTicket).toHaveBeenCalledTimes(2)
-      },
-      { timeout: 3_000 },
-    )
-  })
-
-  it('calls onReconnect on second auth.ok after unplanned close', async () => {
-    const onReconnect = vi.fn()
-
-    const { result } = renderHook(() =>
-      useChatWebSocket({
-        establishmentId: 'est-1',
-        enabled: true,
-        onReconnect,
-      }),
-    )
-
-    const socket = await connectSocket(result)
-    expect(onReconnect).not.toHaveBeenCalled()
-
-    socket?.close()
-
-    await waitFor(
-      () => {
-        expect(issueChatWsTicket).toHaveBeenCalledTimes(2)
-        expect(MockWebSocket.instances[1]).toBeDefined()
-      },
-      { timeout: 3_000 },
-    )
-
-    const socket2 = MockWebSocket.instances[1]
-    socket2?.open()
-    socket2?.emitMessage({ type: 'auth.ok' })
-
-    await waitFor(() => {
-      expect(onReconnect).toHaveBeenCalledTimes(1)
-      expect(result.current.connectionStatus).toBe('connected')
-    })
-  })
-
   it('schedules reconnect after auth timeout without staying disconnected', async () => {
     const { result } = renderHook(() =>
-      useChatWebSocket({
+      useOperationalRealtimeWebSocket({
         establishmentId: 'est-1',
         enabled: true,
       }),
@@ -220,7 +136,7 @@ describe('useChatWebSocket', () => {
 
   it('ignores stale socket onclose without breaking the active connection', async () => {
     const { result } = renderHook(() =>
-      useChatWebSocket({
+      useOperationalRealtimeWebSocket({
         establishmentId: 'est-1',
         enabled: true,
       }),
@@ -228,6 +144,7 @@ describe('useChatWebSocket', () => {
 
     await waitFor(() => {
       expect(MockWebSocket.instances[0]).toBeDefined()
+      expect(result.current.connectionStatus).toBe('connecting')
     })
 
     const staleSocket = MockWebSocket.instances[0]
@@ -253,7 +170,7 @@ describe('useChatWebSocket', () => {
 
   it('reconnects on visibilitychange when visible and disconnected', async () => {
     const { result } = renderHook(() =>
-      useChatWebSocket({
+      useOperationalRealtimeWebSocket({
         establishmentId: 'est-1',
         enabled: true,
       }),
@@ -266,7 +183,7 @@ describe('useChatWebSocket', () => {
       expect(result.current.connectionStatus).toBe('reconnecting')
     })
 
-    const callsBefore = issueChatWsTicket.mock.calls.length
+    const callsBefore = issueOperationalRealtimeWsTicket.mock.calls.length
 
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
@@ -275,13 +192,13 @@ describe('useChatWebSocket', () => {
     document.dispatchEvent(new Event('visibilitychange'))
 
     await waitFor(() => {
-      expect(issueChatWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
+      expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
     })
   })
 
   it('reconnects on window online when disconnected', async () => {
     const { result } = renderHook(() =>
-      useChatWebSocket({
+      useOperationalRealtimeWebSocket({
         establishmentId: 'est-1',
         enabled: true,
       }),
@@ -294,61 +211,45 @@ describe('useChatWebSocket', () => {
       expect(result.current.connectionStatus).toBe('reconnecting')
     })
 
-    const callsBefore = issueChatWsTicket.mock.calls.length
+    const callsBefore = issueOperationalRealtimeWsTicket.mock.calls.length
     window.dispatchEvent(new Event('online'))
 
     await waitFor(() => {
-      expect(issueChatWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
+      expect(issueOperationalRealtimeWsTicket.mock.calls.length).toBeGreaterThan(callsBefore)
     })
   })
 
-  it('handles conversation.access_revoked without closing the socket', async () => {
-    const onConversationAccessRevoked = vi.fn()
+  it('calls onReconnect on second auth.ok after unplanned close', async () => {
+    const onReconnect = vi.fn()
 
     const { result } = renderHook(() =>
-      useChatWebSocket({
+      useOperationalRealtimeWebSocket({
         establishmentId: 'est-1',
         enabled: true,
-        onConversationAccessRevoked,
+        onReconnect,
       }),
     )
 
     const socket = await connectSocket(result)
+    expect(onReconnect).not.toHaveBeenCalled()
 
-    socket?.emitMessage({
-      type: 'conversation.access_revoked',
-      conversation_id: 'conv-1',
-      reason: 'participant_removed',
-    })
+    socket?.close()
 
-    expect(onConversationAccessRevoked).toHaveBeenCalledWith({
-      type: 'conversation.access_revoked',
-      conversation_id: 'conv-1',
-      reason: 'participant_removed',
-    })
-    expect(result.current.connectionStatus).toBe('connected')
-  })
-
-  it('does not reconnect when enabled becomes false', async () => {
-    const { result, rerender } = renderHook(
-      ({ enabled }) =>
-        useChatWebSocket({
-          establishmentId: 'est-1',
-          enabled,
-        }),
-      { initialProps: { enabled: true } },
+    await waitFor(
+      () => {
+        expect(issueOperationalRealtimeWsTicket).toHaveBeenCalledTimes(2)
+        expect(MockWebSocket.instances[1]).toBeDefined()
+      },
+      { timeout: 3_000 },
     )
 
-    await connectSocket(result)
-    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
-
-    rerender({ enabled: false })
+    const socket2 = MockWebSocket.instances[1]
+    socket2?.open()
+    socket2?.emitMessage({ type: 'auth.ok' })
 
     await waitFor(() => {
-      expect(result.current.connectionStatus).toBe('idle')
+      expect(onReconnect).toHaveBeenCalledTimes(1)
+      expect(result.current.connectionStatus).toBe('connected')
     })
-
-    await new Promise((resolve) => window.setTimeout(resolve, 1_500))
-    expect(issueChatWsTicket).toHaveBeenCalledTimes(1)
   })
 })
