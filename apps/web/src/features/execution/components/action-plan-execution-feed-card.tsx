@@ -177,19 +177,28 @@ function PendingValidationActionPlanFeedCard({
       role="button"
       tabIndex={0}
     >
-      <div className="mb-2 flex min-w-0 items-center gap-1.5">
-        <Bell className="h-4 w-4 shrink-0 text-[#E69138]" aria-hidden />
-        <span className="truncate text-[13px] font-bold text-[#B45309]">
-          En attente de validation
-        </span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Bell className="h-4 w-4 shrink-0 text-[#E69138]" aria-hidden />
+          <span className="truncate text-[13px] font-bold text-[#B45309]">
+            En attente de validation
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="text-[11px] leading-none text-[#888]">
+            {formatSignalRelativeTime(item.last_activity_at)}
+          </span>
+          {showActions ? (
+            <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+          ) : null}
+        </div>
       </div>
 
-      <ActionPlanFeedCardHeader
-        item={item}
-        signalInput={signalInput}
-        showActions={Boolean(showActions)}
-        onOpenActions={onOpenActions}
-      />
+      <div className="mb-1 mt-2 flex flex-wrap items-center gap-1">
+        <ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />
+      </div>
+
+      <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
 
       <ActionPlanFeedMetaRow item={item} />
 

@@ -261,7 +261,7 @@ describe('ActionPlanExecutionFeedCard', () => {
     ).toHaveLength(1)
   })
 
-  it('keeps actions on the meta row below pending validation banner', () => {
+  it('keeps time and actions on the pending validation banner row', () => {
     render(
       <ActionPlanExecutionFeedCard
         item={buildFeedItem({ status: 'pending_validation' })}
@@ -270,18 +270,17 @@ describe('ActionPlanExecutionFeedCard', () => {
       />,
     )
 
-    const title = screen.getByRole('heading', { level: 3, name: 'Plan incendie' })
+    const bannerLabel = screen.getByText('En attente de validation')
     const actionsButton = screen.getByRole('button', { name: 'Actions du plan d’action' })
-    const metaRow = actionsButton.parentElement?.parentElement
+    const bannerRow = bannerLabel.parentElement?.parentElement
 
-    expect(screen.getByText('En attente de validation')).toBeTruthy()
+    expect(bannerRow?.className).toContain('justify-between')
+    expect(bannerRow?.contains(actionsButton)).toBe(true)
     expect(screen.getByText('Restaurant')).toBeTruthy()
-    expect(metaRow?.className).toContain('items-center')
-    expect(metaRow?.contains(actionsButton)).toBe(true)
-    expect(metaRow?.nextElementSibling).toBe(title)
+    expect(screen.getByRole('heading', { level: 3, name: 'Plan incendie' })).toBeTruthy()
   })
 
-  it('opens actions sheet from pending validation meta row without navigating', () => {
+  it('opens actions sheet from pending validation banner without navigating', () => {
     const onOpenActions = vi.fn()
     render(
       <ActionPlanExecutionFeedCard
