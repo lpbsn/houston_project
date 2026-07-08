@@ -7,4 +7,4 @@ builder = "DOCKERFILE"
 dockerfilePath = "infra/docker/api/Dockerfile"
 
 [deploy]
-startCommand = "cd /app/apps/api && uv run celery -A config beat -l info --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celerybeat/celerybeat-schedule"
+startCommand = "/opt/venv/bin/celery -A config beat -l info --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celerybeat/celerybeat-schedule"
