@@ -2439,6 +2439,7 @@ export interface components {
             title: string;
             body: string;
             actor: components["schemas"]["NotificationActor"] | null;
+            navigation: components["schemas"]["NotificationNavigation"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2465,6 +2466,11 @@ export interface components {
             has_more: boolean;
             applied_filters: components["schemas"]["NotificationListAppliedFilters"];
             counts: components["schemas"]["NotificationListCounts"];
+        };
+        NotificationNavigation: {
+            parent_subject_type: components["schemas"]["ParentSubjectTypeEnum"];
+            /** Format: uuid */
+            parent_subject_id: string;
         };
         NotificationPreferences: {
             notifications_enabled: boolean;
@@ -2617,6 +2623,13 @@ export interface components {
          * @enum {string}
          */
         OriginEnum: "signal" | "action_plan_execution";
+        /**
+         * @description * `action_plan_execution` - Action plan execution
+         *     * `comment` - Comment
+         *     * `signal` - Signal
+         * @enum {string}
+         */
+        ParentSubjectTypeEnum: "action_plan_execution" | "comment" | "signal";
         PatchedActionPlanScheduleUpdateRequest: {
             /** Format: date */
             start_date?: string;

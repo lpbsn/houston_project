@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
+import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { CommentSection } from '@/features/comments/components/comment-section'
 import { cn } from '@/lib/utils'
@@ -40,8 +41,12 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
 
-  const [activeTab, setActiveTab] = useState<SignalDetailTab>('details')
-  const [hasOpenedComments, setHasOpenedComments] = useState(false)
+  const initialDeepLink = readCurrentDetailDeepLink()
+  const [activeTab, setActiveTab] = useState<SignalDetailTab>(
+    initialDeepLink.tab === 'comments' ? 'comments' : 'details',
+  )
+  const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
+  const highlightCommentId = initialDeepLink.commentId
 
   const lifecycleClosed = () => {
     onNavigate('/signals')
@@ -160,6 +165,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
               establishmentId={establishmentId}
               targetType="signal"
               targetId={signalId}
+              highlightCommentId={highlightCommentId}
             />
           </div>
         ) : null}

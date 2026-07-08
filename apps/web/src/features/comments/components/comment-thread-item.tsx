@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { HoustonBadge } from '@/components/ui/terrain'
@@ -6,9 +6,15 @@ import { getDisplayNameInitials } from '@/lib/display-names'
 import { cn } from '@/lib/utils'
 
 import { formatCommentRelativeTime } from '../lib/comment-display'
+import {
+  COMMENT_SCROLL_ANCHOR_CLASS,
+  commentDomId,
+  scrollToHighlightedComment,
+} from '../lib/comment-highlight'
 import type { CommentCreateRequest, ExecutionCommentListItem } from '../types'
 import { isExecutionThreadItem } from '../types'
 import { CommentComposer } from './comment-composer'
+import { MentionDeepLinkBadge, useMentionDeepLinkBadge } from './mention-deep-link-badge'
 
 const AVATAR_BG_CLASSES = [
   'bg-[#EEF2FF] text-[#1B4FD8]',
@@ -29,6 +35,7 @@ type CommentThreadItemProps = {
   replyErrorMessage?: string | null
   isReplyPending?: boolean
   isResolvePending?: boolean
+  highlightCommentId?: string | null
   onReply: (payload: CommentCreateRequest, callbacks?: ReplySubmitCallbacks) => void
   onResolve: (commentId: string) => void
   onUnresolve: (commentId: string) => void
@@ -86,13 +93,19 @@ function CommentAvatar({
 
 function CommentBubble({
   comment,
+  commentId,
+  highlightCommentId = null,
   showOrigin = false,
   isResolved = false,
 }: {
   comment: CommentContent
+  commentId: string
+  highlightCommentId?: string | null
   showOrigin?: boolean
   isResolved?: boolean
 }) {
+  const showBadge = useMentionDeepLinkBadge(commentId, highlightCommentId)
+
   return (
     <div className="relative min-w-0 flex-1">
       <div className="rounded-2xl bg-[#F0F2F5] px-3 py-2">
@@ -104,6 +117,7 @@ function CommentBubble({
           {comment.body}
         </p>
       </div>
+      {showBadge ? <MentionDeepLinkBadge /> : null}
       {isResolved ? <ResolvedTickBadge /> : null}
     </div>
   )
@@ -192,11 +206,15 @@ function CommentMetaRow({
 
 function CommentRow({
   comment,
+  commentId,
+  highlightCommentId = null,
   showOrigin = false,
   isResolved = false,
   avatarSize = 'md',
 }: {
   comment: CommentContent & { author: { membership_id: string; display_name: string } }
+  commentId: string
+  highlightCommentId?: string | null
   showOrigin?: boolean
   isResolved?: boolean
   avatarSize?: 'md' | 'sm'
@@ -208,15 +226,32 @@ function CommentRow({
         membershipId={comment.author.membership_id}
         size={avatarSize}
       />
-      <CommentBubble comment={comment} showOrigin={showOrigin} isResolved={isResolved} />
+      <CommentBubble
+        comment={comment}
+        commentId={commentId}
+        highlightCommentId={highlightCommentId}
+        showOrigin={showOrigin}
+        isResolved={isResolved}
+      />
     </div>
   )
 }
 
-export function InheritedSignalCommentCard({ item }: { item: ExecutionCommentListItem }) {
+export function InheritedSignalCommentCard({
+  item,
+  highlightCommentId = null,
+}: {
+  item: ExecutionCommentListItem
+  highlightCommentId?: string | null
+}) {
   return (
-    <li>
-      <CommentRow comment={item} showOrigin />
+    <li id={commentDomId(item.id)} className={COMMENT_SCROLL_ANCHOR_CLASS}>
+      <CommentRow
+        comment={item}
+        commentId={item.id}
+        highlightCommentId={highlightCommentId}
+        showOrigin
+      />
     </li>
   )
 }
@@ -228,13 +263,24 @@ export function ActionCommentThreadCard({
   replyErrorMessage = null,
   isReplyPending = false,
   isResolvePending = false,
+  highlightCommentId = null,
   onReply,
   onResolve,
   onUnresolve,
 }: CommentThreadItemProps) {
   const isThread = isExecutionThreadItem(item)
-  const [expanded, setExpanded] = useState(!(item.is_resolved ?? false))
+  const highlightTargetsReply =
+    item.replies?.some((reply) => reply.id === highlightCommentId) ?? false
+  const [expanded, setExpanded] = useState(!(item.is_resolved ?? false) || highlightTargetsReply)
   const [isReplying, setIsReplying] = useState(false)
+
+  useEffect(() => {
+    if (!highlightCommentId || !highlightTargetsReply || !expanded) {
+      return
+    }
+
+    return scrollToHighlightedComment(highlightCommentId)
+  }, [expanded, highlightCommentId, highlightTargetsReply])
 
   if (!isThread) {
     return null
@@ -246,8 +292,14 @@ export function ActionCommentThreadCard({
   const isActionDisabled = disabled || isReplyPending || isResolvePending
 
   return (
-    <li>
-      <CommentRow comment={item} showOrigin isResolved={isResolved} />
+    <li id={commentDomId(item.id)} className={COMMENT_SCROLL_ANCHOR_CLASS}>
+      <CommentRow
+        comment={item}
+        commentId={item.id}
+        highlightCommentId={highlightCommentId}
+        showOrigin
+        isResolved={isResolved}
+      />
 
       <div className="ml-10">
         <CommentMetaRow
@@ -323,8 +375,17 @@ export function ActionCommentThreadCard({
             {expanded ? (
               <ul className={cn('mt-1 flex flex-col gap-3 border-l-2 border-[#E4E6EB] pl-3')}>
                 {(item.replies ?? []).map((reply) => (
-                  <li key={reply.id}>
-                    <CommentRow comment={reply} avatarSize="sm" />
+                  <li
+                    key={reply.id}
+                    id={commentDomId(reply.id)}
+                    className={COMMENT_SCROLL_ANCHOR_CLASS}
+                  >
+                    <CommentRow
+                      comment={reply}
+                      commentId={reply.id}
+                      highlightCommentId={highlightCommentId}
+                      avatarSize="sm"
+                    />
                   </li>
                 ))}
               </ul>

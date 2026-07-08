@@ -13,6 +13,7 @@ export function buildNotificationItem(
     title: 'Nouveau plan d’action',
     body: 'Un plan d’action vous a été assigné.',
     actor: { membership_id: 'member-1', display_name: 'Alice' },
+    navigation: null,
     created_at: '2026-06-23T10:00:00.000Z',
     read_at: null,
     archived_at: null,

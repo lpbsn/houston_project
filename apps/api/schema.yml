@@ -7454,6 +7454,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/NotificationActor'
           nullable: true
+        navigation:
+          allOf:
+          - $ref: '#/components/schemas/NotificationNavigation'
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -7472,6 +7476,7 @@ components:
       - created_at
       - event_key
       - id
+      - navigation
       - priority
       - read_at
       - status
@@ -7525,6 +7530,17 @@ components:
       - has_more
       - items
       - next_cursor
+    NotificationNavigation:
+      type: object
+      properties:
+        parent_subject_type:
+          $ref: '#/components/schemas/ParentSubjectTypeEnum'
+        parent_subject_id:
+          type: string
+          format: uuid
+      required:
+      - parent_subject_id
+      - parent_subject_type
     NotificationPreferences:
       type: object
       properties:
@@ -7897,6 +7913,16 @@ components:
       description: |-
         * `signal` - signal
         * `action_plan_execution` - action_plan_execution
+    ParentSubjectTypeEnum:
+      enum:
+      - action_plan_execution
+      - comment
+      - signal
+      type: string
+      description: |-
+        * `action_plan_execution` - Action plan execution
+        * `comment` - Comment
+        * `signal` - Signal
     PatchedActionPlanScheduleUpdateRequest:
       type: object
       properties:

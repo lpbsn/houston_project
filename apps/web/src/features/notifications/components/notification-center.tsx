@@ -67,7 +67,7 @@ export function NotificationCenter({ establishmentId, onNavigate }: Notification
 
   const handleSelectNotification = useCallback(
     (notification: (typeof items)[number]) => {
-      const path = resolveNotificationPath(notification.subject_type, notification.subject_id)
+      const path = resolveNotificationPath(notification)
 
       if (path) {
         closePanel()

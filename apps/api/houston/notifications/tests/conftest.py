@@ -120,6 +120,7 @@ NOTIFICATION_RESPONSE_ALLOWLIST = frozenset(
         "title",
         "body",
         "actor",
+        "navigation",
         "created_at",
         "read_at",
         "archived_at",

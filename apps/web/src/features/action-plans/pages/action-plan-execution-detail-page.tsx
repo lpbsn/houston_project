@@ -11,6 +11,7 @@ import {
 import { ActionLinkedSignalCard } from '@/features/action-plans/components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '@/features/action-plans/components/action-linked-signal-strip'
 import { CommentSection } from '@/features/comments/components/comment-section'
+import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
@@ -78,8 +79,12 @@ function ActionPlanExecutionDetailPageContent({
     executionId,
   )
 
-  const [activeTab, setActiveTab] = useState<ActionDetailTab>('details')
-  const [hasOpenedComments, setHasOpenedComments] = useState(false)
+  const initialDeepLink = useMemo(() => readCurrentDetailDeepLink(), [])
+  const [activeTab, setActiveTab] = useState<ActionDetailTab>(
+    initialDeepLink.tab === 'comments' ? 'comments' : 'details',
+  )
+  const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
+  const highlightCommentId = initialDeepLink.commentId
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
@@ -337,6 +342,7 @@ function ActionPlanExecutionDetailPageContent({
               establishmentId={establishmentId}
               targetType="action-plan-execution"
               targetId={executionId}
+              highlightCommentId={highlightCommentId}
             />
           </div>
         ) : null}

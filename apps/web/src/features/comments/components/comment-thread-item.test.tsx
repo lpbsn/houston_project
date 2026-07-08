@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ExecutionCommentListItem } from '../types'
+import * as commentHighlight from '../lib/comment-highlight'
 
 import { ActionCommentThreadCard } from './comment-thread-item'
 
@@ -44,6 +45,15 @@ vi.mock('../hooks', () => ({
     isFetching: false,
   }),
 }))
+
+vi.mock('../lib/comment-highlight', async () => {
+  const actual = await vi.importActual<typeof commentHighlight>('../lib/comment-highlight')
+
+  return {
+    ...actual,
+    scrollToHighlightedComment: vi.fn(() => vi.fn()),
+  }
+})
 
 afterEach(() => {
   cleanup()
@@ -148,6 +158,93 @@ describe('ActionCommentThreadCard resolve toggle', () => {
     fireEvent.click(screen.getByLabelText('Marquer le commentaire comme non résolu'))
 
     expect(onUnresolve).toHaveBeenCalledWith('thread-a')
+  })
+
+  it('auto-expands replies when a highlighted reply targets a resolved thread', () => {
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({
+          is_resolved: true,
+          replies: [
+            {
+              id: 'reply-1',
+              origin: 'action_plan_execution',
+              body: 'réponse ciblée',
+              author: { membership_id: 'm-2', display_name: 'Bob' },
+              mentions: [],
+              created_at: '2026-06-15T11:00:00Z',
+            },
+          ],
+          permission_hints: { can_reply: true, can_resolve: true },
+        })}
+        establishmentId="est-1"
+        highlightCommentId="reply-1"
+        onReply={vi.fn()}
+        onResolve={vi.fn()}
+        onUnresolve={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('réponse ciblée')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Voir 1 réponse/ })).toBeNull()
+  })
+
+  it('shows a mention badge on the highlighted reply', () => {
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({
+          is_resolved: true,
+          replies: [
+            {
+              id: 'reply-1',
+              origin: 'action_plan_execution',
+              body: 'réponse ciblée',
+              author: { membership_id: 'm-2', display_name: 'Bob' },
+              mentions: [],
+              created_at: '2026-06-15T11:00:00Z',
+            },
+          ],
+          permission_hints: { can_reply: true, can_resolve: true },
+        })}
+        establishmentId="est-1"
+        highlightCommentId="reply-1"
+        onReply={vi.fn()}
+        onResolve={vi.fn()}
+        onUnresolve={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByLabelText('Vous avez été mentionné dans ce commentaire'),
+    ).toBeTruthy()
+  })
+
+  it('scrolls to the highlighted reply after auto-expanding the thread', () => {
+    render(
+      <ActionCommentThreadCard
+        item={buildThread({
+          is_resolved: true,
+          replies: [
+            {
+              id: 'reply-1',
+              origin: 'action_plan_execution',
+              body: 'réponse ciblée',
+              author: { membership_id: 'm-2', display_name: 'Bob' },
+              mentions: [],
+              created_at: '2026-06-15T11:00:00Z',
+            },
+          ],
+          permission_hints: { can_reply: true, can_resolve: true },
+        })}
+        establishmentId="est-1"
+        highlightCommentId="reply-1"
+        onReply={vi.fn()}
+        onResolve={vi.fn()}
+        onUnresolve={vi.fn()}
+      />,
+    )
+
+    expect(commentHighlight.scrollToHighlightedComment).toHaveBeenCalledWith('reply-1')
   })
 
   it('keeps replies collapsed by default when resolved', () => {

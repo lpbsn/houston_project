@@ -163,7 +163,7 @@ Current API truth is `apps/api/schema.yml`.
 
 Implemented notification endpoints in `apps/api/schema.yml`:
 
-- `GET /api/v1/establishments/{establishment_id}/notifications/` — list for authenticated recipient (cursor pagination)
+- `GET /api/v1/establishments/{establishment_id}/notifications/` — list for authenticated recipient (cursor pagination); `NotificationItem` may include nullable `navigation` (`parent_subject_type`, `parent_subject_id`) for `subject_type=comment` when the comment row still exists
 - `POST .../notifications/{notification_id}/mark-read/`
 - `POST .../notifications/{notification_id}/archive/`
 - `POST .../notifications/mark-all-read/`
@@ -179,6 +179,8 @@ Not implemented:
 - Notification Center lists the authenticated user's notifications only.
 - Frontend must not treat notifications as source of business truth.
 - Opening a notification should navigate to a safe route and then refetch the authorized subject through the backend API.
+- Comment mention notifications (`comment.mention.created`): when `navigation` is present, open the parent detail (`signal` or `action_plan_execution`) with the Commentaires tab and scroll/highlight the mentioned comment (`?tab=comments&commentId={subject_id}`). When `navigation` is `null` (comment hard-deleted; V1 without denormalized parent on `Notification`), mark read only — no navigation. When the parent loads but the comment is absent from the authorized list, show an inline unavailable message in the Commentaires tab.
+- `navigation` is a non-sensitive routing hint (parent type + UUID only); authorization remains on the parent and comment list fetches.
 - Frontend must not display sensitive raw content from notification, push, or realtime payloads.
 - Frontend must handle `unread`, `read`, and `archived` states when APIs exist.
 - Frontend may optimistically update read state only if backend confirmation or reconciliation remains the authority.

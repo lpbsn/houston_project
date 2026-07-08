@@ -83,6 +83,20 @@ describe('NotificationCenter', () => {
                 title: 'Mention',
                 body: 'Vous avez été mentionné dans un commentaire.',
                 created_at: '2026-06-22T10:00:00.000Z',
+                navigation: {
+                  parent_subject_type: 'signal',
+                  parent_subject_id: 'signal-1',
+                },
+              }),
+              buildNotificationItem({
+                id: 'notif-comment-orphan',
+                event_key: 'comment.mention.created',
+                subject_type: 'comment',
+                subject_id: 'comment-orphan',
+                title: 'Mention orpheline',
+                body: 'Vous avez été mentionné dans un commentaire.',
+                created_at: '2026-06-21T10:00:00.000Z',
+                navigation: null,
               }),
             ],
             counts: { unread: 2 },
@@ -186,14 +200,25 @@ describe('NotificationCenter', () => {
     expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull()
   })
 
-  it('marks comment notifications read without navigating', () => {
+  it('navigates comment mention notifications with navigation and marks them read', () => {
     render(<NotificationCenter establishmentId="est-1" onNavigate={onNavigate} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     fireEvent.click(screen.getByText('Mention'))
 
-    expect(onNavigate).not.toHaveBeenCalled()
+    expect(onNavigate).toHaveBeenCalledWith('/signals/signal-1?tab=comments&commentId=comment-1')
     expect(markReadMutate).toHaveBeenCalledWith('notif-comment')
+    expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull()
+  })
+
+  it('marks orphan comment notifications read without navigating', () => {
+    render(<NotificationCenter establishmentId="est-1" onNavigate={onNavigate} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    fireEvent.click(screen.getByText('Mention orpheline'))
+
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(markReadMutate).toHaveBeenCalledWith('notif-comment-orphan')
     expect(screen.getByRole('dialog', { name: 'Notifications' })).toBeTruthy()
   })
 

@@ -6,6 +6,10 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 
 import { CommentsApiError } from '../api'
 import {
+  commentExistsInExecutionList,
+  commentExistsInSignalList,
+} from '../lib/comment-highlight'
+import {
   useCreateExecutionCommentMutation,
   useCreateSignalCommentMutation,
   useExecutionCommentsQuery,
@@ -20,9 +24,26 @@ type CommentSectionProps = {
   establishmentId: string
   targetType: 'signal' | 'action-plan-execution'
   targetId: string
+  highlightCommentId?: string | null
 }
 
-export function CommentSection({ establishmentId, targetType, targetId }: CommentSectionProps) {
+function CommentUnavailableMessage() {
+  return (
+    <p
+      className="mt-3 rounded-[12px] border border-[#E8E6DF] bg-[#FAFAF8] px-3 py-3 text-[13px] text-[#65676B]"
+      role="status"
+    >
+      Ce commentaire n&apos;est plus disponible.
+    </p>
+  )
+}
+
+export function CommentSection({
+  establishmentId,
+  targetType,
+  targetId,
+  highlightCommentId = null,
+}: CommentSectionProps) {
   const composerRef = useRef<CommentComposerHandle>(null)
   const [replyErrorCommentId, setReplyErrorCommentId] = useState<string | null>(null)
   const [pendingReplyCommentId, setPendingReplyCommentId] = useState<string | null>(null)
@@ -68,11 +89,19 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
       unresolveExecutionMutation.isPending
     : false
 
+  const isHighlightMissing =
+    highlightCommentId != null &&
+    commentsQuery.isSuccess &&
+    (isSignal
+      ? !commentExistsInSignalList(signalQuery.data, highlightCommentId)
+      : !commentExistsInExecutionList(executionQuery.data, highlightCommentId))
+
   const threadListProps = {
     establishmentId,
     disabled: isThreadPending || commentsQuery.isLoading || commentsQuery.isError,
     replyErrorCommentId,
     pendingReplyCommentId,
+    highlightCommentId,
   }
 
   return (
@@ -97,8 +126,14 @@ export function CommentSection({ establishmentId, targetType, targetId }: Commen
         />
       ) : null}
 
+      {isHighlightMissing ? <CommentUnavailableMessage /> : null}
+
       {commentsQuery.isSuccess && isSignal ? (
-        <CommentList mode="signal" comments={commentsQuery.data} />
+        <CommentList
+          mode="signal"
+          comments={commentsQuery.data}
+          highlightCommentId={highlightCommentId}
+        />
       ) : null}
 
       {executionQuery.isSuccess && isExecution ? (

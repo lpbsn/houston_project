@@ -316,6 +316,20 @@ describe('CommentSection', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByPlaceholderText(/Répondre à /)).toBeTruthy()
   })
+
+  it('shows unavailable message when highlight id is missing from loaded comments', () => {
+    render(
+      <CommentSection
+        establishmentId="est-1"
+        targetType="action-plan-execution"
+        targetId="exec-1"
+        highlightCommentId="missing-comment"
+      />,
+    )
+
+    expect(screen.getByText("Ce commentaire n'est plus disponible.")).toBeTruthy()
+    expect(screen.getByText('note execution')).toBeTruthy()
+  })
 })
 
 describe('CommentList execution mode', () => {

@@ -24,6 +24,7 @@ from houston.notifications.constants import (
 )
 from houston.notifications.exceptions import NotificationCursorError
 from houston.notifications.models import Notification
+from houston.notifications.navigation import build_comment_navigation_index
 from houston.notifications.selectors import build_notifications_page, count_unread_notifications
 from houston.notifications.services import (
     archive_notification,
@@ -121,8 +122,18 @@ class NotificationsListView(EstablishmentScopedObservationMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        comment_navigation_by_subject_id = build_comment_navigation_index(
+            establishment_id=membership.establishment_id,
+            notifications=page.items,
+        )
         payload = {
-            "items": [serialize_notification(item) for item in page.items],
+            "items": [
+                serialize_notification(
+                    item,
+                    comment_navigation_by_subject_id=comment_navigation_by_subject_id,
+                )
+                for item in page.items
+            ],
             "next_cursor": page.next_cursor,
             "has_more": page.has_more,
             "applied_filters": {"status": page.applied_status},

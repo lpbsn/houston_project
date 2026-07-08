@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import uuid
+
 from rest_framework import serializers
 
 from houston.notifications.models import Notification
+from houston.notifications.navigation import build_comment_navigation_index
 
 
 def _membership_display_name(membership) -> str:
@@ -19,7 +22,27 @@ def serialize_notification_actor(notification: Notification) -> dict | None:
     }
 
 
-def serialize_notification(notification: Notification) -> dict:
+def _resolve_notification_navigation(
+    notification: Notification,
+    *,
+    comment_navigation_by_subject_id: dict[uuid.UUID, dict] | None = None,
+) -> dict | None:
+    if notification.subject_type != Notification.SubjectType.COMMENT:
+        return None
+    if comment_navigation_by_subject_id is None:
+        index = build_comment_navigation_index(
+            establishment_id=notification.establishment_id,
+            notifications=[notification],
+        )
+        return index.get(notification.subject_id)
+    return comment_navigation_by_subject_id.get(notification.subject_id)
+
+
+def serialize_notification(
+    notification: Notification,
+    *,
+    comment_navigation_by_subject_id: dict[uuid.UUID, dict] | None = None,
+) -> dict:
     return {
         "id": notification.id,
         "event_key": notification.event_key,
@@ -30,6 +53,10 @@ def serialize_notification(notification: Notification) -> dict:
         "title": notification.title,
         "body": notification.body,
         "actor": serialize_notification_actor(notification),
+        "navigation": _resolve_notification_navigation(
+            notification,
+            comment_navigation_by_subject_id=comment_navigation_by_subject_id,
+        ),
         "created_at": notification.created_at,
         "read_at": notification.read_at,
         "archived_at": notification.archived_at,
@@ -39,6 +66,11 @@ def serialize_notification(notification: Notification) -> dict:
 class NotificationActorSerializer(serializers.Serializer):
     membership_id = serializers.UUIDField()
     display_name = serializers.CharField()
+
+
+class NotificationNavigationSerializer(serializers.Serializer):
+    parent_subject_type = serializers.ChoiceField(choices=Notification.SubjectType.choices)
+    parent_subject_id = serializers.UUIDField()
 
 
 class NotificationItemSerializer(serializers.Serializer):
@@ -51,6 +83,7 @@ class NotificationItemSerializer(serializers.Serializer):
     title = serializers.CharField()
     body = serializers.CharField()
     actor = NotificationActorSerializer(allow_null=True)
+    navigation = NotificationNavigationSerializer(allow_null=True)
     created_at = serializers.DateTimeField()
     read_at = serializers.DateTimeField(allow_null=True)
     archived_at = serializers.DateTimeField(allow_null=True)

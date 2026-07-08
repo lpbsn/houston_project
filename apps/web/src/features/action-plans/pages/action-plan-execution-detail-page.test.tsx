@@ -179,6 +179,7 @@ function getCommentsTab() {
 }
 
 afterEach(() => {
+  window.history.replaceState(null, '', '/')
   cleanup()
   vi.clearAllMocks()
 })
@@ -216,6 +217,26 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
         establishmentId: 'est-1',
         targetType: 'action-plan-execution',
         targetId: 'exec-1',
+        highlightCommentId: null,
+      }),
+      undefined,
+    )
+  })
+
+  it('opens comments tab and passes highlight id from deep link query params', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/action-plans/executions/exec-1?tab=comments&commentId=comment-42',
+    )
+
+    renderPage()
+
+    expect(getCommentsTab().getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('comment-section')).toBeTruthy()
+    expect(CommentSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        highlightCommentId: 'comment-42',
       }),
       undefined,
     )
