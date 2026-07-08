@@ -5,6 +5,7 @@ import pytest
 from houston.accounts.models import User
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.permissions import (
+    action_plan_execution_readable_to_membership,
     action_plan_execution_visible_to_membership,
     action_plan_has_cross_pole_tasks,
     action_plan_visible_to_membership,
@@ -31,6 +32,7 @@ from houston.action_plans.services import (
     validate_action_plan_execution,
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
+from houston.comments.services import create_action_plan_execution_comment
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.organizations.models import Organization
 from houston.signals.models import Signal
@@ -188,6 +190,80 @@ def test_execution_not_visible_to_unrelated_staff(
         pilot_business_unit=business_unit,
         pilot_assignee=staff_membership,
     )
+    assert action_plan_execution_visible_to_membership(out_of_scope_staff, execution) is False
+
+
+def test_mentioned_out_of_scope_staff_is_readable_not_visible(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    out_of_scope_staff,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="ping",
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    assert action_plan_execution_readable_to_membership(out_of_scope_staff, execution) is True
+    assert action_plan_execution_visible_to_membership(out_of_scope_staff, execution) is False
+
+
+def test_mentioned_out_of_scope_staff_cannot_operate_on_execution(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    out_of_scope_staff,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="ping",
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    assert can_validate_action_plan_execution(out_of_scope_staff, execution) is False
+    assert can_mark_action_plan_execution_done(out_of_scope_staff, execution) is False
+    assert can_cancel_action_plan_execution(out_of_scope_staff, execution) is False
+    assert can_reopen_action_plan_execution(out_of_scope_staff, execution) is False
+
+
+def test_mention_on_reply_grants_readable_access(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    out_of_scope_staff,
+):
+    execution = _execution_for_permissions(
+        owner=owner_membership,
+        pilot_business_unit=business_unit,
+        pilot_assignee=staff_membership,
+    )
+    root = create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="root",
+    )
+    create_action_plan_execution_comment(
+        author_membership=staff_membership,
+        execution=execution,
+        body="reply mention",
+        parent_comment_id=root.id,
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    assert action_plan_execution_readable_to_membership(out_of_scope_staff, execution) is True
     assert action_plan_execution_visible_to_membership(out_of_scope_staff, execution) is False
 
 

@@ -7438,7 +7438,7 @@ components:
         event_key:
           type: string
         subject_type:
-          $ref: '#/components/schemas/SubjectTypeEnum'
+          $ref: '#/components/schemas/NotificationSubjectTypeEnum'
         subject_id:
           type: string
           format: uuid
@@ -7534,7 +7534,7 @@ components:
       type: object
       properties:
         parent_subject_type:
-          $ref: '#/components/schemas/ParentSubjectTypeEnum'
+          $ref: '#/components/schemas/NotificationSubjectTypeEnum'
         parent_subject_id:
           type: string
           format: uuid
@@ -7548,6 +7548,18 @@ components:
           type: boolean
       required:
       - notifications_enabled
+    NotificationSubjectTypeEnum:
+      enum:
+      - action_plan_execution
+      - chat_conversation
+      - comment
+      - signal
+      type: string
+      description: |-
+        * `action_plan_execution` - Action plan execution
+        * `chat_conversation` - Chat conversation
+        * `comment` - Comment
+        * `signal` - Signal
     ObservationProcessingSignalSummary:
       type: object
       properties:
@@ -7913,16 +7925,6 @@ components:
       description: |-
         * `signal` - signal
         * `action_plan_execution` - action_plan_execution
-    ParentSubjectTypeEnum:
-      enum:
-      - action_plan_execution
-      - comment
-      - signal
-      type: string
-      description: |-
-        * `action_plan_execution` - Action plan execution
-        * `comment` - Comment
-        * `signal` - Signal
     PatchedActionPlanScheduleUpdateRequest:
       type: object
       properties:
@@ -8621,16 +8623,6 @@ components:
       - media_count
       - reporter_display_name
       - submitted_at
-    SubjectTypeEnum:
-      enum:
-      - action_plan_execution
-      - comment
-      - signal
-      type: string
-      description: |-
-        * `action_plan_execution` - Action plan execution
-        * `comment` - Comment
-        * `signal` - Signal
     SwitchEstablishmentRequest:
       type: object
       properties:

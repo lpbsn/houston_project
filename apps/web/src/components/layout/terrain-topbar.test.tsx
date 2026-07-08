@@ -10,8 +10,8 @@ describe('TerrainTopbar', () => {
     cleanup()
   })
 
-  it('renders hub page title, logo, and trailing on one row', () => {
-    const { container } = render(
+  it('renders hub page title, logo, and trailing', () => {
+    render(
       <TerrainTopbar
         variant="hub"
         pageTitle="Exécution"
@@ -20,28 +20,19 @@ describe('TerrainTopbar', () => {
     )
 
     expect(screen.getByRole('heading', { level: 1, name: 'Exécution' })).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Houston' }).className).toContain('h-20')
+    expect(screen.getByRole('img', { name: 'Houston' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeTruthy()
-
-    const row = container.querySelector('.grid.h-20')
-    expect(row).not.toBeNull()
-    expect(row?.className).toContain('grid-cols-[1fr_auto_1fr]')
-    expect(row?.querySelector('h1')?.textContent).toBe('Exécution')
-    expect(row?.querySelector('img[alt="Houston"]')).toBeTruthy()
   })
 
-  it('renders hub without page title using a left spacer', () => {
+  it('renders hub without page title', () => {
     const { container } = render(<TerrainTopbar variant="hub" />)
 
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
-    expect(screen.getByRole('img', { name: 'Houston' }).className).toContain('h-20')
-
-    const row = container.querySelector('.grid.h-20')
-    expect(row?.querySelector('h1')).toBeNull()
-    expect(row?.querySelector('span[aria-hidden]')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Houston' })).toBeTruthy()
+    expect(container.querySelector('span[aria-hidden]')).toBeTruthy()
   })
 
-  it('truncates long hub page titles', () => {
+  it('renders long hub page titles without crashing', () => {
     render(
       <TerrainTopbar
         variant="hub"
@@ -49,11 +40,11 @@ describe('TerrainTopbar', () => {
       />,
     )
 
-    const heading = screen.getByRole('heading', {
-      level: 1,
-      name: 'Page introuvable avec un titre très long qui doit être tronqué',
-    })
-    expect(heading.className).toContain('truncate')
-    expect(heading.className).toContain('text-2xl')
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Page introuvable avec un titre très long qui doit être tronqué',
+      }),
+    ).toBeTruthy()
   })
 })

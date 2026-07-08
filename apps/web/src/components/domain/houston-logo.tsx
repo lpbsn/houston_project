@@ -11,7 +11,7 @@ export function HoustonLogo({ className }: HoustonLogoProps) {
       <img
         src={houstonLogoSrc}
         alt="Houston"
-        className="h-20 w-auto object-contain"
+        className="h-15 w-auto object-contain"
       />
     </span>
   )

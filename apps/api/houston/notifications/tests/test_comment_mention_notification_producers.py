@@ -5,8 +5,13 @@ from unittest.mock import patch
 import pytest
 from django.db import transaction
 
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.comments.models import Comment
-from houston.comments.services import create_signal_comment
+from houston.comments.services import (
+    create_action_plan_execution_comment,
+    create_signal_comment,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.constants import build_mention_dedupe_key
 from houston.notifications.models import Notification
@@ -148,6 +153,38 @@ def test_duplicate_mention_ids_create_single_notification():
     notifications = _notifications_for_comment(comment_id=comment.id)
     assert len(notifications) == 1
     assert _recipient_ids(notifications) == {staff.id}
+
+
+def test_execution_comment_mention_notifies_out_of_scope_recipient():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    signal, _, maintenance = _signal(owner)
+    assign_business_unit_scope(staff, maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Scoped execution",
+        source_signal_id=signal.id,
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+
+    comment = create_action_plan_execution_comment(
+        author_membership=owner,
+        execution=execution,
+        body=SENSITIVE_COMMENT_BODY,
+        mentioned_membership_ids=[outsider.id],
+    )
+
+    notifications = _notifications_for_comment(comment_id=comment.id)
+    assert len(notifications) == 1
+    assert notifications[0].recipient_membership_id == outsider.id
+    _assert_generic_copy(notifications[0])
 
 
 def test_business_rollback_creates_zero_notifications():

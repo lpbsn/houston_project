@@ -61,6 +61,7 @@ export function applyOperationalInvalidation(
       case 'comment.execution.resolved':
       case 'comment.execution.unresolved':
         invalidateExecutionCommentQueries(queryClient, establishmentId, event.entity_id)
+        invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)
         break
       default:
         break

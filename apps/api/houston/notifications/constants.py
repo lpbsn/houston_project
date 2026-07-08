@@ -10,6 +10,9 @@ DEDUPE_KEY_MAX_LENGTH = 255
 DEDUPE_WINDOW = timedelta(minutes=5)
 
 MENTION_DEDUPE_KEY_TEMPLATE = "comment.mention.created:{comment_id}:{mentioned_membership_id}"
+CHAT_MESSAGE_DEDUPE_KEY_TEMPLATE = (
+    "chat.message.received:{conversation_id}:{recipient_membership_id}:{actor_membership_id}"
+)
 
 LOT1_EVENT_KEYS: frozenset[str] = frozenset(
     {
@@ -23,6 +26,7 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "signal.pinned",
         "signal.resolved",
         "signal.canceled",
+        "chat.message.received",
     }
 )
 
@@ -68,6 +72,10 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
         "Signal annulé",
         "Un signal a été annulé.",
     ),
+    "chat.message.received": (
+        "Message reçu de {actor_display_name}",
+        "Ouvrez la conversation pour lire le message.",
+    ),
 }
 
 DEFAULT_ACTOR_DISPLAY_NAME = "Quelqu'un"
@@ -98,15 +106,34 @@ def build_mention_dedupe_key(
     )
 
 
+def build_chat_message_dedupe_key(
+    *,
+    conversation_id: uuid.UUID,
+    recipient_membership_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> str:
+    return CHAT_MESSAGE_DEDUPE_KEY_TEMPLATE.format(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient_membership_id,
+        actor_membership_id=actor_membership_id,
+    )
+
+
 def render_notification_copy(
     event_key: str,
     *,
     actor_display_name: str | None = None,
 ) -> tuple[str, str]:
     title_template, body_template = NOTIFICATION_COPY[event_key]
-    if "{actor_display_name}" in body_template:
-        display_name = actor_display_name or DEFAULT_ACTOR_DISPLAY_NAME
-        body = body_template.format(actor_display_name=display_name)
-    else:
-        body = body_template
-    return title_template, body
+    display_name = actor_display_name or DEFAULT_ACTOR_DISPLAY_NAME
+    title = (
+        title_template.format(actor_display_name=display_name)
+        if "{actor_display_name}" in title_template
+        else title_template
+    )
+    body = (
+        body_template.format(actor_display_name=display_name)
+        if "{actor_display_name}" in body_template
+        else body_template
+    )
+    return title, body

@@ -23,6 +23,18 @@ describe('notification navigation', () => {
     ).toBe('/signals/signal-1')
   })
 
+  it('resolves chat conversation routes', () => {
+    expect(
+      resolveNotificationPath(
+        buildNotificationItem({
+          event_key: 'chat.message.received',
+          subject_type: 'chat_conversation',
+          subject_id: 'conv-1',
+        }),
+      ),
+    ).toBe('/chat/conv-1')
+  })
+
   it('resolves comment mention routes when navigation is present', () => {
     expect(
       resolveNotificationPath(

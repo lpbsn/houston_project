@@ -34,12 +34,14 @@ from houston.action_plans.models import (
 from houston.action_plans.permissions import (
     _scope_business_unit_ids,
     action_plan_cross_pole_tasks_exist_subquery,
+    action_plan_execution_readable_to_membership,
     action_plan_execution_visible_to_membership,
     action_plan_visible_to_membership,
     can_execute_action_plan_task,
     can_view_action_plan_catalog,
     can_view_action_plan_schedule,
 )
+from houston.comments.models import CommentMention
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.role_constants import ADMIN_ROLES
 
@@ -190,7 +192,7 @@ def get_action_plan_execution_for_detail(
     )
     if execution is None:
         return None
-    if not action_plan_execution_visible_to_membership(membership, execution):
+    if not action_plan_execution_readable_to_membership(membership, execution):
         return None
     return execution
 
@@ -368,13 +370,25 @@ def _has_open_pole_task_in_member_scopes_q(*, membership: EstablishmentMembershi
     )
 
 
+def _mentioned_on_execution_q(*, membership: EstablishmentMembership) -> Exists:
+    return Exists(
+        CommentMention.objects.filter(
+            mentioned_membership_id=membership.id,
+            comment__action_plan_execution_id=OuterRef("pk"),
+            comment__establishment_id=membership.establishment_id,
+        )
+    )
+
+
 def action_plan_execution_personal_feed_q(
     *,
     membership: EstablishmentMembership,
 ) -> Q:
     now = timezone.now()
     assigned_visible = _assignee_visible_to_membership_now_q(membership=membership, now=now)
-    personal_q = Q(created_by_id=membership.id) | assigned_visible
+    personal_q = Q(created_by_id=membership.id) | assigned_visible | _mentioned_on_execution_q(
+        membership=membership,
+    )
 
     if membership.role == EstablishmentMembership.Role.MANAGER:
         scope_bu_ids = _scope_business_unit_ids(membership)

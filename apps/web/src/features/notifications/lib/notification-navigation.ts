@@ -10,6 +10,8 @@ export function resolveNotificationPath(notification: NotificationItem): string 
       return `/action-plans/executions/${subjectId}`
     case 'signal':
       return `/signals/${subjectId}`
+    case 'chat_conversation':
+      return `/chat/${subjectId}`
     case 'comment': {
       if (!navigation) {
         return null

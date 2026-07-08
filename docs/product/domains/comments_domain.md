@@ -142,7 +142,18 @@ Examples of invalid mentions:
 - inactive user account,
 - unknown membership id.
 
-Mentions in V1 do not trigger notifications.
+Mentions on **execution comments** grant **participation in the thread** for the mentioned member:
+
+- read execution detail (`action_plan_execution_readable_to_membership`),
+- read execution comment list,
+- reply to execution comment threads,
+- appear in Action Plan Execution Feed **Ma vue** (`view_mode=personal`).
+
+This does **not** grant operational rights on the execution (validate, cancel, mark_done, reassign, edit) nor manager/staff actionability beyond the existing RBAC rules (`action_plan_execution_visible_to_membership`).
+
+Mentions on **Signal comments** do not grant Action Plan execution access, including inherited Signal comments shown on execution detail.
+
+Mention notifications are implemented (`comment.mention.created`); payloads remain non-sensitive (no comment body).
 
 ## 5. Permissions
 

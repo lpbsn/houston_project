@@ -8,15 +8,20 @@ from django.db import transaction
 from django.db.models import Prefetch
 
 from houston.action_plans.models import ActionPlanExecution
+from houston.chat.models import ChatMessage
 from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import EstablishmentMembership
-from houston.notifications.constants import build_mention_dedupe_key
+from houston.notifications.constants import (
+    build_chat_message_dedupe_key,
+    build_mention_dedupe_key,
+)
 from houston.notifications.models import Notification
 from houston.notifications.recipients import (
     resolve_action_plan_execution_canceled_recipients,
     resolve_action_plan_execution_created_recipients,
     resolve_action_plan_execution_pending_validation_recipients,
     resolve_action_plan_execution_reopened_recipients,
+    resolve_chat_message_recipients,
     resolve_comment_mention_recipients,
     resolve_signal_pole_recipients,
 )
@@ -454,4 +459,73 @@ def schedule_signal_canceled_notification(
         event_key=Notification.EventKey.SIGNAL_CANCELED,
         subject_type=Notification.SubjectType.SIGNAL,
         subject_id=signal_id,
+    )
+
+
+def _load_chat_message(*, message_id: uuid.UUID) -> ChatMessage | None:
+    return (
+        ChatMessage.objects.filter(id=message_id)
+        .select_related("conversation", "author_membership", "author_membership__user")
+        .first()
+    )
+
+
+def _deliver_chat_message_notifications(
+    *,
+    message: ChatMessage,
+    actor_membership: EstablishmentMembership | None,
+) -> None:
+    if actor_membership is None:
+        return
+    recipients = resolve_chat_message_recipients(
+        conversation=message.conversation,
+        exclude_membership_id=actor_membership.id,
+    )
+    for recipient in recipients:
+        create_in_app_notification(
+            establishment_id=message.conversation.establishment_id,
+            recipient_membership=recipient,
+            event_key=Notification.EventKey.CHAT_MESSAGE_RECEIVED,
+            subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+            subject_id=message.conversation_id,
+            priority=Notification.Priority.INFO,
+            actor_membership=actor_membership,
+            dedupe_key=build_chat_message_dedupe_key(
+                conversation_id=message.conversation_id,
+                recipient_membership_id=recipient.id,
+                actor_membership_id=actor_membership.id,
+            ),
+        )
+
+
+def schedule_chat_message_received_notification(
+    *,
+    message_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+) -> None:
+    conversation_id = (
+        ChatMessage.objects.filter(id=message_id)
+        .values_list("conversation_id", flat=True)
+        .first()
+    )
+    if conversation_id is None:
+        return
+
+    def deliver() -> None:
+        message = _load_chat_message(message_id=message_id)
+        if message is None:
+            return
+        _deliver_chat_message_notifications(
+            message=message,
+            actor_membership=_load_actor(
+                establishment_id=message.conversation.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.CHAT_MESSAGE_RECEIVED,
+        subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+        subject_id=conversation_id,
     )

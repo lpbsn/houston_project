@@ -1124,6 +1124,82 @@ def test_owner_personal_feed_includes_all_establishment_executions(
     assert ids == {str(restaurant_execution.id), str(maintenance_execution.id)}
 
 
+def test_mentioned_out_of_scope_staff_sees_execution_in_personal_feed(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    out_of_scope_staff,
+):
+    from houston.comments.services import create_action_plan_execution_comment
+
+    execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Mentioned execution",
+        assignees=[
+            build_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            ),
+        ],
+    )
+    create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="heads up",
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    token = login(api_client, user=out_of_scope_staff.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(out_of_scope_staff.establishment_id)
+        + _feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(execution.id) in ids
+
+
+def test_mentioned_out_of_scope_staff_does_not_see_execution_in_general_feed(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    out_of_scope_staff,
+):
+    from houston.comments.services import create_action_plan_execution_comment
+
+    execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Mentioned execution general hidden",
+        assignees=[
+            build_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            ),
+        ],
+    )
+    create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="heads up",
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    token = login(api_client, user=out_of_scope_staff.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(out_of_scope_staff.establishment_id)
+        + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
+    assert str(execution.id) not in ids
+
+
 def test_director_personal_feed_includes_all_establishment_executions(
     api_client,
     owner_membership,

@@ -317,6 +317,9 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Houston API",
     "DESCRIPTION": "Houston backend API contract",
     "VERSION": "0.1.0",
+    "ENUM_NAME_OVERRIDES": {
+        "NotificationSubjectTypeEnum": "houston.notifications.models.Notification.SubjectType",
+    },
 }
 
 AUTHENTICATION_BACKENDS = [

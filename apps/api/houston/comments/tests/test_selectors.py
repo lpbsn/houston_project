@@ -111,7 +111,7 @@ def test_list_execution_comments_for_detail_groups_execution_replies():
     assert [item.id for item in entries[1].replies] == [reply.id]
 
 
-def test_get_action_plan_execution_for_comments_returns_none_for_invisible_execution():
+def test_get_action_plan_execution_for_comments_returns_none_without_mention():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     outsider = build_api_membership_on_establishment(
@@ -127,6 +127,76 @@ def test_get_action_plan_execution_for_comments_returns_none_for_invisible_execu
         title="Scoped execution",
         tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
         assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+
+    loaded = get_action_plan_execution_for_comments(
+        membership=outsider,
+        execution_id=execution.id,
+    )
+    assert loaded is None
+
+
+def test_get_action_plan_execution_for_comments_returns_execution_when_mentioned():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    _, maintenance, _ = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Scoped execution",
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+    create_action_plan_execution_comment(
+        author_membership=owner,
+        execution=execution,
+        body="ping",
+        mentioned_membership_ids=[outsider.id],
+    )
+
+    loaded = get_action_plan_execution_for_comments(
+        membership=outsider,
+        execution_id=execution.id,
+    )
+    assert loaded is not None
+    assert loaded.id == execution.id
+
+
+def test_signal_comment_mention_does_not_grant_execution_comment_access():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    assign_business_unit_scope(staff, maintenance)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+    )
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Linked execution",
+        source_signal_id=signal.id,
+        tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+    create_signal_comment(
+        author_membership=owner,
+        signal=signal,
+        body="signal mention",
+        mentioned_membership_ids=[outsider.id],
     )
 
     loaded = get_action_plan_execution_for_comments(

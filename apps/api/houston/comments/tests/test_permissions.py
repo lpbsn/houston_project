@@ -7,6 +7,7 @@ from houston.action_plans.tests.helpers import build_assignee_payload, build_tas
 from houston.comments.permissions import (
     can_access_action_plan_execution_comments,
     can_access_signal_comments,
+    can_reply_to_execution_comment,
     can_resolve_execution_comment,
 )
 from houston.comments.services import (
@@ -127,6 +128,40 @@ def test_can_resolve_execution_comment_rejects_unrelated_staff():
         body="root",
     )
 
+    assert (
+        can_resolve_execution_comment(membership=outsider, execution=execution, comment=root)
+        is False
+    )
+
+
+def test_mentioned_out_of_scope_staff_can_access_and_reply_to_execution_comments():
+    owner, staff, _, execution = _linked_execution()
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    root = create_action_plan_execution_comment(
+        author_membership=staff,
+        execution=execution,
+        body="root",
+        mentioned_membership_ids=[outsider.id],
+    )
+
+    assert (
+        can_access_action_plan_execution_comments(
+            membership=outsider,
+            execution_id=execution.id,
+        )
+        is True
+    )
+    assert (
+        can_reply_to_execution_comment(
+            membership=outsider,
+            execution=execution,
+            comment=root,
+        )
+        is True
+    )
     assert (
         can_resolve_execution_comment(membership=outsider, execution=execution, comment=root)
         is False

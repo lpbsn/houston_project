@@ -107,7 +107,7 @@ Supported `access.revoked` `reason` values :
 ## 3. Out of Scope (V1)
 
 - Single establishment-wide general chat room.
-- Chat notifications, push, sounds, Notification Center integration.
+- Chat push, sounds, presence-aware notification suppression.
 - Read receipts, delivered status, typing indicators, presence.
 - `ChatMessageRead` or per-message read APIs.
 - REST endpoint to send messages (WS only).
@@ -259,7 +259,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - Inspect [`realtime_domain.md`](realtime_domain.md) for Chat vs global realtime boundary.
 - Inspect [`authentication_charter.md`](../../architecture/authentication_charter.md) before WebSocket auth work.
 - Inspect [`rbac_permissions_domain.md`](rbac_permissions_domain.md) and [`identity_membership_domain.md`](identity_membership_domain.md) for eligibility.
-- Do not implement general establishment chat, REST message send, read receipts, notifications, or Signal/Action links.
+- Do not implement general establishment chat, REST message send, read receipts, chat push notifications, or Signal/Action links.
 - Do not use `AuthMiddlewareStack` for Chat WebSocket.
 - Do not rely only on conversation groups joined at auth for message delivery.
 - When implementing Chat, update OpenAPI, generated clients, tests, and this document together.
@@ -271,7 +271,7 @@ Checklist aligned with Chat V1 implementation plan §3.5 — verified **2026-06-
 - [x] Single active Chat V1 definition (this document + carve-out in [`realtime_domain.md`](realtime_domain.md))
 - [x] WebSocket auth = REST one-time ticket ; no `AuthMiddlewareStack` ; Origin validated (`AllowedHostsOriginValidator`)
 - [x] Chat realtime separated from deferred global Signal/Action/Notification invalidation
-- [x] Chat notifications explicitly out of scope (§3)
+- [x] Chat push/sounds/presence-aware notification suppression out of scope (§3); in-app `chat.message.received` handled by Notification domain
 - [x] Minimal unread only ; no read receipts ; unread survives purge (`last_seen_message_id` UUID non-FK + `last_seen_message_created_at`)
 - [x] Hard purge after 7 days documented and implemented (Celery + management command) ; purge does not break participant seen state
 - [x] Message send WebSocket-only ; no REST `POST .../messages/`

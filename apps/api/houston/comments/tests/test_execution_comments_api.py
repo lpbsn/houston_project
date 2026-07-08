@@ -141,6 +141,52 @@ def test_execution_comment_threading(api_client):
     assert items[0]["replies"][0]["body"] == "reply"
 
 
+def test_mentioned_out_of_scope_staff_can_reply_to_execution_thread(api_client):
+    owner, staff, _, execution = _setup_linked_execution()
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    root = create_action_plan_execution_comment(
+        author_membership=owner,
+        execution=execution,
+        body="please chime in",
+        mentioned_membership_ids=[outsider.id],
+    )
+
+    token = login(api_client, user=outsider.user)
+    response = api_client.post(
+        execution_comments_url(outsider.establishment_id, execution.id),
+        {"body": "reply from mention", "parent_comment_id": str(root.id)},
+        format="json",
+        **auth_headers(token),
+    )
+    assert response.status_code == 201
+    assert response.json()["body"] == "reply from mention"
+
+
+def test_mentioned_out_of_scope_staff_can_list_execution_comments(api_client):
+    owner, staff, _, execution = _setup_linked_execution()
+    outsider = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
+    create_action_plan_execution_comment(
+        author_membership=owner,
+        execution=execution,
+        body="please chime in",
+        mentioned_membership_ids=[outsider.id],
+    )
+
+    token = login(api_client, user=outsider.user)
+    response = api_client.get(
+        execution_comments_url(outsider.establishment_id, execution.id),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
 def test_cannot_reply_to_inherited_signal_comment(api_client):
     owner, staff, signal, execution = _setup_linked_execution()
     signal_comment = create_signal_comment(

@@ -34,9 +34,11 @@ class Notification(BaseModel):
         SIGNAL_PINNED = "signal.pinned", "Signal pinned"
         SIGNAL_RESOLVED = "signal.resolved", "Signal resolved"
         SIGNAL_CANCELED = "signal.canceled", "Signal canceled"
+        CHAT_MESSAGE_RECEIVED = "chat.message.received", "Chat message received"
 
     class SubjectType(models.TextChoices):
         ACTION_PLAN_EXECUTION = "action_plan_execution", "Action plan execution"
+        CHAT_CONVERSATION = "chat_conversation", "Chat conversation"
         COMMENT = "comment", "Comment"
         SIGNAL = "signal", "Signal"
 

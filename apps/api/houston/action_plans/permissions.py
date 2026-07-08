@@ -11,6 +11,7 @@ from houston.action_plans.models import (
     ActionPlanSchedule,
     ActionPlanTask,
 )
+from houston.comments.models import CommentMention
 from houston.establishments.membership_scope import (
     _iter_membership_scopes,
     membership_scope_covers_business_unit,
@@ -286,6 +287,34 @@ def action_plan_execution_visible_to_membership(
     if membership.role == EstablishmentMembership.Role.STAFF:
         return execution_has_open_pole_task_in_member_scopes(membership, execution)
     return False
+
+
+def is_mentioned_on_action_plan_execution(
+    membership: EstablishmentMembership | None,
+    execution: ActionPlanExecution,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=execution.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    return CommentMention.objects.filter(
+        mentioned_membership_id=membership.id,
+        comment__action_plan_execution_id=execution.id,
+        comment__establishment_id=membership.establishment_id,
+    ).exists()
+
+
+def action_plan_execution_readable_to_membership(
+    membership: EstablishmentMembership | None,
+    execution: ActionPlanExecution,
+) -> bool:
+    return action_plan_execution_visible_to_membership(
+        membership,
+        execution,
+    ) or is_mentioned_on_action_plan_execution(membership, execution)
 
 
 def action_plan_visible_to_membership(

@@ -136,3 +136,63 @@ def test_contributor_assignee_cannot_mark_done(
         **auth_headers(token),
     )
     assert response.status_code == 403
+
+
+def test_mentioned_out_of_scope_staff_can_read_execution_detail(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    out_of_scope_staff,
+):
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    from houston.comments.services import create_action_plan_execution_comment
+
+    create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="please review",
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    token = login(api_client, user=out_of_scope_staff.user)
+    response = api_client.get(
+        action_plan_execution_url(out_of_scope_staff.establishment_id, execution.id),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    hints = response.json()["permission_hints"]
+    assert hints["can_validate"] is False
+    assert hints["can_mark_done"] is False
+    assert hints["can_cancel"] is False
+
+
+def test_mentioned_out_of_scope_staff_cannot_run_execution_commands(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+    out_of_scope_staff,
+):
+    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
+    from houston.comments.services import create_action_plan_execution_comment
+
+    create_action_plan_execution_comment(
+        author_membership=owner_membership,
+        execution=execution,
+        body="please review",
+        mentioned_membership_ids=[out_of_scope_staff.id],
+    )
+
+    token = login(api_client, user=out_of_scope_staff.user)
+    mark_done = api_client.post(
+        action_plan_execution_url(out_of_scope_staff.establishment_id, execution.id, "mark-done/"),
+        **auth_headers(token),
+    )
+    assert mark_done.status_code == 403
+
+    cancel = api_client.post(
+        action_plan_execution_url(out_of_scope_staff.establishment_id, execution.id, "cancel/"),
+        **auth_headers(token),
+    )
+    assert cancel.status_code == 403

@@ -248,7 +248,8 @@ For `action.pending_validation`:
 | `action.canceled` | info | in_app | ∪(assignees, creator) | −actor |
 | `checklist.execution.created` | action_required | in_app | assignee | system actor OK |
 | `checklist.execution.canceled` | info | in_app | ∪(assignee, assigned_by) | −actor |
-| `comment.mention.created` | info | in_app | mentioned (if access) | skip without visibility |
+| `comment.mention.created` | info | in_app | mentioned membership | mention on execution comment grants read/thread access backend-side; notification does not grant access; no comment body in payload |
+| `chat.message.received` | info | in_app | active participants − author | generic copy with actor name; `subject_id=conversation_id`; no message body; dedupe per conversation + recipient + actor (5 min) |
 | `signal.created` | action_required | in_app | pole-scoped memberships | system actor; no exclusion |
 | `signal.urgency_changed` | urgent | in_app | pole-scoped memberships | only → high; −actor if membership |
 | `signal.pinned` | action_required | in_app | pole-scoped memberships | −actor if membership |
@@ -283,7 +284,8 @@ Not in Lot 1 implementation. Documented for future lots — do not assume these 
 | `action.assigned` | Use `action.created` instead |
 | `operational_domains` recipients | Legacy — use MembershipScope |
 | `SignalDomainAdded` | Removed taxonomy |
-| Chat message notifications | Out of Chat V1 scope |
+| Cross-tenant notifications | Out of scope |
+| Chat push / sounds / presence-aware suppression | Out of scope (in-app `chat.message.received` implemented Lot 1) |
 | Push / email Lot 1 | Separate ticket |
 
 ---
@@ -302,9 +304,10 @@ Given action.canceled where creator is also assignee
 When dispatcher runs
 Then exactly 1 notification (set dedup, highest priority)
 
-Given comment.mention.created where mentioned user cannot view action
+Given comment.mention.created on an execution comment for a mentioned user without prior execution visibility
 When dispatcher runs
-Then mentioned user receives 0 notifications
+Then mentioned user receives 1 in_app notification
+And backend grants read/thread access via CommentMention (not via notification payload)
 
 Given checklist.execution.created from Celery materialization (actor=system)
 When dispatcher runs

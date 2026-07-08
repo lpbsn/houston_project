@@ -94,3 +94,9 @@ class CommentMention(BaseModel):
                 name="uniq_comment_mention_membership",
             ),
         ]
+        indexes = [
+            models.Index(
+                fields=["mentioned_membership", "comment"],
+                name="cmt_mnt_member_comment_idx",
+            ),
+        ]

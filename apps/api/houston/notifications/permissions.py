@@ -4,6 +4,8 @@ import uuid
 
 from houston.action_plans.permissions import action_plan_execution_visible_to_membership
 from houston.action_plans.selectors import get_action_plan_execution_for_detail
+from houston.chat.permissions import can_access_chat
+from houston.chat.selectors import get_conversation_for_participant
 from houston.comments.models import Comment
 from houston.comments.selectors import (
     get_action_plan_execution_for_comments,
@@ -75,5 +77,17 @@ def recipient_can_view_notification_subject(
         from houston.signals.selectors import get_signal_for_detail
 
         return get_signal_for_detail(membership=recipient, signal_id=subject_id) is not None
+
+    if subject_type == Notification.SubjectType.CHAT_CONVERSATION:
+        if not can_access_chat(recipient):
+            return False
+        return (
+            get_conversation_for_participant(
+                establishment_id=establishment_id,
+                conversation_id=subject_id,
+                membership_id=recipient.id,
+            )
+            is not None
+        )
 
     return False

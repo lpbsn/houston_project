@@ -5,6 +5,9 @@ import uuid
 from houston.action_plans.constants import EXECUTION_STATUS_PENDING_VALIDATION
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.permissions import can_validate_action_plan_execution
+from houston.chat.models import ChatConversation
+from houston.chat.permissions import can_access_chat
+from houston.chat.selectors import active_participant_queryset
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
@@ -93,6 +96,26 @@ def resolve_comment_mention_recipients(
             and membership.establishment_id == comment.establishment_id
         ):
             recipients.append(membership)
+    return _dedupe_memberships(recipients)
+
+
+def resolve_chat_message_recipients(
+    *,
+    conversation: ChatConversation,
+    exclude_membership_id: uuid.UUID,
+) -> list[EstablishmentMembership]:
+    recipients: list[EstablishmentMembership] = []
+    for participant in active_participant_queryset(conversation_id=conversation.id):
+        membership = participant.membership
+        if membership.id == exclude_membership_id:
+            continue
+        if membership.status != EstablishmentMembership.Status.ACTIVE:
+            continue
+        if membership.establishment_id != conversation.establishment_id:
+            continue
+        if not can_access_chat(membership):
+            continue
+        recipients.append(membership)
     return _dedupe_memberships(recipients)
 
 

@@ -633,6 +633,12 @@ def create_message(
     )
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=["last_message_at", "updated_at"])
+    from houston.notifications.scheduling import schedule_chat_message_received_notification
+
+    schedule_chat_message_received_notification(
+        message_id=message.id,
+        actor_membership_id=author_membership.id,
+    )
     return MessageSendResult(
         message=message,
         created=True,

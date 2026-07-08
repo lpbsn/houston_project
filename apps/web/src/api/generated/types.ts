@@ -2431,7 +2431,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             event_key: string;
-            subject_type: components["schemas"]["SubjectTypeEnum"];
+            subject_type: components["schemas"]["NotificationSubjectTypeEnum"];
             /** Format: uuid */
             subject_id: string;
             priority: components["schemas"]["PriorityEnum"];
@@ -2468,13 +2468,21 @@ export interface components {
             counts: components["schemas"]["NotificationListCounts"];
         };
         NotificationNavigation: {
-            parent_subject_type: components["schemas"]["ParentSubjectTypeEnum"];
+            parent_subject_type: components["schemas"]["NotificationSubjectTypeEnum"];
             /** Format: uuid */
             parent_subject_id: string;
         };
         NotificationPreferences: {
             notifications_enabled: boolean;
         };
+        /**
+         * @description * `action_plan_execution` - Action plan execution
+         *     * `chat_conversation` - Chat conversation
+         *     * `comment` - Comment
+         *     * `signal` - Signal
+         * @enum {string}
+         */
+        NotificationSubjectTypeEnum: "action_plan_execution" | "chat_conversation" | "comment" | "signal";
         ObservationProcessingSignalSummary: {
             /** Format: uuid */
             id: string;
@@ -2623,13 +2631,6 @@ export interface components {
          * @enum {string}
          */
         OriginEnum: "signal" | "action_plan_execution";
-        /**
-         * @description * `action_plan_execution` - Action plan execution
-         *     * `comment` - Comment
-         *     * `signal` - Signal
-         * @enum {string}
-         */
-        ParentSubjectTypeEnum: "action_plan_execution" | "comment" | "signal";
         PatchedActionPlanScheduleUpdateRequest: {
             /** Format: date */
             start_date?: string;
@@ -2921,13 +2922,6 @@ export interface components {
             reporter_display_name: string;
             media_count: number;
         };
-        /**
-         * @description * `action_plan_execution` - Action plan execution
-         *     * `comment` - Comment
-         *     * `signal` - Signal
-         * @enum {string}
-         */
-        SubjectTypeEnum: "action_plan_execution" | "comment" | "signal";
         SwitchEstablishmentRequest: {
             /** Format: uuid */
             establishment_id: string;
