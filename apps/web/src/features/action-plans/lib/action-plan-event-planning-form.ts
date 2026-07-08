@@ -156,6 +156,12 @@ export function formatAssigneeSummary(
   return `${valid.length} assignés`
 }
 
+export function getDefaultPlanningTime(now: Date = new Date()): string {
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return snapTimeToFiveMinutes(`${hours}:${minutes}`)
+}
+
 export function snapTimeToFiveMinutes(time: string): string {
   const trimmed = time.trim()
   if (!trimmed) {

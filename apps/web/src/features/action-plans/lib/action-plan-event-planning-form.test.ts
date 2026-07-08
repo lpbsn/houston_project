@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createActionPlanAssigneeDraft } from './action-plan-form-validation'
 import {
@@ -9,6 +9,7 @@ import {
   formatDatePillLabel,
   formatRecurrenceDaysSummary,
   formatTimePillLabel,
+  getDefaultPlanningTime,
   snapTimeToFiveMinutes,
   splitIsoToDateAndTime,
   toCreateFormPlanningSlice,
@@ -19,6 +20,9 @@ import {
 } from './action-plan-event-planning-form'
 
 describe('action-plan-event-planning-form', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
   it('maps all-day one-shot datetimes', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),
@@ -134,6 +138,17 @@ describe('action-plan-event-planning-form', () => {
     expect(snapTimeToFiveMinutes('09:02')).toBe('09:00')
     expect(snapTimeToFiveMinutes('09:03')).toBe('09:05')
     expect(snapTimeToFiveMinutes('23:58')).toBe('00:00')
+  })
+
+  it('defaults planning time to the current local time snapped to five minutes', () => {
+    vi.setSystemTime(new Date(2026, 6, 8, 14, 32, 0))
+    expect(getDefaultPlanningTime()).toBe('14:30')
+
+    vi.setSystemTime(new Date(2026, 6, 8, 14, 33, 0))
+    expect(getDefaultPlanningTime()).toBe('14:35')
+
+    vi.setSystemTime(new Date(2026, 6, 8, 23, 58, 0))
+    expect(getDefaultPlanningTime()).toBe('00:00')
   })
 
   it('formats time pill labels in 24h', () => {

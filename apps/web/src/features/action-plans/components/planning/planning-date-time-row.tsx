@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   formatDatePillLabel,
   formatTimePillLabel,
+  getDefaultPlanningTime,
 } from '../../lib/action-plan-event-planning-form'
 import { PlanningDatePicker } from './planning-date-picker'
 import { PlanningPill } from './planning-pill'
@@ -51,6 +52,9 @@ export function PlanningDateTimeRow({
     if (openPicker?.rowId === rowId && openPicker.part === part) {
       onOpenPickerChange(null)
       return
+    }
+    if (part === 'time' && !time.trim()) {
+      onTimeChange(getDefaultPlanningTime())
     }
     onOpenPickerChange({ rowId, part })
   }
