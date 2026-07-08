@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { getAppRouteKey, useAppRoute } from '@/app/app-routes'
+import { useAppRoute } from '@/app/app-routes'
 import {
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
@@ -160,7 +160,6 @@ function App() {
 
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const permissionHints = getBootstrapPermissionHints(auth.bootstrap)
-  const routeKey = useMemo(() => getAppRouteKey(route), [route])
   const isChatRoute =
     route.kind === 'chat-conversation-detail' ||
     (route.kind === 'static' && route.path === '/chat')
@@ -168,7 +167,6 @@ function App() {
     establishmentId,
     hasOperationalAccess: auth.hasOperationalAccess,
     bootstrapChatAvailable: permissionHints.chat_available,
-    routeKey,
   })
   const showChatNav = chatAvailability.isNavVisible
   const chatConversationsQuery = useChatConversationsQuery(establishmentId, {

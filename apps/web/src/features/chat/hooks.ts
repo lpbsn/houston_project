@@ -55,20 +55,16 @@ type UseChatAvailabilityOptions = {
   establishmentId: string | null
   hasOperationalAccess: boolean
   bootstrapChatAvailable: boolean
-  routeKey: string
 }
 
 export function useChatAvailability({
   establishmentId,
   hasOperationalAccess,
   bootstrapChatAvailable,
-  routeKey,
 }: UseChatAvailabilityOptions) {
   const queryClient = useQueryClient()
   const statusQuery = useChatStatusQuery(establishmentId, {
     enabled: Boolean(establishmentId) && hasOperationalAccess,
-    refetchOnWindowFocus: true,
-    staleTime: 0,
   })
 
   const statusResolved = statusQuery.isSuccess
@@ -87,13 +83,6 @@ export function useChatAvailability({
     }
     applyChatAvailabilityFromStatus(queryClient, establishmentId, status)
   }, [establishmentId, queryClient, status])
-
-  useEffect(() => {
-    if (!establishmentId) {
-      return
-    }
-    void queryClient.invalidateQueries({ queryKey: chatQueryKeys.status(establishmentId) })
-  }, [establishmentId, queryClient, routeKey])
 
   return {
     status,
