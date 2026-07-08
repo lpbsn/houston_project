@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
+from django.conf import settings
 from django.utils import timezone
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework import authentication, exceptions
@@ -14,6 +16,31 @@ from houston.accounts.tokens import digest_token
 class AccessTokenAuthContext:
     session: UserSession
     access_token: AccessToken
+
+
+def should_update_session_last_used_at(
+    *,
+    last_used_at: datetime | None,
+    now: datetime,
+    interval_seconds: int,
+) -> bool:
+    if last_used_at is None:
+        return True
+    return (now - last_used_at).total_seconds() >= interval_seconds
+
+
+def touch_session_last_used_at_if_due(*, session: UserSession, now: datetime) -> bool:
+    interval_seconds = settings.HOUSTON_AUTH_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS
+    if not should_update_session_last_used_at(
+        last_used_at=session.last_used_at,
+        now=now,
+        interval_seconds=interval_seconds,
+    ):
+        return False
+
+    session.last_used_at = now
+    session.save(update_fields=["last_used_at", "updated_at"])
+    return True
 
 
 class BearerAccessTokenAuthentication(authentication.BaseAuthentication):
@@ -58,8 +85,7 @@ class BearerAccessTokenAuthentication(authentication.BaseAuthentication):
         if user.status != User.Status.ACTIVE:
             raise exceptions.AuthenticationFailed("Invalid access token.")
 
-        session.last_used_at = now
-        session.save(update_fields=["last_used_at", "updated_at"])
+        touch_session_last_used_at_if_due(session=session, now=now)
 
         return user, AccessTokenAuthContext(session=session, access_token=access_token)
 

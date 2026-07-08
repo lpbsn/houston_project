@@ -89,6 +89,11 @@ _postgres_db_options: dict[str, str] = {}
 if _postgres_sslmode:
     _postgres_db_options["sslmode"] = _postgres_sslmode
 
+# Persistent DB connections reduce TCP/TLS handshake overhead (Railway Postgres).
+# Set HOUSTON_DB_CONN_MAX_AGE=0 to restore per-request connections (e.g. local debug).
+HOUSTON_DB_CONN_MAX_AGE = env_int("HOUSTON_DB_CONN_MAX_AGE", 60)
+HOUSTON_DB_CONN_HEALTH_CHECKS = env_bool("HOUSTON_DB_CONN_HEALTH_CHECKS", default=True)
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -97,6 +102,8 @@ DATABASES = {
         "PASSWORD": env_str("POSTGRES_PASSWORD", "houston"),
         "HOST": env_str("POSTGRES_HOST", "postgres"),
         "PORT": env_str("POSTGRES_PORT", "5432"),
+        "CONN_MAX_AGE": HOUSTON_DB_CONN_MAX_AGE,
+        "CONN_HEALTH_CHECKS": HOUSTON_DB_CONN_HEALTH_CHECKS,
         **({"OPTIONS": _postgres_db_options} if _postgres_db_options else {}),
     }
 }
@@ -315,6 +322,11 @@ SPECTACULAR_SETTINGS = {
 AUTHENTICATION_BACKENDS = [
     "houston.accounts.backends.IdentifierBackend",
 ]
+
+HOUSTON_AUTH_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS = env_int(
+    "HOUSTON_AUTH_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS",
+    60,
+)
 
 HOUSTON_AUTH_ACCESS_TOKEN_TTL = timedelta(minutes=15)
 HOUSTON_AUTH_REFRESH_TOKEN_TTL = timedelta(days=30)
