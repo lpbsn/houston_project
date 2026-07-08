@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, datetime, time, timedelta
 
@@ -46,10 +47,15 @@ from houston.establishments.timezone_utils import (
     establishment_timezone,
 )
 
+logger = logging.getLogger(__name__)
+
 MATERIALIZATION_HORIZON_DAYS = 14
 READ_PATH_MATERIALIZATION_HORIZON_DAYS = 3
 READ_PATH_MATERIALIZATION_STALE_MINUTES = 30
 VISIBLE_FROM_OFFSET = timedelta(hours=1)
+
+MATERIALIZATION_PATH_READ = "read_path"
+MATERIALIZATION_PATH_BEAT_HORIZON = "beat_horizon"
 
 _RECURRENCE_DAY_TO_WEEKDAY = {
     RECURRENCE_DAY_MONDAY: 0,
@@ -581,6 +587,51 @@ def materialize_schedule_occurrences_in_horizon(
     return materialized
 
 
+def _log_skipped_schedule_materialization(
+    *,
+    schedule: ActionPlanSchedule,
+    materialization_path: str,
+    exc: ActionPlanValidationError,
+) -> None:
+    logger.warning(
+        "action_plan_schedule_materialization_skipped",
+        extra={
+            "materialization_path": materialization_path,
+            "schedule_id": str(schedule.id),
+            "establishment_id": str(schedule.establishment_id),
+            "action_plan_id": str(schedule.action_plan_id),
+            "exception_class": type(exc).__name__,
+            "detail": str(exc)[:200],
+        },
+    )
+
+
+def _materialize_schedule_best_effort(
+    *,
+    schedule: ActionPlanSchedule,
+    horizon_days: int,
+    now: datetime,
+    visible_only: bool,
+    materialization_path: str,
+) -> int:
+    try:
+        return len(
+            materialize_schedule_occurrences_in_horizon(
+                schedule=schedule,
+                horizon_days=horizon_days,
+                now=now,
+                visible_only=visible_only,
+            )
+        )
+    except ActionPlanValidationError as exc:
+        _log_skipped_schedule_materialization(
+            schedule=schedule,
+            materialization_path=materialization_path,
+            exc=exc,
+        )
+        return 0
+
+
 def materialize_schedules_horizon(
     *,
     establishment_id: uuid.UUID | None = None,
@@ -590,13 +641,15 @@ def materialize_schedules_horizon(
     if establishment_id is not None:
         queryset = queryset.filter(establishment_id=establishment_id)
 
+    now = timezone.now()
     count = 0
     for schedule in queryset.select_related("establishment", "action_plan"):
-        count += len(
-            materialize_schedule_occurrences_in_horizon(
-                schedule=schedule,
-                horizon_days=horizon_days,
-            )
+        count += _materialize_schedule_best_effort(
+            schedule=schedule,
+            horizon_days=horizon_days,
+            now=now,
+            visible_only=False,
+            materialization_path=MATERIALIZATION_PATH_BEAT_HORIZON,
         )
     return count
 
@@ -729,16 +782,26 @@ def ensure_visible_action_plan_executions_materialized(
     )
     visible_occurrence_dates_by_schedule: dict[uuid.UUID, list[date]] = {}
     for schedule in schedules:
-        occurrence_dates = iter_occurrence_dates(
-            schedule=schedule,
-            from_date=local_today,
-            until_date=local_today + timedelta(days=read_horizon_days),
-        )
-        visible_occurrence_dates_by_schedule[schedule.id] = _visible_occurrence_dates_for_schedule(
-            schedule=schedule,
-            occurrence_dates=occurrence_dates,
-            resolved_now=now,
-        )
+        try:
+            occurrence_dates = iter_occurrence_dates(
+                schedule=schedule,
+                from_date=local_today,
+                until_date=local_today + timedelta(days=read_horizon_days),
+            )
+            visible_occurrence_dates_by_schedule[schedule.id] = (
+                _visible_occurrence_dates_for_schedule(
+                    schedule=schedule,
+                    occurrence_dates=occurrence_dates,
+                    resolved_now=now,
+                )
+            )
+        except ActionPlanValidationError as exc:
+            _log_skipped_schedule_materialization(
+                schedule=schedule,
+                materialization_path=MATERIALIZATION_PATH_READ,
+                exc=exc,
+            )
+            visible_occurrence_dates_by_schedule[schedule.id] = []
 
     existing_dates_by_schedule = _existing_occurrence_dates_for_schedules(
         schedule_occurrence_dates={
@@ -750,20 +813,27 @@ def ensure_visible_action_plan_executions_materialized(
 
     count = 0
     for schedule in schedules:
-        visible_occurrence_dates = visible_occurrence_dates_by_schedule[schedule.id]
-        existing_dates = existing_dates_by_schedule.get(schedule.id, set())
-        if _schedule_read_path_materialization_is_fresh(
-            schedule=schedule,
-            visible_occurrence_dates=visible_occurrence_dates,
-            now=now,
-            existing_dates=existing_dates if visible_occurrence_dates else None,
-        ):
-            continue
-        materialized = materialize_schedule_occurrences_in_horizon(
-            schedule=schedule,
-            horizon_days=read_horizon_days,
-            now=now,
-            visible_only=True,
-        )
-        count += len(materialized)
+        try:
+            visible_occurrence_dates = visible_occurrence_dates_by_schedule[schedule.id]
+            existing_dates = existing_dates_by_schedule.get(schedule.id, set())
+            if _schedule_read_path_materialization_is_fresh(
+                schedule=schedule,
+                visible_occurrence_dates=visible_occurrence_dates,
+                now=now,
+                existing_dates=existing_dates if visible_occurrence_dates else None,
+            ):
+                continue
+            count += _materialize_schedule_best_effort(
+                schedule=schedule,
+                horizon_days=read_horizon_days,
+                now=now,
+                visible_only=True,
+                materialization_path=MATERIALIZATION_PATH_READ,
+            )
+        except ActionPlanValidationError as exc:
+            _log_skipped_schedule_materialization(
+                schedule=schedule,
+                materialization_path=MATERIALIZATION_PATH_READ,
+                exc=exc,
+            )
     return count

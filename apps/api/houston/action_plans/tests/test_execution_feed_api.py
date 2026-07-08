@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from django.utils import timezone
 
@@ -17,7 +19,7 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.selectors import action_plan_execution_overdue
-from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.services import create_action_plan_with_execution, deactivate_action_plan
 from houston.action_plans.tests.helpers import (
     action_plan_execution_feed_url,
     action_plan_task_url,
@@ -807,6 +809,72 @@ def test_feed_materializes_visible_schedule_execution(
     )
     assert response.status_code == 200
     assert len(response.json()["items"]) >= 1
+
+
+def test_feed_survives_invalid_visible_schedule(
+    api_client,
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+    caplog: pytest.LogCaptureFixture,
+):
+    valid_execution = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Valid execution",
+    )
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **visible_schedule_window(),
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    schedule.last_materialized_at = None
+    schedule.save(update_fields=["last_materialized_at", "updated_at"])
+
+    deactivate_action_plan(action_plan=catalog_action_plan, actor=owner_membership)
+
+    materialization_logger = "houston.action_plans.materialization"
+    api_exceptions_logger = "houston.core.api.exceptions"
+    with caplog.at_level(logging.WARNING):
+        token = login(api_client, user=owner_membership.user)
+        response = api_client.get(
+            action_plan_execution_feed_url(owner_membership.establishment_id)
+            + _feed_query("general"),
+            **auth_headers(token),
+        )
+
+    assert response.status_code == 200
+    titles = [item["action_plan_execution"]["title"] for item in response.json()["items"]]
+    assert "Valid execution" in titles
+    assert str(valid_execution.id) in _feed_execution_ids(response.json())
+
+    skip_records = [
+        record
+        for record in caplog.records
+        if record.name == materialization_logger
+        and record.getMessage() == "action_plan_schedule_materialization_skipped"
+    ]
+    assert skip_records
+    assert any(
+        getattr(record, "materialization_path", None) == "read_path"
+        and getattr(record, "schedule_id", None) == str(schedule.id)
+        for record in skip_records
+    )
+    assert not any(
+        record.name == api_exceptions_logger
+        and record.getMessage() == "api_unhandled_exception"
+        for record in caplog.records
+    )
 
 
 def test_action_plan_execution_feed_query_count_baseline_empty(
