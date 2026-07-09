@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 
 from houston.core.models import BaseModel
@@ -100,3 +101,62 @@ class Notification(BaseModel):
             models.Index(fields=["recipient_membership", "status"]),
             models.Index(fields=["recipient_membership", "dedupe_key", "created_at"]),
         ]
+
+
+class WebPushSubscription(BaseModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="web_push_subscriptions",
+    )
+    endpoint = models.CharField(max_length=512, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    user_agent = models.CharField(max_length=512, blank=True, default="")
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "revoked_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"WebPushSubscription({self.user_id}, {self.endpoint[:48]}...)"
+
+
+class PushDelivery(BaseModel):
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+
+    notification = models.ForeignKey(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name="push_deliveries",
+    )
+    subscription = models.ForeignKey(
+        WebPushSubscription,
+        on_delete=models.CASCADE,
+        related_name="push_deliveries",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+    error_code = models.CharField(max_length=64, blank=True, default="")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["notification", "subscription"],
+                name="notifications_pushdelivery_notification_subscription_uniq",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"PushDelivery({self.notification_id}, {self.subscription_id}, {self.status})"

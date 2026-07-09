@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import permissions, status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,6 +18,9 @@ from houston.notifications.api.serializers import (
     NotificationListResponseSerializer,
     NotificationPreferencesSerializer,
     NotificationPreferencesUpdateSerializer,
+    VapidPublicKeySerializer,
+    WebPushSubscriptionResponseSerializer,
+    WebPushSubscriptionUpsertSerializer,
     serialize_notification,
 )
 from houston.notifications.constants import (
@@ -25,6 +30,13 @@ from houston.notifications.constants import (
 from houston.notifications.exceptions import NotificationCursorError
 from houston.notifications.models import Notification
 from houston.notifications.navigation import build_comment_navigation_index
+from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
+from houston.notifications.push.services import (
+    get_web_push_subscription_for_user,
+    revoke_subscription,
+    touch_subscription_last_seen,
+    upsert_web_push_subscription,
+)
 from houston.notifications.selectors import build_notifications_page, count_unread_notifications
 from houston.notifications.services import (
     archive_notification,
@@ -284,6 +296,134 @@ class NotificationPreferencesView(EstablishmentScopedObservationMixin, APIView):
 
         payload = update_notification_preferences(
             membership=membership,
-            notifications_enabled=serializer.validated_data["notifications_enabled"],
+            notifications_enabled=serializer.validated_data.get("notifications_enabled"),
+            push_enabled=serializer.validated_data.get("push_enabled"),
         )
         return Response(NotificationPreferencesSerializer(payload).data)
+
+
+def _serialize_web_push_subscription(subscription) -> dict:
+    return {
+        "id": subscription.id,
+        "endpoint": subscription.endpoint,
+        "created_at": subscription.created_at,
+        "last_seen_at": subscription.last_seen_at,
+    }
+
+
+class VapidPublicKeyView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["push"],
+        responses={
+            200: VapidPublicKeySerializer,
+            503: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Returns the VAPID public key for Web Push subscription.",
+    )
+    def get(self, request):
+        public_key = settings.HOUSTON_VAPID_PUBLIC_KEY.strip()
+        if not public_key:
+            return Response(
+                {"detail": "Push is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(VapidPublicKeySerializer({"public_key": public_key}).data)
+
+
+class WebPushSubscriptionUpsertView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["push"],
+        request=WebPushSubscriptionUpsertSerializer,
+        responses={
+            200: WebPushSubscriptionResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description="Creates or updates a Web Push subscription for the authenticated user.",
+    )
+    def post(self, request):
+        serializer = WebPushSubscriptionUpsertSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"code": "validation_error", "detail": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            subscription = upsert_web_push_subscription(
+                user=request.user,
+                endpoint=serializer.validated_data["endpoint"],
+                p256dh=serializer.validated_data["p256dh"],
+                auth=serializer.validated_data["auth"],
+                user_agent=serializer.validated_data.get("user_agent", ""),
+            )
+        except WebPushSubscriptionValidationError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payload = _serialize_web_push_subscription(subscription)
+        return Response(WebPushSubscriptionResponseSerializer(payload).data)
+
+
+class WebPushSubscriptionTouchView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["push"],
+        request=None,
+        responses={
+            200: WebPushSubscriptionResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Updates last_seen_at for an active Web Push subscription.",
+    )
+    def post(self, request, subscription_id):
+        subscription = get_web_push_subscription_for_user(
+            subscription_id=uuid.UUID(str(subscription_id)),
+            user=request.user,
+        )
+        if subscription is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        updated = touch_subscription_last_seen(subscription=subscription, user=request.user)
+        if updated is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        payload = _serialize_web_push_subscription(updated)
+        return Response(WebPushSubscriptionResponseSerializer(payload).data)
+
+
+class WebPushSubscriptionRevokeView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["push"],
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Subscription revoked."),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+        },
+        description="Soft-revokes a Web Push subscription for the authenticated user.",
+    )
+    def delete(self, request, subscription_id):
+        subscription = get_web_push_subscription_for_user(
+            subscription_id=uuid.UUID(str(subscription_id)),
+            user=request.user,
+        )
+        if subscription is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        revoke_subscription(subscription=subscription, user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

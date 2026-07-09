@@ -4555,6 +4555,110 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/me/web-push-subscriptions/:
+    post:
+      operationId: v1_me_web_push_subscriptions_create
+      description: Creates or updates a Web Push subscription for the authenticated
+        user.
+      tags:
+      - push
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebPushSubscriptionUpsert'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WebPushSubscriptionUpsert'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WebPushSubscriptionUpsert'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPushSubscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/me/web-push-subscriptions/{subscription_id}/:
+    delete:
+      operationId: v1_me_web_push_subscriptions_destroy
+      description: Soft-revokes a Web Push subscription for the authenticated user.
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - push
+      security:
+      - BearerAccessToken: []
+      responses:
+        '204':
+          description: Subscription revoked.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/me/web-push-subscriptions/{subscription_id}/touch/:
+    post:
+      operationId: v1_me_web_push_subscriptions_touch_create
+      description: Updates last_seen_at for an active Web Push subscription.
+      parameters:
+      - in: path
+        name: subscription_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - push
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPushSubscriptionResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/onboarding-sessions/:
     post:
       operationId: v1_onboarding_sessions_create
@@ -5334,6 +5438,27 @@ paths:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/push/vapid-public-key/:
+    get:
+      operationId: v1_push_vapid_public_key_retrieve
+      description: Returns the VAPID public key for Web Push subscription.
+      tags:
+      - push
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VapidPublicKey'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -7546,8 +7671,11 @@ components:
       properties:
         notifications_enabled:
           type: boolean
+        push_enabled:
+          type: boolean
       required:
       - notifications_enabled
+      - push_enabled
     NotificationSubjectTypeEnum:
       enum:
       - action_plan_execution
@@ -7995,6 +8123,8 @@ components:
       type: object
       properties:
         notifications_enabled:
+          type: boolean
+        push_enabled:
           type: boolean
     PatchedOnboardingProposalUpdateRequest:
       type: object
@@ -8715,6 +8845,53 @@ components:
       - code
       - detail
       - errors
+    VapidPublicKey:
+      type: object
+      properties:
+        public_key:
+          type: string
+      required:
+      - public_key
+    WebPushSubscriptionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        endpoint:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - created_at
+      - endpoint
+      - id
+      - last_seen_at
+    WebPushSubscriptionUpsert:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          maxLength: 512
+        p256dh:
+          type: string
+          maxLength: 255
+        auth:
+          type: string
+          maxLength: 255
+        user_agent:
+          type: string
+          default: ''
+          maxLength: 512
+      required:
+      - auth
+      - endpoint
+      - p256dh
     WorkspaceSummaryDirector:
       type: object
       properties:

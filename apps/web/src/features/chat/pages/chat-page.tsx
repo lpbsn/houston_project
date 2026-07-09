@@ -34,7 +34,10 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
   const realtime = useOptionalChatRealtime()
   const connectionStatus = realtime?.connectionStatus ?? 'idle'
 
-  const allConversations = conversationsQuery.data?.items ?? []
+  const allConversations = useMemo(
+    () => conversationsQuery.data?.items ?? [],
+    [conversationsQuery.data?.items],
+  )
   const filteredConversations = useMemo(() => {
     return filterConversationsByQuery(allConversations, search, viewerMembershipId)
   }, [allConversations, search, viewerMembershipId])

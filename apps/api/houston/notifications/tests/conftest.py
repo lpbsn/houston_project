@@ -83,6 +83,22 @@ def notifications_preferences_url(establishment_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/notifications/preferences/"
 
 
+def vapid_public_key_url() -> str:
+    return "/api/v1/push/vapid-public-key/"
+
+
+def web_push_subscriptions_url() -> str:
+    return "/api/v1/me/web-push-subscriptions/"
+
+
+def web_push_subscription_touch_url(subscription_id) -> str:
+    return f"/api/v1/me/web-push-subscriptions/{subscription_id}/touch/"
+
+
+def web_push_subscription_revoke_url(subscription_id) -> str:
+    return f"/api/v1/me/web-push-subscriptions/{subscription_id}/"
+
+
 def create_test_notification(
     *,
     recipient: EstablishmentMembership,

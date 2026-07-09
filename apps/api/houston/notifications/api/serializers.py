@@ -111,7 +111,32 @@ class MarkAllNotificationsReadResponseSerializer(serializers.Serializer):
 
 class NotificationPreferencesSerializer(serializers.Serializer):
     notifications_enabled = serializers.BooleanField()
+    push_enabled = serializers.BooleanField()
 
 
 class NotificationPreferencesUpdateSerializer(serializers.Serializer):
-    notifications_enabled = serializers.BooleanField(required=True)
+    notifications_enabled = serializers.BooleanField(required=False)
+    push_enabled = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("At least one preference field is required.")
+        return attrs
+
+
+class VapidPublicKeySerializer(serializers.Serializer):
+    public_key = serializers.CharField()
+
+
+class WebPushSubscriptionUpsertSerializer(serializers.Serializer):
+    endpoint = serializers.CharField(max_length=512)
+    p256dh = serializers.CharField(max_length=255)
+    auth = serializers.CharField(max_length=255)
+    user_agent = serializers.CharField(max_length=512, required=False, allow_blank=True, default="")
+
+
+class WebPushSubscriptionResponseSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    endpoint = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    last_seen_at = serializers.DateTimeField(allow_null=True)
