@@ -6,10 +6,20 @@ import uuid
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from pywebpush import WebPushException
 
 from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
+from houston.notifications.permissions import recipient_can_view_notification_subject
 from houston.notifications.push import constants as push_constants
 from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
+from houston.notifications.push.payloads import build_push_payload
+from houston.notifications.push.sender import (
+    is_vapid_configured,
+    log_vapid_not_configured,
+    send_web_push,
+    should_revoke_subscription_for_error,
+    web_push_error_code,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,21 +140,49 @@ def revoke_subscription(
     return subscription
 
 
-def _queue_push_delivery(*, notification_id: uuid.UUID, subscription_id: uuid.UUID) -> bool:
+def _queue_push_delivery(*, notification_id: uuid.UUID, subscription_id: uuid.UUID) -> PushDelivery:
     try:
-        _, created = PushDelivery.objects.get_or_create(
+        delivery, _created = PushDelivery.objects.get_or_create(
             notification_id=notification_id,
             subscription_id=subscription_id,
             defaults={"status": PushDelivery.Status.QUEUED},
         )
-        return created
+        return delivery
     except IntegrityError:
-        if PushDelivery.objects.filter(
+        delivery = PushDelivery.objects.filter(
             notification_id=notification_id,
             subscription_id=subscription_id,
-        ).exists():
-            return False
-        raise
+        ).first()
+        if delivery is None:
+            raise
+        return delivery
+
+
+def _mark_push_delivery_skipped(*, delivery: PushDelivery, error_code: str) -> None:
+    delivery.status = PushDelivery.Status.SKIPPED
+    delivery.error_code = error_code
+    delivery.save(update_fields=["status", "error_code", "updated_at"])
+
+
+def _mark_push_delivery_failed(*, delivery: PushDelivery, error_code: str) -> None:
+    delivery.status = PushDelivery.Status.FAILED
+    delivery.error_code = error_code
+    delivery.save(update_fields=["status", "error_code", "updated_at"])
+
+
+def _mark_push_delivery_sent(*, delivery: PushDelivery, now) -> None:
+    delivery.status = PushDelivery.Status.SENT
+    delivery.sent_at = now
+    delivery.error_code = ""
+    delivery.save(update_fields=["status", "sent_at", "error_code", "updated_at"])
+
+
+@transaction.atomic
+def _revoke_subscription_internal(*, subscription: WebPushSubscription, now) -> None:
+    if subscription.revoked_at is not None:
+        return
+    subscription.revoked_at = now
+    subscription.save(update_fields=["revoked_at", "updated_at"])
 
 
 def run_push_for_notification(notification_id: uuid.UUID) -> int:
@@ -155,6 +193,7 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
         Notification.objects.select_related(
             "recipient_membership",
             "recipient_membership__user",
+            "actor_membership",
         )
         .filter(pk=notification_id)
         .first()
@@ -169,6 +208,24 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
     if not recipient.notifications_enabled or not recipient.push_enabled:
         return 0
 
+    if (
+        notification.actor_membership_id is not None
+        and notification.actor_membership_id == notification.recipient_membership_id
+    ):
+        return 0
+
+    if not recipient_can_view_notification_subject(
+        recipient=recipient,
+        establishment_id=notification.establishment_id,
+        subject_type=notification.subject_type,
+        subject_id=notification.subject_id,
+    ):
+        return 0
+
+    if not is_vapid_configured():
+        log_vapid_not_configured(notification_id=str(notification.id))
+        return 0
+
     subscriptions = list(
         WebPushSubscription.objects.filter(
             user_id=recipient.user_id,
@@ -178,13 +235,40 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
     if not subscriptions:
         return 0
 
-    created_count = 0
+    payload = build_push_payload(notification)
+    push_url = payload["data"]["url"]
+    now = timezone.now()
+    sent_count = 0
+    skipped_count = 0
+    failed_count = 0
+
     for subscription in subscriptions:
-        if _queue_push_delivery(
+        delivery = _queue_push_delivery(
             notification_id=notification.id,
             subscription_id=subscription.id,
-        ):
-            created_count += 1
+        )
+        if delivery.status == PushDelivery.Status.SENT:
+            continue
+        if delivery.status == PushDelivery.Status.FAILED:
+            continue
+
+        if push_url is None:
+            _mark_push_delivery_skipped(delivery=delivery, error_code="missing_navigation")
+            skipped_count += 1
+            continue
+
+        try:
+            send_web_push(subscription=subscription, payload=payload)
+        except WebPushException as exc:
+            error_code = web_push_error_code(exc)
+            _mark_push_delivery_failed(delivery=delivery, error_code=error_code)
+            failed_count += 1
+            if should_revoke_subscription_for_error(exc):
+                _revoke_subscription_internal(subscription=subscription, now=now)
+            continue
+
+        _mark_push_delivery_sent(delivery=delivery, now=now)
+        sent_count += 1
 
     logger.info(
         "push_for_notification_processed",
@@ -192,7 +276,9 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
             "event": "push_for_notification_processed",
             "notification_id": str(notification.id),
             "delivery_count": len(subscriptions),
-            "created_count": created_count,
+            "sent_count": sent_count,
+            "skipped_count": skipped_count,
+            "failed_count": failed_count,
         },
     )
-    return created_count
+    return sent_count
