@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -23,6 +25,8 @@ from houston.realtime.operational_invalidation_events import (
     NOTIFICATION_INVALIDATION_SUBJECT_TYPE,
     NOTIFICATION_UPDATED_REASON,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _schedule_notification_invalidation(
@@ -150,6 +154,24 @@ def create_in_app_notification(
         reason=NOTIFICATION_CREATED_REASON,
         entity_id=notification.id,
     )
+    if settings.HOUSTON_PUSH_ENABLED:
+        notification_id = notification.id
+
+        def _enqueue_push_task() -> None:
+            from houston.notifications.push.tasks import send_push_for_notification_task
+
+            try:
+                send_push_for_notification_task.delay(str(notification_id))
+            except Exception:
+                logger.exception(
+                    "push_notification_enqueue_failed",
+                    extra={
+                        "event": "push_notification_enqueue_failed",
+                        "notification_id": str(notification_id),
+                    },
+                )
+
+        transaction.on_commit(_enqueue_push_task)
     return notification
 
 
@@ -284,16 +306,43 @@ def mark_all_notifications_read(
 
 
 def get_notification_preferences(*, membership: EstablishmentMembership) -> dict:
-    return {"notifications_enabled": membership.notifications_enabled}
+    return {
+        "notifications_enabled": membership.notifications_enabled,
+        "push_enabled": membership.push_enabled,
+    }
 
 
 @transaction.atomic
 def update_notification_preferences(
     *,
     membership: EstablishmentMembership,
-    notifications_enabled: bool,
+    notifications_enabled: bool | None = None,
+    push_enabled: bool | None = None,
 ) -> dict:
-    if membership.notifications_enabled != notifications_enabled:
+    update_fields: list[str] = []
+
+    if (
+        notifications_enabled is not None
+        and membership.notifications_enabled != notifications_enabled
+    ):
         membership.notifications_enabled = notifications_enabled
-        membership.save(update_fields=["notifications_enabled", "updated_at"])
+        update_fields.append("notifications_enabled")
+        if not notifications_enabled:
+            if membership.push_enabled:
+                membership.push_enabled = False
+                update_fields.append("push_enabled")
+
+    if push_enabled is not None and membership.push_enabled != push_enabled:
+        effective_push_enabled = push_enabled
+        if not membership.notifications_enabled:
+            effective_push_enabled = False
+        if membership.push_enabled != effective_push_enabled:
+            membership.push_enabled = effective_push_enabled
+            if "push_enabled" not in update_fields:
+                update_fields.append("push_enabled")
+
+    if update_fields:
+        update_fields.append("updated_at")
+        membership.save(update_fields=update_fields)
+
     return get_notification_preferences(membership=membership)

@@ -1379,6 +1379,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/web-push-subscriptions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates or updates a Web Push subscription for the authenticated user. */
+        post: operations["v1_me_web_push_subscriptions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/web-push-subscriptions/{subscription_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Soft-revokes a Web Push subscription for the authenticated user. */
+        delete: operations["v1_me_web_push_subscriptions_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/web-push-subscriptions/{subscription_id}/touch/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Updates last_seen_at for an active Web Push subscription. */
+        post: operations["v1_me_web_push_subscriptions_touch_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding-sessions/": {
         parameters: {
             query?: never;
@@ -1594,6 +1645,23 @@ export interface paths {
         };
         /** @description Returns active runtime configuration for an onboarding session. */
         get: operations["v1_onboarding_sessions_runtime_config_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/vapid-public-key/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the VAPID public key for Web Push subscription. */
+        get: operations["v1_push_vapid_public_key_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2474,6 +2542,7 @@ export interface components {
         };
         NotificationPreferences: {
             notifications_enabled: boolean;
+            push_enabled: boolean;
         };
         /**
          * @description * `action_plan_execution` - Action plan execution
@@ -2665,6 +2734,7 @@ export interface components {
         };
         PatchedNotificationPreferencesUpdate: {
             notifications_enabled?: boolean;
+            push_enabled?: boolean;
         };
         PatchedOnboardingProposalUpdateRequest: {
             payload?: components["schemas"]["OnboardingProposalPayload"];
@@ -2967,6 +3037,25 @@ export interface components {
             errors: {
                 [key: string]: unknown;
             };
+        };
+        VapidPublicKey: {
+            public_key: string;
+        };
+        WebPushSubscriptionResponse: {
+            /** Format: uuid */
+            id: string;
+            endpoint: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_seen_at: string | null;
+        };
+        WebPushSubscriptionUpsert: {
+            endpoint: string;
+            p256dh: string;
+            auth: string;
+            /** @default  */
+            user_agent: string;
         };
         WorkspaceSummaryDirector: {
             display_name: string;
@@ -7522,6 +7611,120 @@ export interface operations {
             };
         };
     };
+    v1_me_web_push_subscriptions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebPushSubscriptionUpsert"];
+                "application/x-www-form-urlencoded": components["schemas"]["WebPushSubscriptionUpsert"];
+                "multipart/form-data": components["schemas"]["WebPushSubscriptionUpsert"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebPushSubscriptionResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_me_web_push_subscriptions_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_me_web_push_subscriptions_touch_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebPushSubscriptionResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
     v1_onboarding_sessions_create: {
         parameters: {
             query?: never;
@@ -8349,6 +8552,33 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_push_vapid_public_key_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VapidPublicKey"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

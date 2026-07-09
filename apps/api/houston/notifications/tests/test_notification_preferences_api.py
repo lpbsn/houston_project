@@ -21,7 +21,7 @@ def test_get_notification_preferences_defaults_to_enabled(api_client):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"notifications_enabled": True}
+    assert response.json() == {"notifications_enabled": True, "push_enabled": False}
 
 
 def test_patch_notification_preferences_updates_value(api_client):
@@ -36,17 +36,18 @@ def test_patch_notification_preferences_updates_value(api_client):
     )
 
     assert patch_response.status_code == 200
-    assert patch_response.json() == {"notifications_enabled": False}
+    assert patch_response.json() == {"notifications_enabled": False, "push_enabled": False}
 
     get_response = api_client.get(
         notifications_preferences_url(recipient.establishment_id),
         **auth_headers(token),
     )
     assert get_response.status_code == 200
-    assert get_response.json() == {"notifications_enabled": False}
+    assert get_response.json() == {"notifications_enabled": False, "push_enabled": False}
 
     recipient.refresh_from_db()
     assert recipient.notifications_enabled is False
+    assert recipient.push_enabled is False
 
 
 def test_get_notification_preferences_requires_authentication(api_client):
@@ -94,3 +95,58 @@ def test_patch_notification_preferences_rejects_missing_field(api_client):
     )
 
     assert response.status_code == 400
+
+
+def test_patch_notification_preferences_updates_push_enabled(api_client):
+    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    token = login(api_client, user=recipient.user)
+
+    response = api_client.patch(
+        notifications_preferences_url(recipient.establishment_id),
+        {"push_enabled": True},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"notifications_enabled": True, "push_enabled": True}
+    recipient.refresh_from_db()
+    assert recipient.push_enabled is True
+
+
+def test_patch_preferences_forces_push_off_when_notifications_disabled(api_client):
+    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    recipient.push_enabled = True
+    recipient.save(update_fields=["push_enabled", "updated_at"])
+    token = login(api_client, user=recipient.user)
+
+    response = api_client.patch(
+        notifications_preferences_url(recipient.establishment_id),
+        {"notifications_enabled": False},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"notifications_enabled": False, "push_enabled": False}
+    recipient.refresh_from_db()
+    assert recipient.push_enabled is False
+
+
+def test_patch_preferences_rejects_push_when_notifications_disabled(api_client):
+    recipient = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    recipient.notifications_enabled = False
+    recipient.save(update_fields=["notifications_enabled", "updated_at"])
+    token = login(api_client, user=recipient.user)
+
+    response = api_client.patch(
+        notifications_preferences_url(recipient.establishment_id),
+        {"push_enabled": True},
+        format="json",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"notifications_enabled": False, "push_enabled": False}
+    recipient.refresh_from_db()
+    assert recipient.push_enabled is False

@@ -6,9 +6,29 @@ from houston.notifications.api.views import (
     NotificationPreferencesView,
     NotificationsListView,
     NotificationsMarkAllReadView,
+    VapidPublicKeyView,
+    WebPushSubscriptionRevokeView,
+    WebPushSubscriptionTouchView,
+    WebPushSubscriptionUpsertView,
 )
 
 urlpatterns = [
+    path("push/vapid-public-key/", VapidPublicKeyView.as_view(), name="push-vapid-public-key"),
+    path(
+        "me/web-push-subscriptions/",
+        WebPushSubscriptionUpsertView.as_view(),
+        name="web-push-subscriptions-upsert",
+    ),
+    path(
+        "me/web-push-subscriptions/<uuid:subscription_id>/touch/",
+        WebPushSubscriptionTouchView.as_view(),
+        name="web-push-subscriptions-touch",
+    ),
+    path(
+        "me/web-push-subscriptions/<uuid:subscription_id>/",
+        WebPushSubscriptionRevokeView.as_view(),
+        name="web-push-subscriptions-revoke",
+    ),
     path(
         "establishments/<uuid:establishment_id>/notifications/",
         NotificationsListView.as_view(),
