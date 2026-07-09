@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildCommentDeepLinkPath,
   buildExecutionValidationFocusPath,
+  getLocationSearchSnapshot,
   parseDetailDeepLink,
+  subscribeLocationSearch,
 } from './detail-deep-link'
 
 describe('detail deep link', () => {
@@ -46,5 +50,22 @@ describe('detail deep link', () => {
     expect(buildExecutionValidationFocusPath('exec-1')).toBe(
       '/action-plans/executions/exec-1?focus=validation',
     )
+  })
+
+  it('notifies subscribers when replaceState or pushState changes search', () => {
+    window.history.replaceState(null, '', '/action-plans/executions/exec-1')
+
+    const onChange = vi.fn()
+    const unsubscribe = subscribeLocationSearch(onChange)
+
+    window.history.replaceState(null, '', '/action-plans/executions/exec-1?focus=validation')
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(getLocationSearchSnapshot()).toBe('?focus=validation')
+
+    window.history.pushState(null, '', '/action-plans/executions/exec-1?tab=comments')
+    expect(onChange).toHaveBeenCalledTimes(2)
+    expect(getLocationSearchSnapshot()).toBe('?tab=comments')
+
+    unsubscribe()
   })
 })

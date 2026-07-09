@@ -90,8 +90,20 @@ export async function handleNotificationClick(
     }
 
     const focusedClient = await client.focus()
+
     if (typeof focusedClient.navigate === 'function') {
-      return focusedClient.navigate(url)
+      try {
+        const navigatedClient = await focusedClient.navigate(url)
+        if (navigatedClient) {
+          return navigatedClient
+        }
+      } catch {
+        // fall through to openWindow
+      }
+    }
+
+    if (clients.openWindow) {
+      return clients.openWindow(url)
     }
 
     return focusedClient

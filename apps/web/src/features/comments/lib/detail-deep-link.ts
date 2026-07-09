@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+
 export const COMMENT_DEEP_LINK_TAB = 'comments'
 export const COMMENT_DEEP_LINK_COMMENT_ID_PARAM = 'commentId'
 export const EXECUTION_VALIDATION_FOCUS = 'validation'
@@ -45,4 +47,46 @@ export function readCurrentDetailDeepLink(): DetailDeepLink {
     return { tab: null, commentId: null, focus: null }
   }
   return parseDetailDeepLink(window.location.search)
+}
+
+const DETAIL_DEEP_LINK_CHANGE_EVENT = 'houston:detail-deep-link-change'
+
+let historyPatchApplied = false
+
+function ensureHistoryPatch(): void {
+  if (historyPatchApplied || typeof window === 'undefined') {
+    return
+  }
+
+  historyPatchApplied = true
+
+  for (const method of ['pushState', 'replaceState'] as const) {
+    const original = window.history[method].bind(window.history)
+    window.history[method] = (...args: Parameters<History['pushState']>) => {
+      original(...args)
+      window.dispatchEvent(new Event(DETAIL_DEEP_LINK_CHANGE_EVENT))
+    }
+  }
+}
+
+export function getLocationSearchSnapshot(): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  return window.location.search
+}
+
+export function subscribeLocationSearch(onStoreChange: () => void): () => void {
+  ensureHistoryPatch()
+  window.addEventListener('popstate', onStoreChange)
+  window.addEventListener(DETAIL_DEEP_LINK_CHANGE_EVENT, onStoreChange)
+
+  return () => {
+    window.removeEventListener('popstate', onStoreChange)
+    window.removeEventListener(DETAIL_DEEP_LINK_CHANGE_EVENT, onStoreChange)
+  }
+}
+
+export function useLocationSearch(): string {
+  return useSyncExternalStore(subscribeLocationSearch, getLocationSearchSnapshot, () => '')
 }

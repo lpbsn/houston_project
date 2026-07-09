@@ -14,6 +14,12 @@ precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
 registerSpaNavigationFallback()
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    void self.skipWaiting()
+  }
+})
+
 self.addEventListener('push', (event) => {
   const { title, options } = buildPushNotificationOptions(parsePushPayload(event.data ?? null))
   event.waitUntil(self.registration.showNotification(title, options))

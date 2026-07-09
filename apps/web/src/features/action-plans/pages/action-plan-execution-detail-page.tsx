@@ -11,7 +11,11 @@ import {
 import { ActionLinkedSignalCard } from '@/features/action-plans/components/action-linked-signal-card'
 import { ActionLinkedSignalStrip } from '@/features/action-plans/components/action-linked-signal-strip'
 import { CommentSection } from '@/features/comments/components/comment-section'
-import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
+import {
+  parseDetailDeepLink,
+  readCurrentDetailDeepLink,
+  useLocationSearch,
+} from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
@@ -79,14 +83,32 @@ function ActionPlanExecutionDetailPageContent({
     executionId,
   )
 
-  const initialDeepLink = useMemo(() => readCurrentDetailDeepLink(), [])
+  const initialDeepLink = readCurrentDetailDeepLink()
+  const locationSearch = useLocationSearch()
   const validationActionsRef = useRef<HTMLDivElement | null>(null)
   const [activeTab, setActiveTab] = useState<ActionDetailTab>(
     initialDeepLink.tab === 'comments' ? 'comments' : 'details',
   )
   const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
   const highlightCommentId = initialDeepLink.commentId
-  const shouldFocusValidation = initialDeepLink.focus === 'validation'
+  const shouldFocusValidation = parseDetailDeepLink(locationSearch).focus === 'validation'
+  const [dismissedFocusValidationSearch, setDismissedFocusValidationSearch] = useState<string | null>(
+    null,
+  )
+  const [previousShouldFocusValidation, setPreviousShouldFocusValidation] =
+    useState(shouldFocusValidation)
+
+  if (shouldFocusValidation !== previousShouldFocusValidation) {
+    setPreviousShouldFocusValidation(shouldFocusValidation)
+    if (shouldFocusValidation) {
+      setDismissedFocusValidationSearch(null)
+    }
+  }
+
+  const resolvedActiveTab: ActionDetailTab =
+    shouldFocusValidation && locationSearch !== dismissedFocusValidationSearch
+      ? 'details'
+      : activeTab
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
@@ -124,9 +146,9 @@ function ActionPlanExecutionDetailPageContent({
     permissionHints.can_validate ||
     permissionHints.can_reopen ||
     canShowActionPlanExecutionCancel(permissionHints, { isTerminal })
-  const showStickyFooter = activeTab === 'details' && canShowLifecycleFooter
+  const showStickyFooter = resolvedActiveTab === 'details' && canShowLifecycleFooter
   const shouldScrollToValidationActions =
-    shouldFocusValidation && activeTab === 'details' && permissionHints.can_validate
+    shouldFocusValidation && resolvedActiveTab === 'details' && permissionHints.can_validate
 
   useEffect(() => {
     if (!shouldScrollToValidationActions) {
@@ -144,6 +166,9 @@ function ActionPlanExecutionDetailPageContent({
     null
 
   const handleTabChange = (tab: ActionDetailTab) => {
+    if (shouldFocusValidation) {
+      setDismissedFocusValidationSearch(locationSearch)
+    }
     if (tab === 'comments') {
       setHasOpenedComments(true)
     }
@@ -293,7 +318,7 @@ function ActionPlanExecutionDetailPageContent({
       ) : null}
 
       <div className="px-3 pt-2">
-        <ActionDetailTabs activeTab={activeTab} onChange={handleTabChange} />
+        <ActionDetailTabs activeTab={resolvedActiveTab} onChange={handleTabChange} />
       </div>
 
       <div
@@ -306,7 +331,7 @@ function ActionPlanExecutionDetailPageContent({
           role="tabpanel"
           id="execution-detail-panel-details"
           aria-labelledby="execution-detail-tab-details"
-          className={cn('flex flex-col gap-2.5', activeTab !== 'details' && 'hidden')}
+          className={cn('flex flex-col gap-2.5', resolvedActiveTab !== 'details' && 'hidden')}
         >
           <ActionPlanExecutionDetailHeader
             execution={execution}
@@ -348,7 +373,7 @@ function ActionPlanExecutionDetailPageContent({
             role="tabpanel"
             id="execution-detail-panel-comments"
             aria-labelledby="execution-detail-tab-comments"
-            className={cn(activeTab !== 'comments' && 'hidden')}
+            className={cn(resolvedActiveTab !== 'comments' && 'hidden')}
           >
             <CommentSection
               establishmentId={establishmentId}

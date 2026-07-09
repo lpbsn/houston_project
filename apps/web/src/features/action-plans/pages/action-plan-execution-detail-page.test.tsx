@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
@@ -293,6 +293,40 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(screen.getByText('Plan nettoyage terrasse')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull()
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('scrolls validation actions when focus=validation arrives after mount', async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    window.history.replaceState(null, '', '/action-plans/executions/exec-1')
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'pending_validation',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: true,
+          can_reopen: false,
+          can_cancel: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    window.history.replaceState(null, '', '/action-plans/executions/exec-1?focus=validation')
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end' })
+    })
   })
 
   it('shows sticky footer only on Détails tab', () => {

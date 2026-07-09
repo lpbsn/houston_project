@@ -99,4 +99,55 @@ describe('handleNotificationClick', () => {
     expect(openWindow).toHaveBeenCalledWith(`${origin}/signals/abc`)
     expect(result).toEqual({ url: `${origin}/signals/abc` })
   })
+
+  it('opens target url when navigate is unavailable on focused client', async () => {
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution` })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/action-plans/executions/exec-1?focus=validation` })
+    const targetUrl = `${origin}/action-plans/executions/exec-1?focus=validation`
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/action-plans/executions/exec-1?focus=validation' },
+      origin,
+    )
+
+    expect(focus).toHaveBeenCalled()
+    expect(openWindow).toHaveBeenCalledWith(targetUrl)
+    expect(result).toEqual({ url: targetUrl })
+  })
+
+  it('opens target url when navigate throws', async () => {
+    const navigate = vi.fn().mockRejectedValue(new Error('navigate failed'))
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution`, navigate })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/signals/abc` })
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/signals/abc' },
+      origin,
+    )
+
+    expect(navigate).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(openWindow).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(result).toEqual({ url: `${origin}/signals/abc` })
+  })
+
+  it('opens target url when navigate returns null', async () => {
+    const navigate = vi.fn().mockResolvedValue(null)
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution`, navigate })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/signals/abc` })
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/signals/abc' },
+      origin,
+    )
+
+    expect(navigate).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(openWindow).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(result).toEqual({ url: `${origin}/signals/abc` })
+  })
 })
