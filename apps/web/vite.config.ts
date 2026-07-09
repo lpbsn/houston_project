@@ -11,6 +11,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'prompt',
       injectRegister: false,
       devOptions: {
@@ -48,8 +51,10 @@ export default defineConfig({
           },
         ],
       },
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+      },
       workbox: {
-        runtimeCaching: [],
         navigateFallbackDenylist: [/^\/api/, /^\/ws/],
       },
     }),

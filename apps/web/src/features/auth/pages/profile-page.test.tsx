@@ -56,13 +56,32 @@ const { authState } = vi.hoisted(() => ({
   },
 }))
 
+const webPushToggleState = vi.hoisted(() => ({
+  current: {
+    state: 'disabled' as
+      | 'ios_not_installed'
+      | 'unsupported'
+      | 'permission_denied'
+      | 'enabled'
+      | 'disabled',
+    message: null as string | null,
+    notificationsBlockedMessage: null as string | null,
+    checked: false,
+    disabled: false,
+    isPending: false,
+    isError: false,
+    errorMessage: null as string | null,
+    onToggle: vi.fn(),
+  },
+}))
+
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => authState.current,
 }))
 
 vi.mock('@/features/notifications/hooks', () => ({
   useNotificationPreferencesQuery: () => ({
-    data: { notifications_enabled: true },
+    data: { notifications_enabled: true, push_enabled: false },
     isLoading: false,
     isError: false,
   }),
@@ -73,11 +92,26 @@ vi.mock('@/features/notifications/hooks', () => ({
   }),
 }))
 
+vi.mock('@/features/push/hooks', () => ({
+  useWebPushToggle: () => webPushToggleState.current,
+}))
+
 afterEach(() => {
   cleanup()
   onNavigate.mockReset()
   onSignOut.mockReset()
   mutate.mockReset()
+  webPushToggleState.current = {
+    state: 'disabled',
+    message: null,
+    notificationsBlockedMessage: null,
+    checked: false,
+    disabled: false,
+    isPending: false,
+    isError: false,
+    errorMessage: null,
+    onToggle: vi.fn(),
+  }
 })
 
 describe('ProfilePage', () => {
@@ -129,7 +163,89 @@ describe('ProfilePage', () => {
     expect(notificationSwitch.getAttribute('aria-checked')).toBe('true')
 
     fireEvent.click(notificationSwitch)
-    expect(mutate).toHaveBeenCalledWith(false)
+    expect(mutate).toHaveBeenCalledWith({ notifications_enabled: false })
+  })
+
+  it('renders push toggle states with explicit helper messages', () => {
+    const cases = [
+      {
+        state: 'unsupported',
+        message: 'Les notifications push ne sont pas disponibles sur cet appareil.',
+      },
+      {
+        state: 'ios_not_installed',
+        message: "Ajoutez l'application à l'écran d'accueil pour activer les notifications push.",
+      },
+      {
+        state: 'permission_denied',
+        message: 'Les notifications sont bloquées. Autorisez-les dans les réglages du navigateur.',
+      },
+      {
+        state: 'enabled',
+        message: null,
+        checked: true,
+      },
+      {
+        state: 'disabled',
+        message: null,
+        checked: false,
+      },
+    ] as const
+
+    for (const testCase of cases) {
+      webPushToggleState.current = {
+        state: testCase.state,
+        message: testCase.message,
+        notificationsBlockedMessage: null,
+        checked: 'checked' in testCase ? testCase.checked : false,
+        disabled: testCase.state !== 'enabled' && testCase.state !== 'disabled',
+        isPending: false,
+        isError: false,
+        errorMessage: null,
+        onToggle: vi.fn(),
+      }
+
+      const { unmount } = render(
+        createElement(ProfilePage, {
+          onNavigate,
+          onSignOut,
+        }),
+      )
+
+      const pushSwitch = screen.getByRole('switch', { name: 'Notifications push' })
+      expect(pushSwitch.getAttribute('aria-checked')).toBe(
+        'checked' in testCase && testCase.checked ? 'true' : 'false',
+      )
+
+      if (testCase.message) {
+        expect(screen.getByText(testCase.message)).toBeTruthy()
+      }
+
+      unmount()
+    }
+  })
+
+  it('shows blocked message when in-app notifications are disabled', () => {
+    webPushToggleState.current = {
+      state: 'disabled',
+      message: null,
+      notificationsBlockedMessage: "Activez d'abord les notifications.",
+      checked: false,
+      disabled: true,
+      isPending: false,
+      isError: false,
+      errorMessage: null,
+      onToggle: vi.fn(),
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByText("Activez d'abord les notifications.")).toBeTruthy()
   })
 
   it('hides management section when permission hints deny access', () => {

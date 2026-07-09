@@ -9,6 +9,7 @@ import {
   updateNotificationPreferences,
   type NotificationListStatus,
 } from './api'
+import type { NotificationPreferencesUpdate } from './types'
 
 export function useNotificationsInfiniteQuery(
   establishmentId: string | null,
@@ -99,13 +100,11 @@ export function useUpdateNotificationPreferencesMutation(establishmentId: string
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (notificationsEnabled: boolean) => {
+    mutationFn: async (input: NotificationPreferencesUpdate) => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return updateNotificationPreferences(establishmentId, {
-        notifications_enabled: notificationsEnabled,
-      })
+      return updateNotificationPreferences(establishmentId, input)
     },
     onSuccess: () => {
       if (!establishmentId) {
