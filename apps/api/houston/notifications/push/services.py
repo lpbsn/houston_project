@@ -23,6 +23,15 @@ from houston.notifications.push.sender import (
 
 logger = logging.getLogger(__name__)
 
+TERMINAL_PUSH_DELIVERY_STATUSES = frozenset(
+    {
+        PushDelivery.Status.SENT,
+        PushDelivery.Status.FAILED,
+        PushDelivery.Status.SKIPPED,
+        PushDelivery.Status.PROCESSING,
+    }
+)
+
 
 def get_web_push_subscription_for_user(
     *,
@@ -158,10 +167,28 @@ def _queue_push_delivery(*, notification_id: uuid.UUID, subscription_id: uuid.UU
         return delivery
 
 
-def _mark_push_delivery_skipped(*, delivery: PushDelivery, error_code: str) -> None:
-    delivery.status = PushDelivery.Status.SKIPPED
-    delivery.error_code = error_code
-    delivery.save(update_fields=["status", "error_code", "updated_at"])
+def _try_claim_push_delivery_for_send(*, delivery_id: uuid.UUID, now) -> bool:
+    return (
+        PushDelivery.objects.filter(
+            pk=delivery_id,
+            status=PushDelivery.Status.QUEUED,
+        ).update(status=PushDelivery.Status.PROCESSING, updated_at=now)
+        == 1
+    )
+
+
+def _try_mark_push_delivery_skipped(*, delivery_id: uuid.UUID, error_code: str, now) -> bool:
+    return (
+        PushDelivery.objects.filter(
+            pk=delivery_id,
+            status=PushDelivery.Status.QUEUED,
+        ).update(
+            status=PushDelivery.Status.SKIPPED,
+            error_code=error_code,
+            updated_at=now,
+        )
+        == 1
+    )
 
 
 def _mark_push_delivery_failed(*, delivery: PushDelivery, error_code: str) -> None:
@@ -247,15 +274,22 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
             notification_id=notification.id,
             subscription_id=subscription.id,
         )
-        if delivery.status == PushDelivery.Status.SENT:
-            continue
-        if delivery.status == PushDelivery.Status.FAILED:
+        if delivery.status in TERMINAL_PUSH_DELIVERY_STATUSES:
             continue
 
         if push_url is None:
-            _mark_push_delivery_skipped(delivery=delivery, error_code="missing_navigation")
-            skipped_count += 1
+            if _try_mark_push_delivery_skipped(
+                delivery_id=delivery.id,
+                error_code="missing_navigation",
+                now=now,
+            ):
+                skipped_count += 1
             continue
+
+        if not _try_claim_push_delivery_for_send(delivery_id=delivery.id, now=now):
+            continue
+
+        delivery.refresh_from_db()
 
         try:
             send_web_push(subscription=subscription, payload=payload)
@@ -265,6 +299,21 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
             failed_count += 1
             if should_revoke_subscription_for_error(exc):
                 _revoke_subscription_internal(subscription=subscription, now=now)
+            continue
+        except Exception as exc:
+            _mark_push_delivery_failed(delivery=delivery, error_code="unexpected_error")
+            failed_count += 1
+            logger.warning(
+                "push_delivery_unexpected_error",
+                extra={
+                    "event": "push_delivery_unexpected_error",
+                    "notification_id": str(notification.id),
+                    "subscription_id": str(subscription.id),
+                    "error_code": "unexpected_error",
+                    "exception_class": type(exc).__name__,
+                },
+                exc_info=False,
+            )
             continue
 
         _mark_push_delivery_sent(delivery=delivery, now=now)
