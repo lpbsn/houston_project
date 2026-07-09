@@ -128,6 +128,7 @@ class WebPushSubscription(BaseModel):
 class PushDelivery(BaseModel):
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
+        PROCESSING = "processing", "Processing"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
         SKIPPED = "skipped", "Skipped"
