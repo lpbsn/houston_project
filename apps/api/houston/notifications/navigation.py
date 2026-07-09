@@ -8,6 +8,8 @@ from houston.notifications.models import Notification
 
 COMMENT_DEEP_LINK_TAB = "comments"
 COMMENT_DEEP_LINK_COMMENT_ID_PARAM = "commentId"
+EXECUTION_VALIDATION_FOCUS = "validation"
+EXECUTION_VALIDATION_FOCUS_PARAM = "focus"
 
 
 def resolve_comment_notification_navigation(comment: Comment) -> dict | None:
@@ -50,14 +52,26 @@ def build_comment_navigation_index(
     return index
 
 
+def _append_query(path: str, params: dict[str, str]) -> str:
+    query = urlencode(params)
+    return f"{path}?{query}"
+
+
 def _build_comment_deep_link_path(parent_path: str, comment_id: uuid.UUID) -> str:
-    query = urlencode(
+    return _append_query(
+        parent_path,
         {
             "tab": COMMENT_DEEP_LINK_TAB,
             COMMENT_DEEP_LINK_COMMENT_ID_PARAM: str(comment_id),
-        }
+        },
     )
-    return f"{parent_path}?{query}"
+
+
+def _build_execution_validation_focus_path(execution_id: uuid.UUID) -> str:
+    return _append_query(
+        f"/action-plans/executions/{execution_id}",
+        {EXECUTION_VALIDATION_FOCUS_PARAM: EXECUTION_VALIDATION_FOCUS},
+    )
 
 
 def _resolve_comment_notification_url(
@@ -97,10 +111,15 @@ def resolve_notification_url(notification: Notification) -> str | None:
     subject_id = notification.subject_id
 
     if subject_type == Notification.SubjectType.ACTION_PLAN_EXECUTION:
+        if notification.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION:
+            return _build_execution_validation_focus_path(subject_id)
         return f"/action-plans/executions/{subject_id}"
 
     if subject_type == Notification.SubjectType.SIGNAL:
         return f"/signals/{subject_id}"
+
+    if subject_type == Notification.SubjectType.CHAT_CONVERSATION:
+        return f"/chat/{subject_id}"
 
     if subject_type == Notification.SubjectType.COMMENT:
         return _resolve_comment_notification_url(

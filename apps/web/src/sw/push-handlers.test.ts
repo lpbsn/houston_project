@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildPushNotificationOptions,
+  handleNotificationClick,
   parsePushPayload,
   resolveNotificationClickUrl,
 } from './push-handlers'
@@ -38,8 +39,115 @@ describe('push-handlers', () => {
       'https://app.example.com/signals/abc',
     )
     expect(
+      resolveNotificationClickUrl(
+        { url: '/action-plans/executions/exec-1?focus=validation' },
+        'https://app.example.com',
+      ),
+    ).toBe('https://app.example.com/action-plans/executions/exec-1?focus=validation')
+    expect(
       resolveNotificationClickUrl({ url: 'https://app.example.com/chat/1' }, 'https://app.example.com'),
     ).toBe('https://app.example.com/chat/1')
     expect(resolveNotificationClickUrl(undefined, 'https://app.example.com')).toBeNull()
+  })
+})
+
+describe('handleNotificationClick', () => {
+  const origin = 'https://app.example.com'
+
+  it('returns null when notification data has no url', async () => {
+    const openWindow = vi.fn()
+    const result = await handleNotificationClick(
+      { matchAll: vi.fn().mockResolvedValue([]), openWindow },
+      {},
+      origin,
+    )
+
+    expect(result).toBeNull()
+    expect(openWindow).not.toHaveBeenCalled()
+  })
+
+  it('focuses and navigates an existing same-origin client', async () => {
+    const navigate = vi.fn().mockResolvedValue({ url: `${origin}/signals/abc` })
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution`, navigate })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn()
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/signals/abc' },
+      origin,
+    )
+
+    expect(focus).toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(result).toEqual({ url: `${origin}/signals/abc` })
+  })
+
+  it('opens a new window when no same-origin client exists', async () => {
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/signals/abc` })
+
+    const result = await handleNotificationClick(
+      {
+        matchAll: vi.fn().mockResolvedValue([]),
+        openWindow,
+      },
+      { url: '/signals/abc' },
+      origin,
+    )
+
+    expect(openWindow).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(result).toEqual({ url: `${origin}/signals/abc` })
+  })
+
+  it('opens target url when navigate is unavailable on focused client', async () => {
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution` })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/action-plans/executions/exec-1?focus=validation` })
+    const targetUrl = `${origin}/action-plans/executions/exec-1?focus=validation`
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/action-plans/executions/exec-1?focus=validation' },
+      origin,
+    )
+
+    expect(focus).toHaveBeenCalled()
+    expect(openWindow).toHaveBeenCalledWith(targetUrl)
+    expect(result).toEqual({ url: targetUrl })
+  })
+
+  it('opens target url when navigate throws', async () => {
+    const navigate = vi.fn().mockRejectedValue(new Error('navigate failed'))
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution`, navigate })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/signals/abc` })
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/signals/abc' },
+      origin,
+    )
+
+    expect(navigate).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(openWindow).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(result).toEqual({ url: `${origin}/signals/abc` })
+  })
+
+  it('opens target url when navigate returns null', async () => {
+    const navigate = vi.fn().mockResolvedValue(null)
+    const focus = vi.fn().mockResolvedValue({ url: `${origin}/execution`, navigate })
+    const matchAll = vi.fn().mockResolvedValue([{ url: `${origin}/execution`, focus }])
+    const openWindow = vi.fn().mockResolvedValue({ url: `${origin}/signals/abc` })
+
+    const result = await handleNotificationClick(
+      { matchAll, openWindow },
+      { url: '/signals/abc' },
+      origin,
+    )
+
+    expect(navigate).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(openWindow).toHaveBeenCalledWith(`${origin}/signals/abc`)
+    expect(result).toEqual({ url: `${origin}/signals/abc` })
   })
 })
