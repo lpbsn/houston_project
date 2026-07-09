@@ -5,7 +5,8 @@ import logging
 import pytest
 from django.utils import timezone
 
-from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.constants import SCHEDULE_STATUS_ACTIVE, SCHEDULE_STATUS_INACTIVE
+from houston.action_plans.models import ActionPlanExecution, ActionPlanSchedule
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.services import deactivate_action_plan
 from houston.action_plans.tasks import materialize_action_plan_schedules_horizon_task
@@ -117,6 +118,10 @@ def test_horizon_task_skips_invalid_schedule_and_materializes_valid_one(
         **window,
     )
     deactivate_action_plan(action_plan=invalid_catalog_plan, actor=owner_membership)
+    invalid_schedule.refresh_from_db()
+    assert invalid_schedule.status == SCHEDULE_STATUS_INACTIVE
+    ActionPlanSchedule.objects.filter(pk=invalid_schedule.pk).update(status=SCHEDULE_STATUS_ACTIVE)
+    invalid_schedule.refresh_from_db()
 
     ActionPlanExecution.objects.filter(
         action_plan_schedule_id__in=[valid_schedule.id, invalid_schedule.id],

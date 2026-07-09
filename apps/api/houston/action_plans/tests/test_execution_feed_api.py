@@ -10,12 +10,15 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    SCHEDULE_STATUS_ACTIVE,
+    SCHEDULE_STATUS_INACTIVE,
     TASK_STATUS_DONE,
 )
 from houston.action_plans.models import (
     ActionPlanAssignee,
     ActionPlanExecution,
     ActionPlanExecutionTask,
+    ActionPlanSchedule,
 )
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.selectors import action_plan_execution_overdue
@@ -842,6 +845,10 @@ def test_feed_survives_invalid_visible_schedule(
     schedule.save(update_fields=["last_materialized_at", "updated_at"])
 
     deactivate_action_plan(action_plan=catalog_action_plan, actor=owner_membership)
+    schedule.refresh_from_db()
+    assert schedule.status == SCHEDULE_STATUS_INACTIVE
+    ActionPlanSchedule.objects.filter(pk=schedule.pk).update(status=SCHEDULE_STATUS_ACTIVE)
+    schedule.refresh_from_db()
 
     materialization_logger = "houston.action_plans.materialization"
     api_exceptions_logger = "houston.core.api.exceptions"

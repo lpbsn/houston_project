@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import pytest
 
-from houston.action_plans.constants import CATALOG_STATUS_ACTIVE, CATALOG_STATUS_INACTIVE
+from houston.action_plans.constants import (
+    CATALOG_STATUS_ACTIVE,
+    CATALOG_STATUS_INACTIVE,
+    SCHEDULE_STATUS_INACTIVE,
+)
 from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.tests.helpers import (
+    action_plan_schedule_url,
     action_plan_url,
     action_plans_url,
     api_assignee_payload,
+    api_recurring_schedule_payload,
     api_task_payload,
 )
 from houston.signals.models import Signal
@@ -418,6 +424,50 @@ def test_activate_and_deactivate_catalog_plan(api_client, owner_membership, busi
     )
     assert activate.status_code == 200
     assert activate.json()["catalog_status"] == CATALOG_STATUS_ACTIVE
+
+
+def test_deactivate_catalog_api_cascades_schedules(
+    api_client,
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    token = login(api_client, user=owner_membership.user)
+    create = api_client.post(
+        action_plans_url(owner_membership.establishment_id),
+        _catalog_create_payload(
+            business_unit=business_unit,
+            tasks=[api_task_payload(task="Task", business_unit=business_unit)],
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    plan_id = create.json()["id"]
+    schedule_create = api_client.post(
+        action_plan_schedule_url(owner_membership.establishment_id, plan_id),
+        api_recurring_schedule_payload(
+            staff_membership=staff_membership,
+            business_unit=business_unit,
+        ),
+        format="json",
+        **auth_headers(token),
+    )
+    assert schedule_create.status_code == 201, schedule_create.json()
+    schedule_id = schedule_create.json()["id"]
+
+    deactivate = api_client.post(
+        action_plan_url(owner_membership.establishment_id, plan_id, "deactivate/"),
+        **auth_headers(token),
+    )
+    assert deactivate.status_code == 200
+    assert deactivate.json()["catalog_status"] == CATALOG_STATUS_INACTIVE
+
+    schedule_detail = api_client.get(
+        f"/api/v1/establishments/{owner_membership.establishment_id}/action-plan-schedules/{schedule_id}/",
+        **auth_headers(token),
+    )
+    assert schedule_detail.status_code == 200
+    assert schedule_detail.json()["status"] == SCHEDULE_STATUS_INACTIVE
 
 
 def test_use_catalog_plan_creates_execution(

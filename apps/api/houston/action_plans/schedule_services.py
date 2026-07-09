@@ -664,21 +664,18 @@ def update_action_plan_schedule(
     return schedule
 
 
-@transaction.atomic
-def deactivate_action_plan_schedule(
+def _deactivate_schedule_core(
     *,
     schedule: ActionPlanSchedule,
-    actor: EstablishmentMembership,
+    allow_active_started: bool = False,
 ) -> ActionPlanSchedule:
-    if not can_manage_action_plan_schedule(actor, schedule):
-        raise ActionPlanPermissionError("Not allowed to deactivate this schedule.")
-
-    active_execution = get_active_started_execution_for_schedule(schedule=schedule)
-    if active_execution is not None:
-        raise ActionPlanConflictError(
-            "Cannot deactivate schedule while an execution is in progress.",
-            active_execution_id=active_execution.id,
-        )
+    if not allow_active_started:
+        active_execution = get_active_started_execution_for_schedule(schedule=schedule)
+        if active_execution is not None:
+            raise ActionPlanConflictError(
+                "Cannot deactivate schedule while an execution is in progress.",
+                active_execution_id=active_execution.id,
+            )
 
     now = timezone.now()
     for execution in schedule.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS):
@@ -690,3 +687,27 @@ def deactivate_action_plan_schedule(
     schedule.status = SCHEDULE_STATUS_INACTIVE
     schedule.save(update_fields=["status", "updated_at"])
     return schedule
+
+
+def deactivate_schedules_for_catalog_deactivation(
+    *,
+    action_plan: ActionPlan,
+) -> int:
+    active_schedules = action_plan.schedules.filter(status=SCHEDULE_STATUS_ACTIVE)
+    deactivated_count = 0
+    for schedule in active_schedules:
+        _deactivate_schedule_core(schedule=schedule, allow_active_started=True)
+        deactivated_count += 1
+    return deactivated_count
+
+
+@transaction.atomic
+def deactivate_action_plan_schedule(
+    *,
+    schedule: ActionPlanSchedule,
+    actor: EstablishmentMembership,
+) -> ActionPlanSchedule:
+    if not can_manage_action_plan_schedule(actor, schedule):
+        raise ActionPlanPermissionError("Not allowed to deactivate this schedule.")
+
+    return _deactivate_schedule_core(schedule=schedule, allow_active_started=False)

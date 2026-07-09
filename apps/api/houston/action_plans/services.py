@@ -1012,6 +1012,12 @@ def deactivate_action_plan(
     if not action_plan.is_reusable:
         raise ActionPlanValidationError("Only reusable action plans can be deactivated.")
 
+    from houston.action_plans.schedule_services import (
+        deactivate_schedules_for_catalog_deactivation,
+    )
+
+    deactivate_schedules_for_catalog_deactivation(action_plan=action_plan)
+
     action_plan.catalog_status = CATALOG_STATUS_INACTIVE
     action_plan.save(update_fields=["catalog_status", "updated_at"])
     from houston.action_plans.realtime import schedule_action_plan_invalidation
