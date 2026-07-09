@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
@@ -22,6 +22,35 @@ def get_web_push_subscription_for_user(
     return WebPushSubscription.objects.filter(pk=subscription_id, user=user).first()
 
 
+def _refresh_web_push_subscription(
+    *,
+    subscription: WebPushSubscription,
+    user,
+    p256dh: str,
+    auth: str,
+    user_agent: str,
+    now,
+) -> WebPushSubscription:
+    if subscription.user_id != user.id:
+        raise WebPushSubscriptionValidationError("Endpoint already registered to another user.")
+    subscription.p256dh = p256dh
+    subscription.auth = auth
+    subscription.user_agent = user_agent
+    subscription.last_seen_at = now
+    subscription.revoked_at = None
+    subscription.save(
+        update_fields=[
+            "p256dh",
+            "auth",
+            "user_agent",
+            "last_seen_at",
+            "revoked_at",
+            "updated_at",
+        ],
+    )
+    return subscription
+
+
 @transaction.atomic
 def upsert_web_push_subscription(
     *,
@@ -34,33 +63,37 @@ def upsert_web_push_subscription(
     now = timezone.now()
     existing = WebPushSubscription.objects.filter(endpoint=endpoint).first()
     if existing is not None:
-        if existing.user_id != user.id:
-            raise WebPushSubscriptionValidationError("Endpoint already registered to another user.")
-        existing.p256dh = p256dh
-        existing.auth = auth
-        existing.user_agent = user_agent
-        existing.last_seen_at = now
-        existing.revoked_at = None
-        existing.save(
-            update_fields=[
-                "p256dh",
-                "auth",
-                "user_agent",
-                "last_seen_at",
-                "revoked_at",
-                "updated_at",
-            ],
+        return _refresh_web_push_subscription(
+            subscription=existing,
+            user=user,
+            p256dh=p256dh,
+            auth=auth,
+            user_agent=user_agent,
+            now=now,
         )
-        return existing
 
-    return WebPushSubscription.objects.create(
-        user=user,
-        endpoint=endpoint,
-        p256dh=p256dh,
-        auth=auth,
-        user_agent=user_agent,
-        last_seen_at=now,
-    )
+    try:
+        with transaction.atomic():
+            return WebPushSubscription.objects.create(
+                user=user,
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth,
+                user_agent=user_agent,
+                last_seen_at=now,
+            )
+    except IntegrityError:
+        existing = WebPushSubscription.objects.filter(endpoint=endpoint).first()
+        if existing is None:
+            raise
+        return _refresh_web_push_subscription(
+            subscription=existing,
+            user=user,
+            p256dh=p256dh,
+            auth=auth,
+            user_agent=user_agent,
+            now=now,
+        )
 
 
 @transaction.atomic
@@ -97,6 +130,23 @@ def revoke_subscription(
     return subscription
 
 
+def _queue_push_delivery(*, notification_id: uuid.UUID, subscription_id: uuid.UUID) -> bool:
+    try:
+        _, created = PushDelivery.objects.get_or_create(
+            notification_id=notification_id,
+            subscription_id=subscription_id,
+            defaults={"status": PushDelivery.Status.QUEUED},
+        )
+        return created
+    except IntegrityError:
+        if PushDelivery.objects.filter(
+            notification_id=notification_id,
+            subscription_id=subscription_id,
+        ).exists():
+            return False
+        raise
+
+
 def run_push_for_notification(notification_id: uuid.UUID) -> int:
     if not settings.HOUSTON_PUSH_ENABLED:
         return 0
@@ -130,12 +180,10 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
 
     created_count = 0
     for subscription in subscriptions:
-        _, created = PushDelivery.objects.get_or_create(
+        if _queue_push_delivery(
             notification_id=notification.id,
             subscription_id=subscription.id,
-            defaults={"status": PushDelivery.Status.QUEUED},
-        )
-        if created:
+        ):
             created_count += 1
 
     logger.info(
