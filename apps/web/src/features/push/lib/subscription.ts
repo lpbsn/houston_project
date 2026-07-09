@@ -1,4 +1,10 @@
-import { fetchVapidPublicKey, upsertWebPushSubscription } from '../api'
+import { deleteWebPushSubscription, fetchVapidPublicKey, upsertWebPushSubscription } from '../api'
+import type { WebPushSubscriptionResponse } from '../types'
+
+export type WebPushRegistration = {
+  pushSubscription: PushSubscription
+  serverSubscription: WebPushSubscriptionResponse
+}
 
 function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
@@ -59,7 +65,7 @@ export async function subscribeToWebPush(): Promise<PushSubscription> {
   })
 }
 
-export async function registerWebPushSubscription(): Promise<PushSubscription> {
+export async function registerWebPushSubscription(): Promise<WebPushRegistration> {
   const subscription = await subscribeToWebPush()
   const p256dhKey = subscription.getKey('p256dh')
   const authKey = subscription.getKey('auth')
@@ -68,12 +74,24 @@ export async function registerWebPushSubscription(): Promise<PushSubscription> {
     throw new Error('Impossible de lire la subscription push.')
   }
 
-  await upsertWebPushSubscription({
+  const serverSubscription = await upsertWebPushSubscription({
     endpoint: subscription.endpoint,
     p256dh: arrayBufferToBase64Url(p256dhKey),
     auth: arrayBufferToBase64Url(authKey),
     user_agent: navigator.userAgent,
   })
 
-  return subscription
+  return {
+    pushSubscription: subscription,
+    serverSubscription,
+  }
+}
+
+export async function rollbackWebPushRegistration(
+  registration: WebPushRegistration,
+): Promise<void> {
+  await Promise.allSettled([
+    deleteWebPushSubscription(registration.serverSubscription.id),
+    registration.pushSubscription.unsubscribe(),
+  ])
 }

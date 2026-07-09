@@ -63,3 +63,24 @@ export async function upsertWebPushSubscription(
 
   return assertPushData<WebPushSubscriptionResponse>(result)
 }
+
+export async function deleteWebPushSubscription(subscriptionId: string): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.DELETE('/api/v1/me/web-push-subscriptions/{subscription_id}/', {
+        params: {
+          path: {
+            subscription_id: subscriptionId,
+          },
+        },
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.response.ok) {
+    return
+  }
+
+  throw parseError(result.response, result.error)
+}

@@ -6,11 +6,13 @@ import {
   parsePushPayload,
   resolveNotificationClickUrl,
 } from './sw/push-handlers'
+import { registerSpaNavigationFallback } from './sw/spa-navigation'
 
 declare const self: ServiceWorkerGlobalScope
 
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
+registerSpaNavigationFallback()
 
 self.addEventListener('push', (event) => {
   const { title, options } = buildPushNotificationOptions(parsePushPayload(event.data ?? null))

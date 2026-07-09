@@ -54,9 +54,6 @@ export default defineConfig({
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
       },
-      workbox: {
-        navigateFallbackDenylist: [/^\/api/, /^\/ws/],
-      },
     }),
   ],
   resolve: {

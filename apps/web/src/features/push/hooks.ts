@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
 
 import { useUpdateNotificationPreferencesMutation } from '@/features/notifications/hooks'
 
 import { getLocalPushSubscription } from './lib/local-subscription'
-import { registerWebPushSubscription } from './lib/subscription'
+import { registerWebPushSubscription, rollbackWebPushRegistration } from './lib/subscription'
 import {
   getBrowserPushSupportEnvironment,
   getPushToggleMessage,
@@ -26,7 +25,7 @@ export function useWebPushToggle(
   options: { isPreferencesLoading?: boolean } = {},
 ) {
   const queryClient = useQueryClient()
-  const env = useMemo(() => getBrowserPushSupportEnvironment(), [])
+  const env = getBrowserPushSupportEnvironment()
   const updatePreferencesMutation = useUpdateNotificationPreferencesMutation(establishmentId)
 
   const localSubscriptionQuery = useQuery({
@@ -52,10 +51,15 @@ export function useWebPushToggle(
         throw new Error('Établissement non sélectionné.')
       }
 
-      await registerWebPushSubscription()
-      return updatePreferencesMutation.mutateAsync({ push_enabled: true })
+      const registration = await registerWebPushSubscription()
+      try {
+        return await updatePreferencesMutation.mutateAsync({ push_enabled: true })
+      } catch (error) {
+        await rollbackWebPushRegistration(registration)
+        throw error
+      }
     },
-    onSuccess: () => {
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: pushQueryKeys.localSubscription })
     },
   })
@@ -75,10 +79,12 @@ export function useWebPushToggle(
 
   const handleToggle = (checked: boolean) => {
     if (checked) {
+      updatePreferencesMutation.reset()
       enablePushMutation.mutate()
       return
     }
 
+    enablePushMutation.reset()
     updatePreferencesMutation.mutate({ push_enabled: false })
   }
 
