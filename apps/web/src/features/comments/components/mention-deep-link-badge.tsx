@@ -10,25 +10,34 @@ export function useMentionDeepLinkBadge(
   highlightCommentId: string | null | undefined,
 ): boolean {
   const isTarget = highlightCommentId != null && highlightCommentId === commentId
-  const [showBadge, setShowBadge] = useState(isTarget)
+  const targetKey = isTarget ? `${commentId}:${highlightCommentId}` : null
+
+  const [session, setSession] = useState<{ targetKey: string | null; expired: boolean }>({
+    targetKey: null,
+    expired: false,
+  })
+
+  if (targetKey !== session.targetKey) {
+    setSession({ targetKey, expired: false })
+  }
 
   useEffect(() => {
-    if (!isTarget) {
-      setShowBadge(false)
+    if (!targetKey) {
       return
     }
 
-    setShowBadge(true)
     const timeoutId = window.setTimeout(() => {
-      setShowBadge(false)
+      setSession((prev) =>
+        prev.targetKey === targetKey ? { ...prev, expired: true } : prev,
+      )
     }, MENTION_DEEP_LINK_BADGE_DURATION_MS)
 
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [commentId, highlightCommentId, isTarget])
+  }, [targetKey])
 
-  return showBadge
+  return targetKey != null && !session.expired
 }
 
 type MentionDeepLinkBadgeProps = {
