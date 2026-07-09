@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from houston.action_plans.services import create_action_plan_with_execution
@@ -127,15 +129,43 @@ def test_resolve_notification_url_for_execution_comment_mention():
     )
 
 
-def test_resolve_notification_url_returns_none_for_chat_conversation():
+def test_resolve_notification_url_for_pending_validation_includes_focus():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    signal, maintenance = _signal(owner)
+    assign_business_unit_scope(staff, maintenance)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner.establishment_id,
+        created_by=owner,
+        pilot_business_unit_id=maintenance.id,
+        title="Linked execution",
+        source_signal_id=signal.id,
+        tasks=[build_task_payload(task="Inspect", business_unit=maintenance, position=1)],
+        assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+    )
+    notification = create_test_notification(
+        recipient=staff,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution.id,
+    )
+
+    assert resolve_notification_url(notification) == (
+        f"/action-plans/executions/{execution.id}?focus=validation"
+    )
+
+
+def test_resolve_notification_url_for_chat_conversation():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    conversation_id = uuid.uuid4()
     notification = create_test_notification(
         recipient=owner,
         event_key=Notification.EventKey.CHAT_MESSAGE_RECEIVED,
         subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+        subject_id=conversation_id,
     )
 
-    assert resolve_notification_url(notification) is None
+    assert resolve_notification_url(notification) == f"/chat/{conversation_id}"
 
 
 def test_resolve_notification_url_returns_none_for_orphan_comment():

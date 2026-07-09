@@ -16,6 +16,15 @@ describe('notification navigation', () => {
     expect(
       resolveNotificationPath(
         buildNotificationItem({
+          event_key: 'action_plan.execution.pending_validation',
+          subject_type: 'action_plan_execution',
+          subject_id: 'exec-1',
+        }),
+      ),
+    ).toBe('/action-plans/executions/exec-1?focus=validation')
+    expect(
+      resolveNotificationPath(
+        buildNotificationItem({
           subject_type: 'signal',
           subject_id: 'signal-1',
         }),

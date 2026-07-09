@@ -1,12 +1,16 @@
-import { buildCommentDeepLinkPath } from '@/features/comments/lib/detail-deep-link'
+import { buildCommentDeepLinkPath, buildExecutionValidationFocusPath } from '@/features/comments/lib/detail-deep-link'
 
 import type { NotificationItem } from '../types'
 
 export function resolveNotificationPath(notification: NotificationItem): string | null {
-  const { subject_type: subjectType, subject_id: subjectId, navigation } = notification
+  const { subject_type: subjectType, subject_id: subjectId, event_key: eventKey, navigation } =
+    notification
 
   switch (subjectType) {
     case 'action_plan_execution':
+      if (eventKey === 'action_plan.execution.pending_validation') {
+        return buildExecutionValidationFocusPath(subjectId)
+      }
       return `/action-plans/executions/${subjectId}`
     case 'signal':
       return `/signals/${subjectId}`

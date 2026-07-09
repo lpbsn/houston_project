@@ -60,3 +60,46 @@ export function resolveNotificationClickUrl(
 
   return `${origin}/${url}`
 }
+
+export type NotificationClickClients = {
+  matchAll(options: { type: 'window'; includeUncontrolled: boolean }): Promise<readonly WindowClientLike[]>
+  openWindow?(url: string): Promise<WindowClientLike | null>
+}
+
+export type WindowClientLike = {
+  url: string
+  focus(): Promise<WindowClientLike>
+  navigate?(url: string): Promise<WindowClientLike | null>
+}
+
+export async function handleNotificationClick(
+  clients: NotificationClickClients,
+  data: Record<string, unknown> | undefined,
+  origin: string,
+): Promise<WindowClientLike | null> {
+  const url = resolveNotificationClickUrl(data, origin)
+  if (!url) {
+    return null
+  }
+
+  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+
+  for (const client of clientList) {
+    if (!client.url.startsWith(origin) || !('focus' in client)) {
+      continue
+    }
+
+    const focusedClient = await client.focus()
+    if (typeof focusedClient.navigate === 'function') {
+      return focusedClient.navigate(url)
+    }
+
+    return focusedClient
+  }
+
+  if (clients.openWindow) {
+    return clients.openWindow(url)
+  }
+
+  return null
+}

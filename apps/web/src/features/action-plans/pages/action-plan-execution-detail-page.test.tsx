@@ -242,6 +242,59 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     )
   })
 
+  it('scrolls validation actions into view from focus=validation deep link when validable', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    window.history.replaceState(
+      null,
+      '',
+      '/action-plans/executions/exec-1?focus=validation',
+    )
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'pending_validation',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: true,
+          can_reopen: false,
+          can_cancel: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(getDetailsTab().getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Valider' })).toBeTruthy()
+    expect(screen.getByTestId('execution-validation-actions')).toBeTruthy()
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end' })
+  })
+
+  it('does not scroll when focus=validation but execution is not validable', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    window.history.replaceState(
+      null,
+      '',
+      '/action-plans/executions/exec-1?focus=validation',
+    )
+
+    renderPage()
+
+    expect(getDetailsTab().getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('Plan nettoyage terrasse')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Valider' })).toBeNull()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
   it('shows sticky footer only on Détails tab', () => {
     renderPage()
 

@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -80,11 +80,13 @@ function ActionPlanExecutionDetailPageContent({
   )
 
   const initialDeepLink = useMemo(() => readCurrentDetailDeepLink(), [])
+  const validationActionsRef = useRef<HTMLDivElement | null>(null)
   const [activeTab, setActiveTab] = useState<ActionDetailTab>(
     initialDeepLink.tab === 'comments' ? 'comments' : 'details',
   )
   const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
   const highlightCommentId = initialDeepLink.commentId
+  const shouldFocusValidation = initialDeepLink.focus === 'validation'
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
@@ -123,6 +125,16 @@ function ActionPlanExecutionDetailPageContent({
     permissionHints.can_reopen ||
     canShowActionPlanExecutionCancel(permissionHints, { isTerminal })
   const showStickyFooter = activeTab === 'details' && canShowLifecycleFooter
+  const shouldScrollToValidationActions =
+    shouldFocusValidation && activeTab === 'details' && permissionHints.can_validate
+
+  useEffect(() => {
+    if (!shouldScrollToValidationActions) {
+      return
+    }
+
+    validationActionsRef.current?.scrollIntoView({ block: 'end' })
+  }, [shouldScrollToValidationActions])
 
   const mutationError =
     markDoneMutation.error ??
@@ -349,20 +361,22 @@ function ActionPlanExecutionDetailPageContent({
       </div>
 
       {showStickyFooter ? (
-        <ActionPlanExecutionStickyFooter
-          hints={permissionHints}
-          isTerminal={isTerminal}
-          isPending={isMutationPending}
-          mutationErrorMessage={
-            mutationError
-              ? resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')
-              : null
-          }
-          onMarkDone={() => void handleMarkDone()}
-          onValidate={() => void handleValidate()}
-          onReopen={() => void handleReopen()}
-          onCancel={() => void handleCancel()}
-        />
+        <div ref={validationActionsRef} data-testid="execution-validation-actions">
+          <ActionPlanExecutionStickyFooter
+            hints={permissionHints}
+            isTerminal={isTerminal}
+            isPending={isMutationPending}
+            mutationErrorMessage={
+              mutationError
+                ? resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')
+                : null
+            }
+            onMarkDone={() => void handleMarkDone()}
+            onValidate={() => void handleValidate()}
+            onReopen={() => void handleReopen()}
+            onCancel={() => void handleCancel()}
+          />
+        </div>
       ) : null}
 
       <ActionPlanExecutionTaskActionsSheet
