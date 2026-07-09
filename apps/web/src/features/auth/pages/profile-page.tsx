@@ -23,6 +23,7 @@ import {
   useNotificationPreferencesQuery,
   useUpdateNotificationPreferencesMutation,
 } from '@/features/notifications/hooks'
+import { useWebPushToggle } from '@/features/push/hooks'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -167,6 +168,9 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const notificationsEnabled = notificationPreferencesQuery.data?.notifications_enabled ?? true
   const isNotificationTogglePending =
     notificationPreferencesQuery.isLoading || updateNotificationPreferencesMutation.isPending
+  const webPushToggle = useWebPushToggle(establishmentId, notificationPreferencesQuery.data, {
+    isPreferencesLoading: notificationPreferencesQuery.isLoading,
+  })
 
   if (!isReady || isBootstrapping) {
     return (
@@ -217,9 +221,25 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             checked={notificationsEnabled}
             disabled={isNotificationTogglePending}
             onCheckedChange={(checked) => {
-              updateNotificationPreferencesMutation.mutate(checked)
+              updateNotificationPreferencesMutation.mutate({
+                notifications_enabled: checked,
+              })
             }}
           />
+          <TerrainSwitch
+            label="Notifications push"
+            checked={webPushToggle.checked}
+            disabled={webPushToggle.disabled}
+            onCheckedChange={webPushToggle.onToggle}
+          />
+          {webPushToggle.notificationsBlockedMessage ? (
+            <p className="px-4 pb-3.5 text-xs text-[#a3a19a]">
+              {webPushToggle.notificationsBlockedMessage}
+            </p>
+          ) : null}
+          {webPushToggle.message ? (
+            <p className="px-4 pb-3.5 text-xs text-[#a3a19a]">{webPushToggle.message}</p>
+          ) : null}
           {notificationPreferencesQuery.isError ? (
             <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
               Les préférences de notifications n&apos;ont pas pu être chargées.
@@ -229,6 +249,9 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">
               La mise à jour des notifications a échoué.
             </p>
+          ) : null}
+          {webPushToggle.isError && webPushToggle.errorMessage ? (
+            <p className="px-4 pb-3.5 text-xs text-[#E24B4A]">{webPushToggle.errorMessage}</p>
           ) : null}
         </TerrainCard>
       </div>

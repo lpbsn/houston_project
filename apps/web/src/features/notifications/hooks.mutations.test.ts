@@ -101,7 +101,7 @@ describe('notification mutations', () => {
         createElement(QueryClientProvider, { client: queryClient }, children),
     })
 
-    result.current.mutate(false)
+    result.current.mutate({ notifications_enabled: false })
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
