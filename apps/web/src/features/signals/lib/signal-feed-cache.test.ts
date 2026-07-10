@@ -22,7 +22,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     title: 'Fuite',
     structured_summary_short: 'Short',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -39,7 +38,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     reporter_display_name: null,
     permission_hints: {
       can_pin: true,
-      can_set_urgency: true,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -55,7 +53,6 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
     structured_summary_short: 'Short',
     structured_summary: 'Long',
     status: 'open',
-    urgency: 'high',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -72,7 +69,6 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
     reporter_display_name: null,
     permission_hints: {
       can_pin: true,
-      can_set_urgency: true,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -86,10 +82,9 @@ function buildDetail(overrides: Partial<SignalDetail> = {}): SignalDetail {
 
 describe('feedItemPatchFromDetail', () => {
   it('maps overlapping feed fields from detail', () => {
-    const detail = buildDetail({ urgency: 'high', is_pinned: true })
+    const detail = buildDetail({ is_pinned: true })
     const patch = feedItemPatchFromDetail(detail)
 
-    expect(patch.urgency).toBe('high')
     expect(patch.is_pinned).toBe(true)
     expect(patch.last_activity_at).toBe('2026-06-30T11:00:00Z')
   })
@@ -124,16 +119,16 @@ describe('patchSignalInActiveFeedCache', () => {
       viewMode: 'personal',
       filters: EMPTY_SIGNAL_FEED_FILTERS,
       signalId: SIGNAL_ID,
-      patch: { urgency: 'high' },
+      patch: { is_pinned: true },
     })
 
     const data = queryClient.getQueryData<{
       pages: SignalFeedResponse[]
     }>(queryKey)
 
-    expect(data?.pages[0]?.items[0]?.urgency).toBe('high')
-    expect(data?.pages[0]?.items[1]?.urgency).toBe('normal')
-    expect(data?.pages[1]?.items[0]?.urgency).toBe('normal')
+    expect(data?.pages[0]?.items[0]?.is_pinned).toBe(true)
+    expect(data?.pages[0]?.items[1]?.is_pinned).toBe(false)
+    expect(data?.pages[1]?.items[0]?.is_pinned).toBe(false)
   })
 })
 
@@ -165,7 +160,7 @@ describe('updateSignalDetailCache', () => {
     updateSignalDetailCache(queryClient, EST, SIGNAL_ID, detail)
     expect(queryClient.getQueryData(detailKey)).toBeUndefined()
 
-    queryClient.setQueryData(detailKey, buildDetail({ urgency: 'normal' }))
+    queryClient.setQueryData(detailKey, buildDetail({ is_pinned: false }))
     updateSignalDetailCache(queryClient, EST, SIGNAL_ID, detail)
 
     expect(queryClient.getQueryData(detailKey)).toEqual(detail)
@@ -173,37 +168,6 @@ describe('updateSignalDetailCache', () => {
 })
 
 describe('applySignalQuickActionSuccess', () => {
-  it('patches active feed on urgency without invalidating feeds', () => {
-    const queryClient = createTestQueryClient()
-    const queryKey = signalsQueryKeys.feed(EST, 'personal', EMPTY_SIGNAL_FEED_FILTERS)
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    queryClient.setQueryData(queryKey, {
-      pages: [
-        {
-          items: [buildFeedItem()],
-          next_cursor: null,
-          has_more: false,
-          applied_filters: { statuses: [], business_unit_keys: [], activity_subject_ids: [] },
-        },
-      ],
-      pageParams: [undefined],
-    })
-
-    applySignalQuickActionSuccess(queryClient, {
-      establishmentId: EST,
-      signalId: SIGNAL_ID,
-      detail: buildDetail({ urgency: 'high' }),
-      viewMode: 'personal',
-      filters: EMPTY_SIGNAL_FEED_FILTERS,
-      mutationKind: 'urgency',
-    })
-
-    const data = queryClient.getQueryData<{ pages: SignalFeedResponse[] }>(queryKey)
-    expect(data?.pages[0]?.items[0]?.urgency).toBe('high')
-    expect(invalidateSpy).not.toHaveBeenCalled()
-  })
-
   it('invalidates feed view modes on pin without invalidating detail prefix', () => {
     const queryClient = createTestQueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')

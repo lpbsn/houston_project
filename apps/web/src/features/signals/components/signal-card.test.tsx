@@ -15,7 +15,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     title: 'Fuite d eau',
     structured_summary_short: 'Short',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -32,7 +31,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     created_at: '2026-06-30T08:00:00Z',
     permission_hints: {
       can_pin: false,
-      can_set_urgency: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -54,11 +52,9 @@ describe('SignalCard feed variant', () => {
     render(
       <SignalCard
         item={buildFeedItem({
-          urgency: 'high',
           responsible_business_unit_label: 'Cuisine',
           permission_hints: {
             can_pin: true,
-            can_set_urgency: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -230,7 +226,6 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: true,
-            can_set_urgency: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -250,7 +245,6 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: true,
-            can_set_urgency: false,
             can_cancel: false,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -265,34 +259,12 @@ describe('SignalCard actions menu', () => {
     expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
   })
 
-  it('shows actions menu when can_set_urgency is true', () => {
-    render(
-      <SignalCard
-        item={buildFeedItem({
-          permission_hints: {
-            can_pin: false,
-            can_set_urgency: true,
-            can_cancel: false,
-            can_resolve: false,
-            can_create_linked_action_plan: false,
-          },
-        })}
-        onSelect={onSelect}
-        onOpenActions={onOpenActions}
-        variant="pinned"
-      />,
-    )
-
-    expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
-  })
-
   it('shows actions menu when can_resolve is true', () => {
     render(
       <SignalCard
         item={buildFeedItem({
           permission_hints: {
             can_pin: false,
-            can_set_urgency: false,
             can_cancel: false,
             can_resolve: true,
             can_create_linked_action_plan: false,
@@ -313,7 +285,6 @@ describe('SignalCard actions menu', () => {
         item={buildFeedItem({
           permission_hints: {
             can_pin: false,
-            can_set_urgency: false,
             can_cancel: true,
             can_resolve: false,
             can_create_linked_action_plan: false,
@@ -332,7 +303,6 @@ describe('SignalCard actions menu', () => {
     const item = buildFeedItem({
       permission_hints: {
         can_pin: true,
-        can_set_urgency: false,
         can_cancel: false,
         can_resolve: false,
         can_create_linked_action_plan: false,

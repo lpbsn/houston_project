@@ -48,7 +48,6 @@ checklist.execution.created
 checklist.execution.canceled
 comment.mention.created
 signal.created
-signal.urgency_changed
 signal.pinned
 signal.resolved
 signal.canceled
@@ -67,7 +66,6 @@ Staff/Manager → included only when scoped on a pole
 ```
 
 - `signal.created` — actor = system (pipeline); no actor exclusion
-- `signal.urgency_changed` — only when urgency transitions to `high`; actor exclusion when manual
 - `signal.pinned` / `signal.resolved` / `signal.canceled` — actor exclusion when manual; auto-resolve (`actor=None`) notifies all scoped pole members
 - `signal.canceled` detail remains navigable: read-only GET detail for pole-scoped members (feed still excludes canceled)
 - Copy is generic FR — never signal title, structured_summary, or observation text
@@ -251,7 +249,6 @@ For `action.pending_validation`:
 | `comment.mention.created` | info | in_app | mentioned membership | mention on execution comment grants read/thread access backend-side; notification does not grant access; no comment body in payload |
 | `chat.message.received` | info | in_app | active participants − author | generic copy with actor name; `subject_id=conversation_id`; no message body; dedupe per conversation + recipient + actor (5 min) |
 | `signal.created` | action_required | in_app | pole-scoped memberships | system actor; no exclusion |
-| `signal.urgency_changed` | urgent | in_app | pole-scoped memberships | only → high; −actor if membership |
 | `signal.pinned` | action_required | in_app | pole-scoped memberships | −actor if membership |
 | `signal.resolved` | info | in_app | pole-scoped memberships | −actor if membership; auto-resolve notifies all |
 | `signal.canceled` | info | in_app | pole-scoped memberships | −actor if membership; detail read-only scopé |
@@ -264,7 +261,7 @@ Not in Lot 1 implementation. Documented for future lots — do not assume these 
 
 | event_key | Direction (draft) | Channel (future) |
 |---|---|---|
-| `signal.aggregated` | Conditional — high urgency / pinned | in_app |
+| `signal.aggregated` | Conditional — pinned | in_app |
 | `action.accepted` | Creator | in_app |
 | `action.completed` / `action.validated` | Creator / assignee | in_app |
 | `checklist.execution.completed` | assigned_by | in_app |

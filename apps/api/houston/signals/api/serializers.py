@@ -21,7 +21,6 @@ from houston.signals.services import structured_summary_short
 
 class PermissionHintsSerializer(serializers.Serializer):
     can_pin = serializers.BooleanField()
-    can_set_urgency = serializers.BooleanField()
     can_cancel = serializers.BooleanField()
     can_resolve = serializers.BooleanField()
     can_create_linked_action_plan = serializers.BooleanField()
@@ -32,7 +31,6 @@ class SignalFeedItemSerializer(serializers.Serializer):
     title = serializers.CharField()
     structured_summary_short = serializers.CharField()
     status = serializers.CharField()
-    urgency = serializers.CharField()
     is_pinned = serializers.BooleanField()
     affected_business_unit_key = serializers.CharField(allow_null=True, required=False)
     affected_business_unit_label = serializers.CharField(allow_null=True, required=False)
@@ -89,17 +87,12 @@ class SignalDetailSerializer(SignalFeedItemSerializer):
     linked_action_plan_executions = SignalLinkedActionPlanExecutionSerializer(many=True)
 
 
-class SignalUrgencyRequestSerializer(serializers.Serializer):
-    urgency = serializers.ChoiceField(choices=Signal.Urgency.values)
-
-
 def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
     from houston.action_plans.permissions import can_create_linked_action_plan
     from houston.signals.permissions import (
         can_cancel_signal,
         can_pin_signal,
         can_resolve_signal,
-        can_set_signal_urgency,
     )
 
     return {
@@ -107,7 +100,6 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "title": signal.title,
         "structured_summary_short": structured_summary_short(signal.structured_summary),
         "status": signal.status,
-        "urgency": signal.urgency,
         "is_pinned": signal.is_pinned,
         "affected_business_unit_key": (
             signal.affected_business_unit.key if signal.affected_business_unit_id else None
@@ -136,7 +128,6 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "aggregation_count": getattr(signal, "aggregation_count", 0) or 0,
         "permission_hints": {
             "can_pin": can_pin_signal(membership, signal),
-            "can_set_urgency": can_set_signal_urgency(membership, signal),
             "can_cancel": can_cancel_signal(membership, signal),
             "can_resolve": can_resolve_signal(membership, signal),
             "can_create_linked_action_plan": can_create_linked_action_plan(

@@ -45,7 +45,6 @@ class Notification(BaseModel):
             "signal.created.unassigned_global",
             "Signal created unassigned global",
         )
-        SIGNAL_URGENCY_CHANGED = "signal.urgency_changed", "Signal urgency changed"
         SIGNAL_PINNED = "signal.pinned", "Signal pinned"
         SIGNAL_RESOLVED = "signal.resolved", "Signal resolved"
         SIGNAL_CANCELED = "signal.canceled", "Signal canceled"

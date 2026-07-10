@@ -496,7 +496,6 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
           id: 'signal-42',
           title: 'Fuite terrasse',
           status: 'open',
-          urgency: 'normal',
           affected_business_unit_key: null,
           affected_business_unit_label: null,
           responsible_business_unit_key: null,

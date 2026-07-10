@@ -37,7 +37,6 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     structured_summary_short: 'Short',
     structured_summary: 'Description du signal.',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -61,7 +60,6 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     linked_action_plan_executions: [],
     permission_hints: {
       can_pin: false,
-      can_set_urgency: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -212,7 +210,6 @@ describe('SignalDetailPage tabs', () => {
       data: buildSignal({
         permission_hints: {
           can_pin: false,
-          can_set_urgency: false,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: true,
@@ -239,7 +236,6 @@ describe('SignalDetailPage lifecycle actions', () => {
       data: buildSignal({
         permission_hints: {
           can_pin: false,
-          can_set_urgency: false,
           can_cancel: true,
           can_resolve: true,
           can_create_linked_action_plan: false,
@@ -257,15 +253,14 @@ describe('SignalDetailPage lifecycle actions', () => {
   })
 })
 
-describe('SignalDetailPage pin and urgency actions', () => {
-  it('does not show pin or urgency actions on details tab', () => {
+describe('SignalDetailPage pin actions', () => {
+  it('does not show pin actions on details tab', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
       data: buildSignal({
         permission_hints: {
           can_pin: true,
-          can_set_urgency: true,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: false,
@@ -278,8 +273,6 @@ describe('SignalDetailPage pin and urgency actions', () => {
 
     expect(screen.queryByRole('button', { name: 'Épingler' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Désépingler' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Marquer urgent' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Priorité normale' })).toBeNull()
   })
 })
 

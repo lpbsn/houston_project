@@ -17,7 +17,6 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
     title: 'Fuite d eau',
     location_text: 'Cuisine',
     status: 'open',
-    urgency: 'normal',
     responsible_business_unit_key: 'rooftop',
     responsible_business_unit_label: 'Rooftop',
     permission_hints: {

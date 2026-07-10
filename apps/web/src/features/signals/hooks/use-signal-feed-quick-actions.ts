@@ -7,7 +7,6 @@ import {
   useCancelSignalMutation,
   usePinSignalMutation,
   useResolveSignalMutation,
-  useSignalUrgencyMutation,
   useUnpinSignalMutation,
 } from '../hooks'
 import {
@@ -34,59 +33,95 @@ export function useSignalFeedQuickActions({
   const [actionsOpen, setActionsOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const activeItemRef = useRef<SignalFeedItem | null>(null)
+  const lifecycleLockRef = useRef(false)
 
   const pinMutation = usePinSignalMutation(establishmentId, cacheContext)
   const unpinMutation = useUnpinSignalMutation(establishmentId, cacheContext)
-  const urgencyMutation = useSignalUrgencyMutation(establishmentId, cacheContext)
   const resolveMutation = useResolveSignalMutation(establishmentId)
   const cancelMutation = useCancelSignalMutation(establishmentId)
+
+  const isLifecyclePending =
+    resolveMutation.isPending || cancelMutation.isPending
 
   const isPending =
     pinMutation.isPending ||
     unpinMutation.isPending ||
-    urgencyMutation.isPending ||
-    resolveMutation.isPending ||
-    cancelMutation.isPending
+    isLifecyclePending
+
+  function isLifecycleLocked() {
+    return lifecycleLockRef.current || isLifecyclePending
+  }
 
   function syncActiveItem(item: SignalFeedItem | null) {
     activeItemRef.current = item
     setActiveItem(item)
   }
 
+  function resetActionsSheet() {
+    setActionsOpen(false)
+    setActionError(null)
+    syncActiveItem(null)
+  }
+
   function openActions(item: SignalFeedItem) {
+    if (isLifecycleLocked()) {
+      return
+    }
     setActionError(null)
     syncActiveItem(item)
     setActionsOpen(true)
   }
 
   function closeActions() {
-    setActionsOpen(false)
-    setActionError(null)
-    syncActiveItem(null)
+    if (isLifecycleLocked()) {
+      return
+    }
+    resetActionsSheet()
   }
 
-  function createLifecycleMutationCallbacks(signalId: string) {
+  function createLifecycleMutationCallbacks() {
     return {
       onSuccess: () => {
-        if (activeItemRef.current?.id !== signalId) {
-          return
-        }
         setActionError(null)
-        closeActions()
+        resetActionsSheet()
       },
       onError: (error: unknown) => {
-        if (activeItemRef.current?.id !== signalId) {
-          return
-        }
         setActionError(
           resolveApiErrorMessage(error, SignalsApiError, 'Une erreur est survenue.'),
         )
       },
+      onSettled: () => {
+        lifecycleLockRef.current = false
+      },
     }
+  }
+
+  function startLifecycleMutation(
+    mutate: (
+      signalId: string,
+      options: ReturnType<typeof createLifecycleMutationCallbacks>,
+    ) => void,
+    signalId: string,
+  ): SignalFeedQuickActionResult {
+    if (isLifecycleLocked()) {
+      return 'abort'
+    }
+    setActionError(null)
+    lifecycleLockRef.current = true
+    mutate(signalId, createLifecycleMutationCallbacks())
+    return 'stay-open'
+  }
+
+  function isLifecycleAction(actionId: SignalFeedCardActionId): boolean {
+    return actionId === 'resolve' || actionId === 'cancel'
   }
 
   function runAction(actionId: SignalFeedCardActionId): SignalFeedQuickActionResult {
     if (!activeItem) {
+      return 'abort'
+    }
+
+    if (!isLifecycleAction(actionId) && isLifecycleLocked()) {
       return 'abort'
     }
 
@@ -100,23 +135,19 @@ export function useSignalFeedQuickActions({
           void pinMutation.mutate(signalId)
         }
         return 'close'
-      case 'urgency':
-        void urgencyMutation.mutate({
-          signalId,
-          urgency: activeItem.urgency === 'high' ? 'normal' : 'high',
-        })
-        return 'close'
       case 'resolve':
-        setActionError(null)
-        void resolveMutation.mutate(signalId, createLifecycleMutationCallbacks(signalId))
-        return 'stay-open'
+        return startLifecycleMutation(
+          (id, options) => void resolveMutation.mutate(id, options),
+          signalId,
+        )
       case 'cancel':
         if (!window.confirm(SIGNAL_CANCEL_CONFIRM_MESSAGE)) {
           return 'abort'
         }
-        setActionError(null)
-        void cancelMutation.mutate(signalId, createLifecycleMutationCallbacks(signalId))
-        return 'stay-open'
+        return startLifecycleMutation(
+          (id, options) => void cancelMutation.mutate(id, options),
+          signalId,
+        )
       default: {
         const exhaustiveCheck: never = actionId
         return exhaustiveCheck

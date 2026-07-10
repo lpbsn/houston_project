@@ -48,7 +48,6 @@ EVENT_KEY_SUBJECT_TYPES = [
         Notification.SubjectType.ACTION_PLAN_EXECUTION,
     ),
     (Notification.EventKey.SIGNAL_CREATED, Notification.SubjectType.SIGNAL),
-    (Notification.EventKey.SIGNAL_URGENCY_CHANGED, Notification.SubjectType.SIGNAL),
     (Notification.EventKey.SIGNAL_PINNED, Notification.SubjectType.SIGNAL),
     (Notification.EventKey.SIGNAL_RESOLVED, Notification.SubjectType.SIGNAL),
     (Notification.EventKey.SIGNAL_CANCELED, Notification.SubjectType.SIGNAL),

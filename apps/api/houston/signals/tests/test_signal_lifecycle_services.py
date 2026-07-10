@@ -52,26 +52,6 @@ def test_resolve_signal_clears_pin_fields():
     assert result.pinned_by_membership_id is None
 
 
-def test_resolve_signal_resets_high_urgency_to_normal():
-    signal = _signal()
-    signal.urgency = Signal.Urgency.HIGH
-    signal.save(update_fields=["urgency", "updated_at"])
-
-    result = resolve_signal(signal=signal)
-
-    assert result.urgency == Signal.Urgency.NORMAL
-
-
-def test_cancel_signal_does_not_reset_high_urgency():
-    signal = _signal()
-    signal.urgency = Signal.Urgency.HIGH
-    signal.save(update_fields=["urgency", "updated_at"])
-
-    result = cancel_signal(signal=signal)
-
-    assert result.urgency == Signal.Urgency.HIGH
-
-
 def test_cancel_signal_rejects_terminal_status():
     signal = _signal(status=Signal.Status.RESOLVED)
 

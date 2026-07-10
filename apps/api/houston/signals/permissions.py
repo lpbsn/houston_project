@@ -115,17 +115,6 @@ def can_pin_signal(
     )
 
 
-def can_set_signal_urgency(
-    membership: EstablishmentMembership | None,
-    signal: Signal,
-) -> bool:
-    return _signal_commandable_by_membership(
-        membership,
-        signal,
-        statuses=ACTIVE_SIGNAL_STATUSES,
-    )
-
-
 def can_cancel_signal(
     membership: EstablishmentMembership | None,
     signal: Signal,

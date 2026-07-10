@@ -8,7 +8,6 @@ import {
   fetchSignalFeed,
   pinSignal,
   resolveSignal,
-  setSignalUrgency,
   signalsQueryKeys,
   unpinSignal,
 } from './api'
@@ -115,40 +114,6 @@ export function useUnpinSignalMutation(
         viewMode: cacheContext.viewMode,
         filters: cacheContext.filters,
         mutationKind: 'unpin',
-      })
-    },
-  })
-}
-
-export function useSignalUrgencyMutation(
-  establishmentId: string | null,
-  cacheContext?: SignalQuickActionCacheContext | null,
-) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      signalId,
-      urgency,
-    }: {
-      signalId: string
-      urgency: 'normal' | 'high'
-    }) => {
-      if (!establishmentId) {
-        throw new Error('Signal introuvable.')
-      }
-      return setSignalUrgency(establishmentId, signalId, urgency)
-    },
-    onSuccess: (detail, { signalId }) => {
-      if (!establishmentId || !cacheContext) {
-        return
-      }
-      applySignalQuickActionSuccess(queryClient, {
-        establishmentId,
-        signalId,
-        detail,
-        viewMode: cacheContext.viewMode,
-        filters: cacheContext.filters,
-        mutationKind: 'urgency',
       })
     },
   })

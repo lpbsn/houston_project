@@ -13,7 +13,6 @@ def test_signal_defaults_to_open():
     membership = build_membership()
     signal = create_minimal_v3_signal(membership, title="Issue")
     assert signal.status == Signal.Status.OPEN
-    assert signal.urgency == Signal.Urgency.NORMAL
     assert signal.is_pinned is False
 
 

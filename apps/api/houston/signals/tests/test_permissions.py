@@ -12,7 +12,6 @@ from houston.signals.permissions import (
     can_cancel_signal,
     can_pin_signal,
     can_resolve_signal,
-    can_set_signal_urgency,
     can_view_signal_detail,
     can_view_signal_feed,
     signal_actionable_by_membership,
@@ -166,15 +165,6 @@ def test_can_pin_signal_denies_in_progress():
     signal.save(update_fields=["status", "updated_at"])
 
     assert not can_pin_signal(membership, signal)
-
-
-def test_can_set_urgency_allows_in_progress():
-    membership = build_membership(role=EstablishmentMembership.Role.DIRECTOR)
-    signal = _build_signal(membership=membership)
-    signal.status = Signal.Status.IN_PROGRESS
-    signal.save(update_fields=["status", "updated_at"])
-
-    assert can_set_signal_urgency(membership, signal)
 
 
 def test_signal_pole_visible_admin_without_scope():

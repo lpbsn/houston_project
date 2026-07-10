@@ -7,7 +7,6 @@ from houston.signals.api.views import (
     SignalPinView,
     SignalResolveView,
     SignalUnpinView,
-    SignalUrgencyView,
 )
 
 urlpatterns = [
@@ -30,11 +29,6 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/unpin/",
         SignalUnpinView.as_view(),
         name="signal-unpin",
-    ),
-    path(
-        "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/urgency/",
-        SignalUrgencyView.as_view(),
-        name="signal-urgency",
     ),
     path(
         "establishments/<uuid:establishment_id>/signals/<uuid:signal_id>/cancel/",

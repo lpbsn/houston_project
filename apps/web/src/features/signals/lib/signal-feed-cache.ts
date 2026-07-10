@@ -9,7 +9,7 @@ import type {
   SignalViewMode,
 } from '../types'
 
-export type SignalQuickActionMutationKind = 'pin' | 'unpin' | 'urgency'
+export type SignalQuickActionMutationKind = 'pin' | 'unpin'
 
 export type SignalQuickActionCacheContext = {
   viewMode: SignalViewMode
@@ -23,7 +23,6 @@ export function feedItemPatchFromDetail(detail: SignalDetail): Partial<SignalFee
     title: detail.title,
     structured_summary_short: detail.structured_summary_short,
     status: detail.status,
-    urgency: detail.urgency,
     is_pinned: detail.is_pinned,
     affected_business_unit_key: detail.affected_business_unit_key ?? null,
     affected_business_unit_label: detail.affected_business_unit_label ?? null,
@@ -119,20 +118,8 @@ export function applySignalQuickActionSuccess(
     mutationKind: SignalQuickActionMutationKind
   },
 ): void {
-  const { establishmentId, signalId, detail, viewMode, filters, mutationKind } = options
+  const { establishmentId, signalId, detail } = options
 
   updateSignalDetailCache(queryClient, establishmentId, signalId, detail)
-
-  if (mutationKind === 'urgency') {
-    patchSignalInActiveFeedCache(queryClient, {
-      establishmentId,
-      viewMode,
-      filters,
-      signalId,
-      patch: feedItemPatchFromDetail(detail),
-    })
-    return
-  }
-
   invalidateSignalFeedViewModes(queryClient, establishmentId)
 }

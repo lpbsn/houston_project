@@ -11,9 +11,8 @@ import { EMPTY_SIGNAL_FEED_FILTERS } from '../lib/signal-feed-filters'
 import type { SignalFeedItem } from '../types'
 import { useSignalFeedQuickActions } from './use-signal-feed-quick-actions'
 
-const pinSignal = vi.fn(async () => ({ id: 'signal-1', urgency: 'normal', is_pinned: true }))
-const unpinSignal = vi.fn(async () => ({ id: 'signal-1', urgency: 'normal', is_pinned: false }))
-const setSignalUrgency = vi.fn(async () => ({ id: 'signal-1', urgency: 'high', is_pinned: false }))
+const pinSignal = vi.fn(async () => ({ id: 'signal-1', is_pinned: true }))
+const unpinSignal = vi.fn(async () => ({ id: 'signal-1', is_pinned: false }))
 const resolveSignal = vi.fn(async () => ({ id: 'signal-1', status: 'resolved' }))
 const cancelSignal = vi.fn(async () => ({ id: 'signal-1', status: 'canceled' }))
 
@@ -23,7 +22,6 @@ vi.mock('../hooks', async (importOriginal) => {
     ...actual,
     usePinSignalMutation: actual.usePinSignalMutation,
     useUnpinSignalMutation: actual.useUnpinSignalMutation,
-    useSignalUrgencyMutation: actual.useSignalUrgencyMutation,
     useResolveSignalMutation: actual.useResolveSignalMutation,
     useCancelSignalMutation: actual.useCancelSignalMutation,
   }
@@ -35,7 +33,6 @@ vi.mock('../api', async (importOriginal) => {
     ...actual,
     pinSignal: (...args: unknown[]) => pinSignal(...args),
     unpinSignal: (...args: unknown[]) => unpinSignal(...args),
-    setSignalUrgency: (...args: unknown[]) => setSignalUrgency(...args),
     resolveSignal: (...args: unknown[]) => resolveSignal(...args),
     cancelSignal: (...args: unknown[]) => cancelSignal(...args),
   }
@@ -47,7 +44,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     title: 'Fuite',
     structured_summary_short: 'Short',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -64,7 +60,6 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     reporter_display_name: null,
     permission_hints: {
       can_pin: true,
-      can_set_urgency: true,
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,
@@ -90,11 +85,19 @@ function renderQuickActionsHook() {
   return { ...hook, queryClient }
 }
 
+function mockSlowResolve() {
+  resolveSignal.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve({ id: 'signal-1', status: 'resolved' }), 50)
+      }),
+  )
+}
+
 describe('useSignalFeedQuickActions', () => {
   beforeEach(() => {
     pinSignal.mockClear()
     unpinSignal.mockClear()
-    setSignalUrgency.mockClear()
     resolveSignal.mockClear()
     cancelSignal.mockClear()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -159,24 +162,6 @@ describe('useSignalFeedQuickActions', () => {
     expect(pinSignal).not.toHaveBeenCalled()
   })
 
-  it('runs urgency mutation toggling priority and returns close', async () => {
-    const { result } = renderQuickActionsHook()
-
-    act(() => {
-      result.current.openActions(buildFeedItem())
-    })
-
-    act(() => {
-      result.current.runAction('urgency')
-    })
-
-    await waitFor(() => {
-      expect(setSignalUrgency).toHaveBeenCalledWith('est-1', 'signal-1', 'high')
-    })
-    expect(resolveSignal).not.toHaveBeenCalled()
-    expect(cancelSignal).not.toHaveBeenCalled()
-  })
-
   it('runs resolve mutation and returns stay-open', async () => {
     const { result } = renderQuickActionsHook()
 
@@ -190,7 +175,6 @@ describe('useSignalFeedQuickActions', () => {
     })
 
     expect(actionResult).toBe('stay-open')
-    expect(setSignalUrgency).not.toHaveBeenCalled()
 
     await waitFor(() => {
       expect(resolveSignal).toHaveBeenCalledWith('est-1', 'signal-1')
@@ -215,7 +199,6 @@ describe('useSignalFeedQuickActions', () => {
     })
 
     expect(actionResult).toBe('stay-open')
-    expect(setSignalUrgency).not.toHaveBeenCalled()
 
     await waitFor(() => {
       expect(cancelSignal).toHaveBeenCalledWith('est-1', 'signal-1')
@@ -245,16 +228,86 @@ describe('useSignalFeedQuickActions', () => {
     expect(result.current.activeItem).not.toBeNull()
   })
 
-  it('does not close sheet after lifecycle success when active item changed', async () => {
+  it('ignores closeActions immediately after runAction before rerender', () => {
+    mockSlowResolve()
     const { result } = renderQuickActionsHook()
+    const item = buildFeedItem({ id: 'signal-1' })
 
-    resolveSignal.mockImplementationOnce(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10))
-      return { id: 'signal-1', status: 'resolved' }
+    act(() => {
+      result.current.openActions(item)
     })
 
     act(() => {
-      result.current.openActions(buildFeedItem({ id: 'signal-1' }))
+      result.current.runAction('resolve')
+      result.current.closeActions()
+    })
+
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem).toEqual(item)
+  })
+
+  it('returns abort on pin while lifecycle mutation is in flight', async () => {
+    mockSlowResolve()
+    const { result } = renderQuickActionsHook()
+    const item = buildFeedItem()
+
+    act(() => {
+      result.current.openActions(item)
+    })
+
+    let resolveResult: string | undefined
+    let pinResult: string | undefined
+    act(() => {
+      resolveResult = result.current.runAction('resolve')
+      pinResult = result.current.runAction('pin')
+    })
+
+    expect(resolveResult).toBe('stay-open')
+    expect(pinResult).toBe('abort')
+    expect(pinSignal).not.toHaveBeenCalled()
+    expect(unpinSignal).not.toHaveBeenCalled()
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem).toEqual(item)
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
+  })
+
+  it('returns abort on second lifecycle action while mutation is in flight', async () => {
+    mockSlowResolve()
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    let firstResult: string | undefined
+    let secondResult: string | undefined
+    act(() => {
+      firstResult = result.current.runAction('resolve')
+      secondResult = result.current.runAction('resolve')
+    })
+
+    expect(firstResult).toBe('stay-open')
+    expect(secondResult).toBe('abort')
+
+    await waitFor(() => {
+      expect(resolveSignal).toHaveBeenCalledTimes(1)
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
+  })
+
+  it('keeps original card open when openActions is called during lifecycle pending', async () => {
+    mockSlowResolve()
+    const { result } = renderQuickActionsHook()
+    const signalOne = buildFeedItem({ id: 'signal-1' })
+
+    act(() => {
+      result.current.openActions(signalOne)
     })
 
     act(() => {
@@ -265,12 +318,38 @@ describe('useSignalFeedQuickActions', () => {
       result.current.openActions(buildFeedItem({ id: 'signal-2', title: 'Autre signal' }))
     })
 
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem?.id).toBe('signal-1')
+
     await waitFor(() => {
-      expect(resolveSignal).toHaveBeenCalled()
+      expect(result.current.actionsOpen).toBe(false)
+      expect(result.current.activeItem).toBeNull()
+    })
+  })
+
+  it('ignores closeActions while lifecycle mutation is pending', async () => {
+    mockSlowResolve()
+    const { result } = renderQuickActionsHook()
+    const item = buildFeedItem({ id: 'signal-1' })
+
+    act(() => {
+      result.current.openActions(item)
+    })
+
+    act(() => {
+      result.current.runAction('resolve')
+    })
+
+    act(() => {
+      result.current.closeActions()
     })
 
     expect(result.current.actionsOpen).toBe(true)
-    expect(result.current.activeItem?.id).toBe('signal-2')
+    expect(result.current.activeItem).toEqual(item)
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
   })
 
   it('sets actionError on lifecycle mutation failure for active item', async () => {
@@ -289,6 +368,55 @@ describe('useSignalFeedQuickActions', () => {
       expect(result.current.actionError).toBeTruthy()
     })
     expect(result.current.actionsOpen).toBe(true)
+  })
+
+  it('allows closeActions after lifecycle mutation failure settles', async () => {
+    cancelSignal.mockRejectedValueOnce(new Error('Échec annulation'))
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    act(() => {
+      result.current.runAction('cancel')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionError).toBeTruthy()
+    })
+
+    act(() => {
+      result.current.closeActions()
+    })
+
+    expect(result.current.actionsOpen).toBe(false)
+    expect(result.current.activeItem).toBeNull()
+    expect(result.current.actionError).toBeNull()
+  })
+
+  it('allows openActions on another card after lifecycle success', async () => {
+    const { result } = renderQuickActionsHook()
+    const signalTwo = buildFeedItem({ id: 'signal-2', title: 'Autre signal' })
+
+    act(() => {
+      result.current.openActions(buildFeedItem({ id: 'signal-1' }))
+    })
+
+    act(() => {
+      result.current.runAction('resolve')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
+
+    act(() => {
+      result.current.openActions(signalTwo)
+    })
+
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem?.id).toBe('signal-2')
   })
 
   it('includes lifecycle mutations in isPending', async () => {

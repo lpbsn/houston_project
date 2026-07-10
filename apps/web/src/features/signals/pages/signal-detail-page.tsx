@@ -17,7 +17,6 @@ import {
 import { SignalLinkedActionPlansSection } from '../components/signal-linked-action-plans-section'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
-import { SignalUrgencyBadge } from '../components/signal-urgency-badge'
 import { useSignalDetailQuery } from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
@@ -97,7 +96,6 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <TerrainCard>
             <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <SignalUrgencyBadge urgency={signal.urgency} />
               <SignalStatusBadge status={signal.status} variant="detail" />
             </div>
             <p className="mt-2 text-[11px] text-[#aaa]">

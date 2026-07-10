@@ -22,7 +22,6 @@ import { canOpenSignalFeedCardActions } from '../lib/signal-feed-card-actions'
 import type { SignalFeedItem } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
 import { SignalClassificationBadges } from './signal-classification-badges'
-import { SignalUrgencyBadge } from './signal-urgency-badge'
 
 type SignalCardProps = {
   item: SignalFeedItem
@@ -115,12 +114,7 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
     >
       <FeedCardMetaRow
         timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-        badges={
-          <>
-            <SignalUrgencyBadge urgency={item.urgency} />
-            <SignalClassificationBadges signal={item} />
-          </>
-        }
+        badges={<SignalClassificationBadges signal={item} />}
         actions={
           showActions ? (
             <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
@@ -193,7 +187,6 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
 
       <div className="mb-1 flex flex-wrap items-center gap-1">
-        <SignalUrgencyBadge urgency={item.urgency} />
         <SignalClassificationBadges signal={item} />
       </div>
 

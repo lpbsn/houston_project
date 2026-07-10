@@ -15,7 +15,6 @@ function buildFeedItem(
     title: 'Client mécontent',
     structured_summary_short: 'Short',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -32,7 +31,6 @@ function buildFeedItem(
     reporter_display_name: null,
     permission_hints: {
       can_pin: true,
-      can_set_urgency: true,
       can_cancel: true,
       can_resolve: true,
       can_create_linked_action_plan: false,

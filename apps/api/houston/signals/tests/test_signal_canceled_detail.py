@@ -179,11 +179,10 @@ def test_detail_canceled_permission_hints_all_false(api_client):
         responsible_business_unit=taxonomy.maintenance,
         activity_subject=taxonomy.lighting_subject,
         status=Signal.Status.CANCELED,
-        title="Canceled pinned urgent",
+        title="Canceled pinned",
     )
     signal.is_pinned = True
-    signal.urgency = Signal.Urgency.HIGH
-    signal.save(update_fields=["is_pinned", "urgency", "updated_at"])
+    signal.save(update_fields=["is_pinned", "updated_at"])
     token = login(api_client, user=manager.user)
 
     response = api_client.get(
@@ -194,7 +193,6 @@ def test_detail_canceled_permission_hints_all_false(api_client):
     assert response.status_code == 200
     hints = response.json()["permission_hints"]
     assert hints["can_pin"] is False
-    assert hints["can_set_urgency"] is False
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
     assert hints["can_create_linked_action_plan"] is False

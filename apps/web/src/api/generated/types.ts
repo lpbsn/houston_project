@@ -1261,22 +1261,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/establishments/{establishment_id}/signals/{signal_id}/urgency/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["v1_establishments_signals_urgency_partial_update"];
-        trace?: never;
-    };
     "/api/v1/establishments/{establishment_id}/temporary-uploads/": {
         parameters: {
             query?: never;
@@ -2060,7 +2044,6 @@ export interface components {
             id: string;
             title: string;
             status: string;
-            urgency: string;
             affected_business_unit_key: string | null;
             affected_business_unit_label: string | null;
             responsible_business_unit_key: string | null;
@@ -2760,9 +2743,6 @@ export interface components {
             description?: string;
             unit_type?: components["schemas"]["UnitTypeEnum"];
         };
-        PatchedSignalUrgencyRequest: {
-            urgency?: components["schemas"]["UrgencyEnum"];
-        };
         PatchedUserProfileUpdateRequest: {
             first_name?: string;
             last_name?: string;
@@ -2783,7 +2763,6 @@ export interface components {
         };
         PermissionHints: {
             can_pin: boolean;
-            can_set_urgency: boolean;
             can_cancel: boolean;
             can_resolve: boolean;
             can_create_linked_action_plan: boolean;
@@ -2923,7 +2902,6 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
-            urgency: string;
             is_pinned: boolean;
             affected_business_unit_key?: string | null;
             affected_business_unit_label?: string | null;
@@ -2963,7 +2941,6 @@ export interface components {
             title: string;
             structured_summary_short: string;
             status: string;
-            urgency: string;
             is_pinned: boolean;
             affected_business_unit_key?: string | null;
             affected_business_unit_label?: string | null;
@@ -3031,12 +3008,6 @@ export interface components {
          * @enum {string}
          */
         UnitTypeEnum: "dedicated" | "transversal";
-        /**
-         * @description * `normal` - normal
-         *     * `high` - high
-         * @enum {string}
-         */
-        UrgencyEnum: "normal" | "high";
         UserPublic: {
             /** Format: uuid */
             id: string;
@@ -7239,58 +7210,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignalDetail"];
-                };
-            };
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    v1_establishments_signals_urgency_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                establishment_id: string;
-                signal_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedSignalUrgencyRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedSignalUrgencyRequest"];
-                "multipart/form-data": components["schemas"]["PatchedSignalUrgencyRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignalDetail"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             403: {

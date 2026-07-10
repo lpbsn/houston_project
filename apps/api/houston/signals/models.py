@@ -21,10 +21,6 @@ class Signal(BaseModel):
         CANCELED = "canceled", "Canceled"
         ARCHIVED = "archived", "Archived"
 
-    class Urgency(models.TextChoices):
-        NORMAL = "normal", "Normal"
-        HIGH = "high", "High"
-
     establishment = models.ForeignKey(
         "establishments.Establishment",
         on_delete=models.CASCADE,
@@ -63,11 +59,6 @@ class Signal(BaseModel):
         choices=Status.choices,
         default=Status.OPEN,
     )
-    urgency = models.CharField(
-        max_length=20,
-        choices=Urgency.choices,
-        default=Urgency.NORMAL,
-    )
     is_pinned = models.BooleanField(default=False)
     pinned_at = models.DateTimeField(null=True, blank=True)
     pinned_by_membership = models.ForeignKey(
@@ -98,7 +89,6 @@ class Signal(BaseModel):
                     "establishment",
                     "status",
                     "is_pinned",
-                    "urgency",
                     "last_activity_at",
                 ],
                 name="signal_feed_sort_idx",
