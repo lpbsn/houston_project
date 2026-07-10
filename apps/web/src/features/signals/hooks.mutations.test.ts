@@ -9,6 +9,7 @@ import { createTestQueryClient } from '@/test-utils'
 
 import { signalsQueryKeys } from './api'
 import {
+  useCancelSignalMutation,
   usePinSignalMutation,
   useResolveSignalMutation,
   useSignalUrgencyMutation,
@@ -17,6 +18,7 @@ import {
 import { EMPTY_SIGNAL_FEED_FILTERS } from './lib/signal-feed-filters'
 
 const resolveSignal = vi.fn(async () => ({ id: 'signal-1', status: 'resolved' }))
+const cancelSignal = vi.fn(async () => ({ id: 'signal-1', status: 'canceled' }))
 const pinSignal = vi.fn(async () => ({
   id: 'signal-1',
   urgency: 'normal',
@@ -43,6 +45,7 @@ vi.mock('./api', async (importOriginal) => {
   return {
     ...actual,
     resolveSignal: (...args: unknown[]) => resolveSignal(...args),
+    cancelSignal: (...args: unknown[]) => cancelSignal(...args),
     pinSignal: (...args: unknown[]) => pinSignal(...args),
     unpinSignal: (...args: unknown[]) => unpinSignal(...args),
     setSignalUrgency: (...args: unknown[]) => setSignalUrgency(...args),
@@ -65,11 +68,11 @@ describe('useResolveSignalMutation', () => {
 
   it('invalidates signal queries on success', async () => {
     const { result, queryClient } = renderMutationHook(() =>
-      useResolveSignalMutation('est-1', 'signal-1'),
+      useResolveSignalMutation('est-1'),
     )
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    result.current.mutate()
+    result.current.mutate('signal-1')
 
     await waitFor(() => {
       expect(result.current.isSuccess).toBe(true)
@@ -79,6 +82,33 @@ describe('useResolveSignalMutation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
     expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: signalsQueryKeys.all })
+  })
+})
+
+describe('useCancelSignalMutation', () => {
+  beforeEach(() => {
+    cancelSignal.mockClear()
+  })
+
+  it('invalidates signal queries and removes detail cache on success', async () => {
+    const { result, queryClient } = renderMutationHook(() =>
+      useCancelSignalMutation('est-1'),
+    )
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const removeSpy = vi.spyOn(queryClient, 'removeQueries')
+
+    result.current.mutate('signal-1')
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(cancelSignal).toHaveBeenCalledWith('est-1', 'signal-1')
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
+    expect(removeSpy).toHaveBeenCalledWith({
+      queryKey: signalsQueryKeys.detail('est-1', 'signal-1'),
+    })
   })
 })
 

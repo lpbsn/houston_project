@@ -33,7 +33,7 @@ import {
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { terrain, terrainObservationAction } from '@/lib/terrain-styles'
+import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ReportPageProps = {
@@ -330,7 +330,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
           className={cn(
             'h-12 w-full rounded-full text-[15px] font-bold text-white',
             canSubmit
-              ? cn(terrainObservationAction.bg, terrainObservationAction.hover)
+              ? cn(terrainBrandAction.bg, terrainBrandAction.hover)
               : 'bg-[#114660]/40 hover:bg-[#114660]/40',
           )}
           disabled={!canSubmit}

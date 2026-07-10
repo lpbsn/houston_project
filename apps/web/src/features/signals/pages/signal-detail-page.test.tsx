@@ -83,8 +83,6 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('../hooks', () => ({
   useSignalDetailQuery: () => detailQueryMock(),
-  useCancelSignalMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-  useResolveSignalMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }))
 
 vi.mock('@/features/comments/components/comment-section', () => ({
@@ -230,6 +228,32 @@ describe('SignalDetailPage tabs', () => {
     fireEvent.click(getCommentsTab())
 
     expect(screen.queryByRole('button', { name: "+ Plan d'action" })).toBeNull()
+  })
+})
+
+describe('SignalDetailPage lifecycle actions', () => {
+  it('does not show resolve or cancel actions on details tab', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        permission_hints: {
+          can_pin: false,
+          can_set_urgency: false,
+          can_cancel: true,
+          can_resolve: true,
+          can_create_linked_action_plan: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'Résolu' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Marquer résolu' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler ce signal' })).toBeNull()
   })
 })
 

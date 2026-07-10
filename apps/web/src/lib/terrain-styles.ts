@@ -25,14 +25,17 @@ export const terrain = {
   successSurface: 'border-[#d8ead8] bg-[#f4fbf4]',
 } as const
 
-/** Shared observation action color (#114660) — submit, inline mic, FAB. */
-export const terrainObservationAction = {
+/** Shared brand action color (#114660) — submit, inline mic, FAB, signal feed accents. */
+export const terrainBrandAction = {
   bg: 'bg-[#114660]',
   hover: 'hover:bg-[#0f3d52]',
   text: 'text-[#114660]',
   shadow: 'shadow-[0_8px_20px_rgba(17,70,96,0.35)]',
   ring: 'ring-[#114660]/30',
 } as const
+
+/** Feed card reporter avatar (signal feed maquette). */
+export const terrainFeedAvatar = 'bg-[#3A7A96] text-white'
 
 export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue'
 

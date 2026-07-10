@@ -14,6 +14,8 @@ import { useSignalFeedQuickActions } from './use-signal-feed-quick-actions'
 const pinSignal = vi.fn(async () => ({ id: 'signal-1', urgency: 'normal', is_pinned: true }))
 const unpinSignal = vi.fn(async () => ({ id: 'signal-1', urgency: 'normal', is_pinned: false }))
 const setSignalUrgency = vi.fn(async () => ({ id: 'signal-1', urgency: 'high', is_pinned: false }))
+const resolveSignal = vi.fn(async () => ({ id: 'signal-1', status: 'resolved' }))
+const cancelSignal = vi.fn(async () => ({ id: 'signal-1', status: 'canceled' }))
 
 vi.mock('../hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks')>()
@@ -22,6 +24,8 @@ vi.mock('../hooks', async (importOriginal) => {
     usePinSignalMutation: actual.usePinSignalMutation,
     useUnpinSignalMutation: actual.useUnpinSignalMutation,
     useSignalUrgencyMutation: actual.useSignalUrgencyMutation,
+    useResolveSignalMutation: actual.useResolveSignalMutation,
+    useCancelSignalMutation: actual.useCancelSignalMutation,
   }
 })
 
@@ -32,6 +36,8 @@ vi.mock('../api', async (importOriginal) => {
     pinSignal: (...args: unknown[]) => pinSignal(...args),
     unpinSignal: (...args: unknown[]) => unpinSignal(...args),
     setSignalUrgency: (...args: unknown[]) => setSignalUrgency(...args),
+    resolveSignal: (...args: unknown[]) => resolveSignal(...args),
+    cancelSignal: (...args: unknown[]) => cancelSignal(...args),
   }
 })
 
@@ -59,8 +65,8 @@ function buildFeedItem(overrides: Partial<SignalFeedItem> = {}): SignalFeedItem 
     permission_hints: {
       can_pin: true,
       can_set_urgency: true,
-      can_cancel: false,
-      can_resolve: false,
+      can_cancel: true,
+      can_resolve: true,
       can_create_linked_action_plan: false,
     },
     ...overrides,
@@ -89,6 +95,9 @@ describe('useSignalFeedQuickActions', () => {
     pinSignal.mockClear()
     unpinSignal.mockClear()
     setSignalUrgency.mockClear()
+    resolveSignal.mockClear()
+    cancelSignal.mockClear()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
   it('opens and closes the actions sheet with active item', () => {
@@ -113,16 +122,19 @@ describe('useSignalFeedQuickActions', () => {
     expect(result.current.activeItem).toBeNull()
   })
 
-  it('runs pin mutation for unpinned item', async () => {
+  it('runs pin mutation for unpinned item and returns close', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
       result.current.openActions(buildFeedItem())
     })
 
+    let actionResult: string | undefined
     act(() => {
-      result.current.runAction('pin')
+      actionResult = result.current.runAction('pin')
     })
+
+    expect(actionResult).toBe('close')
 
     await waitFor(() => {
       expect(pinSignal).toHaveBeenCalledWith('est-1', 'signal-1')
@@ -130,7 +142,7 @@ describe('useSignalFeedQuickActions', () => {
     expect(unpinSignal).not.toHaveBeenCalled()
   })
 
-  it('runs unpin mutation for pinned item', async () => {
+  it('runs unpin mutation for pinned item and returns close', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
@@ -147,7 +159,7 @@ describe('useSignalFeedQuickActions', () => {
     expect(pinSignal).not.toHaveBeenCalled()
   })
 
-  it('runs urgency mutation toggling priority', async () => {
+  it('runs urgency mutation toggling priority and returns close', async () => {
     const { result } = renderQuickActionsHook()
 
     act(() => {
@@ -160,6 +172,154 @@ describe('useSignalFeedQuickActions', () => {
 
     await waitFor(() => {
       expect(setSignalUrgency).toHaveBeenCalledWith('est-1', 'signal-1', 'high')
+    })
+    expect(resolveSignal).not.toHaveBeenCalled()
+    expect(cancelSignal).not.toHaveBeenCalled()
+  })
+
+  it('runs resolve mutation and returns stay-open', async () => {
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    let actionResult: string | undefined
+    act(() => {
+      actionResult = result.current.runAction('resolve')
+    })
+
+    expect(actionResult).toBe('stay-open')
+    expect(setSignalUrgency).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(resolveSignal).toHaveBeenCalledWith('est-1', 'signal-1')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+      expect(result.current.activeItem).toBeNull()
+    })
+  })
+
+  it('runs cancel mutation when confirm is accepted and returns stay-open', async () => {
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    let actionResult: string | undefined
+    act(() => {
+      actionResult = result.current.runAction('cancel')
+    })
+
+    expect(actionResult).toBe('stay-open')
+    expect(setSignalUrgency).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(cancelSignal).toHaveBeenCalledWith('est-1', 'signal-1')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionsOpen).toBe(false)
+    })
+  })
+
+  it('returns abort when cancel confirm is declined', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    let actionResult: string | undefined
+    act(() => {
+      actionResult = result.current.runAction('cancel')
+    })
+
+    expect(actionResult).toBe('abort')
+    expect(cancelSignal).not.toHaveBeenCalled()
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem).not.toBeNull()
+  })
+
+  it('does not close sheet after lifecycle success when active item changed', async () => {
+    const { result } = renderQuickActionsHook()
+
+    resolveSignal.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      return { id: 'signal-1', status: 'resolved' }
+    })
+
+    act(() => {
+      result.current.openActions(buildFeedItem({ id: 'signal-1' }))
+    })
+
+    act(() => {
+      result.current.runAction('resolve')
+    })
+
+    act(() => {
+      result.current.openActions(buildFeedItem({ id: 'signal-2', title: 'Autre signal' }))
+    })
+
+    await waitFor(() => {
+      expect(resolveSignal).toHaveBeenCalled()
+    })
+
+    expect(result.current.actionsOpen).toBe(true)
+    expect(result.current.activeItem?.id).toBe('signal-2')
+  })
+
+  it('sets actionError on lifecycle mutation failure for active item', async () => {
+    cancelSignal.mockRejectedValueOnce(new Error('Échec annulation'))
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    act(() => {
+      result.current.runAction('cancel')
+    })
+
+    await waitFor(() => {
+      expect(result.current.actionError).toBeTruthy()
+    })
+    expect(result.current.actionsOpen).toBe(true)
+  })
+
+  it('includes lifecycle mutations in isPending', async () => {
+    let resolveDeferred: (() => void) | undefined
+    resolveSignal.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDeferred = () => resolve({ id: 'signal-1', status: 'resolved' })
+        }),
+    )
+
+    const { result } = renderQuickActionsHook()
+
+    act(() => {
+      result.current.openActions(buildFeedItem())
+    })
+
+    act(() => {
+      result.current.runAction('resolve')
+    })
+
+    await waitFor(() => {
+      expect(result.current.isPending).toBe(true)
+    })
+
+    act(() => {
+      resolveDeferred?.()
+    })
+
+    await waitFor(() => {
+      expect(result.current.isPending).toBe(false)
     })
   })
 })

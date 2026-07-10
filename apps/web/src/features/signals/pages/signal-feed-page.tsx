@@ -194,6 +194,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           item={quickActions.activeItem}
           open={quickActions.actionsOpen}
           isPending={quickActions.isPending}
+          errorMessage={quickActions.actionError}
           onClose={quickActions.closeActions}
           onSelectAction={quickActions.runAction}
         />

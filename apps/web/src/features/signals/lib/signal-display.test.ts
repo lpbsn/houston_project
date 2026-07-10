@@ -111,7 +111,9 @@ describe('partitionFeedPinnedItems', () => {
 
 describe('pinned signal card display helpers', () => {
   it('uses neutral shell without left accent (pending-validation card family)', () => {
-    expect(getPinnedSignalCardClassName()).toBe(PINNED_SIGNAL_CARD_CLASS)
+    const className = getPinnedSignalCardClassName()
+    expect(className).toContain(PINNED_SIGNAL_CARD_CLASS)
+    expect(className).toContain('rounded-[14px]')
     expect(PINNED_SIGNAL_CARD_CLASS).not.toContain('border-l-')
   })
 })

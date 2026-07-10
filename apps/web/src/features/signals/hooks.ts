@@ -154,65 +154,42 @@ export function useSignalUrgencyMutation(
   })
 }
 
-type SignalLifecycleMutationOptions = {
-  onClosed?: () => void
-}
-
-function useSignalLifecycleMutationSuccess(
-  establishmentId: string | null,
-  signalId: string | null,
-  options?: SignalLifecycleMutationOptions,
-) {
+export function useCancelSignalMutation(establishmentId: string | null) {
   const queryClient = useQueryClient()
-  return () => {
-    if (establishmentId) {
-      invalidateEstablishmentSignalQueries(queryClient, establishmentId)
-    }
-    if (establishmentId && signalId) {
-      queryClient.removeQueries({
-        queryKey: signalsQueryKeys.detail(establishmentId, signalId),
-      })
-    }
-    options?.onClosed?.()
-  }
-}
-
-export function useCancelSignalMutation(
-  establishmentId: string | null,
-  signalId: string | null,
-  options?: SignalLifecycleMutationOptions,
-) {
-  const handleSuccess = useSignalLifecycleMutationSuccess(establishmentId, signalId, options)
   return useMutation({
-    mutationFn: async () => {
-      if (!establishmentId || !signalId) {
+    mutationFn: async (signalId: string) => {
+      if (!establishmentId) {
         throw new Error('Signal introuvable.')
       }
       return cancelSignal(establishmentId, signalId)
     },
-    onSuccess: () => {
-      handleSuccess()
+    onSuccess: (_data, signalId) => {
+      if (establishmentId) {
+        invalidateEstablishmentSignalQueries(queryClient, establishmentId)
+      }
+      if (establishmentId) {
+        queryClient.removeQueries({
+          queryKey: signalsQueryKeys.detail(establishmentId, signalId),
+        })
+      }
     },
   })
 }
 
-export function useResolveSignalMutation(
-  establishmentId: string | null,
-  signalId: string | null,
-) {
+export function useResolveSignalMutation(establishmentId: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async () => {
-      if (!establishmentId || !signalId) {
+    mutationFn: async (signalId: string) => {
+      if (!establishmentId) {
         throw new Error('Signal introuvable.')
       }
       return resolveSignal(establishmentId, signalId)
     },
-    onSuccess: (detail: SignalDetail) => {
+    onSuccess: (detail: SignalDetail, signalId) => {
       if (establishmentId) {
         invalidateEstablishmentSignalQueries(queryClient, establishmentId)
       }
-      if (establishmentId && signalId) {
+      if (establishmentId) {
         queryClient.setQueryData(signalsQueryKeys.detail(establishmentId, signalId), detail)
       }
     },

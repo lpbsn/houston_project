@@ -10,7 +10,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 import type { TerrainNavPath } from '@/app/terrain-routes'
 import { terrainTapProps } from '@/lib/terrain-motion'
-import { terrainObservationAction } from '@/lib/terrain-styles'
+import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type BottomMobileNavProps = {
@@ -84,9 +84,9 @@ export function BottomMobileNav({
                   <span
                     className={cn(
                       'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-full border-4 border-[#F5F4F0] text-white',
-                      terrainObservationAction.bg,
-                      terrainObservationAction.shadow,
-                      isActive && cn('ring-2', terrainObservationAction.ring),
+                      terrainBrandAction.bg,
+                      terrainBrandAction.shadow,
+                      isActive && cn('ring-2', terrainBrandAction.ring),
                     )}
                   >
                     <Icon className="h-6 w-6" />

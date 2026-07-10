@@ -30,7 +30,7 @@ function feedItem(
 }
 
 describe('canOpenSignalFeedCardActions', () => {
-  it('returns false when no pin or urgency permission', () => {
+  it('returns false when no actionable permission', () => {
     expect(canOpenSignalFeedCardActions(hints())).toBe(false)
   })
 
@@ -40,6 +40,14 @@ describe('canOpenSignalFeedCardActions', () => {
 
   it('returns true when can_set_urgency is true', () => {
     expect(canOpenSignalFeedCardActions(hints({ can_set_urgency: true }))).toBe(true)
+  })
+
+  it('returns true when can_resolve is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_resolve: true }))).toBe(true)
+  })
+
+  it('returns true when can_cancel is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_cancel: true }))).toBe(true)
   })
 })
 
@@ -53,7 +61,7 @@ describe('getSignalFeedCardActionOptions', () => {
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_pin: true }) }),
       ),
-    ).toEqual([{ id: 'pin', label: 'Épingler' }])
+    ).toEqual([{ id: 'pin', label: 'Épingler', tone: 'neutral' }])
   })
 
   it('returns unpin action when can_pin and pinned', () => {
@@ -64,7 +72,7 @@ describe('getSignalFeedCardActionOptions', () => {
           permission_hints: hints({ can_pin: true }),
         }),
       ),
-    ).toEqual([{ id: 'pin', label: 'Désépingler' }])
+    ).toEqual([{ id: 'pin', label: 'Désépingler', tone: 'neutral' }])
   })
 
   it('returns urgency action when can_set_urgency and normal priority', () => {
@@ -72,7 +80,7 @@ describe('getSignalFeedCardActionOptions', () => {
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_set_urgency: true }) }),
       ),
-    ).toEqual([{ id: 'urgency', label: 'Marquer urgent' }])
+    ).toEqual([{ id: 'urgency', label: 'Marquer urgent', tone: 'neutral' }])
   })
 
   it('returns normal priority action when can_set_urgency and high urgency', () => {
@@ -83,21 +91,44 @@ describe('getSignalFeedCardActionOptions', () => {
           permission_hints: hints({ can_set_urgency: true }),
         }),
       ),
-    ).toEqual([{ id: 'urgency', label: 'Priorité normale' }])
+    ).toEqual([{ id: 'urgency', label: 'Priorité normale', tone: 'neutral' }])
   })
 
-  it('returns both actions when both permissions are granted', () => {
+  it('returns resolve action when can_resolve', () => {
+    expect(
+      getSignalFeedCardActionOptions(
+        feedItem({ permission_hints: hints({ can_resolve: true }) }),
+      ),
+    ).toEqual([{ id: 'resolve', label: 'Marquer résolu', tone: 'success' }])
+  })
+
+  it('returns cancel action when can_cancel', () => {
+    expect(
+      getSignalFeedCardActionOptions(
+        feedItem({ permission_hints: hints({ can_cancel: true }) }),
+      ),
+    ).toEqual([{ id: 'cancel', label: 'Annuler ce signal', tone: 'danger' }])
+  })
+
+  it('returns all actions in order when all permissions are granted', () => {
     expect(
       getSignalFeedCardActionOptions(
         feedItem({
           is_pinned: true,
           urgency: 'high',
-          permission_hints: hints({ can_pin: true, can_set_urgency: true }),
+          permission_hints: hints({
+            can_pin: true,
+            can_set_urgency: true,
+            can_resolve: true,
+            can_cancel: true,
+          }),
         }),
       ),
     ).toEqual([
-      { id: 'pin', label: 'Désépingler' },
-      { id: 'urgency', label: 'Priorité normale' },
+      { id: 'pin', label: 'Désépingler', tone: 'neutral' },
+      { id: 'urgency', label: 'Priorité normale', tone: 'neutral' },
+      { id: 'resolve', label: 'Marquer résolu', tone: 'success' },
+      { id: 'cancel', label: 'Annuler ce signal', tone: 'danger' },
     ])
   })
 })
