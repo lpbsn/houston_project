@@ -2,7 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainErrorState, TerrainFieldLabel } from '@/components/ui/terrain'
+import { TerrainCard, TerrainErrorState } from '@/components/ui/terrain'
 import { readCurrentDetailDeepLink } from '@/features/comments/lib/detail-deep-link'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { CommentSection } from '@/features/comments/components/comment-section'
@@ -17,6 +17,7 @@ import {
 import { SignalLinkedActionPlansSection } from '../components/signal-linked-action-plans-section'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
+import { SignalDetailLabel } from '../components/signal-detail-label'
 import { useSignalDetailQuery } from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
@@ -102,7 +103,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
               il y a {formatSignalRelativeTime(signal.last_activity_at)}
             </p>
             {(reporterName || signal.aggregation_count > 0) ? (
-              <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
+              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
                 <span className="min-w-0 truncate">
                   {reporterName ? `Signalé par ${reporterName}` : '\u00a0'}
                 </span>
@@ -118,8 +119,8 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <SignalDetailClassificationSection signal={signal} />
 
           <TerrainCard>
-            <TerrainFieldLabel>Description</TerrainFieldLabel>
-            <p className="mt-2 text-[13px] leading-relaxed text-[#444]">
+            <SignalDetailLabel>Description</SignalDetailLabel>
+            <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]">
               {formatDescriptionContent(signal.structured_summary)}
             </p>
           </TerrainCard>

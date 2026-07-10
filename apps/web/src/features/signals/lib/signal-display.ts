@@ -1,4 +1,5 @@
 import type { HoustonBadgeVariant, TerrainSectionDotVariant } from '@/lib/terrain-styles'
+import { terrainInProgress } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import type { SignalFeedItem } from '../types'
@@ -102,7 +103,7 @@ export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
 export const SIGNAL_CARD_LEFT_ACCENT = {
   pinned: 'border-l-[#1a1a1a]',
   open: 'border-l-[#EF9F27]',
-  in_progress: 'border-l-[#1B4FD8]',
+  in_progress: 'border-l-[#3A7A96]',
   resolved: 'border-l-[#1D9E75]',
   archived: 'border-l-[#555]',
   neutral: 'border-l-[#7D7B75]',
@@ -112,7 +113,7 @@ export const SIGNAL_CARD_LEFT_ACCENT = {
 export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   pinned: '#1a1a1a',
   open: '#EF9F27',
-  in_progress: '#1B4FD8',
+  in_progress: terrainInProgress.color,
   resolved: '#1D9E75',
   archived: '#555',
   neutral: '#7D7B75',
@@ -182,7 +183,7 @@ export function getSignalStatusBadgeVariant(status: string): HoustonBadgeVariant
     return 'amber'
   }
   if (status === 'in_progress') {
-    return 'blue'
+    return 'teal'
   }
   if (status === 'resolved') {
     return 'green'

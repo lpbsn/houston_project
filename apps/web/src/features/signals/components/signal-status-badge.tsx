@@ -1,4 +1,5 @@
 import { HoustonBadge } from '@/components/ui/terrain'
+import { terrainInProgress } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { getSignalStatusBadgeVariant } from '../lib/signal-display'
@@ -19,9 +20,11 @@ const LABELS: Record<string, string> = {
 
 const ARCHIVED_BADGE_CLASS = 'bg-[#555] text-white'
 
+const DETAIL_BADGE_CLASS = 'px-2.5 py-1 text-[10px]'
+
 const FEED_STATUS_CLASS: Record<string, string> = {
   open: 'bg-[#FFF4E5] text-[#B45309]',
-  in_progress: 'bg-[#E8F0FE] text-[#1B4FD8]',
+  in_progress: terrainInProgress.badgeFeed,
   resolved: 'bg-[#E6F4EA] text-[#137333]',
   canceled: 'bg-[#F0EFE9] text-[#7D7B75]',
   archived: 'bg-[#F0EFE9] text-[#7D7B75]',
@@ -52,11 +55,15 @@ export function SignalStatusBadge({
 
   if (status === 'archived') {
     return (
-      <HoustonBadge variant={badgeVariant} className={ARCHIVED_BADGE_CLASS}>
+      <HoustonBadge variant={badgeVariant} className={cn(DETAIL_BADGE_CLASS, ARCHIVED_BADGE_CLASS)}>
         {label}
       </HoustonBadge>
     )
   }
 
-  return <HoustonBadge variant={badgeVariant}>{label}</HoustonBadge>
+  return (
+    <HoustonBadge variant={badgeVariant} className={DETAIL_BADGE_CLASS}>
+      {label}
+    </HoustonBadge>
+  )
 }

@@ -37,7 +37,14 @@ export const terrainBrandAction = {
 /** Feed card reporter avatar (signal feed maquette). */
 export const terrainFeedAvatar = 'bg-[#3A7A96] text-white'
 
-export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue'
+/** In-progress operational accent (#3A7A96). */
+export const terrainInProgress = {
+  color: '#3A7A96',
+  badgeSolid: 'bg-[#3A7A96] text-white',
+  badgeFeed: 'bg-[#E8F2F5] text-[#3A7A96]',
+} as const
+
+export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue' | 'teal'
 
 export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   red: 'bg-[#E24B4A] text-white',
@@ -45,6 +52,7 @@ export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   gray: 'bg-[#E8E6DF] text-[#555]',
   green: 'bg-[#1D9E75] text-white',
   blue: 'bg-[#1B4FD8] text-white',
+  teal: terrainInProgress.badgeSolid,
 }
 
 export type TerrainSectionDotVariant = 'danger' | 'primary' | 'muted' | 'warning' | 'success'
