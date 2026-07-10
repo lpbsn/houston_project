@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { TerrainStickyFooter } from '@/components/ui/terrain'
-import { terrain } from '@/lib/terrain-styles'
+import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type SignalDetailStickyFooterProps = {
@@ -13,8 +13,9 @@ export function SignalDetailStickyFooter({ onCreateActionPlan }: SignalDetailSti
       <Button
         type="button"
         className={cn(
-          'h-11 w-full rounded-2xl text-[15px] font-semibold text-white hover:bg-[#1B4FD8]/95',
-          terrain.primaryBg,
+          'h-11 w-full rounded-full text-[15px] font-semibold text-white',
+          terrainBrandAction.bg,
+          terrainBrandAction.hover,
         )}
         onClick={onCreateActionPlan}
       >

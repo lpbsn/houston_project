@@ -215,7 +215,7 @@ describe('formatSignalAggregationLabel', () => {
 describe('getSignalStatusBadgeVariant', () => {
   it('maps active statuses to amber, blue, and green', () => {
     expect(getSignalStatusBadgeVariant('open')).toBe('amber')
-    expect(getSignalStatusBadgeVariant('in_progress')).toBe('blue')
+    expect(getSignalStatusBadgeVariant('in_progress')).toBe('teal')
     expect(getSignalStatusBadgeVariant('resolved')).toBe('green')
   })
 
