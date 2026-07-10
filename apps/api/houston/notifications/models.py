@@ -30,6 +30,12 @@ class Notification(BaseModel):
             "Action plan execution reopened",
         )
         COMMENT_MENTION_CREATED = "comment.mention.created", "Comment mention created"
+        COMMENT_SIGNAL_CREATED = "comment.signal.created", "Comment signal created"
+        COMMENT_ACTION_PLAN_EXECUTION_CREATED = (
+            "comment.action_plan_execution.created",
+            "Comment action plan execution created",
+        )
+        COMMENT_REPLY_CREATED = "comment.reply.created", "Comment reply created"
         SIGNAL_CREATED = "signal.created", "Signal created"
         SIGNAL_URGENCY_CHANGED = "signal.urgency_changed", "Signal urgency changed"
         SIGNAL_PINNED = "signal.pinned", "Signal pinned"

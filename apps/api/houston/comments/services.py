@@ -156,6 +156,13 @@ def create_signal_comment(
             comment_id=comment.id,
             actor_membership_id=author_membership.id,
         )
+    from houston.notifications.scheduling import schedule_comment_signal_created_notification
+
+    schedule_comment_signal_created_notification(
+        comment_id=comment.id,
+        actor_membership_id=author_membership.id,
+        exclude_mentioned_membership_ids=set(deduped_ids),
+    )
     _schedule_comment_invalidation(
         establishment_id=signal.establishment_id,
         reason="comment.signal.created",
@@ -249,6 +256,24 @@ def create_action_plan_execution_comment(
         schedule_comment_mention_created_notification(
             comment_id=comment.id,
             actor_membership_id=author_membership.id,
+        )
+    if parent_comment_id is None:
+        from houston.notifications.scheduling import (
+            schedule_comment_action_plan_execution_created_notification,
+        )
+
+        schedule_comment_action_plan_execution_created_notification(
+            comment_id=comment.id,
+            actor_membership_id=author_membership.id,
+            exclude_mentioned_membership_ids=set(deduped_ids),
+        )
+    else:
+        from houston.notifications.scheduling import schedule_comment_reply_created_notification
+
+        schedule_comment_reply_created_notification(
+            comment_id=comment.id,
+            actor_membership_id=author_membership.id,
+            exclude_mentioned_membership_ids=set(deduped_ids),
         )
     _schedule_comment_invalidation(
         establishment_id=execution.establishment_id,

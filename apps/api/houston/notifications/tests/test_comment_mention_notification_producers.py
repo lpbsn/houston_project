@@ -41,13 +41,18 @@ def _signal(owner):
     )
 
 
-def _notifications_for_comment(*, comment_id) -> list[Notification]:
-    return list(
-        Notification.objects.filter(
-            subject_type=Notification.SubjectType.COMMENT,
-            subject_id=comment_id,
-        ).order_by("recipient_membership_id")
+def _notifications_for_comment(
+    *,
+    comment_id,
+    event_key: str | None = None,
+) -> list[Notification]:
+    queryset = Notification.objects.filter(
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment_id,
     )
+    if event_key is not None:
+        queryset = queryset.filter(event_key=event_key)
+    return list(queryset.order_by("recipient_membership_id"))
 
 
 def _recipient_ids(notifications: list[Notification]) -> set:
@@ -181,7 +186,10 @@ def test_execution_comment_mention_notifies_out_of_scope_recipient():
         mentioned_membership_ids=[outsider.id],
     )
 
-    notifications = _notifications_for_comment(comment_id=comment.id)
+    notifications = _notifications_for_comment(
+        comment_id=comment.id,
+        event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
+    )
     assert len(notifications) == 1
     assert notifications[0].recipient_membership_id == outsider.id
     _assert_generic_copy(notifications[0])

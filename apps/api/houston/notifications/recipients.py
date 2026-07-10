@@ -11,6 +11,7 @@ from houston.chat.selectors import active_participant_queryset
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
 from houston.signals.models import Signal
+from houston.signals.reporter_display import created_from_source_observation_link
 
 
 def _dedupe_memberships(
@@ -96,6 +97,94 @@ def resolve_comment_mention_recipients(
             and membership.establishment_id == comment.establishment_id
         ):
             recipients.append(membership)
+    return _dedupe_memberships(recipients)
+
+
+def _active_membership_in_establishment(
+    membership: EstablishmentMembership | None,
+    *,
+    establishment_id: uuid.UUID,
+) -> EstablishmentMembership | None:
+    if membership is None:
+        return None
+    if membership.status != EstablishmentMembership.Status.ACTIVE:
+        return None
+    if membership.establishment_id != establishment_id:
+        return None
+    return membership
+
+
+def resolve_comment_signal_created_recipients(
+    *,
+    signal: Signal,
+) -> list[EstablishmentMembership]:
+    recipients: list[EstablishmentMembership] = []
+    linked_executions = ActionPlanExecution.objects.filter(
+        establishment_id=signal.establishment_id,
+        source_signal_id=signal.id,
+    ).prefetch_related("assignees__membership")
+    for execution in linked_executions:
+        recipients.extend(_active_action_plan_assignee_memberships(execution=execution))
+
+    observation_link = created_from_source_observation_link(signal)
+    if observation_link is not None:
+        submitter = _active_membership_in_establishment(
+            observation_link.observation.submitted_by_membership,
+            establishment_id=signal.establishment_id,
+        )
+        if submitter is not None:
+            recipients.append(submitter)
+
+    return _dedupe_memberships(recipients)
+
+
+def resolve_comment_action_plan_execution_created_recipients(
+    *,
+    execution: ActionPlanExecution,
+) -> list[EstablishmentMembership]:
+    return resolve_action_plan_execution_reopened_recipients(execution=execution)
+
+
+def resolve_comment_reply_created_recipients(
+    *,
+    reply_comment: Comment,
+) -> list[EstablishmentMembership]:
+    if reply_comment.parent_comment_id is None:
+        return []
+    if reply_comment.action_plan_execution_id is None:
+        return []
+
+    root = reply_comment.parent_comment
+    if root is None or root.parent_comment_id is not None:
+        return []
+
+    recipients: list[EstablishmentMembership] = []
+
+    root_author = _active_membership_in_establishment(
+        root.author_membership,
+        establishment_id=reply_comment.establishment_id,
+    )
+    if root_author is not None:
+        recipients.append(root_author)
+
+    for sibling in root.replies.all():
+        if sibling.id == reply_comment.id:
+            continue
+        author = _active_membership_in_establishment(
+            sibling.author_membership,
+            establishment_id=reply_comment.establishment_id,
+        )
+        if author is not None:
+            recipients.append(author)
+
+    for link in root.mention_links.all():
+        mentioned = _active_membership_in_establishment(
+            link.mentioned_membership,
+            establishment_id=reply_comment.establishment_id,
+        )
+        if mentioned is not None:
+            recipients.append(mentioned)
+
     return _dedupe_memberships(recipients)
 
 
