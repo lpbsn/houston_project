@@ -26,6 +26,7 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "comment.action_plan_execution.created",
         "comment.reply.created",
         "signal.created",
+        "signal.created.unassigned_global",
         "signal.urgency_changed",
         "signal.pinned",
         "signal.resolved",
@@ -75,6 +76,10 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "signal.created": (
         "Nouveau signal",
         "Un signal a été créé sur votre pôle.",
+    ),
+    "signal.created.unassigned_global": (
+        "Signal sans pôle couvert",
+        "Un signal nécessite une attention globale.",
     ),
     "signal.urgency_changed": (
         "Signal urgent",

@@ -41,6 +41,10 @@ class Notification(BaseModel):
         )
         COMMENT_REPLY_CREATED = "comment.reply.created", "Comment reply created"
         SIGNAL_CREATED = "signal.created", "Signal created"
+        SIGNAL_CREATED_UNASSIGNED_GLOBAL = (
+            "signal.created.unassigned_global",
+            "Signal created unassigned global",
+        )
         SIGNAL_URGENCY_CHANGED = "signal.urgency_changed", "Signal urgency changed"
         SIGNAL_PINNED = "signal.pinned", "Signal pinned"
         SIGNAL_RESOLVED = "signal.resolved", "Signal resolved"

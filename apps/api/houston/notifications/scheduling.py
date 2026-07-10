@@ -27,6 +27,7 @@ from houston.notifications.recipients import (
     resolve_comment_reply_created_recipients,
     resolve_comment_signal_created_recipients,
     resolve_signal_pole_recipients,
+    resolve_signal_unassigned_global_recipients,
 )
 from houston.notifications.services import (
     create_in_app_notification,
@@ -554,15 +555,25 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
         signal = _load_signal(signal_id=signal_id)
         if signal is None:
             return
-        recipients = resolve_signal_pole_recipients(signal=signal)
-        _deliver_signal_notifications(
-            signal=signal,
-            event_key=Notification.EventKey.SIGNAL_CREATED,
-            priority=Notification.Priority.ACTION_REQUIRED,
-            recipients=recipients,
-            actor_membership=None,
-            exclude_actor_if_recipient=False,
-        )
+        pole_recipients = resolve_signal_pole_recipients(signal=signal)
+        if pole_recipients:
+            _deliver_signal_notifications(
+                signal=signal,
+                event_key=Notification.EventKey.SIGNAL_CREATED,
+                priority=Notification.Priority.ACTION_REQUIRED,
+                recipients=pole_recipients,
+                actor_membership=None,
+                exclude_actor_if_recipient=False,
+            )
+        else:
+            _deliver_signal_notifications(
+                signal=signal,
+                event_key=Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
+                priority=Notification.Priority.ACTION_REQUIRED,
+                recipients=resolve_signal_unassigned_global_recipients(signal=signal),
+                actor_membership=None,
+                exclude_actor_if_recipient=False,
+            )
 
     _run_notification_after_commit(
         deliver=deliver,

@@ -14,6 +14,7 @@ PUSH_V1_EVENT_KEYS: frozenset[str] = frozenset(
         Notification.EventKey.COMMENT_ACTION_PLAN_EXECUTION_CREATED,
         Notification.EventKey.COMMENT_REPLY_CREATED,
         Notification.EventKey.SIGNAL_CREATED,
+        Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
         Notification.EventKey.SIGNAL_URGENCY_CHANGED,
         Notification.EventKey.SIGNAL_PINNED,
         Notification.EventKey.SIGNAL_RESOLVED,

@@ -10,6 +10,7 @@ from houston.chat.permissions import can_access_chat
 from houston.chat.selectors import active_participant_queryset
 from houston.comments.models import Comment
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.role_constants import ADMIN_ROLES
 from houston.signals.models import Signal
 from houston.signals.reporter_display import created_from_source_observation_link
 
@@ -233,5 +234,20 @@ def resolve_signal_pole_recipients(*, signal: Signal) -> list[EstablishmentMembe
             )
             .select_related("user")
             .distinct()
+        )
+    )
+
+
+def resolve_signal_unassigned_global_recipients(
+    *,
+    signal: Signal,
+) -> list[EstablishmentMembership]:
+    return _dedupe_memberships(
+        list(
+            EstablishmentMembership.objects.filter(
+                establishment_id=signal.establishment_id,
+                status=EstablishmentMembership.Status.ACTIVE,
+                role__in=ADMIN_ROLES,
+            ).select_related("user")
         )
     )
