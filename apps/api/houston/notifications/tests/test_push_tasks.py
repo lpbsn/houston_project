@@ -67,8 +67,8 @@ def test_run_push_for_notification_skips_when_event_key_not_allowlisted():
     recipient = _prepare_recipient()
     notification = create_test_notification(
         recipient=recipient,
-        event_key=Notification.EventKey.CHAT_MESSAGE_RECEIVED,
-        subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+        event_key="signal.future_event",
+        subject_type=Notification.SubjectType.SIGNAL,
     )
     _create_subscription(user=recipient.user)
 

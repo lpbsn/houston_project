@@ -58,6 +58,7 @@ from houston.chat.services import (
     promote_group_participant,
     remove_group_participant,
     rename_group_conversation,
+    touch_conversation_presence,
     update_establishment_chat_enabled,
 )
 from houston.chat.ws_ticket import issue_ws_ticket
@@ -625,6 +626,40 @@ class ChatConversationSeenView(EstablishmentScopedChatMixin, APIView):
 
         try:
             mark_conversation_seen(
+                actor_membership=membership,
+                conversation_id=uuid.UUID(str(conversation_id)),
+            )
+        except ChatError as exc:
+            return _chat_error_response(exc)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChatConversationPresenceView(EstablishmentScopedChatMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanAccessChat,
+    ]
+
+    @extend_schema(
+        tags=["chat"],
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Conversation presence heartbeat recorded."),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, conversation_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        try:
+            touch_conversation_presence(
                 actor_membership=membership,
                 conversation_id=uuid.UUID(str(conversation_id)),
             )

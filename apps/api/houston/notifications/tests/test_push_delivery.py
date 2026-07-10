@@ -10,7 +10,6 @@ from pywebpush import WebPushException
 
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
-from houston.notifications.push import constants as push_constants
 from houston.notifications.push.services import (
     _try_claim_push_delivery_for_send,
     run_push_for_notification,
@@ -153,7 +152,7 @@ def test_run_push_for_notification_sends_for_comment_mention():
 
 
 @override_settings(**VAPID_SETTINGS)
-def test_run_push_for_notification_skips_chat_message_received():
+def test_run_push_for_notification_skips_chat_when_presence_active():
     recipient = _prepare_recipient()
     notification = create_test_notification(
         recipient=recipient,
@@ -162,13 +161,18 @@ def test_run_push_for_notification_skips_chat_message_received():
     )
     _create_subscription(user=recipient.user)
 
-    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+    with (
+        patch(
+            "houston.notifications.push.services.is_chat_presence_active",
+            return_value=True,
+        ),
+        patch("houston.notifications.push.services.send_web_push") as send_web_push,
+    ):
         sent_count = run_push_for_notification(notification.id)
 
     assert sent_count == 0
     assert PushDelivery.objects.count() == 0
     send_web_push.assert_not_called()
-    assert Notification.EventKey.CHAT_MESSAGE_RECEIVED not in push_constants.PUSH_V1_EVENT_KEYS
 
 
 @override_settings(**VAPID_SETTINGS)

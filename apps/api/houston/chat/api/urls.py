@@ -4,6 +4,7 @@ from houston.chat.api.views import (
     ChatConversationDetailView,
     ChatConversationListView,
     ChatConversationMessagesView,
+    ChatConversationPresenceView,
     ChatConversationSeenView,
     ChatCreateDmView,
     ChatCreateGroupView,
@@ -51,6 +52,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/messages/",
         ChatConversationMessagesView.as_view(),
         name="chat-conversation-messages",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/presence/",
+        ChatConversationPresenceView.as_view(),
+        name="chat-conversation-presence",
     ),
     path(
         "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/seen/",

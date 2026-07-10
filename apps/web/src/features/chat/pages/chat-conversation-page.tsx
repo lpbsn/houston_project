@@ -21,6 +21,7 @@ import {
   useChatMessagesInfiniteQuery,
   useMarkConversationSeenMutation,
 } from '../hooks'
+import { useChatConversationPresence } from '../hooks/use-chat-conversation-presence'
 
 type ChatConversationPageProps = {
   conversationId: string
@@ -39,6 +40,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
     establishmentId,
     conversationId,
   )
+  useChatConversationPresence(establishmentId, conversationId)
   const realtime = useOptionalChatRealtime()
   const connectionStatus = realtime?.connectionStatus ?? 'idle'
   const localMessages = useMemo(
