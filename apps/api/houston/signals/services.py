@@ -223,7 +223,6 @@ def create_signal_from_candidate(
         responsible_business_unit=resolved.responsible_business_unit,
         activity_subject=resolved.activity_subject,
         status=Signal.Status.OPEN,
-        urgency=Signal.Urgency.NORMAL,
         title=title.strip(),
         structured_summary=structured_summary.strip(),
         location_text=location_text,
@@ -1380,32 +1379,6 @@ def unpin_signal(*, signal: Signal) -> Signal:
 
 
 @transaction.atomic
-def set_signal_urgency(
-    *,
-    signal: Signal,
-    urgency: str,
-    actor_membership: EstablishmentMembership | None = None,
-) -> Signal:
-    if signal.status not in ACTIVE_SIGNAL_STATUSES:
-        raise SignalStateError("Urgency can only be changed for active signals.")
-    if urgency not in {Signal.Urgency.NORMAL, Signal.Urgency.HIGH}:
-        raise SignalValidationError("Invalid urgency value.")
-    previous_urgency = signal.urgency
-    signal.urgency = urgency
-    touch_signal_activity(signal=signal)
-    signal.save(update_fields=["urgency", "last_activity_at", "updated_at"])
-    _schedule_signal_invalidation(signal=signal, reason="signal.updated")
-    if previous_urgency != Signal.Urgency.HIGH and urgency == Signal.Urgency.HIGH:
-        from houston.notifications.scheduling import schedule_signal_urgency_changed_notification
-
-        schedule_signal_urgency_changed_notification(
-            signal_id=signal.id,
-            actor_membership_id=actor_membership.id if actor_membership is not None else None,
-        )
-    return signal
-
-
-@transaction.atomic
 def cancel_signal(
     *,
     signal: Signal,
@@ -1441,7 +1414,6 @@ def resolve_signal(
     result = _transition_active_signal_to_terminal(
         signal=signal,
         target_status=Signal.Status.RESOLVED,
-        reset_high_urgency=True,
     )
     from houston.notifications.scheduling import schedule_signal_resolved_notification
 
@@ -1491,7 +1463,6 @@ def _transition_active_signal_to_terminal(
     *,
     signal: Signal,
     target_status: str,
-    reset_high_urgency: bool = False,
 ) -> Signal:
     if signal.status not in ACTIVE_SIGNAL_STATUSES:
         raise SignalStateError("Only active signals can be canceled or resolved.")
@@ -1508,9 +1479,6 @@ def _transition_active_signal_to_terminal(
         "last_activity_at",
         "updated_at",
     ]
-    if reset_high_urgency and signal.urgency == Signal.Urgency.HIGH:
-        signal.urgency = Signal.Urgency.NORMAL
-        update_fields.append("urgency")
     touch_signal_activity(signal=signal)
     signal.save(update_fields=update_fields)
     _schedule_signal_invalidation(signal=signal, reason="signal.updated")

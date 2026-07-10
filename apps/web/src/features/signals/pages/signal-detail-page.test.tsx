@@ -37,7 +37,6 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     structured_summary_short: 'Short',
     structured_summary: 'Description du signal.',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     affected_business_unit_key: null,
     affected_business_unit_label: null,
@@ -61,7 +60,6 @@ function buildSignal(overrides: Partial<SignalDetail> = {}): SignalDetail {
     linked_action_plan_executions: [],
     permission_hints: {
       can_pin: false,
-      can_set_urgency: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -83,8 +81,6 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('../hooks', () => ({
   useSignalDetailQuery: () => detailQueryMock(),
-  useCancelSignalMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-  useResolveSignalMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }))
 
 vi.mock('@/features/comments/components/comment-section', () => ({
@@ -214,7 +210,6 @@ describe('SignalDetailPage tabs', () => {
       data: buildSignal({
         permission_hints: {
           can_pin: false,
-          can_set_urgency: false,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: true,
@@ -233,15 +228,39 @@ describe('SignalDetailPage tabs', () => {
   })
 })
 
-describe('SignalDetailPage pin and urgency actions', () => {
-  it('does not show pin or urgency actions on details tab', () => {
+describe('SignalDetailPage lifecycle actions', () => {
+  it('does not show resolve or cancel actions on details tab', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignal({
+        permission_hints: {
+          can_pin: false,
+          can_cancel: true,
+          can_resolve: true,
+          can_create_linked_action_plan: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'Résolu' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Marquer résolu' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler ce signal' })).toBeNull()
+  })
+})
+
+describe('SignalDetailPage pin actions', () => {
+  it('does not show pin actions on details tab', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
       data: buildSignal({
         permission_hints: {
           can_pin: true,
-          can_set_urgency: true,
           can_cancel: false,
           can_resolve: false,
           can_create_linked_action_plan: false,
@@ -254,8 +273,6 @@ describe('SignalDetailPage pin and urgency actions', () => {
 
     expect(screen.queryByRole('button', { name: 'Épingler' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Désépingler' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Marquer urgent' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Priorité normale' })).toBeNull()
   })
 })
 

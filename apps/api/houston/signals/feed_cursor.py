@@ -10,7 +10,7 @@ from django.utils.dateparse import parse_datetime
 
 from houston.signals.models import Signal
 
-CURSOR_PART_COUNT = 7
+CURSOR_PART_COUNT = 6
 
 
 class SignalFeedCursorError(Exception):
@@ -23,23 +23,17 @@ class SignalFeedCursorError(Exception):
 class SignalFeedCursor:
     status_group_rank: int
     is_pinned: bool
-    urgency_order: int
     status_rank: int
     last_activity_at: datetime
     created_at: datetime
     signal_id: uuid.UUID
 
 
-def feed_sort_case_expressions() -> tuple[Case, Case, Case]:
+def feed_sort_case_expressions() -> tuple[Case, Case]:
     status_group_rank = Case(
         When(status__in=[Signal.Status.OPEN, Signal.Status.IN_PROGRESS], then=Value(0)),
         When(status=Signal.Status.RESOLVED, then=Value(1)),
         default=Value(2),
-        output_field=IntegerField(),
-    )
-    urgency_order = Case(
-        When(urgency=Signal.Urgency.HIGH, then=Value(0)),
-        default=Value(1),
         output_field=IntegerField(),
     )
     status_rank = Case(
@@ -48,7 +42,7 @@ def feed_sort_case_expressions() -> tuple[Case, Case, Case]:
         default=Value(2),
         output_field=IntegerField(),
     )
-    return status_group_rank, urgency_order, status_rank
+    return status_group_rank, status_rank
 
 
 def status_group_rank_for_signal(signal: Signal) -> int:
@@ -57,10 +51,6 @@ def status_group_rank_for_signal(signal: Signal) -> int:
     if signal.status == Signal.Status.RESOLVED:
         return 1
     return 2
-
-
-def urgency_order_for_signal(signal: Signal) -> int:
-    return 0 if signal.urgency == Signal.Urgency.HIGH else 1
 
 
 def status_rank_for_signal(signal: Signal) -> int:
@@ -76,7 +66,6 @@ def encode_signal_feed_cursor(signal: Signal) -> str:
         [
             str(status_group_rank_for_signal(signal)),
             "1" if signal.is_pinned else "0",
-            str(urgency_order_for_signal(signal)),
             str(status_rank_for_signal(signal)),
             signal.last_activity_at.isoformat(),
             signal.created_at.isoformat(),
@@ -103,11 +92,10 @@ def parse_signal_feed_cursor(raw: str | None) -> SignalFeedCursor | None:
     try:
         status_group_rank = int(parts[0])
         is_pinned = parts[1] == "1"
-        urgency_order = int(parts[2])
-        status_rank = int(parts[3])
-        last_activity_at = parse_datetime(parts[4])
-        created_at = parse_datetime(parts[5])
-        signal_id = uuid.UUID(parts[6])
+        status_rank = int(parts[2])
+        last_activity_at = parse_datetime(parts[3])
+        created_at = parse_datetime(parts[4])
+        signal_id = uuid.UUID(parts[5])
     except (TypeError, ValueError) as exc:
         raise SignalFeedCursorError() from exc
     if last_activity_at is None or created_at is None:
@@ -115,7 +103,6 @@ def parse_signal_feed_cursor(raw: str | None) -> SignalFeedCursor | None:
     return SignalFeedCursor(
         status_group_rank=status_group_rank,
         is_pinned=is_pinned,
-        urgency_order=urgency_order,
         status_rank=status_rank,
         last_activity_at=last_activity_at,
         created_at=created_at,
@@ -127,7 +114,6 @@ def _after_cursor_filter(cursor: SignalFeedCursor) -> Q:
     fields: list[tuple[str, str, object]] = [
         ("status_group_rank", "asc", cursor.status_group_rank),
         ("is_pinned", "desc", cursor.is_pinned),
-        ("urgency_order", "asc", cursor.urgency_order),
         ("status_rank", "asc", cursor.status_rank),
         ("last_activity_at", "desc", cursor.last_activity_at),
         ("created_at", "desc", cursor.created_at),
@@ -148,9 +134,8 @@ def apply_signal_feed_cursor(
     queryset: QuerySet[Signal],
     cursor: SignalFeedCursor,
 ) -> QuerySet[Signal]:
-    status_group_rank, urgency_order, status_rank = feed_sort_case_expressions()
+    status_group_rank, status_rank = feed_sort_case_expressions()
     return queryset.annotate(
         status_group_rank=status_group_rank,
-        urgency_order=urgency_order,
         status_rank=status_rank,
     ).filter(_after_cursor_filter(cursor))

@@ -163,7 +163,7 @@ Operational WebSocket invalidation is documented in [realtime_domain.md](domains
 | `subject_type` | `reason` | Service source | Catalogue event_key(s) covered |
 |---|---|---|---|
 | `signal` | `signal.created` | `signals/services.py::create_signal_from_candidate` | `signal.created` |
-| `signal` | `signal.updated` | `signals/services.py` (aggregate, pin, unpin, urgency, cancel, resolve) | `signal.aggregated`, `signal.urgency_changed`, `signal.pinned`, `signal.unpinned`, `signal.resolved`, `signal.canceled` |
+| `signal` | `signal.updated` | `signals/services.py` (aggregate, pin, unpin, cancel, resolve) | `signal.aggregated`, `signal.pinned`, `signal.unpinned`, `signal.resolved`, `signal.canceled` |
 | `action` | `action.created` | `actions/services.py::create_action` | `action.created` |
 | `action` | `action.updated` | `actions/services.py` (accept, mark_done, validate, reopen, cancel, reassign, due_at) | `action.accepted`, `action.pending_validation`, `action.completed`, `action.validated`, `action.reopened`, `action.canceled`, `action.reassigned`, `action.due_at_changed` |
 | `checklist` | `checklist.updated` | `checklists/services.py` (template/assignment writers) | all `checklist.template.*`, `checklist.assignment.*` |
@@ -222,7 +222,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | subject_type / subject_id | `signal` / `signal.id` |
 | establishment_id | `signal.establishment_id` |
 | emission_moment | After `Signal.objects.create`, source observation link, before `on_commit` → `signal.created` |
-| payload_safe | `{ signal_id, establishment_id, observation_id, affected_business_unit_id, responsible_business_unit_id, activity_subject_id, status, urgency }` |
+| payload_safe | `{ signal_id, establishment_id, observation_id, affected_business_unit_id, responsible_business_unit_id, activity_subject_id, status }` |
 | realtime_transport | `signal` / `signal.created` |
 | consumers | realtime=yes, notification=later, audit=later, async=later |
 | notification_candidate | conditional |
@@ -246,25 +246,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | notification_candidate | conditional |
 | notification_lot | **later** |
 | notification_reason | Recurring same situation — noisy if notified systematically |
-| tests_futurs | Realtime bundle; conditional notification only if high urgency / pinned (post-Lot 1) |
-
-#### `signal.urgency_changed`
-
-| Field | Value |
-|---|---|
-| domain | signal |
-| service | `signals/services.py::set_signal_urgency` |
-| actor | membership (command caller) |
-| subject_type / subject_id | `signal` / `signal.id` |
-| establishment_id | `signal.establishment_id` |
-| emission_moment | After urgency `save`, before `on_commit` → `signal.updated` |
-| payload_safe | `{ signal_id, establishment_id, from_urgency, to_urgency }` |
-| realtime_transport | `signal` / `signal.updated` (bundled) |
-| consumers | realtime=yes, notification=later |
-| notification_candidate | conditional |
-| notification_lot | **later** |
-| notification_reason | High urgency visible in feed/realtime; manager notification post-Lot 1 |
-| tests_futurs | Manager in MembershipScope for affected/responsible BU (post-Lot 1 rules) |
+| tests_futurs | Realtime bundle; conditional notification only if pinned (post-Lot 1) |
 
 #### `signal.pinned`
 
@@ -311,7 +293,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | actor | membership (manual) or `system` (auto after all linked actions terminal) |
 | subject_type / subject_id | `signal` / `signal.id` |
 | establishment_id | `signal.establishment_id` |
-| emission_moment | After terminal transition `save` (unpin, optional urgency reset), before `on_commit` → `signal.updated` |
+| emission_moment | After terminal transition `save` (unpin), before `on_commit` → `signal.updated` |
 | payload_safe | `{ signal_id, establishment_id, from_status, to_status: "resolved" }` |
 | realtime_transport | `signal` / `signal.updated` (bundled) |
 | consumers | realtime=yes, notification=later |

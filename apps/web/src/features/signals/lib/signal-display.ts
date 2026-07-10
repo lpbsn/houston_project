@@ -1,4 +1,5 @@
 import type { HoustonBadgeVariant, TerrainSectionDotVariant } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import type { SignalFeedItem } from '../types'
 
@@ -99,7 +100,6 @@ export function partitionFeedPinnedItems(items: SignalFeedItem[]): {
 
 /** Left border accent classes for feed cards (terrain palette). */
 export const SIGNAL_CARD_LEFT_ACCENT = {
-  urgent: 'border-l-[#E24B4A]',
   pinned: 'border-l-[#1a1a1a]',
   open: 'border-l-[#EF9F27]',
   in_progress: 'border-l-[#1B4FD8]',
@@ -110,7 +110,6 @@ export const SIGNAL_CARD_LEFT_ACCENT = {
 
 /** Left border accent hex colors for feed cards (inline style; beats global border-color). */
 export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
-  urgent: '#E24B4A',
   pinned: '#1a1a1a',
   open: '#EF9F27',
   in_progress: '#1B4FD8',
@@ -118,6 +117,20 @@ export const SIGNAL_CARD_LEFT_ACCENT_COLOR = {
   archived: '#555',
   neutral: '#7D7B75',
 } as const
+
+/** Signal feed card shell — 14px radius (maquette); distinct from global 22px execution cards. */
+export const SIGNAL_FEED_INTERACTIVE_CARD_CLASS =
+  'cursor-pointer rounded-[14px] border border-[#E8E6DF] bg-white p-4 border-l-4 transition hover:border-t-[#1B4FD8]/30 hover:border-r-[#1B4FD8]/30 hover:border-b-[#1B4FD8]/30'
+
+export const SIGNAL_FEED_CARD_BASE_CLASS = 'cursor-pointer rounded-[14px] p-4 transition'
+
+export function getSignalFeedInteractiveCardClassName(surfaceClass?: string): string {
+  return cn(SIGNAL_FEED_INTERACTIVE_CARD_CLASS, surfaceClass)
+}
+
+export function getSignalFeedCardBaseClassName(shellClass: string): string {
+  return cn(SIGNAL_FEED_CARD_BASE_CLASS, shellClass)
+}
 
 /** Shell for pinned feed cards (same family as execution pending-validation cards; neutral palette). */
 export const PINNED_SIGNAL_CARD_CLASS =
@@ -130,12 +143,12 @@ export const PINNED_SIGNAL_CARD_BANNER_LABEL = 'Épinglé'
 export const PINNED_SIGNAL_CARD_DETAIL_CTA = 'Voir le détail →'
 
 export function getPinnedSignalCardClassName(): string {
-  return PINNED_SIGNAL_CARD_CLASS
+  return getSignalFeedCardBaseClassName(PINNED_SIGNAL_CARD_CLASS)
 }
 
 /**
  * Left border accent for standard feed cards.
- * Priority: urgent → status (archived and canceled/unknown use distinct neutrals).
+ * Priority: status (archived and canceled/unknown use distinct neutrals).
  */
 export function getSignalCardLeftAccentClass(item: SignalFeedItem): string {
   return SIGNAL_CARD_LEFT_ACCENT[getSignalCardLeftAccentColorKey(item)]
@@ -144,9 +157,6 @@ export function getSignalCardLeftAccentClass(item: SignalFeedItem): string {
 function getSignalCardLeftAccentColorKey(
   item: SignalFeedItem,
 ): keyof typeof SIGNAL_CARD_LEFT_ACCENT_COLOR {
-  if (item.urgency === 'high') {
-    return 'urgent'
-  }
   if (item.status === 'open') {
     return 'open'
   }
@@ -182,9 +192,6 @@ export function getSignalStatusBadgeVariant(status: string): HoustonBadgeVariant
 
 export function getSignalCardSurfaceClass(item: SignalFeedItem): string {
   const classes: string[] = []
-  if (item.urgency === 'high') {
-    return classes.join(' ')
-  }
   if (item.status === 'in_progress') {
     classes.push('bg-[#F9F8F5] opacity-[0.92]')
   }

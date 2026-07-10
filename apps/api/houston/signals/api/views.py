@@ -13,14 +13,12 @@ from houston.establishments.permissions import HasActiveMembership
 from houston.signals.api.serializers import (
     SignalDetailSerializer,
     SignalFeedResponseSerializer,
-    SignalUrgencyRequestSerializer,
     serialize_signal_detail,
     serialize_signal_feed_item,
 )
 from houston.signals.exceptions import (
     SignalBusinessConflictError,
     SignalStateError,
-    SignalValidationError,
 )
 from houston.signals.feed_cursor import (
     SignalFeedCursorError,
@@ -37,7 +35,6 @@ from houston.signals.permissions import (
     can_cancel_signal,
     can_pin_signal,
     can_resolve_signal,
-    can_set_signal_urgency,
     can_view_signal_feed,
 )
 from houston.signals.selectors import get_signal_for_detail, signal_feed_queryset
@@ -45,7 +42,6 @@ from houston.signals.services import (
     cancel_signal,
     pin_signal,
     resolve_signal,
-    set_signal_urgency,
     unpin_signal,
 )
 from houston.uploads.access import resolve_observation_actor_membership
@@ -330,64 +326,6 @@ class SignalResolveView(EstablishmentScopedSignalMixin, APIView):
             signal_id=signal_id,
             action="resolve",
         )
-
-
-class SignalUrgencyView(EstablishmentScopedSignalMixin, APIView):
-    authentication_classes = [BearerAccessTokenAuthentication]
-    permission_classes = [
-        permissions.IsAuthenticated,
-        HasActiveMembership,
-        CanViewSignalFeed,
-    ]
-
-    @extend_schema(
-        tags=["signals"],
-        request=SignalUrgencyRequestSerializer,
-        responses={
-            200: SignalDetailSerializer,
-            400: OpenApiResponse(response=ApiErrorResponseSerializer),
-            403: OpenApiResponse(response=ApiErrorResponseSerializer),
-            404: OpenApiResponse(response=ApiErrorResponseSerializer),
-        },
-    )
-    def patch(self, request, establishment_id, signal_id):
-        membership = resolve_observation_actor_membership(
-            request,
-            establishment_id=self.establishment_id,
-        )
-        if membership is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        signal = get_signal_for_detail(
-            membership=membership,
-            signal_id=uuid.UUID(str(signal_id)),
-        )
-        if signal is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if not can_set_signal_urgency(membership, signal):
-            return Response(
-                {"code": "permission_denied", "detail": "Permission denied."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        body = SignalUrgencyRequestSerializer(data=request.data)
-        body.is_valid(raise_exception=True)
-
-        try:
-            signal = set_signal_urgency(
-                signal=signal,
-                urgency=body.validated_data["urgency"],
-                actor_membership=membership,
-            )
-        except (SignalStateError, SignalValidationError) as exc:
-            return Response(
-                {"code": exc.error_code, "detail": "Invalid signal state."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        payload = serialize_signal_detail(signal=signal, membership=membership, request=request)
-        return Response(SignalDetailSerializer(payload).data)
 
 
 def _signal_lifecycle_command_response(

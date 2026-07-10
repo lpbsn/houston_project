@@ -20,7 +20,6 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     title: 'Test',
     structured_summary_short: 'Short',
     status: 'open',
-    urgency: 'normal',
     is_pinned: false,
     operational_unit_key: null,
     location_text: '',
@@ -30,7 +29,6 @@ function item(overrides: Partial<SignalFeedItem> & { id: string }): SignalFeedIt
     created_at: new Date().toISOString(),
     permission_hints: {
       can_pin: false,
-      can_set_urgency: false,
       can_cancel: false,
       can_resolve: false,
       can_create_linked_action_plan: false,
@@ -111,28 +109,14 @@ describe('partitionFeedPinnedItems', () => {
 
 describe('pinned signal card display helpers', () => {
   it('uses neutral shell without left accent (pending-validation card family)', () => {
-    expect(getPinnedSignalCardClassName()).toBe(PINNED_SIGNAL_CARD_CLASS)
+    const className = getPinnedSignalCardClassName()
+    expect(className).toContain(PINNED_SIGNAL_CARD_CLASS)
+    expect(className).toContain('rounded-[14px]')
     expect(PINNED_SIGNAL_CARD_CLASS).not.toContain('border-l-')
   })
 })
 
 describe('getSignalCardLeftAccentClass', () => {
-  it('returns urgent red when urgency is high, even if pinned', () => {
-    expect(
-      getSignalCardLeftAccentClass(
-        item({ id: '1', urgency: 'high', is_pinned: true, status: 'open' }),
-      ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.urgent)
-  })
-
-  it('returns urgent red when urgency is high and status is resolved', () => {
-    expect(
-      getSignalCardLeftAccentClass(
-        item({ id: '1', urgency: 'high', status: 'resolved' }),
-      ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT.urgent)
-  })
-
   it('uses status accent when pinned flag is set but standard feed card is used', () => {
     expect(
       getSignalCardLeftAccentClass(
@@ -146,7 +130,7 @@ describe('getSignalCardLeftAccentClass', () => {
     ).toBe(SIGNAL_CARD_LEFT_ACCENT.in_progress)
   })
 
-  it('returns status colors for standard non-urgent non-pinned items', () => {
+  it('returns status colors for standard non-pinned items', () => {
     expect(getSignalCardLeftAccentClass(item({ id: '1', status: 'open' }))).toBe(
       SIGNAL_CARD_LEFT_ACCENT.open,
     )
@@ -172,22 +156,6 @@ describe('getSignalCardLeftAccentClass', () => {
 })
 
 describe('getSignalCardLeftAccentColor', () => {
-  it('returns urgent red when urgency is high, even if pinned', () => {
-    expect(
-      getSignalCardLeftAccentColor(
-        item({ id: '1', urgency: 'high', is_pinned: true, status: 'open' }),
-      ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.urgent)
-  })
-
-  it('returns urgent red when urgency is high and status is resolved', () => {
-    expect(
-      getSignalCardLeftAccentColor(
-        item({ id: '1', urgency: 'high', status: 'resolved' }),
-      ),
-    ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.urgent)
-  })
-
   it('uses status accent color when pinned flag is set but standard feed card is used', () => {
     expect(
       getSignalCardLeftAccentColor(
@@ -201,7 +169,7 @@ describe('getSignalCardLeftAccentColor', () => {
     ).toBe(SIGNAL_CARD_LEFT_ACCENT_COLOR.in_progress)
   })
 
-  it('returns status colors for standard non-urgent non-pinned items', () => {
+  it('returns status colors for standard non-pinned items', () => {
     expect(getSignalCardLeftAccentColor(item({ id: '1', status: 'open' }))).toBe(
       SIGNAL_CARD_LEFT_ACCENT_COLOR.open,
     )

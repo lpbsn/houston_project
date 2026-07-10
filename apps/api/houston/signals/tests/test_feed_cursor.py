@@ -20,17 +20,15 @@ def _create_signal(
     membership,
     *,
     status: str = Signal.Status.OPEN,
-    urgency: str = Signal.Urgency.NORMAL,
     is_pinned: bool = False,
     last_activity_at=None,
 ):
     signal = create_minimal_v3_signal(membership, title="Cursor signal", status=status)
-    if urgency != Signal.Urgency.NORMAL or is_pinned or last_activity_at is not None:
-        signal.urgency = urgency
+    if is_pinned or last_activity_at is not None:
         signal.is_pinned = is_pinned
         if last_activity_at is not None:
             signal.last_activity_at = last_activity_at
-        signal.save(update_fields=["urgency", "is_pinned", "last_activity_at", "updated_at"])
+        signal.save(update_fields=["is_pinned", "last_activity_at", "updated_at"])
     return signal
 
 
@@ -40,7 +38,6 @@ def test_encode_and_parse_signal_feed_cursor_round_trip():
     signal = _create_signal(
         membership,
         status=Signal.Status.IN_PROGRESS,
-        urgency=Signal.Urgency.HIGH,
         is_pinned=True,
         last_activity_at=now,
     )
@@ -51,7 +48,6 @@ def test_encode_and_parse_signal_feed_cursor_round_trip():
     assert parsed is not None
     assert parsed.status_group_rank == 0
     assert parsed.is_pinned is True
-    assert parsed.urgency_order == 0
     assert parsed.status_rank == 1
     assert parsed.last_activity_at == signal.last_activity_at
     assert parsed.created_at == signal.created_at

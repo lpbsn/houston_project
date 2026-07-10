@@ -148,7 +148,7 @@ Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`
 - Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
 - Chat: `chat.message.received` (in-app + push when allowlisted and guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; push suppressed when recipient presence is active in conversation or within 2-minute push throttle window)
 - Comment: `comment.mention.created`
-- Signal: `signal.created`, `signal.urgency_changed`, `signal.pinned`, `signal.resolved`, `signal.canceled`
+- Signal: `signal.created`, `signal.pinned`, `signal.resolved`, `signal.canceled`
 
 Legacy `action.*` and `checklist.execution.*` keys removed in Lot 10A (migration `0004_remove_legacy_notification_enums`).
 

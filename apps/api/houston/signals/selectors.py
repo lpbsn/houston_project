@@ -85,11 +85,10 @@ def feed_signals_for_establishment(*, establishment_id: uuid.UUID) -> QuerySet[S
 
 
 def apply_feed_sorting(queryset: QuerySet[Signal]) -> QuerySet[Signal]:
-    status_group_rank, urgency_order, status_rank = feed_sort_case_expressions()
+    status_group_rank, status_rank = feed_sort_case_expressions()
     return queryset.order_by(
         status_group_rank,
         "-is_pinned",
-        urgency_order,
         status_rank,
         "-last_activity_at",
         "-created_at",

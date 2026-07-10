@@ -61,7 +61,6 @@ def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
         "id": signal.id,
         "title": signal.title,
         "status": signal.status,
-        "urgency": signal.urgency,
         "affected_business_unit_key": affected["key"] if affected else None,
         "affected_business_unit_label": affected["label"] if affected else None,
         "responsible_business_unit_key": responsible["key"] if responsible else None,
@@ -76,7 +75,6 @@ class ActionSignalSummarySerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
     status = serializers.CharField()
-    urgency = serializers.CharField()
     affected_business_unit_key = serializers.CharField(allow_null=True)
     affected_business_unit_label = serializers.CharField(allow_null=True)
     responsible_business_unit_key = serializers.CharField(allow_null=True)

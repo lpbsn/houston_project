@@ -150,24 +150,6 @@ export async function unpinSignal(
   return assertSignalData<SignalDetail>(result)
 }
 
-export async function setSignalUrgency(
-  establishmentId: string,
-  signalId: string,
-  urgency: 'normal' | 'high',
-): Promise<SignalDetail> {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.PATCH('/api/v1/establishments/{establishment_id}/signals/{signal_id}/urgency/', {
-        params: signalPathParams(establishmentId, signalId),
-        body: { urgency },
-        headers: getAuthHeaders(accessToken),
-      }),
-    { refreshable: true },
-  )
-
-  return assertSignalData<SignalDetail>(result)
-}
-
 export async function cancelSignal(
   establishmentId: string,
   signalId: string,

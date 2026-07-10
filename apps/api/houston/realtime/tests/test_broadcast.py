@@ -20,7 +20,6 @@ from houston.signals.services import (
     cancel_signal,
     pin_signal,
     resolve_signal,
-    set_signal_urgency,
     unpin_signal,
 )
 from houston.signals.tests.conftest import build_api_membership, create_minimal_v3_signal
@@ -102,20 +101,6 @@ def test_unpin_signal_invalidation_emitted_after_commit():
     _assert_signal_updated_invalidation_emitted_after_commit(
         signal=signal,
         service_call=lambda: unpin_signal(signal=signal),
-    )
-
-
-def test_set_signal_urgency_invalidation_emitted_after_commit():
-    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    signal = create_minimal_v3_signal(membership, title="Urgency invalidation")
-
-    _assert_signal_updated_invalidation_emitted_after_commit(
-        signal=signal,
-        service_call=lambda: set_signal_urgency(
-            signal=signal,
-            urgency=Signal.Urgency.HIGH,
-            actor_membership=membership,
-        ),
     )
 
 

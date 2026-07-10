@@ -583,35 +583,6 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
     )
 
 
-def schedule_signal_urgency_changed_notification(
-    *,
-    signal_id: uuid.UUID,
-    actor_membership_id: uuid.UUID | None,
-) -> None:
-    def deliver() -> None:
-        signal = _load_signal(signal_id=signal_id)
-        if signal is None:
-            return
-        recipients = resolve_signal_pole_recipients(signal=signal)
-        _deliver_signal_notifications(
-            signal=signal,
-            event_key=Notification.EventKey.SIGNAL_URGENCY_CHANGED,
-            priority=Notification.Priority.URGENT,
-            recipients=recipients,
-            actor_membership=_load_actor(
-                establishment_id=signal.establishment_id,
-                actor_membership_id=actor_membership_id,
-            ),
-        )
-
-    _run_notification_after_commit(
-        deliver=deliver,
-        event_key=Notification.EventKey.SIGNAL_URGENCY_CHANGED,
-        subject_type=Notification.SubjectType.SIGNAL,
-        subject_id=signal_id,
-    )
-
-
 def schedule_signal_pinned_notification(
     *,
     signal_id: uuid.UUID,

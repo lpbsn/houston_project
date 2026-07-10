@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-06-13
-Implementation status: partial (feed, detail, pin, urgency, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline v4 aggregation on `issue_focus`; archive, timeline not implemented)
+Implementation status: partial (feed, detail, pin, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline v4 aggregation on `issue_focus`; archive, timeline not implemented)
 
 ## 1. Purpose
 
@@ -31,7 +31,6 @@ Signal is the operational object between Observation and Action. It is not the r
 - Aggregation of a candidate Signal into an existing active Signal when backend validation decides it matches an ongoing situation.
 - Signal lifecycle statuses: `open`, `in_progress`, `resolved`, `canceled`, `archived`.
 - Routing through **BusinessUnit / ActivitySubject classification** per Signal: `affected_business_unit`, `responsible_business_unit`, `activity_subject` (optional `operational_unit` for structured location; `location_text` for free text; **`issue_focus`** for operational focus and aggregation discriminant).
-- Human-controlled urgency.
 - Candidate pinned-open behavior for important visible Signals.
 - Safe Signal summaries for feed and detail surfaces.
 - Relationship to linked Actions, contextual comments, safe timeline entries, and linked Observation media context without exposing raw Observation text.
@@ -92,9 +91,6 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Optional operational unit for physical location only.
 
 - ~~`SignalDomain` / `detected_domains`~~ — removed from MVP; classification is BU/AS only.
-- `SignalUrgency`
-  - Human-controlled urgency state for the supervised situation.
-  - Separate from status.
 
 - `SignalAggregation`
   - Backend decision that a candidate Signal belongs to an existing active Signal instead of creating a new one.
@@ -144,9 +140,9 @@ Validated in current code:
 - Manual cancel and resolve from `open` or `in_progress` only (active statuses).
 - Linked Action Plan creation from an active Signal (`open` or `in_progress`) transitions `open` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`). When `source_signal_id` is set, `pilot_business_unit_id` must equal the Signal's `responsible_business_unit_id`.
 - Default Signal Feed includes `open`, `in_progress`, and `resolved`; `canceled` and `archived` are excluded.
-- Feed sorting places all active Signals before any `resolved` Signal (`status_group_rank` before pin/urgency).
+- Feed sorting places all active Signals before any `resolved` Signal (`status_group_rank` before pin).
 - `resolved` Signals are readable on detail (read-only via `permission_hints`); `canceled` and `archived` are not exposed on detail by default.
-- Resolve transition forces unpin (clears pin fields) and resets `high` urgency to `normal` (model has `normal` / `high` only).
+- Resolve transition forces unpin (clears pin fields).
 
 Not validated yet:
 - exact automatic transition from active states to `resolved` via Action completion
@@ -163,14 +159,14 @@ Not validated yet:
 - Manager target behavior: actionability requires RBAC (`MembershipScope` BusinessUnit coverage) and Signal BU classification.
 - Ma vue (`view_mode=personal`) filters by **`MembershipScope`** for Manager/Staff (affected **or** responsible BusinessUnit in scope). Owner/Director: all feed-visible establishment Signals.
 - Vue générale (`view_mode=general`) shows all feed-visible establishment Signals for every role — **no** `MembershipScope` BU filter on the list (establishment-wide read).
-- **Detail access** (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, urgency, cancel, resolve, and create-action commands remain scope-aware for Manager/Staff (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
+- **Detail access** (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, cancel, resolve, and create-action commands remain scope-aware for Manager/Staff (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
 - Visibility does not imply actionability.
-- Resolving Signals, canceling Signals, changing urgency, and pinning require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
+- Resolving Signals, canceling Signals, and pinning require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
 - **Cancel and resolve** (implemented): Owner and Director may act on any active Signal in the establishment; Manager may act only when `MembershipScope` covers the Signal taxonomy; **Staff are denied** cancel and resolve.
 - Notifications and realtime events do not grant Signal access.
 - Raw Observation text is not exposed through Signal permissions.
 
-API responses expose `permission_hints` (`can_pin`, `can_set_urgency`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
+API responses expose `permission_hints` (`can_pin`, `can_cancel`, `can_resolve`, `can_create_linked_action_plan`) for UI display; backend permission checks on command endpoints remain authoritative. `can_create_linked_action_plan` is signal-scoped: it indicates whether the current membership may create a linked Action Plan from this Signal. Action Plan create enforcement remains the final authority.
 
 ## 8. Events
 
@@ -183,7 +179,6 @@ Candidate events only:
 - `SignalResolved`
 - `SignalCanceled`
 - `SignalArchived`
-- `SignalUrgencyChanged`
 - `SignalPinned`
 - `SignalUnpinned`
 - `SignalActionCreated`
@@ -198,7 +193,6 @@ Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establ
 - `GET signals/{signal_id}/` — active Signal detail
 - `POST signals/{signal_id}/pin/`
 - `POST signals/{signal_id}/unpin/`
-- `PATCH signals/{signal_id}/urgency/` — body `{ "urgency": "normal" | "high" }`
 - `POST signals/{signal_id}/cancel/` — **no mandatory body**; sets status `canceled`
 - `POST signals/{signal_id}/resolve/` — **no mandatory body**; sets status `resolved`
 
@@ -220,7 +214,7 @@ Do not treat any Signal route as implemented until it exists in `apps/api/schema
 - Frontend must render backend BU/AS classification as provided and must not infer alternate primary categorization.
 - Realtime remains invalidation and refetch only; it does not carry business truth.
 - Notifications and realtime payloads must not be treated as complete Signal state.
-- Urgency and pinned UI must respect backend rules.
+- Pinned UI must respect backend rules.
 - TanStack Query owns server state for implemented Signal APIs.
 - Frontend must use generated OpenAPI clients only for routes present in `apps/api/schema.yml`.
 

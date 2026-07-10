@@ -10,7 +10,6 @@ import {
 function hints(overrides: Partial<PermissionHints> = {}): PermissionHints {
   return {
     can_pin: false,
-    can_set_urgency: false,
     can_cancel: false,
     can_resolve: false,
     can_create_linked_action_plan: false,
@@ -19,18 +18,17 @@ function hints(overrides: Partial<PermissionHints> = {}): PermissionHints {
 }
 
 function feedItem(
-  overrides: Partial<Pick<SignalFeedItem, 'permission_hints' | 'is_pinned' | 'urgency'>> = {},
-): Pick<SignalFeedItem, 'permission_hints' | 'is_pinned' | 'urgency'> {
+  overrides: Partial<Pick<SignalFeedItem, 'permission_hints' | 'is_pinned'>> = {},
+): Pick<SignalFeedItem, 'permission_hints' | 'is_pinned'> {
   return {
     is_pinned: false,
-    urgency: 'normal',
     permission_hints: hints(),
     ...overrides,
   }
 }
 
 describe('canOpenSignalFeedCardActions', () => {
-  it('returns false when no pin or urgency permission', () => {
+  it('returns false when no actionable permission', () => {
     expect(canOpenSignalFeedCardActions(hints())).toBe(false)
   })
 
@@ -38,8 +36,12 @@ describe('canOpenSignalFeedCardActions', () => {
     expect(canOpenSignalFeedCardActions(hints({ can_pin: true }))).toBe(true)
   })
 
-  it('returns true when can_set_urgency is true', () => {
-    expect(canOpenSignalFeedCardActions(hints({ can_set_urgency: true }))).toBe(true)
+  it('returns true when can_resolve is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_resolve: true }))).toBe(true)
+  })
+
+  it('returns true when can_cancel is true', () => {
+    expect(canOpenSignalFeedCardActions(hints({ can_cancel: true }))).toBe(true)
   })
 })
 
@@ -53,7 +55,7 @@ describe('getSignalFeedCardActionOptions', () => {
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_pin: true }) }),
       ),
-    ).toEqual([{ id: 'pin', label: 'Épingler' }])
+    ).toEqual([{ id: 'pin', label: 'Épingler', tone: 'neutral' }])
   })
 
   it('returns unpin action when can_pin and pinned', () => {
@@ -64,40 +66,41 @@ describe('getSignalFeedCardActionOptions', () => {
           permission_hints: hints({ can_pin: true }),
         }),
       ),
-    ).toEqual([{ id: 'pin', label: 'Désépingler' }])
+    ).toEqual([{ id: 'pin', label: 'Désépingler', tone: 'neutral' }])
   })
 
-  it('returns urgency action when can_set_urgency and normal priority', () => {
+  it('returns resolve action when can_resolve', () => {
     expect(
       getSignalFeedCardActionOptions(
-        feedItem({ permission_hints: hints({ can_set_urgency: true }) }),
+        feedItem({ permission_hints: hints({ can_resolve: true }) }),
       ),
-    ).toEqual([{ id: 'urgency', label: 'Marquer urgent' }])
+    ).toEqual([{ id: 'resolve', label: 'Marquer résolu', tone: 'success' }])
   })
 
-  it('returns normal priority action when can_set_urgency and high urgency', () => {
+  it('returns cancel action when can_cancel', () => {
     expect(
       getSignalFeedCardActionOptions(
-        feedItem({
-          urgency: 'high',
-          permission_hints: hints({ can_set_urgency: true }),
-        }),
+        feedItem({ permission_hints: hints({ can_cancel: true }) }),
       ),
-    ).toEqual([{ id: 'urgency', label: 'Priorité normale' }])
+    ).toEqual([{ id: 'cancel', label: 'Annuler ce signal', tone: 'danger' }])
   })
 
-  it('returns both actions when both permissions are granted', () => {
+  it('returns all actions in order when all permissions are granted', () => {
     expect(
       getSignalFeedCardActionOptions(
         feedItem({
           is_pinned: true,
-          urgency: 'high',
-          permission_hints: hints({ can_pin: true, can_set_urgency: true }),
+          permission_hints: hints({
+            can_pin: true,
+            can_resolve: true,
+            can_cancel: true,
+          }),
         }),
       ),
     ).toEqual([
-      { id: 'pin', label: 'Désépingler' },
-      { id: 'urgency', label: 'Priorité normale' },
+      { id: 'pin', label: 'Désépingler', tone: 'neutral' },
+      { id: 'resolve', label: 'Marquer résolu', tone: 'success' },
+      { id: 'cancel', label: 'Annuler ce signal', tone: 'danger' },
     ])
   })
 })

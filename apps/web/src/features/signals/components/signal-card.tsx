@@ -1,15 +1,17 @@
-import { Pin } from 'lucide-react'
+import { MapPin, Pin } from 'lucide-react'
 
 import { FeedCardActionsButton, FeedCardMetaRow } from '@/components/domain/feed-card-meta-row'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
-import { terrainFeedCardBaseClassName, terrainFeedInteractiveCardClassName } from '@/lib/terrain-styles'
+import { terrainBrandAction, terrainFeedAvatar } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import {
   formatSignalRelativeTime,
   formatSignalAggregationBadge,
   formatSignalAggregationLabel,
   getPinnedSignalCardClassName,
+  getSignalFeedInteractiveCardClassName,
   PINNED_SIGNAL_CARD_BANNER_LABEL,
   PINNED_SIGNAL_CARD_DETAIL_CTA,
   PINNED_SIGNAL_CARD_SEPARATOR_CLASS,
@@ -20,7 +22,6 @@ import { canOpenSignalFeedCardActions } from '../lib/signal-feed-card-actions'
 import type { SignalFeedItem } from '../types'
 import { SignalStatusBadge } from './signal-status-badge'
 import { SignalClassificationBadges } from './signal-classification-badges'
-import { SignalUrgencyBadge } from './signal-urgency-badge'
 
 type SignalCardProps = {
   item: SignalFeedItem
@@ -50,19 +51,61 @@ function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButto
   )
 }
 
+type SignalAggregationBadgeProps = {
+  count: number
+}
+
+function SignalAggregationBadge({ count }: SignalAggregationBadgeProps) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums',
+        terrainBrandAction.bg,
+      )}
+      aria-label={formatSignalAggregationLabel(count)}
+    >
+      {formatSignalAggregationBadge(count)}
+    </span>
+  )
+}
+
+function SignalLocationRow({
+  locationText,
+  aggregationCount,
+}: {
+  locationText: string
+  aggregationCount: number
+}) {
+  return (
+    <div className="mt-1.5 flex items-center justify-between gap-3">
+      <p className="flex min-w-0 flex-1 items-center gap-1 text-[12px] text-[#888]">
+        <MapPin className="h-3 w-3 shrink-0 text-[#E24B4A]" aria-hidden />
+        <span className="truncate">{locationText}</span>
+      </p>
+      {aggregationCount > 0 ? <SignalAggregationBadge count={aggregationCount} /> : null}
+    </div>
+  )
+}
+
+function SignalAggregationRow({ aggregationCount }: { aggregationCount: number }) {
+  return (
+    <div className="mt-1.5 flex justify-end">
+      <SignalAggregationBadge count={aggregationCount} />
+    </div>
+  )
+}
+
 function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
   const leftAccentColor = getSignalCardLeftAccentColor(item)
   const surfaceClass = getSignalCardSurfaceClass(item)
   const reporterName = item.reporter_display_name?.trim() ?? ''
-  const reporterInitials = reporterName
-    ? getDisplayNameInitials(reporterName)
-    : null
+  const reporterInitials = reporterName ? getDisplayNameInitials(reporterName) : null
   const showActions =
     onOpenActions && canOpenSignalFeedCardActions(item.permission_hints)
 
   return (
     <article
-      className={terrainFeedInteractiveCardClassName(surfaceClass)}
+      className={getSignalFeedInteractiveCardClassName(surfaceClass)}
       style={{ borderLeftColor: leftAccentColor }}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
@@ -71,12 +114,7 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
     >
       <FeedCardMetaRow
         timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-        badges={
-          <>
-            <SignalUrgencyBadge urgency={item.urgency} />
-            <SignalClassificationBadges signal={item} />
-          </>
-        }
+        badges={<SignalClassificationBadges signal={item} />}
         actions={
           showActions ? (
             <SignalCardActionsButton item={item} onOpenActions={onOpenActions} />
@@ -85,41 +123,33 @@ function FeedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       />
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
-
       {item.location_text ? (
-        <p className="mt-1.5 text-[12px] text-[#888]">
-          <span className="text-[#E24B4A]" aria-hidden>
-            📍{' '}
-          </span>
-          {item.location_text}
-        </p>
+        <SignalLocationRow
+          locationText={item.location_text}
+          aggregationCount={item.aggregation_count}
+        />
+      ) : item.aggregation_count > 0 ? (
+        <SignalAggregationRow aggregationCount={item.aggregation_count} />
       ) : null}
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0EFE9] pt-3">
         <div className="flex min-w-0 items-center gap-2">
           {reporterInitials ? (
             <div
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#1B4FD8]"
+              className={cn(
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+                terrainFeedAvatar,
+              )}
               aria-hidden
             >
               {reporterInitials}
             </div>
           ) : null}
-          <span className="flex min-w-0 items-center gap-2 truncate text-[11px] text-[#888]">
-            {reporterName ? <span className="truncate">{reporterName}</span> : '\u00a0'}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {item.aggregation_count > 0 ? (
-            <span
-              className="text-[11px] font-medium tabular-nums text-[#888]"
-              aria-label={formatSignalAggregationLabel(item.aggregation_count)}
-            >
-              {formatSignalAggregationBadge(item.aggregation_count)}
-            </span>
+          {reporterName ? (
+            <span className="truncate text-[11px] text-[#888]">{reporterName}</span>
           ) : null}
-          <SignalStatusBadge status={item.status} variant="feed" />
         </div>
+        <SignalStatusBadge status={item.status} variant="feed" />
       </div>
     </article>
   )
@@ -131,7 +161,7 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
 
   return (
     <article
-      className={terrainFeedCardBaseClassName(getPinnedSignalCardClassName())}
+      className={getPinnedSignalCardClassName()}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
@@ -140,7 +170,7 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <Pin className="h-4 w-4 shrink-0 text-[#7D7B75]" aria-hidden />
-          <span className="truncate text-[13px] font-bold text-[#555]">
+          <span className={cn('truncate text-[13px] font-bold', terrainBrandAction.text)}>
             {PINNED_SIGNAL_CARD_BANNER_LABEL}
           </span>
         </div>
@@ -157,7 +187,6 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       <div className={`my-2 ${PINNED_SIGNAL_CARD_SEPARATOR_CLASS}`} />
 
       <div className="mb-1 flex flex-wrap items-center gap-1">
-        <SignalUrgencyBadge urgency={item.urgency} />
         <SignalClassificationBadges signal={item} />
       </div>
 
@@ -166,16 +195,11 @@ function PinnedSignalCard({ item, onSelect, onOpenActions }: SignalCardProps) {
       </h3>
 
       {item.location_text ? (
-        <p className="mt-1.5 text-[12px] text-[#888]">
-          <span className="text-[#7D7B75]" aria-hidden>
-            📍{' '}
-          </span>
-          {item.location_text}
-        </p>
+        <SignalLocationRow locationText={item.location_text} aggregationCount={0} />
       ) : null}
 
       <div className="mt-3 flex items-center justify-end">
-        <span className="shrink-0 text-[11px] font-semibold text-[#7D7B75]">
+        <span className={cn('shrink-0 text-[11px] font-semibold', terrainBrandAction.text)}>
           {PINNED_SIGNAL_CARD_DETAIL_CTA}
         </span>
       </div>

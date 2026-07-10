@@ -2,7 +2,7 @@ import { LoaderCircle, Mic } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { terrainTapProps } from '@/lib/terrain-motion'
-import { terrain, terrainObservationAction } from '@/lib/terrain-styles'
+import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ReportInlineMicButtonProps = {
@@ -34,7 +34,7 @@ export function ReportInlineMicButton({
               terrain.dangerBg,
               'shadow-[0_0_0_8px_rgba(226,75,74,0.15),0_4px_16px_rgba(226,75,74,0.35)]',
             )
-          : cn(terrainObservationAction.bg, terrainObservationAction.hover),
+          : cn(terrainBrandAction.bg, terrainBrandAction.hover),
       )}
       disabled={isTranscribing || isSubmitPending}
       onClick={isRecording ? onStopRecording : onStartRecording}

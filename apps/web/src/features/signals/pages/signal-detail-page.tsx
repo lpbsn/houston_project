@@ -17,12 +17,7 @@ import {
 import { SignalLinkedActionPlansSection } from '../components/signal-linked-action-plans-section'
 import { SignalStatusBadge } from '../components/signal-status-badge'
 import { SignalDetailClassificationSection } from '../components/signal-detail-classification-section'
-import { SignalUrgencyBadge } from '../components/signal-urgency-badge'
-import {
-  useCancelSignalMutation,
-  useResolveSignalMutation,
-  useSignalDetailQuery,
-} from '../hooks'
+import { useSignalDetailQuery } from '../hooks'
 import { SignalsApiError } from '../api'
 import { shouldShowSignalCreateActionPlan } from '../lib/signal-create-action'
 import { formatSignalRelativeTime, formatSignalAggregationLabel } from '../lib/signal-display'
@@ -48,20 +43,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const [hasOpenedComments, setHasOpenedComments] = useState(initialDeepLink.tab === 'comments')
   const highlightCommentId = initialDeepLink.commentId
 
-  const lifecycleClosed = () => {
-    onNavigate('/signals')
-  }
-
   const detailQuery = useSignalDetailQuery(establishmentId, signalId)
-  const cancelMutation = useCancelSignalMutation(establishmentId, signalId, {
-    onClosed: lifecycleClosed,
-  })
-  const resolveMutation = useResolveSignalMutation(establishmentId, signalId)
-
-  const lifecycleError =
-    cancelMutation.error ?? resolveMutation.error ?? null
-
-  const isPending = cancelMutation.isPending || resolveMutation.isPending
 
   const handleTabChange = (tab: SignalDetailTab) => {
     if (tab === 'comments') {
@@ -91,10 +73,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
   const signal = detailQuery.data
   const reporterName = signal.source_context.reporter_display_name?.trim()
   const showStickyCreateActionFooter = shouldShowSignalCreateActionPlan(signal.permission_hints)
-  const hasLifecycleSticky =
-    signal.permission_hints.can_resolve || signal.permission_hints.can_cancel
-  const canShowStickyFooter = hasLifecycleSticky || showStickyCreateActionFooter
-  const showStickyFooter = activeTab === 'details' && canShowStickyFooter
+  const showStickyFooter = activeTab === 'details' && showStickyCreateActionFooter
 
   return (
     <div className="flex min-h-full flex-col">
@@ -117,7 +96,6 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
           <TerrainCard>
             <h2 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{signal.title}</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <SignalUrgencyBadge urgency={signal.urgency} />
               <SignalStatusBadge status={signal.status} variant="detail" />
             </div>
             <p className="mt-2 text-[11px] text-[#aaa]">
@@ -173,15 +151,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
 
       {showStickyFooter ? (
         <SignalDetailStickyFooter
-          hints={signal.permission_hints}
-          isPending={isPending}
-          showCreateActionPlan={showStickyCreateActionFooter}
-          onResolve={() => void resolveMutation.mutate()}
-          onCancel={() => void cancelMutation.mutate()}
           onCreateActionPlan={() => onNavigate(`/signals/${signalId}/plan`)}
-          lifecycleErrorMessage={
-            lifecycleError ? resolveApiErrorMessage(lifecycleError, SignalsApiError, 'Une erreur est survenue.') : null
-          }
         />
       ) : null}
     </div>

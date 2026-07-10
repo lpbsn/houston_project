@@ -25,17 +25,15 @@ def _create_signal(
     *,
     title: str = "Test signal",
     status: str = Signal.Status.OPEN,
-    urgency: str = Signal.Urgency.NORMAL,
     is_pinned: bool = False,
     last_activity_at=None,
 ):
     signal = create_minimal_v3_signal(membership, title=title, status=status)
-    if urgency != Signal.Urgency.NORMAL or is_pinned or last_activity_at is not None:
-        signal.urgency = urgency
+    if is_pinned or last_activity_at is not None:
         signal.is_pinned = is_pinned
         if last_activity_at is not None:
             signal.last_activity_at = last_activity_at
-        signal.save(update_fields=["urgency", "is_pinned", "last_activity_at", "updated_at"])
+        signal.save(update_fields=["is_pinned", "last_activity_at", "updated_at"])
     return signal
 
 
@@ -83,7 +81,6 @@ def test_feed_orders_all_active_before_resolved(api_client):
         title="Resolved recent",
         status=Signal.Status.RESOLVED,
         is_pinned=True,
-        urgency=Signal.Urgency.HIGH,
         last_activity_at=now,
     )
     weak_active = _create_signal(
@@ -91,7 +88,6 @@ def test_feed_orders_all_active_before_resolved(api_client):
         title="Weak active",
         status=Signal.Status.OPEN,
         is_pinned=False,
-        urgency=Signal.Urgency.NORMAL,
         last_activity_at=now - timedelta(days=30),
     )
     strong_active = _create_signal(
@@ -99,7 +95,6 @@ def test_feed_orders_all_active_before_resolved(api_client):
         title="Strong active",
         status=Signal.Status.IN_PROGRESS,
         is_pinned=True,
-        urgency=Signal.Urgency.HIGH,
         last_activity_at=now - timedelta(days=1),
     )
     token = login(api_client, user=membership.user)
@@ -122,14 +117,12 @@ def test_apply_feed_sorting_active_before_dirty_resolved():
         membership,
         status=Signal.Status.RESOLVED,
         is_pinned=True,
-        urgency=Signal.Urgency.HIGH,
         last_activity_at=now,
     )
     active = _create_signal(
         membership,
         status=Signal.Status.OPEN,
         is_pinned=False,
-        urgency=Signal.Urgency.NORMAL,
         last_activity_at=now - timedelta(days=60),
     )
 
@@ -195,7 +188,6 @@ def test_detail_resolved_returns_200(api_client):
         membership,
         status=Signal.Status.RESOLVED,
         is_pinned=True,
-        urgency=Signal.Urgency.HIGH,
     )
     token = login(api_client, user=membership.user)
 
@@ -207,13 +199,12 @@ def test_detail_resolved_returns_200(api_client):
     assert response.status_code == 200
     hints = response.json()["permission_hints"]
     assert hints["can_pin"] is False
-    assert hints["can_set_urgency"] is False
     assert hints["can_cancel"] is False
     assert hints["can_resolve"] is False
     assert hints["can_create_linked_action_plan"] is False
 
 
-def test_in_progress_permission_hints_allow_urgency_not_pin(api_client):
+def test_in_progress_permission_hints_deny_pin(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.DIRECTOR)
     signal = _create_signal(membership, title="Progress", status=Signal.Status.IN_PROGRESS)
     token = login(api_client, user=membership.user)
@@ -227,7 +218,6 @@ def test_in_progress_permission_hints_allow_urgency_not_pin(api_client):
         item for item in feed_response.json()["items"] if item["id"] == str(signal.id)
     )
     assert feed_item["permission_hints"]["can_pin"] is False
-    assert feed_item["permission_hints"]["can_set_urgency"] is True
 
     detail_response = api_client.get(
         signal_detail_url(membership.establishment_id, signal.id),
@@ -236,4 +226,3 @@ def test_in_progress_permission_hints_allow_urgency_not_pin(api_client):
     assert detail_response.status_code == 200
     hints = detail_response.json()["permission_hints"]
     assert hints["can_pin"] is False
-    assert hints["can_set_urgency"] is True

@@ -67,7 +67,7 @@ Implemented `invalidate` reasons (verify in domain `services.py` before extendin
 
 | `subject_type` | `reason` | `entity_id` | Emitted today | Frontend surfaces |
 |---|---|---|---|---|
-| `signal` | `signal.updated` | signal id | yes — sync lifecycle (pin, urgency, cancel, resolve, …) | signal feed, signal detail |
+| `signal` | `signal.updated` | signal id | yes — sync lifecycle (pin, cancel, resolve, …) | signal feed, signal detail |
 | `signal` | `signal.created` | signal id | yes — observation async pipeline | signal feed, signal detail |
 | `action_plan` | `action_plan.created` | action plan id | yes — catalog create, one-shot create | action-plans catalog, detail |
 | `action_plan` | `action_plan.updated` | action plan id | yes — catalog patch, activate/deactivate | action-plans catalog, detail |

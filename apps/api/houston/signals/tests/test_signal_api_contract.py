@@ -13,7 +13,6 @@ from houston.signals.tests.conftest import (
     build_api_membership,
     create_minimal_v3_signal,
     create_observation,
-    create_restaurant_v3_taxonomy,
     login,
     signal_detail_url,
     signal_feed_url,
@@ -108,7 +107,7 @@ def test_signal_detail_only_allows_get(api_client):
     assert api_client.delete(url, **headers).status_code == 405
 
 
-def test_staff_forbidden_pin_unpin_and_urgency(api_client):
+def test_staff_forbidden_pin_and_unpin(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.STAFF)
     signal = _signal_with_linked_observation(membership)
     token = login(api_client, user=membership.user)
@@ -117,18 +116,9 @@ def test_staff_forbidden_pin_unpin_and_urgency(api_client):
 
     assert api_client.post(base + "pin/", **headers).status_code == 403
     assert api_client.post(base + "unpin/", **headers).status_code == 403
-    assert (
-        api_client.patch(
-            base + "urgency/",
-            {"urgency": "high"},
-            format="json",
-            **headers,
-        ).status_code
-        == 403
-    )
 
 
-def test_owner_can_mutate_any_establishment_signal(api_client):
+def test_owner_can_pin_and_unpin_establishment_signal(api_client):
     membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _signal_with_linked_observation(membership)
     token = login(api_client, user=membership.user)
@@ -137,15 +127,6 @@ def test_owner_can_mutate_any_establishment_signal(api_client):
 
     assert api_client.post(base + "pin/", **headers).status_code == 200
     assert api_client.post(base + "unpin/", **headers).status_code == 200
-    assert (
-        api_client.patch(
-            base + "urgency/",
-            {"urgency": "high"},
-            format="json",
-            **headers,
-        ).status_code
-        == 200
-    )
 
 
 @pytest.mark.parametrize(
@@ -194,51 +175,3 @@ def test_scoped_member_can_read_out_of_scope_signal_detail(api_client, role):
     assert response.status_code == 200
     assert response.json()["id"] == str(out_of_scope_signal.id)
     assert response.json()["title"] == "Kitchen signal outside personal scope"
-
-
-def test_manager_urgency_requires_membership_scope(api_client):
-    import uuid
-
-    from houston.accounts.models import User
-    from houston.establishments.tests.conftest import TEST_PASSWORD
-
-    membership = build_api_membership(role=EstablishmentMembership.Role.MANAGER)
-    signal = _signal_with_linked_observation(membership)
-    taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
-    assert taxonomy.maintenance is not None
-
-    manager = User.objects.create_user(
-        username=f"mgr_{uuid.uuid4().hex[:6]}",
-        email=f"mgr_{uuid.uuid4().hex[:6]}@example.com",
-        password=TEST_PASSWORD,
-        status=User.Status.ACTIVE,
-    )
-    other_membership = EstablishmentMembership.objects.create(
-        user=manager,
-        establishment=membership.establishment,
-        role=EstablishmentMembership.Role.MANAGER,
-        status=EstablishmentMembership.Status.ACTIVE,
-    )
-    token = login(api_client, user=other_membership.user)
-    base = signal_detail_url(membership.establishment_id, signal.id)
-    headers = auth_headers(token)
-
-    denied = api_client.patch(
-        base + "urgency/",
-        {"urgency": "high"},
-        format="json",
-        **headers,
-    )
-    assert denied.status_code == 403
-
-    create_membership_with_business_unit_scope(
-        membership=other_membership,
-        business_unit=taxonomy.maintenance,
-    )
-    allowed = api_client.patch(
-        base + "urgency/",
-        {"urgency": "high"},
-        format="json",
-        **headers,
-    )
-    assert allowed.status_code == 200

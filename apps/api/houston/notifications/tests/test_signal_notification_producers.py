@@ -23,7 +23,6 @@ from houston.signals.services import (
     create_signal_from_candidate,
     pin_signal,
     resolve_signal,
-    set_signal_urgency,
 )
 from houston.signals.tests.conftest import (
     auth_headers,
@@ -332,60 +331,6 @@ def test_signal_unassigned_global_inactive_director_excluded():
     assert len(notifications) == 1
     assert notifications[0].recipient_membership_id == owner.id
     assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
-
-
-def test_signal_urgency_changed_to_high_notifies_pole_excludes_actor():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    manager = build_api_membership_on_establishment(
-        owner,
-        role=EstablishmentMembership.Role.MANAGER,
-    )
-    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
-    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
-    assert taxonomy.maintenance is not None
-    assign_business_unit_scope(manager, taxonomy.maintenance)
-    assign_business_unit_scope(staff, taxonomy.maintenance)
-    signal = _open_signal(owner)
-    Notification.objects.filter(subject_id=signal.id).delete()
-
-    set_signal_urgency(
-        signal=signal,
-        urgency=Signal.Urgency.HIGH,
-        actor_membership=manager,
-    )
-
-    notifications = _notifications_for_signal(signal_id=signal.id)
-    assert len(notifications) == 1
-    assert notifications[0].recipient_membership_id == staff.id
-    assert notifications[0].event_key == Notification.EventKey.SIGNAL_URGENCY_CHANGED
-    assert notifications[0].priority == Notification.Priority.URGENT
-
-
-def test_signal_urgency_already_high_emits_zero_notifications():
-    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    manager = build_api_membership_on_establishment(
-        owner,
-        role=EstablishmentMembership.Role.MANAGER,
-    )
-    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
-    assert taxonomy.maintenance is not None
-    assign_business_unit_scope(manager, taxonomy.maintenance)
-    signal = _open_signal(owner)
-    signal.urgency = Signal.Urgency.HIGH
-    signal.save(update_fields=["urgency", "updated_at"])
-    Notification.objects.filter(subject_id=signal.id).delete()
-
-    with patch(
-        "houston.notifications.scheduling.schedule_signal_urgency_changed_notification",
-    ) as mock_schedule:
-        set_signal_urgency(
-            signal=signal,
-            urgency=Signal.Urgency.HIGH,
-            actor_membership=manager,
-        )
-        mock_schedule.assert_not_called()
-
-    assert _notifications_for_signal(signal_id=signal.id) == []
 
 
 def test_signal_pinned_notifies_pole_excludes_actor():
