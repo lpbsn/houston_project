@@ -12,7 +12,10 @@ from houston.chat.presence import is_chat_presence_active
 from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
 from houston.notifications.permissions import recipient_can_view_notification_subject
 from houston.notifications.push import constants as push_constants
-from houston.notifications.push.chat_guards import claim_chat_push_throttle
+from houston.notifications.push.chat_guards import (
+    claim_chat_push_throttle,
+    release_chat_push_throttle,
+)
 from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
 from houston.notifications.push.payloads import build_push_payload
 from houston.notifications.push.sender import (
@@ -276,9 +279,11 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
     if is_chat_push and push_url is None:
         return 0
 
+    chat_throttle_owner = str(notification.id)
     if is_chat_push and not claim_chat_push_throttle(
         conversation_id=notification.subject_id,
         recipient_membership_id=recipient.id,
+        owner_token=chat_throttle_owner,
     ):
         return 0
 
@@ -336,6 +341,13 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
 
         _mark_push_delivery_sent(delivery=delivery, now=now)
         sent_count += 1
+
+    if is_chat_push and sent_count == 0:
+        release_chat_push_throttle(
+            conversation_id=notification.subject_id,
+            recipient_membership_id=recipient.id,
+            owner_token=chat_throttle_owner,
+        )
 
     logger.info(
         "push_for_notification_processed",

@@ -6,11 +6,15 @@ from unittest.mock import patch
 import pytest
 from django.core.cache import cache
 from django.test import override_settings
+from pywebpush import WebPushException
 
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
 from houston.notifications.push import constants as push_constants
-from houston.notifications.push.chat_guards import claim_chat_push_throttle
+from houston.notifications.push.chat_guards import (
+    claim_chat_push_throttle,
+    release_chat_push_throttle,
+)
 from houston.notifications.push.services import run_push_for_notification
 from houston.notifications.tests.conftest import create_test_notification
 from houston.notifications.tests.test_push_vapid_public_key_api import (
@@ -156,6 +160,7 @@ def test_chat_push_throttle_not_consumed_without_active_subscription():
     assert claim_chat_push_throttle(
         conversation_id=conversation_id,
         recipient_membership_id=recipient.id,
+        owner_token=str(uuid.uuid4()),
     )
 
 
@@ -188,7 +193,135 @@ def test_chat_push_throttle_not_consumed_when_navigation_missing():
     assert claim_chat_push_throttle(
         conversation_id=conversation_id,
         recipient_membership_id=recipient.id,
+        owner_token=str(uuid.uuid4()),
     )
+
+
+@override_settings(**VAPID_SETTINGS)
+def test_chat_push_throttle_not_consumed_when_all_deliveries_fail():
+    recipient = _prepare_recipient()
+    conversation_id = uuid.uuid4()
+    notification = _create_chat_notification(
+        recipient=recipient,
+        conversation_id=conversation_id,
+    )
+    _create_subscription(user=recipient.user)
+
+    with (
+        patch(
+            "houston.notifications.push.services.recipient_can_view_notification_subject",
+            return_value=True,
+        ),
+        patch(
+            "houston.notifications.push.services.send_web_push",
+            side_effect=WebPushException("network error", response=None),
+        ),
+    ):
+        sent_count = run_push_for_notification(notification.id)
+
+    assert sent_count == 0
+    delivery = PushDelivery.objects.get()
+    assert delivery.status == PushDelivery.Status.FAILED
+    assert claim_chat_push_throttle(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient.id,
+        owner_token=str(uuid.uuid4()),
+    )
+
+
+@override_settings(**VAPID_SETTINGS)
+def test_chat_push_throttle_consumed_after_successful_send():
+    recipient = _prepare_recipient()
+    conversation_id = uuid.uuid4()
+    notification = _create_chat_notification(
+        recipient=recipient,
+        conversation_id=conversation_id,
+    )
+    _create_subscription(user=recipient.user)
+
+    with (
+        patch(
+            "houston.notifications.push.services.recipient_can_view_notification_subject",
+            return_value=True,
+        ),
+        patch("houston.notifications.push.services.send_web_push"),
+    ):
+        sent_count = run_push_for_notification(notification.id)
+
+    assert sent_count == 1
+    assert not claim_chat_push_throttle(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient.id,
+        owner_token=str(uuid.uuid4()),
+    )
+
+
+@override_settings(**VAPID_SETTINGS)
+def test_chat_push_throttle_consumed_when_one_of_multiple_subscriptions_succeeds():
+    recipient = _prepare_recipient()
+    conversation_id = uuid.uuid4()
+    notification = _create_chat_notification(
+        recipient=recipient,
+        conversation_id=conversation_id,
+    )
+    _create_subscription(user=recipient.user)
+    _create_subscription(user=recipient.user)
+
+    call_count = 0
+
+    def send_side_effect(*, subscription, payload):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise WebPushException("gone", response=type("Response", (), {"status_code": 410})())
+
+    with (
+        patch(
+            "houston.notifications.push.services.recipient_can_view_notification_subject",
+            return_value=True,
+        ),
+        patch(
+            "houston.notifications.push.services.send_web_push",
+            side_effect=send_side_effect,
+        ),
+    ):
+        sent_count = run_push_for_notification(notification.id)
+
+    assert sent_count == 1
+    assert not claim_chat_push_throttle(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient.id,
+        owner_token=str(uuid.uuid4()),
+    )
+
+
+def test_release_chat_push_throttle_does_not_clear_newer_owner():
+    conversation_id = uuid.uuid4()
+    recipient_membership_id = uuid.uuid4()
+    owner_token_a = str(uuid.uuid4())
+    owner_token_b = str(uuid.uuid4())
+
+    assert claim_chat_push_throttle(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient_membership_id,
+        owner_token=owner_token_a,
+    )
+    assert not claim_chat_push_throttle(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient_membership_id,
+        owner_token=owner_token_b,
+    )
+
+    cache_key = f"push:chat:{conversation_id}:{recipient_membership_id}"
+    cache.set(cache_key, owner_token_b, timeout=120)
+
+    release_chat_push_throttle(
+        conversation_id=conversation_id,
+        recipient_membership_id=recipient_membership_id,
+        owner_token=owner_token_a,
+    )
+
+    assert cache.get(cache_key) == owner_token_b
 
 
 def test_push_v1_event_keys_includes_chat():
