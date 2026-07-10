@@ -17,6 +17,10 @@ class Notification(BaseModel):
             "action_plan.execution.created",
             "Action plan execution created",
         )
+        ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL = (
+            "action_plan.execution.created_from_signal",
+            "Action plan execution created from signal",
+        )
         ACTION_PLAN_EXECUTION_PENDING_VALIDATION = (
             "action_plan.execution.pending_validation",
             "Action plan execution pending validation",

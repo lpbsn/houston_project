@@ -326,4 +326,8 @@ def test_release_chat_push_throttle_does_not_clear_newer_owner():
 
 def test_push_v1_event_keys_includes_chat():
     assert Notification.EventKey.CHAT_MESSAGE_RECEIVED in push_constants.PUSH_V1_EVENT_KEYS
-    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 14
+    assert (
+        Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
+        in push_constants.PUSH_V1_EVENT_KEYS
+    )
+    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 15

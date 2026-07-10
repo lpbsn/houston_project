@@ -17,6 +17,7 @@ CHAT_MESSAGE_DEDUPE_KEY_TEMPLATE = (
 LOT1_EVENT_KEYS: frozenset[str] = frozenset(
     {
         "action_plan.execution.created",
+        "action_plan.execution.created_from_signal",
         "action_plan.execution.pending_validation",
         "action_plan.execution.canceled",
         "action_plan.execution.reopened",
@@ -38,6 +39,10 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "action_plan.execution.created": (
         "Nouveau plan d'action",
         "Une exécution de plan d'action vous a été assignée.",
+    ),
+    "action_plan.execution.created_from_signal": (
+        "Plan d'action lié à un signal",
+        "Une exécution de plan d'action a été créée à partir d'un signal.",
     ),
     "action_plan.execution.pending_validation": (
         "Plan d'action à valider",
