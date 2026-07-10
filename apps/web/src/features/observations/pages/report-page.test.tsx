@@ -147,6 +147,17 @@ describe('ReportPage', () => {
     expect(footer?.className).not.toContain('bg-[#F5F4F0]')
   })
 
+  it('reserves pb-28 scroll clearance above sticky footer', () => {
+    renderPage()
+
+    const footer = screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer')
+    const scrollArea = footer?.previousElementSibling as HTMLElement | null
+
+    expect(footer?.parentElement?.classList.contains('min-h-full')).toBe(true)
+    expect(scrollArea?.className).toContain('pb-28')
+    expect(scrollArea?.className).not.toContain('pb-40')
+  })
+
   it('disables submit when observation text is too short', () => {
     renderPage()
 

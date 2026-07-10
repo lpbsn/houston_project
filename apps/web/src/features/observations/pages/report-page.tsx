@@ -294,7 +294,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-5 px-4 pb-4 pt-3">
+      <div className="flex flex-1 flex-col gap-5 px-4 pb-28 pt-3">
         <header className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-[#1a1a1a]">Une observation ?</h1>
           <p className={cn('text-sm', terrain.muted)}>
