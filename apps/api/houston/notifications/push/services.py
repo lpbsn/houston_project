@@ -8,9 +8,11 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from pywebpush import WebPushException
 
+from houston.chat.presence import is_chat_presence_active
 from houston.notifications.models import Notification, PushDelivery, WebPushSubscription
 from houston.notifications.permissions import recipient_can_view_notification_subject
 from houston.notifications.push import constants as push_constants
+from houston.notifications.push.chat_guards import claim_chat_push_throttle
 from houston.notifications.push.exceptions import WebPushSubscriptionValidationError
 from houston.notifications.push.payloads import build_push_payload
 from houston.notifications.push.sender import (
@@ -249,6 +251,13 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
     ):
         return 0
 
+    is_chat_push = notification.event_key == Notification.EventKey.CHAT_MESSAGE_RECEIVED
+    if is_chat_push and is_chat_presence_active(
+        membership_id=recipient.id,
+        conversation_id=notification.subject_id,
+    ):
+        return 0
+
     if not is_vapid_configured():
         log_vapid_not_configured(notification_id=str(notification.id))
         return 0
@@ -264,6 +273,15 @@ def run_push_for_notification(notification_id: uuid.UUID) -> int:
 
     payload = build_push_payload(notification)
     push_url = payload["data"]["url"]
+    if is_chat_push and push_url is None:
+        return 0
+
+    if is_chat_push and not claim_chat_push_throttle(
+        conversation_id=notification.subject_id,
+        recipient_membership_id=recipient.id,
+    ):
+        return 0
+
     now = timezone.now()
     sent_count = 0
     skipped_count = 0

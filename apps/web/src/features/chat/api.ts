@@ -229,6 +229,27 @@ export async function markConversationSeen(
   }
 }
 
+export async function postChatConversationPresence(
+  establishmentId: string,
+  conversationId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/presence/',
+        {
+          params: conversationPathParams(establishmentId, conversationId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
 export async function issueChatWsTicket(establishmentId: string): Promise<ChatWsTicketResponse> {
   const result = await withAuthRetry(
     (accessToken) =>

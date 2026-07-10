@@ -18,6 +18,7 @@ from houston.chat.permissions import (
     can_manage_group,
     can_send_message,
 )
+from houston.chat.presence import touch_chat_presence
 from houston.chat.selectors import (
     active_participant_queryset,
     canonical_dm_membership_pair,
@@ -529,6 +530,32 @@ def mark_conversation_seen(
         ]
     )
     return participant
+
+
+def touch_conversation_presence(
+    *,
+    actor_membership: EstablishmentMembership,
+    conversation_id: uuid.UUID,
+) -> None:
+    conversation = get_conversation_for_participant(
+        establishment_id=actor_membership.establishment_id,
+        conversation_id=conversation_id,
+        membership_id=actor_membership.id,
+    )
+    if conversation is None:
+        raise ChatNotFoundError()
+
+    participant = get_active_participant(
+        conversation_id=conversation.id,
+        membership_id=actor_membership.id,
+    )
+    if participant is None:
+        raise ChatNotFoundError()
+
+    touch_chat_presence(
+        membership_id=actor_membership.id,
+        conversation_id=conversation.id,
+    )
 
 
 @transaction.atomic

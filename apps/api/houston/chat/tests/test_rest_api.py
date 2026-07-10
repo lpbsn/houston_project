@@ -619,6 +619,56 @@ def test_unread_survives_message_purge(api_client):
     assert list_response_after_purge.json()["items"][0]["unread"] is False
 
 
+def test_mark_presence_records_heartbeat(api_client):
+    establishment = create_establishment()
+    sender = create_user(username="chat_presence_sender")
+    receiver = create_user(username="chat_presence_receiver")
+    create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    token_sender = login(api_client, user=sender)
+
+    dm_response = create_dm(
+        api_client,
+        token=token_sender,
+        establishment_id=establishment.id,
+        target_membership_id=receiver_membership.id,
+    )
+    conversation_id = dm_response.json()["conversation"]["id"]
+
+    token_receiver = login(api_client, user=receiver)
+    presence_response = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/presence/"),
+        HTTP_AUTHORIZATION=f"Bearer {token_receiver}",
+    )
+    assert presence_response.status_code == 204
+
+
+def test_mark_presence_returns_404_for_non_participant(api_client):
+    establishment = create_establishment()
+    sender = create_user(username="chat_presence_outsider_sender")
+    outsider = create_user(username="chat_presence_outsider")
+    receiver = create_user(username="chat_presence_outsider_receiver")
+    create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    create_membership(user=outsider, establishment=establishment)
+    token_sender = login(api_client, user=sender)
+
+    dm_response = create_dm(
+        api_client,
+        token=token_sender,
+        establishment_id=establishment.id,
+        target_membership_id=receiver_membership.id,
+    )
+    conversation_id = dm_response.json()["conversation"]["id"]
+
+    token_outsider = login(api_client, user=outsider)
+    presence_response = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/presence/"),
+        HTTP_AUTHORIZATION=f"Bearer {token_outsider}",
+    )
+    assert presence_response.status_code == 404
+
+
 def test_mark_seen_without_messages_is_noop(api_client):
     establishment = create_establishment()
     user = create_user(username="chat_seen_noop")

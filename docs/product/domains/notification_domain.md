@@ -40,15 +40,17 @@ Current truth (Lot 1 in-app):
 - Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the notification list and unread badge; transport is owned by `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
 - Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`); see [`notification_matrix_v0.2.md`](../notification_matrix_v0.2.md) §1.1.
 - `notifications_enabled` on `EstablishmentMembership` suppresses in-app notification creation for that recipient.
+- Web Push (VAPID + `WebPushSubscription`) is implemented for allowlisted Lot 1 event keys in `PUSH_V1_EVENT_KEYS` (`houston/notifications/push/constants.py`), gated by `HOUSTON_PUSH_ENABLED` and membership `push_enabled`.
+- Chat push (`chat.message.received`) is allowlisted only with anti-spam guards: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged.
 
 ## 3. Out of Scope
 
 - General-purpose email notifications in MVP.
 - SMS, WhatsApp, or other external messaging channels.
-- Quiet hours, digests, grouping, or presence-aware suppression.
+- Quiet hours, digests, grouping, or presence-aware suppression for non-chat notifications.
 - Rich media, attachments, or media binaries inside notifications.
 - Notification-based access grants or notification-based business truth.
-- Chat push, sounds, presence-aware suppression, and message-body previews in notifications (in-app chat message received notifications are in Lot 1; see §8).
+- Chat sounds and message-body previews in notifications (in-app `chat.message.received` is in Lot 1; push chat is Lot D — see §8).
 - Full provider setup or push runbook details.
 - Full admin notification console or analytics dashboard.
 - Cross-tenant notifications.
@@ -144,7 +146,7 @@ Current code (Lot 1):
 Lot 1 source triggers (implemented in `scheduling.py`; keys in `LOT1_EVENT_KEYS`):
 
 - Action Plan execution: `action_plan.execution.created`, `action_plan.execution.pending_validation`, `action_plan.execution.canceled`, `action_plan.execution.reopened`
-- Chat: `chat.message.received` (in-app only; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; dedupe per conversation + recipient + actor within 5 minutes)
+- Chat: `chat.message.received` (in-app + push when allowlisted and guards pass; generic copy with actor display name; `subject_type=chat_conversation`, `subject_id=conversation_id`; in-app dedupe per conversation + recipient + actor within 5 minutes; push suppressed when recipient presence is active in conversation or within 2-minute push throttle window)
 - Comment: `comment.mention.created`
 - Signal: `signal.created`, `signal.urgency_changed`, `signal.pinned`, `signal.resolved`, `signal.canceled`
 
@@ -168,11 +170,13 @@ Implemented notification endpoints in `apps/api/schema.yml`:
 - `POST .../notifications/{notification_id}/mark-read/`
 - `POST .../notifications/{notification_id}/archive/`
 - `POST .../notifications/mark-all-read/`
-- `GET` / `PATCH .../notifications/preferences/` — `notifications_enabled`
+- `GET` / `PATCH .../notifications/preferences/` — `notifications_enabled`, `push_enabled`
+- `GET /api/v1/push/vapid-public-key/`
+- `POST /api/v1/me/web-push-subscriptions/` (upsert), `POST .../{id}/touch/`, `DELETE .../{id}/` (revoke)
+- `POST .../chat/conversations/{conversation_id}/presence/` — chat push presence heartbeat (204)
 
 Not implemented:
 
-- browser push subscription endpoints
 - general-purpose email notification workflows
 
 ## 10. Frontend Expectations
@@ -180,7 +184,7 @@ Not implemented:
 - Notification Center lists the authenticated user's notifications only.
 - Frontend must not treat notifications as source of business truth.
 - Opening a notification should navigate to a safe route and then refetch the authorized subject through the backend API.
-- Chat message notifications (`chat.message.received`): navigate to `/chat/{conversation_id}` (`subject_type=chat_conversation`). Notification copy must not include message body.
+- Chat message notifications (`chat.message.received`): navigate to `/chat/{conversation_id}` (`subject_type=chat_conversation`). Notification copy must not include message body. While viewing a conversation, the client sends presence heartbeats (`POST .../presence/`, ~30s when visible) so push is suppressed server-side.
 - Comment mention notifications (`comment.mention.created`): when `navigation` is present, open the parent detail (`signal` or `action_plan_execution`) with the Commentaires tab and scroll/highlight the mentioned comment (`?tab=comments&commentId={subject_id}`). When `navigation` is `null` (comment hard-deleted; V1 without denormalized parent on `Notification`), mark read only — no navigation. When the parent loads but the comment is absent from the authorized list, show an inline unavailable message in the Commentaires tab.
 - `navigation` is a non-sensitive routing hint (parent type + UUID only); authorization remains on the parent and comment list fetches.
 - Frontend must not display sensitive raw content from notification, push, or realtime payloads.
