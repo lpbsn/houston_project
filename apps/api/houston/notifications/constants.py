@@ -21,6 +21,9 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "action_plan.execution.canceled",
         "action_plan.execution.reopened",
         "comment.mention.created",
+        "comment.signal.created",
+        "comment.action_plan_execution.created",
+        "comment.reply.created",
         "signal.created",
         "signal.urgency_changed",
         "signal.pinned",
@@ -51,6 +54,18 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "comment.mention.created": (
         "Mention",
         "Vous avez été mentionné dans un commentaire.",
+    ),
+    "comment.signal.created": (
+        "Commentaire sur un signal",
+        "Un nouveau commentaire a été ajouté sur un signal.",
+    ),
+    "comment.action_plan_execution.created": (
+        "Commentaire sur un plan d'action",
+        "Un nouveau commentaire a été ajouté sur un plan d'action.",
+    ),
+    "comment.reply.created": (
+        "Réponse dans la discussion",
+        "Quelqu'un a répondu dans une discussion de commentaires.",
     ),
     "signal.created": (
         "Nouveau signal",

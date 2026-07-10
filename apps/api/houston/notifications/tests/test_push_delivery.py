@@ -151,6 +151,112 @@ def test_run_push_for_notification_sends_for_comment_mention():
     assert delivery.status == PushDelivery.Status.SENT
 
 
+COMMENT_PUSH_EVENT_KEYS = [
+    Notification.EventKey.COMMENT_SIGNAL_CREATED,
+    Notification.EventKey.COMMENT_ACTION_PLAN_EXECUTION_CREATED,
+    Notification.EventKey.COMMENT_REPLY_CREATED,
+]
+
+
+@override_settings(**VAPID_SETTINGS)
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("event_key", COMMENT_PUSH_EVENT_KEYS)
+def test_run_push_for_notification_sends_for_comment_event_keys(event_key):
+    from houston.action_plans.services import create_action_plan_with_execution
+    from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
+    from houston.comments.services import (
+        create_action_plan_execution_comment,
+        create_signal_comment,
+    )
+    from houston.establishments.models import EstablishmentMembership
+    from houston.testing.auth import (
+        assign_business_unit_scope,
+        build_api_membership,
+        build_api_membership_on_establishment,
+    )
+    from houston.testing.taxonomy import create_signal_v3_for_membership, hotel_maintenance_setup
+
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    staff.push_enabled = True
+    staff.save(update_fields=["push_enabled", "updated_at"])
+    hotel, maintenance, electricite = hotel_maintenance_setup(owner.establishment)
+    signal = create_signal_v3_for_membership(
+        owner,
+        affected_business_unit=hotel,
+        responsible_business_unit=maintenance,
+        activity_subject=electricite,
+    )
+    assign_business_unit_scope(staff, maintenance)
+
+    if event_key == Notification.EventKey.COMMENT_SIGNAL_CREATED:
+        create_action_plan_with_execution(
+            establishment_id=owner.establishment_id,
+            created_by=owner,
+            pilot_business_unit_id=maintenance.id,
+            title="Linked",
+            source_signal_id=signal.id,
+            tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+            assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+        )
+        comment = create_signal_comment(
+            author_membership=owner,
+            signal=signal,
+            body="signal comment",
+        )
+        push_recipient = staff
+    else:
+        _, execution = create_action_plan_with_execution(
+            establishment_id=owner.establishment_id,
+            created_by=owner,
+            pilot_business_unit_id=maintenance.id,
+            title="Execution",
+            tasks=[build_task_payload(task="Task", business_unit=maintenance, position=1)],
+            assignees=[build_assignee_payload(membership=staff, business_unit=maintenance)],
+        )
+        if event_key == Notification.EventKey.COMMENT_ACTION_PLAN_EXECUTION_CREATED:
+            comment = create_action_plan_execution_comment(
+                author_membership=owner,
+                execution=execution,
+                body="root comment",
+            )
+            push_recipient = staff
+        else:
+            root = create_action_plan_execution_comment(
+                author_membership=owner,
+                execution=execution,
+                body="root",
+            )
+            comment = create_action_plan_execution_comment(
+                author_membership=staff,
+                execution=execution,
+                body="reply comment",
+                parent_comment_id=root.id,
+            )
+            owner.push_enabled = True
+            owner.save(update_fields=["push_enabled", "updated_at"])
+            push_recipient = owner
+
+    notification = Notification.objects.filter(
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment.id,
+        event_key=event_key,
+        recipient_membership=push_recipient,
+    ).first()
+    assert notification is not None
+
+    subscription = _create_subscription(user=push_recipient.user)
+
+    with patch("houston.notifications.push.services.send_web_push") as send_web_push:
+        sent_count = run_push_for_notification(notification.id)
+
+    assert sent_count == 1
+    send_web_push.assert_called_once()
+    delivery = PushDelivery.objects.get(notification_id=notification.id)
+    assert delivery.subscription_id == subscription.id
+    assert delivery.status == PushDelivery.Status.SENT
+
+
 @override_settings(**VAPID_SETTINGS)
 def test_run_push_for_notification_skips_chat_when_presence_active():
     recipient = _prepare_recipient()

@@ -22,14 +22,17 @@ from houston.notifications.recipients import (
     resolve_action_plan_execution_pending_validation_recipients,
     resolve_action_plan_execution_reopened_recipients,
     resolve_chat_message_recipients,
+    resolve_comment_action_plan_execution_created_recipients,
     resolve_comment_mention_recipients,
+    resolve_comment_reply_created_recipients,
+    resolve_comment_signal_created_recipients,
     resolve_signal_pole_recipients,
 )
 from houston.notifications.services import (
     create_in_app_notification,
     create_in_app_notifications_for_recipients,
 )
-from houston.signals.models import Signal
+from houston.signals.models import Signal, SignalSourceObservation
 
 logger = logging.getLogger(__name__)
 
@@ -231,16 +234,63 @@ def schedule_action_plan_execution_reopened_notification(
 def _load_comment(*, comment_id: uuid.UUID) -> Comment | None:
     return (
         Comment.objects.filter(id=comment_id)
+        .select_related(
+            "signal",
+            "action_plan_execution__created_by",
+            "parent_comment__author_membership",
+        )
         .prefetch_related(
             Prefetch(
                 "mention_links",
                 queryset=CommentMention.objects.select_related(
                     "mentioned_membership__user",
                 ).order_by("id"),
-            )
+            ),
+            Prefetch(
+                "parent_comment__mention_links",
+                queryset=CommentMention.objects.select_related(
+                    "mentioned_membership__user",
+                ).order_by("id"),
+            ),
+            Prefetch(
+                "parent_comment__replies",
+                queryset=Comment.objects.select_related("author_membership").order_by(
+                    "created_at",
+                    "id",
+                ),
+            ),
+            "action_plan_execution__assignees__membership",
         )
         .first()
     )
+
+
+def _exclude_membership_ids(
+    recipients: list[EstablishmentMembership],
+    exclude_ids: set[uuid.UUID],
+) -> list[EstablishmentMembership]:
+    if not exclude_ids:
+        return recipients
+    return [recipient for recipient in recipients if recipient.id not in exclude_ids]
+
+
+def _deliver_comment_notifications(
+    *,
+    comment: Comment,
+    event_key: str,
+    recipients: list[EstablishmentMembership],
+    actor_membership: EstablishmentMembership | None,
+) -> None:
+    for recipient in recipients:
+        create_in_app_notification(
+            establishment_id=comment.establishment_id,
+            recipient_membership=recipient,
+            event_key=event_key,
+            subject_type=Notification.SubjectType.COMMENT,
+            subject_id=comment.id,
+            priority=Notification.Priority.INFO,
+            actor_membership=actor_membership,
+        )
 
 
 def _deliver_comment_mention_notifications(
@@ -285,6 +335,169 @@ def schedule_comment_mention_created_notification(
     _run_notification_after_commit(
         deliver=deliver,
         event_key=Notification.EventKey.COMMENT_MENTION_CREATED,
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment_id,
+    )
+
+
+def _load_signal_for_comment(*, signal_id: uuid.UUID) -> Signal | None:
+    return (
+        Signal.objects.filter(id=signal_id)
+        .prefetch_related(
+            Prefetch(
+                "source_observation_links",
+                queryset=SignalSourceObservation.objects.filter(
+                    link_type=SignalSourceObservation.LinkType.CREATED_FROM,
+                )
+                .select_related("observation__submitted_by_membership")
+                .order_by("observation__created_at", "observation__id"),
+                to_attr="created_from_source_links",
+            ),
+        )
+        .first()
+    )
+
+
+def _deliver_comment_signal_created_notifications(
+    *,
+    comment: Comment,
+    actor_membership: EstablishmentMembership | None,
+    exclude_mentioned_membership_ids: set[uuid.UUID],
+) -> None:
+    if comment.signal_id is None:
+        return
+    signal = _load_signal_for_comment(signal_id=comment.signal_id)
+    if signal is None:
+        return
+    recipients = _exclude_membership_ids(
+        resolve_comment_signal_created_recipients(signal=signal),
+        exclude_mentioned_membership_ids,
+    )
+    _deliver_comment_notifications(
+        comment=comment,
+        event_key=Notification.EventKey.COMMENT_SIGNAL_CREATED,
+        recipients=recipients,
+        actor_membership=actor_membership,
+    )
+
+
+def schedule_comment_signal_created_notification(
+    *,
+    comment_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+    exclude_mentioned_membership_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+) -> None:
+    def deliver() -> None:
+        comment = _load_comment(comment_id=comment_id)
+        if comment is None:
+            return
+        _deliver_comment_signal_created_notifications(
+            comment=comment,
+            actor_membership=_load_actor(
+                establishment_id=comment.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_mentioned_membership_ids=set(exclude_mentioned_membership_ids),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.COMMENT_SIGNAL_CREATED,
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment_id,
+    )
+
+
+def _deliver_comment_action_plan_execution_created_notifications(
+    *,
+    comment: Comment,
+    actor_membership: EstablishmentMembership | None,
+    exclude_mentioned_membership_ids: set[uuid.UUID],
+) -> None:
+    if comment.action_plan_execution_id is None:
+        return
+    execution = comment.action_plan_execution
+    if execution is None:
+        return
+    recipients = _exclude_membership_ids(
+        resolve_comment_action_plan_execution_created_recipients(execution=execution),
+        exclude_mentioned_membership_ids,
+    )
+    _deliver_comment_notifications(
+        comment=comment,
+        event_key=Notification.EventKey.COMMENT_ACTION_PLAN_EXECUTION_CREATED,
+        recipients=recipients,
+        actor_membership=actor_membership,
+    )
+
+
+def schedule_comment_action_plan_execution_created_notification(
+    *,
+    comment_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+    exclude_mentioned_membership_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+) -> None:
+    def deliver() -> None:
+        comment = _load_comment(comment_id=comment_id)
+        if comment is None:
+            return
+        _deliver_comment_action_plan_execution_created_notifications(
+            comment=comment,
+            actor_membership=_load_actor(
+                establishment_id=comment.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_mentioned_membership_ids=set(exclude_mentioned_membership_ids),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.COMMENT_ACTION_PLAN_EXECUTION_CREATED,
+        subject_type=Notification.SubjectType.COMMENT,
+        subject_id=comment_id,
+    )
+
+
+def _deliver_comment_reply_created_notifications(
+    *,
+    comment: Comment,
+    actor_membership: EstablishmentMembership | None,
+    exclude_mentioned_membership_ids: set[uuid.UUID],
+) -> None:
+    recipients = _exclude_membership_ids(
+        resolve_comment_reply_created_recipients(reply_comment=comment),
+        exclude_mentioned_membership_ids,
+    )
+    _deliver_comment_notifications(
+        comment=comment,
+        event_key=Notification.EventKey.COMMENT_REPLY_CREATED,
+        recipients=recipients,
+        actor_membership=actor_membership,
+    )
+
+
+def schedule_comment_reply_created_notification(
+    *,
+    comment_id: uuid.UUID,
+    actor_membership_id: uuid.UUID,
+    exclude_mentioned_membership_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
+) -> None:
+    def deliver() -> None:
+        comment = _load_comment(comment_id=comment_id)
+        if comment is None:
+            return
+        _deliver_comment_reply_created_notifications(
+            comment=comment,
+            actor_membership=_load_actor(
+                establishment_id=comment.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_mentioned_membership_ids=set(exclude_mentioned_membership_ids),
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.COMMENT_REPLY_CREATED,
         subject_type=Notification.SubjectType.COMMENT,
         subject_id=comment_id,
     )
