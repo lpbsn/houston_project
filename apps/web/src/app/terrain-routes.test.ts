@@ -52,7 +52,7 @@ describe('getTerrainRouteConfig', () => {
   it('configures hub routes with bottom nav, page title, and main scroll', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/reporting' })).toEqual({
       topbarVariant: 'hub',
-      pageTitle: 'Observation',
+      topbarSize: 'compact',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'auto',

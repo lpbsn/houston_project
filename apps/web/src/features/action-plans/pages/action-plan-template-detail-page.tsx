@@ -1,10 +1,9 @@
-import { LoaderCircle, Plus } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainCard, TerrainErrorState, TerrainSectionLabel, TerrainStickyFooter } from '@/components/ui/terrain'
-import { Button } from '@/components/ui/button'
+import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -12,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
 import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
 import { ActionPlanTemplateDetailHeader } from '../components/action-plan-template-detail-header'
+import { ActionPlanTemplateDetailStickyFooter } from '../components/action-plan-template-detail-sticky-footer'
 import {
   useActivateActionPlanMutation,
   useActionPlanDetailQuery,
@@ -92,6 +92,13 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const isBusy =
     activateMutation.isPending || deactivateMutation.isPending || useMutation.isPending
 
+  const showStickyFooter =
+    executionPanelOpen ||
+    canUpdate ||
+    canShowActionPlanActivate(hints) ||
+    canShowActionPlanDeactivate(hints) ||
+    canUse
+
   function resetExecutionPanel() {
     setExecutionPanelOpen(false)
     setPlanningDraft(createActionPlanEventPlanningDraft())
@@ -157,7 +164,12 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className={cn('space-y-3 px-3 pt-2', executionPanelOpen ? 'pb-28' : 'pb-6')}>
+      <div
+        className={cn(
+          'flex flex-1 flex-col gap-3 px-3 pt-2',
+          showStickyFooter ? 'pb-40' : 'pb-4',
+        )}
+      >
         {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
 
         <ActionPlanTemplateDetailHeader plan={plan} />
@@ -179,42 +191,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           )}
         </section>
 
-        <div className="flex flex-col gap-2">
-          {canUpdate ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl"
-              disabled={isBusy}
-              onClick={() => navigate(`/action-plans/${actionPlanId}/edit`)}
-            >
-              Modifier
-            </Button>
-          ) : null}
-          {canShowActionPlanActivate(hints) ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl"
-              disabled={isBusy}
-              onClick={() => void handleActivate()}
-            >
-              Activer dans la bibliothèque
-            </Button>
-          ) : null}
-          {canShowActionPlanDeactivate(hints) ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full rounded-xl text-[#E24B4A]"
-              disabled={isBusy}
-              onClick={() => void handleDeactivate()}
-            >
-              Désactiver
-            </Button>
-          ) : null}
-        </div>
-
         {executionPanelOpen ? (
           <ActionPlanEventPlanningForm
             draft={planningDraft}
@@ -232,42 +208,23 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             onDraftChange={setPlanningDraft}
           />
         ) : null}
-
-        {canUse && !executionPanelOpen ? (
-          <Button
-            type="button"
-            className="h-11 w-full rounded-xl"
-            disabled={isBusy}
-            onClick={() => setExecutionPanelOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" aria-hidden />
-            Exécution
-          </Button>
-        ) : null}
       </div>
 
-      {executionPanelOpen ? (
-        <TerrainStickyFooter>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 flex-1 rounded-xl"
-              disabled={useMutation.isPending}
-              onClick={resetExecutionPanel}
-            >
-              Annuler
-            </Button>
-            <Button
-              type="button"
-              className="h-11 flex-1 rounded-xl"
-              disabled={useMutation.isPending}
-              onClick={() => void handleLaunchExecution()}
-            >
-              Lancer l&apos;exécution
-            </Button>
-          </div>
-        </TerrainStickyFooter>
+      {showStickyFooter ? (
+        <ActionPlanTemplateDetailStickyFooter
+          hints={hints}
+          executionPanelOpen={executionPanelOpen}
+          canUpdate={canUpdate}
+          canUse={canUse}
+          isBusy={isBusy}
+          isLaunchPending={useMutation.isPending}
+          onNavigateToEdit={() => navigate(`/action-plans/${actionPlanId}/edit`)}
+          onActivate={() => void handleActivate()}
+          onDeactivate={() => void handleDeactivate()}
+          onOpenExecutionPanel={() => setExecutionPanelOpen(true)}
+          onCloseExecutionPanel={resetExecutionPanel}
+          onLaunchExecution={() => void handleLaunchExecution()}
+        />
       ) : null}
     </div>
   )

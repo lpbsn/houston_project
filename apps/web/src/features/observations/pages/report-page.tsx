@@ -1,19 +1,16 @@
-import { useMemo, useRef, useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { LoaderCircle, SendHorizonal } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
 
 import { useAuth } from '@/app/auth-provider'
-import {
-  TerrainCard,
-  TerrainErrorState,
-  TerrainFieldLabel,
-  TerrainOrDivider,
-  TerrainStickyFooter,
-} from '@/components/ui/terrain'
+import { TerrainCard, TerrainErrorState, TerrainStickyFooter } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { ReportPhotosSection, type ReportPhotoDraft } from '@/features/observations/components/report-photos-section'
+import {
+  ReportPhotosSection,
+  type ReportPhotoDraft,
+} from '@/features/observations/components/report-photos-section'
 import { ReportSuccessPanel } from '@/features/observations/components/report-success-panel'
-import { ReportVoiceSection } from '@/features/observations/components/report-voice-section'
+import { ReportTextSection } from '@/features/observations/components/report-text-section'
 import { ObservationsApiError } from '@/features/observations/api'
 import {
   useDeleteTemporaryPhotoMutation,
@@ -36,7 +33,7 @@ import {
   OBSERVATION_TEXT_MIN_LENGTH,
 } from '@/features/observations/types'
 import { resolveApiErrorMessage } from '@/lib/error-message'
-import { terrain } from '@/lib/terrain-styles'
+import { terrain, terrainObservationAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type ReportPageProps = {
@@ -57,6 +54,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const photoPreviewUrlsRef = useRef<Set<string>>(new Set())
 
   const uploadMutation = useUploadTemporaryPhotoMutation(establishmentId)
   const deleteMutation = useDeleteTemporaryPhotoMutation(establishmentId)
@@ -80,11 +78,6 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     !uploadMutation.isPending &&
     !isSubmitPending &&
     !isTranscribing
-
-  const photoHint = useMemo(() => {
-    return `${photos.length}/${MAX_OBSERVATION_PHOTOS} photos — optionnel`
-  }, [photos.length])
-  const latestTranscript = transcribeMutation.data?.text?.trim() ?? ''
 
   const processingLabel = processingQuery.data?.ux_status
     ? getProcessingUxLabel(processingQuery.data.ux_status)
@@ -110,6 +103,30 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   const resolveReportError = (error: unknown) =>
     resolveApiErrorMessage(error, ObservationsApiError, 'Une erreur est survenue.')
 
+  function trackPreviewUrl(url: string) {
+    photoPreviewUrlsRef.current.add(url)
+  }
+
+  function revokePreviewUrl(url: string) {
+    if (!photoPreviewUrlsRef.current.delete(url)) {
+      return
+    }
+    URL.revokeObjectURL(url)
+  }
+
+  function revokeAllPreviewUrls() {
+    for (const url of photoPreviewUrlsRef.current) {
+      URL.revokeObjectURL(url)
+    }
+    photoPreviewUrlsRef.current.clear()
+  }
+
+  useEffect(() => {
+    return () => {
+      revokeAllPreviewUrls()
+    }
+  }, [])
+
   const handlePhotoSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -122,9 +139,11 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
     }
 
     const localId = crypto.randomUUID()
+    const previewUrl = URL.createObjectURL(file)
+    trackPreviewUrl(previewUrl)
     setPhotos((current) => [
       ...current,
-      { localId, file, uploadId: null, status: 'uploading' },
+      { localId, file, uploadId: null, status: 'uploading', previewUrl },
     ])
     setFormError(null)
 
@@ -148,6 +167,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   }
 
   const handleRemovePhoto = async (photo: ReportPhotoDraft) => {
+    revokePreviewUrl(photo.previewUrl)
     setPhotos((current) => current.filter((item) => item.localId !== photo.localId))
     if (photo.uploadId && establishmentId) {
       try {
@@ -182,10 +202,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
             blob,
             fileName: 'observation-audio.webm',
           })
-          setText((current) => {
-            const merged = current.trim() ? `${current.trim()}\n${result.text}` : result.text
-            return merged.slice(0, OBSERVATION_TEXT_MAX_LENGTH)
-          })
+          setText(result.text.slice(0, OBSERVATION_TEXT_MAX_LENGTH))
         } catch (error) {
           setFormError(resolveReportError(error))
         } finally {
@@ -226,6 +243,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
         text: trimmedText,
         temporary_upload_ids: uploadIds,
       })
+      revokeAllPreviewUrls()
       setSubmittedObservationId(response.id)
       setText('')
       setPhotos([])
@@ -242,7 +260,7 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   }
 
   const pageShell = (content: React.ReactNode) => (
-    <div className="flex flex-col gap-4 px-3 pb-4 pt-2">{content}</div>
+    <div className="flex flex-col gap-4 px-4 pb-4 pt-2">{content}</div>
   )
 
   if (!establishmentId) {
@@ -276,40 +294,28 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-4 px-3 pb-28 pt-2">
-        <ReportVoiceSection
-          shouldReduceMotion={shouldReduceMotion}
+      <div className="flex flex-1 flex-col gap-5 px-4 pb-28 pt-3">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-[#1a1a1a]">Une observation ?</h1>
+          <p className={cn('text-sm', terrain.muted)}>
+            Soyez précis mais ne perdez pas de temps avec la forme.
+          </p>
+        </header>
+
+        <ReportTextSection
+          text={text}
+          textLength={textLength}
+          shouldReduceMotion={shouldReduceMotion ?? false}
           isRecording={isRecording}
           isTranscribing={isTranscribing}
           isSubmitPending={isSubmitPending}
-          latestTranscript={latestTranscript}
+          onTextChange={setText}
           onStartRecording={() => void handleStartRecording()}
           onStopRecording={handleStopRecording}
         />
 
-        <TerrainOrDivider />
-
-        <TerrainCard>
-          <TerrainFieldLabel htmlFor="observation-text">Description</TerrainFieldLabel>
-          <textarea
-            id="observation-text"
-            className={cn(
-              'mt-2 min-h-[72px] w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed outline-none md:text-[13px]',
-              terrain.foreground,
-              'placeholder:text-[#aaa]',
-            )}
-            value={text}
-            onChange={(event) => setText(event.target.value.slice(0, OBSERVATION_TEXT_MAX_LENGTH))}
-            placeholder="Décrivez le problème observé..."
-          />
-          <p className={cn('mt-1 text-xs', terrain.muted)}>
-            {textLength}/{OBSERVATION_TEXT_MAX_LENGTH} caractères (min. {OBSERVATION_TEXT_MIN_LENGTH})
-          </p>
-        </TerrainCard>
-
         <ReportPhotosSection
           photos={photos}
-          photoHint={photoHint}
           isUploadPending={uploadMutation.isPending}
           onPhotoSelect={(event) => void handlePhotoSelect(event)}
           onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
@@ -318,12 +324,14 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
         {formError ? <TerrainErrorState message={formError} /> : null}
       </div>
 
-      <TerrainStickyFooter>
+      <TerrainStickyFooter variant="transparent">
         <Button
           type="button"
           className={cn(
-            'h-12 w-full rounded-2xl text-[15px] font-bold text-white hover:bg-[#1B4FD8]/95',
-            terrain.primaryBg,
+            'h-12 w-full rounded-full text-[15px] font-bold text-white',
+            canSubmit
+              ? cn(terrainObservationAction.bg, terrainObservationAction.hover)
+              : 'bg-[#114660]/40 hover:bg-[#114660]/40',
           )}
           disabled={!canSubmit}
           onClick={() => void handleSubmit()}
@@ -334,7 +342,10 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
               Envoi...
             </>
           ) : (
-            'Envoyer le signal'
+            <>
+              <SendHorizonal className="mr-2 h-4 w-4" />
+              Envoyer l’observation
+            </>
           )}
         </Button>
       </TerrainStickyFooter>

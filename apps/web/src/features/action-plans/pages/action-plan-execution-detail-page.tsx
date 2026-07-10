@@ -386,22 +386,22 @@ function ActionPlanExecutionDetailPageContent({
       </div>
 
       {showStickyFooter ? (
-        <div ref={validationActionsRef} data-testid="execution-validation-actions">
-          <ActionPlanExecutionStickyFooter
-            hints={permissionHints}
-            isTerminal={isTerminal}
-            isPending={isMutationPending}
-            mutationErrorMessage={
-              mutationError
-                ? resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')
-                : null
-            }
-            onMarkDone={() => void handleMarkDone()}
-            onValidate={() => void handleValidate()}
-            onReopen={() => void handleReopen()}
-            onCancel={() => void handleCancel()}
-          />
-        </div>
+        <ActionPlanExecutionStickyFooter
+          ref={validationActionsRef}
+          data-testid="execution-validation-actions"
+          hints={permissionHints}
+          isTerminal={isTerminal}
+          isPending={isMutationPending}
+          mutationErrorMessage={
+            mutationError
+              ? resolveApiErrorMessage(mutationError, ActionPlansApiError, 'Action impossible.')
+              : null
+          }
+          onMarkDone={() => void handleMarkDone()}
+          onValidate={() => void handleValidate()}
+          onReopen={() => void handleReopen()}
+          onCancel={() => void handleCancel()}
+        />
       ) : null}
 
       <ActionPlanExecutionTaskActionsSheet

@@ -1,6 +1,5 @@
-import { ImagePlus, LoaderCircle, Trash2 } from 'lucide-react'
+import { Image, LoaderCircle, Trash2 } from 'lucide-react'
 
-import { TerrainCard, TerrainFieldLabel } from '@/components/ui/terrain'
 import { MAX_OBSERVATION_PHOTOS } from '@/features/observations/types'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -10,28 +9,18 @@ export type ReportPhotoDraft = {
   file: File
   uploadId: string | null
   status: 'uploading' | 'ready' | 'failed'
+  previewUrl: string
 }
 
 type ReportPhotosSectionProps = {
   photos: ReportPhotoDraft[]
-  photoHint: string
   isUploadPending: boolean
   onPhotoSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
   onRemovePhoto: (photo: ReportPhotoDraft) => void
 }
 
-function truncateFileName(name: string, max = 12): string {
-  if (name.length <= max) {
-    return name
-  }
-  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : ''
-  const base = name.slice(0, max - ext.length - 1)
-  return `${base}…${ext}`
-}
-
 export function ReportPhotosSection({
   photos,
-  photoHint,
   isUploadPending,
   onPhotoSelect,
   onRemovePhoto,
@@ -39,47 +28,52 @@ export function ReportPhotosSection({
   const canAddPhoto = photos.length < MAX_OBSERVATION_PHOTOS && !isUploadPending
 
   return (
-    <TerrainCard>
+    <section
+      className="rounded-[20px] border border-dashed border-[#ccc] p-4"
+      aria-label="Photos de l’observation"
+    >
       <div className="flex items-center justify-between gap-2">
-        <TerrainFieldLabel>Photos</TerrainFieldLabel>
-        <p className={cn('text-xs', terrain.muted)}>{photoHint}</p>
+        <p className={cn('flex items-center gap-1 text-sm font-semibold', terrain.foreground)}>
+          <span className={cn('text-base font-bold', terrain.primary)}>+</span>
+          Ajouter des photos
+        </p>
+        <p className={cn('text-[10px] font-medium uppercase tracking-wide', terrain.muted)}>
+          Optionnel · {photos.length}/{MAX_OBSERVATION_PHOTOS}
+        </p>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {photos.map((photo) => (
           <div
             key={photo.localId}
-            className={cn(
-              'relative flex h-20 w-20 flex-col items-center justify-center gap-0.5 rounded-[14px] border border-[#E8E6DF] p-1',
-              terrain.photoTile,
-            )}
+            className="relative h-20 w-20 overflow-hidden rounded-[14px] border border-[#E8E6DF]"
           >
-            <span
-              className={cn(
-                'max-w-full truncate px-0.5 text-center text-[9px] font-medium',
-                terrain.foreground,
-              )}
-              title={photo.file.name}
-            >
-              {truncateFileName(photo.file.name)}
-            </span>
+            <img
+              src={photo.previewUrl}
+              alt={`Aperçu de ${photo.file.name}`}
+              className="h-full w-full object-cover"
+            />
             {photo.status === 'uploading' ? (
-              <LoaderCircle className={cn('h-4 w-4 animate-spin', terrain.muted)} />
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+                <LoaderCircle className={cn('h-5 w-5 animate-spin', terrain.muted)} />
+              </div>
             ) : photo.status === 'failed' ? (
-              <span className="text-[9px] font-medium text-[#9a3b2e]">Échec</span>
-            ) : (
-              <span className={cn('text-[9px]', terrain.muted)}>Prête</span>
-            )}
+              <div className="absolute inset-x-0 bottom-0 bg-[#fff5f3]/95 px-1 py-0.5 text-center text-[9px] font-medium text-[#9a3b2e]">
+                Échec
+              </div>
+            ) : null}
             <button
               type="button"
               className={cn(
-                'absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border border-[#E8E6DF] bg-white shadow-sm',
-                terrain.muted,
-                'hover:text-[#1a1a1a]',
+                'absolute top-1 right-1 z-10',
+                'flex h-8 w-8 min-h-8 min-w-8 items-center justify-center rounded-full',
+                'border-2 border-white text-white shadow-md',
+                terrain.dangerBg,
+                'hover:bg-[#c93f3e]',
               )}
               onClick={() => void onRemovePhoto(photo)}
               aria-label={`Supprimer ${photo.file.name}`}
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-4 w-4" aria-hidden />
             </button>
           </div>
         ))}
@@ -97,11 +91,11 @@ export function ReportPhotosSection({
               className="sr-only"
               onChange={onPhotoSelect}
             />
-            <ImagePlus className="h-6 w-6 stroke-[#aaa]" />
+            <Image className="h-6 w-6 stroke-[#aaa]" />
             <span className="text-[10px] font-medium">Ajouter</span>
           </label>
         ) : null}
       </div>
-    </TerrainCard>
+    </section>
   )
 }

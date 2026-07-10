@@ -10,6 +10,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 import type { TerrainNavPath } from '@/app/terrain-routes'
 import { terrainTapProps } from '@/lib/terrain-motion'
+import { terrainObservationAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type BottomMobileNavProps = {
@@ -71,7 +72,7 @@ export function BottomMobileNav({
               <li key={item.path} className="flex items-start justify-center">
                 <NavLink
                   href={item.path}
-                  aria-label="Nouveau signal"
+                  aria-label="Nouvelle observation"
                   aria-current={isActive ? 'page' : undefined}
                   onClick={(event) => {
                     event.preventDefault()
@@ -82,8 +83,10 @@ export function BottomMobileNav({
                 >
                   <span
                     className={cn(
-                      'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-full border-4 border-[#F5F4F0] bg-[#1B4FD8] text-white shadow-[0_8px_20px_rgba(27,79,216,0.35)]',
-                      isActive && 'ring-2 ring-[#1B4FD8]/30',
+                      'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-full border-4 border-[#F5F4F0] text-white',
+                      terrainObservationAction.bg,
+                      terrainObservationAction.shadow,
+                      isActive && cn('ring-2', terrainObservationAction.ring),
                     )}
                   >
                     <Icon className="h-6 w-6" />
