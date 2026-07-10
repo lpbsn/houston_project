@@ -106,6 +106,16 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
+  it('renders catalog actions in sticky footer when panel is closed', () => {
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    const modifierButton = screen.getByRole('button', { name: 'Modifier' })
+    const executionButton = screen.getByRole('button', { name: 'Exécution' })
+
+    expect(modifierButton.closest('footer')).toBeTruthy()
+    expect(executionButton.closest('footer')).toBeTruthy()
+  })
+
   it('opens planning panel and sticky launch actions', () => {
     render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
@@ -116,23 +126,19 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
   })
 
-  it('keeps template actions above planification when execution panel is open', () => {
+  it('shows launch actions in sticky footer when execution panel is open', () => {
     render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
 
-    const modifierButton = screen.getByRole('button', { name: 'Modifier' })
-    const deactivateButton = screen.getByRole('button', { name: 'Désactiver' })
-    const planificationLabel = screen.getByText('Planification')
+    const cancelButton = screen.getByRole('button', { name: 'Annuler' })
+    const launchButton = screen.getByRole('button', { name: "Lancer l'exécution" })
 
-    expect(
-      modifierButton.compareDocumentPosition(planificationLabel) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
-    expect(
-      deactivateButton.compareDocumentPosition(planificationLabel) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    expect(cancelButton.closest('footer')).toBeTruthy()
+    expect(launchButton.closest('footer')).toBeTruthy()
+    expect(screen.getByText('Planification')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Modifier' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
   })
 
   it('navigates to edit route from modifier button', () => {

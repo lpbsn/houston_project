@@ -25,6 +25,15 @@ export const terrain = {
   successSurface: 'border-[#d8ead8] bg-[#f4fbf4]',
 } as const
 
+/** Shared observation action color (#114660) — submit, inline mic, FAB. */
+export const terrainObservationAction = {
+  bg: 'bg-[#114660]',
+  hover: 'hover:bg-[#0f3d52]',
+  text: 'text-[#114660]',
+  shadow: 'shadow-[0_8px_20px_rgba(17,70,96,0.35)]',
+  ring: 'ring-[#114660]/30',
+} as const
+
 export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue'
 
 export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {

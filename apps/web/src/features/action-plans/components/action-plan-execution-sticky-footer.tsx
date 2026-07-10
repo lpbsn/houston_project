@@ -1,3 +1,5 @@
+import { forwardRef } from 'react'
+
 import { TerrainStickyFooter } from '@/components/ui/terrain'
 
 import type { ActionPlanExecutionPermissionHints } from '../types'
@@ -8,24 +10,32 @@ type ActionPlanExecutionStickyFooterProps = {
   isTerminal: boolean
   isPending: boolean
   mutationErrorMessage: string | null
+  'data-testid'?: string
   onMarkDone: () => void
   onValidate: () => void
   onReopen: () => void
   onCancel: () => void
 }
 
-export function ActionPlanExecutionStickyFooter({
-  hints,
-  isTerminal,
-  isPending,
-  mutationErrorMessage,
-  onMarkDone,
-  onValidate,
-  onReopen,
-  onCancel,
-}: ActionPlanExecutionStickyFooterProps) {
+export const ActionPlanExecutionStickyFooter = forwardRef<
+  HTMLElement,
+  ActionPlanExecutionStickyFooterProps
+>(function ActionPlanExecutionStickyFooter(
+  {
+    hints,
+    isTerminal,
+    isPending,
+    mutationErrorMessage,
+    'data-testid': dataTestId,
+    onMarkDone,
+    onValidate,
+    onReopen,
+    onCancel,
+  },
+  ref,
+) {
   return (
-    <TerrainStickyFooter className="flex flex-col gap-2">
+    <TerrainStickyFooter ref={ref} className="flex flex-col gap-2" data-testid={dataTestId}>
       <ActionPlanExecutionLifecycleActions
         hints={hints}
         isTerminal={isTerminal}
@@ -42,4 +52,4 @@ export function ActionPlanExecutionStickyFooter({
       ) : null}
     </TerrainStickyFooter>
   )
-}
+})

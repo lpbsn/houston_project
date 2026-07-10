@@ -339,6 +339,15 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
   })
 
+  it('renders sticky footer as direct child of page without constraining wrapper', () => {
+    renderPage()
+
+    const footer = screen.getByTestId('execution-validation-actions')
+    expect(footer.tagName).toBe('FOOTER')
+    expect(footer.parentElement?.classList.contains('flex')).toBe(true)
+    expect(footer.parentElement?.classList.contains('min-h-full')).toBe(true)
+  })
+
   it('renders a flat task list without pole section headers', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,

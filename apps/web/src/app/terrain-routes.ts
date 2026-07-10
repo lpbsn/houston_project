@@ -14,8 +14,11 @@ export type TerrainMainScroll = 'auto' | 'hidden'
 /** Detail topbar: centered title (signal) vs title below back (action). */
 export type TerrainDetailTitleLayout = 'centered' | 'belowBack'
 
+export type TerrainTopbarSize = 'default' | 'compact'
+
 export type TerrainRouteConfig = {
   topbarVariant: 'hub' | 'detail'
+  topbarSize?: TerrainTopbarSize
   title?: string
   pageTitle?: string
   detailTitleLayout?: TerrainDetailTitleLayout
@@ -197,7 +200,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/reporting') {
     return {
       topbarVariant: 'hub',
-      pageTitle: 'Observation',
+      topbarSize: 'compact',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'auto',

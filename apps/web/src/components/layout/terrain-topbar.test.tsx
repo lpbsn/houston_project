@@ -32,6 +32,13 @@ describe('TerrainTopbar', () => {
     expect(container.querySelector('span[aria-hidden]')).toBeTruthy()
   })
 
+  it('renders compact hub with reduced height', () => {
+    const { container } = render(<TerrainTopbar variant="hub" topbarSize="compact" />)
+
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    expect(container.querySelector('.h-14')).toBeTruthy()
+  })
+
   it('renders long hub page titles without crashing', () => {
     render(
       <TerrainTopbar

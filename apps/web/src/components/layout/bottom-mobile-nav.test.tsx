@@ -16,5 +16,9 @@ describe('BottomMobileNav', () => {
     const nav = screen.getByRole('navigation', { name: 'Navigation terrain' })
     expect(nav.className).toContain('z-20')
     expect(nav.className).toContain('relative')
+    expect(screen.getByRole('link', { name: 'Nouvelle observation' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Nouvelle observation' }).innerHTML).toContain(
+      '114660',
+    )
   })
 })
