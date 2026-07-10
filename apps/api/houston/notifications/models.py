@@ -17,6 +17,10 @@ class Notification(BaseModel):
             "action_plan.execution.created",
             "Action plan execution created",
         )
+        ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL = (
+            "action_plan.execution.created_from_signal",
+            "Action plan execution created from signal",
+        )
         ACTION_PLAN_EXECUTION_PENDING_VALIDATION = (
             "action_plan.execution.pending_validation",
             "Action plan execution pending validation",
@@ -37,6 +41,10 @@ class Notification(BaseModel):
         )
         COMMENT_REPLY_CREATED = "comment.reply.created", "Comment reply created"
         SIGNAL_CREATED = "signal.created", "Signal created"
+        SIGNAL_CREATED_UNASSIGNED_GLOBAL = (
+            "signal.created.unassigned_global",
+            "Signal created unassigned global",
+        )
         SIGNAL_URGENCY_CHANGED = "signal.urgency_changed", "Signal urgency changed"
         SIGNAL_PINNED = "signal.pinned", "Signal pinned"
         SIGNAL_RESOLVED = "signal.resolved", "Signal resolved"

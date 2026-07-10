@@ -5,6 +5,7 @@ from houston.notifications.models import Notification
 PUSH_V1_EVENT_KEYS: frozenset[str] = frozenset(
     {
         Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL,
         Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION,
         Notification.EventKey.ACTION_PLAN_EXECUTION_CANCELED,
         Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
@@ -13,6 +14,7 @@ PUSH_V1_EVENT_KEYS: frozenset[str] = frozenset(
         Notification.EventKey.COMMENT_ACTION_PLAN_EXECUTION_CREATED,
         Notification.EventKey.COMMENT_REPLY_CREATED,
         Notification.EventKey.SIGNAL_CREATED,
+        Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
         Notification.EventKey.SIGNAL_URGENCY_CHANGED,
         Notification.EventKey.SIGNAL_PINNED,
         Notification.EventKey.SIGNAL_RESOLVED,

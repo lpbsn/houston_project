@@ -27,6 +27,7 @@ from houston.notifications.recipients import (
     resolve_comment_reply_created_recipients,
     resolve_comment_signal_created_recipients,
     resolve_signal_pole_recipients,
+    resolve_signal_unassigned_global_recipients,
 )
 from houston.notifications.services import (
     create_in_app_notification,
@@ -90,6 +91,12 @@ def _load_action_plan_execution(*, execution_id: uuid.UUID) -> ActionPlanExecuti
     )
 
 
+def _resolve_execution_created_event_key(*, execution: ActionPlanExecution) -> str:
+    if execution.source_signal_id is not None:
+        return Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
+    return Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED
+
+
 def _deliver_action_plan_execution_notifications(
     *,
     execution: ActionPlanExecution,
@@ -122,10 +129,11 @@ def schedule_action_plan_execution_created_notification(
         execution = _load_action_plan_execution(execution_id=execution_id)
         if execution is None:
             return
+        event_key = _resolve_execution_created_event_key(execution=execution)
         recipients = resolve_action_plan_execution_created_recipients(execution=execution)
         _deliver_action_plan_execution_notifications(
             execution=execution,
-            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+            event_key=event_key,
             priority=Notification.Priority.ACTION_REQUIRED,
             recipients=recipients,
             actor_membership=_load_actor(
@@ -134,9 +142,17 @@ def schedule_action_plan_execution_created_notification(
             ),
         )
 
+    log_event_key = (
+        Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
+        if ActionPlanExecution.objects.filter(
+            id=execution_id,
+            source_signal_id__isnull=False,
+        ).exists()
+        else Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED
+    )
     _run_notification_after_commit(
         deliver=deliver,
-        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        event_key=log_event_key,
         subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
         subject_id=execution_id,
     )
@@ -539,15 +555,25 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
         signal = _load_signal(signal_id=signal_id)
         if signal is None:
             return
-        recipients = resolve_signal_pole_recipients(signal=signal)
-        _deliver_signal_notifications(
-            signal=signal,
-            event_key=Notification.EventKey.SIGNAL_CREATED,
-            priority=Notification.Priority.ACTION_REQUIRED,
-            recipients=recipients,
-            actor_membership=None,
-            exclude_actor_if_recipient=False,
-        )
+        pole_recipients = resolve_signal_pole_recipients(signal=signal)
+        if pole_recipients:
+            _deliver_signal_notifications(
+                signal=signal,
+                event_key=Notification.EventKey.SIGNAL_CREATED,
+                priority=Notification.Priority.ACTION_REQUIRED,
+                recipients=pole_recipients,
+                actor_membership=None,
+                exclude_actor_if_recipient=False,
+            )
+        else:
+            _deliver_signal_notifications(
+                signal=signal,
+                event_key=Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
+                priority=Notification.Priority.ACTION_REQUIRED,
+                recipients=resolve_signal_unassigned_global_recipients(signal=signal),
+                actor_membership=None,
+                exclude_actor_if_recipient=False,
+            )
 
     _run_notification_after_commit(
         deliver=deliver,
