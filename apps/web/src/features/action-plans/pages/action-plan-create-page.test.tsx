@@ -12,6 +12,45 @@ const createMutateAsync = vi.fn()
 const scheduleMutateAsync = vi.fn()
 const useMutateAsync = vi.fn()
 const signalDetailQueryMock = vi.fn()
+const detailQueryMock = vi.fn()
+
+function buildTemplatePlan(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'plan-1',
+    title: 'Plan catalogue',
+    description: 'Description',
+    catalog_status: 'active',
+    pilot_business_unit: { id: 'bu-1', key: 'rooftop', label: 'Rooftop' },
+    task_count: 1,
+    involved_pole_count: 1,
+    created_at: '2026-06-30T08:00:00Z',
+    updated_at: '2026-06-30T10:00:00Z',
+    created_by_id: 'member-1',
+    created_by_display_name: 'Alice',
+    requires_validation: true,
+    is_reusable: true,
+    tasks: [
+      {
+        id: 'task-1',
+        task: 'Contrôler la température',
+        description: 'Frigo',
+        deadline_at: '2026-07-08T10:00:00Z',
+        assigned_membership_id: 'member-2',
+        assigned_display_name: 'Bob',
+        position: 1,
+        business_unit: { id: 'bu-1', key: 'rooftop', label: 'Rooftop' },
+      },
+    ],
+    permission_hints: {
+      can_update: true,
+      can_activate: false,
+      can_deactivate: true,
+      can_use: true,
+      can_schedule: true,
+    },
+    ...overrides,
+  }
+}
 
 function buildSignalDetail(overrides: Record<string, unknown> = {}) {
   return {
@@ -88,12 +127,7 @@ vi.mock('../hooks', () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
-  useActionPlanDetailQuery: () => ({
-    isLoading: false,
-    isError: false,
-    data: null,
-    refetch: vi.fn(),
-  }),
+  useActionPlanDetailQuery: () => detailQueryMock(),
   useScheduleActionPlanFromCatalogMutation: () => ({
     mutateAsync: scheduleMutateAsync,
     isPending: false,
@@ -207,9 +241,10 @@ function selectTaskBusinessUnit(taskIndex: number, label: string) {
 
 function renderPage(
   props: {
-    mode?: 'catalog' | 'execution' | 'signal-linked'
+    mode?: 'catalog' | 'execution' | 'signal-linked' | 'template-edit'
     backPath?: string
     signalId?: string
+    actionPlanId?: string
   } = {},
 ) {
   const queryClient = new QueryClient({
@@ -231,6 +266,13 @@ describe('ActionPlanCreatePage', () => {
     createMutateAsync.mockReset()
     scheduleMutateAsync.mockReset()
     useMutateAsync.mockReset()
+    detailQueryMock.mockReset()
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: null,
+      refetch: vi.fn(),
+    })
     perAssigneeTestMode.enabled = false
     perAssigneeTestMode.incomplete = false
     signalDetailQueryMock.mockReset()
@@ -659,5 +701,19 @@ describe('ActionPlanCreatePage', () => {
       expect(scheduleMutateAsync).not.toHaveBeenCalled()
       expect(useMutateAsync).not.toHaveBeenCalled()
     })
+  })
+
+  it('renders template edit save button with brand color', async () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildTemplatePlan(),
+      refetch: vi.fn(),
+    })
+
+    renderPage({ mode: 'template-edit', actionPlanId: 'plan-1' })
+
+    const saveButton = await screen.findByRole('button', { name: 'Enregistrer les modifications' })
+    expect(saveButton.className).toContain('bg-[#114660]')
   })
 })

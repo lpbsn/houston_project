@@ -539,7 +539,11 @@ export function ActionPlanCreatePage({
             </Button>
             <Button
               type="button"
-              className="h-11 flex-1 rounded-xl"
+              className={cn(
+                'h-11 flex-1 rounded-xl text-white',
+                terrainBrandAction.bg,
+                terrainBrandAction.hover,
+              )}
               disabled={resolvedIsSubmitting}
               onClick={() => void submitEdit(formValues)}
             >
