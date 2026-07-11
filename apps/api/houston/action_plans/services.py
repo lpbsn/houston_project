@@ -1254,6 +1254,7 @@ def create_execution_from_action_plan(
     end_at: datetime | None = None,
     visible_from: datetime | None = None,
     occurrence_date=None,
+    emit_side_effects: bool = True,
 ) -> ActionPlanExecution:
     action_plan = ActionPlan.objects.select_for_update().filter(id=action_plan_id).first()
     if action_plan is None:
@@ -1350,19 +1351,20 @@ def create_execution_from_action_plan(
         plan_tasks=plan_tasks,
         assignees=validated_assignees,
     )
-    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
-    from houston.notifications.scheduling import (
-        schedule_action_plan_execution_created_notification,
-    )
+    if emit_side_effects:
+        from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+        from houston.notifications.scheduling import (
+            schedule_action_plan_execution_created_notification,
+        )
 
-    schedule_action_plan_execution_invalidation(
-        execution=execution,
-        reason="action_plan_execution.created",
-    )
-    schedule_action_plan_execution_created_notification(
-        execution_id=execution.id,
-        actor_membership_id=actor.id,
-    )
+        schedule_action_plan_execution_invalidation(
+            execution=execution,
+            reason="action_plan_execution.created",
+        )
+        schedule_action_plan_execution_created_notification(
+            execution_id=execution.id,
+            actor_membership_id=actor.id,
+        )
     return execution
 
 

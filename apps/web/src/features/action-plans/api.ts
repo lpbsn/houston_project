@@ -18,6 +18,8 @@ import type {
   ActionPlanExecutionFeedResponse,
   ActionPlanExecutionPinState,
   ActionPlanListItem,
+  ActionPlanMixedSubmitRequest,
+  ActionPlanMixedSubmitResponse,
   ActionPlanScheduleCreateRequest,
   ActionPlanScheduleDetail,
   ActionPlanTaskCreateObservationRequest,
@@ -51,13 +53,20 @@ export class ActionPlansApiError extends Error {
   status: number
   detail: string
   code: string | null
+  failedStep: 'schedule' | 'use' | null
 
-  constructor(options: { status: number; detail: string; code?: string | null }) {
+  constructor(options: {
+    status: number
+    detail: string
+    code?: string | null
+    failedStep?: 'schedule' | 'use' | null
+  }) {
     super(options.detail)
     this.name = 'ActionPlansApiError'
     this.status = options.status
     this.detail = options.detail
     this.code = options.code ?? null
+    this.failedStep = options.failedStep ?? null
   }
 }
 
@@ -71,7 +80,12 @@ function getAuthHeaders(accessToken: string | null) {
 
 function parseError(response: Response, payload: unknown): ActionPlansApiError {
   const { status, detail, code } = parseStandardApiError(response, payload)
-  return new ActionPlansApiError({ status, detail, code })
+  const body = typeof payload === 'object' && payload !== null ? payload : {}
+  const failedStep =
+    'failed_step' in body && (body.failed_step === 'schedule' || body.failed_step === 'use')
+      ? body.failed_step
+      : null
+  return new ActionPlansApiError({ status, detail, code, failedStep })
 }
 
 function assertActionPlanData<T>(result: {
@@ -291,6 +305,26 @@ export async function createActionPlanSchedule(
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanScheduleDetail>(result)
+}
+
+export async function submitMixedActionPlanCatalog(
+  establishmentId: string,
+  actionPlanId: string,
+  body: ActionPlanMixedSubmitRequest,
+): Promise<ActionPlanMixedSubmitResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/',
+        {
+          params: actionPlanPath(establishmentId, actionPlanId),
+          body,
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanMixedSubmitResponse>(result)
 }
 
 export async function fetchActionPlanExecutionDetail(

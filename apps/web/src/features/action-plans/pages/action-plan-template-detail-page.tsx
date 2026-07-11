@@ -17,15 +17,20 @@ import {
   useActionPlanDetailQuery,
   useCreateActionPlanScheduleMutation,
   useDeactivateActionPlanMutation,
+  useSubmitMixedActionPlanFromCatalogMutation,
   useUseActionPlanMutation,
 } from '../hooks'
 import {
   isCatalogPlanningPrimaryDisabled,
-  resolveCatalogPlanningPrimaryLabel,
   resolveCatalogPlanningSubmit,
+  resolveCatalogPlanningSubmitFallbackMessage,
   validateCatalogPlanningDraft,
 } from '../lib/action-plan-catalog-planning-submit'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
+import {
+  clearMixedSubmissionIntent,
+  resolveMixedSubmissionIntent,
+} from '../lib/action-plan-mixed-submission-intent'
 import {
   createActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -55,6 +60,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const deactivateMutation = useDeactivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const useMutation = useUseActionPlanMutation(establishmentId ?? '', actionPlanId)
   const scheduleMutation = useCreateActionPlanScheduleMutation(establishmentId ?? '', actionPlanId)
+  const mixedMutation = useSubmitMixedActionPlanFromCatalogMutation(establishmentId ?? '')
 
   const [executionPanelOpen, setExecutionPanelOpen] = useState(false)
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
@@ -97,7 +103,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const canUse = canShowActionPlanUse(hints)
   const canSchedule = canShowActionPlanSchedule(hints)
   const planningOptions = { canSchedule, staffMode: staffUseMode }
-  const primaryActionLabel = resolveCatalogPlanningPrimaryLabel(planningDraft, planningOptions)
   const isPrimaryPending = useMutation.isPending || scheduleMutation.isPending
   const primaryActionDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
     ...planningOptions,
@@ -107,7 +112,8 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     activateMutation.isPending ||
     deactivateMutation.isPending ||
     useMutation.isPending ||
-    scheduleMutation.isPending
+    scheduleMutation.isPending ||
+    mixedMutation.isPending
 
   const showStickyFooter =
     executionPanelOpen ||
@@ -117,6 +123,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     canUse
 
   function resetExecutionPanel() {
+    clearMixedSubmissionIntent(establishmentId, actionPlanId)
     setExecutionPanelOpen(false)
     setPlanningDraft(createActionPlanEventPlanningDraft())
     setPlanningFieldErrors({})
@@ -170,10 +177,22 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
       }
 
       if (submit.kind === 'mixed') {
-        await scheduleMutation.mutateAsync(submit.scheduleBody)
-        const execution = await useMutation.mutateAsync(submit.useBody)
+        const intent = await resolveMixedSubmissionIntent({
+          establishmentId,
+          actionPlanId,
+          scheduleBody: submit.scheduleBody,
+          useBody: submit.useBody,
+        })
+        const response = await mixedMutation.mutateAsync({
+          actionPlanId,
+          body: {
+            submission_id: intent.submissionId,
+            schedule_body: submit.scheduleBody,
+            use_body: submit.useBody,
+          },
+        })
         resetExecutionPanel()
-        navigate(`/action-plans/executions/${execution.id}`)
+        navigate(`/action-plans/executions/${response.execution.id}`)
         return
       }
 
@@ -185,9 +204,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         variant: 'error',
         message: resolveActionPlanErrorMessage(
           error,
-          submit.kind === 'schedule'
-            ? 'Le plan n’a pas pu être planifié.'
-            : 'Le plan n’a pas pu être lancé.',
+          resolveCatalogPlanningSubmitFallbackMessage(submit, error),
         ),
       })
     }
@@ -203,7 +220,9 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           showStickyFooter ? 'pb-40' : 'pb-4',
         )}
       >
-        {feedback ? <TerrainFeedback variant={feedback.variant} message={feedback.message} /> : null}
+        {feedback ? (
+          <TerrainFeedback variant={feedback.variant} message={feedback.message} />
+        ) : null}
 
         <ActionPlanTemplateDetailHeader plan={plan} />
 
@@ -251,7 +270,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           canUpdate={canUpdate}
           canUse={canUse}
           isBusy={isBusy}
-          primaryActionLabel={primaryActionLabel}
           primaryActionDisabled={primaryActionDisabled}
           isPrimaryPending={isPrimaryPending}
           onNavigateToEdit={() => navigate(`/action-plans/${actionPlanId}/edit`)}

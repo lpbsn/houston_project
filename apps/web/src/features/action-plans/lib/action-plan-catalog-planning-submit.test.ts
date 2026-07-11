@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { createActionPlanAssigneeDraft } from './action-plan-form-validation'
 import {
   buildPerAssigneeScheduleFromDraft,
+  CATALOG_LAUNCH_EXECUTION_LABEL,
   isCatalogPlanningPrimaryDisabled,
-  resolveCatalogPlanningPrimaryLabel,
   resolveCatalogPlanningSubmit,
+  resolveCatalogPlanningSubmitFallbackMessage,
   validateCatalogPlanningDraft,
 } from './action-plan-catalog-planning-submit'
 import {
@@ -14,6 +15,10 @@ import {
 } from './action-plan-event-planning-form'
 
 describe('action-plan-catalog-planning-submit', () => {
+  it('exposes static launch execution label for catalog UI', () => {
+    expect(CATALOG_LAUNCH_EXECUTION_LABEL).toBe("Lancer l'exécution")
+  })
+
   it('resolves global repeat as schedule-only submit', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),
@@ -65,9 +70,6 @@ describe('action-plan-catalog-planning-submit', () => {
       expect(submit.useBody.use_shared_chronology).toBe(false)
       expect(submit.useBody.assignees).toHaveLength(2)
     }
-    expect(resolveCatalogPlanningPrimaryLabel(draft, { canSchedule: true })).toBe(
-      "Lancer l'exécution",
-    )
   })
 
   it('resolves per-assignee all repeat as schedule-only submit', () => {
@@ -93,9 +95,6 @@ describe('action-plan-catalog-planning-submit', () => {
       expect(submit.scheduleBody.use_shared_chronology).toBe(false)
       expect(submit.scheduleBody.assignees).toHaveLength(1)
     }
-    expect(resolveCatalogPlanningPrimaryLabel(draft, { canSchedule: true })).toBe(
-      'Planifier la récurrence',
-    )
   })
 
   it('resolves per-assignee mixed assignees as mixed submit', () => {
@@ -128,9 +127,6 @@ describe('action-plan-catalog-planning-submit', () => {
       expect(submit.useBody.assignees).toHaveLength(1)
       expect(submit.useBody.assignees?.[0]?.membership_id).toBe('m2')
     }
-    expect(resolveCatalogPlanningPrimaryLabel(draft, { canSchedule: true })).toBe(
-      "Lancer l'exécution",
-    )
   })
 
   it('builds grouped per-assignee schedule from draft', () => {
@@ -209,5 +205,45 @@ describe('action-plan-catalog-planning-submit', () => {
     expect(
       isCatalogPlanningPrimaryDisabled(draft, { canSchedule: true, isPending: true }),
     ).toBe(true)
+  })
+
+  it('disables primary action for incomplete per-assignee all-recurring schedule', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm1',
+          businessUnitId: 'bu1',
+          repeatEnabled: true,
+          recurrenceDays: ['monday'],
+        }),
+      ],
+    }
+
+    expect(
+      isCatalogPlanningPrimaryDisabled(draft, { canSchedule: true, isPending: false }),
+    ).toBe(true)
+  })
+
+  it('maps mixed fallback messages without partial schedule success wording', () => {
+    const mixedSubmit = {
+      kind: 'mixed' as const,
+      scheduleBody: { end_date: '2026-12-31', start_at: '09:00', end_at: '10:00', recurrence_days: ['monday'], assignees: [] },
+      useBody: { use_shared_chronology: false, assignees: [] },
+    }
+
+    expect(resolveCatalogPlanningSubmitFallbackMessage(mixedSubmit)).toBe(
+      'Le plan n’a pas pu être lancé.',
+    )
+    expect(
+      resolveCatalogPlanningSubmitFallbackMessage(mixedSubmit, {
+        name: 'ActionPlansApiError',
+        status: 400,
+        detail: 'Use failed.',
+        code: 'validation_error',
+        failedStep: 'use',
+      } as import('../api').ActionPlansApiError),
+    ).toBe('Le plan n’a pas pu être lancé.')
   })
 })

@@ -588,3 +588,107 @@ class ActionPlanExecutionTask(BaseModel):
             f"ActionPlanExecutionTask execution={self.action_plan_execution_id} "
             f"pos={self.position} [{self.status}]"
         )
+
+
+class ActionPlanMixedSubmission(BaseModel):
+    establishment = models.ForeignKey(
+        "establishments.Establishment",
+        on_delete=models.CASCADE,
+        related_name="action_plan_mixed_submissions",
+    )
+    action_plan = models.ForeignKey(
+        ActionPlan,
+        on_delete=models.CASCADE,
+        related_name="mixed_submissions",
+    )
+    created_by = models.ForeignKey(
+        "establishments.EstablishmentMembership",
+        on_delete=models.PROTECT,
+        related_name="action_plan_mixed_submissions_created",
+    )
+    submission_id = models.UUIDField()
+    request_hash = models.CharField(max_length=64)
+    schedule = models.ForeignKey(
+        "ActionPlanSchedule",
+        on_delete=models.PROTECT,
+        related_name="mixed_submissions",
+        null=True,
+        blank=True,
+    )
+    execution = models.ForeignKey(
+        ActionPlanExecution,
+        on_delete=models.PROTECT,
+        related_name="mixed_submissions",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["establishment", "action_plan", "submission_id"],
+                name="uniq_action_plan_mixed_submission",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(schedule__isnull=True, execution__isnull=True)
+                    | Q(schedule__isnull=False, execution__isnull=False)
+                ),
+                name="ap_mixed_submission_schedule_execution_pair",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"ActionPlanMixedSubmission plan={self.action_plan_id} "
+            f"submission={self.submission_id}"
+        )
+
+
+class ActionPlanMixedOutboxEntry(BaseModel):
+    class EffectType(models.TextChoices):
+        NOTIFICATION = "notification", "Notification"
+        REALTIME_INVALIDATION = "realtime_invalidation", "Realtime invalidation"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        PROCESSED = "processed", "Processed"
+        FAILED = "failed", "Failed"
+
+    mixed_submission = models.ForeignKey(
+        ActionPlanMixedSubmission,
+        on_delete=models.CASCADE,
+        related_name="outbox_entries",
+    )
+    effect_key = models.CharField(max_length=255)
+    effect_type = models.CharField(max_length=32, choices=EffectType.choices)
+    payload = models.JSONField()
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    available_at = models.DateTimeField()
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["mixed_submission", "effect_key"],
+                name="uniq_action_plan_mixed_outbox_effect",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "available_at"], name="ap_mixed_outbox_claim_idx"),
+            models.Index(
+                fields=["status", "lease_expires_at"],
+                name="ap_mixed_outbox_lease_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"ActionPlanMixedOutboxEntry {self.effect_key} [{self.status}]"

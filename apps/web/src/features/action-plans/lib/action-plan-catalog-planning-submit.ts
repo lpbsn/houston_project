@@ -3,6 +3,7 @@ import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
 import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
 import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
 import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest } from '../types'
+import { ActionPlansApiError } from '../api'
 import {
   buildOneShotAssigneesFromDraft,
   buildScheduleRequestsFromDraft,
@@ -29,6 +30,10 @@ export type CatalogPlanningOptions = {
   canSchedule: boolean
   staffMode?: boolean
 }
+
+export type CatalogPlanningPrimaryKind = 'schedule' | 'use' | 'mixed'
+
+export const CATALOG_LAUNCH_EXECUTION_LABEL = "Lancer l'exécution"
 
 export function validateCatalogPlanningDraft(
   draft: ActionPlanEventPlanningDraft,
@@ -94,62 +99,82 @@ function hasOneShotAssignees(
   return assignees.length > 0
 }
 
-export function resolveCatalogPlanningSubmit(
+function resolveCatalogPlanningSubmitKind(
   draft: ActionPlanEventPlanningDraft,
   options: CatalogPlanningOptions,
-): CatalogPlanningSubmit | undefined {
+): CatalogPlanningPrimaryKind | null {
   if (hasGlobalRepeat(draft) && options.canSchedule) {
     const scheduleBody = buildScheduleRequestsFromDraft(draft, {
       staffMode: options.staffMode,
     })[0]
-    if (!scheduleBody) {
-      return undefined
-    }
-    return { kind: 'schedule', scheduleBody }
+    return scheduleBody ? 'schedule' : null
   }
 
   if (draft.usePerAssigneeChronology) {
     const scheduleBody = buildPerAssigneeScheduleFromDraft(draft, {
       staffMode: options.staffMode,
     })
-    const useBody = buildUseRequestFromDraft(draft, { staffMode: options.staffMode })
     const hasOneShot = hasOneShotAssignees(draft, { staffMode: options.staffMode })
 
     if (scheduleBody && hasOneShot) {
-      return { kind: 'mixed', scheduleBody, useBody }
+      return 'mixed'
     }
     if (scheduleBody) {
-      return { kind: 'schedule', scheduleBody }
+      return 'schedule'
     }
     if (hasOneShot) {
-      return { kind: 'use', useBody }
+      return 'use'
     }
+    return null
+  }
+
+  return 'use'
+}
+
+export function resolveCatalogPlanningSubmit(
+  draft: ActionPlanEventPlanningDraft,
+  options: CatalogPlanningOptions,
+): CatalogPlanningSubmit | undefined {
+  const kind = resolveCatalogPlanningSubmitKind(draft, options)
+  if (kind === null) {
     return undefined
+  }
+
+  if (kind === 'schedule') {
+    if (hasGlobalRepeat(draft) && options.canSchedule) {
+      const scheduleBody = buildScheduleRequestsFromDraft(draft, {
+        staffMode: options.staffMode,
+      })[0]
+      if (!scheduleBody) {
+        return undefined
+      }
+      return { kind: 'schedule', scheduleBody }
+    }
+
+    const scheduleBody = buildPerAssigneeScheduleFromDraft(draft, {
+      staffMode: options.staffMode,
+    })
+    if (!scheduleBody) {
+      return undefined
+    }
+    return { kind: 'schedule', scheduleBody }
+  }
+
+  if (kind === 'mixed') {
+    const scheduleBody = buildPerAssigneeScheduleFromDraft(draft, {
+      staffMode: options.staffMode,
+    })
+    const useBody = buildUseRequestFromDraft(draft, { staffMode: options.staffMode })
+    if (!scheduleBody) {
+      return undefined
+    }
+    return { kind: 'mixed', scheduleBody, useBody }
   }
 
   return {
     kind: 'use',
     useBody: buildUseRequestFromDraft(draft, { staffMode: options.staffMode }),
   }
-}
-
-export function resolveCatalogPlanningPrimaryLabel(
-  draft: ActionPlanEventPlanningDraft,
-  options: CatalogPlanningOptions,
-): string {
-  if (hasGlobalRepeat(draft) && options.canSchedule) {
-    return 'Planifier la récurrence'
-  }
-
-  if (
-    draft.usePerAssigneeChronology &&
-    hasPerAssigneeRepeat(draft) &&
-    !hasOneShotAssignees(draft, { staffMode: options.staffMode })
-  ) {
-    return 'Planifier la récurrence'
-  }
-
-  return "Lancer l'exécution"
 }
 
 export function isCatalogPlanningPrimaryDisabled(
@@ -164,5 +189,37 @@ export function isCatalogPlanningPrimaryDisabled(
     return !isActionPlanScheduleConfigured(toScheduleDraft(draft))
   }
 
+  if (
+    draft.usePerAssigneeChronology &&
+    hasPerAssigneeRepeat(draft) &&
+    options.canSchedule &&
+    !hasOneShotAssignees(draft, { staffMode: options.staffMode })
+  ) {
+    return !buildPerAssigneeScheduleFromDraft(draft, { staffMode: options.staffMode })
+  }
+
   return false
+}
+
+export function resolveCatalogPlanningSubmitFallbackMessage(
+  submit: CatalogPlanningSubmit,
+  error?: unknown,
+): string {
+  if (error instanceof ActionPlansApiError) {
+    if (error.failedStep === 'schedule') {
+      return 'Le plan n’a pas pu être planifié.'
+    }
+    if (error.failedStep === 'use') {
+      return 'Le plan n’a pas pu être lancé.'
+    }
+  }
+
+  if (submit.kind === 'schedule') {
+    return 'Le plan n’a pas pu être planifié.'
+  }
+  if (submit.kind === 'mixed' || submit.kind === 'use') {
+    return 'Le plan n’a pas pu être lancé.'
+  }
+
+  return 'Le plan n’a pas pu être utilisé.'
 }

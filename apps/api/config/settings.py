@@ -203,6 +203,15 @@ CELERY_BEAT_SCHEDULE = {
             minute=env_int("HOUSTON_OBSERVATION_STUCK_RECOVERY_BEAT_MINUTE_UTC", 15),
         ),
     },
+    "process-action-plan-mixed-outbox": {
+        "task": (
+            "houston.action_plans.mixed_outbox_tasks."
+            "process_action_plan_mixed_outbox_batch_task"
+        ),
+        "schedule": crontab(
+            minute="*/1",
+        ),
+    },
 }
 
 # Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.

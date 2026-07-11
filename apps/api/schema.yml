@@ -1770,6 +1770,81 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/:
+    post:
+      operationId: v1_establishments_action_plans_mixed_submit_create
+      parameters:
+      - in: path
+        name: action_plan_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionPlanMixedSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ActionPlanMixedSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ActionPlanMixedSubmitRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanMixedSubmitResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanMixedSubmitResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/:
     post:
       operationId: v1_establishments_action_plans_schedule_create
@@ -5985,6 +6060,34 @@ components:
       - task_count
       - title
       - updated_at
+    ActionPlanMixedSubmitRequest:
+      type: object
+      properties:
+        submission_id:
+          type: string
+          format: uuid
+        schedule_body:
+          $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
+        use_body:
+          $ref: '#/components/schemas/ActionPlanUseRequest'
+      required:
+      - schedule_body
+      - submission_id
+      - use_body
+    ActionPlanMixedSubmitResponse:
+      type: object
+      properties:
+        execution:
+          $ref: '#/components/schemas/ActionPlanExecutionDetail'
+        schedule_id:
+          type: string
+          format: uuid
+        replayed:
+          type: boolean
+      required:
+      - execution
+      - replayed
+      - schedule_id
     ActionPlanPermissionHints:
       type: object
       properties:

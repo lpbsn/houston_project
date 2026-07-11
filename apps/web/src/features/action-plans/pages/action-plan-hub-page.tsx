@@ -19,6 +19,7 @@ import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
 import {
   useActionPlanCatalogQuery,
   useScheduleActionPlanFromCatalogMutation,
+  useSubmitMixedActionPlanFromCatalogMutation,
   useUseActionPlanFromCatalogMutation,
 } from '../hooks'
 import { filterActionPlansByTitle } from '../lib/action-plan-catalog-filters'
@@ -30,6 +31,11 @@ import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
 import type { CatalogPlanningSubmit } from '../lib/action-plan-catalog-planning-submit'
+import { resolveCatalogPlanningSubmitFallbackMessage } from '../lib/action-plan-catalog-planning-submit'
+import {
+  clearMixedSubmissionIntent,
+  resolveMixedSubmissionIntent,
+} from '../lib/action-plan-mixed-submission-intent'
 import type { ActionPlanCatalogListFilters } from '../types'
 
 type ActionPlanHubPageProps = {
@@ -77,6 +83,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   )
   const useMutation = useUseActionPlanFromCatalogMutation(establishmentId ?? '')
   const scheduleMutation = useScheduleActionPlanFromCatalogMutation(establishmentId ?? '')
+  const mixedMutation = useSubmitMixedActionPlanFromCatalogMutation(establishmentId ?? '')
 
   const filteredItems = useMemo(() => {
     const items = catalogQuery.data ?? []
@@ -122,7 +129,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   }
 
   async function handlePlanningSubmit(result: CatalogPlanningSubmit) {
-    if (!usePlanId) {
+    if (!usePlanId || !establishmentId) {
       return
     }
 
@@ -130,18 +137,29 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     try {
       if (result.kind === 'schedule') {
         await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body: result.scheduleBody })
+        clearMixedSubmissionIntent(establishmentId, usePlanId)
         setUsePlanId(null)
         return
       }
 
       if (result.kind === 'mixed') {
-        await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body: result.scheduleBody })
-        const execution = await useMutation.mutateAsync({
+        const intent = await resolveMixedSubmissionIntent({
+          establishmentId,
           actionPlanId: usePlanId,
-          body: result.useBody,
+          scheduleBody: result.scheduleBody,
+          useBody: result.useBody,
         })
+        const response = await mixedMutation.mutateAsync({
+          actionPlanId: usePlanId,
+          body: {
+            submission_id: intent.submissionId,
+            schedule_body: result.scheduleBody,
+            use_body: result.useBody,
+          },
+        })
+        clearMixedSubmissionIntent(establishmentId, usePlanId)
         setUsePlanId(null)
-        navigateTo(`/action-plans/executions/${execution.id}`)
+        navigateTo(`/action-plans/executions/${response.execution.id}`)
         return
       }
 
@@ -149,15 +167,11 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
         actionPlanId: usePlanId,
         body: result.useBody,
       })
+      clearMixedSubmissionIntent(establishmentId, usePlanId)
       setUsePlanId(null)
       navigateTo(`/action-plans/executions/${execution.id}`)
     } catch (error) {
-      const message =
-        result.kind === 'schedule'
-          ? 'Le plan n’a pas pu être planifié.'
-          : result.kind === 'mixed'
-            ? 'Le plan n’a pas pu être lancé.'
-            : 'Le plan n’a pas pu être utilisé.'
+      const message = resolveCatalogPlanningSubmitFallbackMessage(result, error)
       setUseError(resolveActionPlanErrorMessage(error, message))
     }
   }
@@ -230,10 +244,15 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           open={usePlanId != null}
           establishmentId={establishmentId ?? ''}
           pilotBusinessUnitId={usePlan.pilot_business_unit.id}
-          isPending={useMutation.isPending || scheduleMutation.isPending}
+          isPending={useMutation.isPending || scheduleMutation.isPending || mixedMutation.isPending}
           staffUseMode={staffUseMode}
           canSchedule={canShowActionPlanSchedule(usePlan.permission_hints)}
-          onClose={() => setUsePlanId(null)}
+          onClose={() => {
+            if (establishmentId && usePlanId) {
+              clearMixedSubmissionIntent(establishmentId, usePlanId)
+            }
+            setUsePlanId(null)
+          }}
           onPlanningSubmit={(result) => void handlePlanningSubmit(result)}
         />
       ) : null}

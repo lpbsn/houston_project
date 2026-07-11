@@ -132,7 +132,7 @@ describe('ActionPlanUseSheet', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
-    expect(screen.getByRole('button', { name: 'Planifier la récurrence' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
 
     rerender(
       createElement(ActionPlanUseSheet, {
@@ -194,7 +194,7 @@ describe('ActionPlanUseSheet', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
     fireEvent.click(screen.getByRole('button', { name: 'Compléter repeat' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Planifier la récurrence' }))
+    fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
 
     expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -233,6 +233,39 @@ describe('ActionPlanUseSheet', () => {
         }),
       }),
     )
+  })
+
+  it('keeps static launch label for schedule and mixed actions', () => {
+    render(
+      createElement(ActionPlanUseSheet, {
+        ...defaultProps,
+        open: true,
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText('Une exécution ponctuelle sera lancée immédiatement.'),
+    ).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compléter repeat' }))
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText(
+        'Une récurrence sera créée. Les prochaines exécutions apparaîtront dans le feed.',
+      ),
+    ).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activer mixte' }))
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText(
+        'Une récurrence sera planifiée et une exécution ponctuelle sera lancée.',
+      ),
+    ).toBeNull()
   })
 
   it('submits mixed per-assignee planning from global action', () => {

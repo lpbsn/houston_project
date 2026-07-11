@@ -22,6 +22,8 @@ from houston.action_plans.api.serializers import (
     ActionPlanExecutionDetailSerializer,
     ActionPlanExecutionPinStateSerializer,
     ActionPlanListItemSerializer,
+    ActionPlanMixedSubmitRequestSerializer,
+    ActionPlanMixedSubmitResponseSerializer,
     ActionPlanScheduleCreateRequestSerializer,
     ActionPlanScheduleDetailSerializer,
     ActionPlanScheduleUpdateRequestSerializer,
@@ -42,6 +44,9 @@ from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanStateError,
     ActionPlanValidationError,
+    MixedSubmissionActorConflict,
+    MixedSubmissionPayloadConflict,
+    MixedSubmissionStepError,
 )
 from houston.action_plans.execution_feed import build_action_plan_execution_feed_page
 from houston.action_plans.feed_cursor import (
@@ -56,6 +61,8 @@ from houston.action_plans.feed_serializers import (
     ActionPlanExecutionFeedResponseSerializer,
     serialize_action_plan_execution_feed_item,
 )
+from houston.action_plans.mixed_outbox_tasks import process_action_plan_mixed_outbox_batch_task
+from houston.action_plans.mixed_submission_services import submit_mixed_action_plan_catalog
 from houston.action_plans.permissions import can_view_action_plan_catalog
 from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
@@ -126,6 +133,48 @@ def _action_plan_error_response(exc: Exception) -> Response:
                 "detail": str(exc) or "Invalid action plan state.",
             },
             status=status.HTTP_400_BAD_REQUEST,
+        )
+    if isinstance(exc, ActionPlanValidationError):
+        return Response(
+            {"code": "validation_error", "detail": str(exc) or "Validation failed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return Response(
+        {"code": "api_error", "detail": "Request failed."},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _mixed_submission_error_response(exc: Exception) -> Response:
+    if isinstance(exc, MixedSubmissionActorConflict):
+        return Response(
+            {
+                "code": MixedSubmissionActorConflict.error_code,
+                "detail": str(exc) or "Mixed submission actor conflict.",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    if isinstance(exc, MixedSubmissionPayloadConflict):
+        return Response(
+            {
+                "code": MixedSubmissionPayloadConflict.error_code,
+                "detail": str(exc) or "Mixed submission payload conflict.",
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    if isinstance(exc, MixedSubmissionStepError):
+        return Response(
+            {
+                "code": MixedSubmissionStepError.error_code,
+                "detail": str(exc) or "Validation failed.",
+                "failed_step": exc.failed_step,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if isinstance(exc, ActionPlanPermissionError):
+        return Response(
+            {"code": "permission_denied", "detail": str(exc) or "Permission denied."},
+            status=status.HTTP_403_FORBIDDEN,
         )
     if isinstance(exc, ActionPlanValidationError):
         return Response(
@@ -598,6 +647,79 @@ class ActionPlanUseView(EstablishmentScopedActionPlanMixin, APIView):
         return Response(
             ActionPlanExecutionDetailSerializer(payload).data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class ActionPlanMixedSubmitView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
+
+    @extend_schema(
+        tags=["action-plans"],
+        request=ActionPlanMixedSubmitRequestSerializer,
+        responses={
+            201: ActionPlanMixedSubmitResponseSerializer,
+            200: ActionPlanMixedSubmitResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, action_plan_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        action_plan = get_action_plan_for_detail(
+            membership=membership,
+            action_plan_id=uuid.UUID(str(action_plan_id)),
+        )
+        if action_plan is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        body = ActionPlanMixedSubmitRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+        schedule_data = dict(data["schedule_body"])
+        use_data = dict(data["use_body"])
+        schedule_data["assignees"] = _schedule_assignee_payloads(
+            schedule_data.get("assignees") or [],
+        )
+        use_data["assignees"] = _assignee_payloads(use_data.get("assignees") or [])
+
+        try:
+            result = submit_mixed_action_plan_catalog(
+                action_plan=action_plan,
+                actor=membership,
+                submission_id=data["submission_id"],
+                schedule_body=schedule_data,
+                use_body=use_data,
+            )
+        except (
+            MixedSubmissionActorConflict,
+            MixedSubmissionPayloadConflict,
+            MixedSubmissionStepError,
+            ActionPlanPermissionError,
+            ActionPlanValidationError,
+        ) as exc:
+            return _mixed_submission_error_response(exc)
+
+        execution = get_action_plan_execution_for_detail(
+            membership=membership,
+            execution_id=result.execution.id,
+        )
+        payload = {
+            "execution": serialize_execution_detail(execution, membership=membership),
+            "schedule_id": result.schedule_id,
+            "replayed": result.replayed,
+        }
+        response_status = status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED
+        process_action_plan_mixed_outbox_batch_task.delay()
+        return Response(
+            ActionPlanMixedSubmitResponseSerializer(payload).data,
+            status=response_status,
         )
 
 

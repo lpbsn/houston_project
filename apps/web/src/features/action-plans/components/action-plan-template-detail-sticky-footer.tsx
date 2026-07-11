@@ -9,6 +9,7 @@ import {
   canShowActionPlanDeactivate,
   canShowActionPlanUse,
 } from '../lib/action-plan-permission-hints'
+import { CATALOG_LAUNCH_EXECUTION_LABEL } from '../lib/action-plan-catalog-planning-submit'
 
 type ActionPlanTemplateDetailStickyFooterProps = {
   hints: ActionPlanPermissionHints
@@ -16,7 +17,6 @@ type ActionPlanTemplateDetailStickyFooterProps = {
   canUpdate: boolean
   canUse: boolean
   isBusy: boolean
-  primaryActionLabel: string
   primaryActionDisabled: boolean
   isPrimaryPending: boolean
   onNavigateToEdit: () => void
@@ -33,7 +33,6 @@ export function ActionPlanTemplateDetailStickyFooter({
   canUpdate,
   canUse,
   isBusy,
-  primaryActionLabel,
   primaryActionDisabled,
   isPrimaryPending,
   onNavigateToEdit,
@@ -62,7 +61,7 @@ export function ActionPlanTemplateDetailStickyFooter({
             disabled={primaryActionDisabled}
             onClick={onLaunchExecution}
           >
-            {primaryActionLabel}
+            {CATALOG_LAUNCH_EXECUTION_LABEL}
           </Button>
         </div>
       </TerrainStickyFooter>

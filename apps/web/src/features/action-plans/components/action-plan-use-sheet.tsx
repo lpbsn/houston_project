@@ -11,8 +11,8 @@ import {
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
 import {
+  CATALOG_LAUNCH_EXECUTION_LABEL,
   isCatalogPlanningPrimaryDisabled,
-  resolveCatalogPlanningPrimaryLabel,
   resolveCatalogPlanningSubmit,
   validateCatalogPlanningDraft,
   type CatalogPlanningSubmit,
@@ -56,7 +56,6 @@ function ActionPlanUseSheetBody({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const planningOptions = { canSchedule, staffMode: staffUseMode }
-  const primaryLabel = resolveCatalogPlanningPrimaryLabel(planningDraft, planningOptions)
   const primaryDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
     ...planningOptions,
     isPending,
@@ -93,7 +92,7 @@ function ActionPlanUseSheetBody({
           disabled={primaryDisabled}
           onClick={handlePrimaryAction}
         >
-          {primaryLabel}
+          {CATALOG_LAUNCH_EXECUTION_LABEL}
         </Button>
       }
     >
