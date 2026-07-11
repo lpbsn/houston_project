@@ -29,7 +29,11 @@ import {
 import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
-import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest, ActionPlanCatalogListFilters } from '../types'
+import type {
+  ActionPlanScheduleCreateRequest,
+  ActionPlanUseRequest,
+  ActionPlanCatalogListFilters,
+} from '../types'
 
 type ActionPlanHubPageProps = {
   onNavigate?: (pathname: string) => void
@@ -151,11 +155,27 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     _assigneeId: string,
     body: ActionPlanScheduleCreateRequest,
   ) {
-    await handleSchedule(body)
+    if (!usePlanId) {
+      return
+    }
+    setUseError(null)
+    try {
+      await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body })
+    } catch (error) {
+      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'))
+    }
   }
 
   async function handleAssigneeLaunch(_assigneeId: string, body: ActionPlanUseRequest) {
-    await handleUse(body)
+    if (!usePlanId) {
+      return
+    }
+    setUseError(null)
+    try {
+      await useMutation.mutateAsync({ actionPlanId: usePlanId, body })
+    } catch (error) {
+      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être utilisé.'))
+    }
   }
 
   return (
