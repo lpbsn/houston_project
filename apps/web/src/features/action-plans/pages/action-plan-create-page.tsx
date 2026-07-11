@@ -28,18 +28,10 @@ import { cn } from '@/lib/utils'
 
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
 import {
-  useScheduleActionPlanFromCatalogMutation,
-  useUseActionPlanFromCatalogMutation,
-} from '../hooks'
-import { isActionPlanExecutionDetail } from '../lib/action-plan-create-response'
-import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
-import {
   PlanningOptionRow,
   type PlanningOptionPickerTarget,
 } from '../components/planning/planning-option-row'
-import {
-  ActionPlanTaskDraftEditor,
-} from '../components/action-plan-task-draft-editor'
+import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-editor'
 import { useActionPlanCreateSubmit } from '../hooks/use-action-plan-create-submit'
 import { useActionPlanEditSubmit } from '../hooks/use-action-plan-edit-submit'
 import { useActionPlanDetailQuery } from '../hooks'
@@ -55,8 +47,6 @@ import {
   type ActionPlanTaskDraft,
 } from '../lib/action-plan-form-validation'
 import {
-  buildScheduleRequestForAssignee,
-  buildUseRequestForAssignee,
   shouldHidePrimaryPlanningActions,
   createActionPlanEventPlanningDraft,
   toCreateFormPlanningSlice,
@@ -129,11 +119,6 @@ export function ActionPlanCreatePage({
   )
   const [openPilotPicker, setOpenPilotPicker] = useState<PlanningOptionPickerTarget>(null)
   const [isTemplateHydrated, setIsTemplateHydrated] = useState(false)
-  const [isOrchestrating, setIsOrchestrating] = useState(false)
-  const [planningActionError, setPlanningActionError] = useState<string | null>(null)
-
-  const scheduleFromCatalogMutation = useScheduleActionPlanFromCatalogMutation(establishmentId ?? '')
-  const useFromCatalogMutation = useUseActionPlanFromCatalogMutation(establishmentId ?? '')
 
   useEffect(() => {
     if (!isTemplateEdit || !templateDetailQuery.data || isTemplateHydrated) {
@@ -272,7 +257,7 @@ export function ActionPlanCreatePage({
       ? { membershipId, pilotBusinessUnitId: resolvedPilotBusinessUnitId }
       : undefined
 
-  const { submit, submitShell, fieldErrors, submitError, isSubmitting } = useActionPlanCreateSubmit({
+  const { submit, fieldErrors, submitError, isSubmitting } = useActionPlanCreateSubmit({
     establishmentId: establishmentId ?? '',
     canDefineCrossPoleTasks: canCrossPole,
     staffExecutionMode,
@@ -296,13 +281,7 @@ export function ActionPlanCreatePage({
 
   const resolvedFieldErrors = isTemplateEdit ? editFieldErrors : fieldErrors
   const resolvedSubmitError = isTemplateEdit ? editSubmitError : submitError
-  const resolvedIsSubmitting =
-    isTemplateEdit
-      ? isEditSubmitting
-      : isSubmitting ||
-        isOrchestrating ||
-        scheduleFromCatalogMutation.isPending ||
-        useFromCatalogMutation.isPending
+  const resolvedIsSubmitting = isTemplateEdit ? isEditSubmitting : isSubmitting
 
   if (!establishmentId) {
     return null
@@ -423,80 +402,7 @@ export function ActionPlanCreatePage({
           ? 'Créer et planifier'
           : 'Créer le plan d’action'
 
-  async function handleCreateWithPerAssigneePlanning() {
-    setPlanningActionError(null)
-    const effectiveDraft = { ...planningDraft, assignees: effectiveAssignees }
-
-    setIsOrchestrating(true)
-    try {
-      const response = await submitShell(formValues, {
-        reusableForScheduling: true,
-        planningDraft: effectiveDraft,
-      })
-      if (!response) {
-        return
-      }
-      const planId = isActionPlanExecutionDetail(response) ? response.action_plan_id : response.id
-
-      const repeatingAssignees = effectiveAssignees.filter(
-        (assignee) => assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
-      )
-      const oneShotAssignees = effectiveAssignees.filter(
-        (assignee) =>
-          !assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
-      )
-
-      for (const assignee of repeatingAssignees) {
-        const body = buildScheduleRequestForAssignee(effectiveDraft, assignee, {
-          staffMode: modeConfig.showStaffSelfAssignee,
-        })
-        if (!body) {
-          continue
-        }
-        await scheduleFromCatalogMutation.mutateAsync({
-          actionPlanId: planId,
-          body,
-        })
-      }
-
-      let firstExecutionId: string | null = null
-      for (const assignee of oneShotAssignees) {
-        const body = buildUseRequestForAssignee(effectiveDraft, assignee)
-        if (!body) {
-          continue
-        }
-        const execution = await useFromCatalogMutation.mutateAsync({
-          actionPlanId: planId,
-          body,
-        })
-        if (!firstExecutionId) {
-          firstExecutionId = execution.id
-        }
-      }
-
-      if (firstExecutionId) {
-        navigate(`/action-plans/executions/${firstExecutionId}`)
-        return
-      }
-      navigate(`/action-plans/${planId}`)
-    } catch (error) {
-      setPlanningActionError(
-        resolveActionPlanErrorMessage(error, 'La planification n’a pas pu être finalisée.'),
-      )
-    } finally {
-      setIsOrchestrating(false)
-    }
-  }
-
   async function handlePrimarySubmit() {
-    if (
-      !isTemplateEdit &&
-      !saveToLibrary &&
-      shouldHidePrimaryPlanningActions(planningDraft)
-    ) {
-      await handleCreateWithPerAssigneePlanning()
-      return
-    }
     await submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
   }
 
@@ -623,9 +529,6 @@ export function ActionPlanCreatePage({
 
         {resolvedSubmitError ? (
           <TerrainFeedback variant="error" message={resolvedSubmitError} />
-        ) : null}
-        {planningActionError ? (
-          <TerrainFeedback variant="error" message={planningActionError} />
         ) : null}
       </div>
 
