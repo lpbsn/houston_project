@@ -1,7 +1,8 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useState, type ChangeEvent } from 'react'
 import { SendHorizonal } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { commentThread, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { useMentionUserSearchQuery } from '../hooks'
@@ -25,8 +26,6 @@ type CommentComposerProps = {
   errorMessage?: string | null
   placeholder?: string
   variant?: 'default' | 'reply'
-  showCancel?: boolean
-  onCancel?: () => void
   onSubmit: (payload: { body: string; mentionedMembershipIds: string[] }) => void
 }
 
@@ -38,8 +37,6 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       errorMessage = null,
       placeholder = 'Ajouter un commentaire...',
       variant = 'default',
-      showCancel = false,
-      onCancel,
       onSubmit,
     },
     ref,
@@ -127,56 +124,84 @@ export const CommentComposer = forwardRef<CommentComposerHandle, CommentComposer
       })
     }
 
-    return (
-      <div className={showCancel ? undefined : 'mt-3'}>
-        <div className={cn('flex gap-2', isReply ? 'items-center' : 'items-end')}>
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(event) => {
-              setDraft(event.target.value.slice(0, MAX_COMMENT_LENGTH))
-              setCursorPosition(event.target.selectionStart)
-            }}
-            onClick={updateCursorPosition}
-            onKeyUp={updateCursorPosition}
-            onSelect={updateCursorPosition}
-            placeholder={placeholder}
-            rows={isReply ? 1 : 3}
-            disabled={disabled}
-            aria-label="Ajouter un commentaire"
-            className={cn(
-              'flex-1 resize-none text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/30',
-              isReply
-                ? 'min-h-11 max-h-24 rounded-full border border-[#E4E6EB] bg-[#F0F2F5] px-4 py-2.5'
-                : 'min-h-24 max-h-40 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3',
-            )}
-          />
-          <Button
-            type="button"
-            size="icon"
-            className="h-11 w-11 shrink-0 rounded-full bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
-            disabled={disabled || !draft.trim()}
-            onClick={handleSubmit}
-            aria-label="Publier le commentaire"
-          >
-            <SendHorizonal className="h-5 w-5" />
-          </Button>
-        </div>
+    const textareaProps = {
+      ref: textareaRef,
+      value: draft,
+      onChange: (event: ChangeEvent<HTMLTextAreaElement>) => {
+        setDraft(event.target.value.slice(0, MAX_COMMENT_LENGTH))
+        setCursorPosition(event.target.selectionStart)
+      },
+      onClick: updateCursorPosition,
+      onKeyUp: updateCursorPosition,
+      onSelect: updateCursorPosition,
+      placeholder,
+      disabled,
+      'aria-label': 'Ajouter un commentaire',
+    }
 
-        {showCancel ? (
-          <div className="mt-2">
+    return (
+      <div className={isReply ? undefined : 'mt-4'}>
+        {isReply ? (
+          <div
+            className={cn(
+              'flex h-12 items-center rounded-full border px-4 transition-shadow',
+              commentThread.replyPillBg,
+              commentThread.replyPillBorder,
+              commentThread.replyPillFocusBorder,
+              commentThread.replyPillFocusShadow,
+            )}
+          >
+            <textarea
+              {...textareaProps}
+              rows={1}
+              className={cn(
+                'min-h-0 max-h-24 flex-1 resize-none border-0 bg-transparent py-2',
+                'text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
+                'focus-visible:outline-none',
+              )}
+            />
+            <button
+              type="button"
+              className={cn(
+                'inline-flex h-11 w-11 shrink-0 items-center justify-center',
+                terrainBrandAction.text,
+                'disabled:opacity-40',
+              )}
+              disabled={disabled || !draft.trim()}
+              onClick={handleSubmit}
+              aria-label="Publier le commentaire"
+            >
+              <SendHorizonal className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-end gap-2">
+            <textarea
+              {...textareaProps}
+              rows={3}
+              className={cn(
+                'min-h-24 max-h-40 flex-1 resize-y rounded-2xl border border-[#E8E6DF] bg-white px-3 py-3',
+                'text-base text-[#1a1a1a] placeholder:text-[#65676B] md:text-sm',
+                'focus-visible:outline-none focus-visible:ring-2',
+                terrainBrandAction.ring,
+              )}
+            />
             <Button
               type="button"
-              variant="ghost"
-              className="min-h-11 px-2 text-[12px] text-[#7D7B75]"
-              disabled={disabled}
-              onClick={onCancel}
+              size="icon"
+              className={cn(
+                'h-11 w-11 shrink-0 rounded-full text-white',
+                terrainBrandAction.bg,
+                terrainBrandAction.hover,
+              )}
+              disabled={disabled || !draft.trim()}
+              onClick={handleSubmit}
+              aria-label="Publier le commentaire"
             >
-              Annuler
+              <SendHorizonal className="h-5 w-5" />
             </Button>
           </div>
-        ) : null}
+        )}
 
         {!isReply ? (
           <p className="mt-1 px-1 text-[10px] text-[#a3a19a]">

@@ -34,6 +34,19 @@ export const terrainBrandAction = {
   ring: 'ring-[#114660]/30',
 } as const
 
+/** Execution comment thread — maquette-aligned tokens. */
+export const commentThread = {
+  bubbleBg: 'bg-[#F1F3F9]',
+  metaMuted: 'text-[#65676B]',
+  resolvedLabel: 'text-[#1E7D32]',
+  resolvedBadge: 'bg-[#1B5EBE]',
+  threadLine: 'border-[#E4E6EB]',
+  replyPillBg: 'bg-[#F8F9FB]',
+  replyPillBorder: 'border-[#E4E6EB]',
+  replyPillFocusBorder: 'focus-within:border-[#d1d9ff]',
+  replyPillFocusShadow: 'focus-within:shadow-[0_0_8px_#d1d9ff]',
+} as const
+
 /** Action plan execution feed — teal accent (#3A7A96). */
 export const ACTION_PLAN_FEED_TEAL = '#3A7A96'
 export const ACTION_PLAN_FEED_PENDING_BG = '#FCE9B8'
