@@ -11,6 +11,7 @@ import { ActionPlanTemplateDetailPage } from './action-plan-template-detail-page
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
 const useMutationMock = vi.fn()
+const scheduleMutationMock = vi.fn()
 
 function buildPlan(overrides: Partial<ActionPlanDetail> = {}): ActionPlanDetail {
   return {
@@ -75,6 +76,7 @@ vi.mock('../hooks', () => ({
   useActivateActionPlanMutation: () => useMutationMock(),
   useDeactivateActionPlanMutation: () => useMutationMock(),
   useUseActionPlanMutation: () => useMutationMock(),
+  useCreateActionPlanScheduleMutation: () => scheduleMutationMock(),
 }))
 
 describe('ActionPlanTemplateDetailPage', () => {
@@ -86,6 +88,10 @@ describe('ActionPlanTemplateDetailPage', () => {
       refetch: vi.fn(),
     })
     useMutationMock.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
+    scheduleMutationMock.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
     })
@@ -123,7 +129,31 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
     expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(screen.getByText('Répéter')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
+  })
+
+  it('hides repeat toggle when schedule is not allowed', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        permission_hints: {
+          can_update: true,
+          can_activate: false,
+          can_deactivate: true,
+          can_use: true,
+          can_schedule: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
+
+    expect(screen.queryByText('Répéter')).toBeNull()
   })
 
   it('shows launch actions in sticky footer when execution panel is open', () => {
@@ -147,5 +177,15 @@ describe('ActionPlanTemplateDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
 
     expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/edit')
+  })
+
+  it('hides primary launch action when per-assignee chronology is enabled', () => {
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
+
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: "Lancer l'exécution" })).toBeNull()
   })
 })

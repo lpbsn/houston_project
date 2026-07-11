@@ -9,6 +9,8 @@ import { ActionPlanCreatePage } from './action-plan-create-page'
 
 const navigate = vi.fn()
 const createMutateAsync = vi.fn()
+const scheduleMutateAsync = vi.fn()
+const useMutateAsync = vi.fn()
 const signalDetailQueryMock = vi.fn()
 
 function buildSignalDetail(overrides: Record<string, unknown> = {}) {
@@ -26,10 +28,11 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const { mockAuthState, mockBusinessUnitTree } = vi.hoisted(() => ({
+const { mockAuthState, mockBusinessUnitTree, perAssigneeTestMode } = vi.hoisted(() => ({
   mockBusinessUnitTree: {
     business_units: [{ id: 'bu-1', label: 'Rooftop', key: 'rooftop', unit_type: 'service' }],
   },
+  perAssigneeTestMode: { enabled: false, incomplete: false },
   mockAuthState: {
     bootstrap: {
       active_membership: {
@@ -91,6 +94,14 @@ vi.mock('../hooks', () => ({
     data: null,
     refetch: vi.fn(),
   }),
+  useScheduleActionPlanFromCatalogMutation: () => ({
+    mutateAsync: scheduleMutateAsync,
+    isPending: false,
+  }),
+  useUseActionPlanFromCatalogMutation: () => ({
+    mutateAsync: useMutateAsync,
+    isPending: false,
+  }),
 }))
 
 vi.mock('../components/action-plan-event-planning-form', () => ({
@@ -98,10 +109,47 @@ vi.mock('../components/action-plan-event-planning-form', () => ({
     draft,
     onDraftChange,
   }: {
-    draft: { assignees: Array<Record<string, string>> }
+    draft: Record<string, unknown> & { assignees: Array<Record<string, unknown>> }
     onDraftChange: (draft: Record<string, unknown>) => void
   }) => {
     useEffect(() => {
+      if (perAssigneeTestMode.enabled) {
+        if (draft.usePerAssigneeChronology) {
+          return
+        }
+        onDraftChange({
+          ...draft,
+          usePerAssigneeChronology: true,
+          assignees: [
+            {
+              id: 'a-recurring',
+              membershipId: 'member-1',
+              businessUnitId: 'bu-1',
+              displayName: 'Luffy',
+              startAt: '2026-07-12T03:00:00.000Z',
+              endAt: '2026-07-12T14:05:00.000Z',
+              visibleFrom: '',
+              repeatEnabled: true,
+              recurrenceDays: perAssigneeTestMode.incomplete ? [] : ['tuesday', 'thursday', 'saturday'],
+              recurrenceEndDate: perAssigneeTestMode.incomplete ? '' : '2026-07-25',
+            },
+            {
+              id: 'a-one-shot',
+              membershipId: 'member-2',
+              businessUnitId: 'bu-1',
+              displayName: 'Nami',
+              startAt: perAssigneeTestMode.incomplete ? '' : '2026-07-11T03:00:00.000Z',
+              endAt: perAssigneeTestMode.incomplete ? '' : '2026-07-25T06:00:00.000Z',
+              visibleFrom: '',
+              repeatEnabled: false,
+              recurrenceDays: [],
+              recurrenceEndDate: '',
+            },
+          ],
+        })
+        return
+      }
+
       if (draft.assignees.length > 0) {
         return
       }
@@ -116,6 +164,9 @@ vi.mock('../components/action-plan-event-planning-form', () => ({
             startAt: '',
             endAt: '',
             visibleFrom: '',
+            repeatEnabled: false,
+            recurrenceDays: [],
+            recurrenceEndDate: '',
           },
         ],
       })
@@ -178,6 +229,10 @@ describe('ActionPlanCreatePage', () => {
   beforeEach(() => {
     navigate.mockReset()
     createMutateAsync.mockReset()
+    scheduleMutateAsync.mockReset()
+    useMutateAsync.mockReset()
+    perAssigneeTestMode.enabled = false
+    perAssigneeTestMode.incomplete = false
     signalDetailQueryMock.mockReset()
     signalDetailQueryMock.mockReturnValue({
       isLoading: false,
@@ -191,6 +246,8 @@ describe('ActionPlanCreatePage', () => {
       status: 'in_progress',
       action_plan_id: 'plan-1',
     })
+    scheduleMutateAsync.mockResolvedValue({ id: 'schedule-1' })
+    useMutateAsync.mockResolvedValue({ id: 'exec-2' })
 
     mockAuthState.bootstrap.active_membership = {
       id: 'member-manager',
@@ -223,6 +280,33 @@ describe('ActionPlanCreatePage', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('renders Options section before tasks', () => {
+    renderPage({ mode: 'catalog' })
+
+    const optionsLabel = screen.getByText('Options')
+    const addTaskButton = screen.getByRole('button', { name: 'Ajouter une tâche' })
+
+    expect(
+      optionsLabel.compareDocumentPosition(addTaskButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('keeps planning form visible when save to library is enabled', () => {
+    renderPage({ mode: 'catalog' })
+    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
+    expect(screen.getByTestId('event-planning-form')).toBeTruthy()
+  })
+
+  it('always uses library submit label when save to library is enabled', () => {
+    renderPage({ mode: 'catalog' })
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan catalogue' } })
+    fireEvent.click(screen.getByRole('switch', { name: 'Enregistrer dans la bibliothèque' }))
+
+    expect(screen.queryByRole('button', { name: 'Enregistrer et planifier' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Enregistrer dans la bibliothèque' })).toBeTruthy()
   })
 
   it('aligns library switch label with validation switch label', () => {
@@ -527,5 +611,53 @@ describe('ActionPlanCreatePage', () => {
       screen.getByText("Vous n'avez pas la permission de créer un plan d'action."),
     ).toBeTruthy()
     expect(createMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('creates per-assignee plan with one atomic create call and hides secondary assignee buttons', async () => {
+    perAssigneeTestMode.enabled = true
+    createMutateAsync.mockResolvedValue({
+      id: 'exec-2',
+      status: 'in_progress',
+      action_plan_id: 'plan-per-assignee-1',
+    })
+
+    renderPage({ mode: 'catalog' })
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan per-assigné' } })
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
+    selectTaskBusinessUnit(0, 'Rooftop')
+
+    expect(screen.queryByRole('button', { name: 'Planifier la récurrence' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Lancer pour cet assigné' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledTimes(1)
+      expect(scheduleMutateAsync).not.toHaveBeenCalled()
+      expect(useMutateAsync).not.toHaveBeenCalled()
+      expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-2')
+    })
+  })
+
+  it('blocks per-assignee create when assignee cards are incomplete', async () => {
+    perAssigneeTestMode.enabled = true
+    perAssigneeTestMode.incomplete = true
+
+    renderPage({ mode: 'catalog' })
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: 'Plan incomplet' } })
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Tâche 1' } })
+    selectTaskBusinessUnit(0, 'Rooftop')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).not.toHaveBeenCalled()
+      expect(scheduleMutateAsync).not.toHaveBeenCalled()
+      expect(useMutateAsync).not.toHaveBeenCalled()
+    })
   })
 })

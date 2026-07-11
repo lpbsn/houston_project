@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createActionPlanAssigneeDraft } from './action-plan-form-validation'
 import {
+  buildScheduleRequestForAssignee,
+  buildScheduleRequestsFromDraft,
+  buildUseRequestForAssignee,
   combineDateAndTimeToIso,
   combineDateTimeToIso,
   createActionPlanEventPlanningDraft,
@@ -10,6 +13,9 @@ import {
   formatRecurrenceDaysSummary,
   formatTimePillLabel,
   getDefaultPlanningTime,
+  hasGlobalRepeat,
+  hasPerAssigneeRepeat,
+  shouldHidePrimaryPlanningActions,
   snapTimeToFiveMinutes,
   splitIsoToDateAndTime,
   toCreateFormPlanningSlice,
@@ -17,18 +23,22 @@ import {
   toSharedChronologyFields,
   toUseRequestOptions,
   validateActionPlanEventPlanningDraft,
+  validateAssigneePlanningAction,
+  validatePerAssigneePlanningDraft,
 } from './action-plan-event-planning-form'
 
 describe('action-plan-event-planning-form', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
-  it('maps all-day one-shot datetimes', () => {
+
+  it('maps timed one-shot datetimes', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),
-      allDay: true,
       startDate: '2026-07-01',
+      startTime: '09:00',
       endDate: '2026-07-02',
+      endTime: '10:00',
     }
     const { sharedStartAt, sharedEndAt } = toSharedChronologyFields(draft)
     expect(sharedStartAt).toBeTruthy()
@@ -37,7 +47,7 @@ describe('action-plan-event-planning-form', () => {
     expect(new Date(sharedEndAt).getDate()).toBe(2)
   })
 
-  it('maps timed one-shot datetimes', () => {
+  it('maps timed one-shot datetimes from combine helper', () => {
     const iso = combineDateTimeToIso('2026-07-01', '09:30', 'start')
     expect(iso).toBeTruthy()
     expect(new Date(iso).getHours()).toBe(9)
@@ -62,20 +72,6 @@ describe('action-plan-event-planning-form', () => {
       startAt: '09:00',
       endAt: '10:00',
     })
-  })
-
-  it('maps all-day repeat to schedule times', () => {
-    const draft = {
-      ...createActionPlanEventPlanningDraft(),
-      allDay: true,
-      repeatEnabled: true,
-      startDate: '2026-07-01',
-      recurrenceEndDate: '2026-12-31',
-      recurrenceDays: ['friday'] as const,
-    }
-    const schedule = toScheduleDraft(draft)
-    expect(schedule.startAt).toBe('00:00')
-    expect(schedule.endAt).toBe('23:59')
   })
 
   it('builds create form slice with per-assignee chronology flag', () => {
@@ -168,5 +164,222 @@ describe('action-plan-event-planning-form', () => {
     expect(parts.date).toBe('2026-07-01')
     expect(parts.time).toBe('09:30')
     expect(combineDateAndTimeToIso(parts.date, parts.time, 'start')).toBe(iso)
+  })
+
+  it('detects global vs per-assignee repeat modes', () => {
+    const globalDraft = {
+      ...createActionPlanEventPlanningDraft(),
+      repeatEnabled: true,
+      usePerAssigneeChronology: false,
+    }
+    const perAssigneeDraft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm1',
+          businessUnitId: 'bu1',
+          repeatEnabled: true,
+        }),
+      ],
+    }
+
+    expect(hasGlobalRepeat(globalDraft)).toBe(true)
+    expect(hasPerAssigneeRepeat(globalDraft)).toBe(false)
+    expect(shouldHidePrimaryPlanningActions(perAssigneeDraft)).toBe(true)
+    expect(hasPerAssigneeRepeat(perAssigneeDraft)).toBe(true)
+  })
+
+  it('builds one schedule per repeating assignee with start date from assignee card', () => {
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'm1',
+          businessUnitId: 'bu1',
+          startAt: combineDateAndTimeToIso('2026-07-01', '09:00', 'start'),
+          endAt: combineDateAndTimeToIso('2026-07-01', '10:00', 'end'),
+          repeatEnabled: true,
+          recurrenceDays: ['monday'],
+          recurrenceEndDate: '2026-12-31',
+        }),
+        createActionPlanAssigneeDraft({
+          membershipId: 'm2',
+          businessUnitId: 'bu1',
+          startAt: combineDateAndTimeToIso('2026-08-01', '14:00', 'start'),
+          endAt: combineDateAndTimeToIso('2026-08-01', '15:00', 'end'),
+          repeatEnabled: true,
+          recurrenceDays: ['friday'],
+          recurrenceEndDate: '2026-12-31',
+        }),
+      ],
+    }
+
+    const schedules = buildScheduleRequestsFromDraft(draft)
+    expect(schedules).toHaveLength(2)
+    expect(schedules[0]?.start_date).toBe('2026-07-01')
+    expect(schedules[1]?.start_date).toBe('2026-08-01')
+    expect(schedules[0]?.recurrence_days).toEqual(['monday'])
+    expect(schedules[1]?.recurrence_days).toEqual(['friday'])
+    expect(schedules[0]?.use_shared_chronology).toBe(false)
+    expect(schedules[1]?.use_shared_chronology).toBe(false)
+  })
+
+  it('builds use request for assignee with independent start and end dates', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      startAt: combineDateAndTimeToIso('2026-07-04', '22:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-05', '06:00', 'end'),
+    })
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [assignee],
+    }
+
+    const body = buildUseRequestForAssignee(draft, assignee)
+    expect(body?.assignees?.[0]?.start_at).toBeTruthy()
+    expect(body?.assignees?.[0]?.end_at).toBeTruthy()
+    expect(Date.parse(body!.assignees![0]!.end_at!)).toBeGreaterThan(
+      Date.parse(body!.assignees![0]!.start_at!),
+    )
+    expect(splitIsoToDateAndTime(body!.assignees![0]!.start_at!).date).toBe('2026-07-04')
+    expect(splitIsoToDateAndTime(body!.assignees![0]!.end_at!).date).toBe('2026-07-05')
+  })
+
+  it('validates per-assignee repeat requirements from assignee card fields', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      repeatEnabled: true,
+      startAt: combineDateAndTimeToIso('2026-07-01', '09:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-01', '10:00', 'end'),
+    })
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [assignee],
+    }
+
+    const errors = validateAssigneePlanningAction(draft, assignee.id, {
+      allowRepeat: true,
+      action: 'schedule',
+    })
+    expect(errors[`assignee.${assignee.id}.recurrenceDays`]).toBeTruthy()
+    expect(errors[`assignee.${assignee.id}.recurrenceEndDate`]).toBeTruthy()
+    expect(errors.startDate).toBeUndefined()
+  })
+
+  it('rejects per-assignee launch when end is before start', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      startAt: combineDateAndTimeToIso('2026-07-05', '09:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-04', '10:00', 'end'),
+    })
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [assignee],
+    }
+
+    const errors = validateAssigneePlanningAction(draft, assignee.id, { action: 'launch' })
+    expect(errors[`assignee.${assignee.id}.endDate`]).toBeTruthy()
+  })
+
+  it('uses assignee start date in schedule request', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      startAt: combineDateAndTimeToIso('2026-07-10', '08:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-10', '09:00', 'end'),
+      repeatEnabled: true,
+      recurrenceDays: ['tuesday'],
+      recurrenceEndDate: '2026-12-31',
+    })
+    const body = buildScheduleRequestForAssignee(createActionPlanEventPlanningDraft(), assignee)
+    expect(body?.start_date).toBe('2026-07-10')
+  })
+
+  it('skips global repeat validation when per-assignee chronology is enabled', () => {
+    const errors = validateActionPlanEventPlanningDraft(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        repeatEnabled: true,
+        usePerAssigneeChronology: true,
+      },
+      { allowRepeat: true },
+    )
+    expect(errors.recurrenceDays).toBeUndefined()
+  })
+
+  it('aggregates per-assignee validation errors for mixed recurring and one-shot assignees', () => {
+    const recurringAssignee = createActionPlanAssigneeDraft({
+      id: 'recurring',
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      repeatEnabled: true,
+      startAt: combineDateAndTimeToIso('2026-07-12', '05:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-12', '16:05', 'end'),
+    })
+    const oneShotAssignee = createActionPlanAssigneeDraft({
+      id: 'one-shot',
+      membershipId: 'm2',
+      businessUnitId: 'bu1',
+      repeatEnabled: false,
+      startAt: combineDateAndTimeToIso('2026-07-11', '05:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-25', '08:00', 'end'),
+    })
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [recurringAssignee, oneShotAssignee],
+    }
+
+    const errors = validatePerAssigneePlanningDraft(draft, { allowRepeat: true })
+    expect(errors[`assignee.${recurringAssignee.id}.recurrenceDays`]).toBeTruthy()
+    expect(errors[`assignee.${recurringAssignee.id}.recurrenceEndDate`]).toBeTruthy()
+    expect(errors[`assignee.${oneShotAssignee.id}.startDate`]).toBeUndefined()
+  })
+
+  it('returns no errors when all per-assignee cards are complete', () => {
+    const recurringAssignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      repeatEnabled: true,
+      startAt: combineDateAndTimeToIso('2026-07-12', '05:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-12', '16:05', 'end'),
+      recurrenceDays: ['tuesday', 'thursday', 'saturday'],
+      recurrenceEndDate: '2026-07-25',
+    })
+    const oneShotAssignee = createActionPlanAssigneeDraft({
+      membershipId: 'm2',
+      businessUnitId: 'bu1',
+      repeatEnabled: false,
+      startAt: combineDateAndTimeToIso('2026-07-11', '05:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-25', '08:00', 'end'),
+    })
+    const draft = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [recurringAssignee, oneShotAssignee],
+    }
+
+    expect(validatePerAssigneePlanningDraft(draft, { allowRepeat: true })).toEqual({})
+  })
+
+  it('requires at least one assignee when per-assignee chronology is enabled', () => {
+    const errors = validatePerAssigneePlanningDraft(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [],
+      },
+      { allowRepeat: true },
+    )
+
+    expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
   })
 })

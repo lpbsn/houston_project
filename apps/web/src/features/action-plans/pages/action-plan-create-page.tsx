@@ -23,15 +23,15 @@ import { SignalsApiError } from '@/features/signals/api'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { useSignalDetailQuery } from '@/features/signals/hooks'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
 import {
   PlanningOptionRow,
   type PlanningOptionPickerTarget,
 } from '../components/planning/planning-option-row'
-import {
-  ActionPlanTaskDraftEditor,
-} from '../components/action-plan-task-draft-editor'
+import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-editor'
 import { useActionPlanCreateSubmit } from '../hooks/use-action-plan-create-submit'
 import { useActionPlanEditSubmit } from '../hooks/use-action-plan-edit-submit'
 import { useActionPlanDetailQuery } from '../hooks'
@@ -47,6 +47,7 @@ import {
   type ActionPlanTaskDraft,
 } from '../lib/action-plan-form-validation'
 import {
+  shouldHidePrimaryPlanningActions,
   createActionPlanEventPlanningDraft,
   toCreateFormPlanningSlice,
   type ActionPlanEventPlanningDraft,
@@ -387,21 +388,23 @@ export function ActionPlanCreatePage({
   const signalDetail = isSignalLinked ? signalDetailQuery.data : null
 
   const scheduleConfigured = isActionPlanScheduleConfigured(planningSlice.schedule)
-  const showPlanningForm =
-    !isTemplateEdit &&
-    (!saveToLibrary || modeConfig.showStaffSelfAssignee || modeConfig.showScheduleSection)
+  const showPlanningForm = !isTemplateEdit
   const showToggleSection = isTemplateEdit
     ? modeConfig.showValidationToggle
     : modeConfig.showLibraryToggle || modeConfig.showValidationToggle
   const submitLabel = isTemplateEdit
     ? 'Enregistrer les modifications'
-    : scheduleConfigured
-      ? saveToLibrary
-        ? 'Enregistrer et planifier'
-        : 'Créer et planifier'
-      : saveToLibrary
-        ? 'Enregistrer dans la bibliothèque'
-        : 'Créer le plan d’action'
+    : saveToLibrary
+      ? 'Enregistrer dans la bibliothèque'
+      : shouldHidePrimaryPlanningActions(planningDraft)
+        ? 'Créer le plan d’action'
+        : scheduleConfigured
+          ? 'Créer et planifier'
+          : 'Créer le plan d’action'
+
+  async function handlePrimarySubmit() {
+    await submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
+  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -463,6 +466,28 @@ export function ActionPlanCreatePage({
           />
         </TerrainCard>
 
+        {showToggleSection ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Options</TerrainSectionLabel>
+            <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+              {modeConfig.showValidationToggle ? (
+                <TerrainSwitch
+                  label="Validation requise"
+                  checked={requiresValidation}
+                  onCheckedChange={setRequiresValidation}
+                />
+              ) : null}
+              {modeConfig.showLibraryToggle ? (
+                <TerrainSwitch
+                  label="Enregistrer dans la bibliothèque"
+                  checked={saveToLibrary}
+                  onCheckedChange={setSaveToLibrary}
+                />
+              ) : null}
+            </TerrainCard>
+          </section>
+        ) : null}
+
         <ActionPlanTaskDraftEditor
           tasks={tasks}
           establishmentId={establishmentId ?? ''}
@@ -480,12 +505,14 @@ export function ActionPlanCreatePage({
           <ActionPlanEventPlanningForm
             draft={{ ...planningDraft, assignees: effectiveAssignees }}
             config={{
-              canEditAssignees: !saveToLibrary && modeConfig.showAssigneeSheet,
+              canEditAssignees: modeConfig.showAssigneeSheet,
               canSchedule: modeConfig.showScheduleSection,
               staffMode: modeConfig.showStaffSelfAssignee,
-              showAdvancedChronology: !saveToLibrary && modeConfig.showAssigneeSheet,
-              hideAssignees: saveToLibrary,
+              showAdvancedChronology: modeConfig.showAssigneeSheet,
+              hideAssignees: false,
               staffDisplayName,
+              planningPersisted: saveToLibrary ? false : undefined,
+              assigneeActionsEnabled: false,
             }}
             establishmentId={establishmentId}
             pilotBusinessUnitId={resolvedPilotBusinessUnitId}
@@ -498,25 +525,6 @@ export function ActionPlanCreatePage({
               setPlanningDraft(next)
             }}
           />
-        ) : null}
-
-        {showToggleSection ? (
-          <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
-            {modeConfig.showValidationToggle ? (
-              <TerrainSwitch
-                label="Validation requise"
-                checked={requiresValidation}
-                onCheckedChange={setRequiresValidation}
-              />
-            ) : null}
-            {modeConfig.showLibraryToggle ? (
-              <TerrainSwitch
-                label="Enregistrer dans la bibliothèque"
-                checked={saveToLibrary}
-                onCheckedChange={setSaveToLibrary}
-              />
-            ) : null}
-          </TerrainCard>
         ) : null}
 
         {resolvedSubmitError ? (
@@ -548,11 +556,13 @@ export function ActionPlanCreatePage({
         ) : (
           <Button
             type="button"
-            className="h-11 w-full rounded-xl"
+            className={cn(
+              'h-11 w-full rounded-xl text-white',
+              terrainBrandAction.bg,
+              terrainBrandAction.hover,
+            )}
             disabled={resolvedIsSubmitting}
-            onClick={() =>
-              void submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
-            }
+            onClick={() => void handlePrimarySubmit()}
           >
             {submitLabel}
           </Button>

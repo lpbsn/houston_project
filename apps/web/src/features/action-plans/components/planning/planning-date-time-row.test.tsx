@@ -57,4 +57,10 @@ describe('PlanningDateTimeRow', () => {
     expect(onTimeChange).not.toHaveBeenCalled()
     expect(onOpenPickerChange).toHaveBeenCalledWith({ rowId: 'shared-start', part: 'time' })
   })
+
+  it('hides date pill when hideDate is enabled', () => {
+    renderRow({ hideDate: true, time: '09:00' })
+    expect(screen.queryByLabelText('Début — date')).toBeNull()
+    expect(screen.getByLabelText('Début — heure')).toBeTruthy()
+  })
 })

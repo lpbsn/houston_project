@@ -1,9 +1,14 @@
-import type { ActionPlanCreateRequest, ActionPlanUseRequest, PatchedActionPlanUpdateRequest } from '../types'
+import type {
+  ActionPlanCreateRequest,
+  ActionPlanUseRequest,
+  PatchedActionPlanUpdateRequest,
+} from '../types'
 import type {
   ActionPlanAssigneeDraft,
   ActionPlanCreateFormValues,
   ActionPlanTaskDraft,
 } from './action-plan-form-validation'
+import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
 import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
 
 function toIsoDateTime(value: string): string | undefined {
@@ -16,6 +21,16 @@ function toIsoDateTime(value: string): string | undefined {
     return undefined
   }
   return new Date(parsed).toISOString()
+}
+
+function splitIsoToLocalDateAndTime(value: string): { date: string; time: string } {
+  const parsed = new Date(value)
+  if (!value.trim() || Number.isNaN(parsed.getTime())) {
+    return { date: '', time: '' }
+  }
+  const offset = parsed.getTimezoneOffset()
+  const local = new Date(parsed.getTime() - offset * 60_000).toISOString()
+  return { date: local.slice(0, 10), time: local.slice(11, 16) }
 }
 
 function buildAssigneePayloads(
@@ -48,6 +63,35 @@ function buildAssigneePayloads(
         visible_from: visibleFrom ?? null,
       }
     })
+}
+
+function buildPerAssigneeSchedule(
+  assignees: ActionPlanAssigneeDraft[],
+): ReturnType<typeof buildActionPlanScheduleCreateRequest> {
+  const recurringAssignees = assignees.filter(
+    (assignee) => assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
+  )
+  const firstAssignee = recurringAssignees[0]
+  if (!firstAssignee) {
+    return undefined
+  }
+
+  const start = splitIsoToLocalDateAndTime(firstAssignee.startAt)
+  const end = splitIsoToLocalDateAndTime(firstAssignee.endAt)
+  const schedule: ActionPlanScheduleDraft = {
+    enabled: true,
+    recurrenceDays: [...firstAssignee.recurrenceDays],
+    startDate: start.date,
+    endDate: firstAssignee.recurrenceEndDate.trim(),
+    startAt: start.time,
+    endAt: end.time,
+  }
+
+  return buildActionPlanScheduleCreateRequest({
+    schedule,
+    assignees: recurringAssignees,
+    useSharedChronology: false,
+  })
 }
 
 export function buildActionPlanTaskInputPayloads(
@@ -87,31 +131,75 @@ export function buildActionPlanUpdateRequest(
   }
 }
 
+export function buildActionPlanShellCreateRequest(
+  values: Pick<
+    ActionPlanCreateFormValues,
+    'title' | 'description' | 'pilotBusinessUnitId' | 'requiresValidation' | 'tasks'
+  >,
+  options: { reusableForScheduling?: boolean } = {},
+): ActionPlanCreateRequest {
+  return {
+    title: values.title.trim(),
+    description: values.description.trim(),
+    pilot_business_unit_id: values.pilotBusinessUnitId,
+    requires_validation: values.requiresValidation,
+    is_reusable: options.reusableForScheduling === true,
+    tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
+    assignees: [],
+    use_shared_chronology: false,
+    start_at: null,
+    end_at: null,
+    visible_from: null,
+  }
+}
+
 export function buildActionPlanCreateRequest(
   values: ActionPlanCreateFormValues,
 ): ActionPlanCreateRequest {
-  const scheduleEnabled = values.schedule.enabled
-  const assignees = values.saveToLibrary && !scheduleEnabled
-    ? []
-    : buildAssigneePayloads(values.assignees, {
-        useSharedChronology: values.useSharedChronology,
-        sharedStartAt: values.sharedStartAt,
-        sharedEndAt: values.sharedEndAt,
-        sharedVisibleFrom: values.sharedVisibleFrom,
-      })
+  if (values.saveToLibrary) {
+    return {
+      title: values.title.trim(),
+      description: values.description.trim(),
+      pilot_business_unit_id: values.pilotBusinessUnitId,
+      requires_validation: values.requiresValidation,
+      is_reusable: true,
+      tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
+      assignees: [],
+      use_shared_chronology: false,
+      start_at: null,
+      end_at: null,
+      visible_from: null,
+      ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
+    }
+  }
 
-  const schedule = buildActionPlanScheduleCreateRequest({
-    schedule: values.schedule,
-    assignees: values.assignees,
+  const perAssigneeSchedule = values.useSharedChronology
+    ? undefined
+    : buildPerAssigneeSchedule(values.assignees)
+  const oneShotAssignees = perAssigneeSchedule
+    ? values.assignees.filter((assignee) => !assignee.repeatEnabled)
+    : values.assignees
+  const assignees = buildAssigneePayloads(oneShotAssignees, {
     useSharedChronology: values.useSharedChronology,
+    sharedStartAt: values.sharedStartAt,
+    sharedEndAt: values.sharedEndAt,
+    sharedVisibleFrom: values.sharedVisibleFrom,
   })
+
+  const schedule =
+    perAssigneeSchedule ??
+    buildActionPlanScheduleCreateRequest({
+      schedule: values.schedule,
+      assignees: values.assignees,
+      useSharedChronology: values.useSharedChronology,
+    })
 
   return {
     title: values.title.trim(),
     description: values.description.trim(),
     pilot_business_unit_id: values.pilotBusinessUnitId,
     requires_validation: values.requiresValidation,
-    is_reusable: values.saveToLibrary || scheduleEnabled,
+    is_reusable: schedule !== undefined,
     tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
     assignees,
     use_shared_chronology: values.useSharedChronology,

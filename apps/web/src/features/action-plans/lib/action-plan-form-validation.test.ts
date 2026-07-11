@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildActionPlanCreateRequest } from '@/features/action-plans/lib/action-plan-create-payload'
 import {
+  createActionPlanAssigneeDraft,
   createActionPlanTaskDraft,
   validateActionPlanCreateForm,
   validateActionPlanCreatePlanningErrors,
@@ -207,10 +208,43 @@ describe('validateActionPlanCreatePlanningErrors', () => {
         startTime: '09:00',
         endTime: '10:00',
       },
-      { saveToLibrary: true },
+      { saveToLibrary: false },
     )
 
     expect(errors.recurrenceEndDate).toBeTruthy()
+  })
+
+  it('validates per-assignee cards when chronology by assignee is enabled', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      repeatEnabled: true,
+      startAt: '2026-07-12T03:00:00.000Z',
+      endAt: '2026-07-12T14:05:00.000Z',
+    })
+    const errors = validateActionPlanCreatePlanningErrors(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [assignee],
+      },
+      { saveToLibrary: false },
+    )
+
+    expect(errors[`assignee.${assignee.id}.recurrenceDays`]).toBeTruthy()
+  })
+
+  it('requires at least one assignee for create when per-assignee chronology is enabled', () => {
+    const errors = validateActionPlanCreatePlanningErrors(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [],
+      },
+      { saveToLibrary: false },
+    )
+
+    expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
   })
 })
 

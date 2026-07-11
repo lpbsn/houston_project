@@ -5,30 +5,31 @@ import { TerrainCard, TerrainSectionLabel, TerrainSwitch } from '@/components/ui
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import {
-  ACTION_PLAN_RECURRENCE_DAY_LABELS,
-  ACTION_PLAN_RECURRENCE_DAYS,
-  type ActionPlanRecurrenceDay,
-} from '../lib/action-plan-schedule-constants'
+import type { ActionPlanRecurrenceDay } from '../lib/action-plan-schedule-constants'
 import {
   createActionPlanAssigneeDraft,
   type ActionPlanAssigneeDraft,
 } from '../lib/action-plan-form-validation'
 import {
+  buildScheduleRequestForAssignee,
+  buildUseRequestForAssignee,
   combineDateAndTimeToIso,
   formatAssigneeSummary,
-  formatRecurrenceDaysSummary,
+  hasGlobalRepeat,
   snapTimeToFiveMinutes,
   splitIsoToDateAndTime,
+  validateAssigneePlanningAction,
   type ActionPlanEventPlanningConfig,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
+import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest } from '../types'
 import { ActionPlanAssigneesSheet } from './action-plan-assignees-sheet'
 import { PlanningDateRow } from './planning/planning-date-row'
 import {
   PlanningDateTimeRow,
   type PlanningPickerTarget,
 } from './planning/planning-date-time-row'
+import { RecurrenceDaysPicker } from './planning/recurrence-days-picker'
 
 type ActionPlanEventPlanningFormProps = {
   draft: ActionPlanEventPlanningDraft
@@ -37,6 +38,8 @@ type ActionPlanEventPlanningFormProps = {
   pilotBusinessUnitId: string
   fieldErrors?: Record<string, string>
   onDraftChange: (draft: ActionPlanEventPlanningDraft) => void
+  onAssigneeSchedule?: (assigneeId: string, body: ActionPlanScheduleCreateRequest) => void
+  onAssigneeLaunch?: (assigneeId: string, body: ActionPlanUseRequest) => void
 }
 
 type PlanningFormRowProps = {
@@ -85,6 +88,14 @@ function PlanningFormRow({
   )
 }
 
+function assigneeFieldError(
+  fieldErrors: Record<string, string>,
+  assigneeId: string,
+  field: string,
+): string | undefined {
+  return fieldErrors[`assignee.${assigneeId}.${field}`]
+}
+
 export function ActionPlanEventPlanningForm({
   draft,
   config,
@@ -92,19 +103,15 @@ export function ActionPlanEventPlanningForm({
   pilotBusinessUnitId,
   fieldErrors = {},
   onDraftChange,
+  onAssigneeSchedule,
+  onAssigneeLaunch,
 }: ActionPlanEventPlanningFormProps) {
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
+  const [assigneeActionErrors, setAssigneeActionErrors] = useState<Record<string, string>>({})
 
   function updateDraft(patch: Partial<ActionPlanEventPlanningDraft>) {
     onDraftChange({ ...draft, ...patch })
-  }
-
-  function toggleDay(day: ActionPlanRecurrenceDay) {
-    const nextDays = draft.recurrenceDays.includes(day)
-      ? draft.recurrenceDays.filter((value) => value !== day)
-      : [...draft.recurrenceDays, day]
-    updateDraft({ recurrenceDays: nextDays })
   }
 
   function updateAssignee(id: string, patch: Partial<ActionPlanAssigneeDraft>) {
@@ -115,19 +122,70 @@ export function ActionPlanEventPlanningForm({
     })
   }
 
+  function handleGlobalRepeatToggle(repeatEnabled: boolean) {
+    updateDraft({ repeatEnabled })
+  }
+
+  function handleStartDateChange(startDate: string) {
+    updateDraft({ startDate })
+  }
+
+  function handleAssigneeSchedule(assignee: ActionPlanAssigneeDraft) {
+    const errors = validateAssigneePlanningAction(draft, assignee.id, {
+      allowRepeat: config.canSchedule,
+      action: 'schedule',
+    })
+    setAssigneeActionErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      return
+    }
+    const body = buildScheduleRequestForAssignee(draft, assignee, {
+      staffMode: config.staffMode,
+    })
+    if (!body || !onAssigneeSchedule) {
+      return
+    }
+    onAssigneeSchedule(assignee.id, body)
+  }
+
+  function handleAssigneeLaunch(assignee: ActionPlanAssigneeDraft) {
+    const errors = validateAssigneePlanningAction(draft, assignee.id, { action: 'launch' })
+    setAssigneeActionErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      return
+    }
+    const body = buildUseRequestForAssignee(draft, assignee)
+    if (!body || !onAssigneeLaunch) {
+      return
+    }
+    onAssigneeLaunch(assignee.id, body)
+  }
+
   const assigneeSummary = formatAssigneeSummary(draft.assignees, {
     staffMode: config.staffMode,
     staffDisplayName: config.staffDisplayName,
   })
 
   const showAssignees = !config.hideAssignees
-  const canToggleRepeat = config.canSchedule
-  const showRepeatFields = draft.repeatEnabled && canToggleRepeat
+  const showGlobalPlanning = !draft.usePerAssigneeChronology
+  const showAssigneePlanning = draft.usePerAssigneeChronology && config.showAdvancedChronology
+  const canToggleRepeat = config.canSchedule && showGlobalPlanning
+  const assigneeActionsEnabled = config.assigneeActionsEnabled !== false
+  const mergedFieldErrors = { ...fieldErrors, ...assigneeActionErrors }
+  const chronologyModeLabel = draft.usePerAssigneeChronology
+    ? 'Chronologie par assigné'
+    : 'Chronologie commune'
 
   return (
     <>
       <section className="space-y-2">
         <TerrainSectionLabel>Planification</TerrainSectionLabel>
+        <p className="px-0.5 text-xs text-[#7D7B75]">{chronologyModeLabel}</p>
+        {config.planningPersisted === false ? (
+          <p className="text-xs text-[#7D7B75]">
+            La planification n&apos;est pas enregistrée avec le template.
+          </p>
+        ) : null}
         <TerrainCard className="overflow-hidden p-0">
           {showAssignees ? (
             <PlanningFormRow
@@ -137,55 +195,178 @@ export function ActionPlanEventPlanningForm({
                 config.canEditAssignees ? () => setAssigneeSheetOpen(true) : undefined
               }
               disabled={!config.canEditAssignees}
-              error={fieldErrors.assignees}
+              error={mergedFieldErrors.assignees}
             />
           ) : null}
 
           {config.showAdvancedChronology ? (
-            <>
-              <TerrainSwitch
-                variant="bordered"
-                label="Chronologie par assigné"
-                checked={draft.usePerAssigneeChronology}
-                onCheckedChange={(usePerAssigneeChronology) =>
-                  updateDraft({ usePerAssigneeChronology })
-                }
-              />
-              {draft.usePerAssigneeChronology ? (
-                <div className="space-y-3 border-b border-[#E8E6DF] px-3 pb-3">
-                  {draft.assignees.map((assignee) => {
-                    const startParts = splitIsoToDateAndTime(assignee.startAt)
-                    const endParts = splitIsoToDateAndTime(assignee.endAt)
-                    return (
-                      <div
-                        key={assignee.id}
-                        className="overflow-hidden rounded-xl border border-[#E8E6DF]"
+            <TerrainSwitch
+              variant="bordered"
+              label="Chronologie par assigné"
+              checked={draft.usePerAssigneeChronology}
+              onCheckedChange={(usePerAssigneeChronology) =>
+                updateDraft({
+                  usePerAssigneeChronology,
+                  repeatEnabled: usePerAssigneeChronology ? false : draft.repeatEnabled,
+                })
+              }
+            />
+          ) : null}
+
+          {canToggleRepeat ? (
+            <TerrainSwitch
+              variant="bordered"
+              label="Répéter"
+              checked={draft.repeatEnabled}
+              onCheckedChange={handleGlobalRepeatToggle}
+            />
+          ) : null}
+
+          {showAssigneePlanning ? (
+            <div className="space-y-3 border-b border-[#E8E6DF] px-3 pt-3 pb-3">
+              {draft.assignees.map((assignee) => {
+                const startParts = splitIsoToDateAndTime(assignee.startAt)
+                const endParts = splitIsoToDateAndTime(assignee.endAt)
+                const showAssigneeRepeat = config.canSchedule && assignee.repeatEnabled
+                return (
+                  <div
+                    key={assignee.id}
+                    className="overflow-hidden rounded-xl border border-[#E8E6DF]"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-[#E8E6DF] px-3 py-2">
+                      <p className="text-sm font-medium text-[#1a1a1a]">
+                        {assignee.displayName || 'Assigné'}
+                      </p>
+                      <button
+                        type="button"
+                        className="rounded-lg p-2 text-[#E24B4A]"
+                        aria-label="Retirer l’assigné"
+                        onClick={() =>
+                          updateDraft({
+                            assignees: draft.assignees.filter(
+                              (candidate) => candidate.id !== assignee.id,
+                            ),
+                          })
+                        }
                       >
-                        <div className="flex items-center justify-between gap-2 border-b border-[#E8E6DF] px-3 py-2">
-                          <p className="text-sm font-medium text-[#1a1a1a]">
-                            {assignee.displayName || 'Assigné'}
-                          </p>
-                          <button
-                            type="button"
-                            className="rounded-lg p-2 text-[#E24B4A]"
-                            aria-label="Retirer l’assigné"
-                            onClick={() =>
-                              updateDraft({
-                                assignees: draft.assignees.filter(
-                                  (candidate) => candidate.id !== assignee.id,
-                                ),
-                              })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {config.canSchedule ? (
+                      <TerrainSwitch
+                        variant="bordered"
+                        label="Répéter"
+                        checked={assignee.repeatEnabled}
+                        onCheckedChange={(repeatEnabled) =>
+                          updateAssignee(assignee.id, { repeatEnabled })
+                        }
+                      />
+                    ) : null}
+
+                    {showAssigneeRepeat ? (
+                      <>
+                        <PlanningDateTimeRow
+                          rowId={`assignee-${assignee.id}-recurrence-start`}
+                          label="Début de la récurrence"
+                          date={startParts.date}
+                          time={startParts.time}
+                          hideTime
+                          openPicker={openPicker}
+                          onOpenPickerChange={setOpenPicker}
+                          onDateChange={(date) =>
+                            updateAssignee(assignee.id, {
+                              startAt: combineDateAndTimeToIso(
+                                date,
+                                startParts.time,
+                                'start',
+                              ),
+                            })
+                          }
+                          onTimeChange={() => undefined}
+                          error={assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate')}
+                        />
+                        <PlanningDateRow
+                          rowId={`assignee-${assignee.id}-recurrence-end`}
+                          label="Fin de la récurrence"
+                          date={assignee.recurrenceEndDate}
+                          openPicker={openPicker}
+                          onOpenPickerChange={setOpenPicker}
+                          onDateChange={(recurrenceEndDate) =>
+                            updateAssignee(assignee.id, { recurrenceEndDate })
+                          }
+                          error={assigneeFieldError(
+                            mergedFieldErrors,
+                            assignee.id,
+                            'recurrenceEndDate',
+                          )}
+                        />
+                        <div className="border-b border-[#E8E6DF] last:border-b-0">
+                          <div className="flex items-center justify-between gap-3 px-3 py-3">
+                            <span className="text-sm text-[#1a1a1a]">Jours</span>
+                          </div>
+                          <div className="space-y-2 px-3 pb-3">
+                            <RecurrenceDaysPicker
+                              value={assignee.recurrenceDays}
+                              onChange={(recurrenceDays: ActionPlanRecurrenceDay[]) =>
+                                updateAssignee(assignee.id, { recurrenceDays })
+                              }
+                              error={assigneeFieldError(
+                                mergedFieldErrors,
+                                assignee.id,
+                                'recurrenceDays',
+                              )}
+                            />
+                          </div>
                         </div>
+                        <PlanningDateTimeRow
+                          rowId={`assignee-${assignee.id}-slot-start`}
+                          label="Début du créneau d'exécution"
+                          date={startParts.date}
+                          time={startParts.time}
+                          hideDate
+                          openPicker={openPicker}
+                          onOpenPickerChange={setOpenPicker}
+                          onDateChange={() => undefined}
+                          onTimeChange={(time) =>
+                            updateAssignee(assignee.id, {
+                              startAt: combineDateAndTimeToIso(
+                                startParts.date,
+                                snapTimeToFiveMinutes(time),
+                                'start',
+                              ),
+                            })
+                          }
+                          error={assigneeFieldError(mergedFieldErrors, assignee.id, 'startTime')}
+                        />
+                        <PlanningDateTimeRow
+                          rowId={`assignee-${assignee.id}-slot-end`}
+                          label="Fin du créneau d'exécution"
+                          date={startParts.date}
+                          time={endParts.time}
+                          hideDate
+                          openPicker={openPicker}
+                          onOpenPickerChange={setOpenPicker}
+                          onDateChange={() => undefined}
+                          onTimeChange={(time) =>
+                            updateAssignee(assignee.id, {
+                              endAt: combineDateAndTimeToIso(
+                                startParts.date,
+                                snapTimeToFiveMinutes(time),
+                                'end',
+                              ),
+                            })
+                          }
+                          error={assigneeFieldError(mergedFieldErrors, assignee.id, 'endTime')}
+                        />
+                      </>
+                    ) : (
+                      <>
                         <PlanningDateTimeRow
                           rowId={`assignee-${assignee.id}-start`}
                           label="Début"
                           date={startParts.date}
                           time={startParts.time}
-                          hideTime={false}
                           openPicker={openPicker}
                           onOpenPickerChange={setOpenPicker}
                           onDateChange={(date) =>
@@ -206,13 +387,16 @@ export function ActionPlanEventPlanningForm({
                               ),
                             })
                           }
+                          error={
+                            assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate') ??
+                            assigneeFieldError(mergedFieldErrors, assignee.id, 'startTime')
+                          }
                         />
                         <PlanningDateTimeRow
                           rowId={`assignee-${assignee.id}-end`}
                           label="Fin"
                           date={endParts.date}
                           time={endParts.time}
-                          hideTime={false}
                           openPicker={openPicker}
                           onOpenPickerChange={setOpenPicker}
                           onDateChange={(date) =>
@@ -229,126 +413,167 @@ export function ActionPlanEventPlanningForm({
                               ),
                             })
                           }
+                          error={
+                            assigneeFieldError(mergedFieldErrors, assignee.id, 'endDate') ??
+                            assigneeFieldError(mergedFieldErrors, assignee.id, 'endTime')
+                          }
                         />
+                      </>
+                    )}
+
+                    {assigneeActionsEnabled ? (
+                      <div className="border-t border-[#E8E6DF] px-3 py-3">
+                        <Button
+                          type="button"
+                          className="h-10 w-full rounded-xl"
+                          disabled={Boolean(config.assigneeActionPending?.[assignee.id])}
+                          onClick={() =>
+                            assignee.repeatEnabled
+                              ? handleAssigneeSchedule(assignee)
+                              : handleAssigneeLaunch(assignee)
+                          }
+                        >
+                          {assignee.repeatEnabled
+                            ? 'Planifier la récurrence'
+                            : 'Lancer pour cet assigné'}
+                        </Button>
                       </div>
-                    )
-                  })}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 w-full rounded-xl border-dashed"
-                    onClick={() =>
-                      updateDraft({
-                        assignees: [
-                          ...draft.assignees,
-                          createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
-                        ],
-                      })
-                    }
-                  >
-                    <Plus className="mr-2 h-4 w-4" aria-hidden />
-                    Ajouter un créneau assigné
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
-          <TerrainSwitch
-            variant="bordered"
-            label="Toute la journée"
-            checked={draft.allDay}
-            onCheckedChange={(allDay) => updateDraft({ allDay })}
-          />
-
-          <PlanningDateTimeRow
-            rowId="shared-start"
-            label="Début"
-            date={draft.startDate}
-            time={draft.startTime}
-            hideTime={draft.allDay}
-            openPicker={openPicker}
-            onOpenPickerChange={setOpenPicker}
-            onDateChange={(startDate) => updateDraft({ startDate })}
-            onTimeChange={(startTime) =>
-              updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
-            }
-            error={fieldErrors.startAt ?? fieldErrors.startTime}
-          />
-
-          <PlanningDateTimeRow
-            rowId="shared-end"
-            label="Fin"
-            date={draft.endDate}
-            time={draft.endTime}
-            hideTime={draft.allDay}
-            openPicker={openPicker}
-            onOpenPickerChange={setOpenPicker}
-            onDateChange={(endDate) => updateDraft({ endDate })}
-            onTimeChange={(endTime) =>
-              updateDraft({ endTime: snapTimeToFiveMinutes(endTime) })
-            }
-            error={
-              fieldErrors.endDate ??
-              fieldErrors.sharedEndAt ??
-              fieldErrors.endAt ??
-              fieldErrors.endTime
-            }
-          />
-
-          {canToggleRepeat ? (
-            <TerrainSwitch
-              variant="bordered"
-              label="Répéter"
-              checked={draft.repeatEnabled}
-              onCheckedChange={(repeatEnabled) => updateDraft({ repeatEnabled })}
-            />
-          ) : null}
-
-          {showRepeatFields ? (
-            <>
-              <PlanningDateRow
-                rowId="recurrence-end"
-                label="Fin de la récurrence"
-                date={draft.recurrenceEndDate}
-                openPicker={openPicker}
-                onOpenPickerChange={setOpenPicker}
-                onDateChange={(recurrenceEndDate) => updateDraft({ recurrenceEndDate })}
-                error={fieldErrors.recurrenceEndDate}
-              />
-
-              <PlanningFormRow
-                label="Jours"
-                summary={formatRecurrenceDaysSummary(draft.recurrenceDays)}
-                error={fieldErrors.recurrenceDays}
+                    ) : null}
+                  </div>
+                )
+              })}
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 w-full rounded-xl border-dashed"
+                onClick={() =>
+                  updateDraft({
+                    assignees: [
+                      ...draft.assignees,
+                      createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
+                    ],
+                  })
+                }
               >
-                <div className="flex flex-wrap gap-2">
-                  {ACTION_PLAN_RECURRENCE_DAYS.map((day) => {
-                    const selected = draft.recurrenceDays.includes(day)
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        className={cn(
-                          'rounded-full border px-3 py-1 text-xs',
-                          selected
-                            ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'
-                            : 'border-[#E8E6DF] text-[#1a1a1a]',
-                        )}
-                        onClick={() => toggleDay(day)}
-                      >
-                        {ACTION_PLAN_RECURRENCE_DAY_LABELS[day]}
-                      </button>
-                    )
-                  })}
+                <Plus className="mr-2 h-4 w-4" aria-hidden />
+                Ajouter un créneau assigné
+              </Button>
+            </div>
+          ) : null}
+
+          {showGlobalPlanning ? (
+            hasGlobalRepeat(draft) ? (
+              <>
+                <PlanningDateTimeRow
+                  rowId="global-recurrence-start"
+                  label="Début de la récurrence"
+                  date={draft.startDate}
+                  time={draft.startTime}
+                  hideTime
+                  openPicker={openPicker}
+                  onOpenPickerChange={setOpenPicker}
+                  onDateChange={handleStartDateChange}
+                  onTimeChange={() => undefined}
+                  error={mergedFieldErrors.startDate}
+                />
+                <PlanningDateRow
+                  rowId="global-recurrence-end"
+                  label="Fin de la récurrence"
+                  date={draft.recurrenceEndDate}
+                  openPicker={openPicker}
+                  onOpenPickerChange={setOpenPicker}
+                  onDateChange={(recurrenceEndDate) => updateDraft({ recurrenceEndDate })}
+                  error={mergedFieldErrors.recurrenceEndDate}
+                />
+                <div className="border-b border-[#E8E6DF] last:border-b-0">
+                  <div className="flex items-center justify-between gap-3 px-3 py-3">
+                    <span className="text-sm text-[#1a1a1a]">Jours</span>
+                  </div>
+                  <div className="space-y-2 px-3 pb-3">
+                    <RecurrenceDaysPicker
+                      value={draft.recurrenceDays}
+                      onChange={(recurrenceDays: ActionPlanRecurrenceDay[]) =>
+                        updateDraft({ recurrenceDays })
+                      }
+                      error={mergedFieldErrors.recurrenceDays}
+                    />
+                    {config.staffMode ? (
+                      <p className="text-xs text-[#7D7B75]">
+                        La planification récurrente vous sera assignée sur le pôle pilote du
+                        modèle.
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-                {config.staffMode ? (
-                  <p className="text-xs text-[#7D7B75]">
-                    La planification récurrente vous sera assignée sur le pôle pilote du modèle.
-                  </p>
-                ) : null}
-              </PlanningFormRow>
-            </>
+                <PlanningDateTimeRow
+                  rowId="global-slot-start"
+                  label="Début du créneau d'exécution"
+                  date={draft.startDate}
+                  time={draft.startTime}
+                  hideDate
+                  openPicker={openPicker}
+                  onOpenPickerChange={setOpenPicker}
+                  onDateChange={() => undefined}
+                  onTimeChange={(startTime) =>
+                    updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
+                  }
+                  error={mergedFieldErrors.startTime}
+                />
+                <PlanningDateTimeRow
+                  rowId="global-slot-end"
+                  label="Fin du créneau d'exécution"
+                  date={draft.startDate}
+                  time={draft.endTime}
+                  hideDate
+                  openPicker={openPicker}
+                  onOpenPickerChange={setOpenPicker}
+                  onDateChange={() => undefined}
+                  onTimeChange={(endTime) =>
+                    updateDraft({ endTime: snapTimeToFiveMinutes(endTime) })
+                  }
+                  error={mergedFieldErrors.endTime}
+                />
+              </>
+            ) : (
+              <>
+                <PlanningDateTimeRow
+                  rowId="shared-start"
+                  label="Début"
+                  date={draft.startDate}
+                  time={draft.startTime}
+                  openPicker={openPicker}
+                  onOpenPickerChange={setOpenPicker}
+                  onDateChange={handleStartDateChange}
+                  onTimeChange={(startTime) =>
+                    updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
+                  }
+                  error={
+                    mergedFieldErrors.startAt ??
+                    mergedFieldErrors.startTime ??
+                    mergedFieldErrors.startDate
+                  }
+                />
+
+                <PlanningDateTimeRow
+                  rowId="shared-end"
+                  label="Fin"
+                  date={draft.endDate}
+                  time={draft.endTime}
+                  openPicker={openPicker}
+                  onOpenPickerChange={setOpenPicker}
+                  onDateChange={(endDate) => updateDraft({ endDate })}
+                  onTimeChange={(endTime) =>
+                    updateDraft({ endTime: snapTimeToFiveMinutes(endTime) })
+                  }
+                  error={
+                    mergedFieldErrors.endDate ??
+                    mergedFieldErrors.sharedEndAt ??
+                    mergedFieldErrors.endAt ??
+                    mergedFieldErrors.endTime
+                  }
+                />
+              </>
+            )
           ) : null}
         </TerrainCard>
       </section>
