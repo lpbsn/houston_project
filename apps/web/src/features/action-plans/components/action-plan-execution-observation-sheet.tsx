@@ -1,6 +1,8 @@
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 type ActionPlanExecutionObservationSheetProps = {
   open: boolean
@@ -29,7 +31,11 @@ export function ActionPlanExecutionObservationSheet({
           <Button
             type="button"
             size="sm"
-            className="flex-1 rounded-lg"
+            className={cn(
+              'flex-1 rounded-lg text-white',
+              terrainBrandAction.bg,
+              terrainBrandAction.hover,
+            )}
             disabled={isPending || !text.trim()}
             onClick={onConfirm}
           >

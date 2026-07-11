@@ -84,6 +84,11 @@ describe('parseAppRoute', () => {
     })
     expect(parseAppRoute('/action-plans/new')).toEqual({
       kind: 'action-plan-create',
+      origin: 'library',
+    })
+    expect(parseAppRoute('/action-plans/new?from=execution')).toEqual({
+      kind: 'action-plan-create',
+      origin: 'execution',
     })
     expect(parseAppRoute('/action-plans/plan-1')).toEqual({
       kind: 'action-plan-template-detail',
@@ -105,10 +110,11 @@ describe('parseAppRoute', () => {
 
   it('parses execution action plan create route before static execution hub', () => {
     expect(parseAppRoute('/execution/plans/new')).toEqual({
-      kind: 'execution-action-plan-create',
+      kind: 'action-plan-create',
+      origin: 'execution',
     })
-    expect(getAppRouteKey({ kind: 'execution-action-plan-create' })).toBe(
-      'execution-action-plan-create',
+    expect(getAppRouteKey({ kind: 'action-plan-create', origin: 'execution' })).toBe(
+      'action-plan-create',
     )
   })
 

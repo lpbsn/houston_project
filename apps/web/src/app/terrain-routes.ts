@@ -57,7 +57,6 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'signal-detail',
   'signal-action-create',
   'action-plan-create',
-  'execution-action-plan-create',
   'action-plan-template-detail',
   'action-plan-template-edit',
   'action-plan-execution-detail',
@@ -100,7 +99,6 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
-    route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
@@ -122,7 +120,6 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'signal-detail' ||
     route.kind === 'signal-action-create' ||
     route.kind === 'action-plan-create' ||
-    route.kind === 'execution-action-plan-create' ||
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
@@ -167,11 +164,11 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'execution-action-plan-create') {
+  if (route.kind === 'action-plan-create') {
     return {
       topbarVariant: 'detail',
       title: "Plan d'action",
-      backPath: '/execution',
+      backPath: route.origin === 'execution' ? '/execution' : '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
     }
@@ -287,17 +284,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
-  if (route.kind === 'action-plan-create') {
-    return {
-      topbarVariant: 'detail',
-      title: 'Nouveau plan d’action',
-      backPath: '/action-plans',
-      showBottomNav: false,
-      mainScroll: 'auto',
-      hideTopbar: true,
-    }
-  }
-
   if (route.kind === 'action-plan-template-detail') {
     return {
       topbarVariant: 'detail',
@@ -361,10 +347,6 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'signal-action-create') {
     return `signal-action-create-${route.signalId}`
-  }
-
-  if (route.kind === 'execution-action-plan-create') {
-    return 'execution-action-plan-create'
   }
 
   if (route.kind === 'action-plan-create') {

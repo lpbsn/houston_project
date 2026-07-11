@@ -103,7 +103,7 @@ export function ExecutionFeedPage({
         open={isCreateMenuOpen}
         permissionHints={permissionHints ?? undefined}
         onClose={() => setIsCreateMenuOpen(false)}
-        onSelectActionPlan={() => onNavigate?.('/execution/plans/new')}
+        onSelectActionPlan={() => onNavigate?.('/action-plans/new?from=execution')}
         onSelectCatalog={() => onNavigate?.('/action-plans')}
       />
       <TerrainHubSubheader>

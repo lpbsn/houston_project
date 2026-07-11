@@ -28,12 +28,13 @@ export type AppPath =
   | '/team/invite'
   | '/action-plans'
 
+export type ActionPlanCreateOrigin = 'library' | 'execution'
+
 export type AppRoute =
   | { kind: 'static'; path: AppPath }
   | { kind: 'signal-detail'; signalId: string }
   | { kind: 'signal-action-create'; signalId: string }
-  | { kind: 'action-plan-create' }
-  | { kind: 'execution-action-plan-create' }
+  | { kind: 'action-plan-create'; origin: ActionPlanCreateOrigin }
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
   | { kind: 'action-plan-template-edit'; actionPlanId: string }
   | { kind: 'action-plan-execution-detail'; executionId: string }
@@ -58,8 +59,6 @@ export function getAppRouteKey(route: AppRoute): string {
       return `signal-action-create:${route.signalId}`
     case 'action-plan-create':
       return 'action-plan-create'
-    case 'execution-action-plan-create':
-      return 'execution-action-plan-create'
     case 'action-plan-template-detail':
       return `action-plan-template-detail:${route.actionPlanId}`
     case 'action-plan-template-edit':
@@ -107,7 +106,14 @@ function parseSignalDetailId(pathname: string): string | null {
   return segments[0] || null
 }
 
-function parseActionPlanRoute(pathname: string): AppRoute | null {
+function parseActionPlanCreateOrigin(input: string): ActionPlanCreateOrigin {
+  const withoutHash = input.split('#')[0] ?? input
+  const queryPart = withoutHash.includes('?') ? (withoutHash.split('?')[1] ?? '') : ''
+  const params = new URLSearchParams(queryPart)
+  return params.get('from') === 'execution' ? 'execution' : 'library'
+}
+
+function parseActionPlanRoute(pathname: string, input: string): AppRoute | null {
   const executionDetailMatch = pathname.match(/^\/action-plans\/executions\/([^/]+)$/)
   if (executionDetailMatch?.[1]) {
     return {
@@ -117,7 +123,7 @@ function parseActionPlanRoute(pathname: string): AppRoute | null {
   }
 
   if (pathname === '/action-plans/new') {
-    return { kind: 'action-plan-create' }
+    return { kind: 'action-plan-create', origin: parseActionPlanCreateOrigin(input) }
   }
 
   const editMatch = pathname.match(/^\/action-plans\/([^/]+)\/edit$/)
@@ -174,7 +180,7 @@ export function parseAppRoute(input: string): AppRoute {
     return { kind: 'signal-detail', signalId }
   }
 
-  const actionPlanRoute = parseActionPlanRoute(pathname)
+  const actionPlanRoute = parseActionPlanRoute(pathname, input)
   if (actionPlanRoute) {
     return actionPlanRoute
   }
@@ -190,7 +196,7 @@ export function parseAppRoute(input: string): AppRoute {
   }
 
   if (pathname === '/execution/plans/new') {
-    return { kind: 'execution-action-plan-create' }
+    return { kind: 'action-plan-create', origin: 'execution' }
   }
 
   if (

@@ -21,8 +21,8 @@ describe('usesTerrainShell', () => {
 
   it('returns true for action plan create routes', () => {
     expect(usesTerrainShell({ kind: 'signal-action-create', signalId: 'abc' })).toBe(true)
-    expect(usesTerrainShell({ kind: 'execution-action-plan-create' })).toBe(true)
-    expect(usesTerrainShell({ kind: 'action-plan-create' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'action-plan-create', origin: 'library' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'action-plan-create', origin: 'execution' })).toBe(true)
     expect(usesTerrainShell({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       true,
     )
@@ -140,13 +140,19 @@ describe('getTerrainRouteConfig', () => {
       showBottomNav: false,
       mainScroll: 'auto',
     })
-    expect(getTerrainRouteConfig({ kind: 'action-plan-create' })).toEqual({
+    expect(getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'library' })).toEqual({
       topbarVariant: 'detail',
-      title: 'Nouveau plan d’action',
+      title: "Plan d'action",
       backPath: '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
-      hideTopbar: true,
+    })
+    expect(getTerrainRouteConfig({ kind: 'action-plan-create', origin: 'execution' })).toEqual({
+      topbarVariant: 'detail',
+      title: "Plan d'action",
+      backPath: '/execution',
+      showBottomNav: false,
+      mainScroll: 'auto',
     })
     expect(
       getTerrainRouteConfig({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
@@ -188,16 +194,6 @@ describe('getTerrainRouteConfig', () => {
       topbarVariant: 'detail',
       title: "Plan d'action",
       backPath: '/signals/sig-1',
-      showBottomNav: false,
-      mainScroll: 'auto',
-    })
-  })
-
-  it('configures execution action plan create route', () => {
-    expect(getTerrainRouteConfig({ kind: 'execution-action-plan-create' })).toEqual({
-      topbarVariant: 'detail',
-      title: "Plan d'action",
-      backPath: '/execution',
       showBottomNav: false,
       mainScroll: 'auto',
     })
@@ -247,9 +243,9 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'signal-action-create', signalId: 'abc' })).toBe(
       'signal-action-create-abc',
     )
-    expect(getTerrainContentKey({ kind: 'action-plan-create' })).toBe('action-plan-create')
-    expect(getTerrainContentKey({ kind: 'execution-action-plan-create' })).toBe(
-      'execution-action-plan-create',
+    expect(getTerrainContentKey({ kind: 'action-plan-create', origin: 'library' })).toBe('action-plan-create')
+    expect(getTerrainContentKey({ kind: 'action-plan-create', origin: 'execution' })).toBe(
+      'action-plan-create',
     )
     expect(getTerrainContentKey({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' })).toBe(
       'action-plan-template-detail-plan-1',
@@ -293,8 +289,8 @@ describe('isProtectedRoute', () => {
 
   it('returns true for operational detail routes', () => {
     expect(isProtectedRoute({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
-    expect(isProtectedRoute({ kind: 'execution-action-plan-create' })).toBe(true)
-    expect(isProtectedRoute({ kind: 'action-plan-create' })).toBe(true)
+    expect(isProtectedRoute({ kind: 'action-plan-create', origin: 'execution' })).toBe(true)
+    expect(isProtectedRoute({ kind: 'action-plan-create', origin: 'library' })).toBe(true)
     expect(isProtectedRoute({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       true,
     )
@@ -330,8 +326,8 @@ describe('requiresActiveMembership', () => {
 
   it('returns true for operational detail routes', () => {
     expect(requiresActiveMembership({ kind: 'signal-detail', signalId: 'abc' })).toBe(true)
-    expect(requiresActiveMembership({ kind: 'execution-action-plan-create' })).toBe(true)
-    expect(requiresActiveMembership({ kind: 'action-plan-create' })).toBe(true)
+    expect(requiresActiveMembership({ kind: 'action-plan-create', origin: 'execution' })).toBe(true)
+    expect(requiresActiveMembership({ kind: 'action-plan-create', origin: 'library' })).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
     ).toBe(true)

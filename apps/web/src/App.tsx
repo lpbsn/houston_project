@@ -264,11 +264,9 @@ function App() {
     }
 
     if (route.kind === 'action-plan-create') {
-      return <LazyActionPlanCreatePage mode="catalog" backPath="/action-plans" />
-    }
-
-    if (route.kind === 'execution-action-plan-create') {
-      return <LazyActionPlanCreatePage mode="execution" backPath="/execution" />
+      const mode = route.origin === 'execution' ? 'execution' : 'catalog'
+      const backPath = route.origin === 'execution' ? '/execution' : '/action-plans'
+      return <LazyActionPlanCreatePage mode={mode} backPath={backPath} />
     }
 
     if (route.kind === 'action-plan-template-detail') {
