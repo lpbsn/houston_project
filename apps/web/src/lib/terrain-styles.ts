@@ -34,6 +34,19 @@ export const terrainBrandAction = {
   ring: 'ring-[#114660]/30',
 } as const
 
+/** Execution comment thread — maquette-aligned tokens. */
+export const commentThread = {
+  bubbleBg: 'bg-[#F1F3F9]',
+  metaMuted: 'text-[#65676B]',
+  resolvedLabel: 'text-[#1E7D32]',
+  resolvedBadge: 'bg-[#1B5EBE]',
+  threadLine: 'border-[#E4E6EB]',
+  replyPillBg: 'bg-[#F8F9FB]',
+  replyPillBorder: 'border-[#E4E6EB]',
+  replyPillFocusBorder: 'focus-within:border-[#d1d9ff]',
+  replyPillFocusShadow: 'focus-within:shadow-[0_0_8px_#d1d9ff]',
+} as const
+
 /** Action plan execution feed — teal accent (#3A7A96). */
 export const ACTION_PLAN_FEED_TEAL = '#3A7A96'
 export const ACTION_PLAN_FEED_PENDING_BG = '#FCE9B8'
@@ -51,6 +64,16 @@ export const terrainInProgress = {
   badgeSolid: 'bg-[#3A7A96] text-white',
   badgeFeed: 'bg-[#E8F2F5] text-[#3A7A96]',
 } as const
+
+/** Action plan execution detail page — maquette-aligned static classes. */
+export const actionPlanExecutionDetailNavyBgClassName = 'bg-[#16435B]'
+export const actionPlanExecutionDetailMarkDoneBgClassName = 'bg-[#219673] hover:bg-[#1d8566]'
+export const actionPlanExecutionDetailValidateBgClassName = 'bg-[#25A17F] hover:bg-[#208f6f]'
+export const actionPlanExecutionDetailReopenBgClassName = 'bg-[#3A7A96] hover:bg-[#346d87]'
+export const actionPlanExecutionDetailCancelBgClassName = 'bg-[#E85553] hover:bg-[#d14c4a]'
+export const actionPlanExecutionDetailTaskDoneClassName = 'text-[#2D9C75]'
+export const actionPlanExecutionDetailLifecycleButtonClassName =
+  'inline-flex min-h-11 flex-1 items-center justify-center rounded-full px-3 text-[14px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2'
 
 export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue' | 'teal'
 

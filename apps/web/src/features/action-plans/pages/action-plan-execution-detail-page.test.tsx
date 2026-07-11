@@ -599,3 +599,135 @@ describe('ActionPlanExecutionDetailPage pole task filters', () => {
     expect(screen.getByText('Appeler technicien')).toBeTruthy()
   })
 })
+
+describe('ActionPlanExecutionDetailPage UI refonte', () => {
+  beforeEach(() => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution(),
+      error: null,
+      refetch: vi.fn(),
+    })
+  })
+
+  it('does not render Tâches par pôle label when there are no tasks', () => {
+    renderPage()
+
+    expect(screen.queryByText('Tâches par pôle')).toBeNull()
+    expect(screen.getByText('Aucune tâche dans cette exécution.')).toBeTruthy()
+  })
+
+  it('renders exactly one Tâches par pôle label when tasks exist', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        task_executions: [
+          buildTaskExecution({
+            id: 'task-1',
+            task: 'Contrôler la terrasse',
+            position: 1,
+            business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+          }),
+        ],
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    expect(screen.getAllByText('Tâches par pôle')).toHaveLength(1)
+  })
+
+  it('exposes Marquer terminé via aria-label despite two-line visual label', () => {
+    renderPage()
+
+    const button = screen.getByRole('button', { name: 'Marquer terminé' })
+    expect(button).toBeTruthy()
+    expect(button.className).toContain('bg-[#219673]')
+  })
+
+  it('shows Valider button with validate color when can_validate is true', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'pending_validation',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: true,
+          can_reopen: false,
+          can_cancel: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const button = screen.getByRole('button', { name: 'Valider' })
+    expect(button.className).toContain('bg-[#25A17F]')
+    expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+  })
+
+  it('shows Rouvrir button with reopen color when can_reopen is true', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        status: 'done',
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: false,
+          can_reopen: true,
+          can_cancel: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const button = screen.getByRole('button', { name: 'Rouvrir' })
+    expect(button.className).toContain('bg-[#3A7A96]')
+  })
+
+  it('shows Annuler button with cancel color when can_cancel is true', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({
+        permission_hints: {
+          can_mark_done: false,
+          can_validate: false,
+          can_reopen: false,
+          can_cancel: true,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
+      }),
+      error: null,
+      refetch: vi.fn(),
+    })
+
+    renderPage()
+
+    const button = screen.getByRole('button', { name: 'Annuler' })
+    expect(button.className).toContain('bg-[#E85553]')
+    expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
+  })
+
+  it('renders executionHeader navy badge in title section', () => {
+    const { container } = renderPage()
+
+    expect(container.querySelector('.bg-\\[\\#16435B\\]')).toBeTruthy()
+  })
+})

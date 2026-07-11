@@ -1,6 +1,9 @@
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 
+const skipSheetButtonClassName =
+  'flex-1 rounded-full border border-[#E8E6DF] bg-white font-semibold text-[#1a1a1a]'
+
 type ActionPlanExecutionSkipSheetProps = {
   open: boolean
   isPending: boolean
@@ -25,7 +28,7 @@ export function ActionPlanExecutionSkipSheet({
             type="button"
             size="sm"
             variant="outline"
-            className="flex-1 rounded-lg"
+            className={skipSheetButtonClassName}
             disabled={isPending}
             onClick={onConfirm}
           >
@@ -34,8 +37,8 @@ export function ActionPlanExecutionSkipSheet({
           <Button
             type="button"
             size="sm"
-            variant="ghost"
-            className="flex-1 rounded-lg"
+            variant="outline"
+            className={skipSheetButtonClassName}
             disabled={isPending}
             onClick={onClose}
           >

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 
 import { TerrainCard } from '@/components/ui/terrain'
+import { cn } from '@/lib/utils'
 
 import {
   canShowActionPlanTaskCreateObservation,
@@ -34,9 +35,12 @@ export function ActionPlanExecutionTaskList({
   )
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-3">
       {sortedTasks.map((task) => (
-        <TerrainCard key={task.id} className="p-0">
+        <TerrainCard
+          key={task.id}
+          className={cn('p-0', task.status === 'done' && 'shadow-sm')}
+        >
           <ActionPlanExecutionTaskRow
             task={task}
             canShowMarkDone={

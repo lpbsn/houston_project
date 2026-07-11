@@ -80,4 +80,32 @@ describe('CommentComposer', () => {
     })
     expect(screen.getByLabelText('Ajouter un commentaire')).toHaveProperty('value', '')
   })
+
+  it('renders reply variant as a single pill with integrated send button', () => {
+    const onSubmit = vi.fn()
+
+    render(
+      <CommentComposer
+        establishmentId="est-1"
+        variant="reply"
+        placeholder="Répondre à Alice…"
+        onSubmit={onSubmit}
+      />,
+    )
+
+    const pill = screen.getByLabelText('Ajouter un commentaire').closest('.rounded-full')
+    expect(pill).toBeTruthy()
+    expect(pill?.querySelector('[aria-label="Publier le commentaire"]')).toBeTruthy()
+    expect(pill?.querySelectorAll('textarea')).toHaveLength(1)
+
+    fireEvent.change(screen.getByLabelText('Ajouter un commentaire'), {
+      target: { value: 'Ma réponse' },
+    })
+    fireEvent.click(screen.getByLabelText('Publier le commentaire'))
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      body: 'Ma réponse',
+      mentionedMembershipIds: [],
+    })
+  })
 })

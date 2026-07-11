@@ -275,8 +275,22 @@ function formatActionPlanDeadlineBeforeLabel(endAt: string): string | null {
   return `avant ${timeLabel}`
 }
 
-function formatActionPlanRemainingMinutesLabel(remainingMs: number): string {
-  const remainingMinutes = Math.max(1, Math.ceil(remainingMs / (60 * 1000)))
+const MS_PER_MINUTE = 60_000
+const MS_PER_HOUR = 60 * MS_PER_MINUTE
+const MS_PER_DAY = 24 * MS_PER_HOUR
+
+function formatActionPlanRemainingTimeLabel(remainingMs: number): string {
+  if (remainingMs >= MS_PER_DAY) {
+    const days = Math.ceil(remainingMs / MS_PER_DAY)
+    return days === 1 ? '1 jour restant' : `${days} jours restants`
+  }
+  if (remainingMs >= MS_PER_HOUR) {
+    const hours = Math.floor(remainingMs / MS_PER_HOUR)
+    const minutes = Math.floor((remainingMs % MS_PER_HOUR) / MS_PER_MINUTE)
+    const timePart = minutes > 0 ? `${hours}h ${minutes}min` : `${hours}h`
+    return `${timePart} restante${hours > 1 || minutes > 0 ? 's' : ''}`
+  }
+  const remainingMinutes = Math.max(1, Math.ceil(remainingMs / MS_PER_MINUTE))
   return `${remainingMinutes} min restante${remainingMinutes > 1 ? 's' : ''}`
 }
 
@@ -328,7 +342,7 @@ export function computeActionPlanDeadlineState(options: {
     progressPct,
     remainingLabel:
       remainingMs > 0
-        ? formatActionPlanRemainingMinutesLabel(remainingMs)
+        ? formatActionPlanRemainingTimeLabel(remainingMs)
         : 'Échéance dépassée',
     beforeLabel: formatActionPlanDeadlineBeforeLabel(endAt),
     endAtLabel,

@@ -237,4 +237,24 @@ describe('ActionPlanExecutionTaskRow', () => {
     expect(statusRow?.className).toContain('justify-between')
     expect(screen.queryByRole('button', { name: 'Actions sur la tâche' })).toBeNull()
   })
+
+  it('renders task title with text-base font-semibold and circular checkbox', () => {
+    const { container } = render(
+      createElement(ActionPlanExecutionTaskRow, {
+        task: buildTask(),
+        canShowMarkDone: true,
+        canShowUnmarkDone: false,
+        canShowSecondaryActions: true,
+        isMutationPending: false,
+        onMarkDone: vi.fn(),
+        onUnmarkDone: vi.fn(),
+        onOpenActions: vi.fn(),
+      }),
+    )
+
+    const title = screen.getByText('Nettoyer la terrasse')
+    expect(title.className).toContain('text-base')
+    expect(title.className).toContain('font-semibold')
+    expect(container.querySelector('.rounded-full')).toBeTruthy()
+  })
 })

@@ -1,7 +1,14 @@
 import { motion, useReducedMotion } from 'framer-motion'
+import type { ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { terrain } from '@/lib/terrain-styles'
+import {
+  actionPlanExecutionDetailCancelBgClassName,
+  actionPlanExecutionDetailLifecycleButtonClassName,
+  actionPlanExecutionDetailMarkDoneBgClassName,
+  actionPlanExecutionDetailReopenBgClassName,
+  actionPlanExecutionDetailValidateBgClassName,
+} from '@/lib/terrain-styles'
 import { terrainTapProps } from '@/lib/terrain-motion'
 import { cn } from '@/lib/utils'
 
@@ -23,19 +30,26 @@ type ActionPlanExecutionLifecycleActionsProps = {
   onCancel: () => void
 }
 
-type LifecycleTone = 'success' | 'danger' | 'primary'
+type LifecycleTone = 'markDone' | 'validate' | 'reopen' | 'cancel'
 
-const lifecycleActionClassName =
-  'inline-flex h-10 flex-1 items-center justify-center rounded-2xl px-3 text-[14px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50'
+const lifecycleToneClassNames: Record<LifecycleTone, string> = {
+  markDone: actionPlanExecutionDetailMarkDoneBgClassName,
+  validate: actionPlanExecutionDetailValidateBgClassName,
+  reopen: actionPlanExecutionDetailReopenBgClassName,
+  cancel: actionPlanExecutionDetailCancelBgClassName,
+}
 
-function lifecycleToneClassName(tone: LifecycleTone): string {
-  if (tone === 'success') {
-    return terrain.successBg
-  }
-  if (tone === 'danger') {
-    return terrain.dangerBg
-  }
-  return terrain.primaryBg
+function getLifecycleButtonClassName(tone: LifecycleTone): string {
+  return cn(actionPlanExecutionDetailLifecycleButtonClassName, lifecycleToneClassNames[tone])
+}
+
+function renderMarkDoneLabel() {
+  return (
+    <span className="flex flex-col leading-tight">
+      <span>Marquer</span>
+      <span>terminé</span>
+    </span>
+  )
 }
 
 export function ActionPlanExecutionLifecycleActions({
@@ -49,25 +63,51 @@ export function ActionPlanExecutionLifecycleActions({
 }: ActionPlanExecutionLifecycleActionsProps) {
   const shouldReduceMotion = useReducedMotion()
 
-  const buttons: Array<{ key: string; label: string; onClick: () => void; tone: LifecycleTone }> =
-    []
+  const buttons: Array<{
+    key: string
+    label: string
+    ariaLabel?: string
+    content: ReactNode
+    onClick: () => void
+    tone: LifecycleTone
+  }> = []
 
   if (canShowActionPlanExecutionMarkDone(hints)) {
     buttons.push({
       key: 'mark-done',
       label: 'Marquer terminé',
+      ariaLabel: 'Marquer terminé',
+      content: renderMarkDoneLabel(),
       onClick: onMarkDone,
-      tone: 'success',
+      tone: 'markDone',
     })
   }
   if (canShowActionPlanExecutionValidate(hints)) {
-    buttons.push({ key: 'validate', label: 'Valider', onClick: onValidate, tone: 'success' })
+    buttons.push({
+      key: 'validate',
+      label: 'Valider',
+      content: 'Valider',
+      onClick: onValidate,
+      tone: 'validate',
+    })
   }
   if (canShowActionPlanExecutionReopen(hints)) {
-    buttons.push({ key: 'reopen', label: 'Rouvrir', onClick: onReopen, tone: 'primary' })
+    buttons.push({
+      key: 'reopen',
+      label: 'Rouvrir',
+      content: 'Rouvrir',
+      onClick: onReopen,
+      tone: 'reopen',
+    })
   }
   if (canShowActionPlanExecutionCancel(hints, { isTerminal })) {
-    buttons.push({ key: 'cancel', label: 'Annuler', onClick: onCancel, tone: 'danger' })
+    buttons.push({
+      key: 'cancel',
+      label: 'Annuler',
+      content: 'Annuler',
+      onClick: onCancel,
+      tone: 'cancel',
+    })
   }
 
   if (buttons.length === 0) {
@@ -75,23 +115,25 @@ export function ActionPlanExecutionLifecycleActions({
   }
 
   const renderActionButton = (
-    label: string,
+    content: ReactNode,
     onClick: () => void,
     key: string,
     tone: LifecycleTone,
+    ariaLabel?: string,
   ) => {
-    const toneClass = lifecycleToneClassName(tone)
+    const className = getLifecycleButtonClassName(tone)
 
     if (shouldReduceMotion || isPending) {
       return (
         <Button
           key={key}
           type="button"
-          className={cn('h-10 flex-1 rounded-2xl text-[14px] font-semibold text-white', toneClass)}
+          className={className}
           disabled={isPending}
+          aria-label={ariaLabel}
           onClick={onClick}
         >
-          {label}
+          {content}
         </Button>
       )
     }
@@ -100,20 +142,21 @@ export function ActionPlanExecutionLifecycleActions({
       <motion.button
         key={key}
         type="button"
-        className={cn(lifecycleActionClassName, toneClass)}
+        className={className}
         disabled={isPending}
+        aria-label={ariaLabel}
         onClick={onClick}
         {...terrainTapProps(shouldReduceMotion)}
       >
-        {label}
+        {content}
       </motion.button>
     )
   }
 
   return (
     <div className="flex w-full gap-2">
-      {buttons.map(({ key, label, onClick, tone }) =>
-        renderActionButton(label, onClick, key, tone),
+      {buttons.map(({ key, content, onClick, tone, ariaLabel }) =>
+        renderActionButton(content, onClick, key, tone, ariaLabel),
       )}
     </div>
   )

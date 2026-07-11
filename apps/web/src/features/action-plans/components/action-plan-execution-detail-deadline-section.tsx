@@ -1,6 +1,7 @@
 import { Timer } from 'lucide-react'
 
 import { TerrainCard } from '@/components/ui/terrain'
+import { actionPlanExecutionDetailNavyBgClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import {
@@ -48,7 +49,7 @@ export function ActionPlanExecutionDetailDeadlineSection({
             <div
               className={cn(
                 'h-full rounded-full transition-[width]',
-                showOverdue ? 'bg-[#E24B4A]' : 'bg-[#1B4FD8]',
+                showOverdue ? 'bg-[#E24B4A]' : actionPlanExecutionDetailNavyBgClassName,
               )}
               style={{ width: `${deadlineState.progressPct}%` }}
               role="progressbar"
@@ -62,8 +63,8 @@ export function ActionPlanExecutionDetailDeadlineSection({
             {deadlineState.remainingLabel ? (
               <span
                 className={cn(
-                  'inline-flex items-center gap-1 font-medium',
-                  showOverdue ? 'text-[#E24B4A]' : 'text-[#1a1a1a]',
+                  'inline-flex items-center gap-1 font-semibold',
+                  showOverdue ? 'text-[#E24B4A]' : 'text-[#222222]',
                 )}
               >
                 <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden />

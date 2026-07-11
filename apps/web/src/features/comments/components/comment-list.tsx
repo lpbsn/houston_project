@@ -158,7 +158,7 @@ function ExecutionCommentList({
   }
 
   return (
-    <ul className="mt-3 flex flex-col gap-4" aria-label="Liste des commentaires">
+    <ul className="mt-4 flex flex-col gap-5" aria-label="Liste des commentaires">
       {comments.map((item) => {
         if (isExecutionInheritedSignalItem(item)) {
           return (

@@ -2,7 +2,6 @@ import type { ActionPlanExecutionDetail } from '../types'
 import { ActionPlanExecutionDetailAssigneesSection } from './action-plan-execution-detail-assignees-section'
 import { ActionPlanExecutionDetailDeadlineSection } from './action-plan-execution-detail-deadline-section'
 import { ActionPlanExecutionDetailDescriptionSection } from './action-plan-execution-detail-description-section'
-import { ActionPlanExecutionDetailPoleSummarySection } from './action-plan-execution-detail-pole-summary-section'
 import { ActionPlanExecutionDetailTitleSection } from './action-plan-execution-detail-title-section'
 import { isActionPlanExecutionTerminal } from '../lib/action-plan-display'
 
@@ -32,7 +31,6 @@ export function ActionPlanExecutionDetailHeader({
         currentMembershipId={currentMembershipId}
       />
       <ActionPlanExecutionDetailDescriptionSection execution={execution} />
-      <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
     </div>
   )
 }

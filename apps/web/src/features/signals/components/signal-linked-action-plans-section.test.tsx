@@ -55,6 +55,18 @@ describe('SignalLinkedActionPlansSection', () => {
     expect(screen.getByText('>')).toBeTruthy()
   })
 
+  it('renders detail status badge with teal background for in_progress', () => {
+    const { container } = render(
+      createElement(SignalLinkedActionPlansSection, {
+        executions: [buildLinkedExecution()],
+        onSelect: vi.fn(),
+      }),
+    )
+
+    expect(container.querySelector('.bg-\\[\\#3A7A96\\]')).toBeTruthy()
+    expect(container.querySelector('.bg-\\[\\#16435B\\]')).toBeNull()
+  })
+
   it('calls onSelect with execution id on card click', () => {
     const onSelect = vi.fn()
 

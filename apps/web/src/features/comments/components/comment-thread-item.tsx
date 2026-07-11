@@ -3,6 +3,7 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { HoustonBadge } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/lib/display-names'
+import { commentThread } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { formatCommentRelativeTime } from '../lib/comment-display'
@@ -108,7 +109,7 @@ function CommentBubble({
 
   return (
     <div className="relative min-w-0 flex-1">
-      <div className="rounded-2xl bg-[#F0F2F5] px-3 py-2">
+      <div className={cn('rounded-2xl px-4 py-3', commentThread.bubbleBg)}>
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="text-[13px] font-semibold text-[#1a1a1a]">{comment.author.display_name}</p>
           {showOrigin ? <CommentOriginBadge origin={comment.origin} /> : null}
@@ -126,7 +127,10 @@ function CommentBubble({
 function ResolvedTickBadge() {
   return (
     <span
-      className="absolute -bottom-1 right-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[#1B4FD8] text-white"
+      className={cn(
+        'absolute -bottom-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white text-white',
+        commentThread.resolvedBadge,
+      )}
       aria-hidden
     >
       <Check className="h-3 w-3" strokeWidth={3} />
@@ -181,8 +185,13 @@ function CommentMetaRow({
   }
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1 pl-1">
-      <span className="inline-flex min-h-11 items-center px-1 text-[12px] font-semibold text-[#65676B]">
+    <div className="flex flex-wrap items-center gap-1.5 pl-1">
+      <span
+        className={cn(
+          'inline-flex min-h-8 items-center px-1 text-[12px] font-semibold',
+          commentThread.metaMuted,
+        )}
+      >
         {formatCommentRelativeTime(createdAt)}
       </span>
       {actions.map((action) => (
@@ -190,8 +199,8 @@ function CommentMetaRow({
           key={action.key}
           type="button"
           className={cn(
-            'inline-flex min-h-11 items-center px-2 text-[12px] font-semibold',
-            action.active ? 'text-[#137333]' : 'text-[#65676B]',
+            'inline-flex min-h-8 items-center px-1.5 text-[12px] font-semibold',
+            action.active ? commentThread.resolvedLabel : commentThread.metaMuted,
           )}
           disabled={disabled}
           onClick={action.onClick}
@@ -319,15 +328,13 @@ export function ActionCommentThreadCard({
         />
 
         {isReplying ? (
-          <div className="mt-1">
+          <div className="mt-1.5">
             <CommentComposer
               variant="reply"
               establishmentId={establishmentId}
               disabled={disabled || isReplyPending}
               errorMessage={replyErrorMessage}
               placeholder={`Répondre à ${item.author.display_name}…`}
-              showCancel
-              onCancel={() => setIsReplying(false)}
               onSubmit={({ body, mentionedMembershipIds }) => {
                 onReply(
                   {
@@ -347,10 +354,13 @@ export function ActionCommentThreadCard({
         ) : null}
 
         {replyCount > 0 ? (
-          <div className="mt-1">
+          <div>
             <button
               type="button"
-              className="flex min-h-11 items-center gap-1 px-1 text-[12px] font-semibold text-[#65676B]"
+              className={cn(
+                'flex min-h-7 items-center gap-0.5 px-1 py-0.5 text-[12px] font-semibold',
+                commentThread.metaMuted,
+              )}
               onClick={() => setExpanded((current) => !current)}
               aria-expanded={expanded}
               aria-label={
@@ -373,7 +383,12 @@ export function ActionCommentThreadCard({
             </button>
 
             {expanded ? (
-              <ul className={cn('mt-1 flex flex-col gap-3 border-l-2 border-[#E4E6EB] pl-3')}>
+              <ul
+                className={cn(
+                  'ml-0.5 flex flex-col gap-1 border-l pl-2',
+                  commentThread.threadLine,
+                )}
+              >
                 {(item.replies ?? []).map((reply) => (
                   <li
                     key={reply.id}

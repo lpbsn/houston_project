@@ -28,7 +28,7 @@ export function ActionPlanTaskDetailLayout({
   const bottomBlockRowClass = description ? 'row-start-3' : 'row-start-2'
 
   return (
-    <div className={cn('px-4 py-2.5', className)}>
+    <div className={cn('px-4 py-3', className)}>
       <div
         className={cn(
           'grid items-center gap-x-1',
@@ -51,7 +51,7 @@ export function ActionPlanTaskDetailLayout({
         {description ? (
           <div
             className={cn(
-              'row-start-2 mt-0 min-w-0 break-words whitespace-pre-wrap text-xs text-[#7D7B75]',
+              'row-start-2 mt-0 min-w-0 break-words whitespace-pre-wrap text-sm text-[#7D7B75]',
               contentColStart,
             )}
           >

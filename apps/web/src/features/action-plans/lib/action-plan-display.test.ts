@@ -369,6 +369,9 @@ describe('buildActionPlanTemplatePoleSummaries', () => {
 })
 
 describe('computeActionPlanDeadlineState', () => {
+  const startAt = '2026-07-09T12:00:00.000Z'
+  const now = Date.parse('2026-07-10T12:00:00.000Z')
+
   it('returns progress mode when start and end are available', () => {
     const state = computeActionPlanDeadlineState({
       startAt: '2026-07-07T09:00:00.000Z',
@@ -381,6 +384,61 @@ describe('computeActionPlanDeadlineState', () => {
     expect(state?.progressPct).toBeGreaterThan(0)
     expect(state?.remainingLabel).toContain('min restante')
     expect(state?.beforeLabel).toMatch(/^avant /)
+  })
+
+  it('formats remaining time in minutes when less than one hour', () => {
+    const state = computeActionPlanDeadlineState({
+      startAt,
+      endAt: '2026-07-10T12:45:00.000Z',
+      isTerminal: false,
+      now,
+    })
+
+    expect(state?.remainingLabel).toBe('45 min restantes')
+  })
+
+  it('formats remaining time in hours and minutes when between one and twenty-four hours', () => {
+    const state = computeActionPlanDeadlineState({
+      startAt,
+      endAt: '2026-07-10T13:30:00.000Z',
+      isTerminal: false,
+      now,
+    })
+
+    expect(state?.remainingLabel).toBe('1h 30min restantes')
+  })
+
+  it('formats remaining time in hours only when minutes are zero', () => {
+    const state = computeActionPlanDeadlineState({
+      startAt,
+      endAt: '2026-07-10T14:00:00.000Z',
+      isTerminal: false,
+      now,
+    })
+
+    expect(state?.remainingLabel).toBe('2h restantes')
+  })
+
+  it('formats remaining time in days when at least twenty-four hours remain', () => {
+    const state = computeActionPlanDeadlineState({
+      startAt,
+      endAt: '2026-07-13T12:00:00.000Z',
+      isTerminal: false,
+      now,
+    })
+
+    expect(state?.remainingLabel).toBe('3 jours restants')
+  })
+
+  it('rounds up remaining days when hours are left over', () => {
+    const state = computeActionPlanDeadlineState({
+      startAt,
+      endAt: '2026-07-12T11:00:00.000Z',
+      isTerminal: false,
+      now,
+    })
+
+    expect(state?.remainingLabel).toBe('2 jours restants')
   })
 
   it('falls back to simple mode without start_at', () => {
