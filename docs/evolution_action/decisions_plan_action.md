@@ -113,21 +113,15 @@ Deux flux distincts : **recalcul automatique** depuis les exécutions, et **rés
 
 Déclenché par une mutation d'exécution liée (mark-done, cancel, reopen, etc.).
 
-Résoudre le signal automatiquement quand :
-
-```txt
-aucune exécution liée en statut actif
-ET au moins une exécution en done
-→ signal RESOLVED
-```
-
-Si, suite à des annulations côté exécutions (individuelles ou successives), toutes les exécutions liées sont canceled et aucune n'est done :
+Si, suite à des annulations côté exécutions (individuelles ou successives), toutes les exécutions liées sont canceled :
 
 ```txt
 signal repasse OPEN
 ```
 
 Ce cas concerne uniquement le recalcul automatique. Un signal déjà résolu manuellement ne redevient pas OPEN pour cette raison seule.
+
+Les exécutions en `done` (seules ou en mix avec `canceled`) ne déclenchent **pas** de résolution automatique du signal. La clôture en `resolved` reste une action manuelle sur le signal.
 
 #### Résolution manuelle (signal → exécutions)
 
@@ -146,13 +140,13 @@ La résolution manuelle **prime** sur le recalcul automatique : tant que le sign
 
 #### Réouverture d'une exécution liée
 
-Si une exécution liée est rouverte après résolution du signal (manuelle ou automatique) :
+Si une exécution liée est rouverte après résolution **manuelle** du signal :
 
 ```txt
 signal repasse IN_PROGRESS
 ```
 
-**Port Lot 2D :** `sync_signal_after_execution_change` pour le recalcul automatique ; flux resolve manuel distinct. Tests obligatoires : auto-resolve (done) ; annulations successives côté exécutions → OPEN si aucune done ; resolve manuel → cancel actives + signal RESOLVED même si toutes canceled ensuite ; reopen exécution → IN_PROGRESS ; résolution manuelle prime sur recalcul auto.
+**Port Lot 2D :** `sync_signal_after_execution_change` pour le recalcul automatique (annulations → OPEN) ; flux resolve manuel distinct. Tests obligatoires : annulations successives côté exécutions → OPEN ; mark-done / validate ne résout pas le signal ; resolve manuel → cancel actives + signal RESOLVED même si toutes canceled ensuite ; reopen exécution après resolve manuel → IN_PROGRESS ; résolution manuelle prime sur recalcul auto.
 
 ### Decision 26.6 — Catalogue multi-pôles {#decision-26-6}
 

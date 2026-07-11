@@ -33,6 +33,7 @@ def feed_sort_case_expressions() -> tuple[Case, Case]:
     status_group_rank = Case(
         When(status__in=[Signal.Status.OPEN, Signal.Status.IN_PROGRESS], then=Value(0)),
         When(status=Signal.Status.RESOLVED, then=Value(1)),
+        When(status=Signal.Status.CANCELED, then=Value(2)),
         default=Value(2),
         output_field=IntegerField(),
     )
@@ -50,6 +51,8 @@ def status_group_rank_for_signal(signal: Signal) -> int:
         return 0
     if signal.status == Signal.Status.RESOLVED:
         return 1
+    if signal.status == Signal.Status.CANCELED:
+        return 2
     return 2
 
 

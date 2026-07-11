@@ -30,15 +30,15 @@ describe('normalizeSignalFeedFilters', () => {
     expect(a.activitySubjectIds).toEqual([SAMPLE_SUBJECT_ID])
   })
 
-  it('drops non-feed statuses and invalid activity subject ids', () => {
+  it('keeps feed statuses and drops invalid activity subject ids', () => {
     expect(
       normalizeSignalFeedFilters({
         ...EMPTY_SIGNAL_FEED_FILTERS,
-        statuses: ['open', 'canceled' as 'open'],
+        statuses: ['open', 'canceled'],
         activitySubjectIds: ['not-a-uuid'],
       }),
     ).toEqual({
-      statuses: ['open'],
+      statuses: ['canceled', 'open'],
       businessUnitKeys: [],
       activitySubjectIds: [],
     })
@@ -74,6 +74,16 @@ describe('appendSignalFeedFiltersToSearchParams', () => {
     expect(params.get('business_unit_keys')).toBe('bar,restaurant')
     expect(params.get('activity_subject_ids')).toBe(SAMPLE_SUBJECT_ID)
   })
+
+  it('serializes canceled status filter', () => {
+    const params = new URLSearchParams()
+    appendSignalFeedFiltersToSearchParams(params, {
+      ...EMPTY_SIGNAL_FEED_FILTERS,
+      statuses: ['canceled'],
+    })
+
+    expect(params.get('statuses')).toBe('canceled')
+  })
 })
 
 describe('formatStatusFilterSummary', () => {
@@ -85,6 +95,12 @@ describe('formatStatusFilterSummary', () => {
         statuses: ['open'],
       }),
     ).toBe('En attente ▾')
+    expect(
+      formatStatusFilterSummary({
+        ...EMPTY_SIGNAL_FEED_FILTERS,
+        statuses: ['canceled'],
+      }),
+    ).toBe('Annulé ▾')
   })
 })
 

@@ -3,7 +3,94 @@ import { describe, expect, it } from 'vitest'
 import {
   formatActionPlanFeedMetaParts,
   formatActionPlanFeedTaskProgressLabel,
+  getActionPlanFeedProgressState,
+  getActionPlanFeedSidebarState,
 } from './action-plan-execution-feed-card-display'
+
+const NOW = Date.parse('2026-07-10T12:00:00Z')
+
+describe('getActionPlanFeedSidebarState', () => {
+  it('returns countdown in hours when end_at is within 24 hours', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW)).toEqual({
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: '4h',
+    })
+  })
+
+  it('returns countdown in days when end_at is at least 24 hours away', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-13T12:00:00Z', NOW)).toEqual({
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: '3j',
+    })
+  })
+
+  it('returns no_deadline when end_at is absent', () => {
+    expect(getActionPlanFeedSidebarState(null, NOW)).toEqual({
+      variant: 'no_deadline',
+    })
+  })
+
+  it('returns no_deadline when end_at is invalid', () => {
+    expect(getActionPlanFeedSidebarState('not-a-date', NOW)).toEqual({
+      variant: 'no_deadline',
+    })
+  })
+
+  it('returns overdue only when isOverdue is true', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW, true)).toEqual({
+      variant: 'overdue',
+    })
+  })
+
+  it('returns neutral 0h countdown when isOverdue is false and end_at is in the past', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-10T11:00:00Z', NOW, false)).toEqual({
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: '0h',
+    })
+  })
+
+  it('uses a minimum of 1 hour for sub-day remaining time when isOverdue is false', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-10T12:15:00Z', NOW)).toEqual({
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: '1h',
+    })
+  })
+})
+
+describe('getActionPlanFeedProgressState', () => {
+  it('returns clamped progress state', () => {
+    expect(getActionPlanFeedProgressState({ task_count: 5, treated_task_count: 2 })).toEqual({
+      total: 5,
+      filled: 2,
+      fractionLabel: '2/5',
+    })
+  })
+
+  it('clamps filled when treated_task_count exceeds task_count', () => {
+    expect(getActionPlanFeedProgressState({ task_count: 4, treated_task_count: 9 })).toEqual({
+      total: 4,
+      filled: 4,
+      fractionLabel: '4/4',
+    })
+  })
+
+  it('clamps negative values to zero', () => {
+    expect(getActionPlanFeedProgressState({ task_count: -2, treated_task_count: -1 })).toBeNull()
+    expect(getActionPlanFeedProgressState({ task_count: 3, treated_task_count: -1 })).toEqual({
+      total: 3,
+      filled: 0,
+      fractionLabel: '0/3',
+    })
+  })
+
+  it('returns null when task_count is zero', () => {
+    expect(getActionPlanFeedProgressState({ task_count: 0, treated_task_count: 0 })).toBeNull()
+  })
+})
 
 describe('formatActionPlanFeedTaskProgressLabel', () => {
   it('returns null when there are no tasks', () => {

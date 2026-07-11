@@ -37,11 +37,12 @@ def _create_signal(
     return signal
 
 
-def test_feed_includes_open_in_progress_and_resolved(api_client):
-    membership = build_api_membership()
+def test_feed_includes_open_in_progress_resolved_and_canceled(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     _create_signal(membership, title="Open", status=Signal.Status.OPEN)
     _create_signal(membership, title="Progress", status=Signal.Status.IN_PROGRESS)
     _create_signal(membership, title="Done", status=Signal.Status.RESOLVED)
+    _create_signal(membership, title="Canceled", status=Signal.Status.CANCELED)
     token = login(api_client, user=membership.user)
 
     response = api_client.get(
@@ -55,12 +56,12 @@ def test_feed_includes_open_in_progress_and_resolved(api_client):
         Signal.Status.OPEN,
         Signal.Status.IN_PROGRESS,
         Signal.Status.RESOLVED,
+        Signal.Status.CANCELED,
     }
 
 
-def test_feed_excludes_canceled_and_archived(api_client):
+def test_feed_excludes_archived(api_client):
     membership = build_api_membership()
-    _create_signal(membership, status=Signal.Status.CANCELED)
     _create_signal(membership, status=Signal.Status.ARCHIVED)
     token = login(api_client, user=membership.user)
 
@@ -108,6 +109,35 @@ def test_feed_orders_all_active_before_resolved(api_client):
     ids = [item["id"] for item in response.json()["items"]]
     assert ids.index(str(strong_active.id)) < ids.index(str(weak_active.id))
     assert ids.index(str(weak_active.id)) < ids.index(str(resolved.id))
+
+
+def test_feed_orders_resolved_before_canceled(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    now = timezone.now()
+    canceled = _create_signal(
+        membership,
+        title="Canceled recent",
+        status=Signal.Status.CANCELED,
+        is_pinned=True,
+        last_activity_at=now,
+    )
+    resolved = _create_signal(
+        membership,
+        title="Resolved older",
+        status=Signal.Status.RESOLVED,
+        is_pinned=False,
+        last_activity_at=now - timedelta(days=1),
+    )
+    token = login(api_client, user=membership.user)
+
+    response = api_client.get(
+        signal_feed_url(membership.establishment_id) + "?view_mode=general",
+        **auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    ids = [item["id"] for item in response.json()["items"]]
+    assert ids.index(str(resolved.id)) < ids.index(str(canceled.id))
 
 
 def test_apply_feed_sorting_active_before_dirty_resolved():

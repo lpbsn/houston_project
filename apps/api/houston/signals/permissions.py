@@ -78,10 +78,12 @@ def can_view_signal_detail(
         return False
     if signal.establishment_id != membership.establishment_id:
         return False
-    if signal.status in FEED_SIGNAL_STATUSES:
-        return can_view_signal_feed(membership)
+    if not can_view_signal_feed(membership):
+        return False
     if signal.status == Signal.Status.CANCELED:
         return signal_pole_visible_to_membership(membership, signal)
+    if signal.status in FEED_SIGNAL_STATUSES:
+        return True
     return False
 
 

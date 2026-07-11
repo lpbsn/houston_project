@@ -142,11 +142,11 @@ Frontend display states may include:
 | **Action Plan Execution Feed** | Executions where user is **assignee**, plus Manager scope via execution teams, plus **mention on execution comment** (`action_plan_execution_personal_feed_q`). Owner/Director Ma vue is not all establishment executions (unlike Signal Feed general). | **Owner/Director:** all feed-visible establishment executions. **Manager:** scoped BUs + own assignments. **Staff:** own assignments only. |
 
 **Action Plan Execution Feed — inclusion rules (implemented):**
-- `status IN (in_progress, pending_validation)` (`EXECUTION_FEED_STATUSES`).
+- `status IN (pending_validation, in_progress, done, canceled)` (`EXECUTION_FEED_STATUSES`).
 - `(visible_from IS NULL OR now >= visible_from)`.
-- Terminal `done` / `canceled` excluded from active feed; detail remains accessible.
-- `end_at` overdue does not remove items (`is_overdue` indicator only).
-- **Sorting (implemented):** backend-owned. Personal feed pins (`ActionPlanExecutionFeedPin`, per membership) sort first: pinned items at the top of the feed regardless of status (`-is_feed_pinned`, `pinned_at ASC` among pins), then `pending_validation` before `in_progress`, then within each status: overdue (`end_at < as_of`) → upcoming → no `end_at` (nulls last), nearest `end_at` ascending, tie-break `created_at desc`, `id desc`. Frontend renders pinned items in a flat block at the top (no section label), then groups unpinned items by status without re-sorting. Pagination cursor freezes `as_of` for stable overdue buckets and `is_overdue` across pages.
+- Terminal `done` / `canceled` included in feed; detail remains accessible for all statuses.
+- `end_at` overdue does not remove items (`is_overdue` indicator only for active statuses).
+- **Sorting (implemented):** backend-owned. Personal feed pins (`ActionPlanExecutionFeedPin`, per membership) sort first: pinned items at the top of the feed regardless of status (`-is_feed_pinned`, `pinned_at ASC` among pins), then global status order: `pending_validation` → `in_progress` → `done` → `canceled`. Within active statuses: overdue (`end_at < as_of`) → upcoming → no `end_at` (nulls last), nearest `end_at` ascending, then `-last_activity_at`, `-created_at`, `-id`. Within terminal statuses: `-last_activity_at`, `-created_at`, `-id`. Frontend renders pinned items in a flat block at the top (no section label), then groups unpinned items by status without re-sorting. Sections **Terminés** and **Annulés** are collapsed by default in the UI. Pagination cursor freezes `as_of` for stable overdue buckets and `is_overdue` across pages.
 - **Personal pin (implemented):** `POST .../action-plan-executions/{id}/pin/` and `.../unpin/` — preference per membership, not shared (distinct from establishment-wide Signal pin). Any member who sees the item in feed may pin for themselves (`can_pin` hint). No visual card change; order only.
 - Lazy schedule materialization on feed read (`ensure_visible_action_plan_executions_materialized`) — horizon 3 days, stale guard 30 min. See [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md).
 
@@ -233,9 +233,9 @@ Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Fe
 | Active member requests `view_mode=personal` with BusinessUnit scopes | Returns feed-visible Signals where affected or responsible BusinessUnit matches scope |
 | Active member requests `view_mode=personal` without BusinessUnit scopes | Returns empty list (not an error) for Manager/Staff |
 | Owner/Director requests `view_mode=personal` | All feed-visible establishment Signals |
-| Active member requests `view_mode=general` | Returns all feed-visible establishment Signals |
-| `resolved` Signals | Included in default feed-visible results |
-| `canceled` / `archived` Signals | Excluded from default feed-visible results |
+| Active member requests `view_mode=general` | Returns feed-visible establishment Signals; Manager/Staff see `canceled` only when pole-scoped |
+| `resolved` and `canceled` Signals | Included in default feed-visible results |
+| `archived` Signals | Excluded from default feed-visible results |
 | Cross-establishment access | 404 when establishment does not match session membership |
 | Inactive membership | 403 / no feed access |
 

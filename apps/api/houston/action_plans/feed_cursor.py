@@ -5,21 +5,25 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from django.db.models import Case, F, IntegerField, OrderBy, Q, QuerySet, Value, When
+from django.db.models import Case, DateTimeField, F, IntegerField, OrderBy, Q, QuerySet, Value, When
 from django.utils.dateparse import parse_datetime
 
 from houston.action_plans.constants import (
-    EXECUTION_FEED_STATUSES,
+    ACTIVE_EXECUTION_STATUSES,
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    TERMINAL_EXECUTION_STATUSES,
 )
 from houston.action_plans.models import ActionPlanExecution
 
-CURSOR_PART_COUNT = 8
+CURSOR_PART_COUNT = 9
 
 DEADLINE_BUCKET_OVERDUE = 0
 DEADLINE_BUCKET_UPCOMING = 1
 DEADLINE_BUCKET_NO_DEADLINE = 2
+DEADLINE_BUCKET_TERMINAL = 3
 
 
 class ActionPlanExecutionFeedCursorError(Exception):
@@ -36,6 +40,7 @@ class ActionPlanExecutionFeedCursor:
     status_rank: int
     deadline_bucket: int
     end_at: datetime | None
+    last_activity_at: datetime
     created_at: datetime
     item_id: uuid.UUID
 
@@ -48,7 +53,7 @@ def execution_deadline_bucket(
 ) -> int:
     if end_at is None:
         return DEADLINE_BUCKET_NO_DEADLINE
-    if status in EXECUTION_FEED_STATUSES and end_at < as_of:
+    if status in ACTIVE_EXECUTION_STATUSES and end_at < as_of:
         return DEADLINE_BUCKET_OVERDUE
     return DEADLINE_BUCKET_UPCOMING
 
@@ -58,13 +63,19 @@ def status_rank_for_execution(status: str) -> int:
         return 0
     if status == EXECUTION_STATUS_IN_PROGRESS:
         return 1
-    return 2
+    if status == EXECUTION_STATUS_DONE:
+        return 2
+    if status == EXECUTION_STATUS_CANCELED:
+        return 3
+    return 4
 
 
 def deadline_bucket_for_execution(
     execution: ActionPlanExecution,
     as_of: datetime,
 ) -> int:
+    if execution.status in TERMINAL_EXECUTION_STATUSES:
+        return DEADLINE_BUCKET_TERMINAL
     return execution_deadline_bucket(
         end_at=execution.end_at,
         status=execution.status,
@@ -72,26 +83,46 @@ def deadline_bucket_for_execution(
     )
 
 
+def sort_end_at_for_execution(execution: ActionPlanExecution) -> datetime | None:
+    if execution.status in TERMINAL_EXECUTION_STATUSES:
+        return None
+    return execution.end_at
+
+
 def action_plan_execution_feed_sort_case_expressions(
     as_of: datetime,
-) -> tuple[Case, Case]:
+) -> tuple[Case, Case, Case]:
     status_rank = Case(
         When(status=EXECUTION_STATUS_PENDING_VALIDATION, then=Value(0)),
         When(status=EXECUTION_STATUS_IN_PROGRESS, then=Value(1)),
-        default=Value(2),
+        When(status=EXECUTION_STATUS_DONE, then=Value(2)),
+        When(status=EXECUTION_STATUS_CANCELED, then=Value(3)),
+        default=Value(4),
         output_field=IntegerField(),
     )
     deadline_bucket = Case(
+        When(
+            status__in=TERMINAL_EXECUTION_STATUSES,
+            then=Value(DEADLINE_BUCKET_TERMINAL),
+        ),
         When(end_at__isnull=True, then=Value(DEADLINE_BUCKET_NO_DEADLINE)),
         When(
             end_at__lt=as_of,
-            status__in=EXECUTION_FEED_STATUSES,
+            status__in=ACTIVE_EXECUTION_STATUSES,
             then=Value(DEADLINE_BUCKET_OVERDUE),
         ),
         default=Value(DEADLINE_BUCKET_UPCOMING),
         output_field=IntegerField(),
     )
-    return status_rank, deadline_bucket
+    feed_sort_end_at = Case(
+        When(
+            status__in=TERMINAL_EXECUTION_STATUSES,
+            then=Value(None, output_field=DateTimeField()),
+        ),
+        default=F("end_at"),
+        output_field=DateTimeField(),
+    )
+    return status_rank, deadline_bucket, feed_sort_end_at
 
 
 def action_plan_execution_feed_order_by() -> tuple[object, ...]:
@@ -100,7 +131,8 @@ def action_plan_execution_feed_order_by() -> tuple[object, ...]:
         OrderBy(F("feed_pinned_at"), nulls_last=True),
         "status_rank",
         "deadline_bucket",
-        OrderBy(F("end_at"), nulls_last=True),
+        OrderBy(F("feed_sort_end_at"), nulls_last=True),
+        "-last_activity_at",
         "-created_at",
         "-id",
     )
@@ -125,7 +157,8 @@ def encode_action_plan_execution_feed_cursor(
 ) -> str:
     is_feed_pinned = bool(getattr(execution, "is_feed_pinned", False))
     feed_pinned_at = getattr(execution, "feed_pinned_at", None)
-    end_at_part = "" if execution.end_at is None else execution.end_at.isoformat()
+    sort_end_at = sort_end_at_for_execution(execution)
+    end_at_part = "" if sort_end_at is None else sort_end_at.isoformat()
     pinned_at_part = "" if feed_pinned_at is None else feed_pinned_at.isoformat()
     raw = "|".join(
         [
@@ -135,6 +168,7 @@ def encode_action_plan_execution_feed_cursor(
             str(status_rank_for_execution(execution.status)),
             str(deadline_bucket_for_execution(execution, as_of)),
             end_at_part,
+            execution.last_activity_at.isoformat(),
             execution.created_at.isoformat(),
             str(execution.id),
         ]
@@ -157,11 +191,12 @@ def parse_action_plan_execution_feed_cursor(
         status_rank = int(parts[3])
         deadline_bucket = int(parts[4])
         end_at = parse_datetime(parts[5]) if parts[5] else None
-        created_at = parse_datetime(parts[6])
-        item_id = uuid.UUID(parts[7])
+        last_activity_at = parse_datetime(parts[6])
+        created_at = parse_datetime(parts[7])
+        item_id = uuid.UUID(parts[8])
     except (TypeError, ValueError) as exc:
         raise ActionPlanExecutionFeedCursorError() from exc
-    if as_of is None or created_at is None:
+    if as_of is None or last_activity_at is None or created_at is None:
         raise ActionPlanExecutionFeedCursorError()
     return ActionPlanExecutionFeedCursor(
         as_of=as_of,
@@ -172,6 +207,7 @@ def parse_action_plan_execution_feed_cursor(
         end_at=end_at,
         created_at=created_at,
         item_id=item_id,
+        last_activity_at=last_activity_at,
     )
 
 
@@ -196,10 +232,15 @@ def _after_cursor_filter(cursor: ActionPlanExecutionFeedCursor) -> Q:
     prefix &= Q(deadline_bucket=cursor.deadline_bucket)
 
     if cursor.end_at is not None:
-        q |= prefix & (Q(end_at__gt=cursor.end_at) | Q(end_at__isnull=True))
-        prefix &= Q(end_at=cursor.end_at)
+        q |= prefix & (
+            Q(feed_sort_end_at__gt=cursor.end_at) | Q(feed_sort_end_at__isnull=True)
+        )
+        prefix &= Q(feed_sort_end_at=cursor.end_at)
     else:
-        prefix &= Q(end_at__isnull=True)
+        prefix &= Q(feed_sort_end_at__isnull=True)
+
+    q |= prefix & Q(last_activity_at__lt=cursor.last_activity_at)
+    prefix &= Q(last_activity_at=cursor.last_activity_at)
 
     q |= prefix & Q(created_at__lt=cursor.created_at)
     prefix &= Q(created_at=cursor.created_at)
@@ -214,17 +255,14 @@ def apply_action_plan_execution_feed_cursor(
     *,
     membership,
 ) -> QuerySet[ActionPlanExecution]:
-    from houston.action_plans.selectors import annotate_action_plan_execution_feed_pins
-
-    status_rank, deadline_bucket = action_plan_execution_feed_sort_case_expressions(
-        cursor.as_of,
+    from houston.action_plans.selectors import (
+        annotate_action_plan_execution_feed_sort_keys,
     )
-    return annotate_action_plan_execution_feed_pins(
+
+    return annotate_action_plan_execution_feed_sort_keys(
         queryset,
         membership=membership,
-    ).annotate(
-        status_rank=status_rank,
-        deadline_bucket=deadline_bucket,
+        as_of=cursor.as_of,
     ).filter(_after_cursor_filter(cursor)).order_by(
         *action_plan_execution_feed_order_by(),
     )

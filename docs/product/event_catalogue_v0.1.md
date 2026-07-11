@@ -182,7 +182,6 @@ Operational WebSocket invalidation is documented in [realtime_domain.md](domains
 | Linked `create_action`: Signal `open→in_progress`, optional unpin | yes | `action.created` (+ `signal.updated` only if unpin) |
 | `reopen_action`: Signal `resolved→in_progress` | yes | `action.updated` + `signal.updated` |
 | All linked actions canceled → Signal reopens to `open` | yes | `action.updated` + `signal.updated` |
-| `mark_done` / `validate` → auto `resolve_signal` | yes | `action.updated` + `signal.updated` |
 
 Frontend: `invalidateActionMutationSurfaces` also invalidates Signal queries ([apps/web/src/lib/query-invalidation.ts](apps/web/src/lib/query-invalidation.ts)).
 
@@ -289,8 +288,8 @@ The following domain docs are stale relative to current code. **Transport truth:
 | Field | Value |
 |---|---|
 | domain | signal |
-| service | `signals/services.py::resolve_signal` or `actions/services.py::sync_signal_after_action_change` (auto) |
-| actor | membership (manual) or `system` (auto after all linked actions terminal) |
+| service | `signals/services.py::resolve_signal` (manual only) |
+| actor | membership (manual resolve) |
 | subject_type / subject_id | `signal` / `signal.id` |
 | establishment_id | `signal.establishment_id` |
 | emission_moment | After terminal transition `save` (unpin), before `on_commit` → `signal.updated` |
@@ -300,7 +299,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | notification_candidate | conditional |
 | notification_lot | **later** |
 | notification_reason | Situation closed — notify linked action stakeholders post-Lot 1 |
-| tests_futurs | Auto-resolve after action completion emits `signal.updated` |
+| tests_futurs | Manual resolve emits `signal.updated` |
 
 #### `signal.canceled`
 
@@ -413,7 +412,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | notification_candidate | yes |
 | notification_lot | **later** |
 | notification_reason | Creator info post-Lot 1 |
-| tests_futurs | May also emit `signal.updated` if auto-resolve |
+| tests_futurs | No linked signal status change on mark-done without validation |
 
 #### `action.validated`
 
@@ -431,7 +430,7 @@ The following domain docs are stale relative to current code. **Transport truth:
 | notification_candidate | yes |
 | notification_lot | **later** |
 | notification_reason | Assignee info post-Lot 1 |
-| tests_futurs | Signal auto-resolve may add `signal.updated` |
+| tests_futurs | No linked signal auto-resolve on validate |
 
 #### `action.reopened`
 

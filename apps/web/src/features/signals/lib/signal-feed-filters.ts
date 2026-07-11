@@ -1,4 +1,4 @@
-export type SignalFeedStatusFilter = 'open' | 'in_progress' | 'resolved'
+export type SignalFeedStatusFilter = 'open' | 'in_progress' | 'resolved' | 'canceled'
 
 export type SignalFeedFilters = {
   statuses: SignalFeedStatusFilter[]
@@ -19,6 +19,7 @@ export const SIGNAL_FEED_STATUS_OPTIONS: ReadonlyArray<{
   { value: 'open', label: 'En attente' },
   { value: 'in_progress', label: 'En cours' },
   { value: 'resolved', label: 'Résolu' },
+  { value: 'canceled', label: 'Annulé' },
 ]
 
 const FEED_STATUS_SET = new Set<string>(SIGNAL_FEED_STATUS_OPTIONS.map((option) => option.value))

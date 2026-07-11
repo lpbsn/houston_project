@@ -49,14 +49,40 @@ def _create_linked_execution(
     return execution
 
 
-def test_sync_auto_resolves_when_one_done_one_canceled(
+def test_cancel_single_linked_execution_reopens_signal_to_open(
     owner_membership,
     business_unit,
     staff_membership,
 ):
     signal = create_minimal_v3_signal(
         owner_membership,
-        title="Sync resolve",
+        title="Single cancel reopen",
+        status=Signal.Status.OPEN,
+    )
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Only execution",
+    )
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.IN_PROGRESS
+
+    cancel_action_plan_execution(execution_id=execution.id, actor=owner_membership)
+
+    signal.refresh_from_db()
+    execution.refresh_from_db()
+    assert execution.status == ActionPlanExecution.Status.CANCELED
+    assert signal.status == Signal.Status.OPEN
+
+
+def test_sync_does_not_resolve_when_one_done_one_canceled(
+    owner_membership,
+    business_unit,
+    staff_membership,
+):
+    signal = create_minimal_v3_signal(
+        owner_membership,
+        title="Done plus canceled",
         status=Signal.Status.IN_PROGRESS,
     )
     done_execution = _create_linked_execution(
@@ -81,7 +107,7 @@ def test_sync_auto_resolves_when_one_done_one_canceled(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
 
 
 def test_sync_reopens_to_open_when_all_canceled_without_done(
@@ -143,7 +169,7 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_mark_done_without_validation_auto_resolves_linked_signal(
+def test_mark_done_without_validation_does_not_resolve_linked_signal(
     owner_membership,
     business_unit,
     staff_membership,
@@ -152,7 +178,7 @@ def test_mark_done_without_validation_auto_resolves_linked_signal(
     execution = _create_linked_execution(
         owner_membership=owner_membership,
         signal=signal,
-        title="Auto resolve",
+        title="Mark done only",
         requires_validation=False,
     )
 
@@ -162,10 +188,10 @@ def test_mark_done_without_validation_auto_resolves_linked_signal(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
 
 
-def test_validate_execution_auto_resolves_linked_signal(
+def test_validate_execution_does_not_resolve_linked_signal(
     owner_membership,
     business_unit,
     staff_membership,
@@ -174,7 +200,7 @@ def test_validate_execution_auto_resolves_linked_signal(
     execution = _create_linked_execution(
         owner_membership=owner_membership,
         signal=signal,
-        title="Validate resolve",
+        title="Validate only",
         requires_validation=True,
     )
     pending = mark_action_plan_execution_done(
@@ -187,10 +213,10 @@ def test_validate_execution_auto_resolves_linked_signal(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.RESOLVED
+    assert signal.status == Signal.Status.IN_PROGRESS
 
 
-def test_lifecycle_resolves_signal_after_validation_cycle(
+def test_lifecycle_reopens_signal_to_open_after_cancel_following_validation_cycle(
     owner_membership,
     business_unit,
     staff_membership,
@@ -229,7 +255,7 @@ def test_lifecycle_resolves_signal_after_validation_cycle(
     assert signal.status == Signal.Status.OPEN
 
 
-def test_reopen_linked_execution_sets_signal_in_progress(
+def test_reopen_linked_execution_after_manual_resolve_sets_signal_in_progress(
     owner_membership,
     business_unit,
     staff_membership,
@@ -242,13 +268,14 @@ def test_reopen_linked_execution_sets_signal_in_progress(
     execution = _create_linked_execution(
         owner_membership=owner_membership,
         signal=signal,
-        title="Resolved execution",
+        title="Done execution",
         requires_validation=False,
     )
     mark_action_plan_execution_done(
         execution_id=execution.id,
         actor_membership=owner_membership,
     )
+    resolve_signal(signal=signal, actor_membership=owner_membership)
     signal.refresh_from_db()
     assert signal.status == Signal.Status.RESOLVED
 
@@ -293,14 +320,14 @@ def test_resolve_signal_cancels_active_executions_and_resolves(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_sync_idempotent_when_signal_already_resolved_with_done_execution(
+def test_sync_does_not_resolve_when_signal_manually_resolved_with_done_execution(
     owner_membership,
     business_unit,
     staff_membership,
 ):
     signal = create_minimal_v3_signal(
         owner_membership,
-        title="Idempotent resolve",
+        title="Manual resolve stays",
         status=Signal.Status.IN_PROGRESS,
     )
     done_execution = _create_linked_execution(

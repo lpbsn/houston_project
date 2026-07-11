@@ -233,11 +233,86 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     const pinned = screen.getByText('Plan épinglé')
-    const sectionLabel = screen.getByText(/En cours · 1/)
+    const sectionToggle = screen.getByRole('button', { name: 'Replier la section En cours' })
     const regular = screen.getByText('Plan normal')
 
-    expect(pinned.compareDocumentPosition(sectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(sectionLabel.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(pinned.compareDocumentPosition(sectionToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(sectionToggle.compareDocumentPosition(regular) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('keeps the done section collapsed by default', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('plan-done', 'Plan terminé', { status: 'done' }),
+                buildPlanFeedWrapper('plan-active', 'Plan actif'),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: 'Déplier la section Terminés' })).toBeTruthy()
+    expect(screen.queryByText('Plan terminé')).toBeNull()
+    expect(screen.getByText('Plan actif')).toBeTruthy()
+  })
+
+  it('keeps the canceled section collapsed by default', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [
+                buildPlanFeedWrapper('plan-canceled', 'Plan annulé', { status: 'canceled' }),
+                buildPlanFeedWrapper('plan-active', 'Plan actif'),
+              ],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByRole('button', { name: 'Déplier la section Annulés' })).toBeTruthy()
+    expect(screen.queryByText('Plan annulé')).toBeNull()
+    expect(screen.getByText('Plan actif')).toBeTruthy()
+  })
+
+  it('collapses an expanded section when its header is toggled', () => {
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage()
+
+    expect(screen.getByText('Plan actif')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replier la section En cours' }))
+
+    expect(screen.queryByText('Plan actif')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Déplier la section En cours' })).toBeTruthy()
   })
 
   it('shows loading more label while fetching next page', () => {
