@@ -453,18 +453,43 @@ export function validateAssigneePlanningAction(
   return errors
 }
 
+function recurringPlanningSignature(assignee: ActionPlanAssigneeDraft): string {
+  const startDate = splitIsoToDateAndTime(assignee.startAt).date
+  const days = [...assignee.recurrenceDays].sort().join(',')
+  return `${startDate}|${assignee.recurrenceEndDate.trim()}|${days}`
+}
+
 export function validatePerAssigneePlanningDraft(
   draft: ActionPlanEventPlanningDraft,
-  options: { allowRepeat?: boolean } = {},
+  options: { allowRepeat?: boolean; requireCompatibleRepeats?: boolean } = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {}
+  const validAssignees = draft.assignees.filter(
+    (assignee) => assignee.membershipId && assignee.businessUnitId,
+  )
 
-  for (const assignee of draft.assignees.filter((candidate) => candidate.membershipId)) {
+  if (validAssignees.length === 0) {
+    errors.assignees = 'Ajoutez au moins un assigné pour lancer le plan.'
+  }
+
+  for (const assignee of draft.assignees) {
     const assigneeErrors = validateAssigneePlanningAction(draft, assignee.id, {
       allowRepeat: options.allowRepeat,
       action: assignee.repeatEnabled ? 'schedule' : 'launch',
     })
     Object.assign(errors, assigneeErrors)
+  }
+
+  if (options.requireCompatibleRepeats) {
+    const signatures = new Set(
+      validAssignees
+        .filter((assignee) => assignee.repeatEnabled)
+        .map(recurringPlanningSignature),
+    )
+    if (signatures.size > 1) {
+      errors.assignees =
+        'Les récurrences doivent partager les mêmes dates et jours pour être créées ensemble.'
+    }
   }
 
   return errors
