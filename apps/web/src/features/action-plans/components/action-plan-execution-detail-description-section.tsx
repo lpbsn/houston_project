@@ -18,7 +18,7 @@ export function ActionPlanExecutionDetailDescriptionSection({
       <TerrainSectionLabel>Description</TerrainSectionLabel>
       <TerrainCard>
         {description ? (
-          <p className="whitespace-pre-wrap text-sm text-[#555]">{description}</p>
+          <p className="whitespace-pre-wrap text-sm text-[#222222]">{description}</p>
         ) : (
           <p className={cn('text-sm', terrain.muted)}>Aucune description.</p>
         )}

@@ -52,6 +52,16 @@ export const terrainInProgress = {
   badgeFeed: 'bg-[#E8F2F5] text-[#3A7A96]',
 } as const
 
+/** Action plan execution detail page — maquette-aligned static classes. */
+export const actionPlanExecutionDetailNavyBgClassName = 'bg-[#16435B]'
+export const actionPlanExecutionDetailMarkDoneBgClassName = 'bg-[#219673] hover:bg-[#1d8566]'
+export const actionPlanExecutionDetailValidateBgClassName = 'bg-[#25A17F] hover:bg-[#208f6f]'
+export const actionPlanExecutionDetailReopenBgClassName = 'bg-[#3A7A96] hover:bg-[#346d87]'
+export const actionPlanExecutionDetailCancelBgClassName = 'bg-[#E85553] hover:bg-[#d14c4a]'
+export const actionPlanExecutionDetailTaskDoneClassName = 'text-[#2D9C75]'
+export const actionPlanExecutionDetailLifecycleButtonClassName =
+  'inline-flex min-h-11 flex-1 items-center justify-center rounded-full px-3 text-[14px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2'
+
 export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue' | 'teal'
 
 export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {

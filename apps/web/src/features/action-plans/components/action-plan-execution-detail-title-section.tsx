@@ -1,4 +1,4 @@
-import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
+import { TerrainCard } from '@/components/ui/terrain'
 import { getDisplayNameInitials } from '@/lib/display-names'
 
 import {
@@ -23,8 +23,8 @@ export function ActionPlanExecutionDetailTitleSection({
   return (
     <TerrainCard className="space-y-2">
       <div className="flex items-start justify-between gap-2">
-        <h1 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{execution.title}</h1>
-        <ActionPlanStatusBadge status={execution.status} />
+        <h1 className="text-lg font-bold leading-snug text-[#222222]">{execution.title}</h1>
+        <ActionPlanStatusBadge status={execution.status} variant="executionHeader" />
       </div>
 
       <div className="flex items-center gap-2">
@@ -48,14 +48,14 @@ export function ActionPlanExecutionDetailTitleSection({
       {classification.poleLabel || classification.subjectLabel ? (
         <div className="flex flex-wrap gap-1.5">
           {classification.poleLabel ? (
-            <HoustonBadge variant="gray" className="text-[10px]">
+            <span className="inline-flex items-center rounded-full bg-[#F0EFE9] px-2.5 py-0.5 text-[10px] font-medium text-[#555]">
               {classification.poleLabel}
-            </HoustonBadge>
+            </span>
           ) : null}
           {classification.subjectLabel ? (
-            <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">
+            <span className="inline-flex items-center rounded-full bg-[#F0EFE9] px-2.5 py-0.5 text-[10px] font-medium text-[#555]">
               {classification.subjectLabel}
-            </HoustonBadge>
+            </span>
           ) : null}
         </div>
       ) : null}

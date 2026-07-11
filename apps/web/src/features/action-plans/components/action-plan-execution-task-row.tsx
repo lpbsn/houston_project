@@ -7,6 +7,7 @@ import {
   formatActionPlanTaskStatusLabel,
 } from '@/features/action-plans/lib/action-plan-display'
 import type { ActionPlanTaskExecution } from '@/features/action-plans/types'
+import { actionPlanExecutionDetailTaskDoneClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ActionPlanTaskDetailLayout } from './action-plan-task-detail-layout'
@@ -42,7 +43,7 @@ function TaskCheckbox({
         disabled={disabled}
         onClick={onClick}
       >
-        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#1D9E75]">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#2D9C75]">
           <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
         </span>
       </button>
@@ -52,7 +53,7 @@ function TaskCheckbox({
   if (checked) {
     return (
       <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
-        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#1D9E75]">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#2D9C75]">
           <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
         </span>
       </span>
@@ -68,14 +69,14 @@ function TaskCheckbox({
         disabled={disabled}
         onClick={onClick}
       >
-        <span className="h-5 w-5 rounded-md border-2 border-[#D4D2CB] bg-white" />
+        <span className="h-5 w-5 rounded-full border-2 border-[#D4D2CB] bg-white" />
       </button>
     )
   }
 
   return (
     <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
-      <span className="h-5 w-5 rounded-md border-2 border-[#D4D2CB] bg-white" />
+      <span className="h-5 w-5 rounded-full border-2 border-[#D4D2CB] bg-white" />
     </span>
   )
 }
@@ -106,13 +107,13 @@ export function ActionPlanExecutionTaskRow({
 
   const statusIndicator = isObservationCreated ? (
     <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
-      <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#E24B4A]">
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#E24B4A]">
         <AlertCircle className="h-3.5 w-3.5 text-white" />
       </span>
     </span>
   ) : isSkipped ? (
     <span className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
-      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#D4D2CB] bg-[#E8E6DF]">
+      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D4D2CB] bg-[#E8E6DF]">
         <Minus className="h-3 w-3 text-[#7D7B75]" strokeWidth={2.5} />
       </span>
     </span>
@@ -132,7 +133,6 @@ export function ActionPlanExecutionTaskRow({
   return (
     <ActionPlanTaskDetailLayout
       className={cn(
-        isDone && 'bg-[#F8FBF9]',
         isSkipped && 'bg-[#F5F4F0]',
         isObservationCreated && 'rounded-lg border border-[#f0d4cf] bg-[#fff5f3]',
       )}
@@ -140,7 +140,7 @@ export function ActionPlanExecutionTaskRow({
       title={
         <p
           className={cn(
-            'text-sm font-medium text-[#1a1a1a]',
+            'text-base font-semibold text-[#222222]',
             isDone && 'text-[#7D7B75] line-through decoration-[#B8B6B0]',
             isSkipped && 'text-[#7D7B75]',
           )}
@@ -163,7 +163,7 @@ export function ActionPlanExecutionTaskRow({
         !isPending ? (
           <span
             className={cn(
-              isDone && 'text-[#1D9E75]',
+              isDone && actionPlanExecutionDetailTaskDoneClassName,
               isSkipped && 'text-[#7D7B75]',
               isObservationCreated && 'text-[#E24B4A]',
             )}

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
-import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
+import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import {
   ActionDetailTabs,
   type ActionDetailTab,
@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 
 import { ActionPlansApiError } from '../api'
 import { ActionPlanExecutionDetailHeader } from '../components/action-plan-execution-detail-header'
+import { ActionPlanExecutionDetailPoleSummarySection } from '../components/action-plan-execution-detail-pole-summary-section'
 import { ActionPlanExecutionObservationSheet } from '../components/action-plan-execution-observation-sheet'
 import { ActionPlanExecutionSkipSheet } from '../components/action-plan-execution-skip-sheet'
 import {
@@ -345,6 +346,8 @@ function ActionPlanExecutionDetailPageContent({
             <TerrainEmptyState title="Aucune tâche dans cette exécution." />
           ) : (
             <>
+              <TerrainSectionLabel>Tâches par pôle</TerrainSectionLabel>
+              <ActionPlanExecutionDetailPoleSummarySection execution={execution} />
               {poleSummaries.length > 1 ? (
                 <ActionPlanExecutionTaskFilters
                   poles={poleSummaries}
