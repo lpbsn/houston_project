@@ -2,26 +2,26 @@ import { Plus } from 'lucide-react'
 
 import { TerrainStickyFooter } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import type { ActionPlanPermissionHints } from '../types'
-import {
-  canShowActionPlanActivate,
-  canShowActionPlanDeactivate,
-  canShowActionPlanUse,
-} from '../lib/action-plan-permission-hints'
+import { canShowActionPlanUse } from '../lib/action-plan-permission-hints'
 import { CATALOG_LAUNCH_EXECUTION_LABEL } from '../lib/action-plan-catalog-planning-submit'
+
+const catalogPrimaryButtonClassName = cn(
+  'text-white',
+  terrainBrandAction.bg,
+  terrainBrandAction.hover,
+)
 
 type ActionPlanTemplateDetailStickyFooterProps = {
   hints: ActionPlanPermissionHints
   executionPanelOpen: boolean
-  canUpdate: boolean
   canUse: boolean
   isBusy: boolean
   primaryActionDisabled: boolean
   isPrimaryPending: boolean
-  onNavigateToEdit: () => void
-  onActivate: () => void
-  onDeactivate: () => void
   onOpenExecutionPanel: () => void
   onCloseExecutionPanel: () => void
   onLaunchExecution: () => void
@@ -30,14 +30,10 @@ type ActionPlanTemplateDetailStickyFooterProps = {
 export function ActionPlanTemplateDetailStickyFooter({
   hints,
   executionPanelOpen,
-  canUpdate,
   canUse,
   isBusy,
   primaryActionDisabled,
   isPrimaryPending,
-  onNavigateToEdit,
-  onActivate,
-  onDeactivate,
   onOpenExecutionPanel,
   onCloseExecutionPanel,
   onLaunchExecution,
@@ -57,7 +53,7 @@ export function ActionPlanTemplateDetailStickyFooter({
           </Button>
           <Button
             type="button"
-            className="h-11 flex-1 rounded-xl"
+            className={cn('h-11 flex-1 rounded-full', catalogPrimaryButtonClassName)}
             disabled={primaryActionDisabled}
             onClick={onLaunchExecution}
           >
@@ -68,60 +64,23 @@ export function ActionPlanTemplateDetailStickyFooter({
     )
   }
 
-  const showActivate = canShowActionPlanActivate(hints)
-  const showDeactivate = canShowActionPlanDeactivate(hints)
   const showUse = canUse && canShowActionPlanUse(hints)
 
-  if (!canUpdate && !showActivate && !showDeactivate && !showUse) {
+  if (!showUse) {
     return null
   }
 
   return (
     <TerrainStickyFooter className="flex flex-col gap-2">
-      {canUpdate ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 w-full rounded-xl"
-          disabled={isBusy}
-          onClick={onNavigateToEdit}
-        >
-          Modifier
-        </Button>
-      ) : null}
-      {showActivate ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 w-full rounded-xl"
-          disabled={isBusy}
-          onClick={onActivate}
-        >
-          Activer dans la bibliothèque
-        </Button>
-      ) : null}
-      {showDeactivate ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 w-full rounded-xl text-[#E24B4A]"
-          disabled={isBusy}
-          onClick={onDeactivate}
-        >
-          Désactiver
-        </Button>
-      ) : null}
-      {showUse ? (
-        <Button
-          type="button"
-          className="h-11 w-full rounded-xl"
-          disabled={isBusy}
-          onClick={onOpenExecutionPanel}
-        >
-          <Plus className="mr-2 h-4 w-4" aria-hidden />
-          Exécution
-        </Button>
-      ) : null}
+      <Button
+        type="button"
+        className={cn('h-11 w-full rounded-full', catalogPrimaryButtonClassName)}
+        disabled={isBusy}
+        onClick={onOpenExecutionPanel}
+      >
+        <Plus className="mr-2 h-4 w-4" aria-hidden />
+        Exécution
+      </Button>
     </TerrainStickyFooter>
   )
 }

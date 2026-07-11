@@ -11,6 +11,8 @@ import * as catalogPlanningSubmit from '../lib/action-plan-catalog-planning-subm
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
+const activateMutationMock = vi.fn()
+const deactivateMutationMock = vi.fn()
 const useMutationMock = vi.fn()
 const scheduleMutationMock = vi.fn()
 const mixedMutationMock = vi.fn()
@@ -75,8 +77,8 @@ vi.mock('@/app/auth-provider', () => ({
 
 vi.mock('../hooks', () => ({
   useActionPlanDetailQuery: () => detailQueryMock(),
-  useActivateActionPlanMutation: () => useMutationMock(),
-  useDeactivateActionPlanMutation: () => useMutationMock(),
+  useActivateActionPlanMutation: () => activateMutationMock(),
+  useDeactivateActionPlanMutation: () => deactivateMutationMock(),
   useUseActionPlanMutation: () => useMutationMock(),
   useCreateActionPlanScheduleMutation: () => scheduleMutationMock(),
   useSubmitMixedActionPlanFromCatalogMutation: () => mixedMutationMock(),
@@ -89,6 +91,14 @@ describe('ActionPlanTemplateDetailPage', () => {
       isError: false,
       data: buildPlan(),
       refetch: vi.fn(),
+    })
+    activateMutationMock.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
+    deactivateMutationMock.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
     })
     useMutationMock.mockReturnValue({
       mutateAsync: vi.fn(),
@@ -110,24 +120,143 @@ describe('ActionPlanTemplateDetailPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders read-only template detail with modifier action', () => {
+  it('renders read-only template detail with execution action', () => {
     render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     expect(screen.getByRole('heading', { name: 'Plan catalogue' })).toBeTruthy()
     expect(screen.getByText('Contrôler la température')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Modifier' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Exécution' })).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByText('Actif')).toBeNull()
   })
 
-  it('renders catalog actions in sticky footer when panel is closed', () => {
+  it('renders deactivate in header card and execution in sticky footer', () => {
     render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
-    const modifierButton = screen.getByRole('button', { name: 'Modifier' })
+    const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
+    const deactivateButton = screen.getByRole('button', { name: 'Désactiver' })
     const executionButton = screen.getByRole('button', { name: 'Exécution' })
 
-    expect(modifierButton.closest('footer')).toBeTruthy()
+    expect(headerCard).toBeTruthy()
+    expect(headerCard!.contains(deactivateButton)).toBe(true)
+    expect(deactivateButton.closest('footer')).toBeNull()
     expect(executionButton.closest('footer')).toBeTruthy()
+    expect(executionButton.className).toContain('bg-[#114660]')
+    expect(screen.queryByRole('button', { name: 'Activer' })).toBeNull()
+    expect(screen.queryByText('Activer dans la bibliothèque')).toBeNull()
+  })
+
+  it('renders activate in header card for inactive plan', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        catalog_status: 'inactive',
+        permission_hints: {
+          can_update: true,
+          can_activate: true,
+          can_deactivate: false,
+          can_use: true,
+          can_schedule: true,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
+    const activateButton = screen.getByRole('button', { name: 'Activer' })
+    const executionButton = screen.getByRole('button', { name: 'Exécution' })
+
+    expect(headerCard).toBeTruthy()
+    expect(headerCard!.contains(activateButton)).toBe(true)
+    expect(activateButton.closest('footer')).toBeNull()
+    expect(activateButton.className).toContain('text-[#1D9E75]')
+    expect(screen.queryByRole('button', { name: 'Désactiver' })).toBeNull()
+    expect(screen.queryByText('Activer dans la bibliothèque')).toBeNull()
+    expect(executionButton.closest('footer')).toBeTruthy()
+  })
+
+  it('hides sticky footer when inactive plan cannot be used', () => {
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        catalog_status: 'inactive',
+        permission_hints: {
+          can_update: true,
+          can_activate: true,
+          can_deactivate: false,
+          can_use: false,
+          can_schedule: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    expect(screen.getByRole('button', { name: 'Activer' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
+    expect(screen.queryByRole('contentinfo')).toBeNull()
+  })
+
+  it('calls activate mutation when activate button is clicked', async () => {
+    const activateMutateAsync = vi.fn().mockResolvedValue(undefined)
+    activateMutationMock.mockReturnValue({
+      mutateAsync: activateMutateAsync,
+      isPending: false,
+    })
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        catalog_status: 'inactive',
+        permission_hints: {
+          can_update: true,
+          can_activate: true,
+          can_deactivate: false,
+          can_use: false,
+          can_schedule: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activer' }))
+
+    await vi.waitFor(() => {
+      expect(activateMutateAsync).toHaveBeenCalled()
+    })
+  })
+
+  it('disables activate button while activation is pending', () => {
+    activateMutationMock.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: true,
+    })
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildPlan({
+        catalog_status: 'inactive',
+        permission_hints: {
+          can_update: true,
+          can_activate: true,
+          can_deactivate: false,
+          can_use: false,
+          can_schedule: false,
+        },
+      }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    expect(screen.getByRole('button', { name: 'Activer' })).toHaveProperty('disabled', true)
   })
 
   it('opens planning panel and sticky launch actions', () => {
@@ -174,17 +303,9 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     expect(cancelButton.closest('footer')).toBeTruthy()
     expect(launchButton.closest('footer')).toBeTruthy()
+    expect(launchButton.className).toContain('bg-[#114660]')
     expect(screen.getByText('Planification')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Modifier' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
-  })
-
-  it('navigates to edit route from modifier button', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
-
-    expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/edit')
   })
 
   it('shows static launch label when execution panel is open', () => {

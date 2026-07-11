@@ -287,12 +287,10 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'action-plan-template-detail') {
     return {
       topbarVariant: 'detail',
-      detailTitleLayout: 'belowBack',
       title: 'Détail du plan',
       backPath: '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
-      showTopbarBottomBorder: false,
     }
   }
 

@@ -66,6 +66,7 @@ import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-ac
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
+import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
 
 function App() {
   const shouldReduceMotion = useReducedMotion()
@@ -174,15 +175,35 @@ function App() {
   })
   const chatHasUnread = (chatConversationsQuery.data?.items ?? []).some((item) => item.unread)
 
+  const templateDetailActionPlanId =
+    route.kind === 'action-plan-template-detail' ? route.actionPlanId : null
+
   const terrainTopbarTrailing = useMemo(() => {
     if (!establishmentId || !auth.hasOperationalAccess) {
       return null
     }
 
+    if (route.kind === 'action-plan-template-detail' && templateDetailActionPlanId) {
+      return (
+        <ActionPlanTemplateDetailTopbarTrailing
+          key={templateDetailActionPlanId}
+          establishmentId={establishmentId}
+          actionPlanId={templateDetailActionPlanId}
+          onNavigate={navigate}
+        />
+      )
+    }
+
     return (
       <NotificationCenter establishmentId={establishmentId} onNavigate={navigate} />
     )
-  }, [auth.hasOperationalAccess, establishmentId, navigate])
+  }, [
+    auth.hasOperationalAccess,
+    establishmentId,
+    navigate,
+    route.kind,
+    templateDetailActionPlanId,
+  ])
 
   useEffect(() => {
     if (

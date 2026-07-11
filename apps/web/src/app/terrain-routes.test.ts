@@ -158,12 +158,10 @@ describe('getTerrainRouteConfig', () => {
       getTerrainRouteConfig({ kind: 'action-plan-template-detail', actionPlanId: 'plan-1' }),
     ).toEqual({
       topbarVariant: 'detail',
-      detailTitleLayout: 'belowBack',
       title: 'Détail du plan',
       backPath: '/action-plans',
       showBottomNav: false,
       mainScroll: 'auto',
-      showTopbarBottomBorder: false,
     })
     expect(
       getTerrainRouteConfig({ kind: 'action-plan-template-edit', actionPlanId: 'plan-1' }),

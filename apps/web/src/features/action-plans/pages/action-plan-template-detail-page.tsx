@@ -39,7 +39,6 @@ import {
   canShowActionPlanActivate,
   canShowActionPlanDeactivate,
   canShowActionPlanSchedule,
-  canShowActionPlanUpdate,
   canShowActionPlanUse,
 } from '../lib/action-plan-permission-hints'
 import { isStaffActionPlanUsageRole } from '../lib/action-plan-management-access'
@@ -99,7 +98,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
   const plan = detailQuery.data
   const hints = plan.permission_hints
-  const canUpdate = canShowActionPlanUpdate(hints)
   const canUse = canShowActionPlanUse(hints)
   const canSchedule = canShowActionPlanSchedule(hints)
   const planningOptions = { canSchedule, staffMode: staffUseMode }
@@ -115,12 +113,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     scheduleMutation.isPending ||
     mixedMutation.isPending
 
-  const showStickyFooter =
-    executionPanelOpen ||
-    canUpdate ||
-    canShowActionPlanActivate(hints) ||
-    canShowActionPlanDeactivate(hints) ||
-    canUse
+  const showStickyFooter = executionPanelOpen || canUse
 
   function resetExecutionPanel() {
     clearMixedSubmissionIntent(establishmentId, actionPlanId)
@@ -224,7 +217,15 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           <TerrainFeedback variant={feedback.variant} message={feedback.message} />
         ) : null}
 
-        <ActionPlanTemplateDetailHeader plan={plan} />
+        <ActionPlanTemplateDetailHeader
+          plan={plan}
+          showActivate={canShowActionPlanActivate(hints)}
+          showDeactivate={canShowActionPlanDeactivate(hints)}
+          isActivatePending={activateMutation.isPending}
+          isDeactivatePending={deactivateMutation.isPending}
+          onActivate={() => void handleActivate()}
+          onDeactivate={() => void handleDeactivate()}
+        />
 
         <section className="space-y-2">
           <TerrainSectionLabel>Tâches</TerrainSectionLabel>
@@ -267,14 +268,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         <ActionPlanTemplateDetailStickyFooter
           hints={hints}
           executionPanelOpen={executionPanelOpen}
-          canUpdate={canUpdate}
           canUse={canUse}
           isBusy={isBusy}
           primaryActionDisabled={primaryActionDisabled}
           isPrimaryPending={isPrimaryPending}
-          onNavigateToEdit={() => navigate(`/action-plans/${actionPlanId}/edit`)}
-          onActivate={() => void handleActivate()}
-          onDeactivate={() => void handleDeactivate()}
           onOpenExecutionPanel={() => setExecutionPanelOpen(true)}
           onCloseExecutionPanel={resetExecutionPanel}
           onLaunchExecution={() => void handleLaunchExecution()}
