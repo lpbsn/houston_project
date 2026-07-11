@@ -281,7 +281,7 @@ const MS_PER_DAY = 24 * MS_PER_HOUR
 
 function formatActionPlanRemainingTimeLabel(remainingMs: number): string {
   if (remainingMs >= MS_PER_DAY) {
-    const days = Math.floor(remainingMs / MS_PER_DAY)
+    const days = Math.ceil(remainingMs / MS_PER_DAY)
     return days === 1 ? '1 jour restant' : `${days} jours restants`
   }
   if (remainingMs >= MS_PER_HOUR) {

@@ -430,6 +430,17 @@ describe('computeActionPlanDeadlineState', () => {
     expect(state?.remainingLabel).toBe('3 jours restants')
   })
 
+  it('rounds up remaining days when hours are left over', () => {
+    const state = computeActionPlanDeadlineState({
+      startAt,
+      endAt: '2026-07-12T11:00:00.000Z',
+      isTerminal: false,
+      now,
+    })
+
+    expect(state?.remainingLabel).toBe('2 jours restants')
+  })
+
   it('falls back to simple mode without start_at', () => {
     const state = computeActionPlanDeadlineState({
       startAt: null,
