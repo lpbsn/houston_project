@@ -33,6 +33,7 @@ import {
   isActionPlanFeedInProgressCard,
   isActionPlanFeedPendingValidationCard,
 } from '../lib/action-plan-execution-feed-card-display'
+import { useFeedCardNow } from '../lib/use-feed-card-now'
 
 type ActionPlanExecutionFeedCardProps = {
   item: ActionPlanExecutionFeedItem
@@ -236,7 +237,8 @@ function InProgressActionPlanFeedCard({
   const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
   const showActions =
     onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
-  const sidebarState = getActionPlanFeedSidebarState(item.end_at)
+  const now = useFeedCardNow()
+  const sidebarState = getActionPlanFeedSidebarState(item.end_at, now, item.is_overdue)
   const progressState = getActionPlanFeedProgressState(item)
 
   return (

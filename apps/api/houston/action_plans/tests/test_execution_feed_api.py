@@ -313,6 +313,156 @@ def test_terminal_executions_sort_by_last_activity_desc_within_status(
     ]
 
 
+def test_done_sort_by_last_activity_overrides_end_at(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    newer_done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Newer activity done",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(hours=1),
+        end_at=now + timezone.timedelta(days=2),
+    )
+    older_done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Older activity done",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(days=2),
+        end_at=now - timezone.timedelta(days=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _feed_execution_ids(response.json()) == [
+        str(newer_done.id),
+        str(older_done.id),
+    ]
+
+
+def test_canceled_sort_by_last_activity_overrides_end_at(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    newer_canceled = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Newer activity canceled",
+        status=EXECUTION_STATUS_CANCELED,
+        last_activity_at=now - timezone.timedelta(hours=1),
+        end_at=now + timezone.timedelta(days=2),
+    )
+    older_canceled = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Older activity canceled",
+        status=EXECUTION_STATUS_CANCELED,
+        last_activity_at=now - timezone.timedelta(days=2),
+        end_at=now - timezone.timedelta(days=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _feed_execution_ids(response.json()) == [
+        str(newer_canceled.id),
+        str(older_canceled.id),
+    ]
+
+
+def test_terminal_pagination_done_respects_last_activity_order(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    newer_done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Newer done page",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(hours=1),
+        end_at=now + timezone.timedelta(days=2),
+    )
+    older_done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Older done page",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(days=2),
+        end_at=now - timezone.timedelta(days=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    first = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + "&page_size=1",
+        **auth_headers(token),
+    )
+    second = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + f"&page_size=1&cursor={first.json()['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert _feed_execution_ids(first.json()) == [str(newer_done.id)]
+    assert _feed_execution_ids(second.json()) == [str(older_done.id)]
+
+
+def test_terminal_pagination_canceled_respects_last_activity_order(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    newer_canceled = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Newer canceled page",
+        status=EXECUTION_STATUS_CANCELED,
+        last_activity_at=now - timezone.timedelta(hours=1),
+        end_at=now + timezone.timedelta(days=2),
+    )
+    older_canceled = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Older canceled page",
+        status=EXECUTION_STATUS_CANCELED,
+        last_activity_at=now - timezone.timedelta(days=2),
+        end_at=now - timezone.timedelta(days=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    first = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + "&page_size=1",
+        **auth_headers(token),
+    )
+    second = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + f"&page_size=1&cursor={first.json()['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert _feed_execution_ids(first.json()) == [str(newer_canceled.id)]
+    assert _feed_execution_ids(second.json()) == [str(older_canceled.id)]
+
+
 def test_terminal_executions_are_not_marked_overdue_in_feed(
     api_client,
     owner_membership,

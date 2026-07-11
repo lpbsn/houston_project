@@ -38,13 +38,21 @@ describe('getActionPlanFeedSidebarState', () => {
     })
   })
 
-  it('returns overdue when end_at is in the past', () => {
-    expect(getActionPlanFeedSidebarState('2026-07-10T11:00:00Z', NOW)).toEqual({
+  it('returns overdue only when isOverdue is true', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW, true)).toEqual({
       variant: 'overdue',
     })
   })
 
-  it('uses a minimum of 1 hour for sub-day remaining time', () => {
+  it('returns neutral 0h countdown when isOverdue is false and end_at is in the past', () => {
+    expect(getActionPlanFeedSidebarState('2026-07-10T11:00:00Z', NOW, false)).toEqual({
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: '0h',
+    })
+  })
+
+  it('uses a minimum of 1 hour for sub-day remaining time when isOverdue is false', () => {
     expect(getActionPlanFeedSidebarState('2026-07-10T12:15:00Z', NOW)).toEqual({
       variant: 'countdown',
       prefix: 'DANS',

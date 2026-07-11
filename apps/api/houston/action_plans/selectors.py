@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 
 from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.utils import timezone
@@ -480,15 +481,14 @@ def annotate_action_plan_execution_feed_pins(
     )
 
 
-def apply_action_plan_execution_feed_sorting(
+def annotate_action_plan_execution_feed_sort_keys(
     queryset: QuerySet[ActionPlanExecution],
     *,
     membership: EstablishmentMembership,
-    as_of=None,
+    as_of: datetime,
 ) -> QuerySet[ActionPlanExecution]:
-    effective_as_of = as_of or timezone.now()
-    status_rank, deadline_bucket = action_plan_execution_feed_sort_case_expressions(
-        effective_as_of,
+    status_rank, deadline_bucket, feed_sort_end_at = (
+        action_plan_execution_feed_sort_case_expressions(as_of)
     )
     return annotate_action_plan_execution_feed_pins(
         queryset,
@@ -496,6 +496,21 @@ def apply_action_plan_execution_feed_sorting(
     ).annotate(
         status_rank=status_rank,
         deadline_bucket=deadline_bucket,
+        feed_sort_end_at=feed_sort_end_at,
+    )
+
+
+def apply_action_plan_execution_feed_sorting(
+    queryset: QuerySet[ActionPlanExecution],
+    *,
+    membership: EstablishmentMembership,
+    as_of=None,
+) -> QuerySet[ActionPlanExecution]:
+    effective_as_of = as_of or timezone.now()
+    return annotate_action_plan_execution_feed_sort_keys(
+        queryset,
+        membership=membership,
+        as_of=effective_as_of,
     ).order_by(*action_plan_execution_feed_order_by())
 
 

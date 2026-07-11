@@ -78,9 +78,11 @@ Optional endpoint-specific fields (e.g. `applied_filters` on Signal Feed) are do
 
 Action Plan Execution Feed cursor specifics:
 
-- Opaque server cursor tied to sort keys: `as_of`, `status_rank`, `deadline_bucket`, `end_at` (asc, nulls last), `created_at desc`, `id desc`.
+- Opaque server cursor tied to sort keys: `as_of`, pin (`is_feed_pinned`, `feed_pinned_at`), `status_rank`, `deadline_bucket`, effective `feed_sort_end_at` (encoded as `end_at`; empty when terminal), `last_activity_at desc`, `created_at desc`, `id desc`.
+- `deadline_bucket` values: `0` overdue (active only), `1` upcoming, `2` no deadline, `3` terminal (`done` / `canceled`). Terminal items always encode bucket `3` and an empty `end_at` sort key regardless of DB `end_at`.
 - `as_of` is frozen on page 1 and reused for subsequent pages (overdue bucket + `is_overdue` consistency).
-- Terminal executions (`done` / `canceled`) included in feed; mutations invalidate the feed.
+- Terminal executions (`done` / `canceled`) included in feed; within terminal sections sort is by `last_activity_at` only (deadline keys neutralized). Mutations invalidate the feed.
+- **Deploy compatibility:** cursor format (`CURSOR_PART_COUNT = 9`) unchanged; only terminal semantic changes. Active-item cursors remain valid. In-flight cursors anchored on a terminal item with pre-fix bucket `1`/`2` and real `end_at` may duplicate/skip on page 2+ until page 1 is refetched (mutation, realtime invalidation, or navigation).
 
 ### Tier B — Chronological streams
 

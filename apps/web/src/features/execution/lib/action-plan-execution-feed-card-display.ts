@@ -105,8 +105,13 @@ const MS_PER_DAY = 24 * MS_PER_HOUR
 
 export function getActionPlanFeedSidebarState(
   endAt: string | null,
-  now: number = Date.now(),
+  now: number,
+  isOverdue = false,
 ): ActionPlanFeedSidebarState {
+  if (isOverdue) {
+    return { variant: 'overdue' }
+  }
+
   if (!endAt) {
     return { variant: 'no_deadline' }
   }
@@ -118,7 +123,11 @@ export function getActionPlanFeedSidebarState(
 
   const remainingMs = Math.max(0, endMs - now)
   if (remainingMs === 0) {
-    return { variant: 'overdue' }
+    return {
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: '0h',
+    }
   }
 
   if (remainingMs >= MS_PER_DAY) {
