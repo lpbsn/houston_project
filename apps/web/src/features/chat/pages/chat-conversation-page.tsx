@@ -15,7 +15,7 @@ import {
   getConversationTitle,
   isSameChatDay,
 } from '../lib/chat-display'
-import { mergeServerAndLocalMessages } from '../lib/chat-messages'
+import { flattenChatMessagePages, mergeServerAndLocalMessages } from '../lib/chat-messages'
 import {
   useChatConversationDetailQuery,
   useChatMessagesInfiniteQuery,
@@ -56,7 +56,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
   const retryFailedMessage = realtime?.retryFailedMessage ?? (() => false)
 
   const serverMessages = useMemo(
-    () => messagesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    () => flattenChatMessagePages(messagesQuery.data?.pages ?? []),
     [messagesQuery.data?.pages],
   )
 
@@ -143,52 +143,54 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
             description="Envoyez le premier message de cette conversation."
           />
         ) : (
-          <div className="flex flex-col gap-3">
-            {mergedMessages.map((entry, index) => {
-              const createdAt =
-                entry.kind === 'server' ? entry.message.created_at : entry.message.createdAt
-              const previous = mergedMessages[index - 1]
-              const previousCreatedAt = previous
-                ? previous.kind === 'server'
-                  ? previous.message.created_at
-                  : previous.message.createdAt
-                : null
-              const showDaySeparator =
-                !previousCreatedAt || !isSameChatDay(previousCreatedAt, createdAt)
+          <div className="flex min-h-full flex-col justify-end">
+            <div className="flex flex-col gap-3">
+              {mergedMessages.map((entry, index) => {
+                const createdAt =
+                  entry.kind === 'server' ? entry.message.created_at : entry.message.createdAt
+                const previous = mergedMessages[index - 1]
+                const previousCreatedAt = previous
+                  ? previous.kind === 'server'
+                    ? previous.message.created_at
+                    : previous.message.createdAt
+                  : null
+                const showDaySeparator =
+                  !previousCreatedAt || !isSameChatDay(previousCreatedAt, createdAt)
 
-              const message = entry.kind === 'server' ? entry.message : entry.message
-              const isOwn =
-                entry.kind === 'server'
-                  ? entry.message.author_membership_id === viewerMembershipId
-                  : entry.message.authorMembershipId === viewerMembershipId
+                const message = entry.kind === 'server' ? entry.message : entry.message
+                const isOwn =
+                  entry.kind === 'server'
+                    ? entry.message.author_membership_id === viewerMembershipId
+                    : entry.message.authorMembershipId === viewerMembershipId
 
-              const key =
-                entry.kind === 'server' ? entry.message.id : entry.message.clientMessageId
+                const key =
+                  entry.kind === 'server' ? entry.message.id : entry.message.clientMessageId
 
-              return (
-                <div key={key} className="flex flex-col gap-3">
-                  {showDaySeparator ? (
-                    <div className="flex justify-center">
-                      <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-[#7D7B75]">
-                        {formatChatMessageDayLabel(createdAt)}
-                      </span>
-                    </div>
-                  ) : null}
-                  <MessageBubble
-                    message={message}
-                    isOwn={isOwn}
-                    onRetry={
-                      entry.kind === 'local' && entry.message.status === 'failed'
-                        ? () => {
-                            retryFailedMessage(entry.message.clientMessageId)
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
-              )
-            })}
-            <div ref={messagesEndRef} />
+                return (
+                  <div key={key} className="flex flex-col gap-3">
+                    {showDaySeparator ? (
+                      <div className="flex justify-center">
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-[#7D7B75]">
+                          {formatChatMessageDayLabel(createdAt)}
+                        </span>
+                      </div>
+                    ) : null}
+                    <MessageBubble
+                      message={message}
+                      isOwn={isOwn}
+                      onRetry={
+                        entry.kind === 'local' && entry.message.status === 'failed'
+                          ? () => {
+                              retryFailedMessage(entry.message.clientMessageId)
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
+                )
+              })}
+              <div ref={messagesEndRef} />
+            </div>
           </div>
         )}
       </div>

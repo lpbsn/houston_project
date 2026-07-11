@@ -24,6 +24,7 @@ import {
   resolveChatNavVisible,
 } from './lib/chat-availability'
 import { buildMessageCursor } from './lib/chat-display'
+import { appendUniqueServerMessage } from './lib/chat-messages'
 import { patchConversationsOnMessageCreated } from './lib/chat-conversations-cache'
 import type { ChatConversationListResponse, ChatMessage, ChatMessageListResponse } from './types'
 
@@ -266,19 +267,14 @@ export function useAppendChatMessageToCache() {
         }
 
         const pages = [...current.pages]
-        const lastPageIndex = pages.length - 1
-        const lastPage = pages[lastPageIndex]
-        if (!lastPage) {
+        const recentPage = pages[0]
+        if (!recentPage) {
           return current
         }
 
-        if (lastPage.items.some((item) => item.id === message.id)) {
-          return current
-        }
-
-        pages[lastPageIndex] = {
-          ...lastPage,
-          items: [...lastPage.items, message],
+        pages[0] = {
+          ...recentPage,
+          items: appendUniqueServerMessage(recentPage.items, message),
         }
 
         return {

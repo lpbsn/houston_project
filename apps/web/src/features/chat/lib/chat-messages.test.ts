@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { appendUniqueServerMessage, mergeServerAndLocalMessages } from './chat-messages'
+import {
+  appendUniqueServerMessage,
+  flattenChatMessagePages,
+  mergeServerAndLocalMessages,
+} from './chat-messages'
 import type { ChatMessage, LocalChatMessage } from '../types'
 
 const serverMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
@@ -57,5 +61,101 @@ describe('chat-messages', () => {
 
     expect(appendUniqueServerMessage([first], second)).toEqual([first, second])
     expect(appendUniqueServerMessage([first], first)).toEqual([first])
+  })
+
+  it('appends a newer server message at the end when the page is out of order', () => {
+    const older = serverMessage({
+      id: 'msg-older',
+      client_message_id: 'client-older',
+      created_at: '2026-06-09T10:00:00.000Z',
+    })
+    const newer = serverMessage({
+      id: 'msg-newer',
+      client_message_id: 'client-newer',
+      created_at: '2026-06-09T10:05:00.000Z',
+    })
+    const incoming = serverMessage({
+      id: 'msg-incoming',
+      client_message_id: 'client-incoming',
+      created_at: '2026-06-09T10:10:00.000Z',
+    })
+
+    const result = appendUniqueServerMessage([newer, older], incoming)
+
+    expect(result.map((message) => message.id)).toEqual([
+      'msg-older',
+      'msg-newer',
+      'msg-incoming',
+    ])
+  })
+
+  it('flattens paginated pages into global chronological order', () => {
+    const recentPage = {
+      items: [
+        serverMessage({
+          id: 'msg-51',
+          client_message_id: 'client-51',
+          created_at: '2026-06-09T11:00:00.000Z',
+        }),
+        serverMessage({
+          id: 'msg-100',
+          client_message_id: 'client-100',
+          created_at: '2026-06-09T12:00:00.000Z',
+        }),
+      ],
+    }
+    const olderPage = {
+      items: [
+        serverMessage({
+          id: 'msg-1',
+          client_message_id: 'client-1',
+          created_at: '2026-06-09T09:00:00.000Z',
+        }),
+        serverMessage({
+          id: 'msg-50',
+          client_message_id: 'client-50',
+          created_at: '2026-06-09T10:30:00.000Z',
+        }),
+      ],
+    }
+
+    const flattened = flattenChatMessagePages([recentPage, olderPage])
+
+    expect(flattened.map((message) => message.id)).toEqual([
+      'msg-1',
+      'msg-50',
+      'msg-51',
+      'msg-100',
+    ])
+  })
+
+  it('keeps pending local messages after server history', () => {
+    const merged = mergeServerAndLocalMessages(
+      [
+        serverMessage({
+          id: 'msg-1',
+          client_message_id: 'client-1',
+          created_at: '2026-06-09T10:00:00.000Z',
+        }),
+        serverMessage({
+          id: 'msg-2',
+          client_message_id: 'client-2',
+          created_at: '2026-06-09T10:05:00.000Z',
+        }),
+      ],
+      [
+        localMessage({
+          clientMessageId: 'client-pending',
+          createdAt: '2026-06-09T10:10:00.000Z',
+        }),
+      ],
+      'conv-1',
+    )
+
+    expect(merged).toHaveLength(3)
+    expect(merged[2]?.kind).toBe('local')
+    expect(merged[2]?.kind === 'local' ? merged[2].message.clientMessageId : null).toBe(
+      'client-pending',
+    )
   })
 })
