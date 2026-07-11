@@ -76,6 +76,25 @@ describe('ActionPlanEventPlanningForm', () => {
     )
   })
 
+  it('preserves a distinct one-shot end date when repeat is enabled', () => {
+    const onDraftChange = vi.fn()
+    renderForm(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        startDate: '2026-07-04',
+        endDate: '2026-07-08',
+      },
+      baseConfig,
+      onDraftChange,
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
+
+    expect(onDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({ repeatEnabled: true, endDate: '2026-07-08' }),
+    )
+  })
+
   it('hides repeat toggle when scheduling is not allowed', () => {
     renderForm(createActionPlanEventPlanningDraft(), {
       ...baseConfig,
@@ -229,8 +248,8 @@ describe('ActionPlanEventPlanningForm', () => {
     })
     expect(screen.getByText('Début de la récurrence')).toBeTruthy()
     expect(screen.getByText('Fin de la récurrence')).toBeTruthy()
-    expect(screen.getByText('Début du créneau d\'exécution')).toBeTruthy()
-    expect(screen.getByText('Fin du créneau d\'exécution')).toBeTruthy()
+    expect(screen.getByText("Début du créneau d'exécution")).toBeTruthy()
+    expect(screen.getByText("Fin du créneau d'exécution")).toBeTruthy()
     expect(screen.queryByLabelText('Début de la récurrence — heure')).toBeNull()
     expect(screen.getByLabelText('Début de la récurrence — date')).toBeTruthy()
     expect(screen.getByText('Jours')).toBeTruthy()
