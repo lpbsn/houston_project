@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { isActionPlanExecutionDetail } from '../lib/action-plan-create-response'
-import { buildActionPlanCreateRequest } from '../lib/action-plan-create-payload'
+import { buildActionPlanCreateRequest, buildActionPlanShellCreateRequest } from '../lib/action-plan-create-payload'
 import {
   hasActionPlanCreateFormErrors,
   validateActionPlanCreateForm,
@@ -64,8 +64,45 @@ export function useActionPlanCreateSubmit({
     }
   }
 
+  async function submitShell(
+    values: ActionPlanCreateFormValues,
+    options: {
+      reusableForScheduling?: boolean
+      planningDraft?: ActionPlanEventPlanningDraft
+    } = {},
+  ) {
+    setSubmitError(null)
+    const errors = validateActionPlanCreateForm(values, {
+      canDefineCrossPoleTasks,
+      staffExecutionMode,
+    })
+    const planningErrors = options.planningDraft
+      ? validateActionPlanCreatePlanningErrors(options.planningDraft, {
+          saveToLibrary: values.saveToLibrary,
+          staffExecutionMode,
+        })
+      : {}
+    const mergedErrors = { ...errors, ...planningErrors }
+    setFieldErrors(mergedErrors)
+    if (hasActionPlanCreateFormErrors(mergedErrors)) {
+      return null
+    }
+
+    try {
+      return await createMutation.mutateAsync(
+        buildActionPlanShellCreateRequest(values, options),
+      )
+    } catch (error) {
+      setSubmitError(
+        resolveActionPlanErrorMessage(error, 'Le plan d’action n’a pas pu être créé.'),
+      )
+      return null
+    }
+  }
+
   return {
     submit,
+    submitShell,
     fieldErrors,
     submitError,
     isSubmitting: createMutation.isPending,

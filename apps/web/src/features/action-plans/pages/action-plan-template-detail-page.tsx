@@ -15,6 +15,7 @@ import { ActionPlanTemplateDetailStickyFooter } from '../components/action-plan-
 import {
   useActivateActionPlanMutation,
   useActionPlanDetailQuery,
+  useCreateActionPlanScheduleMutation,
   useDeactivateActionPlanMutation,
   useUseActionPlanMutation,
 } from '../hooks'
@@ -22,6 +23,7 @@ import { buildActionPlanUseRequest } from '../lib/action-plan-create-payload'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
   createActionPlanEventPlanningDraft,
+  toScheduleDraft,
   toUseRequestOptions,
   validateActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -29,9 +31,12 @@ import {
 import {
   canShowActionPlanActivate,
   canShowActionPlanDeactivate,
+  canShowActionPlanSchedule,
   canShowActionPlanUpdate,
   canShowActionPlanUse,
 } from '../lib/action-plan-permission-hints'
+import { buildActionPlanScheduleCreateRequest } from '../lib/action-plan-schedule-payload'
+import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
 import { isStaffActionPlanUsageRole } from '../lib/action-plan-management-access'
 
 type ActionPlanTemplateDetailPageProps = {
@@ -49,6 +54,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const activateMutation = useActivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const deactivateMutation = useDeactivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const useMutation = useUseActionPlanMutation(establishmentId ?? '', actionPlanId)
+  const scheduleMutation = useCreateActionPlanScheduleMutation(establishmentId ?? '', actionPlanId)
 
   const [executionPanelOpen, setExecutionPanelOpen] = useState(false)
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
@@ -89,8 +95,18 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const hints = plan.permission_hints
   const canUpdate = canShowActionPlanUpdate(hints)
   const canUse = canShowActionPlanUse(hints)
+  const canSchedule = canShowActionPlanSchedule(hints)
+  const isRepeatSubmit = planningDraft.repeatEnabled && canSchedule
+  const scheduleConfigured = isActionPlanScheduleConfigured(toScheduleDraft(planningDraft))
+  const primaryActionLabel = isRepeatSubmit ? 'Planifier la récurrence' : "Lancer l'exécution"
+  const isPrimaryPending = isRepeatSubmit ? scheduleMutation.isPending : useMutation.isPending
+  const primaryActionDisabled =
+    isRepeatSubmit ? !scheduleConfigured || isPrimaryPending : isPrimaryPending
   const isBusy =
-    activateMutation.isPending || deactivateMutation.isPending || useMutation.isPending
+    activateMutation.isPending ||
+    deactivateMutation.isPending ||
+    useMutation.isPending ||
+    scheduleMutation.isPending
 
   const showStickyFooter =
     executionPanelOpen ||
@@ -134,7 +150,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   async function handleLaunchExecution() {
     const errors = validateActionPlanEventPlanningDraft(planningDraft, {
       requireAssignees: false,
-      allowRepeat: false,
+      allowRepeat: canSchedule,
     })
     setPlanningFieldErrors(errors)
     if (Object.keys(errors).length > 0) {
@@ -143,6 +159,21 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
     setFeedback(null)
     try {
+      if (isRepeatSubmit) {
+        const body = buildActionPlanScheduleCreateRequest({
+          schedule: toScheduleDraft(planningDraft),
+          assignees: staffUseMode ? [] : planningDraft.assignees,
+          useSharedChronology: !planningDraft.usePerAssigneeChronology,
+        })
+        if (!body) {
+          return
+        }
+        await scheduleMutation.mutateAsync(body)
+        resetExecutionPanel()
+        setFeedback({ variant: 'success', message: 'Récurrence planifiée.' })
+        return
+      }
+
       const useOptions = toUseRequestOptions(planningDraft)
       const execution = await useMutation.mutateAsync(
         buildActionPlanUseRequest({
@@ -155,7 +186,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     } catch (error) {
       setFeedback({
         variant: 'error',
-        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être lancé.'),
+        message: resolveActionPlanErrorMessage(
+          error,
+          isRepeatSubmit ? 'Le plan n’a pas pu être planifié.' : 'Le plan n’a pas pu être lancé.',
+        ),
       })
     }
   }
@@ -196,7 +230,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             draft={planningDraft}
             config={{
               canEditAssignees: !staffUseMode,
-              canSchedule: false,
+              canSchedule,
               staffMode: staffUseMode,
               showAdvancedChronology: !staffUseMode,
               hideAssignees: false,
@@ -217,7 +251,9 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           canUpdate={canUpdate}
           canUse={canUse}
           isBusy={isBusy}
-          isLaunchPending={useMutation.isPending}
+          primaryActionLabel={primaryActionLabel}
+          primaryActionDisabled={primaryActionDisabled}
+          isPrimaryPending={isPrimaryPending}
           onNavigateToEdit={() => navigate(`/action-plans/${actionPlanId}/edit`)}
           onActivate={() => void handleActivate()}
           onDeactivate={() => void handleDeactivate()}

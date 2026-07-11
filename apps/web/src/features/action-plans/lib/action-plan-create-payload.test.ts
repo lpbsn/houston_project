@@ -71,6 +71,70 @@ describe('buildActionPlanCreateRequest', () => {
       },
     ])
   })
+
+  it('strips planning fields when saveToLibrary is enabled', () => {
+    const schedule = {
+      ...createActionPlanScheduleDraft(),
+      enabled: true,
+      recurrenceDays: ['monday'] as const,
+      startDate: '2026-07-01',
+      endDate: '2026-12-31',
+      startAt: '09:00',
+      endAt: '10:00',
+    }
+
+    const request = buildActionPlanCreateRequest({
+      title: 'Library template',
+      description: 'Desc',
+      pilotBusinessUnitId: 'bu-pilot',
+      requiresValidation: true,
+      saveToLibrary: true,
+      useSharedChronology: true,
+      sharedStartAt: '2026-07-01T09:00:00.000Z',
+      sharedEndAt: '2026-07-01T10:00:00.000Z',
+      sharedVisibleFrom: '',
+      tasks: [{ ...createActionPlanTaskDraft('bu-pilot'), task: 'Task 1' }],
+      assignees: [
+        {
+          id: 'a1',
+          membershipId: 'm1',
+          businessUnitId: 'bu-pilot',
+          displayName: 'Alice',
+          startAt: '2026-07-01T09:00:00.000Z',
+          endAt: '2026-07-01T10:00:00.000Z',
+          visibleFrom: '',
+          repeatEnabled: false,
+          recurrenceDays: [],
+          recurrenceEndDate: '',
+        },
+      ],
+      schedule,
+    })
+
+    expect(request).toEqual({
+      title: 'Library template',
+      description: 'Desc',
+      pilot_business_unit_id: 'bu-pilot',
+      requires_validation: true,
+      is_reusable: true,
+      tasks: [
+        {
+          task: 'Task 1',
+          business_unit_id: 'bu-pilot',
+          position: 1,
+          description: '',
+          deadline_at: null,
+          assigned_membership_id: null,
+        },
+      ],
+      assignees: [],
+      use_shared_chronology: false,
+      start_at: null,
+      end_at: null,
+      visible_from: null,
+    })
+    expect(request).not.toHaveProperty('schedule')
+  })
 })
 
 describe('buildActionPlanUpdateRequest', () => {

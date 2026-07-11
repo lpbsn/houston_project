@@ -23,8 +23,16 @@ import { SignalsApiError } from '@/features/signals/api'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { useSignalDetailQuery } from '@/features/signals/hooks'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
+import {
+  useScheduleActionPlanFromCatalogMutation,
+  useUseActionPlanFromCatalogMutation,
+} from '../hooks'
+import { isActionPlanExecutionDetail } from '../lib/action-plan-create-response'
+import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
   PlanningOptionRow,
   type PlanningOptionPickerTarget,
@@ -47,6 +55,9 @@ import {
   type ActionPlanTaskDraft,
 } from '../lib/action-plan-form-validation'
 import {
+  buildScheduleRequestForAssignee,
+  buildUseRequestForAssignee,
+  shouldHidePrimaryPlanningActions,
   createActionPlanEventPlanningDraft,
   toCreateFormPlanningSlice,
   type ActionPlanEventPlanningDraft,
@@ -118,6 +129,11 @@ export function ActionPlanCreatePage({
   )
   const [openPilotPicker, setOpenPilotPicker] = useState<PlanningOptionPickerTarget>(null)
   const [isTemplateHydrated, setIsTemplateHydrated] = useState(false)
+  const [isOrchestrating, setIsOrchestrating] = useState(false)
+  const [planningActionError, setPlanningActionError] = useState<string | null>(null)
+
+  const scheduleFromCatalogMutation = useScheduleActionPlanFromCatalogMutation(establishmentId ?? '')
+  const useFromCatalogMutation = useUseActionPlanFromCatalogMutation(establishmentId ?? '')
 
   useEffect(() => {
     if (!isTemplateEdit || !templateDetailQuery.data || isTemplateHydrated) {
@@ -256,7 +272,7 @@ export function ActionPlanCreatePage({
       ? { membershipId, pilotBusinessUnitId: resolvedPilotBusinessUnitId }
       : undefined
 
-  const { submit, fieldErrors, submitError, isSubmitting } = useActionPlanCreateSubmit({
+  const { submit, submitShell, fieldErrors, submitError, isSubmitting } = useActionPlanCreateSubmit({
     establishmentId: establishmentId ?? '',
     canDefineCrossPoleTasks: canCrossPole,
     staffExecutionMode,
@@ -280,7 +296,13 @@ export function ActionPlanCreatePage({
 
   const resolvedFieldErrors = isTemplateEdit ? editFieldErrors : fieldErrors
   const resolvedSubmitError = isTemplateEdit ? editSubmitError : submitError
-  const resolvedIsSubmitting = isTemplateEdit ? isEditSubmitting : isSubmitting
+  const resolvedIsSubmitting =
+    isTemplateEdit
+      ? isEditSubmitting
+      : isSubmitting ||
+        isOrchestrating ||
+        scheduleFromCatalogMutation.isPending ||
+        useFromCatalogMutation.isPending
 
   if (!establishmentId) {
     return null
@@ -387,21 +409,96 @@ export function ActionPlanCreatePage({
   const signalDetail = isSignalLinked ? signalDetailQuery.data : null
 
   const scheduleConfigured = isActionPlanScheduleConfigured(planningSlice.schedule)
-  const showPlanningForm =
-    !isTemplateEdit &&
-    (!saveToLibrary || modeConfig.showStaffSelfAssignee || modeConfig.showScheduleSection)
+  const showPlanningForm = !isTemplateEdit
   const showToggleSection = isTemplateEdit
     ? modeConfig.showValidationToggle
     : modeConfig.showLibraryToggle || modeConfig.showValidationToggle
   const submitLabel = isTemplateEdit
     ? 'Enregistrer les modifications'
-    : scheduleConfigured
-      ? saveToLibrary
-        ? 'Enregistrer et planifier'
-        : 'Créer et planifier'
-      : saveToLibrary
-        ? 'Enregistrer dans la bibliothèque'
-        : 'Créer le plan d’action'
+    : saveToLibrary
+      ? 'Enregistrer dans la bibliothèque'
+      : shouldHidePrimaryPlanningActions(planningDraft)
+        ? 'Créer le plan d’action'
+        : scheduleConfigured
+          ? 'Créer et planifier'
+          : 'Créer le plan d’action'
+
+  async function handleCreateWithPerAssigneePlanning() {
+    setPlanningActionError(null)
+    const effectiveDraft = { ...planningDraft, assignees: effectiveAssignees }
+
+    setIsOrchestrating(true)
+    try {
+      const response = await submitShell(formValues, {
+        reusableForScheduling: true,
+        planningDraft: effectiveDraft,
+      })
+      if (!response) {
+        return
+      }
+      const planId = isActionPlanExecutionDetail(response) ? response.action_plan_id : response.id
+
+      const repeatingAssignees = effectiveAssignees.filter(
+        (assignee) => assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
+      )
+      const oneShotAssignees = effectiveAssignees.filter(
+        (assignee) =>
+          !assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
+      )
+
+      for (const assignee of repeatingAssignees) {
+        const body = buildScheduleRequestForAssignee(effectiveDraft, assignee, {
+          staffMode: modeConfig.showStaffSelfAssignee,
+        })
+        if (!body) {
+          continue
+        }
+        await scheduleFromCatalogMutation.mutateAsync({
+          actionPlanId: planId,
+          body,
+        })
+      }
+
+      let firstExecutionId: string | null = null
+      for (const assignee of oneShotAssignees) {
+        const body = buildUseRequestForAssignee(effectiveDraft, assignee)
+        if (!body) {
+          continue
+        }
+        const execution = await useFromCatalogMutation.mutateAsync({
+          actionPlanId: planId,
+          body,
+        })
+        if (!firstExecutionId) {
+          firstExecutionId = execution.id
+        }
+      }
+
+      if (firstExecutionId) {
+        navigate(`/action-plans/executions/${firstExecutionId}`)
+        return
+      }
+      navigate(`/action-plans/${planId}`)
+    } catch (error) {
+      setPlanningActionError(
+        resolveActionPlanErrorMessage(error, 'La planification n’a pas pu être finalisée.'),
+      )
+    } finally {
+      setIsOrchestrating(false)
+    }
+  }
+
+  async function handlePrimarySubmit() {
+    if (
+      !isTemplateEdit &&
+      !saveToLibrary &&
+      shouldHidePrimaryPlanningActions(planningDraft)
+    ) {
+      await handleCreateWithPerAssigneePlanning()
+      return
+    }
+    await submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
+  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -463,6 +560,28 @@ export function ActionPlanCreatePage({
           />
         </TerrainCard>
 
+        {showToggleSection ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Options</TerrainSectionLabel>
+            <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+              {modeConfig.showValidationToggle ? (
+                <TerrainSwitch
+                  label="Validation requise"
+                  checked={requiresValidation}
+                  onCheckedChange={setRequiresValidation}
+                />
+              ) : null}
+              {modeConfig.showLibraryToggle ? (
+                <TerrainSwitch
+                  label="Enregistrer dans la bibliothèque"
+                  checked={saveToLibrary}
+                  onCheckedChange={setSaveToLibrary}
+                />
+              ) : null}
+            </TerrainCard>
+          </section>
+        ) : null}
+
         <ActionPlanTaskDraftEditor
           tasks={tasks}
           establishmentId={establishmentId ?? ''}
@@ -480,12 +599,14 @@ export function ActionPlanCreatePage({
           <ActionPlanEventPlanningForm
             draft={{ ...planningDraft, assignees: effectiveAssignees }}
             config={{
-              canEditAssignees: !saveToLibrary && modeConfig.showAssigneeSheet,
+              canEditAssignees: modeConfig.showAssigneeSheet,
               canSchedule: modeConfig.showScheduleSection,
               staffMode: modeConfig.showStaffSelfAssignee,
-              showAdvancedChronology: !saveToLibrary && modeConfig.showAssigneeSheet,
-              hideAssignees: saveToLibrary,
+              showAdvancedChronology: modeConfig.showAssigneeSheet,
+              hideAssignees: false,
               staffDisplayName,
+              planningPersisted: saveToLibrary ? false : undefined,
+              assigneeActionsEnabled: false,
             }}
             establishmentId={establishmentId}
             pilotBusinessUnitId={resolvedPilotBusinessUnitId}
@@ -500,27 +621,11 @@ export function ActionPlanCreatePage({
           />
         ) : null}
 
-        {showToggleSection ? (
-          <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
-            {modeConfig.showValidationToggle ? (
-              <TerrainSwitch
-                label="Validation requise"
-                checked={requiresValidation}
-                onCheckedChange={setRequiresValidation}
-              />
-            ) : null}
-            {modeConfig.showLibraryToggle ? (
-              <TerrainSwitch
-                label="Enregistrer dans la bibliothèque"
-                checked={saveToLibrary}
-                onCheckedChange={setSaveToLibrary}
-              />
-            ) : null}
-          </TerrainCard>
-        ) : null}
-
         {resolvedSubmitError ? (
           <TerrainFeedback variant="error" message={resolvedSubmitError} />
+        ) : null}
+        {planningActionError ? (
+          <TerrainFeedback variant="error" message={planningActionError} />
         ) : null}
       </div>
 
@@ -548,11 +653,13 @@ export function ActionPlanCreatePage({
         ) : (
           <Button
             type="button"
-            className="h-11 w-full rounded-xl"
+            className={cn(
+              'h-11 w-full rounded-xl text-white',
+              terrainBrandAction.bg,
+              terrainBrandAction.hover,
+            )}
             disabled={resolvedIsSubmitting}
-            onClick={() =>
-              void submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
-            }
+            onClick={() => void handlePrimarySubmit()}
           >
             {submitLabel}
           </Button>

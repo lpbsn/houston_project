@@ -29,7 +29,7 @@ import {
 import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
-import type { ActionPlanCatalogListFilters } from '../types'
+import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest, ActionPlanCatalogListFilters } from '../types'
 
 type ActionPlanHubPageProps = {
   onNavigate?: (pathname: string) => void
@@ -147,6 +147,17 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     }
   }
 
+  async function handleAssigneeSchedule(
+    _assigneeId: string,
+    body: ActionPlanScheduleCreateRequest,
+  ) {
+    await handleSchedule(body)
+  }
+
+  async function handleAssigneeLaunch(_assigneeId: string, body: ActionPlanUseRequest) {
+    await handleUse(body)
+  }
+
   return (
     <div className="space-y-3 px-3 pb-24 pt-2">
       <div className="flex items-start justify-between gap-3">
@@ -215,6 +226,8 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           onClose={() => setUsePlanId(null)}
           onConfirm={(body) => void handleUse(body)}
           onScheduleConfirm={(body) => void handleSchedule(body)}
+          onAssigneeSchedule={(assigneeId, body) => void handleAssigneeSchedule(assigneeId, body)}
+          onAssigneeLaunch={(assigneeId, body) => void handleAssigneeLaunch(assigneeId, body)}
         />
       ) : null}
     </div>

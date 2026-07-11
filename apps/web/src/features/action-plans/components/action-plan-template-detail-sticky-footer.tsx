@@ -16,7 +16,9 @@ type ActionPlanTemplateDetailStickyFooterProps = {
   canUpdate: boolean
   canUse: boolean
   isBusy: boolean
-  isLaunchPending: boolean
+  primaryActionLabel: string
+  primaryActionDisabled: boolean
+  isPrimaryPending: boolean
   onNavigateToEdit: () => void
   onActivate: () => void
   onDeactivate: () => void
@@ -31,7 +33,9 @@ export function ActionPlanTemplateDetailStickyFooter({
   canUpdate,
   canUse,
   isBusy,
-  isLaunchPending,
+  primaryActionLabel,
+  primaryActionDisabled,
+  isPrimaryPending,
   onNavigateToEdit,
   onActivate,
   onDeactivate,
@@ -47,7 +51,7 @@ export function ActionPlanTemplateDetailStickyFooter({
             type="button"
             variant="outline"
             className="h-11 flex-1 rounded-xl"
-            disabled={isLaunchPending}
+            disabled={isPrimaryPending}
             onClick={onCloseExecutionPanel}
           >
             Annuler
@@ -55,10 +59,10 @@ export function ActionPlanTemplateDetailStickyFooter({
           <Button
             type="button"
             className="h-11 flex-1 rounded-xl"
-            disabled={isLaunchPending}
+            disabled={primaryActionDisabled}
             onClick={onLaunchExecution}
           >
-            Lancer l&apos;exécution
+            {primaryActionLabel}
           </Button>
         </div>
       </TerrainStickyFooter>

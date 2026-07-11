@@ -22,6 +22,7 @@ type PlanningDateTimeRowProps = {
   date: string
   time: string
   hideTime?: boolean
+  hideDate?: boolean
   openPicker: PlanningPickerTarget
   onOpenPickerChange: (target: PlanningPickerTarget) => void
   onDateChange: (date: string) => void
@@ -37,6 +38,7 @@ export function PlanningDateTimeRow({
   date,
   time,
   hideTime = false,
+  hideDate = false,
   openPicker,
   onOpenPickerChange,
   onDateChange,
@@ -64,13 +66,15 @@ export function PlanningDateTimeRow({
       <div className="flex items-center justify-between gap-3 px-3 py-3">
         <span className="text-sm text-[#1a1a1a]">{label}</span>
         <div className="flex shrink-0 items-center gap-2">
-          <PlanningPill
-            active={dateActive}
-            aria-label={`${label} — date`}
-            onClick={() => togglePicker('date')}
-          >
-            {formatDatePillLabel(date)}
-          </PlanningPill>
+          {!hideDate ? (
+            <PlanningPill
+              active={dateActive}
+              aria-label={`${label} — date`}
+              onClick={() => togglePicker('date')}
+            >
+              {formatDatePillLabel(date)}
+            </PlanningPill>
+          ) : null}
           {!hideTime ? (
             <PlanningPill
               active={timeActive}
@@ -83,7 +87,7 @@ export function PlanningDateTimeRow({
         </div>
       </div>
 
-      {dateActive ? (
+      {dateActive && !hideDate ? (
         <PlanningDatePicker
           value={date}
           onChange={(nextDate) => {

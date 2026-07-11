@@ -4,17 +4,18 @@ import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
 
 import { ActionPlanEventPlanningForm } from './action-plan-event-planning-form'
-import { buildActionPlanUseRequest } from '../lib/action-plan-create-payload'
 import {
+  buildScheduleRequestsFromDraft,
+  buildUseRequestFromDraft,
   createActionPlanEventPlanningDraft,
+  hasGlobalRepeat,
+  shouldHidePrimaryPlanningActions,
   toScheduleDraft,
-  toUseRequestOptions,
   validateActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
-import { buildActionPlanScheduleCreateRequest } from '../lib/action-plan-schedule-payload'
 import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
-import type { ActionPlanScheduleCreateRequest } from '../types'
+import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest } from '../types'
 
 type ActionPlanUseSheetProps = {
   open: boolean
@@ -26,8 +27,10 @@ type ActionPlanUseSheetProps = {
   staffDisplayName?: string
   canSchedule?: boolean
   onClose: () => void
-  onConfirm: (body: ReturnType<typeof buildActionPlanUseRequest>) => void
+  onConfirm: (body: ReturnType<typeof buildUseRequestFromDraft>) => void
   onScheduleConfirm?: (body: ActionPlanScheduleCreateRequest) => void
+  onAssigneeSchedule?: (assigneeId: string, body: ActionPlanScheduleCreateRequest) => void
+  onAssigneeLaunch?: (assigneeId: string, body: ActionPlanUseRequest) => void
 }
 
 type ActionPlanUseSheetBodyProps = Omit<ActionPlanUseSheetProps, 'open'>
@@ -51,6 +54,8 @@ function ActionPlanUseSheetBody({
   onClose,
   onConfirm,
   onScheduleConfirm,
+  onAssigneeSchedule,
+  onAssigneeLaunch,
 }: ActionPlanUseSheetBodyProps) {
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
@@ -59,7 +64,8 @@ function ActionPlanUseSheetBody({
 
   const scheduleConfigured = isActionPlanScheduleConfigured(toScheduleDraft(planningDraft))
 
-  const isRepeatSubmit = planningDraft.repeatEnabled && canSchedule
+  const isRepeatSubmit = hasGlobalRepeat(planningDraft) && canSchedule
+  const hidePrimaryFooter = shouldHidePrimaryPlanningActions(planningDraft)
 
   function handlePrimaryAction() {
     const errors = validateActionPlanEventPlanningDraft(planningDraft, {
@@ -72,11 +78,10 @@ function ActionPlanUseSheetBody({
     }
 
     if (isRepeatSubmit) {
-      const body = buildActionPlanScheduleCreateRequest({
-        schedule: toScheduleDraft(planningDraft),
-        assignees: staffUseMode ? [] : planningDraft.assignees,
-        useSharedChronology: !planningDraft.usePerAssigneeChronology,
+      const schedules = buildScheduleRequestsFromDraft(planningDraft, {
+        staffMode: staffUseMode,
       })
+      const body = schedules[0]
       if (!body || !onScheduleConfirm) {
         return
       }
@@ -84,19 +89,16 @@ function ActionPlanUseSheetBody({
       return
     }
 
-    const useOptions = toUseRequestOptions(planningDraft)
     onConfirm(
-      buildActionPlanUseRequest({
-        ...useOptions,
-        assignees: staffUseMode ? [] : useOptions.assignees,
+      buildUseRequestFromDraft(planningDraft, {
+        staffMode: staffUseMode,
       }),
     )
   }
 
   const primaryLabel = isRepeatSubmit ? 'Planifier la récurrence' : "Lancer l'exécution"
   const primaryPending = isRepeatSubmit ? isSchedulePending : isPending
-  const primaryDisabled =
-    isRepeatSubmit ? !scheduleConfigured || primaryPending : primaryPending
+  const primaryDisabled = isRepeatSubmit ? !scheduleConfigured || primaryPending : primaryPending
 
   return (
     <TerrainBottomSheet
@@ -104,14 +106,16 @@ function ActionPlanUseSheetBody({
       open
       onClose={onClose}
       footer={
-        <Button
-          type="button"
-          className="h-11 w-full rounded-xl"
-          disabled={primaryDisabled}
-          onClick={handlePrimaryAction}
-        >
-          {primaryLabel}
-        </Button>
+        hidePrimaryFooter ? undefined : (
+          <Button
+            type="button"
+            className="h-11 w-full rounded-xl"
+            disabled={primaryDisabled}
+            onClick={handlePrimaryAction}
+          >
+            {primaryLabel}
+          </Button>
+        )
       }
     >
       <ActionPlanEventPlanningForm
@@ -123,11 +127,14 @@ function ActionPlanUseSheetBody({
           showAdvancedChronology: !staffUseMode,
           hideAssignees: false,
           staffDisplayName,
+          assigneeActionsEnabled: true,
         }}
         establishmentId={establishmentId}
         pilotBusinessUnitId={pilotBusinessUnitId}
         fieldErrors={fieldErrors}
         onDraftChange={setPlanningDraft}
+        onAssigneeSchedule={onAssigneeSchedule}
+        onAssigneeLaunch={onAssigneeLaunch}
       />
     </TerrainBottomSheet>
   )

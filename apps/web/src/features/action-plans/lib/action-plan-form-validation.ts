@@ -1,7 +1,10 @@
+import type { ActionPlanRecurrenceDay } from './action-plan-schedule-constants'
 import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
 import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
 import {
+  hasGlobalRepeat,
   validateActionPlanEventPlanningDraft,
+  validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from './action-plan-event-planning-form'
 import type { ActionPlanTaskTemplate } from '../types'
@@ -51,6 +54,9 @@ export type ActionPlanAssigneeDraft = {
   startAt: string
   endAt: string
   visibleFrom: string
+  repeatEnabled: boolean
+  recurrenceDays: ActionPlanRecurrenceDay[]
+  recurrenceEndDate: string
 }
 
 export function createActionPlanAssigneeDraft(
@@ -64,6 +70,9 @@ export function createActionPlanAssigneeDraft(
     startAt: partial.startAt ?? '',
     endAt: partial.endAt ?? '',
     visibleFrom: partial.visibleFrom ?? '',
+    repeatEnabled: partial.repeatEnabled ?? false,
+    recurrenceDays: partial.recurrenceDays ?? [],
+    recurrenceEndDate: partial.recurrenceEndDate ?? '',
   }
 }
 
@@ -159,7 +168,14 @@ export function validateActionPlanCreateForm(
     }
   }
 
-  if (!values.saveToLibrary && !isActionPlanScheduleConfigured(values.schedule)) {
+  const hasPerAssigneeRepeatAssignees =
+    !values.useSharedChronology && values.assignees.some((assignee) => assignee.repeatEnabled)
+
+  if (
+    !values.saveToLibrary &&
+    !isActionPlanScheduleConfigured(values.schedule) &&
+    !hasPerAssigneeRepeatAssignees
+  ) {
     for (const assignee of values.assignees.filter((item) => item.membershipId)) {
       if (!assignee.businessUnitId) {
         errors.assignees = 'Chaque assigné doit être rattaché à un pôle.'
@@ -213,8 +229,20 @@ export function validateActionPlanCreatePlanningErrors(
     staffExecutionMode?: { membershipId: string; pilotBusinessUnitId: string }
   },
 ): Record<string, string> {
+  if (options.saveToLibrary) {
+    return {}
+  }
+
+  if (planningDraft.usePerAssigneeChronology) {
+    return validatePerAssigneePlanningDraft(planningDraft, {
+      allowRepeat: !options.staffExecutionMode,
+    })
+  }
+
   return validateActionPlanEventPlanningDraft(planningDraft, {
-    requireAssignees: !options.saveToLibrary || planningDraft.repeatEnabled,
+    requireAssignees:
+      !options.saveToLibrary &&
+      (hasGlobalRepeat(planningDraft) || planningDraft.repeatEnabled),
     allowRepeat: !options.staffExecutionMode,
   })
 }

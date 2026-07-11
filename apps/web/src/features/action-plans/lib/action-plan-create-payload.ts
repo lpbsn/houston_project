@@ -87,13 +87,50 @@ export function buildActionPlanUpdateRequest(
   }
 }
 
+export function buildActionPlanShellCreateRequest(
+  values: Pick<
+    ActionPlanCreateFormValues,
+    'title' | 'description' | 'pilotBusinessUnitId' | 'requiresValidation' | 'tasks'
+  >,
+  options: { reusableForScheduling?: boolean } = {},
+): ActionPlanCreateRequest {
+  return {
+    title: values.title.trim(),
+    description: values.description.trim(),
+    pilot_business_unit_id: values.pilotBusinessUnitId,
+    requires_validation: values.requiresValidation,
+    is_reusable: options.reusableForScheduling === true,
+    tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
+    assignees: [],
+    use_shared_chronology: false,
+    start_at: null,
+    end_at: null,
+    visible_from: null,
+  }
+}
+
 export function buildActionPlanCreateRequest(
   values: ActionPlanCreateFormValues,
 ): ActionPlanCreateRequest {
+  if (values.saveToLibrary) {
+    return {
+      title: values.title.trim(),
+      description: values.description.trim(),
+      pilot_business_unit_id: values.pilotBusinessUnitId,
+      requires_validation: values.requiresValidation,
+      is_reusable: true,
+      tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
+      assignees: [],
+      use_shared_chronology: false,
+      start_at: null,
+      end_at: null,
+      visible_from: null,
+      ...(values.sourceSignalId ? { source_signal_id: values.sourceSignalId } : {}),
+    }
+  }
+
   const scheduleEnabled = values.schedule.enabled
-  const assignees = values.saveToLibrary && !scheduleEnabled
-    ? []
-    : buildAssigneePayloads(values.assignees, {
+  const assignees = buildAssigneePayloads(values.assignees, {
         useSharedChronology: values.useSharedChronology,
         sharedStartAt: values.sharedStartAt,
         sharedEndAt: values.sharedEndAt,
@@ -111,7 +148,7 @@ export function buildActionPlanCreateRequest(
     description: values.description.trim(),
     pilot_business_unit_id: values.pilotBusinessUnitId,
     requires_validation: values.requiresValidation,
-    is_reusable: values.saveToLibrary || scheduleEnabled,
+    is_reusable: scheduleEnabled,
     tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
     assignees,
     use_shared_chronology: values.useSharedChronology,
