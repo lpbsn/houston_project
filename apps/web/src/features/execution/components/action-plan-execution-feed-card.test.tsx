@@ -111,6 +111,8 @@ describe('ActionPlanExecutionFeedCard', () => {
     )
 
     expect(screen.getByText('∞')).toBeTruthy()
+    const sidebar = screen.getByLabelText('Sans échéance')
+    expect(sidebar.querySelector('.rounded-full.bg-white\\/20')).toBeTruthy()
     expect(screen.queryByText('DANS')).toBeNull()
     expect(screen.getByText('1/4')).toBeTruthy()
   })

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Bell, Check, X } from 'lucide-react'
 
 import type { ActionPlanFeedSidebarState } from '@/features/execution/lib/action-plan-execution-feed-card-display'
@@ -31,16 +32,24 @@ function getSidebarBackgroundClassName(state: ActionPlanFeedSidebarState): strin
     : actionPlanFeedTealBgClassName
 }
 
-function TerminalSidebarIcon({ variant }: { variant: 'done' | 'canceled' }) {
-  const Icon = variant === 'done' ? Check : X
-
+function SidebarIconCircle({ children }: { children: ReactNode }) {
   return (
     <div
       className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20"
       aria-hidden
     >
-      <Icon className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+      {children}
     </div>
+  )
+}
+
+function TerminalSidebarIcon({ variant }: { variant: 'done' | 'canceled' }) {
+  const Icon = variant === 'done' ? Check : X
+
+  return (
+    <SidebarIconCircle>
+      <Icon className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+    </SidebarIconCircle>
   )
 }
 
@@ -83,7 +92,9 @@ export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanF
         </>
       ) : null}
       {state.variant === 'no_deadline' ? (
-        <span className="text-xl font-bold leading-none">∞</span>
+        <SidebarIconCircle>
+          <span className="text-lg font-bold leading-none">∞</span>
+        </SidebarIconCircle>
       ) : null}
       {state.variant === 'overdue' ? <Bell className="h-5 w-5 shrink-0" aria-hidden /> : null}
     </div>
