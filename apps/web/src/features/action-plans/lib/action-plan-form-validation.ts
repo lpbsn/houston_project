@@ -236,6 +236,7 @@ export function validateActionPlanCreatePlanningErrors(
   if (planningDraft.usePerAssigneeChronology) {
     return validatePerAssigneePlanningDraft(planningDraft, {
       allowRepeat: !options.staffExecutionMode,
+      requireCompatibleRepeats: true,
     })
   }
 
