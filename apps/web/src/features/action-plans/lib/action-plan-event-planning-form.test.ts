@@ -369,4 +369,17 @@ describe('action-plan-event-planning-form', () => {
 
     expect(validatePerAssigneePlanningDraft(draft, { allowRepeat: true })).toEqual({})
   })
+
+  it('requires at least one assignee when per-assignee chronology is enabled', () => {
+    const errors = validatePerAssigneePlanningDraft(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [],
+      },
+      { allowRepeat: true },
+    )
+
+    expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
+  })
 })

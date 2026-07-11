@@ -19,6 +19,8 @@ export type ActionPlanEventPlanningDraft = {
   usePerAssigneeChronology: boolean
 }
 
+export type ActionPlanAssigneeActionKind = 'schedule' | 'launch'
+
 export type ActionPlanEventPlanningConfig = {
   canEditAssignees: boolean
   canSchedule: boolean
@@ -28,6 +30,7 @@ export type ActionPlanEventPlanningConfig = {
   staffDisplayName?: string
   planningPersisted?: boolean
   assigneeActionsEnabled?: boolean
+  assigneeActionPending?: Record<string, ActionPlanAssigneeActionKind>
 }
 
 export function hasGlobalRepeat(draft: ActionPlanEventPlanningDraft): boolean {

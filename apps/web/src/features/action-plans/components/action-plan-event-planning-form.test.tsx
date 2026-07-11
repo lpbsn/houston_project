@@ -95,6 +95,26 @@ describe('ActionPlanEventPlanningForm', () => {
     )
   })
 
+  it('preserves end date when repeat is toggled off again', () => {
+    const onDraftChange = vi.fn()
+    renderForm(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        startDate: '2026-07-04',
+        endDate: '2026-07-08',
+        repeatEnabled: true,
+      },
+      baseConfig,
+      onDraftChange,
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
+
+    expect(onDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({ repeatEnabled: false, endDate: '2026-07-08' }),
+    )
+  })
+
   it('hides repeat toggle when scheduling is not allowed', () => {
     renderForm(createActionPlanEventPlanningDraft(), {
       ...baseConfig,
@@ -254,6 +274,32 @@ describe('ActionPlanEventPlanningForm', () => {
     expect(screen.getByLabelText('Début de la récurrence — date')).toBeTruthy()
     expect(screen.getByText('Jours')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Lundi' })).toBeTruthy()
+  })
+
+  it('disables assignee action button while pending', () => {
+    const assignee = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      displayName: 'Bob',
+      startAt: combineDateAndTimeToIso('2026-07-04', '09:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-05', '10:00', 'end'),
+    })
+    renderForm(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [assignee],
+      },
+      {
+        ...baseConfig,
+        assigneeActionPending: { [assignee.id]: 'launch' },
+      },
+    )
+
+    expect(screen.getByRole('button', { name: 'Lancer pour cet assigné' })).toHaveProperty(
+      'disabled',
+      true,
+    )
   })
 
   it('shows planning not persisted hint when configured', () => {

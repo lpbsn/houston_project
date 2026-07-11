@@ -31,6 +31,7 @@ type ActionPlanUseSheetProps = {
   onScheduleConfirm?: (body: ActionPlanScheduleCreateRequest) => void
   onAssigneeSchedule?: (assigneeId: string, body: ActionPlanScheduleCreateRequest) => void
   onAssigneeLaunch?: (assigneeId: string, body: ActionPlanUseRequest) => void
+  assigneeActionPending?: Record<string, 'schedule' | 'launch'>
 }
 
 type ActionPlanUseSheetBodyProps = Omit<ActionPlanUseSheetProps, 'open'>
@@ -56,6 +57,7 @@ function ActionPlanUseSheetBody({
   onScheduleConfirm,
   onAssigneeSchedule,
   onAssigneeLaunch,
+  assigneeActionPending = {},
 }: ActionPlanUseSheetBodyProps) {
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
@@ -68,6 +70,10 @@ function ActionPlanUseSheetBody({
   const hidePrimaryFooter = shouldHidePrimaryPlanningActions(planningDraft)
 
   function handlePrimaryAction() {
+    if (shouldHidePrimaryPlanningActions(planningDraft)) {
+      return
+    }
+
     const errors = validateActionPlanEventPlanningDraft(planningDraft, {
       requireAssignees: false,
       allowRepeat: canSchedule,
@@ -128,6 +134,7 @@ function ActionPlanUseSheetBody({
           hideAssignees: false,
           staffDisplayName,
           assigneeActionsEnabled: true,
+          assigneeActionPending,
         }}
         establishmentId={establishmentId}
         pilotBusinessUnitId={pilotBusinessUnitId}

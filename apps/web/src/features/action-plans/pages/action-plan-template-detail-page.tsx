@@ -28,7 +28,7 @@ import {
   toScheduleDraft,
   toUseRequestOptions,
   validateActionPlanEventPlanningDraft,
-  validatePerAssigneePlanningDraft,
+  type ActionPlanAssigneeActionKind,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
 import {
@@ -68,6 +68,9 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
+  const [assigneeActionPending, setAssigneeActionPending] = useState<
+    Record<string, ActionPlanAssigneeActionKind>
+  >({})
 
   if (!establishmentId) {
     return null
@@ -124,6 +127,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     setExecutionPanelOpen(false)
     setPlanningDraft(createActionPlanEventPlanningDraft())
     setPlanningFieldErrors({})
+    setAssigneeActionPending({})
   }
 
   async function handleActivate() {
@@ -153,9 +157,13 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   }
 
   async function handleAssigneeSchedule(
-    _assigneeId: string,
+    assigneeId: string,
     body: ActionPlanScheduleCreateRequest,
   ) {
+    if (assigneeActionPending[assigneeId]) {
+      return
+    }
+    setAssigneeActionPending((previous) => ({ ...previous, [assigneeId]: 'schedule' }))
     setFeedback(null)
     try {
       await scheduleMutation.mutateAsync(body)
@@ -165,10 +173,20 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         variant: 'error',
         message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'),
       })
+    } finally {
+      setAssigneeActionPending((previous) => {
+        const next = { ...previous }
+        delete next[assigneeId]
+        return next
+      })
     }
   }
 
-  async function handleAssigneeLaunch(_assigneeId: string, body: ActionPlanUseRequest) {
+  async function handleAssigneeLaunch(assigneeId: string, body: ActionPlanUseRequest) {
+    if (assigneeActionPending[assigneeId]) {
+      return
+    }
+    setAssigneeActionPending((previous) => ({ ...previous, [assigneeId]: 'launch' }))
     setFeedback(null)
     try {
       await useMutation.mutateAsync(body)
@@ -178,18 +196,26 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         variant: 'error',
         message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être lancé.'),
       })
+    } finally {
+      setAssigneeActionPending((previous) => {
+        const next = { ...previous }
+        delete next[assigneeId]
+        return next
+      })
     }
   }
 
   async function handleLaunchExecution() {
-    const errors = planningDraft.usePerAssigneeChronology
-      ? validatePerAssigneePlanningDraft(planningDraft, { allowRepeat: canSchedule })
-      : validateActionPlanEventPlanningDraft(planningDraft, {
-          requireAssignees: false,
-          allowRepeat: canSchedule,
-        })
+    if (planningDraft.usePerAssigneeChronology) {
+      return
+    }
+
+    const errors = validateActionPlanEventPlanningDraft(planningDraft, {
+      requireAssignees: false,
+      allowRepeat: canSchedule,
+    })
     setPlanningFieldErrors(errors)
-    if (Object.keys(errors).length > 0 || planningDraft.usePerAssigneeChronology) {
+    if (Object.keys(errors).length > 0) {
       return
     }
 
@@ -271,6 +297,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
               showAdvancedChronology: !staffUseMode,
               hideAssignees: false,
               staffDisplayName,
+              assigneeActionPending,
             }}
             establishmentId={establishmentId}
             pilotBusinessUnitId={plan.pilot_business_unit.id}

@@ -5,7 +5,10 @@ import {
   buildActionPlanTaskInputPayloads,
   buildActionPlanUpdateRequest,
 } from '@/features/action-plans/lib/action-plan-create-payload'
-import { createActionPlanTaskDraft } from '@/features/action-plans/lib/action-plan-form-validation'
+import {
+  createActionPlanAssigneeDraft,
+  createActionPlanTaskDraft,
+} from '@/features/action-plans/lib/action-plan-form-validation'
 import { createActionPlanScheduleDraft } from '@/features/action-plans/lib/action-plan-schedule-form'
 
 describe('buildActionPlanTaskInputPayloads', () => {
@@ -134,6 +137,69 @@ describe('buildActionPlanCreateRequest', () => {
       visible_from: null,
     })
     expect(request).not.toHaveProperty('schedule')
+  })
+
+  it('builds per-assignee mixed create payload with schedule and one-shot assignees', () => {
+    const recurringAssignee = createActionPlanAssigneeDraft({
+      id: 'a-recurring',
+      membershipId: 'member-1',
+      businessUnitId: 'bu-pilot',
+      displayName: 'Luffy',
+      repeatEnabled: true,
+      startAt: '2026-07-12T03:00:00.000Z',
+      endAt: '2026-07-12T14:05:00.000Z',
+      recurrenceDays: ['tuesday', 'thursday', 'saturday'],
+      recurrenceEndDate: '2026-07-25',
+    })
+    const oneShotAssignee = createActionPlanAssigneeDraft({
+      id: 'a-one-shot',
+      membershipId: 'member-2',
+      businessUnitId: 'bu-pilot',
+      displayName: 'Nami',
+      repeatEnabled: false,
+      startAt: '2026-07-11T03:00:00.000Z',
+      endAt: '2026-07-25T06:00:00.000Z',
+    })
+
+    const request = buildActionPlanCreateRequest({
+      title: 'Plan per-assigné',
+      description: 'Desc',
+      pilotBusinessUnitId: 'bu-pilot',
+      requiresValidation: false,
+      saveToLibrary: false,
+      useSharedChronology: false,
+      sharedStartAt: '',
+      sharedEndAt: '',
+      sharedVisibleFrom: '',
+      tasks: [{ ...createActionPlanTaskDraft('bu-pilot'), task: 'Task 1' }],
+      assignees: [recurringAssignee, oneShotAssignee],
+      schedule: createActionPlanScheduleDraft(),
+    })
+
+    expect(request.use_shared_chronology).toBe(false)
+    expect(request.is_reusable).toBe(true)
+    expect(request.schedule).toEqual(
+      expect.objectContaining({
+        recurrence_days: ['tuesday', 'thursday', 'saturday'],
+        end_date: '2026-07-25',
+        use_shared_chronology: false,
+        assignees: [
+          expect.objectContaining({
+            membership_id: 'member-1',
+            business_unit_id: 'bu-pilot',
+          }),
+        ],
+      }),
+    )
+    expect(request.assignees).toEqual([
+      expect.objectContaining({
+        membership_id: 'member-2',
+        business_unit_id: 'bu-pilot',
+        start_at: '2026-07-11T03:00:00.000Z',
+        end_at: '2026-07-25T06:00:00.000Z',
+      }),
+    ])
+    expect(request.assignees).toHaveLength(1)
   })
 })
 

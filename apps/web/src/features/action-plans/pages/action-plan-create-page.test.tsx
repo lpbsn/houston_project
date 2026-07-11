@@ -613,9 +613,13 @@ describe('ActionPlanCreatePage', () => {
     expect(createMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('orchestrates per-assignee create with one click and hides secondary assignee buttons', async () => {
+  it('creates per-assignee plan with one atomic create call and hides secondary assignee buttons', async () => {
     perAssigneeTestMode.enabled = true
-    createMutateAsync.mockResolvedValue({ id: 'plan-shell-1' })
+    createMutateAsync.mockResolvedValue({
+      id: 'exec-2',
+      status: 'in_progress',
+      action_plan_id: 'plan-per-assignee-1',
+    })
 
     renderPage({ mode: 'catalog' })
 
@@ -630,23 +634,9 @@ describe('ActionPlanCreatePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
 
     await waitFor(() => {
-      expect(createMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Plan per-assigné',
-          is_reusable: true,
-          assignees: [],
-        }),
-      )
-      expect(scheduleMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actionPlanId: 'plan-shell-1',
-        }),
-      )
-      expect(useMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actionPlanId: 'plan-shell-1',
-        }),
-      )
+      expect(createMutateAsync).toHaveBeenCalledTimes(1)
+      expect(scheduleMutateAsync).not.toHaveBeenCalled()
+      expect(useMutateAsync).not.toHaveBeenCalled()
       expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-2')
     })
   })

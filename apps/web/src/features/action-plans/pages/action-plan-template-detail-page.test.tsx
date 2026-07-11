@@ -178,4 +178,14 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/edit')
   })
+
+  it('hides primary launch action when per-assignee chronology is enabled', () => {
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
+
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: "Lancer l'exécution" })).toBeNull()
+  })
 })

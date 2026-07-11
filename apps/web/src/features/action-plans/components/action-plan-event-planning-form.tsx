@@ -426,6 +426,7 @@ export function ActionPlanEventPlanningForm({
                         <Button
                           type="button"
                           className="h-10 w-full rounded-xl"
+                          disabled={Boolean(config.assigneeActionPending?.[assignee.id])}
                           onClick={() =>
                             assignee.repeatEnabled
                               ? handleAssigneeSchedule(assignee)

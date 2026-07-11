@@ -29,6 +29,7 @@ import {
 import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
+import type { ActionPlanAssigneeActionKind } from '../lib/action-plan-event-planning-form'
 import type {
   ActionPlanScheduleCreateRequest,
   ActionPlanUseRequest,
@@ -62,6 +63,9 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   const [createdByMe, setCreatedByMe] = useState(false)
   const [usePlanId, setUsePlanId] = useState<string | null>(null)
   const [useError, setUseError] = useState<string | null>(null)
+  const [assigneeActionPending, setAssigneeActionPending] = useState<
+    Record<string, ActionPlanAssigneeActionKind>
+  >({})
 
   const filters = useMemo<ActionPlanCatalogListFilters>(() => {
     const next: ActionPlanCatalogListFilters = {}
@@ -152,29 +156,43 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   }
 
   async function handleAssigneeSchedule(
-    _assigneeId: string,
+    assigneeId: string,
     body: ActionPlanScheduleCreateRequest,
   ) {
-    if (!usePlanId) {
+    if (!usePlanId || assigneeActionPending[assigneeId]) {
       return
     }
+    setAssigneeActionPending((previous) => ({ ...previous, [assigneeId]: 'schedule' }))
     setUseError(null)
     try {
       await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body })
     } catch (error) {
       setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'))
+    } finally {
+      setAssigneeActionPending((previous) => {
+        const next = { ...previous }
+        delete next[assigneeId]
+        return next
+      })
     }
   }
 
-  async function handleAssigneeLaunch(_assigneeId: string, body: ActionPlanUseRequest) {
-    if (!usePlanId) {
+  async function handleAssigneeLaunch(assigneeId: string, body: ActionPlanUseRequest) {
+    if (!usePlanId || assigneeActionPending[assigneeId]) {
       return
     }
+    setAssigneeActionPending((previous) => ({ ...previous, [assigneeId]: 'launch' }))
     setUseError(null)
     try {
       await useMutation.mutateAsync({ actionPlanId: usePlanId, body })
     } catch (error) {
       setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être utilisé.'))
+    } finally {
+      setAssigneeActionPending((previous) => {
+        const next = { ...previous }
+        delete next[assigneeId]
+        return next
+      })
     }
   }
 
@@ -243,11 +261,15 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           isSchedulePending={scheduleMutation.isPending}
           staffUseMode={staffUseMode}
           canSchedule={canShowActionPlanSchedule(usePlan.permission_hints)}
-          onClose={() => setUsePlanId(null)}
+          onClose={() => {
+            setUsePlanId(null)
+            setAssigneeActionPending({})
+          }}
           onConfirm={(body) => void handleUse(body)}
           onScheduleConfirm={(body) => void handleSchedule(body)}
           onAssigneeSchedule={(assigneeId, body) => void handleAssigneeSchedule(assigneeId, body)}
           onAssigneeLaunch={(assigneeId, body) => void handleAssigneeLaunch(assigneeId, body)}
+          assigneeActionPending={assigneeActionPending}
         />
       ) : null}
     </div>

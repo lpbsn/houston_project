@@ -233,6 +233,19 @@ describe('validateActionPlanCreatePlanningErrors', () => {
 
     expect(errors[`assignee.${assignee.id}.recurrenceDays`]).toBeTruthy()
   })
+
+  it('requires at least one assignee for create when per-assignee chronology is enabled', () => {
+    const errors = validateActionPlanCreatePlanningErrors(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [],
+      },
+      { saveToLibrary: false },
+    )
+
+    expect(errors.assignees).toBe('Ajoutez au moins un assigné pour lancer le plan.')
+  })
 })
 
 describe('buildActionPlanCreateRequest', () => {
