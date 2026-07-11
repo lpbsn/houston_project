@@ -1,4 +1,5 @@
 import { HoustonBadge, TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
+import { Button } from '@/components/ui/button'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -6,29 +7,37 @@ import { cn } from '@/lib/utils'
 import {
   buildActionPlanTemplatePoleSummaries,
   formatActionPlanCreatedAtLabel,
-  formatCatalogStatusLabel,
 } from '../lib/action-plan-display'
 import type { ActionPlanDetail } from '../types'
 
 type ActionPlanTemplateDetailHeaderProps = {
   plan: ActionPlanDetail
+  showActivate?: boolean
+  showDeactivate?: boolean
+  isActivatePending?: boolean
+  isDeactivatePending?: boolean
+  onActivate?: () => void
+  onDeactivate?: () => void
 }
 
-export function ActionPlanTemplateDetailHeader({ plan }: ActionPlanTemplateDetailHeaderProps) {
+export function ActionPlanTemplateDetailHeader({
+  plan,
+  showActivate = false,
+  showDeactivate = false,
+  isActivatePending = false,
+  isDeactivatePending = false,
+  onActivate,
+  onDeactivate,
+}: ActionPlanTemplateDetailHeaderProps) {
   const createdAtLabel = formatActionPlanCreatedAtLabel(plan.created_at)
   const creatorInitials = getDisplayNameInitials(plan.created_by_display_name)
   const poleSummaries = buildActionPlanTemplatePoleSummaries(plan)
   const description = plan.description.trim()
-  const catalogStatusLabel = formatCatalogStatusLabel(plan.catalog_status)
-  const catalogBadgeVariant = plan.catalog_status === 'active' ? 'green' : 'gray'
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <TerrainCard className="space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <h1 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{plan.title}</h1>
-          <HoustonBadge variant={catalogBadgeVariant}>{catalogStatusLabel}</HoustonBadge>
-        </div>
+    <div className="flex flex-col gap-4">
+      <TerrainCard className="space-y-3">
+        <h1 className="text-[17px] font-semibold leading-snug text-[#1a1a1a]">{plan.title}</h1>
 
         <div className="flex items-center gap-2">
           <div
@@ -49,14 +58,42 @@ export function ActionPlanTemplateDetailHeader({ plan }: ActionPlanTemplateDetai
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          <HoustonBadge variant="gray" className="text-[10px]">
-            {plan.pilot_business_unit.label}
-          </HoustonBadge>
-          {plan.requires_validation ? (
-            <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">
-              Validation requise
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <HoustonBadge variant="gray" className="text-[10px]">
+              {plan.pilot_business_unit.label}
             </HoustonBadge>
+            {plan.requires_validation ? (
+              <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">
+                Validation requise
+              </HoustonBadge>
+            ) : null}
+          </div>
+          {showActivate ? (
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                'h-8 shrink-0 rounded-full border-[#E8E6DF] bg-white px-3 text-xs font-medium hover:bg-[#F5F4F0]',
+                terrain.success,
+                'hover:text-[#1D9E75]',
+              )}
+              disabled={isActivatePending}
+              onClick={onActivate}
+            >
+              Activer
+            </Button>
+          ) : null}
+          {showDeactivate ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 shrink-0 rounded-full border-[#E8E6DF] bg-white px-3 text-xs font-medium text-[#E24B4A] hover:bg-[#F5F4F0] hover:text-[#E24B4A]"
+              disabled={isDeactivatePending}
+              onClick={onDeactivate}
+            >
+              Désactiver
+            </Button>
           ) : null}
         </div>
       </TerrainCard>

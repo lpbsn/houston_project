@@ -67,6 +67,29 @@ def test_inactive_catalog_can_activate_hint(
     assert hints["can_use"] is False
 
 
+def test_inactive_catalog_without_tasks_can_activate_hint(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    plan = ActionPlan.objects.create(
+        establishment=owner_membership.establishment,
+        created_by=owner_membership,
+        pilot_business_unit=business_unit,
+        title="Inactive without tasks",
+        is_reusable=True,
+        catalog_status=CATALOG_STATUS_INACTIVE,
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_url(owner_membership.establishment_id, plan.id),
+        **auth_headers(token),
+    )
+    hints = _hints(response)
+    assert hints["can_activate"] is True
+    assert hints["can_use"] is False
+
+
 def test_execution_hints_align_with_rbac(
     api_client,
     owner_membership,

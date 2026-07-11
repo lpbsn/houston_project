@@ -30,27 +30,18 @@ from houston.action_plans.schedule_services import get_active_started_execution_
 from houston.establishments.models import EstablishmentMembership
 
 
-def _plan_task_count(action_plan: ActionPlan) -> int:
-    task_count = getattr(action_plan, "task_count", None)
-    if task_count is not None:
-        return task_count
-    return action_plan.tasks.count()
-
-
 def _build_action_plan_permission_hints_core(
     *,
     membership: EstablishmentMembership,
     action_plan: ActionPlan,
 ) -> dict[str, bool]:
     can_manage = can_manage_action_plan(membership, action_plan)
-    task_count = _plan_task_count(action_plan)
-    has_tasks = task_count >= 1
     is_active = action_plan.catalog_status == CATALOG_STATUS_ACTIVE
     is_inactive = action_plan.catalog_status == CATALOG_STATUS_INACTIVE
 
     return {
         "can_update": can_manage,
-        "can_activate": can_manage and is_inactive and has_tasks and action_plan.is_reusable,
+        "can_activate": can_manage and is_inactive and action_plan.is_reusable,
         "can_deactivate": can_manage and is_active and action_plan.is_reusable,
         "can_use": can_use_action_plan(membership, action_plan),
         "can_schedule": can_create_action_plan_schedule(membership, action_plan),
