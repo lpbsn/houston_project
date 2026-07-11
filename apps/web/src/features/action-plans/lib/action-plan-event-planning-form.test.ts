@@ -149,13 +149,13 @@ describe('action-plan-event-planning-form', () => {
 
   it('formats time pill labels in 24h', () => {
     expect(formatTimePillLabel('14:30')).toBe('14:30')
-    expect(formatTimePillLabel('')).toBe('—')
+    expect(formatTimePillLabel('')).toBe('HH:MM')
     expect(formatTimePillLabel('09:07')).toBe('09:05')
   })
 
   it('formats date pill labels', () => {
     expect(formatDatePillLabel('2026-07-04')).toContain('2026')
-    expect(formatDatePillLabel('')).toBe('—')
+    expect(formatDatePillLabel('')).toBe('JJ/MM/AAAA')
   })
 
   it('splits and combines ISO date/time in local fields', () => {

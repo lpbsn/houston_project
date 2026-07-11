@@ -38,9 +38,11 @@ export function ActionPlanCatalogSectionView({
   }
 
   return (
-    <section className="space-y-2">
-      <TerrainSectionLabel>{section.businessUnitLabel}</TerrainSectionLabel>
-      <div className="space-y-2">
+    <section className="space-y-3">
+      <TerrainSectionLabel className="px-0 py-0 text-[10px] font-bold text-[#1a1a1a]">
+        {section.businessUnitLabel}
+      </TerrainSectionLabel>
+      <div className="space-y-3">
         {section.items.map((item) => (
           <ActionPlanCatalogCard
             key={item.id}

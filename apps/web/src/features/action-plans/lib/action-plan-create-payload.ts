@@ -8,7 +8,7 @@ import type {
   ActionPlanCreateFormValues,
   ActionPlanTaskDraft,
 } from './action-plan-form-validation'
-import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
+import { buildPerAssigneeScheduleFromAssignees } from './action-plan-catalog-planning-submit'
 import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
 
 function toIsoDateTime(value: string): string | undefined {
@@ -21,16 +21,6 @@ function toIsoDateTime(value: string): string | undefined {
     return undefined
   }
   return new Date(parsed).toISOString()
-}
-
-function splitIsoToLocalDateAndTime(value: string): { date: string; time: string } {
-  const parsed = new Date(value)
-  if (!value.trim() || Number.isNaN(parsed.getTime())) {
-    return { date: '', time: '' }
-  }
-  const offset = parsed.getTimezoneOffset()
-  const local = new Date(parsed.getTime() - offset * 60_000).toISOString()
-  return { date: local.slice(0, 10), time: local.slice(11, 16) }
 }
 
 function buildAssigneePayloads(
@@ -63,35 +53,6 @@ function buildAssigneePayloads(
         visible_from: visibleFrom ?? null,
       }
     })
-}
-
-function buildPerAssigneeSchedule(
-  assignees: ActionPlanAssigneeDraft[],
-): ReturnType<typeof buildActionPlanScheduleCreateRequest> {
-  const recurringAssignees = assignees.filter(
-    (assignee) => assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
-  )
-  const firstAssignee = recurringAssignees[0]
-  if (!firstAssignee) {
-    return undefined
-  }
-
-  const start = splitIsoToLocalDateAndTime(firstAssignee.startAt)
-  const end = splitIsoToLocalDateAndTime(firstAssignee.endAt)
-  const schedule: ActionPlanScheduleDraft = {
-    enabled: true,
-    recurrenceDays: [...firstAssignee.recurrenceDays],
-    startDate: start.date,
-    endDate: firstAssignee.recurrenceEndDate.trim(),
-    startAt: start.time,
-    endAt: end.time,
-  }
-
-  return buildActionPlanScheduleCreateRequest({
-    schedule,
-    assignees: recurringAssignees,
-    useSharedChronology: false,
-  })
 }
 
 export function buildActionPlanTaskInputPayloads(
@@ -175,7 +136,7 @@ export function buildActionPlanCreateRequest(
 
   const perAssigneeSchedule = values.useSharedChronology
     ? undefined
-    : buildPerAssigneeSchedule(values.assignees)
+    : buildPerAssigneeScheduleFromAssignees(values.assignees)
   const oneShotAssignees = perAssigneeSchedule
     ? values.assignees.filter((assignee) => !assignee.repeatEnabled)
     : values.assignees
