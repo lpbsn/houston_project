@@ -200,16 +200,19 @@ export function snapTimeToFiveMinutes(time: string): string {
   return `${String(hours).padStart(2, '0')}:${String(snapped).padStart(2, '0')}`
 }
 
+export const PLANNING_DATE_PLACEHOLDER = 'JJ/MM/AAAA'
+export const PLANNING_TIME_PLACEHOLDER = 'HH:MM'
+
 export function formatTimePillLabel(time: string): string {
   if (!time.trim()) {
-    return '—'
+    return PLANNING_TIME_PLACEHOLDER
   }
   return snapTimeToFiveMinutes(time)
 }
 
 export function formatDatePillLabel(date: string): string {
   const summary = formatDateSummary(date)
-  return summary === 'Non défini' ? '—' : summary
+  return summary === 'Non défini' ? PLANNING_DATE_PLACEHOLDER : summary
 }
 
 export function splitIsoToDateAndTime(iso: string): { date: string; time: string } {

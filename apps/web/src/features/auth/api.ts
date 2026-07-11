@@ -1,4 +1,5 @@
 import { apiClient, withAuthRetry } from '@/api/client'
+import { clearAllMixedSubmissionIntents } from '@/features/action-plans/lib/action-plan-mixed-submission-intent'
 import { queryClient } from '@/lib/query-client'
 import {
   clearAuthenticatedQueryCache,
@@ -186,6 +187,7 @@ let restorePromise: Promise<string | null> | null = null
 
 export function clearAuthState() {
   clearAccessToken()
+  clearAllMixedSubmissionIntents()
   clearAuthenticatedQueryCache(queryClient)
 }
 
@@ -263,6 +265,7 @@ export async function login(input: LoginRequest) {
   }
 
   purgeNonAuthQueries(queryClient)
+  clearAllMixedSubmissionIntents()
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -309,6 +312,7 @@ export async function registerOnboarding(input: RegistrationRequest) {
   }
 
   purgeNonAuthQueries(queryClient)
+  clearAllMixedSubmissionIntents()
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -368,6 +372,7 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
   }
 
   purgeNonAuthQueries(queryClient)
+  clearAllMixedSubmissionIntents()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }

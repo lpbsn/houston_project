@@ -554,6 +554,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_action_plans_mixed_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/": {
         parameters: {
             query?: never;
@@ -1882,6 +1898,18 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             permission_hints: components["schemas"]["ActionPlanPermissionHints"];
+        };
+        ActionPlanMixedSubmitRequest: {
+            /** Format: uuid */
+            submission_id: string;
+            schedule_body: components["schemas"]["ActionPlanScheduleCreateRequest"];
+            use_body: components["schemas"]["ActionPlanUseRequest"];
+        };
+        ActionPlanMixedSubmitResponse: {
+            execution: components["schemas"]["ActionPlanExecutionDetail"];
+            /** Format: uuid */
+            schedule_id: string;
+            replayed: boolean;
         };
         ActionPlanPermissionHints: {
             can_update: boolean;
@@ -4760,6 +4788,82 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plans_mixed_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_plan_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionPlanMixedSubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanMixedSubmitRequest"];
+                "multipart/form-data": components["schemas"]["ActionPlanMixedSubmitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanMixedSubmitResponse"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanMixedSubmitResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -10,7 +10,7 @@ import {
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
-import { terrain } from '@/lib/terrain-styles'
+import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ActionPlanCatalogSectionView } from '../components/action-plan-catalog-section'
@@ -19,6 +19,7 @@ import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
 import {
   useActionPlanCatalogQuery,
   useScheduleActionPlanFromCatalogMutation,
+  useSubmitMixedActionPlanFromCatalogMutation,
   useUseActionPlanFromCatalogMutation,
 } from '../hooks'
 import { filterActionPlansByTitle } from '../lib/action-plan-catalog-filters'
@@ -29,12 +30,13 @@ import {
 import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
-import type { ActionPlanAssigneeActionKind } from '../lib/action-plan-event-planning-form'
-import type {
-  ActionPlanScheduleCreateRequest,
-  ActionPlanUseRequest,
-  ActionPlanCatalogListFilters,
-} from '../types'
+import type { CatalogPlanningSubmit } from '../lib/action-plan-catalog-planning-submit'
+import { resolveCatalogPlanningSubmitFallbackMessage } from '../lib/action-plan-catalog-planning-submit'
+import {
+  clearMixedSubmissionIntent,
+  resolveMixedSubmissionIntent,
+} from '../lib/action-plan-mixed-submission-intent'
+import type { ActionPlanCatalogListFilters } from '../types'
 
 type ActionPlanHubPageProps = {
   onNavigate?: (pathname: string) => void
@@ -63,9 +65,6 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   const [createdByMe, setCreatedByMe] = useState(false)
   const [usePlanId, setUsePlanId] = useState<string | null>(null)
   const [useError, setUseError] = useState<string | null>(null)
-  const [assigneeActionPending, setAssigneeActionPending] = useState<
-    Record<string, ActionPlanAssigneeActionKind>
-  >({})
 
   const filters = useMemo<ActionPlanCatalogListFilters>(() => {
     const next: ActionPlanCatalogListFilters = {}
@@ -84,6 +83,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
   )
   const useMutation = useUseActionPlanFromCatalogMutation(establishmentId ?? '')
   const scheduleMutation = useScheduleActionPlanFromCatalogMutation(establishmentId ?? '')
+  const mixedMutation = useSubmitMixedActionPlanFromCatalogMutation(establishmentId ?? '')
 
   const filteredItems = useMemo(() => {
     const items = catalogQuery.data ?? []
@@ -128,88 +128,73 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     }
   }
 
-  async function handleSchedule(body: Parameters<typeof scheduleMutation.mutateAsync>[0]['body']) {
-    if (!usePlanId) {
+  async function handlePlanningSubmit(result: CatalogPlanningSubmit) {
+    if (!usePlanId || !establishmentId) {
       return
     }
-    setUseError(null)
-    try {
-      await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body })
-      setUsePlanId(null)
-    } catch (error) {
-      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'))
-    }
-  }
 
-  async function handleUse(body: Parameters<typeof useMutation.mutateAsync>[0]['body']) {
-    if (!usePlanId) {
-      return
-    }
     setUseError(null)
     try {
-      const execution = await useMutation.mutateAsync({ actionPlanId: usePlanId, body })
+      if (result.kind === 'schedule') {
+        await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body: result.scheduleBody })
+        clearMixedSubmissionIntent(establishmentId, usePlanId)
+        setUsePlanId(null)
+        return
+      }
+
+      if (result.kind === 'mixed') {
+        const intent = await resolveMixedSubmissionIntent({
+          establishmentId,
+          actionPlanId: usePlanId,
+          scheduleBody: result.scheduleBody,
+          useBody: result.useBody,
+        })
+        const response = await mixedMutation.mutateAsync({
+          actionPlanId: usePlanId,
+          body: {
+            submission_id: intent.submissionId,
+            schedule_body: result.scheduleBody,
+            use_body: result.useBody,
+          },
+        })
+        clearMixedSubmissionIntent(establishmentId, usePlanId)
+        setUsePlanId(null)
+        navigateTo(`/action-plans/executions/${response.execution.id}`)
+        return
+      }
+
+      const execution = await useMutation.mutateAsync({
+        actionPlanId: usePlanId,
+        body: result.useBody,
+      })
+      clearMixedSubmissionIntent(establishmentId, usePlanId)
       setUsePlanId(null)
       navigateTo(`/action-plans/executions/${execution.id}`)
     } catch (error) {
-      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être utilisé.'))
-    }
-  }
-
-  async function handleAssigneeSchedule(
-    assigneeId: string,
-    body: ActionPlanScheduleCreateRequest,
-  ) {
-    if (!usePlanId || assigneeActionPending[assigneeId]) {
-      return
-    }
-    setAssigneeActionPending((previous) => ({ ...previous, [assigneeId]: 'schedule' }))
-    setUseError(null)
-    try {
-      await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body })
-    } catch (error) {
-      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'))
-    } finally {
-      setAssigneeActionPending((previous) => {
-        const next = { ...previous }
-        delete next[assigneeId]
-        return next
-      })
-    }
-  }
-
-  async function handleAssigneeLaunch(assigneeId: string, body: ActionPlanUseRequest) {
-    if (!usePlanId || assigneeActionPending[assigneeId]) {
-      return
-    }
-    setAssigneeActionPending((previous) => ({ ...previous, [assigneeId]: 'launch' }))
-    setUseError(null)
-    try {
-      await useMutation.mutateAsync({ actionPlanId: usePlanId, body })
-    } catch (error) {
-      setUseError(resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être utilisé.'))
-    } finally {
-      setAssigneeActionPending((previous) => {
-        const next = { ...previous }
-        delete next[assigneeId]
-        return next
-      })
+      const message = resolveCatalogPlanningSubmitFallbackMessage(result, error)
+      setUseError(resolveActionPlanErrorMessage(error, message))
     }
   }
 
   return (
-    <div className="space-y-3 px-3 pb-24 pt-2">
+    <div className="space-y-4 px-4 pb-24 pt-2">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={cn('text-sm', terrain.muted)}>Bibliothèque de plans d&apos;action</p>
-          <p className="text-xs text-[#7D7B75]">
-            Réutilisez des modèles validés pour lancer des exécutions.
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold text-[#1a1a1a]">Bibliothèque</h1>
+          <p className="mt-1 text-sm text-[#7D7B75]">
+            Modèles de plans d&apos;action prêts à lancer sur le terrain.
           </p>
         </div>
         {canCreate ? (
           <Button
             type="button"
             size="icon"
-            className="h-11 w-11 shrink-0 rounded-xl"
+            className={cn(
+              'h-10 w-10 shrink-0 rounded-full text-white',
+              terrainBrandAction.bg,
+              terrainBrandAction.hover,
+              terrainBrandAction.shadow,
+            )}
             aria-label="Créer un plan d’action"
             onClick={() => navigateTo('/action-plans/new')}
           >
@@ -240,16 +225,18 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           </p>
         </TerrainCard>
       ) : (
-        sections.map((section) => (
-          <ActionPlanCatalogSectionView
-            key={section.businessUnitId}
-            section={section}
-            isLoading={catalogQuery.isLoading}
-            isError={catalogQuery.isError}
-            onOpenPlan={(id) => navigateTo(`/action-plans/${id}`)}
-            onUsePlan={setUsePlanId}
-          />
-        ))
+        <div className="space-y-6">
+          {sections.map((section) => (
+            <ActionPlanCatalogSectionView
+              key={section.businessUnitId}
+              section={section}
+              isLoading={catalogQuery.isLoading}
+              isError={catalogQuery.isError}
+              onOpenPlan={(id) => navigateTo(`/action-plans/${id}`)}
+              onUsePlan={setUsePlanId}
+            />
+          ))}
+        </div>
       )}
 
       {usePlan ? (
@@ -257,19 +244,16 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           open={usePlanId != null}
           establishmentId={establishmentId ?? ''}
           pilotBusinessUnitId={usePlan.pilot_business_unit.id}
-          isPending={useMutation.isPending}
-          isSchedulePending={scheduleMutation.isPending}
+          isPending={useMutation.isPending || scheduleMutation.isPending || mixedMutation.isPending}
           staffUseMode={staffUseMode}
           canSchedule={canShowActionPlanSchedule(usePlan.permission_hints)}
           onClose={() => {
+            if (establishmentId && usePlanId) {
+              clearMixedSubmissionIntent(establishmentId, usePlanId)
+            }
             setUsePlanId(null)
-            setAssigneeActionPending({})
           }}
-          onConfirm={(body) => void handleUse(body)}
-          onScheduleConfirm={(body) => void handleSchedule(body)}
-          onAssigneeSchedule={(assigneeId, body) => void handleAssigneeSchedule(assigneeId, body)}
-          onAssigneeLaunch={(assigneeId, body) => void handleAssigneeLaunch(assigneeId, body)}
-          assigneeActionPending={assigneeActionPending}
+          onPlanningSubmit={(result) => void handlePlanningSubmit(result)}
         />
       ) : null}
     </div>

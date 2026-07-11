@@ -232,6 +232,12 @@ class ActionPlanUseRequestSerializer(serializers.Serializer):
     occurrence_date = serializers.DateField(required=False, allow_null=True)
 
 
+class ActionPlanMixedSubmitRequestSerializer(serializers.Serializer):
+    submission_id = serializers.UUIDField()
+    schedule_body = ActionPlanScheduleCreateRequestSerializer()
+    use_body = ActionPlanUseRequestSerializer()
+
+
 class ActionPlanScheduleUpdateRequestSerializer(serializers.Serializer):
     start_date = serializers.DateField(required=False)
     end_date = serializers.DateField(required=False)
@@ -368,6 +374,12 @@ class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     involved_poles = ActionPlanInvolvedPoleSerializer(many=True)
     task_executions = ActionPlanTaskExecutionSerializer(many=True)
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
+
+
+class ActionPlanMixedSubmitResponseSerializer(serializers.Serializer):
+    execution = ActionPlanExecutionDetailSerializer()
+    schedule_id = serializers.UUIDField()
+    replayed = serializers.BooleanField()
 
 
 class ActionPlanTaskSkipRequestSerializer(serializers.Serializer):

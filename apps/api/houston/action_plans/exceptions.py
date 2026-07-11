@@ -30,3 +30,24 @@ class ActionPlanConflictError(ActionPlanServiceError):
     ) -> None:
         super().__init__(message)
         self.active_execution_id = active_execution_id
+
+
+class MixedSubmissionActorConflict(ActionPlanPermissionError):
+    error_code = "mixed_submission_actor_conflict"
+
+
+class MixedSubmissionPayloadConflict(ActionPlanConflictError):
+    error_code = "mixed_submission_conflict"
+
+
+class MixedSubmissionStepError(ActionPlanValidationError):
+    error_code = "validation_error"
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        failed_step: str,
+    ) -> None:
+        super().__init__(message)
+        self.failed_step = failed_step

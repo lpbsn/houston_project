@@ -365,6 +365,7 @@ def materialize_execution_from_schedule(
     schedule: ActionPlanSchedule,
     occurrence_date: date,
     schedule_assignee: ActionPlanScheduleAssignee | None = None,
+    emit_side_effects: bool = True,
 ) -> ActionPlanExecution:
     if occurrence_date is None:
         raise ActionPlanValidationError("occurrence_date is required for schedule executions.")
@@ -502,19 +503,20 @@ def materialize_execution_from_schedule(
         plan_tasks=plan_tasks,
         assignees=assignees,
     )
-    from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
-    from houston.notifications.scheduling import (
-        schedule_action_plan_execution_created_notification,
-    )
+    if emit_side_effects:
+        from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
+        from houston.notifications.scheduling import (
+            schedule_action_plan_execution_created_notification,
+        )
 
-    schedule_action_plan_execution_invalidation(
-        execution=execution,
-        reason="action_plan_execution.created",
-    )
-    schedule_action_plan_execution_created_notification(
-        execution_id=execution.id,
-        actor_membership_id=None,
-    )
+        schedule_action_plan_execution_invalidation(
+            execution=execution,
+            reason="action_plan_execution.created",
+        )
+        schedule_action_plan_execution_created_notification(
+            execution_id=execution.id,
+            actor_membership_id=None,
+        )
     return execution
 
 
@@ -522,6 +524,7 @@ def _materialize_occurrence(
     *,
     schedule: ActionPlanSchedule,
     occurrence_date: date,
+    emit_side_effects: bool = True,
 ) -> list[ActionPlanExecution]:
     schedule = _load_schedule_for_materialization(schedule)
     if schedule.use_shared_chronology:
@@ -529,6 +532,7 @@ def _materialize_occurrence(
             materialize_execution_from_schedule(
                 schedule=schedule,
                 occurrence_date=occurrence_date,
+                emit_side_effects=emit_side_effects,
             )
         ]
 
@@ -539,6 +543,7 @@ def _materialize_occurrence(
                 schedule=schedule,
                 occurrence_date=occurrence_date,
                 schedule_assignee=schedule_assignee,
+                emit_side_effects=emit_side_effects,
             )
         )
     return materialized
@@ -550,6 +555,7 @@ def materialize_schedule_occurrences_in_horizon(
     horizon_days: int = MATERIALIZATION_HORIZON_DAYS,
     now: datetime | None = None,
     visible_only: bool = False,
+    emit_side_effects: bool = True,
 ) -> list[ActionPlanExecution]:
     if schedule.status != SCHEDULE_STATUS_ACTIVE:
         return []
@@ -578,6 +584,7 @@ def materialize_schedule_occurrences_in_horizon(
             _materialize_occurrence(
                 schedule=schedule,
                 occurrence_date=occurrence_date,
+                emit_side_effects=emit_side_effects,
             )
         )
 

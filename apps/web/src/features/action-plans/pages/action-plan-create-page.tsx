@@ -47,12 +47,10 @@ import {
   type ActionPlanTaskDraft,
 } from '../lib/action-plan-form-validation'
 import {
-  shouldHidePrimaryPlanningActions,
   createActionPlanEventPlanningDraft,
   toCreateFormPlanningSlice,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
-import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
 import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
 import { canShowActionPlanUpdate } from '../lib/action-plan-permission-hints'
 
@@ -387,7 +385,6 @@ export function ActionPlanCreatePage({
 
   const signalDetail = isSignalLinked ? signalDetailQuery.data : null
 
-  const scheduleConfigured = isActionPlanScheduleConfigured(planningSlice.schedule)
   const showPlanningForm = !isTemplateEdit
   const showToggleSection = isTemplateEdit
     ? modeConfig.showValidationToggle
@@ -396,11 +393,7 @@ export function ActionPlanCreatePage({
     ? 'Enregistrer les modifications'
     : saveToLibrary
       ? 'Enregistrer dans la bibliothèque'
-      : shouldHidePrimaryPlanningActions(planningDraft)
-        ? 'Créer le plan d’action'
-        : scheduleConfigured
-          ? 'Créer et planifier'
-          : 'Créer le plan d’action'
+      : 'Créer le plan d’action'
 
   async function handlePrimarySubmit() {
     await submit(formValues, { ...planningDraft, assignees: effectiveAssignees })

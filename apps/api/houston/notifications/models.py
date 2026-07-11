@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 from houston.core.models import BaseModel
 from houston.notifications.constants import (
@@ -96,11 +97,19 @@ class Notification(BaseModel):
     title = models.CharField(max_length=NOTIFICATION_TITLE_MAX_LENGTH)
     body = models.CharField(max_length=NOTIFICATION_BODY_MAX_LENGTH)
     dedupe_key = models.CharField(max_length=DEDUPE_KEY_MAX_LENGTH, blank=True, default="")
+    idempotency_key = models.CharField(max_length=DEDUPE_KEY_MAX_LENGTH, blank=True, default="")
     read_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipient_membership", "idempotency_key"],
+                condition=Q(idempotency_key__gt=""),
+                name="notifications_recipient_idempotency_key_uniq",
+            ),
+        ]
         indexes = [
             models.Index(
                 fields=[

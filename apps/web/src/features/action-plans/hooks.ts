@@ -25,6 +25,7 @@ import {
   pinActionPlanExecution,
   reopenActionPlanExecution,
   skipActionPlanTask,
+  submitMixedActionPlanCatalog,
   unpinActionPlanExecution,
   updateActionPlan,
   validateActionPlanExecution,
@@ -33,6 +34,7 @@ import type {
   ActionPlanCatalogListFilters,
   ActionPlanCreateRequest,
   ActionPlanScheduleCreateRequest,
+  ActionPlanMixedSubmitRequest,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskSkipRequest,
   ActionPlanUseRequest,
@@ -235,6 +237,26 @@ export function useScheduleActionPlanFromCatalogMutation(establishmentId: string
     }) => createActionPlanSchedule(establishmentId, actionPlanId, body),
     onSuccess: (_data, variables) => {
       invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
+      void queryClient.invalidateQueries({
+        queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
+      })
+    },
+  })
+}
+
+export function useSubmitMixedActionPlanFromCatalogMutation(establishmentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      actionPlanId,
+      body,
+    }: {
+      actionPlanId: string
+      body: ActionPlanMixedSubmitRequest
+    }) => submitMixedActionPlanCatalog(establishmentId, actionPlanId, body),
+    onSuccess: (data, variables) => {
+      invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
+      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.execution.id)
       void queryClient.invalidateQueries({
         queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
       })

@@ -14,13 +14,9 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
     ActionPlanEventPlanningForm: ({
       draft,
       onDraftChange,
-      onAssigneeSchedule,
-      onAssigneeLaunch,
     }: {
       draft: ActionPlanEventPlanningDraft
       onDraftChange: (next: ActionPlanEventPlanningDraft) => void
-      onAssigneeSchedule?: (assigneeId: string, body: unknown) => void
-      onAssigneeLaunch?: (assigneeId: string, body: unknown) => void
     }) => (
       <div>
         <button
@@ -57,12 +53,12 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
                   membershipId: 'm1',
                   businessUnitId: 'bu1',
                   displayName: 'Alice',
-                  startAt: '',
-                  endAt: '',
+                  startAt: '2026-07-01T07:00:00.000Z',
+                  endAt: '2026-07-01T08:00:00.000Z',
                   visibleFrom: '',
-                  repeatEnabled: true,
-                  recurrenceDays: ['monday'],
-                  recurrenceEndDate: '2026-12-31',
+                  repeatEnabled: false,
+                  recurrenceDays: [],
+                  recurrenceEndDate: '',
                 },
               ],
               startDate: '2026-07-01',
@@ -73,12 +69,40 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
         </button>
         <button
           type="button"
-          onClick={() => onAssigneeSchedule?.('a1', { recurrence_days: ['monday'] })}
+          onClick={() =>
+            onDraftChange({
+              ...draft,
+              usePerAssigneeChronology: true,
+              assignees: [
+                {
+                  id: 'a-recurring',
+                  membershipId: 'm1',
+                  businessUnitId: 'bu1',
+                  displayName: 'Alice',
+                  startAt: '2026-07-12T03:00:00.000Z',
+                  endAt: '2026-07-12T14:05:00.000Z',
+                  visibleFrom: '',
+                  repeatEnabled: true,
+                  recurrenceDays: ['tuesday', 'thursday', 'saturday'],
+                  recurrenceEndDate: '2026-07-25',
+                },
+                {
+                  id: 'a-one-shot',
+                  membershipId: 'm2',
+                  businessUnitId: 'bu1',
+                  displayName: 'Bob',
+                  startAt: '2026-07-11T03:00:00.000Z',
+                  endAt: '2026-07-25T06:00:00.000Z',
+                  visibleFrom: '',
+                  repeatEnabled: false,
+                  recurrenceDays: [],
+                  recurrenceEndDate: '',
+                },
+              ],
+            })
+          }
         >
-          Planifier assigné
-        </button>
-        <button type="button" onClick={() => onAssigneeLaunch?.('a1', { assignees: [] })}>
-          Lancer assigné
+          Activer mixte
         </button>
       </div>
     ),
@@ -91,8 +115,7 @@ const defaultProps = {
   isPending: false,
   canSchedule: true,
   onClose: vi.fn(),
-  onConfirm: vi.fn(),
-  onScheduleConfirm: vi.fn(),
+  onPlanningSubmit: vi.fn(),
 }
 
 describe('ActionPlanUseSheet', () => {
@@ -109,7 +132,7 @@ describe('ActionPlanUseSheet', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
-    expect(screen.getByRole('button', { name: 'Planifier la récurrence' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
 
     rerender(
       createElement(ActionPlanUseSheet, {
@@ -125,13 +148,14 @@ describe('ActionPlanUseSheet', () => {
       }),
     )
 
-    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    const launchButton = screen.getByRole('button', { name: "Lancer l'exécution" })
+    expect(launchButton).toBeTruthy()
+    expect(launchButton.className).toContain('bg-[#114660]')
     expect(screen.queryByRole('button', { name: 'Planifier la récurrence' })).toBeNull()
   })
 
-  it('calls onConfirm for one-shot launch', () => {
-    const onConfirm = vi.fn()
-    const onScheduleConfirm = vi.fn()
+  it('calls onPlanningSubmit for one-shot launch', () => {
+    const onPlanningSubmit = vi.fn()
 
     render(
       createElement(ActionPlanUseSheet, {
@@ -141,19 +165,20 @@ describe('ActionPlanUseSheet', () => {
         isPending: false,
         canSchedule: true,
         onClose: vi.fn(),
-        onConfirm,
-        onScheduleConfirm,
+        onPlanningSubmit,
       }),
     )
 
     fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
-    expect(onConfirm).toHaveBeenCalled()
-    expect(onScheduleConfirm).not.toHaveBeenCalled()
+    expect(onPlanningSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'use',
+      }),
+    )
   })
 
-  it('calls onScheduleConfirm when repeat is configured', () => {
-    const onConfirm = vi.fn()
-    const onScheduleConfirm = vi.fn()
+  it('calls onPlanningSubmit for global repeat schedule', () => {
+    const onPlanningSubmit = vi.fn()
 
     render(
       createElement(ActionPlanUseSheet, {
@@ -163,25 +188,54 @@ describe('ActionPlanUseSheet', () => {
         isPending: false,
         canSchedule: true,
         onClose: vi.fn(),
-        onConfirm,
-        onScheduleConfirm,
+        onPlanningSubmit,
       }),
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
     fireEvent.click(screen.getByRole('button', { name: 'Compléter repeat' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Planifier la récurrence' }))
+    fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
 
-    expect(onScheduleConfirm).toHaveBeenCalledWith(
+    expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        recurrence_days: ['monday'],
-        use_shared_chronology: true,
+        kind: 'schedule',
+        scheduleBody: expect.objectContaining({
+          recurrence_days: ['monday'],
+          use_shared_chronology: true,
+        }),
       }),
     )
-    expect(onConfirm).not.toHaveBeenCalled()
   })
 
-  it('hides footer when per-assignee chronology is active', () => {
+  it('shows global launch when per-assignee chronology is active', () => {
+    const onPlanningSubmit = vi.fn()
+
+    render(
+      createElement(ActionPlanUseSheet, {
+        ...defaultProps,
+        open: true,
+        onPlanningSubmit,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activer per-assignee' }))
+    fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(onPlanningSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'use',
+        useBody: expect.objectContaining({
+          use_shared_chronology: false,
+          assignees: expect.arrayContaining([
+            expect.objectContaining({ membership_id: 'm1' }),
+          ]),
+        }),
+      }),
+    )
+  })
+
+  it('keeps static launch label for schedule and mixed actions', () => {
     render(
       createElement(ActionPlanUseSheet, {
         ...defaultProps,
@@ -189,33 +243,60 @@ describe('ActionPlanUseSheet', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Activer per-assignee' }))
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText('Une exécution ponctuelle sera lancée immédiatement.'),
+    ).toBeNull()
 
-    expect(screen.queryByRole('button', { name: "Lancer l'exécution" })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Planifier la récurrence' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Activer repeat' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Compléter repeat' }))
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText(
+        'Une récurrence sera créée. Les prochaines exécutions apparaîtront dans le feed.',
+      ),
+    ).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activer mixte' }))
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText(
+        'Une récurrence sera planifiée et une exécution ponctuelle sera lancée.',
+      ),
+    ).toBeNull()
   })
 
-  it('calls per-assignee callbacks from card actions', () => {
-    const onAssigneeSchedule = vi.fn()
-    const onAssigneeLaunch = vi.fn()
+  it('submits mixed per-assignee planning from global action', () => {
+    const onPlanningSubmit = vi.fn()
 
     render(
       createElement(ActionPlanUseSheet, {
         ...defaultProps,
         open: true,
-        onAssigneeSchedule,
-        onAssigneeLaunch,
+        onPlanningSubmit,
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Activer per-assignee' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Planifier assigné' }))
-    expect(onAssigneeSchedule).toHaveBeenCalledWith(
-      'a1',
-      expect.objectContaining({ recurrence_days: ['monday'] }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Activer mixte' }))
+    fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lancer assigné' }))
-    expect(onAssigneeLaunch).toHaveBeenCalledWith('a1', expect.objectContaining({ assignees: [] }))
+    expect(onPlanningSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'mixed',
+        scheduleBody: expect.objectContaining({
+          use_shared_chronology: false,
+          assignees: expect.arrayContaining([
+            expect.objectContaining({ membership_id: 'm1' }),
+          ]),
+        }),
+        useBody: expect.objectContaining({
+          assignees: expect.arrayContaining([
+            expect.objectContaining({ membership_id: 'm2' }),
+          ]),
+        }),
+      }),
+    )
   })
 })

@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from houston.establishments.models import EstablishmentMembership
@@ -80,6 +80,7 @@ def create_in_app_notification(
     priority: str,
     actor_membership: EstablishmentMembership | None = None,
     dedupe_key: str | None = None,
+    idempotency_key: str | None = None,
     exclude_actor_if_recipient: bool = True,
     skip_subject_visibility_recheck: bool = False,
 ) -> Notification | None:
@@ -119,7 +120,7 @@ def create_in_app_notification(
         subject_id=subject_id,
     )
 
-    if effective_dedupe_key:
+    if effective_dedupe_key and not idempotency_key:
         EstablishmentMembership.objects.select_for_update().get(
             pk=recipient_membership.pk,
             establishment_id=establishment_id,
@@ -135,19 +136,25 @@ def create_in_app_notification(
         actor_display_name=_membership_display_name(actor_membership),
     )
 
-    notification = Notification.objects.create(
-        establishment_id=establishment_id,
-        recipient_membership=recipient_membership,
-        actor_membership=actor_membership,
-        event_key=event_key,
-        subject_type=subject_type,
-        subject_id=subject_id,
-        priority=priority,
-        status=Notification.Status.UNREAD,
-        title=title,
-        body=body,
-        dedupe_key=effective_dedupe_key,
-    )
+    try:
+        notification = Notification.objects.create(
+            establishment_id=establishment_id,
+            recipient_membership=recipient_membership,
+            actor_membership=actor_membership,
+            event_key=event_key,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            priority=priority,
+            status=Notification.Status.UNREAD,
+            title=title,
+            body=body,
+            dedupe_key=effective_dedupe_key,
+            idempotency_key=idempotency_key or "",
+        )
+    except IntegrityError:
+        if idempotency_key:
+            return None
+        raise
     _schedule_notification_invalidation(
         establishment_id=establishment_id,
         membership_id=recipient_membership.id,

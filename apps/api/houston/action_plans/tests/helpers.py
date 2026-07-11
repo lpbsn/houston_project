@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import time
 
 from django.utils import timezone
@@ -40,6 +41,12 @@ def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") 
 
 def action_plan_schedule_url(establishment_id, action_plan_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/"
+
+
+def action_plan_mixed_submit_url(establishment_id, action_plan_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/"
+    )
 
 
 def action_plan_schedule_detail_url(establishment_id, schedule_id, suffix: str = "") -> str:
@@ -203,6 +210,51 @@ def api_task_payload(
     if payload.get("deadline_at") is not None:
         payload["deadline_at"] = payload["deadline_at"].isoformat().replace("+00:00", "Z")
     return payload
+
+
+def api_mixed_submit_payload(
+    *,
+    submission_id: uuid.UUID | None = None,
+    recurring_membership,
+    one_shot_membership,
+    business_unit,
+    recurrence_days=None,
+) -> dict:
+    window = visible_schedule_window(period_days=14)
+    if recurrence_days is None:
+        recurrence_days = recurrence_days_for_visible_today()
+    start_at = timezone.now() + timezone.timedelta(days=1)
+    end_at = start_at + timezone.timedelta(hours=2)
+    return {
+        "submission_id": str(submission_id or uuid.uuid4()),
+        "schedule_body": {
+            "start_date": window["start_date"].isoformat(),
+            "end_date": window["end_date"].isoformat(),
+            "start_at": window["start_at"].isoformat(),
+            "end_at": window["end_at"].isoformat(),
+            "recurrence_days": recurrence_days,
+            "use_shared_chronology": False,
+            "assignees": [
+                api_schedule_assignee_payload(
+                    membership=recurring_membership,
+                    business_unit=business_unit,
+                )
+            ],
+        },
+        "use_body": {
+            "use_shared_chronology": False,
+            "assignees": [
+                {
+                    **api_assignee_payload(
+                        membership=one_shot_membership,
+                        business_unit=business_unit,
+                    ),
+                    "start_at": start_at.isoformat().replace("+00:00", "Z"),
+                    "end_at": end_at.isoformat().replace("+00:00", "Z"),
+                }
+            ],
+        },
+    }
 
 
 def api_assignee_payload(*, membership, business_unit) -> dict:

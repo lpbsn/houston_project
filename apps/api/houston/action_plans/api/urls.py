@@ -17,6 +17,7 @@ from houston.action_plans.api.views import (
     ActionPlanExecutionUnpinView,
     ActionPlanExecutionValidateView,
     ActionPlanListCreateView,
+    ActionPlanMixedSubmitView,
     ActionPlanScheduleCreateView,
     ActionPlanScheduleDeactivateView,
     ActionPlanScheduleDetailView,
@@ -53,6 +54,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/action-plans/<uuid:action_plan_id>/schedule/",
         ActionPlanScheduleCreateView.as_view(),
         name="action-plan-schedule-create",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/action-plans/<uuid:action_plan_id>/mixed-submit/",
+        ActionPlanMixedSubmitView.as_view(),
+        name="action-plan-mixed-submit",
     ),
     path(
         "establishments/<uuid:establishment_id>/action-plan-schedules/<uuid:schedule_id>/",

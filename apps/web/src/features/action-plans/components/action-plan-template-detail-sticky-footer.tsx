@@ -9,6 +9,7 @@ import {
   canShowActionPlanDeactivate,
   canShowActionPlanUse,
 } from '../lib/action-plan-permission-hints'
+import { CATALOG_LAUNCH_EXECUTION_LABEL } from '../lib/action-plan-catalog-planning-submit'
 
 type ActionPlanTemplateDetailStickyFooterProps = {
   hints: ActionPlanPermissionHints
@@ -16,10 +17,8 @@ type ActionPlanTemplateDetailStickyFooterProps = {
   canUpdate: boolean
   canUse: boolean
   isBusy: boolean
-  primaryActionLabel: string
   primaryActionDisabled: boolean
   isPrimaryPending: boolean
-  hidePrimaryAction?: boolean
   onNavigateToEdit: () => void
   onActivate: () => void
   onDeactivate: () => void
@@ -34,10 +33,8 @@ export function ActionPlanTemplateDetailStickyFooter({
   canUpdate,
   canUse,
   isBusy,
-  primaryActionLabel,
   primaryActionDisabled,
   isPrimaryPending,
-  hidePrimaryAction = false,
   onNavigateToEdit,
   onActivate,
   onDeactivate,
@@ -52,22 +49,20 @@ export function ActionPlanTemplateDetailStickyFooter({
           <Button
             type="button"
             variant="outline"
-            className={hidePrimaryAction ? 'h-11 w-full rounded-xl' : 'h-11 flex-1 rounded-xl'}
+            className="h-11 flex-1 rounded-xl"
             disabled={isPrimaryPending}
             onClick={onCloseExecutionPanel}
           >
             Annuler
           </Button>
-          {!hidePrimaryAction ? (
-            <Button
-              type="button"
-              className="h-11 flex-1 rounded-xl"
-              disabled={primaryActionDisabled}
-              onClick={onLaunchExecution}
-            >
-              {primaryActionLabel}
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            className="h-11 flex-1 rounded-xl"
+            disabled={primaryActionDisabled}
+            onClick={onLaunchExecution}
+          >
+            {CATALOG_LAUNCH_EXECUTION_LABEL}
+          </Button>
         </div>
       </TerrainStickyFooter>
     )

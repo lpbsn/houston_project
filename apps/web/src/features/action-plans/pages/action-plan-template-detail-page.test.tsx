@@ -7,11 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
 import { ActionPlanTemplateDetailPage } from './action-plan-template-detail-page'
+import * as catalogPlanningSubmit from '../lib/action-plan-catalog-planning-submit'
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
 const useMutationMock = vi.fn()
 const scheduleMutationMock = vi.fn()
+const mixedMutationMock = vi.fn()
 
 function buildPlan(overrides: Partial<ActionPlanDetail> = {}): ActionPlanDetail {
   return {
@@ -77,6 +79,7 @@ vi.mock('../hooks', () => ({
   useDeactivateActionPlanMutation: () => useMutationMock(),
   useUseActionPlanMutation: () => useMutationMock(),
   useCreateActionPlanScheduleMutation: () => scheduleMutationMock(),
+  useSubmitMixedActionPlanFromCatalogMutation: () => mixedMutationMock(),
 }))
 
 describe('ActionPlanTemplateDetailPage', () => {
@@ -95,11 +98,16 @@ describe('ActionPlanTemplateDetailPage', () => {
       mutateAsync: vi.fn(),
       isPending: false,
     })
+    mixedMutationMock.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
   })
 
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('renders read-only template detail with modifier action', () => {
@@ -179,13 +187,59 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(navigateMock).toHaveBeenCalledWith('/action-plans/plan-1/edit')
   })
 
-  it('hides primary launch action when per-assignee chronology is enabled', () => {
+  it('shows static launch label when execution panel is open', () => {
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
+
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(
+      screen.queryByText('Une exécution ponctuelle sera lancée immédiatement.'),
+    ).toBeNull()
+  })
+
+  it('shows primary launch action when per-assignee chronology is enabled', () => {
     render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
 
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: "Lancer l'exécution" })).toBeNull()
+    expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Lancer pour cet assigné' })).toBeNull()
+  })
+
+  it('shows execution feed link after schedule success', async () => {
+    const scheduleMutateAsync = vi.fn().mockResolvedValue(undefined)
+    scheduleMutationMock.mockReturnValue({
+      mutateAsync: scheduleMutateAsync,
+      isPending: false,
+    })
+    vi.spyOn(catalogPlanningSubmit, 'validateCatalogPlanningDraft').mockReturnValue({})
+    vi.spyOn(catalogPlanningSubmit, 'resolveCatalogPlanningSubmit').mockReturnValue({
+      kind: 'schedule',
+      scheduleBody: {
+        end_date: '2026-12-31',
+        start_at: '09:00:00',
+        end_at: '10:00:00',
+        recurrence_days: ['monday'],
+        assignees: [],
+        use_shared_chronology: true,
+      },
+    })
+
+    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
+    fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
+
+    await vi.waitFor(() => {
+      expect(scheduleMutateAsync).toHaveBeenCalled()
+    })
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Récurrence planifiée.')).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: "Voir le feed d'exécution" })).toBeNull()
   })
 })

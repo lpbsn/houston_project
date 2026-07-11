@@ -451,6 +451,7 @@ def create_action_plan_schedule(
     recurrence_days: list[str],
     assignees: list[dict] | None = None,
     use_shared_chronology: bool = False,
+    emit_side_effects: bool = True,
 ) -> ActionPlanSchedule:
     if not can_create_action_plan_schedule(actor, action_plan):
         raise ActionPlanPermissionError("Not allowed to create a schedule for this action plan.")
@@ -514,6 +515,7 @@ def create_action_plan_schedule(
         schedule=schedule,
         horizon_days=MATERIALIZATION_HORIZON_DAYS,
         visible_only=True,
+        emit_side_effects=emit_side_effects,
     )
     return schedule
 
