@@ -23,9 +23,12 @@ import { buildActionPlanUseRequest } from '../lib/action-plan-create-payload'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
   createActionPlanEventPlanningDraft,
+  hasGlobalRepeat,
+  shouldHidePrimaryPlanningActions,
   toScheduleDraft,
   toUseRequestOptions,
   validateActionPlanEventPlanningDraft,
+  validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
 import {
@@ -38,6 +41,7 @@ import {
 import { buildActionPlanScheduleCreateRequest } from '../lib/action-plan-schedule-payload'
 import { isActionPlanScheduleConfigured } from '../lib/action-plan-schedule-form'
 import { isStaffActionPlanUsageRole } from '../lib/action-plan-management-access'
+import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest } from '../types'
 
 type ActionPlanTemplateDetailPageProps = {
   actionPlanId: string
@@ -96,7 +100,8 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const canUpdate = canShowActionPlanUpdate(hints)
   const canUse = canShowActionPlanUse(hints)
   const canSchedule = canShowActionPlanSchedule(hints)
-  const isRepeatSubmit = planningDraft.repeatEnabled && canSchedule
+  const isRepeatSubmit = hasGlobalRepeat(planningDraft) && canSchedule
+  const hidePrimaryAction = shouldHidePrimaryPlanningActions(planningDraft)
   const scheduleConfigured = isActionPlanScheduleConfigured(toScheduleDraft(planningDraft))
   const primaryActionLabel = isRepeatSubmit ? 'Planifier la récurrence' : "Lancer l'exécution"
   const isPrimaryPending = isRepeatSubmit ? scheduleMutation.isPending : useMutation.isPending
@@ -147,13 +152,44 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     }
   }
 
+  async function handleAssigneeSchedule(
+    _assigneeId: string,
+    body: ActionPlanScheduleCreateRequest,
+  ) {
+    setFeedback(null)
+    try {
+      await scheduleMutation.mutateAsync(body)
+      setFeedback({ variant: 'success', message: 'Récurrence assignée planifiée.' })
+    } catch (error) {
+      setFeedback({
+        variant: 'error',
+        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être planifié.'),
+      })
+    }
+  }
+
+  async function handleAssigneeLaunch(_assigneeId: string, body: ActionPlanUseRequest) {
+    setFeedback(null)
+    try {
+      await useMutation.mutateAsync(body)
+      setFeedback({ variant: 'success', message: 'Exécution assignée lancée.' })
+    } catch (error) {
+      setFeedback({
+        variant: 'error',
+        message: resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être lancé.'),
+      })
+    }
+  }
+
   async function handleLaunchExecution() {
-    const errors = validateActionPlanEventPlanningDraft(planningDraft, {
-      requireAssignees: false,
-      allowRepeat: canSchedule,
-    })
+    const errors = planningDraft.usePerAssigneeChronology
+      ? validatePerAssigneePlanningDraft(planningDraft, { allowRepeat: canSchedule })
+      : validateActionPlanEventPlanningDraft(planningDraft, {
+          requireAssignees: false,
+          allowRepeat: canSchedule,
+        })
     setPlanningFieldErrors(errors)
-    if (Object.keys(errors).length > 0) {
+    if (Object.keys(errors).length > 0 || planningDraft.usePerAssigneeChronology) {
       return
     }
 
@@ -163,7 +199,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         const body = buildActionPlanScheduleCreateRequest({
           schedule: toScheduleDraft(planningDraft),
           assignees: staffUseMode ? [] : planningDraft.assignees,
-          useSharedChronology: !planningDraft.usePerAssigneeChronology,
+          useSharedChronology: true,
         })
         if (!body) {
           return
@@ -240,6 +276,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
             pilotBusinessUnitId={plan.pilot_business_unit.id}
             fieldErrors={planningFieldErrors}
             onDraftChange={setPlanningDraft}
+            onAssigneeSchedule={(assigneeId, body) =>
+              void handleAssigneeSchedule(assigneeId, body)
+            }
+            onAssigneeLaunch={(assigneeId, body) => void handleAssigneeLaunch(assigneeId, body)}
           />
         ) : null}
       </div>
@@ -254,6 +294,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           primaryActionLabel={primaryActionLabel}
           primaryActionDisabled={primaryActionDisabled}
           isPrimaryPending={isPrimaryPending}
+          hidePrimaryAction={hidePrimaryAction}
           onNavigateToEdit={() => navigate(`/action-plans/${actionPlanId}/edit`)}
           onActivate={() => void handleActivate()}
           onDeactivate={() => void handleDeactivate()}
