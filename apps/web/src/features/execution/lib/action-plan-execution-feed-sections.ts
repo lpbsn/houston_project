@@ -27,7 +27,7 @@ const SECTION_META: Record<
   { label: string; dotVariant: TerrainSectionDotVariant }
 > = {
   pending_validation: { label: 'À valider', dotVariant: 'warning' },
-  in_progress: { label: 'En cours', dotVariant: 'primary' },
+  in_progress: { label: 'En cours', dotVariant: 'teal' },
   done: { label: 'Terminés', dotVariant: 'success' },
   canceled: { label: 'Annulés', dotVariant: 'muted' },
 }

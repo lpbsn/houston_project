@@ -54,10 +54,26 @@ describe('groupFeedItemsByStatus', () => {
     ])
     expect(groups).toHaveLength(2)
     expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].dotVariant).toBe('primary')
+    expect(groups?.[1].dotVariant).toBe('teal')
   })
 
-  it('returns three sections with resolved last when all statuses are present', () => {
+  it('returns three sections with resolved before canceled when all statuses are present', () => {
+    const groups = groupFeedItemsByStatus([
+      item({ id: '1', status: 'open' }),
+      item({ id: '2', status: 'in_progress' }),
+      item({ id: '3', status: 'resolved' }),
+      item({ id: '4', status: 'canceled' }),
+    ])
+    expect(groups).toHaveLength(4)
+    expect(groups?.[0].dotVariant).toBe('warning')
+    expect(groups?.[1].dotVariant).toBe('teal')
+    expect(groups?.[2].dotVariant).toBe('success')
+    expect(groups?.[3].dotVariant).toBe('muted')
+    expect(groups?.[3].label).toBe('Annulés')
+    expect(groups?.[3].items.map((entry) => entry.id)).toEqual(['4'])
+  })
+
+  it('returns three sections with resolved last when all active statuses are present', () => {
     const groups = groupFeedItemsByStatus([
       item({ id: '1', status: 'open' }),
       item({ id: '2', status: 'in_progress' }),
@@ -65,7 +81,7 @@ describe('groupFeedItemsByStatus', () => {
     ])
     expect(groups).toHaveLength(3)
     expect(groups?.[0].dotVariant).toBe('warning')
-    expect(groups?.[1].dotVariant).toBe('primary')
+    expect(groups?.[1].dotVariant).toBe('teal')
     expect(groups?.[2].dotVariant).toBe('success')
     expect(groups?.[2].items.map((entry) => entry.id)).toEqual(['3'])
   })

@@ -15,5 +15,5 @@ AI_OBSERVATION_PIPELINE_PROMPT_VERSION = "ai_observation_pipeline_v4"
 # Must stay aligned with Signal.Status.OPEN and Signal.Status.IN_PROGRESS.
 ACTIVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})
 
-# Default Signal Feed visibility (excludes canceled and archived).
-FEED_SIGNAL_STATUSES = frozenset({"open", "in_progress", "resolved"})
+# Default Signal Feed visibility (excludes archived).
+FEED_SIGNAL_STATUSES = frozenset({"open", "in_progress", "resolved", "canceled"})

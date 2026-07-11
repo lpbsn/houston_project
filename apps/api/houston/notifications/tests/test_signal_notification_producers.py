@@ -450,7 +450,7 @@ def test_aggregate_emits_zero_notifications():
     assert _notifications_for_signal(signal_id=signal.id) == []
 
 
-def test_auto_resolve_with_actor_none_notifies_pole_members():
+def test_mark_done_validate_does_not_emit_signal_resolved_notification():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
@@ -488,8 +488,7 @@ def test_auto_resolve_with_actor_none_notifies_pole_members():
         for item in _notifications_for_signal(signal_id=signal.id)
         if item.event_key == Notification.EventKey.SIGNAL_RESOLVED
     ]
-    assert len(notifications) == 1
-    assert notifications[0].recipient_membership_id == staff.id
+    assert notifications == []
 
 
 def test_signal_notification_rollback_creates_zero_notifications():

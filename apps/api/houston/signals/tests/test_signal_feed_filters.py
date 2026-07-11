@@ -106,18 +106,31 @@ def test_feed_filters_by_multiple_statuses(api_client):
     assert body["applied_filters"]["statuses"] == ["in_progress", "open"]
 
 
-def test_feed_rejects_canceled_and_archived_status_filters(api_client):
+def test_feed_rejects_archived_status_filter(api_client):
     membership = build_api_membership()
     _create_signal(membership, title="Open")
 
-    for status_value in ("canceled", "archived"):
-        response = _feed_get(
-            api_client,
-            membership,
-            f"?view_mode=general&statuses={status_value}",
-        )
-        assert response.status_code == 400
-        assert response.json()["code"] == "validation_error"
+    response = _feed_get(
+        api_client,
+        membership,
+        "?view_mode=general&statuses=archived",
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
+
+
+def test_feed_filters_by_canceled_status(api_client):
+    membership = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    _create_signal(membership, title="Open", status=Signal.Status.OPEN)
+    canceled = _create_signal(membership, title="Canceled", status=Signal.Status.CANCELED)
+
+    response = _feed_get(api_client, membership, "?view_mode=general&statuses=canceled")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == str(canceled.id)
+    assert body["applied_filters"]["statuses"] == ["canceled"]
 
 
 def test_feed_deduplicates_statuses_in_applied_filters(api_client):

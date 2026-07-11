@@ -139,9 +139,9 @@ Validated target transition rules:
 Validated in current code:
 - Manual cancel and resolve from `open` or `in_progress` only (active statuses).
 - Linked Action Plan creation from an active Signal (`open` or `in_progress`) transitions `open` → `in_progress` and unpins if pinned; creation is rejected when the Signal is terminal (`resolved`, `canceled`, `archived`). When `source_signal_id` is set, `pilot_business_unit_id` must equal the Signal's `responsible_business_unit_id`.
-- Default Signal Feed includes `open`, `in_progress`, and `resolved`; `canceled` and `archived` are excluded.
-- Feed sorting places all active Signals before any `resolved` Signal (`status_group_rank` before pin).
-- `resolved` Signals are readable on detail (read-only via `permission_hints`); `canceled` and `archived` are not exposed on detail by default.
+- Default Signal Feed includes `open`, `in_progress`, `resolved`, and `canceled`; `archived` is excluded.
+- Feed sorting places all active Signals before `resolved`, then `canceled` (`status_group_rank` before pin).
+- `resolved` and `canceled` Signals are readable on detail (read-only via `permission_hints`); `canceled` detail requires pole visibility for Manager/Staff; `archived` is not exposed on detail by default.
 - Resolve transition forces unpin (clears pin fields).
 
 Not validated yet:
@@ -158,7 +158,7 @@ Not validated yet:
 - Owner and Director target behavior: broad establishment-level Signal visibility and actionability, subject to RBAC.
 - Manager target behavior: actionability requires RBAC (`MembershipScope` BusinessUnit coverage) and Signal BU classification.
 - Ma vue (`view_mode=personal`) filters by **`MembershipScope`** for Manager/Staff (affected **or** responsible BusinessUnit in scope). Owner/Director: all feed-visible establishment Signals.
-- Vue générale (`view_mode=general`) shows all feed-visible establishment Signals for every role — **no** `MembershipScope` BU filter on the list (establishment-wide read).
+- Vue générale (`view_mode=general`) shows all feed-visible establishment Signals for Owner/Director; for Manager/Staff, active and `resolved` Signals are establishment-wide while `canceled` Signals follow pole visibility on the feed list.
 - **Detail access** (implemented): any member who passes `can_view_signal_feed` may read **feed-visible** Signal detail by ID, including deep-links to Signals outside their Ma vue BU scope. Pin, cancel, resolve, and create-action commands remain scope-aware for Manager/Staff (see [`rbac_permissions_domain.md`](rbac_permissions_domain.md) §7).
 - Visibility does not imply actionability.
 - Resolving Signals, canceling Signals, and pinning require backend command authorization (implemented). Creating Actions from Signals remains a separate workflow.
@@ -262,8 +262,8 @@ Aligned with `FEED_SIGNAL_STATUSES` in `apps/api/houston/signals/constants.py`.
 
 | Status | In active Signal Feed (default) |
 | --- | --- |
-| `open`, `in_progress`, `resolved` | Yes |
-| `canceled`, `archived` | No |
+| `open`, `in_progress`, `resolved`, `canceled` | Yes |
+| `archived` | No |
 
 ### Aggregation (when pipeline exists)
 

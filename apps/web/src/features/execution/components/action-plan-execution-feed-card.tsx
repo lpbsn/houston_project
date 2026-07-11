@@ -3,11 +3,15 @@ import { Bell } from 'lucide-react'
 import { FeedCardActionsButton, FeedCardMetaRow } from '@/components/domain/feed-card-meta-row'
 import { HoustonBadge } from '@/components/ui/terrain'
 import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
+import { getDisplayNameInitials } from '@/lib/display-names'
 import {
+  actionPlanFeedPendingBgClassName,
+  actionPlanFeedTealBgClassName,
+  terrain,
+  terrainActionPlanFeedCardClassName,
   terrainFeedCardBaseClassName,
   terrainFeedInteractiveCardClassName,
 } from '@/lib/terrain-styles'
-import { getDisplayNameInitials } from '@/lib/display-names'
 import { ActionPlanPinnedBadge } from '@/features/action-plans/components/action-plan-pinned-badge'
 import { ActionPlanStatusBadge } from '@/features/action-plans/components/action-plan-status-badge'
 import { canOpenActionPlanExecutionFeedCardActions } from '@/features/action-plans/lib/action-plan-execution-feed-card-actions'
@@ -15,10 +19,18 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { formatSignalRelativeTime } from '@/features/signals/lib/signal-display'
 
+import { ActionPlanFeedSidebar } from './action-plan-feed-sidebar'
+import { ActionPlanFeedTaskProgressBar } from './action-plan-feed-task-progress-bar'
+import type { ActionPlanFeedTaskProgressBarVariant } from './action-plan-feed-task-progress-bar'
 import {
   actionPlanFeedSignalClassificationInput,
   formatActionPlanFeedAssigneeDisplay,
   formatActionPlanFeedMetaParts,
+  getActionPlanFeedProgressState,
+  getActionPlanFeedSidebarState,
+  isActionPlanFeedCanceledCard,
+  isActionPlanFeedDoneCard,
+  isActionPlanFeedInProgressCard,
   isActionPlanFeedPendingValidationCard,
 } from '../lib/action-plan-execution-feed-card-display'
 
@@ -31,6 +43,8 @@ type ActionPlanExecutionFeedCardProps = {
 type ActionPlanFeedAssigneeRowProps = {
   item: ActionPlanExecutionFeedItem
   showStatusBadge?: boolean
+  showPinnedBadge?: boolean
+  avatarClassName?: string
 }
 
 function stopCardNavigation(event: { stopPropagation: () => void }) {
@@ -123,9 +137,14 @@ function ActionPlanFeedMetaRow({ item }: { item: ActionPlanExecutionFeedItem }) 
   )
 }
 
-function ActionPlanFeedAssigneeRow({ item, showStatusBadge = true }: ActionPlanFeedAssigneeRowProps) {
+function ActionPlanFeedAssigneeRow({
+  item,
+  showStatusBadge = true,
+  showPinnedBadge = showStatusBadge,
+  avatarClassName = 'bg-[#EEF2FF] text-[#1B4FD8]',
+}: ActionPlanFeedAssigneeRowProps) {
   const { visible, overflow } = formatActionPlanFeedAssigneeDisplay(item.assignees)
-  if (visible.length === 0 && !showStatusBadge) {
+  if (visible.length === 0 && !showStatusBadge && !showPinnedBadge) {
     return null
   }
 
@@ -138,7 +157,7 @@ function ActionPlanFeedAssigneeRow({ item, showStatusBadge = true }: ActionPlanF
       {visible.length > 0 ? (
         <div className="flex min-w-0 items-center gap-2">
           <div
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[10px] font-bold text-[#1B4FD8]"
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarClassName}`}
             aria-hidden
           >
             {primaryInitials}
@@ -150,8 +169,12 @@ function ActionPlanFeedAssigneeRow({ item, showStatusBadge = true }: ActionPlanF
       )}
       {showStatusBadge ? (
         <div className="flex shrink-0 items-center gap-1.5">
-          {item.is_pinned ? <ActionPlanPinnedBadge /> : null}
+          {showPinnedBadge && item.is_pinned ? <ActionPlanPinnedBadge /> : null}
           <ActionPlanStatusBadge status={item.status} />
+        </div>
+      ) : showPinnedBadge && item.is_pinned ? (
+        <div className="flex shrink-0 items-center">
+          <ActionPlanPinnedBadge />
         </div>
       ) : null}
     </div>
@@ -169,9 +192,7 @@ function PendingValidationActionPlanFeedCard({
 
   return (
     <article
-      className={terrainFeedCardBaseClassName(
-        'border border-[#E69138] bg-[#FFF9ED] hover:border-[#E69138]/80',
-      )}
+      className={terrainFeedCardBaseClassName(actionPlanFeedPendingBgClassName)}
       onClick={() => onSelect(item.id)}
       onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
       role="button"
@@ -202,8 +223,143 @@ function PendingValidationActionPlanFeedCard({
 
       <ActionPlanFeedMetaRow item={item} />
 
-      <ActionPlanFeedAssigneeRow item={item} showStatusBadge={false} />
+      <ActionPlanFeedAssigneeRow item={item} showStatusBadge={false} showPinnedBadge={false} />
     </article>
+  )
+}
+
+function InProgressActionPlanFeedCard({
+  item,
+  onSelect,
+  onOpenActions,
+}: ActionPlanExecutionFeedCardProps) {
+  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
+  const showActions =
+    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
+  const sidebarState = getActionPlanFeedSidebarState(item.end_at)
+  const progressState = getActionPlanFeedProgressState(item)
+
+  return (
+    <article
+      className={terrainActionPlanFeedCardClassName()}
+      onClick={() => onSelect(item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
+      role="button"
+      tabIndex={0}
+    >
+      <ActionPlanFeedSidebar state={sidebarState} />
+
+      <div className="min-w-0 flex-1 p-4">
+        <FeedCardMetaRow
+          timeLabel={formatSignalRelativeTime(item.last_activity_at)}
+          badges={<ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />}
+          actions={
+            showActions && onOpenActions ? (
+              <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+            ) : null
+          }
+        />
+
+        <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
+
+        {progressState ? (
+          <ActionPlanFeedTaskProgressBar
+            total={progressState.total}
+            filled={progressState.filled}
+            fractionLabel={progressState.fractionLabel}
+          />
+        ) : null}
+
+        <ActionPlanFeedAssigneeRow
+          item={item}
+          showStatusBadge={false}
+          showPinnedBadge
+          avatarClassName={`${actionPlanFeedTealBgClassName} text-white`}
+        />
+      </div>
+    </article>
+  )
+}
+
+function TerminalActionPlanFeedCard({
+  item,
+  onSelect,
+  onOpenActions,
+  sidebarVariant,
+  progressVariant,
+  avatarClassName,
+}: ActionPlanExecutionFeedCardProps & {
+  sidebarVariant: 'done' | 'canceled'
+  progressVariant: ActionPlanFeedTaskProgressBarVariant
+  avatarClassName: string
+}) {
+  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
+  const showActions =
+    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
+  const progressState = getActionPlanFeedProgressState(item)
+
+  return (
+    <article
+      className={terrainActionPlanFeedCardClassName()}
+      onClick={() => onSelect(item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
+      role="button"
+      tabIndex={0}
+    >
+      <ActionPlanFeedSidebar variant={sidebarVariant} />
+
+      <div className="min-w-0 flex-1 p-4">
+        <FeedCardMetaRow
+          timeLabel={formatSignalRelativeTime(item.last_activity_at)}
+          badges={<ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />}
+          actions={
+            showActions && onOpenActions ? (
+              <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+            ) : null
+          }
+        />
+
+        <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
+
+        {progressState ? (
+          <ActionPlanFeedTaskProgressBar
+            total={progressState.total}
+            filled={progressState.filled}
+            fractionLabel={progressState.fractionLabel}
+            variant={progressVariant}
+          />
+        ) : null}
+
+        <ActionPlanFeedAssigneeRow
+          item={item}
+          showStatusBadge={false}
+          showPinnedBadge
+          avatarClassName={avatarClassName}
+        />
+      </div>
+    </article>
+  )
+}
+
+function DoneActionPlanFeedCard(props: ActionPlanExecutionFeedCardProps) {
+  return (
+    <TerminalActionPlanFeedCard
+      {...props}
+      sidebarVariant="done"
+      progressVariant="success"
+      avatarClassName={`${terrain.successBg} text-white`}
+    />
+  )
+}
+
+function CanceledActionPlanFeedCard(props: ActionPlanExecutionFeedCardProps) {
+  return (
+    <TerminalActionPlanFeedCard
+      {...props}
+      sidebarVariant="canceled"
+      progressVariant="muted"
+      avatarClassName="bg-[#7D7B75] text-white"
+    />
   )
 }
 
@@ -251,6 +407,22 @@ export function ActionPlanExecutionFeedCard({
         onSelect={onSelect}
         onOpenActions={onOpenActions}
       />
+    )
+  }
+
+  if (isActionPlanFeedInProgressCard(item)) {
+    return (
+      <InProgressActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
+    )
+  }
+
+  if (isActionPlanFeedDoneCard(item)) {
+    return <DoneActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
+  }
+
+  if (isActionPlanFeedCanceledCard(item)) {
+    return (
+      <CanceledActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
     )
   }
 

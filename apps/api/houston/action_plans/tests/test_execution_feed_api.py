@@ -231,27 +231,41 @@ def test_action_plan_execution_feed_item_task_counts_decrement_after_mark_pendin
     assert feed_after_pending.json()["items"][0]["action_plan_execution"]["treated_task_count"] == 0
 
 
-def test_terminal_executions_excluded_from_feed(
+def test_terminal_executions_included_in_feed_ordered_after_actives(
     api_client,
     owner_membership,
     business_unit,
 ):
-    _create_execution(
+    now = timezone.now()
+    done = _create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Done execution",
         status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(hours=1),
+        end_at=now - timezone.timedelta(days=2),
     )
-    _create_execution(
+    canceled = _create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Canceled execution",
         status=EXECUTION_STATUS_CANCELED,
+        last_activity_at=now - timezone.timedelta(hours=2),
+        end_at=now - timezone.timedelta(days=1),
     )
-    active = _create_execution(
+    pending = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Pending validation",
+        status=EXECUTION_STATUS_PENDING_VALIDATION,
+        requires_validation=True,
+        last_activity_at=now,
+    )
+    in_progress = _create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Active execution",
+        last_activity_at=now - timezone.timedelta(minutes=30),
     )
     token = login(api_client, user=owner_membership.user)
     response = api_client.get(
@@ -259,8 +273,119 @@ def test_terminal_executions_excluded_from_feed(
         **auth_headers(token),
     )
     assert response.status_code == 200
-    ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
-    assert ids == {str(active.id)}
+    assert _feed_execution_ids(response.json()) == [
+        str(pending.id),
+        str(in_progress.id),
+        str(done.id),
+        str(canceled.id),
+    ]
+
+
+def test_terminal_executions_sort_by_last_activity_desc_within_status(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    older_done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Older done",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(days=2),
+    )
+    newer_done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Newer done",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(hours=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert _feed_execution_ids(response.json()) == [
+        str(newer_done.id),
+        str(older_done.id),
+    ]
+
+
+def test_terminal_executions_are_not_marked_overdue_in_feed(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Done overdue",
+        status=EXECUTION_STATUS_DONE,
+        end_at=now - timezone.timedelta(days=1),
+    )
+    canceled = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Canceled overdue",
+        status=EXECUTION_STATUS_CANCELED,
+        end_at=now - timezone.timedelta(days=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    response = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    items_by_id = {
+        item["action_plan_execution"]["id"]: item["action_plan_execution"]
+        for item in response.json()["items"]
+    }
+    assert items_by_id[str(done.id)]["is_overdue"] is False
+    assert items_by_id[str(canceled.id)]["is_overdue"] is False
+
+
+def test_feed_pagination_includes_terminal_executions_after_actives(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    now = timezone.now()
+    actives = [
+        _create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Active {index}",
+            end_at=now + timezone.timedelta(hours=index + 1),
+        )
+        for index in range(2)
+    ]
+    done = _create_execution(
+        owner_membership,
+        business_unit=business_unit,
+        title="Done execution",
+        status=EXECUTION_STATUS_DONE,
+        last_activity_at=now - timezone.timedelta(hours=1),
+    )
+    token = login(api_client, user=owner_membership.user)
+    first = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + "&page_size=2",
+        **auth_headers(token),
+    )
+    second = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + _feed_query("general")
+        + f"&page_size=2&cursor={first.json()['next_cursor']}",
+        **auth_headers(token),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    merged_ids = _feed_execution_ids(first.json()) + _feed_execution_ids(second.json())
+    assert merged_ids == [str(execution.id) for execution in actives] + [str(done.id)]
 
 
 def test_future_execution_visible_from_excluded(

@@ -9,13 +9,15 @@ from django.db.models import Case, F, IntegerField, OrderBy, Q, QuerySet, Value,
 from django.utils.dateparse import parse_datetime
 
 from houston.action_plans.constants import (
-    EXECUTION_FEED_STATUSES,
+    ACTIVE_EXECUTION_STATUSES,
+    EXECUTION_STATUS_CANCELED,
+    EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
 )
 from houston.action_plans.models import ActionPlanExecution
 
-CURSOR_PART_COUNT = 8
+CURSOR_PART_COUNT = 9
 
 DEADLINE_BUCKET_OVERDUE = 0
 DEADLINE_BUCKET_UPCOMING = 1
@@ -36,6 +38,7 @@ class ActionPlanExecutionFeedCursor:
     status_rank: int
     deadline_bucket: int
     end_at: datetime | None
+    last_activity_at: datetime
     created_at: datetime
     item_id: uuid.UUID
 
@@ -48,7 +51,7 @@ def execution_deadline_bucket(
 ) -> int:
     if end_at is None:
         return DEADLINE_BUCKET_NO_DEADLINE
-    if status in EXECUTION_FEED_STATUSES and end_at < as_of:
+    if status in ACTIVE_EXECUTION_STATUSES and end_at < as_of:
         return DEADLINE_BUCKET_OVERDUE
     return DEADLINE_BUCKET_UPCOMING
 
@@ -58,7 +61,11 @@ def status_rank_for_execution(status: str) -> int:
         return 0
     if status == EXECUTION_STATUS_IN_PROGRESS:
         return 1
-    return 2
+    if status == EXECUTION_STATUS_DONE:
+        return 2
+    if status == EXECUTION_STATUS_CANCELED:
+        return 3
+    return 4
 
 
 def deadline_bucket_for_execution(
@@ -78,14 +85,16 @@ def action_plan_execution_feed_sort_case_expressions(
     status_rank = Case(
         When(status=EXECUTION_STATUS_PENDING_VALIDATION, then=Value(0)),
         When(status=EXECUTION_STATUS_IN_PROGRESS, then=Value(1)),
-        default=Value(2),
+        When(status=EXECUTION_STATUS_DONE, then=Value(2)),
+        When(status=EXECUTION_STATUS_CANCELED, then=Value(3)),
+        default=Value(4),
         output_field=IntegerField(),
     )
     deadline_bucket = Case(
         When(end_at__isnull=True, then=Value(DEADLINE_BUCKET_NO_DEADLINE)),
         When(
             end_at__lt=as_of,
-            status__in=EXECUTION_FEED_STATUSES,
+            status__in=ACTIVE_EXECUTION_STATUSES,
             then=Value(DEADLINE_BUCKET_OVERDUE),
         ),
         default=Value(DEADLINE_BUCKET_UPCOMING),
@@ -101,6 +110,7 @@ def action_plan_execution_feed_order_by() -> tuple[object, ...]:
         "status_rank",
         "deadline_bucket",
         OrderBy(F("end_at"), nulls_last=True),
+        "-last_activity_at",
         "-created_at",
         "-id",
     )
@@ -135,6 +145,7 @@ def encode_action_plan_execution_feed_cursor(
             str(status_rank_for_execution(execution.status)),
             str(deadline_bucket_for_execution(execution, as_of)),
             end_at_part,
+            execution.last_activity_at.isoformat(),
             execution.created_at.isoformat(),
             str(execution.id),
         ]
@@ -157,11 +168,12 @@ def parse_action_plan_execution_feed_cursor(
         status_rank = int(parts[3])
         deadline_bucket = int(parts[4])
         end_at = parse_datetime(parts[5]) if parts[5] else None
-        created_at = parse_datetime(parts[6])
-        item_id = uuid.UUID(parts[7])
+        last_activity_at = parse_datetime(parts[6])
+        created_at = parse_datetime(parts[7])
+        item_id = uuid.UUID(parts[8])
     except (TypeError, ValueError) as exc:
         raise ActionPlanExecutionFeedCursorError() from exc
-    if as_of is None or created_at is None:
+    if as_of is None or last_activity_at is None or created_at is None:
         raise ActionPlanExecutionFeedCursorError()
     return ActionPlanExecutionFeedCursor(
         as_of=as_of,
@@ -172,6 +184,7 @@ def parse_action_plan_execution_feed_cursor(
         end_at=end_at,
         created_at=created_at,
         item_id=item_id,
+        last_activity_at=last_activity_at,
     )
 
 
@@ -200,6 +213,9 @@ def _after_cursor_filter(cursor: ActionPlanExecutionFeedCursor) -> Q:
         prefix &= Q(end_at=cursor.end_at)
     else:
         prefix &= Q(end_at__isnull=True)
+
+    q |= prefix & Q(last_activity_at__lt=cursor.last_activity_at)
+    prefix &= Q(last_activity_at=cursor.last_activity_at)
 
     q |= prefix & Q(created_at__lt=cursor.created_at)
     prefix &= Q(created_at=cursor.created_at)

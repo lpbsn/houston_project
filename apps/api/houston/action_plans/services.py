@@ -144,18 +144,8 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
     if linked.filter(status__in=ACTIVE_EXECUTION_STATUSES).exists():
         return signal
 
-    if linked.filter(status=EXECUTION_STATUS_DONE).exists():
-        from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
-
-        if signal.status not in ACTIVE_SIGNAL_STATUSES:
-            return signal
-        from houston.signals.services import resolve_signal
-
-        return resolve_signal(signal=signal)
-
     if (
         linked.exists()
-        and not linked.filter(status=EXECUTION_STATUS_DONE).exists()
         and linked.filter(status=EXECUTION_STATUS_CANCELED).count() == linked.count()
     ):
         from houston.signals.constants import ACTIVE_SIGNAL_STATUSES

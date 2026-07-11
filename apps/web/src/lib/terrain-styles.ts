@@ -34,6 +34,14 @@ export const terrainBrandAction = {
   ring: 'ring-[#114660]/30',
 } as const
 
+/** Action plan execution feed — teal accent (#3A7A96). */
+export const ACTION_PLAN_FEED_TEAL = '#3A7A96'
+export const ACTION_PLAN_FEED_PENDING_BG = '#FCE9B8'
+export const actionPlanFeedTealBgClassName = 'bg-[#3A7A96]'
+export const actionPlanFeedPendingBgClassName = 'bg-[#FCE9B8]'
+export const actionPlanFeedTealTextClassName = 'text-[#3A7A96]'
+export const actionPlanFeedOverdueBgClassName = 'bg-[#E24B4A]'
+
 /** Feed card reporter avatar (signal feed maquette). */
 export const terrainFeedAvatar = 'bg-[#3A7A96] text-white'
 
@@ -55,7 +63,13 @@ export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   teal: terrainInProgress.badgeSolid,
 }
 
-export type TerrainSectionDotVariant = 'danger' | 'primary' | 'muted' | 'warning' | 'success'
+export type TerrainSectionDotVariant =
+  | 'danger'
+  | 'primary'
+  | 'muted'
+  | 'warning'
+  | 'success'
+  | 'teal'
 
 export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string> = {
   danger: 'bg-[#E24B4A]',
@@ -63,6 +77,7 @@ export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string>
   muted: 'bg-[#7D7B75]',
   warning: 'bg-[#EF9F27]',
   success: 'bg-[#1D9E75]',
+  teal: 'bg-[#3A7A96]',
 }
 
 export function terrainCardClassName(className?: string) {
@@ -82,6 +97,15 @@ export function terrainFeedInteractiveCardClassName(className?: string) {
 /** Shared radius/padding for feed cards without left-accent border (e.g. pending validation). */
 export function terrainFeedCardBaseClassName(className?: string) {
   return cn('cursor-pointer rounded-[22px] p-4 transition', className)
+}
+
+/** In-progress action plan feed card — flex row with left sidebar (~60px). */
+export function terrainActionPlanFeedCardClassName(className?: string) {
+  return cn(
+    'flex cursor-pointer overflow-hidden rounded-[22px] border border-[#E8E6DF] bg-white transition',
+    'hover:border-[#3A7A96]/30',
+    className,
+  )
 }
 
 export function terrainFieldLabelClassName(className?: string) {

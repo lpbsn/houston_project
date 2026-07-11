@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import {
+  TerrainCollapsibleFeedSection,
   TerrainEmptyState,
   TerrainErrorState,
-  TerrainSectionLabel,
 } from '@/components/ui/terrain'
+import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { SignalCard } from '../components/signal-card'
 import { SignalFeedCardActionsSheet } from '../components/signal-feed-card-actions-sheet'
@@ -27,6 +28,8 @@ import {
   type SignalFeedFilters,
 } from '../lib/signal-feed-filters'
 import type { SignalFeedItem, SignalViewMode } from '../types'
+
+const SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS = ['resolved', 'canceled'] as const
 
 type SignalFeedPageProps = {
   onOpenSignal: (signalId: string) => void
@@ -47,14 +50,10 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
     filters: normalizedFilters,
   })
 
-  if (!establishmentId) {
-    return (
-      <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
-    )
-  }
-
   const feedItems =
-    feedQuery.isSuccess && feedQuery.data.pages.some((page) => page.items.length > 0)
+    establishmentId &&
+    feedQuery.isSuccess &&
+    feedQuery.data.pages.some((page) => page.items.length > 0)
       ? feedQuery.data.pages.flatMap((page) => page.items)
       : null
   const { pinnedItems, unpinnedItems } = feedItems
@@ -62,6 +61,21 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
     : { pinnedItems: [], unpinnedItems: [] }
   const groups =
     unpinnedItems.length > 0 ? groupFeedItemsByStatus(unpinnedItems) : null
+  const sectionKeys = groups?.map((group) => group.status) ?? []
+  const sectionExpansionResetToken = useMemo(
+    () => `${viewMode}:${JSON.stringify(normalizedFilters)}`,
+    [viewMode, normalizedFilters],
+  )
+  const { isExpanded, toggle } = useCollapsibleFeedSections(sectionKeys, {
+    defaultCollapsedKeys: SIGNAL_FEED_DEFAULT_COLLAPSED_SECTIONS,
+    resetToken: sectionExpansionResetToken,
+  })
+
+  if (!establishmentId) {
+    return (
+      <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
+    )
+  }
 
   const listClassName = 'flex flex-col gap-3 px-3'
 
@@ -158,16 +172,22 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           <div className="flex flex-col gap-3 pt-5">
             {pinnedItems.length > 0 ? renderItems(pinnedItems, 'pinned') : null}
 
-            {groups
-              ? groups.map((group) => (
-                  <section key={group.status}>
-                    <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
-                      {group.label} · {group.items.length}
-                    </TerrainSectionLabel>
+            {groups ? (
+              <div className="flex flex-col gap-2">
+                {groups.map((group) => (
+                  <TerrainCollapsibleFeedSection
+                    key={group.status}
+                    label={group.label}
+                    count={group.items.length}
+                    dotVariant={group.dotVariant}
+                    expanded={isExpanded(group.status)}
+                    onToggle={() => toggle(group.status)}
+                  >
                     {renderItems(group.items)}
-                  </section>
-                ))
-              : null}
+                  </TerrainCollapsibleFeedSection>
+                ))}
+              </div>
+            ) : null}
 
             {!groups && unpinnedItems.length > 0 ? (
               <div>{renderItems(unpinnedItems)}</div>

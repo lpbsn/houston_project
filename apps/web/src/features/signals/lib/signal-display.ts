@@ -28,19 +28,20 @@ export function formatSignalRelativeTime(iso: string): string {
 }
 
 export type SignalFeedStatusGroup = {
-  status: 'open' | 'in_progress' | 'resolved'
+  status: 'open' | 'in_progress' | 'resolved' | 'canceled'
   label: string
   dotVariant: TerrainSectionDotVariant
   items: SignalFeedItem[]
 }
 
 const STATUS_GROUP_META: Record<
-  'open' | 'in_progress' | 'resolved',
+  'open' | 'in_progress' | 'resolved' | 'canceled',
   { label: string; dotVariant: TerrainSectionDotVariant }
 > = {
   open: { label: 'En attente', dotVariant: 'warning' },
-  in_progress: { label: 'En cours', dotVariant: 'primary' },
+  in_progress: { label: 'En cours', dotVariant: 'teal' },
   resolved: { label: 'Résolus', dotVariant: 'success' },
+  canceled: { label: 'Annulés', dotVariant: 'muted' },
 }
 
 /**
@@ -51,6 +52,7 @@ export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatu
   const open = items.filter((item) => item.status === 'open')
   const inProgress = items.filter((item) => item.status === 'in_progress')
   const resolved = items.filter((item) => item.status === 'resolved')
+  const canceled = items.filter((item) => item.status === 'canceled')
 
   const presentGroups: SignalFeedStatusGroup[] = []
   if (open.length > 0) {
@@ -72,6 +74,13 @@ export function groupFeedItemsByStatus(items: SignalFeedItem[]): SignalFeedStatu
       status: 'resolved',
       ...STATUS_GROUP_META.resolved,
       items: resolved,
+    })
+  }
+  if (canceled.length > 0) {
+    presentGroups.push({
+      status: 'canceled',
+      ...STATUS_GROUP_META.canceled,
+      items: canceled,
     })
   }
 

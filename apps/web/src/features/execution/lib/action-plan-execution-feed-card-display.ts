@@ -94,3 +94,81 @@ export function formatActionPlanFeedMetaParts(
     taskProgressLabel: formatActionPlanFeedTaskProgressLabel(item),
   }
 }
+
+export type ActionPlanFeedSidebarState =
+  | { variant: 'countdown'; prefix: 'DANS'; value: string }
+  | { variant: 'no_deadline' }
+  | { variant: 'overdue' }
+
+const MS_PER_HOUR = 60 * 60 * 1000
+const MS_PER_DAY = 24 * MS_PER_HOUR
+
+export function getActionPlanFeedSidebarState(
+  endAt: string | null,
+  now: number = Date.now(),
+): ActionPlanFeedSidebarState {
+  if (!endAt) {
+    return { variant: 'no_deadline' }
+  }
+
+  const endMs = Date.parse(endAt)
+  if (Number.isNaN(endMs)) {
+    return { variant: 'no_deadline' }
+  }
+
+  const remainingMs = Math.max(0, endMs - now)
+  if (remainingMs === 0) {
+    return { variant: 'overdue' }
+  }
+
+  if (remainingMs >= MS_PER_DAY) {
+    const days = Math.floor(remainingMs / MS_PER_DAY)
+    return {
+      variant: 'countdown',
+      prefix: 'DANS',
+      value: `${days}j`,
+    }
+  }
+
+  const hours = Math.max(1, Math.ceil(remainingMs / MS_PER_HOUR))
+  return {
+    variant: 'countdown',
+    prefix: 'DANS',
+    value: `${hours}h`,
+  }
+}
+
+export type ActionPlanFeedProgressState = {
+  total: number
+  filled: number
+  fractionLabel: string
+}
+
+export function getActionPlanFeedProgressState(
+  item: Pick<ActionPlanExecutionFeedItem, 'task_count' | 'treated_task_count'>,
+): ActionPlanFeedProgressState | null {
+  const total = Math.max(0, item.task_count)
+  const filled = Math.min(total, Math.max(0, item.treated_task_count))
+
+  if (total === 0) {
+    return null
+  }
+
+  return {
+    total,
+    filled,
+    fractionLabel: `${filled}/${total}`,
+  }
+}
+
+export function isActionPlanFeedInProgressCard(item: ActionPlanExecutionFeedItem): boolean {
+  return item.status === 'in_progress'
+}
+
+export function isActionPlanFeedDoneCard(item: ActionPlanExecutionFeedItem): boolean {
+  return item.status === 'done'
+}
+
+export function isActionPlanFeedCanceledCard(item: ActionPlanExecutionFeedItem): boolean {
+  return item.status === 'canceled'
+}

@@ -49,12 +49,45 @@ describe('getActionPlanExecutionFeedSection', () => {
     )
   })
 
+  it('maps done and canceled statuses', () => {
+    expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '4', status: 'done' }))).toBe('done')
+    expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '5', status: 'canceled' }))).toBe(
+      'canceled',
+    )
+  })
+
   it('returns null for unknown status', () => {
     expect(getActionPlanExecutionFeedSection(buildFeedItem({ id: '3', status: 'unknown' }))).toBeNull()
   })
 })
 
 describe('groupActionPlanExecutionsBySection', () => {
+  it('orders all four sections and omits empty sections', () => {
+    const canceled = buildFeedItem({ id: 'canceled', status: 'canceled', title: 'Annulé' })
+    const done = buildFeedItem({ id: 'done', status: 'done', title: 'Terminé' })
+    const inProgress = buildFeedItem({ id: 'in-progress', status: 'in_progress', title: 'En cours' })
+    const pending = buildFeedItem({
+      id: 'pending',
+      status: 'pending_validation',
+      title: 'À valider',
+    })
+
+    const groups = groupActionPlanExecutionsBySection([canceled, done, inProgress, pending])
+
+    expect(groups.map((group) => group.section)).toEqual([
+      'pending_validation',
+      'in_progress',
+      'done',
+      'canceled',
+    ])
+    expect(groups.map((group) => group.label)).toEqual([
+      'À valider',
+      'En cours',
+      'Terminés',
+      'Annulés',
+    ])
+  })
+
   it('orders pending_validation before in_progress and omits empty sections', () => {
     const inProgress = buildFeedItem({ id: 'in-progress', status: 'in_progress', title: 'En cours' })
     const pending = buildFeedItem({
@@ -67,6 +100,8 @@ describe('groupActionPlanExecutionsBySection', () => {
     const groups = groupActionPlanExecutionsBySection([inProgress, pending, unknown])
 
     expect(groups.map((group) => group.section)).toEqual(['pending_validation', 'in_progress'])
+    expect(groups[0]?.dotVariant).toBe('warning')
+    expect(groups[1]?.dotVariant).toBe('teal')
     expect(groups[0]?.items.map((item) => item.id)).toEqual(['pending'])
     expect(groups[1]?.items.map((item) => item.id)).toEqual(['in-progress'])
   })

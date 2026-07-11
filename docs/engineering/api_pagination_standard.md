@@ -80,7 +80,7 @@ Action Plan Execution Feed cursor specifics:
 
 - Opaque server cursor tied to sort keys: `as_of`, `status_rank`, `deadline_bucket`, `end_at` (asc, nulls last), `created_at desc`, `id desc`.
 - `as_of` is frozen on page 1 and reused for subsequent pages (overdue bucket + `is_overdue` consistency).
-- Terminal executions (`done` / `canceled`) excluded from feed; mutations invalidate the feed.
+- Terminal executions (`done` / `canceled`) included in feed; mutations invalidate the feed.
 
 ### Tier B — Chronological streams
 

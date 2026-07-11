@@ -6,8 +6,11 @@ import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permi
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
-import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainEmptyState, TerrainErrorState, TerrainCollapsibleFeedSection } from '@/components/ui/terrain'
+import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import { useActionPlanExecutionFeedQuery } from '@/features/action-plans/hooks'
 import type { ExecutionViewMode } from '@/features/execution/lib/types'
@@ -23,6 +26,8 @@ import {
 } from '../lib/action-plan-execution-feed-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
 import { getEmptyFeedDescription } from '../lib/execution-feed-empty'
+
+const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 
 type ExecutionFeedPageProps = {
   onOpenActionPlanExecution?: (executionId: string) => void
@@ -49,6 +54,11 @@ export function ExecutionFeedPage({
     : []
   const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
   const planGroups = groupActionPlanExecutionsBySection(unpinnedItems)
+  const sectionKeys = planGroups.map((group) => group.section)
+  const { isExpanded, toggle } = useCollapsibleFeedSections(sectionKeys, {
+    defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
+    resetToken: viewMode,
+  })
 
   const permissionHints = auth.bootstrap
     ? getBootstrapPermissionHints(auth.bootstrap)
@@ -68,9 +78,12 @@ export function ExecutionFeedPage({
   const createAction = canCreate ? (
     <Button
       type="button"
-      variant="ghost"
       size="icon"
-      className="h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl"
+      className={cn(
+        'h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl text-white',
+        terrainBrandAction.bg,
+        terrainBrandAction.hover,
+      )}
       aria-label="Créer"
       onClick={() => setIsCreateMenuOpen(true)}
     >
@@ -133,23 +146,31 @@ export function ExecutionFeedPage({
                   </div>
                 ) : null}
 
-                {planGroups.map((group) => (
-                  <section key={`plan-${group.section}`}>
-                    <TerrainSectionLabel dotVariant={group.dotVariant} className="px-3">
-                      {group.label} · {group.items.length}
-                    </TerrainSectionLabel>
-                    <div className="flex flex-col gap-3">
-                      {group.items.map((item) => (
-                        <ActionPlanExecutionFeedCard
-                          key={`plan-${item.id}`}
-                          item={item}
-                          onSelect={(id) => onOpenActionPlanExecution?.(id)}
-                          onOpenActions={quickActions.openActions}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))}
+                {planGroups.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {planGroups.map((group) => (
+                      <TerrainCollapsibleFeedSection
+                        key={`plan-${group.section}`}
+                        label={group.label}
+                        count={group.items.length}
+                        dotVariant={group.dotVariant}
+                        expanded={isExpanded(group.section)}
+                        onToggle={() => toggle(group.section)}
+                      >
+                        <div className="flex flex-col gap-3">
+                          {group.items.map((item) => (
+                            <ActionPlanExecutionFeedCard
+                              key={`plan-${item.id}`}
+                              item={item}
+                              onSelect={(id) => onOpenActionPlanExecution?.(id)}
+                              onOpenActions={quickActions.openActions}
+                            />
+                          ))}
+                        </div>
+                      </TerrainCollapsibleFeedSection>
+                    ))}
+                  </div>
+                ) : null}
               </>
             ) : null}
 

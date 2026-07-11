@@ -66,7 +66,7 @@ Staff/Manager → included only when scoped on a pole
 ```
 
 - `signal.created` — actor = system (pipeline); no actor exclusion
-- `signal.pinned` / `signal.resolved` / `signal.canceled` — actor exclusion when manual; auto-resolve (`actor=None`) notifies all scoped pole members
+- `signal.pinned` / `signal.resolved` / `signal.canceled` — actor exclusion when manual
 - `signal.canceled` detail remains navigable: read-only GET detail for pole-scoped members (feed still excludes canceled)
 - Copy is generic FR — never signal title, structured_summary, or observation text
 
@@ -250,7 +250,7 @@ For `action.pending_validation`:
 | `chat.message.received` | info | in_app | active participants − author | generic copy with actor name; `subject_id=conversation_id`; no message body; dedupe per conversation + recipient + actor (5 min) |
 | `signal.created` | action_required | in_app | pole-scoped memberships | system actor; no exclusion |
 | `signal.pinned` | action_required | in_app | pole-scoped memberships | −actor if membership |
-| `signal.resolved` | info | in_app | pole-scoped memberships | −actor if membership; auto-resolve notifies all |
+| `signal.resolved` | info | in_app | pole-scoped memberships | −actor if membership |
 | `signal.canceled` | info | in_app | pole-scoped memberships | −actor if membership; detail read-only scopé |
 
 ---

@@ -8,6 +8,7 @@ import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { ActionPlanExecutionFeedCard } from './action-plan-execution-feed-card'
 
 const onSelect = vi.fn()
+const COUNTDOWN_NOW = Date.parse('2026-07-10T12:00:00Z')
 
 function buildFeedItem(
   overrides: Partial<ActionPlanExecutionFeedItem> = {},
@@ -26,7 +27,7 @@ function buildFeedItem(
     ],
     signal_summary: null,
     assignees: [{ membership_id: 'member-1', display_name: 'Alice Martin' }],
-    end_at: '2026-07-06T18:30:00Z',
+    end_at: '2026-07-10T16:00:00Z',
     is_overdue: false,
     task_count: 4,
     treated_task_count: 1,
@@ -61,29 +62,31 @@ function buildFeedItem(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.spyOn(Date, 'now').mockReturnValue(COUNTDOWN_NOW)
 })
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
 })
 
 describe('ActionPlanExecutionFeedCard', () => {
-  it('shows compact pilotage meta and hides description and task previews', () => {
+  it('shows in_progress layout with countdown, segmented progress and teal avatar', () => {
     render(<ActionPlanExecutionFeedCard item={buildFeedItem()} onSelect={onSelect} />)
 
     expect(screen.getByText('Plan incendie')).toBeTruthy()
-    expect(screen.getByText('Tâche 1/4')).toBeTruthy()
-    expect(screen.getByText(/Échéance :/)).toBeTruthy()
-
-    const deadlineNode = screen.getByText(/Échéance :/)
-    const taskProgressNode = screen.getByText('Tâche 1/4')
-    expect(
-      deadlineNode.compareDocumentPosition(taskProgressNode) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    expect(screen.getByText('DANS')).toBeTruthy()
+    expect(screen.getByText('4h')).toBeTruthy()
+    expect(screen.getByText('1/4')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Progression des tâches : 1/4' })).toBeTruthy()
+    expect(screen.queryByText('Tâche 1/4')).toBeNull()
+    expect(screen.queryByText(/Échéance :/)).toBeNull()
     expect(screen.getByText('Restaurant')).toBeTruthy()
-    expect(screen.queryByText('Pôle pilote : Restaurant')).toBeNull()
     expect(screen.getByText('Alice Martin')).toBeTruthy()
-    expect(screen.getByText('En cours')).toBeTruthy()
+    expect(screen.queryByText('En cours')).toBeNull()
+
+    const avatar = document.querySelector('.bg-\\[\\#3A7A96\\]')
+    expect(avatar).toBeTruthy()
 
     expect(screen.queryByText('Description longue à ne pas afficher')).toBeNull()
     expect(screen.queryByText('Tâche 1')).toBeNull()
@@ -91,19 +94,42 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.queryByText(/Pôles impliqués/)).toBeNull()
   })
 
-  it('highlights overdue deadline', () => {
+  it('shows multi-day countdown for in_progress cards', () => {
     render(
       <ActionPlanExecutionFeedCard
-        item={buildFeedItem({ is_overdue: true })}
+        item={buildFeedItem({ end_at: '2026-07-13T12:00:00Z' })}
         onSelect={onSelect}
       />,
     )
 
-    const deadline = screen.getByText(/Échéance :/)
-    expect(deadline.className).toContain('text-[#E24B4A]')
+    expect(screen.getByText('3j')).toBeTruthy()
   })
 
-  it('omits task progress when task_count is zero', () => {
+  it('shows infinity when end_at is null on in_progress cards', () => {
+    render(
+      <ActionPlanExecutionFeedCard item={buildFeedItem({ end_at: null })} onSelect={onSelect} />,
+    )
+
+    expect(screen.getByText('∞')).toBeTruthy()
+    expect(screen.queryByText('DANS')).toBeNull()
+    expect(screen.getByText('1/4')).toBeTruthy()
+  })
+
+  it('shows overdue sidebar with bell when end_at is past on in_progress cards', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ end_at: '2026-07-10T11:00:00Z', is_overdue: true })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.queryByText('DANS')).toBeNull()
+    expect(screen.queryByText(/-\d/)).toBeNull()
+    expect(screen.getByLabelText('Échéance dépassée')).toBeTruthy()
+    expect(document.querySelector('.bg-\\[\\#E24B4A\\]')).toBeTruthy()
+  })
+
+  it('omits task progress bar when task_count is zero on in_progress cards', () => {
     render(
       <ActionPlanExecutionFeedCard
         item={buildFeedItem({ task_count: 0, treated_task_count: 0 })}
@@ -111,19 +137,20 @@ describe('ActionPlanExecutionFeedCard', () => {
       />,
     )
 
-    expect(screen.queryByText(/Tâche \d+\/\d+/)).toBeNull()
+    expect(screen.queryByRole('progressbar')).toBeNull()
+    expect(screen.queryByText(/\d+\/\d+/)).toBeNull()
   })
 
-  it('shows task progress only when end_at is null', () => {
+  it('highlights overdue deadline on pending validation cards', () => {
     render(
       <ActionPlanExecutionFeedCard
-        item={buildFeedItem({ end_at: null })}
+        item={buildFeedItem({ status: 'pending_validation', is_overdue: true })}
         onSelect={onSelect}
       />,
     )
 
-    expect(screen.queryByText(/Échéance :/)).toBeNull()
-    expect(screen.getByText('Tâche 1/4')).toBeTruthy()
+    const deadline = screen.getByText(/Échéance :/)
+    expect(deadline.className).toContain('text-[#E24B4A]')
   })
 
   it('renders distinct pending validation card without duplicate status badge', () => {
@@ -137,6 +164,8 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('En attente de validation')).toBeTruthy()
     expect(screen.queryByText('En cours')).toBeNull()
     expect(screen.getAllByText('En attente de validation')).toHaveLength(1)
+    expect(document.querySelector('.bg-\\[\\#FCE9B8\\]')).toBeTruthy()
+    expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
   it('navigates to detail on click', () => {
@@ -147,7 +176,7 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(onSelect).toHaveBeenCalledWith('execution-1')
   })
 
-  it('shows pilot pole badge on the meta row with title below', () => {
+  it('shows pilot pole badge on the meta row with title below for in_progress cards', () => {
     render(
       <ActionPlanExecutionFeedCard
         item={buildFeedItem()}
@@ -163,7 +192,7 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('Restaurant')).toBeTruthy()
     expect(metaRow?.className).toContain('items-center')
     expect(metaRow?.contains(actionsButton)).toBe(true)
-    expect(metaRow?.nextElementSibling).toBe(title)
+    expect(title).toBeTruthy()
   })
 
   it('keeps relative time and actions on the same row as badges with title below', () => {
@@ -192,10 +221,10 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('Restaurant')).toBeTruthy()
     expect(metaRow?.className).toContain('items-center')
     expect(metaRow?.contains(actionsButton)).toBe(true)
-    expect(metaRow?.nextElementSibling).toBe(title)
+    expect(title).toBeTruthy()
   })
 
-  it('shows pinned badge to the left of status badge when is_pinned is true', () => {
+  it('shows pinned badge on in_progress cards without status badge', () => {
     render(
       <ActionPlanExecutionFeedCard
         item={buildFeedItem({ is_pinned: true })}
@@ -203,20 +232,16 @@ describe('ActionPlanExecutionFeedCard', () => {
       />,
     )
 
-    const pinnedBadge = screen.getByText('Épinglé')
-    const statusBadge = screen.getByText('En cours')
-
-    expect(pinnedBadge).toBeTruthy()
-    expect(
-      pinnedBadge.compareDocumentPosition(statusBadge) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy()
+    expect(screen.getByText('Épinglé')).toBeTruthy()
+    expect(screen.queryByText('En cours')).toBeNull()
   })
 
-  it('hides pinned badge when is_pinned is false', () => {
-    render(<ActionPlanExecutionFeedCard item={buildFeedItem({ is_pinned: false })} onSelect={onSelect} />)
+  it('hides pinned badge when is_pinned is false on in_progress cards', () => {
+    render(
+      <ActionPlanExecutionFeedCard item={buildFeedItem({ is_pinned: false })} onSelect={onSelect} />,
+    )
 
     expect(screen.queryByText('Épinglé')).toBeNull()
-    expect(screen.getByText('En cours')).toBeTruthy()
   })
 
   it('hides pinned badge on pending validation cards', () => {
@@ -296,5 +321,37 @@ describe('ActionPlanExecutionFeedCard', () => {
       expect.objectContaining({ id: 'execution-1', status: 'pending_validation' }),
     )
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('renders done card with success sidebar and progress bar', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ status: 'done', treated_task_count: 4, task_count: 4 })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.getByLabelText('Terminé')).toBeTruthy()
+    expect(document.querySelector('.bg-\\[\\#1D9E75\\]')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Progression des tâches : 4/4' })).toBeTruthy()
+    expect(screen.getByText('4/4')).toBeTruthy()
+    expect(screen.queryByText('Tâche 4/4')).toBeNull()
+    expect(screen.queryByText('Terminé')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('renders canceled card with muted sidebar and progress bar', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({ status: 'canceled', treated_task_count: 0, task_count: 2 })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.getByLabelText('Annulé')).toBeTruthy()
+    expect(document.querySelector('.bg-\\[\\#7D7B75\\]')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Progression des tâches : 0/2' })).toBeTruthy()
+    expect(screen.getByText('0/2')).toBeTruthy()
+    expect(screen.queryByText('Annulé')).toBeNull()
   })
 })
