@@ -123,19 +123,11 @@ export function ActionPlanEventPlanningForm({
   }
 
   function handleGlobalRepeatToggle(repeatEnabled: boolean) {
-    const patch: Partial<ActionPlanEventPlanningDraft> = { repeatEnabled }
-    if (repeatEnabled) {
-      patch.endDate = draft.startDate
-    }
-    updateDraft(patch)
+    updateDraft({ repeatEnabled })
   }
 
   function handleStartDateChange(startDate: string) {
-    const patch: Partial<ActionPlanEventPlanningDraft> = { startDate }
-    if (hasGlobalRepeat(draft)) {
-      patch.endDate = startDate
-    }
-    updateDraft(patch)
+    updateDraft({ startDate })
   }
 
   function handleAssigneeSchedule(assignee: ActionPlanAssigneeDraft) {
