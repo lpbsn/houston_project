@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from django.db.models import Q, QuerySet
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet
 from houston.accounts.models import User
 from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.establishments.models import (
@@ -153,22 +153,59 @@ def list_messages_for_conversation(
     return list(queryset.order_by("-created_at", "-id")[:limit])
 
 
-def is_conversation_unread(
+def _viewer_participant_marks_message_unread(*, membership_id: uuid.UUID) -> Exists:
+    return Exists(
+        ChatParticipant.objects.filter(
+            conversation_id=OuterRef("conversation_id"),
+            membership_id=membership_id,
+            left_at__isnull=True,
+        ).filter(
+            Q(last_seen_message_created_at__isnull=True)
+            | Q(last_seen_message_id__isnull=True)
+            | Q(last_seen_message_created_at__lt=OuterRef("created_at"))
+            | Q(
+                last_seen_message_created_at=OuterRef("created_at"),
+                last_seen_message_id__lt=OuterRef("id"),
+            )
+        )
+    )
+
+
+def get_unread_message_counts_by_conversation_ids(
     *,
-    participant: ChatParticipant,
-    latest_message: ChatMessage | None,
-) -> bool:
-    if latest_message is None:
-        return False
-    if latest_message.author_membership_id == participant.membership_id:
-        return False
+    membership_id: uuid.UUID,
+    conversation_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    if not conversation_ids:
+        return {}
+
+    counts = dict.fromkeys(conversation_ids, 0)
+    rows = (
+        ChatMessage.objects.filter(conversation_id__in=conversation_ids)
+        .exclude(author_membership_id=membership_id)
+        .filter(_viewer_participant_marks_message_unread(membership_id=membership_id))
+        .values("conversation_id")
+        .annotate(unread_count=Count("id"))
+    )
+    for row in rows:
+        counts[row["conversation_id"]] = row["unread_count"]
+    return counts
+
+
+def count_unread_messages_for_participant(*, participant: ChatParticipant) -> int:
+    queryset = (
+        ChatMessage.objects.filter(conversation_id=participant.conversation_id)
+        .exclude(author_membership_id=participant.membership_id)
+    )
     if participant.last_seen_message_id is None or participant.last_seen_message_created_at is None:
-        return True
-    if latest_message.created_at > participant.last_seen_message_created_at:
-        return True
-    if latest_message.created_at < participant.last_seen_message_created_at:
-        return False
-    return str(latest_message.id) > str(participant.last_seen_message_id)
+        return queryset.count()
+    return queryset.filter(
+        Q(created_at__gt=participant.last_seen_message_created_at)
+        | Q(
+            created_at=participant.last_seen_message_created_at,
+            id__gt=participant.last_seen_message_id,
+        )
+    ).count()
 
 
 def find_existing_dm_conversation(

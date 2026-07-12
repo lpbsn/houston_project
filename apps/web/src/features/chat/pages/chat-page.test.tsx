@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,6 +18,7 @@ function buildConversation(
   options: {
     title?: string
     peerDisplayName?: string
+    last_message_at?: string
   } = {},
 ): ChatConversationListItem {
   const peerDisplayName = options.peerDisplayName ?? 'Bob Martin'
@@ -27,7 +28,8 @@ function buildConversation(
     type,
     title: options.title ?? '',
     unread: false,
-    last_message_at: '2026-06-13T12:00:00Z',
+    unread_count: 0,
+    last_message_at: options.last_message_at ?? '2026-06-13T12:00:00Z',
     last_message_preview: null,
     participants:
       type === 'dm'
@@ -139,7 +141,7 @@ function renderChatPage() {
   )
 }
 
-describe('ChatPage conversation sections', () => {
+describe('ChatPage flat conversation list', () => {
   beforeEach(() => {
     statusQueryMock.mockReturnValue(buildStatusQueryState())
     conversationsQueryMock.mockReturnValue(buildConversationsQueryState())
@@ -149,13 +151,18 @@ describe('ChatPage conversation sections', () => {
     cleanup()
   })
 
-  it('renders direct and group sections for mixed conversations', () => {
+  it('renders mixed conversations in API order without sections', () => {
     conversationsQueryMock.mockReturnValue(
       buildConversationsQueryState({
         data: {
           items: [
-            buildConversation('conv-dm', 'dm'),
-            buildConversation('conv-group', 'group', { title: 'Équipe cuisine' }),
+            buildConversation('conv-group', 'group', {
+              title: 'Équipe cuisine',
+              last_message_at: '2026-06-13T14:00:00Z',
+            }),
+            buildConversation('conv-dm', 'dm', {
+              last_message_at: '2026-06-13T12:00:00Z',
+            }),
           ],
         },
       }),
@@ -163,28 +170,16 @@ describe('ChatPage conversation sections', () => {
 
     renderChatPage()
 
-    expect(screen.getByText('Messages directs')).toBeTruthy()
-    expect(screen.getByText('Groupes')).toBeTruthy()
-    expect(screen.getByText('Bob Martin')).toBeTruthy()
-    expect(screen.getByText('Équipe cuisine')).toBeTruthy()
-  })
-
-  it('renders only the direct section when there are no groups', () => {
-    conversationsQueryMock.mockReturnValue(
-      buildConversationsQueryState({
-        data: {
-          items: [buildConversation('conv-dm', 'dm')],
-        },
-      }),
-    )
-
-    renderChatPage()
-
-    expect(screen.getByText('Messages directs')).toBeTruthy()
+    expect(screen.queryByText('Messages directs')).toBeNull()
     expect(screen.queryByText('Groupes')).toBeNull()
+    expect(screen.getByText('Équipe cuisine')).toBeTruthy()
+    expect(screen.getByText('Bob Martin')).toBeTruthy()
+
+    const titles = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent)
+    expect(titles).toEqual(['Équipe cuisine', 'Bob Martin'])
   })
 
-  it('filters search results within the matching section', () => {
+  it('filters search results in a flat list without sections', () => {
     conversationsQueryMock.mockReturnValue(
       buildConversationsQueryState({
         data: {
@@ -202,7 +197,7 @@ describe('ChatPage conversation sections', () => {
       target: { value: 'bob' },
     })
 
-    expect(screen.getByText('Messages directs')).toBeTruthy()
+    expect(screen.queryByText('Messages directs')).toBeNull()
     expect(screen.queryByText('Groupes')).toBeNull()
     expect(screen.getByText('Bob Martin')).toBeTruthy()
     expect(screen.queryByText('Équipe cuisine')).toBeNull()
@@ -233,5 +228,19 @@ describe('ChatPage conversation sections', () => {
     expect(screen.getByText('Aucune conversation')).toBeTruthy()
     expect(screen.queryByText('Messages directs')).toBeNull()
     expect(screen.queryByText('Groupes')).toBeNull()
+  })
+
+  it('uses a pill search field and a single 40px create target', () => {
+    renderChatPage()
+
+    const search = screen.getByPlaceholderText('Rechercher une conversation')
+    expect(search.className).toContain('h-8')
+    expect(search.className).toContain('rounded-full')
+
+    const createButton = screen.getByRole('button', { name: 'Nouvelle conversation' })
+    expect(createButton.className).toContain('h-10')
+    expect(createButton.className).toContain('w-10')
+    expect(within(createButton).getByText('', { selector: 'span' }).className).toContain('h-8')
+    expect(within(createButton).getByText('', { selector: 'span' }).className).toContain('w-8')
   })
 })

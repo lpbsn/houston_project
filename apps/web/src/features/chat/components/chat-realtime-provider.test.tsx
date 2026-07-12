@@ -60,6 +60,7 @@ const sampleConversation = (): ChatConversationListItem => ({
   type: 'dm',
   title: '',
   unread: false,
+  unread_count: 0,
   last_message_at: null,
   last_message_preview: null,
   participants: [],
@@ -110,9 +111,53 @@ describe('ChatRealtimeProvider', () => {
     )
 
     expect(patched?.items[0]?.unread).toBe(true)
+    expect(patched?.items[0]?.unread_count).toBe(1)
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: chatQueryKeys.conversations(ESTABLISHMENT_ID),
     })
+  })
+
+  it('does not increment unread_count on duplicate message.created events', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    queryClient.setQueryData(chatQueryKeys.conversations(ESTABLISHMENT_ID), {
+      items: [sampleConversation()],
+    })
+
+    renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(ChatRealtimeProvider, {
+          establishmentId: ESTABLISHMENT_ID,
+          activeConversationId: null,
+        }),
+      ),
+    )
+
+    const event: ChatWsMessageCreatedEvent = {
+      type: 'message.created',
+      conversation_id: 'conv-1',
+      message: {
+        id: 'msg-1',
+        author_membership_id: 'mbr-peer',
+        author_display_name: 'Peer',
+        body: 'Ping',
+        client_message_id: 'client-1',
+        created_at: '2026-06-09T16:00:00.000Z',
+      },
+    }
+
+    capturedOnMessageCreated?.(event)
+    capturedOnMessageCreated?.(event)
+
+    const patched = queryClient.getQueryData<{ items: ChatConversationListItem[] }>(
+      chatQueryKeys.conversations(ESTABLISHMENT_ID),
+    )
+
+    expect(patched?.items[0]?.unread_count).toBe(1)
   })
 
   it('invalidates conversations and active messages on reconnect', () => {

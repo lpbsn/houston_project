@@ -60,6 +60,7 @@ const sampleConversation = (): ChatConversationListItem => ({
   type: 'dm',
   title: '',
   unread: false,
+  unread_count: 0,
   last_message_at: '2026-06-01T10:00:00.000Z',
   last_message_preview: null,
   participants: [],
@@ -126,6 +127,7 @@ describe('chat terrain unread integration', () => {
     )
 
     expect(patched?.items[0]?.unread).toBe(true)
+    expect(patched?.items[0]?.unread_count).toBe(1)
     expect(patched?.items[0]?.last_message_preview?.body).toBe('New message')
     expect(hasUnreadConversations(patched?.items ?? [])).toBe(true)
 

@@ -3,17 +3,18 @@ import { LoaderCircle, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { TerrainEmptyState, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
+import { TerrainEmptyState, TerrainErrorState } from '@/components/ui/terrain'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 import { ChatApiError } from '../api'
 import { ChatCreateSheet } from '../components/chat-create-sheet'
 import { ChatReconnectBanner } from '../components/chat-reconnect-banner'
 import { ConversationRow } from '../components/conversation-row'
 import { useOptionalChatRealtime } from '../components/chat-realtime-provider'
-import { filterConversationsByQuery, groupConversationsByType } from '../lib/chat-display'
+import { filterConversationsByQuery } from '../lib/chat-display'
 import { useChatConversationsQuery, useChatStatusQuery } from '../hooks'
 
 type ChatPageProps = {
@@ -41,9 +42,6 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
   const filteredConversations = useMemo(() => {
     return filterConversationsByQuery(allConversations, search, viewerMembershipId)
   }, [allConversations, search, viewerMembershipId])
-  const conversationGroups = useMemo(() => {
-    return groupConversationsByType(filteredConversations)
-  }, [filteredConversations])
 
   const searchActive = search.trim().length > 0
   const showGlobalEmpty =
@@ -98,18 +96,24 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Rechercher une conversation"
-            className="h-10 rounded-xl border-[#E8E6DF] bg-[#F5F4F0]"
+            className="h-8 rounded-full border-[#E8E6DF] bg-[#F5F4F0] px-3 text-sm"
           />
           {canCreate ? (
-            <Button
+            <button
               type="button"
-              size="icon"
-              className="h-10 w-10 shrink-0 rounded-xl bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#114660]/30 focus-visible:ring-offset-2"
               aria-label="Nouvelle conversation"
               onClick={() => setCreateOpen(true)}
             >
-              <Plus className="h-5 w-5" />
-            </Button>
+              <span
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-full text-white',
+                  terrainBrandAction.bg,
+                )}
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
+              </span>
+            </button>
           ) : null}
         </div>
       </TerrainHubSubheader>
@@ -145,22 +149,15 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
           />
         ) : null}
 
-        {conversationsQuery.isSuccess && conversationGroups.length > 0 ? (
-          <div className="flex flex-col gap-5 px-3">
-            {conversationGroups.map((group) => (
-              <section key={group.section}>
-                <TerrainSectionLabel className="px-0">{group.label}</TerrainSectionLabel>
-                <div className="mt-2 flex flex-col gap-3">
-                  {group.items.map((conversation) => (
-                    <ConversationRow
-                      key={conversation.id}
-                      conversation={conversation}
-                      viewerMembershipId={viewerMembershipId}
-                      onSelect={onOpenConversation}
-                    />
-                  ))}
-                </div>
-              </section>
+        {conversationsQuery.isSuccess && filteredConversations.length > 0 ? (
+          <div className="flex flex-col gap-[6px] px-3">
+            {filteredConversations.map((conversation) => (
+              <ConversationRow
+                key={conversation.id}
+                conversation={conversation}
+                viewerMembershipId={viewerMembershipId}
+                onSelect={onOpenConversation}
+              />
             ))}
           </div>
         ) : null}

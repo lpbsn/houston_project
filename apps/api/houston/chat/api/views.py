@@ -39,11 +39,11 @@ from houston.chat.exceptions import (
 from houston.chat.models import ChatConversation
 from houston.chat.permissions import can_delete_group, can_manage_group
 from houston.chat.selectors import (
+    count_unread_messages_for_participant,
     get_conversation_for_participant,
     get_eligible_chat_memberships_queryset,
-    get_latest_message,
     get_latest_messages_by_conversation_ids,
-    is_conversation_unread,
+    get_unread_message_counts_by_conversation_ids,
     list_conversations_for_membership,
     list_messages_for_conversation,
 )
@@ -179,20 +179,13 @@ def _serialize_conversation_list_item(
     conversation: ChatConversation,
     viewer_membership_id: uuid.UUID,
     latest_message=None,
+    unread_count: int = 0,
 ) -> dict:
-    participant = None
     active_participants = []
     for item in conversation.participants.all():
         if item.left_at is not None:
             continue
         active_participants.append(item)
-        if item.membership_id == viewer_membership_id:
-            participant = item
-    unread = (
-        is_conversation_unread(participant=participant, latest_message=latest_message)
-        if participant is not None
-        else False
-    )
     return {
         "id": conversation.id,
         "type": conversation.type,
@@ -200,7 +193,8 @@ def _serialize_conversation_list_item(
             conversation=conversation,
             viewer_membership_id=viewer_membership_id,
         ),
-        "unread": unread,
+        "unread": unread_count > 0,
+        "unread_count": unread_count,
         "last_message_at": conversation.last_message_at,
         "last_message_preview": serialize_message(latest_message) if latest_message else None,
         "participants": [serialize_participant_summary(item) for item in active_participants],
@@ -299,11 +293,16 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
         latest_messages_by_conversation_id = get_latest_messages_by_conversation_ids(
             [conversation.id for conversation in conversations]
         )
+        unread_counts_by_conversation_id = get_unread_message_counts_by_conversation_ids(
+            membership_id=membership.id,
+            conversation_ids=[conversation.id for conversation in conversations],
+        )
         items = [
             _serialize_conversation_list_item(
                 conversation=conversation,
                 viewer_membership_id=membership.id,
                 latest_message=latest_messages_by_conversation_id.get(conversation.id),
+                unread_count=unread_counts_by_conversation_id.get(conversation.id, 0),
             )
             for conversation in conversations
         ]
@@ -353,11 +352,10 @@ class ChatCreateDmView(EstablishmentScopedChatMixin, APIView):
         participant = next(
             item for item in conversation.participants.all() if item.membership_id == membership.id
         )
-        latest_message = get_latest_message(conversation.id)
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
-            unread=is_conversation_unread(participant=participant, latest_message=latest_message),
+            unread=count_unread_messages_for_participant(participant=participant) > 0,
             can_manage=False,
             can_delete=False,
         )
@@ -459,11 +457,10 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         participant = next(
             item for item in conversation.participants.all() if item.membership_id == membership.id
         )
-        latest_message = get_latest_message(conversation.id)
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
-            unread=is_conversation_unread(participant=participant, latest_message=latest_message),
+            unread=count_unread_messages_for_participant(participant=participant) > 0,
             can_manage=can_manage_group(membership, conversation),
             can_delete=can_delete_group(membership, conversation),
         )
@@ -504,11 +501,10 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         participant = next(
             item for item in conversation.participants.all() if item.membership_id == membership.id
         )
-        latest_message = get_latest_message(conversation.id)
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
-            unread=is_conversation_unread(participant=participant, latest_message=latest_message),
+            unread=count_unread_messages_for_participant(participant=participant) > 0,
             can_manage=can_manage_group(membership, conversation),
             can_delete=can_delete_group(membership, conversation),
         )

@@ -597,6 +597,10 @@ def test_unread_survives_message_purge(api_client):
         HTTP_AUTHORIZATION=f"Bearer {token_receiver}",
     )
     assert list_response.json()["items"][0]["unread"] is True
+    assert list_response.json()["items"][0]["unread_count"] == 1
+    assert list_response.json()["items"][0]["unread"] is (
+        list_response.json()["items"][0]["unread_count"] > 0
+    )
 
     seen_response = api_client.post(
         chat_url(establishment.id, f"conversations/{conversation_id}/seen/"),
@@ -617,6 +621,64 @@ def test_unread_survives_message_purge(api_client):
         HTTP_AUTHORIZATION=f"Bearer {token_receiver}",
     )
     assert list_response_after_purge.json()["items"][0]["unread"] is False
+    assert list_response_after_purge.json()["items"][0]["unread_count"] == 0
+    assert list_response_after_purge.json()["items"][0]["unread"] is (
+        list_response_after_purge.json()["items"][0]["unread_count"] > 0
+    )
+
+
+def test_conversation_list_exposes_unread_count_for_multiple_messages(api_client):
+    establishment = create_establishment()
+    sender = create_user(username="chat_sender_multi")
+    receiver = create_user(username="chat_receiver_multi")
+    sender_membership = create_membership(user=sender, establishment=establishment)
+    receiver_membership = create_membership(user=receiver, establishment=establishment)
+    token_sender = login(api_client, user=sender)
+
+    dm_response = api_client.post(
+        chat_url(establishment.id, "conversations/dm/"),
+        {"membership_id": str(receiver_membership.id)},
+        format="json",
+        HTTP_AUTHORIZATION=f"Bearer {token_sender}",
+    )
+    conversation_id = dm_response.json()["conversation"]["id"]
+    conversation = ChatConversation.objects.get(id=conversation_id)
+
+    for index in range(3):
+        message = ChatMessage.objects.create(
+            conversation=conversation,
+            author_membership=sender_membership,
+            body=f"hello-{index}",
+            client_message_id=uuid.uuid4(),
+        )
+        conversation.last_message_at = message.created_at
+        conversation.save(update_fields=["last_message_at", "updated_at"])
+
+    token_receiver = login(api_client, user=receiver)
+    list_response = api_client.get(
+        chat_url(establishment.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {token_receiver}",
+    )
+
+    item = list_response.json()["items"][0]
+    assert item["unread_count"] == 3
+    assert item["unread"] is True
+    assert item["unread"] is (item["unread_count"] > 0)
+
+    seen_response = api_client.post(
+        chat_url(establishment.id, f"conversations/{conversation_id}/seen/"),
+        HTTP_AUTHORIZATION=f"Bearer {token_receiver}",
+    )
+    assert seen_response.status_code == 204
+
+    list_response_after_seen = api_client.get(
+        chat_url(establishment.id, "conversations/"),
+        HTTP_AUTHORIZATION=f"Bearer {token_receiver}",
+    )
+    item_after_seen = list_response_after_seen.json()["items"][0]
+    assert item_after_seen["unread_count"] == 0
+    assert item_after_seen["unread"] is False
+    assert item_after_seen["unread"] is (item_after_seen["unread_count"] > 0)
 
 
 def test_mark_presence_records_heartbeat(api_client):
