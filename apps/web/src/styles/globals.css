@@ -105,6 +105,7 @@ html {
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background: transparent;
   color: var(--foreground);
@@ -116,6 +117,7 @@ button {
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .dark {

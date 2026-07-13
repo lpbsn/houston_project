@@ -4,17 +4,10 @@ import { Button } from '@/components/ui/button'
 
 type NotificationBellButtonProps = {
   hasUnread: boolean
-  isOpen: boolean
-  panelId: string
   onClick: () => void
 }
 
-export function NotificationBellButton({
-  hasUnread,
-  isOpen,
-  panelId,
-  onClick,
-}: NotificationBellButtonProps) {
+export function NotificationBellButton({ hasUnread, onClick }: NotificationBellButtonProps) {
   return (
     <Button
       type="button"
@@ -22,9 +15,6 @@ export function NotificationBellButton({
       size="icon"
       className="relative h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-xl"
       aria-label="Notifications"
-      aria-expanded={isOpen}
-      aria-haspopup="dialog"
-      aria-controls={panelId}
       onClick={onClick}
     >
       <Bell className="h-5 w-5" />
