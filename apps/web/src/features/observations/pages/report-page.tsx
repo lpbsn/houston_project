@@ -293,35 +293,37 @@ export function ReportPage({ onNavigate }: ReportPageProps) {
   }
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex flex-1 flex-col gap-5 px-4 pb-28 pt-3">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold text-[#1a1a1a]">Une observation ?</h1>
-          <p className={cn('text-sm', terrain.muted)}>
-            Soyez précis mais ne perdez pas de temps avec la forme.
-          </p>
-        </header>
+    <div className="flex h-full min-h-0 flex-col" data-testid="report-page-root">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pt-3">
+        <div className="flex flex-col gap-5 pb-3">
+          <header className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold text-[#1a1a1a]">Une observation ?</h1>
+            <p className={cn('text-sm', terrain.muted)}>
+              Soyez précis mais ne perdez pas de temps avec la forme.
+            </p>
+          </header>
 
-        <ReportTextSection
-          text={text}
-          textLength={textLength}
-          shouldReduceMotion={shouldReduceMotion ?? false}
-          isRecording={isRecording}
-          isTranscribing={isTranscribing}
-          isSubmitPending={isSubmitPending}
-          onTextChange={setText}
-          onStartRecording={() => void handleStartRecording()}
-          onStopRecording={handleStopRecording}
-        />
+          <ReportTextSection
+            text={text}
+            textLength={textLength}
+            shouldReduceMotion={shouldReduceMotion ?? false}
+            isRecording={isRecording}
+            isTranscribing={isTranscribing}
+            isSubmitPending={isSubmitPending}
+            onTextChange={setText}
+            onStartRecording={() => void handleStartRecording()}
+            onStopRecording={handleStopRecording}
+          />
 
-        <ReportPhotosSection
-          photos={photos}
-          isUploadPending={uploadMutation.isPending}
-          onPhotoSelect={(event) => void handlePhotoSelect(event)}
-          onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
-        />
+          <ReportPhotosSection
+            photos={photos}
+            isUploadPending={uploadMutation.isPending}
+            onPhotoSelect={(event) => void handlePhotoSelect(event)}
+            onRemovePhoto={(photo) => void handleRemovePhoto(photo)}
+          />
 
-        {formError ? <TerrainErrorState message={formError} /> : null}
+          {formError ? <TerrainErrorState message={formError} /> : null}
+        </div>
       </div>
 
       <TerrainStickyFooter variant="transparent">

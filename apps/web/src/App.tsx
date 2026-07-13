@@ -629,73 +629,65 @@ function App() {
   }
 
   if (route.kind === 'unknown' && auth.hasOperationalAccess) {
-    return (
-      <>
-        <PwaUpdateBanner />
-        {wrapTerrainWithOperationalRealtime(
-          wrapTerrainWithChatRealtime(
-            <TerrainShell
-              contentKey="not-found"
-              showBottomNav={true}
-              activeNavPath="/reporting"
-              mainScroll="auto"
-              navigate={navigate}
-              showChatNav={showChatNav}
-              chatHasUnread={chatHasUnread}
-              topbar={
-                <TerrainTopbar
-                  variant="hub"
-                  pageTitle="Page introuvable"
-                  showBottomBorder={true}
-                  trailing={terrainTopbarTrailing}
-                />
-              }
-            >
-              <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
-            </TerrainShell>,
-          ),
-        )}
-      </>
+    return wrapTerrainWithOperationalRealtime(
+      wrapTerrainWithChatRealtime(
+        <TerrainShell
+          contentKey="not-found"
+          showBottomNav={true}
+          activeNavPath="/reporting"
+          mainScroll="auto"
+          navigate={navigate}
+          showChatNav={showChatNav}
+          chatHasUnread={chatHasUnread}
+          updateBanner={<PwaUpdateBanner />}
+          topbar={
+            <TerrainTopbar
+              variant="hub"
+              pageTitle="Page introuvable"
+              showBottomBorder={true}
+              trailing={terrainTopbarTrailing}
+            />
+          }
+        >
+          <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+        </TerrainShell>,
+      ),
     )
   }
 
   if (usesTerrainShell(route)) {
     const terrainConfig = getTerrainRouteConfig(route)
-    return (
-      <>
-        <PwaUpdateBanner />
-        {wrapTerrainWithOperationalRealtime(
-          wrapTerrainWithChatRealtime(
-            <TerrainShell
-              contentKey={getTerrainContentKey(route)}
-              showBottomNav={terrainConfig.showBottomNav}
-              activeNavPath={terrainConfig.activeNavPath}
-              mainScroll={terrainConfig.mainScroll}
-              navigate={navigate}
-              showChatNav={showChatNav}
-              chatHasUnread={chatHasUnread}
-              topbar={
-                terrainConfig.hideTopbar ? null : (
-                  <TerrainTopbar
-                    variant={terrainConfig.topbarVariant}
-                    topbarSize={terrainConfig.topbarSize}
-                    title={terrainConfig.title}
-                    pageTitle={terrainConfig.pageTitle}
-                    detailTitleLayout={terrainConfig.detailTitleLayout}
-                    showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
-                    onBack={
-                      terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
-                    }
-                    trailing={terrainTopbarTrailing}
-                  />
-                )
-              }
-            >
-              <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
-            </TerrainShell>,
-          ),
-        )}
-      </>
+    return wrapTerrainWithOperationalRealtime(
+      wrapTerrainWithChatRealtime(
+        <TerrainShell
+          contentKey={getTerrainContentKey(route)}
+          showBottomNav={terrainConfig.showBottomNav}
+          activeNavPath={terrainConfig.activeNavPath}
+          mainScroll={terrainConfig.mainScroll}
+          navigate={navigate}
+          showChatNav={showChatNav}
+          chatHasUnread={chatHasUnread}
+          updateBanner={<PwaUpdateBanner />}
+          topbar={
+            terrainConfig.hideTopbar ? null : (
+              <TerrainTopbar
+                variant={terrainConfig.topbarVariant}
+                topbarSize={terrainConfig.topbarSize}
+                title={terrainConfig.title}
+                pageTitle={terrainConfig.pageTitle}
+                detailTitleLayout={terrainConfig.detailTitleLayout}
+                showBottomBorder={resolveTerrainTopbarShowBottomBorder(route, terrainConfig)}
+                onBack={
+                  terrainConfig.backPath ? () => navigate(terrainConfig.backPath!) : undefined
+                }
+                trailing={terrainTopbarTrailing}
+              />
+            )
+          }
+        >
+          <Suspense fallback={<RoutePageLoading />}>{routeContent}</Suspense>
+        </TerrainShell>,
+      ),
     )
   }
 

@@ -60,7 +60,7 @@ describe('getTerrainRouteConfig', () => {
       topbarSize: 'compact',
       showBottomNav: true,
       activeNavPath: '/reporting',
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     })
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/signals' })).toEqual({

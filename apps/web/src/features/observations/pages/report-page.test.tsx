@@ -6,6 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { OBSERVATION_TEXT_MIN_LENGTH } from '@/features/observations/types'
+import {
+  collectOverflowYScrollElements,
+  expectSinglePageScrollZone,
+} from '@/lib/terrain-scroll-layout'
 
 import { ReportPage } from './report-page'
 
@@ -147,15 +151,21 @@ describe('ReportPage', () => {
     expect(footer?.className).not.toContain('bg-[#F5F4F0]')
   })
 
-  it('reserves pb-28 scroll clearance above sticky footer', () => {
-    renderPage()
+  it('uses a single internal scroll zone with footer outside the scroller', () => {
+    const { container } = renderPage()
+
+    const root = screen.getByTestId('report-page-root')
+    expect(root.className).toContain('h-full')
+    expect(root.className).toContain('min-h-0')
 
     const footer = screen.getByRole('button', { name: /Envoyer l’observation/ }).closest('footer')
-    const scrollArea = footer?.previousElementSibling as HTMLElement | null
+    const scrollArea = expectSinglePageScrollZone(container)
 
-    expect(footer?.parentElement?.classList.contains('min-h-full')).toBe(true)
-    expect(scrollArea?.className).toContain('pb-28')
-    expect(scrollArea?.className).not.toContain('pb-40')
+    expect(footer?.parentElement).toBe(root)
+    expect(scrollArea).toBe(footer?.previousElementSibling)
+    expect(scrollArea.className).toContain('overflow-y-auto')
+    expect(scrollArea.className).not.toContain('pb-28')
+    expect(collectOverflowYScrollElements(container)).toHaveLength(1)
   })
 
   it('disables submit when observation text is too short', () => {

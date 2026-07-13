@@ -6,6 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatConversationListItem } from '../types'
+import {
+  collectOverflowYScrollElements,
+  expectSinglePageScrollZone,
+} from '@/lib/terrain-scroll-layout'
 
 import { ChatPage } from './chat-page'
 
@@ -122,6 +126,12 @@ vi.mock('../hooks', () => ({
   useCreateGroupMutation: () => ({
     mutate: () => undefined,
     isPending: false,
+  }),
+}))
+
+vi.mock('../components/chat-realtime-provider', () => ({
+  useOptionalChatRealtime: () => ({
+    connectionStatus: 'reconnecting',
   }),
 }))
 
@@ -242,5 +252,72 @@ describe('ChatPage flat conversation list', () => {
     expect(createButton.className).toContain('w-10')
     expect(within(createButton).getByText('', { selector: 'span' }).className).toContain('h-8')
     expect(within(createButton).getByText('', { selector: 'span' }).className).toContain('w-8')
+  })
+})
+
+describe('ChatPage scroll layout', () => {
+  beforeEach(() => {
+    statusQueryMock.mockReturnValue(buildStatusQueryState())
+    conversationsQueryMock.mockReturnValue(buildConversationsQueryState())
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  function expectChatPageRoot() {
+    const root = screen.getByTestId('chat-page-root')
+    expect(root.className).toContain('h-full')
+    expect(root.className).toContain('min-h-0')
+    expect(root.className).toContain('flex-col')
+    return root
+  }
+
+  it('success state uses one scroll zone and reconnect banner is outside the scroller', () => {
+    conversationsQueryMock.mockReturnValue(
+      buildConversationsQueryState({
+        data: {
+          items: [buildConversation('conv-dm', 'dm')],
+        },
+      }),
+    )
+
+    const { container } = renderChatPage()
+    const root = expectChatPageRoot()
+    const scrollArea = expectSinglePageScrollZone(container)
+
+    expect(scrollArea.className).toContain('overflow-y-auto')
+    expect(root.contains(scrollArea)).toBe(true)
+
+    const reconnectBanner = screen.getByRole('status')
+    expect(scrollArea.contains(reconnectBanner)).toBe(false)
+  })
+
+  it('loading state keeps the same page root without a parallel scroll container', () => {
+    statusQueryMock.mockReturnValue(buildStatusQueryState({ isLoading: true }))
+
+    const { container } = renderChatPage()
+    expectChatPageRoot()
+    expect(collectOverflowYScrollElements(container)).toHaveLength(0)
+  })
+
+  it('error state keeps the page root and a single scroll zone', () => {
+    statusQueryMock.mockReturnValue(
+      buildStatusQueryState({
+        isError: true,
+        error: new Error('status failed'),
+      }),
+    )
+
+    const { container } = renderChatPage()
+    expectChatPageRoot()
+    expectSinglePageScrollZone(container)
+  })
+
+  it('empty state keeps the page root and a single scroll zone', () => {
+    const { container } = renderChatPage()
+    expectChatPageRoot()
+    expectSinglePageScrollZone(container)
+    expect(screen.getByText('Aucune conversation')).toBeTruthy()
   })
 })

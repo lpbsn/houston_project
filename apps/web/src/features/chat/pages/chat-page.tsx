@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { LoaderCircle, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -19,6 +19,14 @@ import { useChatConversationsQuery, useChatStatusQuery } from '../hooks'
 
 type ChatPageProps = {
   onOpenConversation: (conversationId: string) => void
+}
+
+function ChatPageRoot({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col" data-testid="chat-page-root">
+      {children}
+    </div>
+  )
 }
 
 export function ChatPage({ onOpenConversation }: ChatPageProps) {
@@ -53,42 +61,58 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
     filteredConversations.length === 0
 
   if (!establishmentId) {
-    return <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
+    return (
+      <ChatPageRoot>
+        <p className="px-3 py-4 text-sm text-[#6b5f52]">Établissement non sélectionné.</p>
+      </ChatPageRoot>
+    )
   }
 
   if (statusQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-[#7D7B75]">
-        <LoaderCircle className="h-6 w-6 animate-spin" />
-      </div>
+      <ChatPageRoot>
+        <div className="flex min-h-0 flex-1 items-center justify-center text-[#7D7B75]">
+          <LoaderCircle className="h-6 w-6 animate-spin" />
+        </div>
+      </ChatPageRoot>
     )
   }
 
   if (statusQuery.isError) {
     return (
-      <TerrainErrorState
-        className="mx-3 mt-3"
-        message={resolveApiErrorMessage(statusQuery.error, ChatApiError, 'Une erreur est survenue.')}
-        onRetry={() => void statusQuery.refetch()}
-      />
+      <ChatPageRoot>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+          <TerrainErrorState
+            className="mx-3 mt-3"
+            message={resolveApiErrorMessage(statusQuery.error, ChatApiError, 'Une erreur est survenue.')}
+            onRetry={() => void statusQuery.refetch()}
+          />
+        </div>
+      </ChatPageRoot>
     )
   }
 
   if (!statusQuery.data?.can_access || !statusQuery.data.chat_enabled) {
     return (
-      <TerrainEmptyState
-        className="mx-3 mt-6"
-        title="Chat indisponible"
-        description="Le chat n'est pas activé pour cet établissement ou vous n'y avez pas accès."
-      />
+      <ChatPageRoot>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+          <TerrainEmptyState
+            className="mx-3 mt-6"
+            title="Chat indisponible"
+            description="Le chat n'est pas activé pour cet établissement ou vous n'y avez pas accès."
+          />
+        </div>
+      </ChatPageRoot>
     )
   }
 
   const canCreate = statusQuery.data.can_create_dm || statusQuery.data.can_create_group
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <ChatReconnectBanner status={connectionStatus} />
+    <ChatPageRoot>
+      <div className="shrink-0">
+        <ChatReconnectBanner status={connectionStatus} />
+      </div>
 
       <TerrainHubSubheader>
         <div className="flex items-center gap-2 px-3 py-2">
@@ -171,6 +195,6 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
         onClose={() => setCreateOpen(false)}
         onConversationCreated={onOpenConversation}
       />
-    </div>
+    </ChatPageRoot>
   )
 }

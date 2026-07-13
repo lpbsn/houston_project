@@ -207,7 +207,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       topbarSize: 'compact',
       showBottomNav: true,
       activeNavPath: '/reporting',
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     }
   }
 
