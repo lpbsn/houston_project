@@ -124,13 +124,33 @@ function renderConversationPage() {
 }
 
 describe('ChatConversationPage', () => {
+  const scrollTo = vi.fn()
+
   beforeEach(() => {
-    Element.prototype.scrollIntoView = vi.fn()
+    scrollTo.mockClear()
+    Element.prototype.scrollTo = scrollTo
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get() {
+        return 480
+      },
+    })
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as typeof window.matchMedia
   })
 
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('anchors the message list to the bottom of the scroll area', () => {
@@ -145,5 +165,17 @@ describe('ChatConversationPage', () => {
     const anchorWrapper = container.querySelector('.min-h-full.justify-end')
     expect(anchorWrapper).not.toBeNull()
     expect(anchorWrapper?.textContent).toContain('wd')
+  })
+
+  it('scrolls the message container to the bottom when messages update', () => {
+    detailQueryMock.mockReturnValue(buildDetailQueryState())
+    messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+
+    renderConversationPage()
+
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 480,
+      behavior: 'smooth',
+    })
   })
 })

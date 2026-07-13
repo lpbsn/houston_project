@@ -38,7 +38,7 @@ Current truth (Lot 1 in-app):
 - `apps/api/schema.yml` lists notification endpoints: list, mark-read, archive, mark-all-read, preferences.
 - Frontend Notification Center uses TanStack Query (`features/notifications/`).
 - Membership-scoped realtime invalidation (`notification.created` / `notification.updated` / `notification.bulk_updated`) refreshes the notification list and unread badge; transport is owned by `houston/realtime/` (see [`realtime_domain.md`](realtime_domain.md)).
-- Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`); see [`notification_matrix_v0.2.md`](../notification_matrix_v0.2.md) §1.1.
+- Lot 1 event keys are defined in `houston/notifications/constants.py` (`LOT1_EVENT_KEYS`).
 - `notifications_enabled` on `EstablishmentMembership` suppresses in-app notification creation for that recipient.
 - Web Push (VAPID + `WebPushSubscription`) is implemented for allowlisted Lot 1 event keys in `PUSH_V1_EVENT_KEYS` (`houston/notifications/push/constants.py`), gated by `HOUSTON_PUSH_ENABLED` and membership `push_enabled`.
 - Chat push (`chat.message.received`) is allowlisted only with anti-spam guards: Redis conversation presence (`chat:presence:{membership_id}:{conversation_id}`, TTL 45s, heartbeat via `POST .../chat/conversations/{id}/presence/`) and push throttle (`push:chat:{conversation_id}:{recipient_membership_id}`, TTL 120s). In-app chat notification rules (dedupe 5 min) are unchanged.
@@ -158,7 +158,7 @@ Candidate notification-domain transport events (membership-scoped WS invalidatio
 
 - `notification.created`, `notification.updated`, `notification.bulk_updated`
 
-Candidate Lot 2+ source triggers (not implemented): see [`notification_matrix_v0.2.md`](../notification_matrix_v0.2.md) §Lot2 backlog.
+Candidate Lot 2+ source triggers (not implemented): extend `LOT1_EVENT_KEYS` / notification producers in code when product signs off.
 
 ## 9. API Surface
 

@@ -159,4 +159,4 @@ docker compose exec api uv run python manage.py report_issue_focus_aggregation_e
 make backend-test PYTEST_ARGS='houston/signals/tests/test_pipeline_v4_golden.py houston/signals/tests/test_aggregation_eval.py houston/signals/tests/test_evaluate_observation_pipeline.py -q'
 ```
 
-See [`issue_focus_aggregation_eval_lot5.md`](issue_focus_aggregation_eval_lot5.md).
+Command: `report_issue_focus_aggregation_eval` (see `houston/signals/management/commands/`).

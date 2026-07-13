@@ -1,6 +1,8 @@
 # Comments Domain — Signal & Action Comments
 
-Status: Draft validated for implementation  
+Status: authoritative
+
+Implementation status: implemented (REST threads, mentions, realtime invalidation)  
 Scope: MVP / V1  
 Related backlog:
 - HOU-BACKLOG-005 — Ajouter les commentaires sur les Signaux
@@ -297,7 +299,7 @@ The following are explicitly out of scope:
 - audit export,
 - advanced pagination unless needed by implementation constraints.
 
-**Operational realtime (in scope — not a non-goal):** comment list refresh via establishment-scoped WebSocket **invalidation** is implemented. Backend emits `comment.*` reasons from `comments/services.py` after sync writes; the frontend refetches authorized comment queries — no comment body over the socket. Authoritative transport contract: [`realtime_domain.md`](realtime_domain.md). Business-fact and notification boundaries: [`event_catalogue_v0.1.md`](../event_catalogue_v0.1.md).
+**Operational realtime (in scope — not a non-goal):** comment list refresh via establishment-scoped WebSocket **invalidation** is implemented. Backend emits `comment.*` reasons from `comments/services.py` after sync writes; the frontend refetches authorized comment queries — no comment body over the socket. Authoritative transport contract: [`realtime_domain.md`](realtime_domain.md). Event keys: `houston/notifications/constants.py` and [`contracts/operational-realtime-invalidation.json`](../../../contracts/operational-realtime-invalidation.json).
 
 ## 10. Acceptance criteria
 

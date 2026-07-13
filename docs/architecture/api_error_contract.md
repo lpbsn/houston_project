@@ -7,7 +7,7 @@ Last reviewed: 2026-06-02
 
 This document defines the mandatory error response shapes emitted by the global DRF exception handler:
 
-- [`apps/api/houston/core/api/exceptions.py`](apps/api/houston/core/api/exceptions.py) (`api_exception_handler`)
+- [`apps/api/houston/core/api/exceptions.py`](../../apps/api/houston/core/api/exceptions.py) (`api_exception_handler`)
 
 The contract is used for framework-level errors (auth, permissions, not-found, throttling, validation) and is intentionally stable so that the frontend can render predictable user-facing and developer-facing states.
 

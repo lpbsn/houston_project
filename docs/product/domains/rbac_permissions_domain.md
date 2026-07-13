@@ -182,7 +182,7 @@ Additional implemented establishment-scoped endpoints with backend RBAC (confirm
 - Action Plan catalog, executions, schedules, and task commands under `.../action-plans/`, `.../action-plan-executions/`, `.../action-plan-execution-tasks/`
 - Observations submit and processing status under `.../observations/`
 
-Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`feed_domain.md`](feed_domain.md) §7, [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md). Legacy Action/Checklist matrices archived: [`action_domain.md`](../../archive/product/domains/action_domain.md), [`checklist_domain.md`](../../archive/product/domains/checklist_domain.md).
+Domain RBAC matrices: [`signal_domain.md`](signal_domain.md), [`feed_domain.md`](feed_domain.md) §7, [`decisions/action_plan.md`](../decisions/action_plan.md). Legacy Action/Checklist domains were removed in Lot 10.
 
 Candidate endpoints only:
 

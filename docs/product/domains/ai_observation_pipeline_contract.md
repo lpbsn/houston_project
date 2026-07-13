@@ -113,12 +113,11 @@ Frozen exact-match behavior: `normalize(issue_focus)` must match for aggregation
 | G10 | `pain` | `pain blanc` | New Signal (no aggregate) |
 | G11 | `clim chambre 104` | `climatisation chambre 104` | New Signal (no aggregate) |
 
-Lot 5 evaluation procedure: [`issue_focus_aggregation_eval_lot5.md`](../../engineering/issue_focus_aggregation_eval_lot5.md).
+Lot 5 evaluation: `python manage.py report_issue_focus_aggregation_eval` — see [`engineering/testing.md`](../../engineering/testing.md).
 
 ## Related documents
 
 - [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md)
-- [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md)
 - [`observation_domain.md`](observation_domain.md)
 - [`signal_domain.md`](signal_domain.md)
 - [`ai_domain.md`](ai_domain.md)

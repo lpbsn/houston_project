@@ -1,15 +1,14 @@
-# Decision log — Plan d'action (§26)
+# Decision log — Action Plan (§26)
 
 Status: `authoritative`  
-Lot: -1 (+ compléments Lot 2B — décisions 26.13–26.15)  
-Last updated: 2026-06-29  
+Last updated: 2026-07-13  
 Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 2B (2026-06-29)
 
 ## Procédure sign-off
 
-1. Review de ce document et de l'index §26 dans [`besoin_evolution_action.md`](besoin_evolution_action.md).
+1. Review de ce document.
 2. Validation humaine explicite (produit + tech).
-3. Après sign-off : passer ce document en statut `authoritative`, dater le sign-off, retirer « en attente » du besoin.
+3. Après sign-off : statut `authoritative`, dater le sign-off.
 
 **Sortie Lot -1 :** `Done` (sign-off 2026-06-28).
 
@@ -354,3 +353,59 @@ Chronologie individuelle = dates/horaires par assigné que le manager contribute
 ```
 
 La section 9 du besoin (assignation et chronologie) reste inchangée.
+
+---
+
+## Schedule materialization
+
+**Statut:** Décision verrouillée (Lot 4)
+
+### Objectif
+
+Définir comment les exécutions récurrentes sont créées à partir d'un `ActionPlanSchedule`, sans reproduire la dette MAT-01 du legacy checklist (read-path sur chaque GET feed).
+
+### Chemins de materialization
+
+| Chemin | Actif | Détail |
+|--------|-------|--------|
+| Celery Beat proactif | Oui | Horizon 14 jours (`MATERIALIZATION_HORIZON_DAYS`), cron daily UTC (`HOUSTON_ACTION_PLAN_HORIZON_BEAT_*`) |
+| Sync on schedule create | Oui | Occurrences **visibles** dans l'horizon (`visible_from <= now`) |
+| Read-path sur `GET action-plan-execution-feed/` | Oui | Horizon 3 jours (`READ_PATH_MATERIALIZATION_HORIZON_DAYS`), stale guard 30 min |
+| `ensure_visible_action_plan_executions_materialized` | Oui | Branché sur le feed via `build_action_plan_execution_feed_page` |
+| WebSocket / notifications | Oui | `action_plan_execution.created` (+ lifecycle events) |
+
+Legacy `execution-feed/` and `houston/actions` / `houston/checklists` apps were removed (Lot 10).
+
+### Chronologie partagée vs individuelle
+
+- **`use_shared_chronology=True`:** une exécution par `occurrence_date`, tous les assignés du schedule sur la même exécution.
+- **`use_shared_chronology=False`:** une exécution par `(occurrence_date, assigné)` ; clé `schedule_source_membership` sur l'exécution.
+
+### Idempotence
+
+- Contraintes uniques partielles en base.
+- Check-then-create + retry sur `IntegrityError` en concurrence.
+- Pas de resnapshot assignés/tâches sur exécution existante.
+
+### `occurrence_date` immuable
+
+Fixée à la création. Un PATCH schedule ne déplace jamais une exécution existante.
+
+### Réactivation des exécutions `canceled`
+
+Champ interne `cancel_origin` sur `ActionPlanExecution` :
+
+| Valeur | Réactivable par PATCH / materialize ? |
+|--------|--------------------------------------|
+| `null` | non |
+| `schedule_sync` | **oui** (si occurrence encore valide) |
+| `manual` | **non** (reopen API explicite) |
+
+### PATCH `use_shared_chronology`
+
+Interdit si le schedule a déjà ≥1 exécution matérialisée (`400`).
+
+### API
+
+- **Récurrent:** `POST /action-plans/{id}/schedule/` (`recurrence_days` non vide requis).
+- **Ponctuel:** `POST /action-plans/{id}/use/`.

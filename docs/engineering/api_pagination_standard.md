@@ -205,8 +205,6 @@ Houston does not set `DEFAULT_PAGINATION_CLASS` in DRF settings. Each domain imp
 | HOU-PAG-003 | P1 | Chat messages — align envelope or document exception |
 | HOU-PAG-004 | P1 | Chat conversations — cursor pagination + N+1 fix |
 | HOU-PAG-005 | P1 | Users search — `limit` cap |
-| HOU-PAG-006 | P1 | Checklist templates — pagination if > ~50 |
-| HOU-PAG-007 | P1 | Checklist assignments — pagination + API filter |
 | HOU-PAG-008 | P2 | Membership roster — `page`/`limit` |
 | HOU-PAG-009 | P2 | Raw array → `{ items }` harmonization |
 | HOU-PAG-010 | P2 | Shared backend pagination helpers |

@@ -11,8 +11,8 @@ Use sources in this order:
 1. Current source code
 2. Generated OpenAPI schema: `apps/api/schema.yml`
 3. `AGENTS.md` files
-4. Active docs under `docs/`
-5. Archived docs only for historical context
+4. Active docs under `docs/` (see [`docs/README.md`](README.md))
+5. Git history for past decisions — no legacy archive or audit doc trees in the repo
 
 If two sources conflict, the higher source wins.
 
@@ -21,7 +21,7 @@ If two sources conflict, the higher source wins.
 - `authoritative`: stable decision; follow unless current code proves it obsolete
 - `candidate`: target design; not necessarily implemented
 - `advisory`: recommendation; adaptable
-- `archived`: historical; must not drive implementation
+- `archived`: removed from repo; use Git history only
 
 ## API Rule
 

@@ -2,7 +2,7 @@
 
 Status: authoritative  
 Last reviewed: 2026-07-05  
-Implementation status: implemented (Signal Feed Phase 4 + Action Plan Execution Feed Lot 5/10). Legacy polymorphic Action/Checklist execution feed removed in Lot 10 — archived domain docs: [`action_domain.md`](../../archive/product/domains/action_domain.md), [`checklist_domain.md`](../../archive/product/domains/checklist_domain.md).
+Implementation status: implemented (Signal Feed Phase 4 + Action Plan Execution Feed Lot 5/10). Legacy polymorphic Action/Checklist execution feed removed in Lot 10.
 
 ## 1. Purpose
 
@@ -37,7 +37,7 @@ Current truth:
 - `GET signal-feed/` implemented (Phase 4) with required `view_mode=personal|general`.
 - **`GET action-plan-execution-feed/`** (Lot 5 Plan d'action, seul feed exécution post-Lot 10) with required `view_mode=personal|general`. Response envelope: `items`, `next_cursor`, `has_more`; each item has `item_type: "action_plan_execution"` and payload `action_plan_execution`.
 - Lazy action plan schedule materialization runs on feed read (`ensure_visible_action_plan_executions_materialized`) before querying items on **`action-plan-execution-feed/`** (horizon 3 days, stale guard 30 min).
-- **Feed Exécution `+` (cible Lot 10):** menu **Plan ponctuel** / **Catalogue** — voir [`besoin_evolution_action.md`](../../evolution_action/besoin_evolution_action.md) §25.
+- **Feed Exécution `+`:** menu **Plan ponctuel** / **Catalogue** — see [`decisions/action_plan.md`](../decisions/action_plan.md).
 
 ## 3. Out of Scope
 
@@ -82,7 +82,7 @@ Current truth:
 
 - `ExecutionFeed`
   - Structured execution summary view for operational follow-up.
-  - **Implemented today:** Action Plan execution items only (`item_type: "action_plan_execution"`). Legacy polymorphic Action/Checklist feed removed in Lot 10 — see archive docs linked in header.
+  - **Implemented today:** Action Plan execution items only (`item_type: "action_plan_execution"`). Legacy polymorphic Action/Checklist feed removed in Lot 10.
 
 - `FeedItem`
   - Safe summary of a visible domain object.
@@ -148,7 +148,7 @@ Frontend display states may include:
 - `end_at` overdue does not remove items (`is_overdue` indicator only for active statuses).
 - **Sorting (implemented):** backend-owned. Personal feed pins (`ActionPlanExecutionFeedPin`, per membership) sort first: pinned items at the top of the feed regardless of status (`-is_feed_pinned`, `pinned_at ASC` among pins), then global status order: `pending_validation` → `in_progress` → `done` → `canceled`. Within active statuses: overdue (`end_at < as_of`) → upcoming → no `end_at` (nulls last), nearest `end_at` ascending, then `-last_activity_at`, `-created_at`, `-id`. Within terminal statuses: `-last_activity_at`, `-created_at`, `-id`. Frontend renders pinned items in a flat block at the top (no section label), then groups unpinned items by status without re-sorting. Sections **Terminés** and **Annulés** are collapsed by default in the UI. Pagination cursor freezes `as_of` for stable overdue buckets and `is_overdue` across pages.
 - **Personal pin (implemented):** `POST .../action-plan-executions/{id}/pin/` and `.../unpin/` — preference per membership, not shared (distinct from establishment-wide Signal pin). Any member who sees the item in feed may pin for themselves (`can_pin` hint). No visual card change; order only.
-- Lazy schedule materialization on feed read (`ensure_visible_action_plan_executions_materialized`) — horizon 3 days, stale guard 30 min. See [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md).
+- Lazy schedule materialization on feed read (`ensure_visible_action_plan_executions_materialized`) — horizon 3 days, stale guard 30 min. See [`decisions/action_plan.md`](../decisions/action_plan.md) (Schedule materialization).
 
 **Future** feed subscriptions may personalize Signal Feed Ma vue (not implemented). They would not be permissions and would not filter Execution Feed. **Today:** Signal Feed Ma vue uses `MembershipScope` (BusinessUnit) only.
 
@@ -182,7 +182,7 @@ Pagination standard: [`api_pagination_standard.md`](../../engineering/api_pagina
 
 Candidate / not implemented: advanced search, feed counts, saved views.
 
-**Execution Feed `+` menu (implemented):** mobile-first bottom sheet with **Plan d'action** only when `can_create_action_plan` bootstrap hint is true. Routes to action plan create (ponctuel or catalogue). See [`besoin_evolution_action.md`](../../evolution_action/besoin_evolution_action.md) §25.
+**Execution Feed `+` menu (implemented):** mobile-first bottom sheet with **Plan d'action** only when `can_create_action_plan` bootstrap hint is true. Routes to action plan create (ponctuel or catalogue). See [`decisions/action_plan.md`](../decisions/action_plan.md).
 
 Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Feed.
 
@@ -213,7 +213,7 @@ Detail routes belong to owning domains (`/action-plans/executions/{id}`), not Fe
 - Inspect current code before claiming feed models, selectors, endpoints, filters, or sorting exist.
 - Inspect `apps/api/schema.yml` before naming any feed API as implemented.
 - Inspect `signal_domain.md` before changing Signal Feed item rules.
-- Inspect [`action_plan_materialization.md`](../../evolution_action/action_plan_materialization.md) and `action_plans/selectors.py` before changing Execution Feed item rules.
+- Inspect [`decisions/action_plan.md`](../decisions/action_plan.md) and `action_plans/selectors.py` before changing Execution Feed item rules.
 - Inspect `rbac_permissions_domain.md` before changing visibility or actionability assumptions.
 - Inspect `security_rgpd_domain.md` and `observation_domain.md` before changing raw-text, search, media, or logging boundaries.
 - Do not make Feed a lifecycle owner.

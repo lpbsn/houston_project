@@ -319,7 +319,7 @@ Run the readonly script from the repository root (single source of truth for inf
 BASE_URL=https://<railway-domain> ./scripts/smoke/readonly.sh
 ```
 
-Local prod-test: `BASE_URL=http://localhost:8080` after `make up-prod-test`. See [`scripts/smoke/readonly.sh`](../../scripts/smoke/readonly.sh) and [`railway_smoke_checklist.md`](railway_smoke_checklist.md) for manual worker/beat/media checks.
+Local prod-test: `BASE_URL=http://localhost:8080` after `make up-prod-test`. See [`scripts/smoke/readonly.sh`](../../scripts/smoke/readonly.sh) and [`smoke_checklist.md`](smoke_checklist.md) for manual worker/beat/media checks.
 
 ---
 
@@ -353,5 +353,5 @@ make backend-deploy-check
 * [`railway_variables.md`](railway_variables.md) — variable mapping and per-service matrix
 * [`railway_architecture.md`](railway_architecture.md) — architecture overview
 * [`railway_security.md`](railway_security.md) — secrets and `check --deploy`
-* [`prod_test_decisions.md`](prod_test_decisions.md) — frozen decisions
-* [`railway_static_frontend.md`](railway_static_frontend.md) — local same-origin validation (PR3)
+* [`smoke_checklist.md`](smoke_checklist.md) — unified smoke
+* Local same-origin: `docker-compose.prod-test.yml` + `make up-prod-test`

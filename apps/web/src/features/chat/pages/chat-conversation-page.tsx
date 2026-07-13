@@ -33,7 +33,7 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
   const viewerMembershipId = auth.bootstrap?.active_membership?.id ?? null
   const viewerDisplayName = auth.bootstrap?.user.username ?? 'Vous'
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null)
   const detailQuery = useChatConversationDetailQuery(establishmentId, conversationId)
   const messagesQuery = useChatMessagesInfiniteQuery(establishmentId, conversationId)
   const { mutate: markConversationSeen } = useMarkConversationSeenMutation(
@@ -74,7 +74,19 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
   }, [conversationId, detailQuery.isSuccess, establishmentId, markConversationSeen])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messagesScrollRef.current
+    if (!container) {
+      return
+    }
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    })
   }, [mergedMessages.length, conversationId])
 
   if (!establishmentId || !viewerMembershipId) {
@@ -122,7 +134,10 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-3">
+      <div
+        ref={messagesScrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-3"
+      >
         {messagesQuery.hasNextPage ? (
           <div className="mb-3 flex justify-center">
             <button
@@ -189,7 +204,6 @@ export function ChatConversationPage({ conversationId }: ChatConversationPagePro
                   </div>
                 )
               })}
-              <div ref={messagesEndRef} />
             </div>
           </div>
         )}

@@ -3,7 +3,7 @@
 Houston is a mobile-first, event-driven operational PWA.
 
 Core loop:
-Observation -> Signal -> Action -> Execution -> Validation -> Feed update
+Observation -> Signal -> Action Plan -> Execution -> Validation -> Feed update
 
 ## Source of truth
 

@@ -20,7 +20,7 @@ Remplacez `<URL_DU_REPO>` par l’URL SSH réelle fournie par votre équipe (ex.
 
 - **`make bootstrap-dev`** ne remplace pas **`make build-backend`** (première install) ni **`make web-install`** (frontend local).
 - **`make reset-dev-db`** efface la DB Postgres locale et **tous les volumes Docker du projet** (dont `web_node_modules` si vous utilisez le conteneur `web`). Il ne modifie ni le code ni le `.env`. Relancez **`make web-install`** si le frontend Docker (`make up`) était utilisé.
-- Validation E2E documentée : [`docs/qa/fresh_install_validation.md`](docs/qa/fresh_install_validation.md).
+- Validation E2E et smoke : [`docs/deploy/smoke_checklist.md`](docs/deploy/smoke_checklist.md) et [`docs/engineering/local_development.md`](docs/engineering/local_development.md).
 
 ---
 

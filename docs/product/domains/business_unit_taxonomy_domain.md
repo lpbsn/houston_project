@@ -2,7 +2,7 @@
 
 Status: authoritative  
 Last reviewed: 2026-06-07  
-Implementation status: **implemented** (Lot 6 complete — see [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md))
+Implementation status: **implemented** (Lot 6 complete — Module/Domain/Subject v1 removed; BusinessUnit / ActivitySubject authoritative)
 
 > **Legacy model:** Module → Domain → Subject is obsolete and removed from active product contracts.
 
@@ -97,7 +97,7 @@ Legacy v1 onboarding catalogue is seeded in `OnboardingCatalogModule` / `Onboard
 
 ## Related contracts
 
-- Migration: [`taxonomy_v1_to_v2_migration.md`](../taxonomy_v1_to_v2_migration.md)
+- Migration (Lot 6): legacy Module/Domain/Subject removed; BusinessUnit / ActivitySubject only.
 - Onboarding: [`runtime_config_onboarding_domain.md`](runtime_config_onboarding_domain.md)
 - RBAC: [`rbac_permissions_domain.md`](rbac_permissions_domain.md)
 - Signal: [`signal_domain.md`](signal_domain.md)

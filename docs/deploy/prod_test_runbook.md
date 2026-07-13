@@ -7,8 +7,7 @@ Short **operator hub** for day-0 deploy through recurring ops. Technical detail 
 | [`railway_deploy_contract.md`](railway_deploy_contract.md) | Service topology, start commands, healthchecks, rollback |
 | [`railway_variables.md`](railway_variables.md) | Variable matrix per service |
 | [`infra/railway/README.md`](../../infra/railway/README.md) | Config-as-code wiring (Root Directory, Config File paths) |
-| [`railway_smoke_checklist.md`](railway_smoke_checklist.md) | Technical post-deploy checklist |
-| [`prod_test_smoke.md`](../qa/prod_test_smoke.md) | Product smoke on Railway (FR) |
+| [`smoke_checklist.md`](smoke_checklist.md) | Unified smoke (technical + product, local + Railway) |
 
 **Merge PR6** validates docs + `readonly.sh` locally. **Railway sign-off** (real deploy, OpenAI, backups) is human, post-merge, before external pilot.
 
@@ -65,7 +64,7 @@ Use Railway shell or `railway run` on `api-web`.
 
 ## 3. Technical smoke
 
-Use [`railway_smoke_checklist.md`](railway_smoke_checklist.md):
+Use [`smoke_checklist.md`](smoke_checklist.md) (Railway sections).
 
 ```bash
 BASE_URL=https://<railway-domain> ./scripts/smoke/readonly.sh
@@ -77,7 +76,7 @@ Then complete manual worker/beat/media checks on Railway.
 
 ## 4. Product smoke
 
-Use [`prod_test_smoke.md`](../qa/prod_test_smoke.md) (French) — same journey as [`pilot_smoke_checklist.md`](../qa/pilot_smoke_checklist.md) on HTTPS same-origin, with real OpenAI.
+Use [`smoke_checklist.md`](smoke_checklist.md) — Railway product journey and technical checks on HTTPS same-origin, with real OpenAI when configured.
 
 ---
 
@@ -106,8 +105,8 @@ Never paste secrets, tokens, raw observation text, or private media paths.
 |---|---|
 | Env var change → redeploy | Contract § Restart and redeploy |
 | Code rollback | Contract § Rollback (minimal) |
-| Postgres backup / restore | Contract § postgres backup ; [`prod_test_decisions.md`](prod_test_decisions.md) §8 |
-| Media backup | Contract § Known limitations V1 ; decisions §9 |
+| Postgres backup / restore | Contract § postgres backup |
+| Media backup | Contract § Known limitations V1 |
 
 ---
 
@@ -126,12 +125,12 @@ Destructive — use only on prod-test, not production.
 
 | Symptom | Where to look |
 |---|---|
-| Health OK but observations `queued` | Worker logs ; [`railway_smoke_checklist.md`](railway_smoke_checklist.md) § Workers |
+| Health OK but observations `queued` | Worker logs ; [`smoke_checklist.md`](smoke_checklist.md) § Workers |
 | Blank page / wrong asset | `readonly.sh` ; contract § api-web routing |
 | Deep-link 404 (SPA) | `readonly.sh` `/signals` check |
 | CSRF / login loop | [`railway_variables.md`](railway_variables.md) `CSRF_TRUSTED_ORIGINS` ; [`railway_security.md`](railway_security.md) |
-| Upload 413 / 400 | Contract § Upload limits ; [`prod_test_smoke.md`](../qa/prod_test_smoke.md) § Smoke négatif |
-| Photo submit blocked | [`prod_test_smoke.md`](../qa/prod_test_smoke.md) § Smoke négatif (expected behaviour) |
+| Upload 413 / 400 | Contract § Upload limits ; [`smoke_checklist.md`](smoke_checklist.md) § Photo submit guard |
+| Photo submit blocked | [`smoke_checklist.md`](smoke_checklist.md) § Photo submit guard (expected behaviour) |
 | Signal never appears | Worker logs ; grep `observation_pipeline_failed` ; processing-status endpoint |
 | WebSocket issues | Contract § WebSocket ; confirm `/ws/*` not SPA (`readonly.sh`) |
 | Beat schedules missing | Beat logs ; contract § celery-beat volume |
@@ -140,4 +139,4 @@ Destructive — use only on prod-test, not production.
 
 ## Sign-off (post-merge, not PR6 merge criteria)
 
-Before inviting external testers, complete Railway sign-off in [`prod_test_smoke.md`](../qa/prod_test_smoke.md) plus backups and rollback readiness per contract and [`prod_test_decisions.md`](prod_test_decisions.md).
+Before inviting external testers, complete Railway sign-off in [`smoke_checklist.md`](smoke_checklist.md) plus backups and rollback readiness per contract.

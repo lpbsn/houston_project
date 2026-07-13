@@ -4,7 +4,7 @@ Applies to `apps/web/**`.
 
 ## Stack
 
-React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, minimal Zustand, minimal Framer Motion, PWA-ready.
+React, TypeScript, Vite, Tailwind, shadcn/ui, TanStack Query, Framer Motion, PWA-ready. Zustand is allowed for local UI state but **not currently used** in `apps/web/src` — prefer React state until needed.
 
 Do not upgrade frontend framework versions unless explicitly requested.
 
@@ -14,7 +14,9 @@ Do not upgrade frontend framework versions unless explicitly requested.
 - Backend owns business rules, permissions, lifecycle, visibility, and validation.
 - OpenAPI/generated types own API data contracts.
 - TanStack Query owns server state.
-- Zustand owns local UI/client state only.
+- React `useState` / context for local UI state (Zustand optional, not in use today).
+
+Architecture map: [`docs/engineering/frontend_architecture.md`](../../docs/engineering/frontend_architecture.md).
 
 Do not move business workflows to React.
 
@@ -50,13 +52,9 @@ Houston is phone-first for field teams.
 
 Use TanStack Query for reads, mutations, cache, invalidation, and server-derived loading/error state.
 
-Use Zustand only for UI state:
-- drawer/sidebar
-- selected tab/view mode
-- modal state
-- short-lived form helpers
+Use React state for local UI (drawers, tabs, modals). Zustand is optional per stack docs but not imported in `src/` today.
 
-Forbidden in Zustand:
+Forbidden in client persistent stores (Zustand if adopted later):
 - feed data
 - permissions
 - workflow statuses

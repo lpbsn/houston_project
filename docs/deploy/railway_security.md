@@ -130,5 +130,5 @@ With `DJANGO_DEBUG=1`, dev remains permissive.
 ## Related documents
 
 * [`railway_architecture.md`](railway_architecture.md)
-* [`prod_test_decisions.md`](prod_test_decisions.md)
+* [`smoke_checklist.md`](smoke_checklist.md)
 * [`.env.prod-test.example`](../../.env.prod-test.example)

@@ -2,7 +2,7 @@
 
 Architecture overview for prod-test V1. **Operational contract (PR5):** [`railway_deploy_contract.md`](railway_deploy_contract.md). **Variables:** [`railway_variables.md`](railway_variables.md). **Config wiring:** [`infra/railway/README.md`](../../infra/railway/README.md).
 
-Decisions are frozen in [`prod_test_decisions.md`](prod_test_decisions.md). Environment template: [`.env.prod-test.example`](../../.env.prod-test.example).
+Decisions are documented in this file and [`railway_deploy_contract.md`](railway_deploy_contract.md). Environment template: [`.env.prod-test.example`](../../.env.prod-test.example).
 
 ## Architecture (Option A only)
 
@@ -21,7 +21,7 @@ Railway Project (prod-test V1)
 Local analogues:
 
 * Dev: [`docker-compose.yml`](../../docker-compose.yml) (`api`, `celery`, `celery-beat`, `postgres`, `redis`, `private_media` volume).
-* Prod-test static + gateway (PR3, local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — see [`railway_static_frontend.md`](railway_static_frontend.md).
+* Prod-test static + gateway (local only): [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — nginx serves SPA + API same-origin on port 8080 (validates PR3 routing before Railway).
 
 ## Public routing (same-origin)
 
@@ -192,7 +192,7 @@ Future PR10+ may add Cloudflare for DNS, edge cache, or WAF **after** Railway pr
 * [`railway_deploy_contract.md`](railway_deploy_contract.md) — operational deploy playbook (PR5)
 * [`railway_variables.md`](railway_variables.md) — variable mapping and per-service matrix
 * [`infra/railway/README.md`](../../infra/railway/README.md) — Railway config file wiring
-* [`prod_test_decisions.md`](prod_test_decisions.md) — decision log
-* [`railway_static_frontend.md`](railway_static_frontend.md) — PR3 local static + gateway validation
+* [`smoke_checklist.md`](smoke_checklist.md) — unified smoke
+* [`docker-compose.prod-test.yml`](../../docker-compose.prod-test.yml) — local same-origin validation
 * [`railway_security.md`](railway_security.md) — production security gate and secrets
 * [`.env.prod-test.example`](../../.env.prod-test.example) — environment template

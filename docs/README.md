@@ -1,43 +1,55 @@
-# Houston Documentation Index
+# Houston documentation
 
-## Active Documentation Rules
+Status: authoritative  
+Last reviewed: 2026-07-13
 
-- `docs/00_ai_documentation_policy.md` is mandatory reading for documentation work.
-- `AGENTS.md` files remain the primary coding-agent behavior instructions.
-- `apps/api/schema.yml` is the current API truth.
-- Product docs describe business decisions and target scope, not necessarily implemented endpoints.
-- Build docs describe phased implementation.
-- Architecture docs describe technical rules.
-- Archived docs are historical only and must not drive implementation.
+Git is the only history. There is no `archive/` or `audits/` folder in active docs.
 
-## Proposed Structure
+## Start here
 
-```txt
-docs/
-  00_ai_documentation_policy.md
-  README.md
-  architecture/
-  engineering/
-  evolution_action/
-  product/
-  product/Build_Plan/
-  api/
-  archive/
-```
+1. Root [`README.md`](../README.md) — repository entry
+2. [`product/current_state.md`](product/current_state.md) — what is implemented today
+3. [`engineering/local_development.md`](engineering/local_development.md) — daily workflow
+4. Nearest [`AGENTS.md`](../AGENTS.md) (root, `apps/api`, `apps/web`) for coding agents
+5. [`apps/api/schema.yml`](../apps/api/schema.yml) — HTTP API contract
 
-Engineering standards (e.g. [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md)) live under `docs/engineering/`.
+## Product
 
-Refonte Plan d'action (Lot -1 signé) :
+| Doc | Purpose |
+|-----|---------|
+| [`product/mvp_scope.md`](product/mvp_scope.md) | Pilot boundaries |
+| [`product/product_principles.md`](product/product_principles.md) | Principles |
+| [`product/product_operating_model.md`](product/product_operating_model.md) | Operating model |
+| [`product/decisions/action_plan.md`](product/decisions/action_plan.md) | Action plan §26 + schedules |
+| [`product/domains/`](product/domains/) | Domain specs (16 files) |
 
-- [`evolution_action/besoin_evolution_action.md`](evolution_action/besoin_evolution_action.md) — expression de besoin
-- [`evolution_action/decisions_plan_action.md`](evolution_action/decisions_plan_action.md) — decision log §26 (`authoritative`)
+## Architecture & engineering
 
-This index does not require creating a larger doc tree immediately. It defines how the active documentation set should be read.
+| Doc | Purpose |
+|-----|---------|
+| [`architecture/authentication_charter.md`](architecture/authentication_charter.md) | Auth rules |
+| [`architecture/api_error_contract.md`](architecture/api_error_contract.md) | API errors |
+| [`engineering/local_development.md`](engineering/local_development.md) | Local workflow |
+| [`engineering/frontend_architecture.md`](engineering/frontend_architecture.md) | React / PWA map |
+| [`engineering/testing.md`](engineering/testing.md) | Test strategy |
+| [`engineering/api_pagination_standard.md`](engineering/api_pagination_standard.md) | Pagination |
 
-## How To Read The Docs
+## Deploy
 
-1. Start with the nearest `AGENTS.md`.
-2. Use `apps/api/schema.yml` for current API truth.
-3. Use architecture docs for technical constraints.
-4. Use product docs for business decisions and target scope.
-5. Use archive only for historical context.
+| Doc | Purpose |
+|-----|---------|
+| [`deploy/smoke_checklist.md`](deploy/smoke_checklist.md) | Smoke (local + Railway) |
+| [`deploy/prod_test_runbook.md`](deploy/prod_test_runbook.md) | Operator runbook |
+| [`deploy/railway_deploy_contract.md`](deploy/railway_deploy_contract.md) | Deploy contract |
+| [`deploy/railway_architecture.md`](deploy/railway_architecture.md) | Railway topology |
+| [`deploy/railway_variables.md`](deploy/railway_variables.md) | Env matrix |
+| [`deploy/railway_security.md`](deploy/railway_security.md) | Security notes |
+
+## Policy
+
+[`00_ai_documentation_policy.md`](00_ai_documentation_policy.md) — how to write and maintain docs.
+
+## Data (not prose docs)
+
+- [`catalogue/`](catalogue/) — CSV import for global catalog (`make import-catalog`)
+- [`../contracts/`](../contracts/) — machine contracts (realtime invalidation)
