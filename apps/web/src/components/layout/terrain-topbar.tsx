@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import type { TerrainDetailTitleLayout, TerrainTopbarSize } from '@/app/terrain-routes'
 import { HoustonLogo } from '@/components/domain/houston-logo'
 import { Button } from '@/components/ui/button'
+import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type TerrainTopbarProps = {
@@ -92,7 +93,7 @@ export function TerrainTopbar({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-auto px-0 text-sm font-medium text-[#1B4FD8] hover:bg-transparent hover:text-[#1B4FD8]/90"
+                  className={terrainBackButtonClassName()}
                   onClick={onBack}
                 >
                   <ArrowLeft className="mr-1 h-4 w-4" />
@@ -123,7 +124,7 @@ export function TerrainTopbar({
           <Button
             type="button"
             variant="ghost"
-            className="h-auto px-0 text-sm font-medium text-[#1B4FD8] hover:bg-transparent hover:text-[#1B4FD8]/90"
+            className={terrainBackButtonClassName()}
             onClick={onBack}
           >
             <ArrowLeft className="mr-1 h-4 w-4" />

@@ -33,7 +33,7 @@ import { getEditableRoleOptions } from '@/features/auth/lib/membership-rbac'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { EstablishmentMembershipResponse, RoleEnum } from '@/features/auth/types'
 import { toErrorMessage } from '@/lib/error-message'
-import { terrain } from '@/lib/terrain-styles'
+import { terrain, terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 const ROLE_PILL_OPTIONS: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
@@ -231,7 +231,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
             <Button
               type="button"
               variant="ghost"
-              className="h-auto px-0 text-sm font-medium text-[#1B4FD8] hover:bg-transparent hover:text-[#1B4FD8]/90"
+              className={terrainBackButtonClassName()}
               onClick={() => navigate('/team')}
             >
               <ArrowLeft className="mr-1 h-4 w-4" />

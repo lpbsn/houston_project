@@ -54,4 +54,14 @@ describe('TerrainTopbar', () => {
       }),
     ).toBeTruthy()
   })
+
+  it('renders detail back button without visible border classes', () => {
+    render(
+      <TerrainTopbar variant="detail" title="Signal" onBack={() => undefined} />,
+    )
+
+    const backButton = screen.getByRole('button', { name: 'Retour' })
+    expect(backButton.className).toContain('border-0')
+    expect(backButton.className).toContain('focus-visible:ring-0')
+  })
 })

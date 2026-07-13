@@ -179,3 +179,13 @@ export function terrainFilterSlotClassName(className?: string) {
     className,
   )
 }
+
+export function terrainBackButtonClassName(className?: string) {
+  return cn(
+    'h-auto border-0 px-0 text-sm font-medium text-[#1B4FD8] shadow-none',
+    'hover:bg-transparent hover:text-[#1B4FD8]/90',
+    'focus-visible:border-transparent focus-visible:ring-0',
+    'focus-visible:underline focus-visible:underline-offset-2',
+    className,
+  )
+}
