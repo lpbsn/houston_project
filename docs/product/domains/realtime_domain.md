@@ -226,7 +226,7 @@ Source domains with invalidation emission today:
 
 ### Action Plan lifecycle side-effects on Signal (refetch contract)
 
-When an Action Plan execution lifecycle write also mutates a linked Signal, transport depends on the mutation. Signal-linked plan create schedules `signal.updated` when the Signal becomes `in_progress` (and optional unpin). Canceling all linked executions reopens the Signal to `open` and schedules `signal.updated`. Manual `resolve_signal` cancels active linked executions and schedules `signal.updated`. Mark-done and validate do not auto-resolve the linked Signal. See `action_plans/services.py` and `signals/services.py`.
+When an Action Plan execution lifecycle write also mutates a linked Signal, transport depends on the mutation. Signal-linked plan create schedules `signal.updated` when the Signal becomes `in_progress` (and optional unpin). Canceling all linked executions reopens the Signal to `open` and schedules `signal.updated`. When all linked executions are terminal with at least one `done`, mark-done or validate auto-resolves the active linked Signal via `resolve_signal` and schedules `signal.updated`. Manual `resolve_signal` cancels active linked executions and schedules `signal.updated`. See `action_plans/services.py` and `signals/services.py`.
 
 See **Operational WebSocket invalidation** under section 2 for the reason matrix.
 

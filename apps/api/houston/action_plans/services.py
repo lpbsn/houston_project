@@ -171,6 +171,14 @@ def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
                 ]
             )
             _schedule_signal_invalidation(signal=signal, reason="signal.updated")
+        return signal
+
+    if linked.exists() and linked.filter(status=EXECUTION_STATUS_DONE).exists():
+        from houston.signals.constants import ACTIVE_SIGNAL_STATUSES
+        from houston.signals.services import resolve_signal
+
+        if signal.status in ACTIVE_SIGNAL_STATUSES:
+            return resolve_signal(signal=signal, actor_membership=None)
     return signal
 
 

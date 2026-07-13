@@ -143,9 +143,9 @@ Validated in current code:
 - Feed sorting places all active Signals before `resolved`, then `canceled` (`status_group_rank` before pin).
 - `resolved` and `canceled` Signals are readable on detail (read-only via `permission_hints`); `canceled` detail requires pole visibility for Manager/Staff; `archived` is not exposed on detail by default.
 - Resolve transition forces unpin (clears pin fields).
+- Automatic transition from active states to `resolved` when all linked Action Plan executions are terminal and at least one is `done` (triggered by mark-done or validate via `sync_signal_after_execution_change`).
 
 Not validated yet:
-- exact automatic transition from active states to `resolved` via Action completion
 - exact reopen behavior
 - exact archival timing
 - exact stored representation of confidence scores

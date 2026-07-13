@@ -75,7 +75,7 @@ def test_cancel_single_linked_execution_reopens_signal_to_open(
     assert signal.status == Signal.Status.OPEN
 
 
-def test_sync_does_not_resolve_when_one_done_one_canceled(
+def test_sync_resolves_when_one_done_one_canceled(
     owner_membership,
     business_unit,
     staff_membership,
@@ -107,7 +107,7 @@ def test_sync_does_not_resolve_when_one_done_one_canceled(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.status == Signal.Status.RESOLVED
 
 
 def test_sync_reopens_to_open_when_all_canceled_without_done(
@@ -169,7 +169,7 @@ def test_sync_does_not_reopen_resolved_signal_when_all_canceled(
     assert signal.status == Signal.Status.RESOLVED
 
 
-def test_mark_done_without_validation_does_not_resolve_linked_signal(
+def test_mark_done_without_validation_resolves_linked_signal(
     owner_membership,
     business_unit,
     staff_membership,
@@ -188,10 +188,10 @@ def test_mark_done_without_validation_does_not_resolve_linked_signal(
     )
 
     signal.refresh_from_db()
-    assert signal.status == Signal.Status.IN_PROGRESS
+    assert signal.status == Signal.Status.RESOLVED
 
 
-def test_validate_execution_does_not_resolve_linked_signal(
+def test_validate_execution_resolves_linked_signal(
     owner_membership,
     business_unit,
     staff_membership,
@@ -212,6 +212,29 @@ def test_validate_execution_does_not_resolve_linked_signal(
         actor_membership=owner_membership,
     )
 
+    signal.refresh_from_db()
+    assert signal.status == Signal.Status.RESOLVED
+
+
+def test_pending_validation_does_not_resolve_linked_signal(
+    owner_membership,
+    business_unit,
+    staff_membership,
+    signal,
+):
+    execution = _create_linked_execution(
+        owner_membership=owner_membership,
+        signal=signal,
+        title="Pending validation",
+        requires_validation=True,
+    )
+
+    pending = mark_action_plan_execution_done(
+        execution_id=execution.id,
+        actor_membership=owner_membership,
+    )
+
+    assert pending.status == ActionPlanExecution.Status.PENDING_VALIDATION
     signal.refresh_from_db()
     assert signal.status == Signal.Status.IN_PROGRESS
 
