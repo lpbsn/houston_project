@@ -6,6 +6,7 @@ import {
   allowsUnauthenticatedAccess,
   isPublicAuthRoute,
   resolveAuthenticatedLanding,
+  routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
   shouldRedirectUnauthenticatedPublicRoute,
   shouldShowAuthRoutingLoading,
@@ -170,6 +171,18 @@ describe('isPublicAuthRoute', () => {
     expect(isPublicAuthRoute({ kind: 'static', path: '/onboarding' })).toBe(false)
     expect(isPublicAuthRoute({ kind: 'static', path: '/' })).toBe(false)
     expect(isPublicAuthRoute({ kind: 'unknown', pathname: '/login' })).toBe(false)
+  })
+})
+
+describe('routeAllowsMissingActiveMembership', () => {
+  it('returns true for onboarding and install-app routes', () => {
+    expect(routeAllowsMissingActiveMembership('/pending-onboarding')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/install-app')).toBe(true)
+  })
+
+  it('returns false for operational routes', () => {
+    expect(routeAllowsMissingActiveMembership('/reporting')).toBe(false)
+    expect(routeAllowsMissingActiveMembership('/general')).toBe(false)
   })
 })
 

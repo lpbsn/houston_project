@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 
 type InstallAppPageProps = {
   onNavigate: (pathname: string, options?: { replace?: boolean }) => void
+  continuePath?: string
 }
 
 type InstallPlatformTabsProps = {
@@ -155,7 +156,7 @@ function InstallPlatformPanel({ platform }: InstallPlatformPanelProps) {
   )
 }
 
-export function InstallAppPage({ onNavigate }: InstallAppPageProps) {
+export function InstallAppPage({ onNavigate, continuePath }: InstallAppPageProps) {
   const [activePlatform, setActivePlatform] = useState<InstallPlatform>('ios')
   const HeroIcon = INSTALL_APP_HERO_ICON as ComponentType<{ className?: string }>
 
@@ -219,9 +220,13 @@ export function InstallAppPage({ onNavigate }: InstallAppPageProps) {
           type="button"
           variant="outline"
           className="h-11 min-w-[12rem] rounded-full border-[#E8E6DF] bg-white px-6 text-sm font-medium text-[#1a1a1a] hover:bg-[#F5F4F0]"
-          onClick={() => onNavigate('/general')}
+          onClick={() =>
+            continuePath
+              ? onNavigate(continuePath, { replace: true })
+              : onNavigate('/general')
+          }
         >
-          Retour à l&apos;application
+          {continuePath ? 'Continuer' : "Retour à l'application"}
         </Button>
       </div>
     </div>

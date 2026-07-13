@@ -37,7 +37,7 @@ import { PwaUpdateBanner } from '@/components/layout/pwa-update-banner'
 import { TerrainShell } from '@/components/layout/terrain-shell'
 import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
-import { bootstrapQueryKey, clearAuthState } from '@/features/auth/api'
+import { clearAuthState } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
 import { AppPage } from '@/features/auth/pages/app-page'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
@@ -46,7 +46,6 @@ import { LoginPage } from '@/features/auth/pages/login-page'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
-  resolveAuthenticatedLanding,
   routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
   shouldRedirectUnauthenticatedPublicRoute,
@@ -55,7 +54,6 @@ import {
 import { NoEstablishmentPage } from '@/features/auth/pages/no-establishment-page'
 import { SelectEstablishmentPage } from '@/features/auth/pages/select-establishment-page'
 import { resolvePendingLanding } from '@/features/auth/lib/pending-onboarding'
-import type { BootstrapResponse } from '@/features/auth/types'
 import { queryClient } from '@/lib/query-client'
 import { useChatAvailability, useChatConversationsQuery } from '@/features/chat/hooks'
 import { chatQueryKeys } from '@/features/chat/api'
@@ -250,11 +248,7 @@ function App() {
         <InvitationAcceptPage
           token={route.token}
           onAccepted={() => {
-            const bootstrap = queryClient.getQueryData<BootstrapResponse>(bootstrapQueryKey)
-            const path = bootstrap
-              ? resolveAuthenticatedLanding(bootstrap).path
-              : '/pending-onboarding'
-            navigate(path, { replace: true })
+            navigate('/install-app?from=invitation', { replace: true })
           }}
         />
       )
@@ -364,7 +358,14 @@ function App() {
     }
 
     if (route.path === '/install-app') {
-      return <LazyInstallAppPage onNavigate={navigate} />
+      const searchParams = new URLSearchParams(window.location.search)
+      const fromInvitation = searchParams.get('from') === 'invitation'
+      const continuePath =
+        fromInvitation && auth.bootstrap
+          ? (getAuthenticatedLandingPath(auth.bootstrap) ?? '/pending-onboarding')
+          : undefined
+
+      return <LazyInstallAppPage onNavigate={navigate} continuePath={continuePath} />
     }
 
     if (route.path === '/general') {

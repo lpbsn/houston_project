@@ -66,4 +66,12 @@ describe('InstallAppPage', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('/general')
   })
+
+  it('navigates to continuePath with replace when provided', () => {
+    render(createElement(InstallAppPage, { onNavigate, continuePath: '/pending-onboarding' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }))
+
+    expect(onNavigate).toHaveBeenCalledWith('/pending-onboarding', { replace: true })
+  })
 })

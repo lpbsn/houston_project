@@ -64,7 +64,8 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
     path === '/onboarding' ||
     path === '/pending-onboarding' ||
     path === '/select-establishment' ||
-    path === '/no-establishment'
+    path === '/no-establishment' ||
+    path === '/install-app'
   )
 }
 
