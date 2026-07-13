@@ -42,7 +42,10 @@ export function TerrainShell({
   const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]">
+    <div
+      data-terrain-shell-root
+      className="fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]"
+    >
       <div className="shrink-0">{topbar}</div>
       {updateBanner ? <div className="shrink-0">{updateBanner}</div> : null}
       <NetworkStatusBanner isOnline={isOnline} />

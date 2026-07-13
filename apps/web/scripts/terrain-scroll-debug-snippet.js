@@ -5,7 +5,7 @@
  */
 (function () {
   const bottomNav = document.querySelector('nav[aria-label="Navigation terrain"]')
-  const shell = bottomNav?.parentElement ?? null
+  const shell = document.querySelector('[data-terrain-shell-root]') ?? bottomNav?.parentElement ?? null
   const main = shell?.querySelector(':scope > main') ?? null
 
   const isScrollableOverflow = (el) => {

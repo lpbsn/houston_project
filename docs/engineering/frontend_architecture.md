@@ -22,7 +22,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 
 ## Layout
 
-- **Terrain shell** — `TerrainShell` (`h-dvh`, topbar, scrollable main, optional bottom nav)
+- **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav)
 - **App shell** — legacy desktop shell for non-terrain routes (`/app`, auth pages)
 
 ## Server state

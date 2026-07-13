@@ -74,8 +74,10 @@ describe('TerrainShell', () => {
 
     const main = screen.getByRole('main')
     const shell = main.parentElement
+    expect(shell?.className).toContain('fixed')
     expect(shell?.className).toContain('h-dvh')
     expect(shell?.className).toContain('overflow-hidden')
+    expect(shell?.getAttribute('data-terrain-shell-root')).not.toBeNull()
 
     const updateBannerSlot = main.previousElementSibling
     expect(updateBannerSlot?.className).toContain('shrink-0')
