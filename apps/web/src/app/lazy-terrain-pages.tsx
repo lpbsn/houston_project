@@ -48,6 +48,12 @@ export const LazyProfileSwitchEstablishmentPage = lazy(() =>
   })),
 )
 
+export const LazyInstallAppPage = lazy(() =>
+  import('@/features/pwa/pages/install-app-page').then((module) => ({
+    default: module.InstallAppPage,
+  })),
+)
+
 export const LazyTeamPage = lazy(() =>
   import('@/features/auth/pages/team-page').then((module) => ({
     default: module.TeamPage,

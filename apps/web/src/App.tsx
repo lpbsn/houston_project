@@ -13,6 +13,7 @@ import {
   LazyExecutionFeedPage,
   LazyProfilePage,
   LazyProfileSwitchEstablishmentPage,
+  LazyInstallAppPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
   LazyReportPage,
@@ -353,6 +354,10 @@ function App() {
 
     if (route.path === '/general/switch-establishment') {
       return <LazyProfileSwitchEstablishmentPage onNavigate={navigate} />
+    }
+
+    if (route.path === '/install-app') {
+      return <LazyInstallAppPage onNavigate={navigate} />
     }
 
     if (route.path === '/general') {

@@ -449,4 +449,17 @@ describe('ProfilePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Changer d'établissement/i }))
     expect(onNavigate).toHaveBeenCalledWith('/general/switch-establishment')
   })
+
+  it('shows install app card and navigates to install guide', () => {
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.getByRole('button', { name: /Installer l'application/i })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Installer l'application/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/install-app')
+  })
 })
