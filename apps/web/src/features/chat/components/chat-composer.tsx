@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { SendHorizonal } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 const MAX_MESSAGE_LENGTH = 2000
@@ -51,7 +52,11 @@ export function ChatComposer({ disabled = false, onSend }: ChatComposerProps) {
         <Button
           type="button"
           size="icon"
-          className="h-11 w-11 shrink-0 rounded-full bg-[#1B4FD8] text-white hover:bg-[#1B4FD8]/95"
+          className={cn(
+            'h-11 w-11 shrink-0 rounded-full text-white',
+            terrainBrandAction.bg,
+            terrainBrandAction.hover,
+          )}
           disabled={disabled || !draft.trim()}
           onClick={handleSubmit}
           aria-label="Envoyer"

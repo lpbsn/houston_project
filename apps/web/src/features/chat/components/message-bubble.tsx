@@ -40,17 +40,19 @@ export function MessageBubble({ message, isOwn, onRetry }: MessageBubbleProps) {
     <div className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[85%] rounded-2xl px-3 py-2 shadow-sm',
-          isOwn ? 'rounded-br-md bg-[#1B4FD8] text-white' : 'rounded-bl-md bg-white text-[#1a1a1a]',
+          'max-w-[80%] rounded-[18px] px-3.5 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.08)]',
+          isOwn
+            ? 'bg-[#3A7A96] text-white shadow-[0_1px_3px_rgba(58,122,150,0.2)]'
+            : 'border border-[#E0E0E0] bg-white text-[#1a1a1a]',
           isFailed && 'border border-[#E24B4A]/40',
         )}
       >
         {!isOwn ? (
-          <p className="mb-1 text-[11px] font-semibold text-[#1B4FD8]">
+          <p className="mb-1 text-[13px] font-semibold text-[#3A7A96]">
             {parsed.authorDisplayName}
           </p>
         ) : null}
-        <p className="whitespace-pre-wrap break-words text-sm">{parsed.body}</p>
+        <p className="whitespace-pre-wrap break-words text-[15px]">{parsed.body}</p>
         <div
           className={cn(
             'mt-1 flex items-center justify-end gap-2 text-[10px]',
