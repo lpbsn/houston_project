@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from 'react'
+import { useEffect, type PropsWithChildren, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
@@ -41,8 +41,21 @@ export function TerrainShell({
   const operationalRealtime = useOptionalOperationalRealtime()
   const operationalConnectionStatus = operationalRealtime?.connectionStatus ?? 'idle'
 
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prevHtmlOverflow = html.style.overflow
+    const prevBodyOverflow = body.style.overflow
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    return () => {
+      html.style.overflow = prevHtmlOverflow
+      body.style.overflow = prevBodyOverflow
+    }
+  }, [])
+
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]">
+    <div className="mx-auto flex h-dvh max-h-dvh w-full max-w-md flex-col overflow-hidden overscroll-none bg-[#F5F4F0]">
       <div className="shrink-0">{topbar}</div>
       {updateBanner ? <div className="shrink-0">{updateBanner}</div> : null}
       <NetworkStatusBanner isOnline={isOnline} />
