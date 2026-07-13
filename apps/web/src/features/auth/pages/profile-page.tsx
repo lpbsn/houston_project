@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react'
-import { ArrowLeftRight, Building2, ChevronRight, Library, Users } from 'lucide-react'
+import { ArrowLeftRight, Building2, ChevronRight, Download, Library, Users } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
 import {
@@ -215,6 +215,13 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             onClick={() => onNavigate?.('/general/switch-establishment')}
           />
         ) : null}
+        <ProfileManagementNavCard
+          icon={Download}
+          iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+          title="Installer l'application"
+          subtitle="Ajoutez Spore à votre écran d'accueil"
+          onClick={() => onNavigate?.('/install-app')}
+        />
         <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
           <TerrainSwitch
             label="Notifications"

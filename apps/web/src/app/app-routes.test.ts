@@ -70,6 +70,13 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses install app route', () => {
+    expect(parseAppRoute('/install-app')).toEqual({
+      kind: 'static',
+      path: '/install-app',
+    })
+  })
+
   it('parses operational config route', () => {
     expect(parseAppRoute('/app/operational-config')).toEqual({
       kind: 'static',
