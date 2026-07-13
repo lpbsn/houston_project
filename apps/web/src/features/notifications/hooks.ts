@@ -13,6 +13,7 @@ import {
 import { resolveNotificationPath } from './lib/notification-navigation'
 import type { NotificationItem, NotificationPreferencesUpdate } from './types'
 
+
 export function useNotificationsInfiniteQuery(
   establishmentId: string | null,
   filter: NotificationListFilter = 'all',
@@ -39,6 +40,11 @@ export function useNotificationsInfiniteQuery(
     },
     enabled: Boolean(establishmentId),
   })
+}
+
+export function useNotificationsUnreadCount(establishmentId: string | null) {
+  const query = useNotificationsInfiniteQuery(establishmentId, 'all')
+  return query.data?.pages[0]?.counts.unread
 }
 
 type UseNotificationSelectionOptions = {

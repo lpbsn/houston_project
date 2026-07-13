@@ -14,7 +14,7 @@ const markAllReadMutate = vi.fn()
 const onNavigate = vi.fn()
 
 let queryFilter = 'all'
-let queryState = {
+const defaultQueryState = {
   isLoading: false,
   isError: false,
   isSuccess: true,
@@ -24,7 +24,11 @@ let queryState = {
     pages: [buildNotificationListResponse()],
     pageParams: [undefined],
   },
+  refetch,
+  fetchNextPage,
 }
+let allQueryState = { ...defaultQueryState }
+let filteredQueryState = { ...defaultQueryState }
 
 vi.mock('./hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./hooks')>()
@@ -32,12 +36,9 @@ vi.mock('./hooks', async (importOriginal) => {
     ...actual,
     useNotificationsInfiniteQuery: (_establishmentId: string, filter = 'all') => {
       queryFilter = filter
-      return {
-        ...queryState,
-        refetch,
-        fetchNextPage,
-      }
+      return filter === 'all' ? allQueryState : filteredQueryState
     },
+    useNotificationsUnreadCount: () => allQueryState.data?.pages[0]?.counts.unread,
     useNotificationSelection: (
       _establishmentId: string | null,
       { onNavigate: navigate }: { onNavigate: (pathname: string) => void },
@@ -84,7 +85,7 @@ describe('NotificationsCenterPage', () => {
     onNavigate.mockClear()
     queryFilter = 'all'
 
-    queryState = {
+    allQueryState = {
       isLoading: false,
       isError: false,
       isSuccess: true,
@@ -106,7 +107,31 @@ describe('NotificationsCenterPage', () => {
         ],
         pageParams: [undefined],
       },
+      refetch,
+      fetchNextPage,
     }
+    filteredQueryState = { ...allQueryState }
+  })
+
+  it('shows loading label while unread count is unknown', () => {
+    allQueryState = {
+      isLoading: true,
+      isError: false,
+      isSuccess: false,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      data: undefined,
+      refetch,
+      fetchNextPage,
+    }
+    filteredQueryState = { ...allQueryState }
+
+    render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
+
+    expect(screen.getByText('Chargement…')).toBeTruthy()
+    expect(screen.queryByText('0 notification non lue')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Tout marquer comme lu' })).toBeNull()
+    expect(screen.queryByText('2')).toBeNull()
   })
 
   it('renders page title and unread count', () => {
@@ -151,13 +176,14 @@ describe('NotificationsCenterPage', () => {
   })
 
   it('shows unread-specific empty message when filter is unread', () => {
-    queryState = {
-      ...queryState,
+    allQueryState = {
+      ...allQueryState,
       data: {
         pages: [buildNotificationListResponse({ items: [], counts: { unread: 0 } })],
         pageParams: [undefined],
       },
     }
+    filteredQueryState = { ...allQueryState }
 
     render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
 
@@ -165,6 +191,27 @@ describe('NotificationsCenterPage', () => {
     expect(screen.getByText('0 notification non lue')).toBeTruthy()
     expect(screen.getByText('Vous êtes à jour.')).toBeTruthy()
     expect(screen.queryByText('Aucune notification non lue')).toBeNull()
+  })
+
+  it('keeps unread count stable while filtered list is loading', () => {
+    render(<NotificationsCenterPage establishmentId="est-1" onNavigate={onNavigate} />)
+
+    filteredQueryState = {
+      isLoading: true,
+      isError: false,
+      isSuccess: false,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      data: undefined,
+      refetch,
+      fetchNextPage,
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: /Non lues/ }))
+    expect(queryFilter).toBe('unread')
+    expect(screen.getByText('2 notifications non lues')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Tout marquer comme lu' })).toBeTruthy()
+    expect(screen.getByText('2')).toBeTruthy()
   })
 
   it('navigates and marks notification read on click', () => {

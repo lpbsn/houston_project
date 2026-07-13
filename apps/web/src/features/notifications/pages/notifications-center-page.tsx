@@ -8,6 +8,7 @@ import {
   useMarkAllNotificationsReadMutation,
   useNotificationSelection,
   useNotificationsInfiniteQuery,
+  useNotificationsUnreadCount,
 } from '@/features/notifications/hooks'
 import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,8 @@ export function NotificationsCenterPage({
   const [filter, setFilter] = useState<NotificationListFilter>('all')
 
   const notificationsQuery = useNotificationsInfiniteQuery(establishmentId, filter)
+  const unreadCount = useNotificationsUnreadCount(establishmentId)
+  const hasUnread = unreadCount !== undefined && unreadCount > 0
   const markAllReadMutation = useMarkAllNotificationsReadMutation(establishmentId)
   const { handleSelectNotification } = useNotificationSelection(establishmentId, { onNavigate })
 
@@ -45,7 +48,6 @@ export function NotificationsCenterPage({
     notificationsQuery.isSuccess
       ? notificationsQuery.data.pages.flatMap((page) => page.items)
       : []
-  const unreadCount = notificationsQuery.data?.pages[0]?.counts.unread ?? 0
 
   const handleMarkAllRead = useCallback(() => {
     void markAllReadMutation.mutate()
@@ -56,8 +58,10 @@ export function NotificationsCenterPage({
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-[#1a1a1a]">Centre de notifications</h1>
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm text-[#7D7B75]">{formatUnreadCountLabel(unreadCount)}</p>
-          {unreadCount > 0 ? (
+          <p className="text-sm text-[#7D7B75]">
+            {unreadCount === undefined ? 'Chargement…' : formatUnreadCountLabel(unreadCount)}
+          </p>
+          {hasUnread ? (
             <Button
               type="button"
               variant="outline"
@@ -87,7 +91,7 @@ export function NotificationsCenterPage({
         >
           <span className="flex items-center gap-1.5">
             Non lues
-            {unreadCount > 0 ? (
+            {hasUnread ? (
               <span
                 className={cn(
                   'inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white',
