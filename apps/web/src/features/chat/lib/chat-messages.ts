@@ -1,6 +1,11 @@
 import type { ChatMessage, LocalChatMessage } from '../types'
 
-export function compareChatMessagesAscending(left: ChatMessage, right: ChatMessage): number {
+export type ChatMessageOrderKey = Pick<ChatMessage, 'id' | 'created_at'>
+
+export function compareChatMessagesAscending(
+  left: ChatMessageOrderKey,
+  right: ChatMessageOrderKey,
+): number {
   if (left.created_at === right.created_at) {
     return left.id.localeCompare(right.id)
   }

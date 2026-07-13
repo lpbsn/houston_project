@@ -1,5 +1,7 @@
 import type { ChatConversationListResponse, ChatMessage } from '../types'
 
+import { compareChatMessagesAscending } from './chat-messages'
+
 export function shouldMarkConversationUnread(options: {
   authorMembershipId: string
   viewerMembershipId: string | null
@@ -58,6 +60,12 @@ export function patchConversationsOnMessageCreated(
       return item
     }
     if (item.last_message_preview?.id === message.id) {
+      return item
+    }
+    if (
+      item.last_message_preview &&
+      compareChatMessagesAscending(item.last_message_preview, message) >= 0
+    ) {
       return item
     }
 
