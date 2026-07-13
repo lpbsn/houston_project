@@ -56,11 +56,12 @@ export function BottomMobileNav({
       aria-label="Navigation terrain"
       className={cn(
         'relative z-20 w-full shrink-0 overflow-visible border-t border-[#E8E6DF] bg-white',
+        'pb-[max(0.25rem,env(safe-area-inset-bottom))]',
         className,
       )}
     >
       <ul
-        className="grid px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1"
+        className="grid h-11 px-2"
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
         {visibleItems.map((item) => {
@@ -69,7 +70,7 @@ export function BottomMobileNav({
 
           if (item.isPrimary) {
             return (
-              <li key={item.path} className="flex items-start justify-center">
+              <li key={item.path} className="relative h-11">
                 <NavLink
                   href={item.path}
                   aria-label="Nouvelle observation"
@@ -78,26 +79,22 @@ export function BottomMobileNav({
                     event.preventDefault()
                     navigate('/reporting')
                   }}
-                  className="flex min-h-11 min-w-11 flex-col items-center justify-start"
+                  className={cn(
+                    'absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-[calc(50%+0.5rem)] items-center justify-center rounded-full border-4 border-[#F5F4F0] text-white',
+                    terrainBrandAction.bg,
+                    terrainBrandAction.shadow,
+                    isActive && cn('ring-2', terrainBrandAction.ring),
+                  )}
                   {...tapProps}
                 >
-                  <span
-                    className={cn(
-                      'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-full border-4 border-[#F5F4F0] text-white',
-                      terrainBrandAction.bg,
-                      terrainBrandAction.shadow,
-                      isActive && cn('ring-2', terrainBrandAction.ring),
-                    )}
-                  >
-                    <Icon className="h-6 w-6" />
-                  </span>
+                  <Icon className="h-6 w-6" />
                 </NavLink>
               </li>
             )
           }
 
           return (
-            <li key={item.path} className="flex items-center justify-center">
+            <li key={item.path} className="flex h-11 items-center justify-center">
               <NavLink
                 href={item.path}
                 aria-current={isActive ? 'page' : undefined}

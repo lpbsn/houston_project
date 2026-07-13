@@ -14,11 +14,8 @@ export type TerrainMainScroll = 'auto' | 'hidden'
 /** Detail topbar: centered title (signal) vs title below back (action). */
 export type TerrainDetailTitleLayout = 'centered' | 'belowBack'
 
-export type TerrainTopbarSize = 'default' | 'compact'
-
 export type TerrainRouteConfig = {
   topbarVariant: 'hub' | 'detail'
-  topbarSize?: TerrainTopbarSize
   title?: string
   pageTitle?: string
   detailTitleLayout?: TerrainDetailTitleLayout
@@ -204,7 +201,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/reporting') {
     return {
       topbarVariant: 'hub',
-      topbarSize: 'compact',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'hidden',
@@ -234,7 +230,6 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/chat') {
     return {
       topbarVariant: 'hub',
-      topbarSize: 'compact',
       pageTitle: 'Discussions',
       showBottomNav: true,
       activeNavPath: '/chat',
@@ -353,15 +348,11 @@ export function resolveTerrainTopbarShowBottomBorder(
     return config.showTopbarBottomBorder
   }
 
-  return (
-    route.kind !== 'signal-action-create' &&
-    !(
-      route.kind === 'static' &&
-      (route.path === '/signals' ||
-        route.path === '/execution' ||
-        route.path === '/general')
-    )
-  )
+  if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
+    return false
+  }
+
+  return route.kind !== 'signal-action-create'
 }
 
 /** Stable key for terrain page transitions (AnimatePresence). Excludes viewMode and query state. */

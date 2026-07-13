@@ -673,7 +673,6 @@ function App() {
             terrainConfig.hideTopbar ? null : (
               <TerrainTopbar
                 variant={terrainConfig.topbarVariant}
-                topbarSize={terrainConfig.topbarSize}
                 title={terrainConfig.title}
                 pageTitle={terrainConfig.pageTitle}
                 detailTitleLayout={terrainConfig.detailTitleLayout}

@@ -5,6 +5,7 @@ import {
   getTerrainRouteConfig,
   isProtectedRoute,
   requiresActiveMembership,
+  resolveTerrainTopbarShowBottomBorder,
   usesTerrainShell,
 } from '@/app/terrain-routes'
 
@@ -57,7 +58,6 @@ describe('getTerrainRouteConfig', () => {
   it('configures hub routes with bottom nav, page title, and main scroll', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/reporting' })).toEqual({
       topbarVariant: 'hub',
-      topbarSize: 'compact',
       showBottomNav: true,
       activeNavPath: '/reporting',
       mainScroll: 'hidden',
@@ -81,7 +81,6 @@ describe('getTerrainRouteConfig', () => {
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/chat' })).toEqual({
       topbarVariant: 'hub',
-      topbarSize: 'compact',
       pageTitle: 'Discussions',
       showBottomNav: true,
       activeNavPath: '/chat',
@@ -239,6 +238,25 @@ describe('getTerrainRouteConfig', () => {
       showBottomNav: false,
       mainScroll: 'auto',
     })
+  })
+})
+
+describe('resolveTerrainTopbarShowBottomBorder', () => {
+  it('returns false for all terrain hub routes', () => {
+    for (const path of ['/reporting', '/signals', '/execution', '/chat', '/general'] as const) {
+      const route = { kind: 'static' as const, path }
+      expect(resolveTerrainTopbarShowBottomBorder(route, getTerrainRouteConfig(route))).toBe(false)
+    }
+  })
+
+  it('returns true for detail routes such as signal detail', () => {
+    const route = { kind: 'signal-detail' as const, signalId: 'abc' }
+    expect(resolveTerrainTopbarShowBottomBorder(route, getTerrainRouteConfig(route))).toBe(true)
+  })
+
+  it('returns false for signal action create', () => {
+    const route = { kind: 'signal-action-create' as const, signalId: 'abc' }
+    expect(resolveTerrainTopbarShowBottomBorder(route, getTerrainRouteConfig(route))).toBe(false)
   })
 })
 

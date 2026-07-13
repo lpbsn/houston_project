@@ -1,15 +1,13 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
-import type { TerrainDetailTitleLayout, TerrainTopbarSize } from '@/app/terrain-routes'
-import { HoustonLogo } from '@/components/domain/houston-logo'
+import type { TerrainDetailTitleLayout } from '@/app/terrain-routes'
 import { Button } from '@/components/ui/button'
 import { terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 type TerrainTopbarProps = {
   variant: 'hub' | 'detail'
-  topbarSize?: TerrainTopbarSize
   title?: string
   pageTitle?: string
   detailTitleLayout?: TerrainDetailTitleLayout
@@ -36,7 +34,6 @@ function DetailTrailingSlot({ trailing }: { trailing?: ReactNode }) {
 
 export function TerrainTopbar({
   variant,
-  topbarSize = 'default',
   title,
   pageTitle,
   detailTitleLayout = 'centered',
@@ -53,25 +50,15 @@ export function TerrainTopbar({
           'pt-[max(0.75rem,env(safe-area-inset-top))] pb-1.5',
         )}
       >
-        <div
-          className={cn(
-            'grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3',
-            topbarSize === 'compact' ? 'h-14' : 'h-20',
-          )}
-        >
+        <div className="flex h-14 items-center justify-between gap-3 px-3">
           {pageTitle ? (
-            <h1 className="min-w-0 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
+            <h1 className="min-w-0 flex-1 truncate text-left text-2xl font-semibold leading-tight text-[#1a1a1a]">
               {pageTitle}
             </h1>
           ) : (
-            <span aria-hidden />
+            <span className="min-w-0 flex-1" aria-hidden />
           )}
-          <div className="flex shrink-0 justify-center">
-            <HoustonLogo />
-          </div>
-          <div className="flex justify-end">
-            <TrailingSlot trailing={trailing} />
-          </div>
+          <TrailingSlot trailing={trailing} />
         </div>
       </header>
     )

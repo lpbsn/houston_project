@@ -10,8 +10,8 @@ describe('TerrainTopbar', () => {
     cleanup()
   })
 
-  it('renders hub page title, logo, and trailing', () => {
-    render(
+  it('renders hub page title and trailing without logo', () => {
+    const { container } = render(
       <TerrainTopbar
         variant="hub"
         pageTitle="Exécution"
@@ -20,22 +20,18 @@ describe('TerrainTopbar', () => {
     )
 
     expect(screen.getByRole('heading', { level: 1, name: 'Exécution' })).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Houston' })).toBeTruthy()
+    expect(screen.queryByRole('img', { name: 'Houston' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeTruthy()
+    expect(container.querySelector('.grid-cols-\\[1fr_auto_1fr\\]')).toBeNull()
+    expect(container.querySelector('.h-14')).toBeTruthy()
   })
 
-  it('renders hub without page title', () => {
+  it('renders hub without page title using a spacer', () => {
     const { container } = render(<TerrainTopbar variant="hub" />)
 
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
-    expect(screen.getByRole('img', { name: 'Houston' })).toBeTruthy()
+    expect(screen.queryByRole('img', { name: 'Houston' })).toBeNull()
     expect(container.querySelector('span[aria-hidden]')).toBeTruthy()
-  })
-
-  it('renders compact hub with reduced height', () => {
-    const { container } = render(<TerrainTopbar variant="hub" topbarSize="compact" />)
-
-    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     expect(container.querySelector('.h-14')).toBeTruthy()
   })
 
