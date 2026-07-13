@@ -47,11 +47,10 @@ Chat V1 is **not** a single establishment-wide general chat room.
 ### Unread (minimal)
 
 - Per-participant unread only ; no read receipts, no delivered status, no typing indicator.
-- A conversation is unread for the current membership when :
-  - a last message exists ;
-  - the last message was not sent by the current membership ;
-  - the participant has not marked the conversation seen through `POST .../seen/`.
+- Conversation list items expose `unread_count` : SQL `COUNT` of messages from **other** memberships strictly after the participant read cursor (`last_seen_message_id` + `last_seen_message_created_at`).
+- `unread` on list items is derived server-side as `unread_count > 0` (single source of truth for the boolean).
 - Seen state uses `last_seen_message_id` (UUID, **no FK**) + `last_seen_message_created_at` so unread survives message purge.
+- Client realtime cache may increment `unread_count` optimistically on `message.created` ; reset happens only after `POST .../seen/` succeeds and the conversations list refetches.
 - **Forbidden** : `ChatMessageRead`, visible read receipts, double-check marks, “vu/lu” UI.
 
 ### Realtime (Chat-only)

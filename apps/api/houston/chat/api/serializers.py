@@ -51,6 +51,7 @@ class ChatConversationListItemSerializer(serializers.Serializer):
     type = serializers.CharField()
     title = serializers.CharField(allow_blank=True)
     unread = serializers.BooleanField()
+    unread_count = serializers.IntegerField(min_value=0)
     last_message_at = serializers.DateTimeField(allow_null=True)
     last_message_preview = ChatMessagePreviewSerializer(allow_null=True)
     participants = ChatParticipantSummarySerializer(many=True)

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { User, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -98,10 +99,11 @@ export function ChatCreateSheet({
             <li>
               <button
                 type="button"
-                className="flex min-h-11 w-full items-center rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5 text-left text-sm font-medium text-[#1a1a1a]"
+                className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5 text-sm font-medium text-[#1a1a1a]"
                 onClick={() => setMode('dm')}
               >
                 Message direct
+                <User className="h-4 w-4 shrink-0 text-[#7D7B75]" aria-hidden="true" />
               </button>
             </li>
           ) : null}
@@ -109,10 +111,11 @@ export function ChatCreateSheet({
             <li>
               <button
                 type="button"
-                className="flex min-h-11 w-full items-center rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5 text-left text-sm font-medium text-[#1a1a1a]"
+                className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-[#E8E6DF] bg-[#F5F4F0] px-3 py-2.5 text-sm font-medium text-[#1a1a1a]"
                 onClick={() => setMode('group')}
               >
                 Groupe
+                <Users className="h-4 w-4 shrink-0 text-[#7D7B75]" aria-hidden="true" />
               </button>
             </li>
           ) : null}

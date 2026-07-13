@@ -1,5 +1,7 @@
 import type { ChatConversationListResponse, ChatMessage } from '../types'
 
+import { compareChatMessagesAscending } from './chat-messages'
+
 export function shouldMarkConversationUnread(options: {
   authorMembershipId: string
   viewerMembershipId: string | null
@@ -45,7 +47,7 @@ export function patchConversationsOnMessageCreated(
   }
 
   const { conversationId, message, viewerMembershipId, activeConversationId } = options
-  const unread = shouldMarkConversationUnread({
+  const shouldIncrementUnread = shouldMarkConversationUnread({
     authorMembershipId: message.author_membership_id,
     viewerMembershipId,
     conversationId,
@@ -53,16 +55,30 @@ export function patchConversationsOnMessageCreated(
   })
   const preview = buildLastMessagePreview(message)
 
-  const items = current.items.map((item) =>
-    item.id === conversationId
-      ? {
-          ...item,
-          unread,
-          last_message_at: message.created_at,
-          last_message_preview: preview,
-        }
-      : item,
-  )
+  const items = current.items.map((item) => {
+    if (item.id !== conversationId) {
+      return item
+    }
+    if (item.last_message_preview?.id === message.id) {
+      return item
+    }
+    if (
+      item.last_message_preview &&
+      compareChatMessagesAscending(item.last_message_preview, message) >= 0
+    ) {
+      return item
+    }
+
+    const unreadCount = shouldIncrementUnread ? item.unread_count + 1 : item.unread_count
+
+    return {
+      ...item,
+      unread: unreadCount > 0,
+      unread_count: unreadCount,
+      last_message_at: message.created_at,
+      last_message_preview: preview,
+    }
+  })
 
   const sorted = [...items].sort((left, right) => {
     const leftTime = left.last_message_at ?? ''

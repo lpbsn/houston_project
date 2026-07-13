@@ -14,6 +14,7 @@ const sampleConversation = (
   type: 'dm',
   title: '',
   unread: false,
+  unread_count: 0,
   last_message_at: '2026-06-01T10:00:00.000Z',
   last_message_preview: null,
   participants: [],
@@ -64,7 +65,7 @@ describe('chat-conversations-cache', () => {
     ).toBe(false)
   })
 
-  it('patches preview, unread, and re-sorts conversations', () => {
+  it('patches preview, unread_count, unread, and re-sorts conversations', () => {
     const message = sampleMessage()
     const result = patchConversationsOnMessageCreated(
       {
@@ -82,14 +83,30 @@ describe('chat-conversations-cache', () => {
     )
 
     expect(result?.items[0]?.id).toBe('conv-1')
+    expect(result?.items[0]?.unread_count).toBe(1)
     expect(result?.items[0]?.unread).toBe(true)
     expect(result?.items[0]?.last_message_preview).toEqual(buildLastMessagePreview(message))
     expect(result?.items[0]?.last_message_at).toBe(message.created_at)
   })
 
-  it('keeps active conversation unread false when another user sends a message', () => {
+  it('increments unread_count for subsequent inactive messages', () => {
+    const firstPatch = patchConversationsOnMessageCreated(
+      { items: [sampleConversation({ unread_count: 1, unread: true })] },
+      {
+        conversationId: 'conv-1',
+        message: sampleMessage({ id: 'msg-2', created_at: '2026-06-09T13:00:00.000Z' }),
+        viewerMembershipId: 'mbr-viewer',
+        activeConversationId: null,
+      },
+    )
+
+    expect(firstPatch?.items[0]?.unread_count).toBe(2)
+    expect(firstPatch?.items[0]?.unread).toBe(true)
+  })
+
+  it('keeps active conversation unread_count unchanged when another user sends a message', () => {
     const result = patchConversationsOnMessageCreated(
-      { items: [sampleConversation()] },
+      { items: [sampleConversation({ unread_count: 3, unread: true })] },
       {
         conversationId: 'conv-1',
         message: sampleMessage(),
@@ -98,7 +115,155 @@ describe('chat-conversations-cache', () => {
       },
     )
 
-    expect(result?.items[0]?.unread).toBe(false)
+    expect(result?.items[0]?.unread_count).toBe(3)
+    expect(result?.items[0]?.unread).toBe(true)
+  })
+
+  it('does not reset unread_count for own messages', () => {
+    const result = patchConversationsOnMessageCreated(
+      { items: [sampleConversation({ unread_count: 3, unread: true })] },
+      {
+        conversationId: 'conv-1',
+        message: sampleMessage({ author_membership_id: 'mbr-viewer' }),
+        viewerMembershipId: 'mbr-viewer',
+        activeConversationId: null,
+      },
+    )
+
+    expect(result?.items[0]?.unread_count).toBe(3)
+    expect(result?.items[0]?.unread).toBe(true)
+  })
+
+  it('ignores duplicate websocket events for the same message id', () => {
+    const message = sampleMessage()
+    const current = {
+      items: [
+        sampleConversation({
+          unread_count: 1,
+          unread: true,
+          last_message_preview: buildLastMessagePreview(message),
+        }),
+      ],
+    }
+
+    const result = patchConversationsOnMessageCreated(current, {
+      conversationId: 'conv-1',
+      message,
+      viewerMembershipId: 'mbr-viewer',
+      activeConversationId: null,
+    })
+
+    expect(result).toEqual(current)
+  })
+
+  it('ignores out-of-order message.created events with an older timestamp', () => {
+    const newerPreview = buildLastMessagePreview(
+      sampleMessage({ id: 'msg-2', body: 'Newer', created_at: '2026-06-09T13:00:00.000Z' }),
+    )
+    const current = {
+      items: [
+        sampleConversation({
+          id: 'conv-2',
+          last_message_at: '2026-06-09T14:00:00.000Z',
+          last_message_preview: buildLastMessagePreview(
+            sampleMessage({ id: 'msg-other', created_at: '2026-06-09T14:00:00.000Z' }),
+          ),
+        }),
+        sampleConversation({
+          unread_count: 2,
+          unread: true,
+          last_message_at: '2026-06-09T13:00:00.000Z',
+          last_message_preview: newerPreview,
+        }),
+      ],
+    }
+
+    const result = patchConversationsOnMessageCreated(current, {
+      conversationId: 'conv-1',
+      message: sampleMessage({ id: 'msg-1', created_at: '2026-06-09T12:00:00.000Z' }),
+      viewerMembershipId: 'mbr-viewer',
+      activeConversationId: null,
+    })
+
+    expect(result).toEqual(current)
+    expect(result?.items.map((item) => item.id)).toEqual(['conv-2', 'conv-1'])
+    expect(result?.items[1]?.unread_count).toBe(2)
+    expect(result?.items[1]?.last_message_preview).toEqual(newerPreview)
+    expect(result?.items[1]?.last_message_at).toBe('2026-06-09T13:00:00.000Z')
+  })
+
+  it('ignores out-of-order message.created events with the same timestamp and lower id', () => {
+    const timestamp = '2026-06-09T13:00:00.000Z'
+    const cachedPreview = buildLastMessagePreview(
+      sampleMessage({ id: 'msg-b', body: 'Cached', created_at: timestamp }),
+    )
+    const current = {
+      items: [
+        sampleConversation({
+          id: 'conv-2',
+          last_message_at: '2026-06-09T14:00:00.000Z',
+          last_message_preview: buildLastMessagePreview(
+            sampleMessage({ id: 'msg-other', created_at: '2026-06-09T14:00:00.000Z' }),
+          ),
+        }),
+        sampleConversation({
+          unread_count: 2,
+          unread: true,
+          last_message_at: timestamp,
+          last_message_preview: cachedPreview,
+        }),
+      ],
+    }
+
+    const result = patchConversationsOnMessageCreated(current, {
+      conversationId: 'conv-1',
+      message: sampleMessage({ id: 'msg-a', body: 'Older tie', created_at: timestamp }),
+      viewerMembershipId: 'mbr-viewer',
+      activeConversationId: null,
+    })
+
+    expect(result).toEqual(current)
+    expect(result?.items.map((item) => item.id)).toEqual(['conv-2', 'conv-1'])
+    expect(result?.items[1]?.unread_count).toBe(2)
+    expect(result?.items[1]?.last_message_preview).toEqual(cachedPreview)
+    expect(result?.items[1]?.last_message_at).toBe(timestamp)
+  })
+
+  it('applies message.created events with the same timestamp and higher id', () => {
+    const timestamp = '2026-06-09T13:00:00.000Z'
+    const incoming = sampleMessage({ id: 'msg-b', body: 'Newer tie', created_at: timestamp })
+    const current = {
+      items: [
+        sampleConversation({
+          id: 'conv-2',
+          last_message_at: '2026-06-09T14:00:00.000Z',
+          last_message_preview: buildLastMessagePreview(
+            sampleMessage({ id: 'msg-other', created_at: '2026-06-09T14:00:00.000Z' }),
+          ),
+        }),
+        sampleConversation({
+          unread_count: 2,
+          unread: true,
+          last_message_at: timestamp,
+          last_message_preview: buildLastMessagePreview(
+            sampleMessage({ id: 'msg-a', body: 'Cached', created_at: timestamp }),
+          ),
+        }),
+      ],
+    }
+
+    const result = patchConversationsOnMessageCreated(current, {
+      conversationId: 'conv-1',
+      message: incoming,
+      viewerMembershipId: 'mbr-viewer',
+      activeConversationId: null,
+    })
+
+    expect(result?.items[1]?.unread_count).toBe(3)
+    expect(result?.items[1]?.unread).toBe(true)
+    expect(result?.items[1]?.last_message_preview).toEqual(buildLastMessagePreview(incoming))
+    expect(result?.items[1]?.last_message_at).toBe(timestamp)
+    expect(result?.items.map((item) => item.id)).toEqual(['conv-2', 'conv-1'])
   })
 
   it('does not expose read receipt fields in preview helper', () => {

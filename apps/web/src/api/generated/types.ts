@@ -2229,6 +2229,7 @@ export interface components {
             type: string;
             title: string;
             unread: boolean;
+            unread_count: number;
             /** Format: date-time */
             last_message_at: string | null;
             last_message_preview: components["schemas"]["ChatMessagePreview"] | null;

@@ -6899,6 +6899,9 @@ components:
           type: string
         unread:
           type: boolean
+        unread_count:
+          type: integer
+          minimum: 0
         last_message_at:
           type: string
           format: date-time
@@ -6919,6 +6922,7 @@ components:
       - title
       - type
       - unread
+      - unread_count
     ChatConversationListResponse:
       type: object
       properties:

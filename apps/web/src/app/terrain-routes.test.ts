@@ -76,10 +76,11 @@ describe('getTerrainRouteConfig', () => {
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/chat' })).toEqual({
       topbarVariant: 'hub',
-      pageTitle: 'Chat',
+      topbarSize: 'compact',
+      pageTitle: 'Discussions',
       showBottomNav: true,
       activeNavPath: '/chat',
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     })
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/general' })).toEqual({

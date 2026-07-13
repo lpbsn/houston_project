@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   filterConversationsByQuery,
+  formatUnreadBadgeCount,
   getConversationTitle,
-  groupConversationsByType,
+  getUnreadCountAriaLabel,
   hasUnreadConversations,
 } from './chat-display'
 import type { ChatConversationListItem } from '../types'
@@ -15,6 +16,7 @@ const sampleConversation = (
   type: 'dm',
   title: '',
   unread: false,
+  unread_count: 0,
   last_message_at: null,
   last_message_preview: null,
   participants: [
@@ -68,69 +70,34 @@ describe('chat-display', () => {
     expect(filterConversationsByQuery(conversations, 'claire', 'mbr-viewer')).toHaveLength(1)
   })
 
-  it('detects unread conversations', () => {
-    expect(hasUnreadConversations([sampleConversation({ unread: true })])).toBe(true)
-    expect(hasUnreadConversations([sampleConversation({ unread: false })])).toBe(false)
-  })
-})
-
-describe('groupConversationsByType', () => {
-  it('returns dm then group sections for mixed conversations', () => {
-    const dm = sampleConversation({ id: 'conv-dm' })
+  it('preserves API order when filtering conversations', () => {
     const group = sampleConversation({
       id: 'conv-group',
       type: 'group',
       title: 'Équipe cuisine',
     })
+    const dm = sampleConversation({ id: 'conv-dm' })
 
-    const groups = groupConversationsByType([group, dm])
-
-    expect(groups).toHaveLength(2)
-    expect(groups[0]?.section).toBe('dm')
-    expect(groups[0]?.label).toBe('Messages directs')
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(['conv-dm'])
-    expect(groups[1]?.section).toBe('group')
-    expect(groups[1]?.label).toBe('Groupes')
-    expect(groups[1]?.items.map((item) => item.id)).toEqual(['conv-group'])
+    expect(filterConversationsByQuery([group, dm], '', 'mbr-viewer').map((item) => item.id)).toEqual([
+      'conv-group',
+      'conv-dm',
+    ])
   })
 
-  it('preserves input order within each section', () => {
-    const firstDm = sampleConversation({ id: 'conv-dm-1' })
-    const secondDm = sampleConversation({
-      id: 'conv-dm-2',
-      participants: [
-        {
-          membership_id: 'mbr-viewer',
-          user_id: 'user-viewer',
-          display_name: 'Alice',
-          role: 'staff',
-          participant_role: 'member',
-        },
-        {
-          membership_id: 'mbr-peer-2',
-          user_id: 'user-peer-2',
-          display_name: 'Claire Dupont',
-          role: 'staff',
-          participant_role: 'member',
-        },
-      ],
-    })
-
-    const groups = groupConversationsByType([firstDm, secondDm])
-
-    expect(groups).toHaveLength(1)
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(['conv-dm-1', 'conv-dm-2'])
+  it('detects unread conversations', () => {
+    expect(hasUnreadConversations([sampleConversation({ unread: true })])).toBe(true)
+    expect(hasUnreadConversations([sampleConversation({ unread: false })])).toBe(false)
   })
 
-  it('omits empty sections', () => {
-    const groups = groupConversationsByType([sampleConversation({ id: 'conv-dm' })])
-
-    expect(groups).toHaveLength(1)
-    expect(groups[0]?.section).toBe('dm')
-    expect(groups[0]?.label).toBe('Messages directs')
+  it('formats unread badge count with 99+ cap for display only', () => {
+    expect(formatUnreadBadgeCount(3)).toBe('3')
+    expect(formatUnreadBadgeCount(99)).toBe('99')
+    expect(formatUnreadBadgeCount(150)).toBe('99+')
   })
 
-  it('returns an empty list when there are no conversations', () => {
-    expect(groupConversationsByType([])).toEqual([])
+  it('keeps the real unread count in aria labels', () => {
+    expect(getUnreadCountAriaLabel(1)).toBe('1 message non lu')
+    expect(getUnreadCountAriaLabel(3)).toBe('3 messages non lus')
+    expect(getUnreadCountAriaLabel(150)).toBe('150 messages non lus')
   })
 })

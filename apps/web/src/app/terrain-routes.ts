@@ -227,10 +227,11 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/chat') {
     return {
       topbarVariant: 'hub',
-      pageTitle: 'Chat',
+      topbarSize: 'compact',
+      pageTitle: 'Discussions',
       showBottomNav: true,
       activeNavPath: '/chat',
-      mainScroll: 'auto',
+      mainScroll: 'hidden',
     }
   }
 
