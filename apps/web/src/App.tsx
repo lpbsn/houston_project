@@ -14,6 +14,7 @@ import {
   LazyProfilePage,
   LazyProfileSwitchEstablishmentPage,
   LazyInstallAppPage,
+  LazyNotificationsCenterPage,
   LazyTeamPage,
   LazyTeamMemberDetailPage,
   LazyReportPage,
@@ -178,9 +179,14 @@ function App() {
 
   const templateDetailActionPlanId =
     route.kind === 'action-plan-template-detail' ? route.actionPlanId : null
+  const staticRoutePath = route.kind === 'static' ? route.path : null
 
   const terrainTopbarTrailing = useMemo(() => {
     if (!establishmentId || !auth.hasOperationalAccess) {
+      return null
+    }
+
+    if (staticRoutePath === '/notifications-center') {
       return null
     }
 
@@ -203,6 +209,7 @@ function App() {
     establishmentId,
     navigate,
     route.kind,
+    staticRoutePath,
     templateDetailActionPlanId,
   ])
 
@@ -374,6 +381,12 @@ function App() {
       return <LazyTeamPage onNavigate={navigate} />
     }
 
+    if (route.path === '/notifications-center') {
+      return establishmentId ? (
+        <LazyNotificationsCenterPage establishmentId={establishmentId} onNavigate={navigate} />
+      ) : null
+    }
+
     if (route.path === '/team/invite') {
       return <TeamInvitePage />
     }
@@ -413,6 +426,7 @@ function App() {
     auth.isLoggingOut,
     auth.memberships,
     auth.pendingOnboardingMemberships,
+    establishmentId,
     handleSignOut,
     navigate,
     route,

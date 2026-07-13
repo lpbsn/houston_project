@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
@@ -7,17 +8,19 @@ import {
   markNotificationRead,
   notificationsQueryKeys,
   updateNotificationPreferences,
-  type NotificationListStatus,
+  type NotificationListFilter,
 } from './api'
-import type { NotificationPreferencesUpdate } from './types'
+import { resolveNotificationPath } from './lib/notification-navigation'
+import type { NotificationItem, NotificationPreferencesUpdate } from './types'
+
 
 export function useNotificationsInfiniteQuery(
   establishmentId: string | null,
-  status: NotificationListStatus = 'inbox',
+  filter: NotificationListFilter = 'all',
 ) {
   return useInfiniteQuery({
     queryKey: establishmentId
-      ? notificationsQueryKeys.list(establishmentId, status)
+      ? notificationsQueryKeys.list(establishmentId, filter)
       : ['notifications', 'list', 'none'],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => {
@@ -26,7 +29,7 @@ export function useNotificationsInfiniteQuery(
       }
       return fetchNotifications(establishmentId, {
         cursor: pageParam,
-        status,
+        filter,
       })
     },
     getNextPageParam: (lastPage) => {
@@ -37,6 +40,45 @@ export function useNotificationsInfiniteQuery(
     },
     enabled: Boolean(establishmentId),
   })
+}
+
+export function useNotificationsUnreadCount(establishmentId: string | null) {
+  const query = useNotificationsInfiniteQuery(establishmentId, 'all')
+  return query.data?.pages[0]?.counts.unread
+}
+
+type UseNotificationSelectionOptions = {
+  onNavigate: (pathname: string) => void
+  onClosePanel?: () => void
+}
+
+export function useNotificationSelection(
+  establishmentId: string | null,
+  { onNavigate, onClosePanel }: UseNotificationSelectionOptions,
+) {
+  const markReadMutation = useMarkNotificationReadMutation(establishmentId)
+
+  const handleSelectNotification = useCallback(
+    (notification: NotificationItem) => {
+      const path = resolveNotificationPath(notification)
+
+      if (path) {
+        onClosePanel?.()
+        onNavigate(path)
+        if (notification.status === 'unread') {
+          void markReadMutation.mutate(notification.id)
+        }
+        return
+      }
+
+      if (notification.status === 'unread') {
+        void markReadMutation.mutate(notification.id)
+      }
+    },
+    [markReadMutation, onClosePanel, onNavigate],
+  )
+
+  return { handleSelectNotification }
 }
 
 export function useMarkNotificationReadMutation(establishmentId: string | null) {

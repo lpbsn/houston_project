@@ -65,7 +65,7 @@ export function NotificationRow({ notification, onSelect }: NotificationRowProps
           <div className="flex items-center justify-between gap-2">
             <p className="line-clamp-2 text-sm text-[#7D7B75]">{notification.body}</p>
             {isUnread ? (
-              <span className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#1B4FD8]" />
+              <span className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#4c8543]" />
             ) : null}
           </div>
         </div>

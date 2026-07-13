@@ -1,13 +1,9 @@
-import { LoaderCircle } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
-import { TerrainSectionLabel } from '@/components/ui/terrain'
 import { cn } from '@/lib/utils'
 
-import { groupNotificationsByPeriod } from '../lib/notification-display'
 import type { NotificationItem } from '../types'
 
-import { NotificationRow } from './notification-row'
+import { NotificationListBody } from './notification-list-body'
 
 type NotificationCenterPanelProps = {
   panelId: string
@@ -23,6 +19,7 @@ type NotificationCenterPanelProps = {
   onLoadMore: () => void
   onMarkAllRead: () => void
   onSelectNotification: (notification: NotificationItem) => void
+  onViewCenter: () => void
 }
 
 export function NotificationCenterPanel({
@@ -39,12 +36,11 @@ export function NotificationCenterPanel({
   onLoadMore,
   onMarkAllRead,
   onSelectNotification,
+  onViewCenter,
 }: NotificationCenterPanelProps) {
   if (!isOpen) {
     return null
   }
-
-  const groups = groupNotificationsByPeriod(items)
 
   return (
     <div
@@ -73,55 +69,23 @@ export function NotificationCenterPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-10 text-[#7D7B75]">
-            <LoaderCircle className="h-5 w-5 animate-spin" />
-          </div>
-        ) : null}
+        <NotificationListBody
+          items={items}
+          emptyMessage="Aucune notification"
+          isLoading={isLoading}
+          isError={isError}
+          isFetchingNextPage={isFetchingNextPage}
+          hasNextPage={hasNextPage}
+          onRetry={onRetry}
+          onLoadMore={onLoadMore}
+          onSelectNotification={onSelectNotification}
+        />
+      </div>
 
-        {isError ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <p className="text-sm text-[#7D7B75]">Impossible de charger les notifications.</p>
-            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-              Réessayer
-            </Button>
-          </div>
-        ) : null}
-
-        {!isLoading && !isError && items.length === 0 ? (
-          <p className="py-8 text-center text-sm text-[#7D7B75]">Aucune notification</p>
-        ) : null}
-
-        {!isLoading && !isError && items.length > 0 ? (
-          <div className="flex flex-col gap-3 pb-2">
-            {groups.map((group) => (
-              <section key={group.key}>
-                <TerrainSectionLabel className="mb-2 px-0">{group.label}</TerrainSectionLabel>
-                <div className="flex flex-col gap-2">
-                  {group.items.map((notification) => (
-                    <NotificationRow
-                      key={notification.id}
-                      notification={notification}
-                      onSelect={onSelectNotification}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            {hasNextPage ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={isFetchingNextPage}
-                onClick={onLoadMore}
-              >
-                {isFetchingNextPage ? 'Chargement…' : 'Charger plus'}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
+      <div className="shrink-0 border-t border-[#E8E6DF] p-2">
+        <Button type="button" variant="outline" className="w-full" onClick={onViewCenter}>
+          Voir le centre de notifications
+        </Button>
       </div>
     </div>
   )

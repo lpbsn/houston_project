@@ -44,6 +44,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/team',
   '/team/invite',
   '/action-plans',
+  '/notifications-center',
 ])
 
 const PROTECTED_STATIC_PATHS = new Set<string>([
@@ -70,6 +71,8 @@ const ACTION_PLAN_TERRAIN_PATHS = new Set<string>(['/action-plans'])
 const TEAM_TERRAIN_PATHS = new Set<string>(['/team', '/team/invite'])
 
 const PROFILE_TERRAIN_PATHS = new Set<string>(['/general/switch-establishment', '/install-app'])
+
+const NOTIFICATIONS_TERRAIN_PATHS = new Set<string>(['/notifications-center'])
 
 const TERRAIN_HUB_PATHS = new Set<string>([
   '/reporting',
@@ -139,6 +142,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
     return true
   }
   if (route.kind === 'static' && PROFILE_TERRAIN_PATHS.has(route.path)) {
+    return true
+  }
+  if (route.kind === 'static' && NOTIFICATIONS_TERRAIN_PATHS.has(route.path)) {
     return true
   }
   return false
@@ -250,6 +256,16 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     return {
       topbarVariant: 'detail',
       title: 'Équipe',
+      backPath: '/general',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/notifications-center') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Notifications',
       backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -398,6 +414,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'action-plans-hub'
       case '/team':
         return 'team'
+      case '/notifications-center':
+        return 'notifications-center'
       case '/team/invite':
         return 'team-invite'
       case '/general/switch-establishment':

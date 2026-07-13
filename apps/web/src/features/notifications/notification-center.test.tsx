@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { buildNotificationItem, buildNotificationListResponse } from './test-fixtures'
+import { resolveNotificationPath } from './lib/notification-navigation'
+import type { NotificationItem } from './types'
 
 const fetchNextPage = vi.fn()
 const refetch = vi.fn()
@@ -23,21 +25,43 @@ let queryState = {
   },
 }
 
-vi.mock('./hooks', () => ({
-  useNotificationsInfiniteQuery: () => ({
-    ...queryState,
-    refetch,
-    fetchNextPage,
-  }),
-  useMarkNotificationReadMutation: () => ({
-    mutate: markReadMutate,
-    isPending: false,
-  }),
-  useMarkAllNotificationsReadMutation: () => ({
-    mutate: markAllReadMutate,
-    isPending: false,
-  }),
-}))
+vi.mock('./hooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./hooks')>()
+  return {
+    ...actual,
+    useNotificationsInfiniteQuery: () => ({
+      ...queryState,
+      refetch,
+      fetchNextPage,
+    }),
+    useNotificationSelection: (
+      _establishmentId: string | null,
+      {
+        onNavigate: navigate,
+        onClosePanel,
+      }: { onNavigate: (pathname: string) => void; onClosePanel?: () => void },
+    ) => ({
+      handleSelectNotification: (notification: NotificationItem) => {
+        const path = resolveNotificationPath(notification)
+        if (path) {
+          onClosePanel?.()
+          navigate(path)
+          if (notification.status === 'unread') {
+            markReadMutate(notification.id)
+          }
+          return
+        }
+        if (notification.status === 'unread') {
+          markReadMutate(notification.id)
+        }
+      },
+    }),
+    useMarkAllNotificationsReadMutation: () => ({
+      mutate: markAllReadMutate,
+      isPending: false,
+    }),
+  }
+})
 
 import { NotificationCenter } from './components/notification-center'
 
@@ -229,5 +253,17 @@ describe('NotificationCenter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tout marquer comme lu' }))
 
     expect(markAllReadMutate).toHaveBeenCalled()
+  })
+
+  it('navigates to the notifications center from the panel footer', async () => {
+    render(<NotificationCenter establishmentId="est-1" onNavigate={onNavigate} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le centre de notifications' }))
+
+    expect(onNavigate).toHaveBeenCalledWith('/notifications-center')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Notifications' })).toBeNull()
+    })
   })
 })

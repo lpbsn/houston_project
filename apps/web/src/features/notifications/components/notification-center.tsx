@@ -2,10 +2,9 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import {
   useMarkAllNotificationsReadMutation,
-  useMarkNotificationReadMutation,
+  useNotificationSelection,
   useNotificationsInfiniteQuery,
 } from '../hooks'
-import { resolveNotificationPath } from '../lib/notification-navigation'
 
 import { NotificationBellButton } from './notification-bell-button'
 import { NotificationCenterPanel } from './notification-center-panel'
@@ -21,7 +20,6 @@ export function NotificationCenter({ establishmentId, onNavigate }: Notification
   const panelId = useId()
 
   const notificationsQuery = useNotificationsInfiniteQuery(establishmentId)
-  const markReadMutation = useMarkNotificationReadMutation(establishmentId)
   const markAllReadMutation = useMarkAllNotificationsReadMutation(establishmentId)
 
   const items =
@@ -38,6 +36,11 @@ export function NotificationCenter({ establishmentId, onNavigate }: Notification
   const togglePanel = useCallback(() => {
     setIsOpen((current) => !current)
   }, [])
+
+  const { handleSelectNotification } = useNotificationSelection(establishmentId, {
+    onNavigate,
+    onClosePanel: closePanel,
+  })
 
   useEffect(() => {
     if (!isOpen) {
@@ -65,29 +68,14 @@ export function NotificationCenter({ establishmentId, onNavigate }: Notification
     }
   }, [closePanel, isOpen])
 
-  const handleSelectNotification = useCallback(
-    (notification: (typeof items)[number]) => {
-      const path = resolveNotificationPath(notification)
-
-      if (path) {
-        closePanel()
-        onNavigate(path)
-        if (notification.status === 'unread') {
-          void markReadMutation.mutate(notification.id)
-        }
-        return
-      }
-
-      if (notification.status === 'unread') {
-        void markReadMutation.mutate(notification.id)
-      }
-    },
-    [closePanel, markReadMutation, onNavigate],
-  )
-
   const handleMarkAllRead = useCallback(() => {
     void markAllReadMutation.mutate()
   }, [markAllReadMutation])
+
+  const handleViewCenter = useCallback(() => {
+    closePanel()
+    onNavigate('/notifications-center')
+  }, [closePanel, onNavigate])
 
   return (
     <div ref={containerRef} className="relative flex justify-end">
@@ -111,6 +99,7 @@ export function NotificationCenter({ establishmentId, onNavigate }: Notification
         onLoadMore={() => void notificationsQuery.fetchNextPage()}
         onMarkAllRead={handleMarkAllRead}
         onSelectNotification={handleSelectNotification}
+        onViewCenter={handleViewCenter}
       />
     </div>
   )
