@@ -45,6 +45,13 @@ describe('parseAppRoute', () => {
     })
   })
 
+  it('parses notifications center route', () => {
+    expect(parseAppRoute('/notifications-center')).toEqual({
+      kind: 'static',
+      path: '/notifications-center',
+    })
+  })
+
   it('parses team member detail route', () => {
     expect(parseAppRoute('/team/member-123')).toEqual({
       kind: 'team-member-detail',

@@ -10,13 +10,13 @@ import type {
   NotificationPreferencesUpdate,
 } from './types'
 
-export type NotificationListStatus = 'inbox'
+export type NotificationListFilter = 'all' | 'unread'
 
 export const notificationsQueryKeys = {
   all: ['notifications'] as const,
   lists: (establishmentId: string) => ['notifications', 'list', establishmentId] as const,
-  list: (establishmentId: string, status: NotificationListStatus = 'inbox') =>
-    ['notifications', 'list', establishmentId, status] as const,
+  list: (establishmentId: string, filter: NotificationListFilter = 'all') =>
+    ['notifications', 'list', establishmentId, filter] as const,
   preferences: (establishmentId: string) =>
     ['notifications', 'preferences', establishmentId] as const,
 }
@@ -70,7 +70,7 @@ function establishmentPath(establishmentId: string) {
 
 export async function fetchNotifications(
   establishmentId: string,
-  options: { cursor?: string; pageSize?: number; status?: NotificationListStatus } = {},
+  options: { cursor?: string; pageSize?: number; filter?: NotificationListFilter } = {},
 ): Promise<NotificationListResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
@@ -80,6 +80,7 @@ export async function fetchNotifications(
           query: {
             ...(options.cursor ? { cursor: options.cursor } : {}),
             ...(options.pageSize ? { page_size: options.pageSize } : {}),
+            ...(options.filter === 'unread' ? { status: 'unread' as const } : {}),
           },
         },
         headers: getAuthHeaders(accessToken),

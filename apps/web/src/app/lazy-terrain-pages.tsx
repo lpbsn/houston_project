@@ -60,6 +60,12 @@ export const LazyTeamPage = lazy(() =>
   })),
 )
 
+export const LazyNotificationsCenterPage = lazy(() =>
+  import('@/features/notifications/pages/notifications-center-page').then((module) => ({
+    default: module.NotificationsCenterPage,
+  })),
+)
+
 export const LazyTeamMemberDetailPage = lazy(() =>
   import('@/features/auth/pages/team-member-detail-page').then((module) => ({
     default: module.TeamMemberDetailPage,

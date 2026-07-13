@@ -39,6 +39,7 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/team/invite' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/general/switch-establishment' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/notifications-center' })).toBe(true)
   })
 
   it('returns false for non-terrain routes', () => {
@@ -100,6 +101,16 @@ describe('getTerrainRouteConfig', () => {
     expect(getTerrainRouteConfig({ kind: 'static', path: '/team' })).toEqual({
       topbarVariant: 'detail',
       title: 'Équipe',
+      backPath: '/general',
+      showBottomNav: false,
+      mainScroll: 'auto',
+    })
+  })
+
+  it('configures notifications center route as detail shell without bottom nav', () => {
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/notifications-center' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'Notifications',
       backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -243,6 +254,9 @@ describe('getTerrainContentKey', () => {
     )
     expect(getTerrainContentKey({ kind: 'static', path: '/action-plans' })).toBe('action-plans-hub')
     expect(getTerrainContentKey({ kind: 'static', path: '/team' })).toBe('team')
+    expect(getTerrainContentKey({ kind: 'static', path: '/notifications-center' })).toBe(
+      'notifications-center',
+    )
     expect(getTerrainContentKey({ kind: 'static', path: '/team/invite' })).toBe('team-invite')
   })
 

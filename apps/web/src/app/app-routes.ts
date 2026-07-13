@@ -28,6 +28,7 @@ export type AppPath =
   | '/team'
   | '/team/invite'
   | '/action-plans'
+  | '/notifications-center'
 
 export type ActionPlanCreateOrigin = 'library' | 'execution'
 
@@ -219,7 +220,8 @@ export function parseAppRoute(input: string): AppRoute {
     pathname === '/general' ||
     pathname === '/team' ||
     pathname === '/team/invite' ||
-    pathname === '/action-plans'
+    pathname === '/action-plans' ||
+    pathname === '/notifications-center'
   ) {
     return { kind: 'static', path: pathname as AppPath }
   }
