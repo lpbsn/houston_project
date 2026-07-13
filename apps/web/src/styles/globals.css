@@ -118,14 +118,6 @@ button {
   min-height: 100vh;
 }
 
-html[data-terrain-shell],
-html[data-terrain-shell] body,
-html[data-terrain-shell] #root {
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
