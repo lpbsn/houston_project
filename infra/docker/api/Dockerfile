@@ -18,7 +18,8 @@ ARG UV_SYNC_DEV=false
 COPY pyproject.toml uv.lock /app/
 
 RUN if [ "$UV_SYNC_DEV" = "true" ]; then \
-      uv sync --locked --no-install-project --group dev; \
+      uv sync --locked --no-install-project --group dev \
+      && install -m 755 /usr/local/bin/uv /opt/venv/bin/uv; \
     else \
       uv sync --locked --no-install-project --no-dev; \
     fi
@@ -36,12 +37,11 @@ WORKDIR /app
 RUN groupadd --gid 1000 houston \
     && useradd --uid 1000 --gid houston --create-home --shell /bin/sh houston
 
-ARG UV_SYNC_DEV=false
-
 COPY --from=python-builder --chown=houston:houston /opt/venv /opt/venv
 
-RUN --mount=type=bind,from=python-builder,source=/usr/local/bin/uv,target=/mnt/uv \
-    if [ "$UV_SYNC_DEV" = "true" ]; then install -m 755 /mnt/uv /usr/local/bin/uv; fi
+RUN if [ -x /opt/venv/bin/uv ]; then \
+      ln -s /opt/venv/bin/uv /usr/local/bin/uv; \
+    fi
 
 COPY apps/api /app/apps/api
 COPY contracts/operational-realtime-invalidation.json /app/contracts/operational-realtime-invalidation.json
