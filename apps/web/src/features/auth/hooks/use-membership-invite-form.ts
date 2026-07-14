@@ -43,6 +43,7 @@ export function useMembershipInviteForm({
     BusinessUnitScopeSelection[]
   >([])
   const [invitationLink, setInvitationLink] = useState<string | null>(null)
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -92,6 +93,8 @@ export function useMembershipInviteForm({
     event.preventDefault()
     setErrorMessage(null)
     setCopyMessage(null)
+    setInvitedEmail(null)
+    setInvitationLink(null)
     setIsSubmitting(true)
 
     try {
@@ -107,14 +110,17 @@ export function useMembershipInviteForm({
         throw new Error('Sélectionnez au moins un pôle d’activité.')
       }
 
+      const submittedEmail = form.email.trim()
+
       const result = await inviteMembership(establishmentId, {
-        email: form.email.trim(),
+        email: submittedEmail,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         role: selectedRole as MembershipInvitationRequestRoleEnum,
         scopes: selectedBusinessUnitScopes,
       })
 
+      setInvitedEmail(submittedEmail)
       setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
       setForm(emptyForm)
       setSelectedBusinessUnitScopes([])
@@ -144,6 +150,7 @@ export function useMembershipInviteForm({
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
+    invitedEmail,
     copyMessage,
     errorMessage,
     isSubmitting,

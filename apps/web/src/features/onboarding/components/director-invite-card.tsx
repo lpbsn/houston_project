@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { buildInvitationCreatedMessage } from '@/features/auth/lib/invitation-messaging'
 import type { ActivationSummaryResponse } from '@/features/onboarding/types'
 import { useInviteDirector } from '@/features/onboarding/hooks'
 import {
@@ -63,6 +64,7 @@ export function DirectorInviteCard({
 }: DirectorInviteCardProps) {
   const [form, setForm] = useState<DirectorInviteForm>(emptyForm)
   const [invitationLink, setInvitationLink] = useState<string | null>(null)
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
   const inviteMutation = useInviteDirector(sessionId)
 
@@ -87,13 +89,18 @@ export function DirectorInviteCard({
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setCopyMessage(null)
+    setInvitedEmail(null)
+    setInvitationLink(null)
 
     try {
+      const submittedEmail = form.email.trim()
+
       const response = await inviteMutation.mutateAsync({
-        email: form.email.trim(),
+        email: submittedEmail,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
       })
+      setInvitedEmail(submittedEmail)
       setInvitationLink(buildInvitationAcceptUrl(response.invitation_accept_path))
       setForm(emptyForm)
     } catch {
@@ -164,7 +171,7 @@ export function DirectorInviteCard({
           </CardTitle>
           <CardDescription className="text-sm leading-6">
             Each establishment has exactly one Director (invited or active), distinct from the
-            Owner. Share the invitation link with them after sending the invite.
+            Owner. An email will be sent automatically; copy and share the link manually if needed.
           </CardDescription>
         </div>
       </CardHeader>
@@ -274,11 +281,11 @@ export function DirectorInviteCard({
           </form>
         )}
 
-        {invitationLink ? (
+        {invitationLink && invitedEmail ? (
           <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
               <CheckCircle2 className="size-4" />
-              Director invitation link
+              {buildInvitationCreatedMessage(invitedEmail ?? '')}
             </div>
             <p className="break-all text-sm text-emerald-900">{invitationLink}</p>
             <Button
