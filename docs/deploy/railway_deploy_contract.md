@@ -41,6 +41,94 @@ Railway does **not** auto-discover `infra/railway/*/railway.toml`. For each appl
 
 See [`infra/railway/README.md`](../../infra/railway/README.md) for step-by-step setup.
 
+## Build triggers (Watch Paths)
+
+Before `watchPatterns`, every push to the connected branch triggered a Docker rebuild on **all three** application services.
+
+Each service's [`railway.toml`](../../infra/railway/api-web/railway.toml) now defines `watchPatterns` under `[build]`. Railway evaluates patterns from the repository root (`/`), regardless of Root Directory.
+
+Watch Paths express **functional build dependencies** — what should trigger a redeploy — not the full context currently included by `COPY . /app` in today's Dockerfiles. Changes under paths such as `/docs/**` or `/.cursor/**` do **not** match any pattern and skip deployment. A future Docker COPY alignment (PR3) will narrow the build context to match this matrix.
+
+### `watchPatterns` per service
+
+**`api-web`** ([`infra/railway/api-web/railway.toml`](../../infra/railway/api-web/railway.toml)):
+
+```toml
+watchPatterns = [
+  "/apps/web/**",
+  "/contracts/**",
+  "/apps/api/**",
+  "/infra/docker/railway/**",
+  "/infra/railway/api-web/**",
+  "/pyproject.toml",
+  "/uv.lock",
+  "/.dockerignore",
+  "/README.md",  # temporary — removed in PR3 when Dockerfile COPY is dropped
+]
+```
+
+**`celery-worker`** ([`infra/railway/celery-worker/railway.toml`](../../infra/railway/celery-worker/railway.toml)):
+
+```toml
+watchPatterns = [
+  "/apps/api/**",
+  "/infra/docker/api/**",
+  "/infra/railway/celery-worker/**",
+  "/pyproject.toml",
+  "/uv.lock",
+  "/.dockerignore",
+  "/README.md",  # temporary — removed in PR3 when Dockerfile COPY is dropped
+]
+```
+
+**`celery-beat`** ([`infra/railway/celery-beat/railway.toml`](../../infra/railway/celery-beat/railway.toml)):
+
+```toml
+watchPatterns = [
+  "/apps/api/**",
+  "/infra/docker/api/**",
+  "/infra/railway/celery-beat/**",
+  "/pyproject.toml",
+  "/uv.lock",
+  "/.dockerignore",
+  "/README.md",  # temporary — removed in PR3 when Dockerfile COPY is dropped
+]
+```
+
+`/README.md` is temporary: current Dockerfiles still copy it for the `uv sync` layer (`COPY pyproject.toml uv.lock README.md`). It will be removed from `watchPatterns` in PR3 when that `COPY` is dropped.
+
+### Trigger matrix
+
+| Change | `api-web` | `celery-worker` | `celery-beat` |
+|---|---:|---:|---:|
+| `/apps/web/**` | Yes | No | No |
+| `/contracts/**` | Yes | No | No |
+| `/apps/api/**` | Yes | Yes | Yes |
+| `/infra/docker/railway/**` | Yes | No | No |
+| `/infra/docker/api/**` | No | Yes | Yes |
+| `/infra/railway/api-web/**` | Yes | No | No |
+| `/infra/railway/celery-worker/**` | No | Yes | No |
+| `/infra/railway/celery-beat/**` | No | No | Yes |
+| `/pyproject.toml`, `/uv.lock` | Yes | Yes | Yes |
+| `/.dockerignore` | Yes | Yes | Yes |
+| `/README.md` | Yes (temporary) | Yes (temporary) | Yes (temporary) |
+| `/docs/**`, `/.cursor/**` | No | No | No |
+
+`api-web` does **not** watch `/infra/docker/api/**` (worker/beat Dockerfile). Worker and beat do **not** watch frontend or Railway edge paths.
+
+### Validation (post-merge)
+
+Do not use artificial test commits on the production branch. Prefer a Railway test environment connected to a non-production branch, or observe real pushes after merge:
+
+| Scenario | Expected |
+|---|---|
+| Change under `/docs/**` only (not `/README.md`) | 0 deploys |
+| Change under `/apps/web/**` only | `api-web` only |
+| Change under `/apps/api/**` only | all 3 services |
+| Change under `/infra/docker/api/**` only | worker + beat only |
+
+Rollback: remove `watchPatterns` from the affected `railway.toml` files.
+
 ---
 
 ## Service: `api-web`
@@ -121,6 +209,8 @@ Add a Railway volume on `api-web` mounted at this path. Verify write access afte
 
 Railway volumes mount as root; the start script `chown`s the media directory. If permission issues persist, set `RAILWAY_RUN_UID=0` on the service.
 
+**Do not scale `api-web` horizontally** while private media uses a single Railway volume (one mount per service). Object storage is required before multi-replica `api-web`.
+
 ### Domain
 
 1. Enable Railway Public Networking on `api-web`.
@@ -189,6 +279,8 @@ startCommand = "cd /app/apps/api && uv run celery -A config beat -l info --sched
 | `/var/lib/celerybeat` | Persistent Celery Beat schedule file |
 
 Without this volume, beat schedule resets on redeploy.
+
+**Singleton:** run exactly **one** Celery Beat replica (`numReplicas = 1` in the Railway dashboard). Do not scale Beat horizontally — duplicate schedulers dispatch the same periodic tasks twice.
 
 ### Health / verification
 
@@ -294,9 +386,10 @@ Never paste secrets, tokens, raw observation text, or private media paths in tic
 | Change type | Action |
 |---|---|
 | Env var update | Update Railway variables → redeploy affected services (`api-web`, `celery-worker`, `celery-beat`) |
-| Code change | Push to connected branch → Railway rebuilds from Dockerfile → redeploy |
+| Code change (push) | Railway rebuilds only services whose `watchPatterns` match changed paths (see [Build triggers](#build-triggers-watch-paths)); otherwise deploy is skipped |
 | Postgres / Redis | Managed plugins; restart via dashboard if needed; app services reconnect |
 | Volume on `api-web` | Brief downtime on redeploy (Railway serializes volume mounts) |
+| Volume on `celery-beat` | Brief downtime on redeploy; schedule persists via `/var/lib/celerybeat` mount |
 
 No bind-mount `.env` in prod-test — all config via Railway variables.
 

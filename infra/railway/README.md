@@ -13,6 +13,24 @@ Houston builds from the **repository root** (all Dockerfiles copy `pyproject.tom
 
 Do **not** set Root Directory to `infra/railway/<service>` — that narrows the build context and breaks Docker builds.
 
+## Watch Paths (build triggers)
+
+Railway evaluates `watchPatterns` from the **repository root** (`/`), even when Root Directory is `/`. Patterns are anchored with a leading `/`.
+
+Watch Paths express **functional build dependencies** — what should trigger a redeploy — not the full context currently included by `COPY . /app` in today's Dockerfiles. A future Docker COPY alignment (PR3) will narrow the build context to match this matrix.
+
+| Service | `watchPatterns` |
+|---|---|
+| `api-web` | `/apps/web/**`, `/contracts/**`, `/apps/api/**`, `/infra/docker/railway/**`, `/infra/railway/api-web/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore`, `/README.md` (temporary) |
+| `celery-worker` | `/apps/api/**`, `/infra/docker/api/**`, `/infra/railway/celery-worker/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore`, `/README.md` (temporary) |
+| `celery-beat` | `/apps/api/**`, `/infra/docker/api/**`, `/infra/railway/celery-beat/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore`, `/README.md` (temporary) |
+
+`/README.md` is temporary: current Dockerfiles still `COPY` it for the `uv sync` layer. It will be removed from `watchPatterns` in PR3 when that `COPY` is dropped.
+
+> Le dashboard peut afficher une valeur différente, car Railway ne le met pas à jour depuis `railway.toml`. Pour chaque déploiement, la configuration en code prévaut. Vérifier la configuration effective dans les détails du déploiement via l'icône de fichier.
+
+Full trigger matrix and validation scenarios: [`docs/deploy/railway_deploy_contract.md`](../../docs/deploy/railway_deploy_contract.md#build-triggers-watch-paths).
+
 ## Setup (once per Railway project)
 
 1. Create a Railway project from the Houston GitHub repository.
