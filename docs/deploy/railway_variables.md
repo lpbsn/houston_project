@@ -186,7 +186,7 @@ Choose `C` **before** setting the variable on production `celery-worker`:
 2. **Do not** connect sizing experiments to the production broker, production Postgres, or production datasets.
 3. **Do not** start a second Celery worker via SSH inside the production container.
 4. Measure memory at representative burst load by **successive redeploys** with `CELERY_WORKER_CONCURRENCY` = 1, 2, 4, 8, … — **one active worker** on the test broker at a time.
-5. Model: `M_total(C) = M_main + C × M_child_idle + C × Δ_task_active + headroom`; pick the largest `C` that keeps cgroup/container memory under the Railway limit (8 GiB prod-test) with headroom.
+5. Model: `M_total(C) = M_main + C × M_child_idle + C × Δ_task_active + headroom`; Select the lowest `C` that meets the measured throughput and latency objectives while keeping cgroup/container memory below the Railway limit with the required headroom and respecting PostgreSQL and OpenAI constraints.
 6. Set the chosen value on production `celery-worker` **before or when** merging the `startCommand` that requires this variable.
 
 ### Rollback
