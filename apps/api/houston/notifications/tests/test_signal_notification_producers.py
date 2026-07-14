@@ -450,13 +450,18 @@ def test_aggregate_emits_zero_notifications():
     assert _notifications_for_signal(signal_id=signal.id) == []
 
 
-def test_mark_done_validate_does_not_emit_signal_resolved_notification():
+def test_mark_done_validate_emits_signal_resolved_notification():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
-    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    staff = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.STAFF,
+    )
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     assert taxonomy.maintenance is not None
     assign_business_unit_scope(staff, taxonomy.maintenance)
+
     signal = _open_signal(owner)
+
     _, execution = create_action_plan_with_execution(
         establishment_id=owner.establishment_id,
         created_by=owner,
@@ -470,14 +475,28 @@ def test_mark_done_validate_does_not_emit_signal_resolved_notification():
                 business_unit=taxonomy.maintenance,
             )
         ],
-        assignees=[build_assignee_payload(membership=staff, business_unit=taxonomy.maintenance)],
+        assignees=[
+            build_assignee_payload(
+                membership=staff,
+                business_unit=taxonomy.maintenance,
+            )
+        ],
     )
+
     Notification.objects.filter(subject_id=signal.id).delete()
 
     pending = mark_action_plan_execution_done(
         execution_id=execution.id,
         actor_membership=owner,
     )
+
+    # Le signal ne doit pas être résolu avant validation.
+    assert not [
+        item
+        for item in _notifications_for_signal(signal_id=signal.id)
+        if item.event_key == Notification.EventKey.SIGNAL_RESOLVED
+    ]
+
     validate_action_plan_execution(
         execution_id=pending.id,
         actor_membership=owner,
@@ -488,7 +507,8 @@ def test_mark_done_validate_does_not_emit_signal_resolved_notification():
         for item in _notifications_for_signal(signal_id=signal.id)
         if item.event_key == Notification.EventKey.SIGNAL_RESOLVED
     ]
-    assert notifications == []
+
+    assert len(notifications) == 1
 
 
 def test_signal_notification_rollback_creates_zero_notifications():
