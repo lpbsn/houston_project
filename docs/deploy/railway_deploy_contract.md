@@ -233,15 +233,23 @@ Same multi-stage build as `api-web` Python layer: **uv `0.11.16`** and `build-es
 ### Start command
 
 ```toml
-startCommand = "/opt/venv/bin/celery -A config worker -l info -n houston-worker@%h"
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-worker@%h --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
 ```
+
+* `CELERY_WORKER_CONCURRENCY` is **required** on this service (see [`railway_variables.md`](railway_variables.md#celery-worker-concurrency-celery-worker-only)).
+* Shell validates presence, decimal digits only, value > 0, no leading zero — **before** `exec` (so Celery never receives `--concurrency=0`, which would fall back to CPU-count default).
+* `exec` replaces the shell so SIGTERM reaches the Celery process for graceful shutdown.
 
 ### Health / verification
 
 No HTTP healthcheck. Verify in Railway logs:
 
+* Startup banner includes `concurrency: <C> (prefork)` where `<C>` matches `CELERY_WORKER_CONCURRENCY` (not host CPU count, e.g. not `48` unless explicitly set).
+* Missing or invalid `CELERY_WORKER_CONCURRENCY` → shell error on stderr, exit 1, **no** Celery worker process — crash loop until the variable is fixed.
 * `celery@houston-worker` ready message
 * Worker processes tasks when observations are submitted
+
+**Sizing:** choose `<C>` via redeployments on an **isolated** Railway test service (dedicated broker/Postgres, no production data). Do **not** spawn a second worker via SSH on production. See variables doc.
 
 **Prod-test is broken** if the worker is down: observation processing and AI signal generation stop.
 
@@ -374,7 +382,7 @@ View per service in the Railway dashboard:
 | Service | What to look for |
 |---|---|
 | `api-web` | Daphne/nginx start, `check --deploy`, HTTP errors, pre-deploy migrate output |
-| `celery-worker` | Worker ready, task execution, task failures |
+| `celery-worker` | Worker ready, `concurrency: <C> (prefork)` banner, task execution, task failures |
 | `celery-beat` | Scheduler tick, periodic task dispatch |
 
 Never paste secrets, tokens, raw observation text, or private media paths in tickets.
@@ -401,6 +409,8 @@ No bind-mount `.env` in prod-test — all config via Railway variables.
 2. Select the last known-good deployment → **Redeploy** / rollback to previous image
 3. Repeat for `celery-worker` and `celery-beat` if they were deployed together
 4. If a bad migration shipped: restore Postgres from backup or run reverse migration manually before rollback
+
+**`celery-worker` concurrency:** if a new `CELERY_WORKER_CONCURRENCY` causes OOM or instability, set the variable back to the **last explicitly validated** value and redeploy — do not remove the variable (startup fails) and do not expect Celery to fall back to a safe default (omitting `--concurrency` or passing `0` uses CPU-count prefork, e.g. 48).
 
 ---
 
