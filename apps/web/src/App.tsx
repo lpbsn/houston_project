@@ -319,7 +319,7 @@ function App() {
     }
 
     if (route.path === '/login') {
-      return <LoginPage />
+      return <LoginPage onNavigate={navigate} />
     }
 
     if (route.path === '/app') {
@@ -477,6 +477,15 @@ function App() {
       <>
         <PwaUpdateBanner />
         <AuthRoutingLoading />
+      </>
+    )
+  }
+
+  if (route.kind === 'static' && route.path === '/login') {
+    return (
+      <>
+        <PwaUpdateBanner />
+        <LoginPage onNavigate={navigate} />
       </>
     )
   }

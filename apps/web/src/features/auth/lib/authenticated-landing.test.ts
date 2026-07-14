@@ -216,8 +216,14 @@ describe('shouldShowAuthRoutingLoading', () => {
   const onboardingRoute = { kind: 'static' as const, path: '/onboarding' as const }
   const unknownRoute = { kind: 'unknown' as const, pathname: '/foo' }
 
-  it('shows loading when auth is not ready', () => {
+  it('does not show loading for login when auth is not ready', () => {
     expect(shouldShowAuthRoutingLoading(loginRoute, { isReady: false, isAuthenticated: false })).toBe(
+      false,
+    )
+  })
+
+  it('shows loading for other routes when auth is not ready', () => {
+    expect(shouldShowAuthRoutingLoading(rootRoute, { isReady: false, isAuthenticated: false })).toBe(
       true,
     )
   })

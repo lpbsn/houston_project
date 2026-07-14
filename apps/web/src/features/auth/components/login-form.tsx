@@ -1,25 +1,27 @@
-import { LoaderCircle, LockKeyhole, UserRound } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 import { AuthApiError } from '@/features/auth/api'
 import { useAuth } from '@/app/auth-provider'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 function getLoginErrorMessage(error: Error | null) {
   if (error instanceof AuthApiError && error.status === 401) {
-    return 'Invalid credentials.'
+    return 'Identifiants invalides.'
   }
 
-  return error ? 'Sign-in failed.' : null
+  return error ? 'La connexion a échoué.' : null
 }
 
 export function LoginForm() {
   const { isLoggingIn, login, loginError } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const errorMessage = useMemo(() => getLoginErrorMessage(loginError), [loginError])
 
@@ -32,69 +34,80 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="border-white/60 bg-white/90 shadow-[0_24px_80px_-48px_rgba(15,59,72,0.45)] backdrop-blur">
-      <CardHeader className="space-y-3">
-        <CardTitle className="text-2xl">Sign in to Houston</CardTitle>
-        <CardDescription>Enter your email or username and password to continue.</CardDescription>
-      </CardHeader>
-
-      <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="identifier">
-              Email or username
-            </label>
-            <div className="relative">
-              <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="identifier"
-                autoComplete="username"
-                className="pl-10"
-                value={identifier}
-                onChange={(event) => setIdentifier(event.target.value)}
-                placeholder="you@example.com"
-                required
-              />
-            </div>
+    <section className="w-full max-w-[346px] rounded-[22px] border border-[#E8E6DF] bg-white px-5 py-6 shadow-[0_20px_60px_-24px_rgba(15,23,42,0.12)] sm:max-w-[360px] sm:rounded-3xl">
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-[#111827]" htmlFor="identifier">
+            Email ou identifiant
+          </label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#9CA3AF]" />
+            <Input
+              id="identifier"
+              autoComplete="username"
+              className="h-12 rounded-full border-[#E5E7EB] bg-white pl-11 text-base placeholder:text-[#9CA3AF] shadow-none md:text-base"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+              placeholder="vous@spore.app"
+              required
+            />
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="password">
-              Password
-            </label>
-            <div className="relative">
-              <LockKeyhole className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="password"
-                autoComplete="current-password"
-                className="pl-10"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                required
-              />
-            </div>
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-[#111827]" htmlFor="password">
+            Mot de passe
+          </label>
+          <div className="relative">
+            <LockKeyhole className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#9CA3AF]" />
+            <Input
+              id="password"
+              autoComplete="current-password"
+              className="h-12 rounded-full border-[#E5E7EB] bg-white pr-11 pl-11 text-base placeholder:text-[#9CA3AF] shadow-none md:text-base"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            <button
+              type="button"
+              className="absolute top-1/2 right-1 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-[#9CA3AF] transition hover:text-[#6B7280]"
+              aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
           </div>
+        </div>
 
-          {errorMessage ? (
-            <div className="rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-              {errorMessage}
-            </div>
-          ) : null}
+        {errorMessage ? (
+          <div className="rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+            {errorMessage}
+          </div>
+        ) : null}
 
-          <Button className="w-full" disabled={isLoggingIn} size="lg" type="submit">
-            {isLoggingIn ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              'Sign in'
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <Button
+          className={cn(
+            'h-12 w-full rounded-full text-[15px] font-semibold text-white',
+            terrainBrandAction.bg,
+            terrainBrandAction.hover,
+          )}
+          disabled={isLoggingIn}
+          type="submit"
+        >
+          {isLoggingIn ? (
+            <>
+              <LoaderCircle className="size-4 animate-spin" />
+              Connexion en cours…
+            </>
+          ) : (
+            <>
+              Se connecter
+              <ArrowRight className="size-4" />
+            </>
+          )}
+        </Button>
+      </form>
+    </section>
   )
 }

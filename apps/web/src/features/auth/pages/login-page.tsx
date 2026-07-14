@@ -1,21 +1,78 @@
 import { LoaderCircle } from 'lucide-react'
 
+import sporeIconSrc from '@/assets/brand/spore-icon-source.png'
 import { useAuth } from '@/app/auth-provider'
 import { LoginForm } from '@/features/auth/components/login-form'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
-export function LoginPage() {
+type LoginPageProps = {
+  onNavigate: (path: string, options?: { replace?: boolean }) => void
+}
+
+const loginPageClassName = cn(
+  'grid min-h-dvh grid-rows-[auto_1fr_auto]',
+  'bg-[#F9FAFB]',
+  'bg-[radial-gradient(circle_at_bottom_left,rgba(139,92,246,0.06),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.06),transparent_40%)]',
+)
+
+function LoginPageShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div data-testid="login-page" className={loginPageClassName}>
+      {children}
+    </div>
+  )
+}
+
+export function LoginPage({ onNavigate }: LoginPageProps) {
   const { isReady } = useAuth()
 
   if (!isReady) {
     return (
-      <div className="flex min-h-[22rem] items-center justify-center">
-        <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-background/85 px-4 py-3 text-sm">
-          <LoaderCircle className="size-4 animate-spin text-primary" />
-          Restoring your session...
-        </div>
-      </div>
+      <LoginPageShell>
+        <header className="flex justify-end px-4 pt-4 sm:px-6 sm:pt-6" aria-hidden />
+        <main className="flex flex-col items-center justify-center px-4">
+          <div className="flex items-center gap-3 rounded-full border border-[#E8E6DF] bg-white px-4 py-3 text-sm text-[#6B7280]">
+            <LoaderCircle className="size-4 animate-spin text-[#114660]" />
+            Restauration de votre session…
+          </div>
+        </main>
+        <footer className="pb-6 text-center text-xs text-[#9CA3AF]" aria-hidden />
+      </LoginPageShell>
     )
   }
 
-  return <LoginForm />
+  return (
+    <LoginPageShell>
+      <header className="flex justify-end px-4 pt-4 sm:px-6 sm:pt-6">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 rounded-2xl border-[#E8E6DF] bg-white text-[#111827] hover:bg-[#F9FAFB]"
+          onClick={() => {
+            onNavigate('/onboarding')
+          }}
+        >
+          Onboarding
+        </Button>
+      </header>
+
+      <main className="flex flex-col items-center justify-center gap-8 px-4">
+        <div className="flex items-center gap-2.5">
+          <span className="text-3xl font-bold tracking-tight text-[#111827]">spore</span>
+          <img
+            src={sporeIconSrc}
+            alt=""
+            aria-hidden
+            className="size-10 object-contain"
+          />
+        </div>
+        <LoginForm />
+      </main>
+
+      <footer className="pb-6 text-center text-xs text-[#9CA3AF]">
+        © 2026 Spore · Terrain-first
+      </footer>
+    </LoginPageShell>
+  )
 }
