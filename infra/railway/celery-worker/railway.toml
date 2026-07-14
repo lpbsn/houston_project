@@ -15,4 +15,4 @@ watchPatterns = [
 ]
 
 [deploy]
-startCommand = "/opt/venv/bin/celery -A config worker -l info -n houston-worker@%h"
+startCommand = "/bin/sh -c 'if [ -z \"${CELERY_WORKER_CONCURRENCY:-}\" ]; then echo \"CELERY_WORKER_CONCURRENCY is required\" >&2; exit 1; fi; case \"$CELERY_WORKER_CONCURRENCY\" in *[!0-9]*) echo \"CELERY_WORKER_CONCURRENCY must contain only decimal digits\" >&2; exit 1;; 0|0*) echo \"CELERY_WORKER_CONCURRENCY must be greater than zero\" >&2; exit 1;; esac; exec /opt/venv/bin/celery -A config worker -l info -n houston-worker@%h --concurrency=\"$CELERY_WORKER_CONCURRENCY\"'"
