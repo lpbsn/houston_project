@@ -142,7 +142,9 @@ Rollback: remove `watchPatterns` from the affected `railway.toml` files.
 
 Railway builds with `builder = "DOCKERFILE"` and `dockerfilePath = "infra/docker/railway/Dockerfile.api-web"` (relative to Root Directory `/`).
 
-The image includes: Python API (uv), production SPA build (`apps/web/dist`), nginx edge config.
+The image includes: production Python venv (`/opt/venv`), production SPA build (`apps/web/dist`), nginx edge config.
+
+Images are **multi-stage**: a `python-builder` stage runs `uv sync` with **uv `0.11.16`** (`ghcr.io/astral-sh/uv:0.11.16`) and `build-essential`; the production runtime copies only `/opt/venv` and application code — **no `uv`, `curl`, `gcc`, or `make`** in the deployed image. Local dev images built with `UV_SYNC_DEV=true` (see [`docker-compose.yml`](../../docker-compose.yml)) intentionally retain `uv` for `uv run` in Compose/Makefile.
 
 ### Pre-deploy (migrations only)
 
@@ -225,6 +227,8 @@ Railway volumes mount as root; the start script `chown`s the media directory. If
 | Dockerfile | `infra/docker/api/Dockerfile` |
 | Visibility | Private (no public port) |
 | Depends on | `postgres`, `redis` |
+
+Same multi-stage build as `api-web` Python layer: **uv `0.11.16`** and `build-essential` in the builder only; production runtime without `uv`/`curl`/`gcc`/`make`.
 
 ### Start command
 

@@ -268,7 +268,7 @@ Références officielles du projet : [`README.md`](README.md), [`Makefile`](Make
 | **Make** | Fourni avec Xcode Command Line Tools : `xcode-select --install` | Oui |
 | **Node.js** | Image frontend Docker : **Node 24** ([`infra/docker/web/Dockerfile`](infra/docker/web/Dockerfile)). Le `package.json` ne fixe pas de version minimale. | Oui (frontend local) |
 | **npm** | Livré avec Node | Oui (frontend local) |
-| **Python 3.13.13** + **uv** | Pour outillage backend **hors** Docker ([`apps/api/AGENTS.md`](apps/api/AGENTS.md)). L’image API utilise déjà Python 3.13.13. | Non si vous n’exécutez le backend que dans Docker |
+| **Python 3.13.13** + **uv `0.11.16`** | Pour outillage backend **hors** Docker ([`apps/api/AGENTS.md`](apps/api/AGENTS.md)). L’image API utilise déjà Python 3.13.13 ; le builder Docker épingle uv `0.11.16` (aligné CI). | Non si vous n’exécutez le backend que dans Docker |
 
 Aucune connexion à l’environnement Docker d’un autre collègue n’est requise : chacun lance sa stack sur son Mac.
 
