@@ -1,0 +1,37 @@
+name: Docker smoke
+
+on:
+  pull_request:
+    paths:
+      - 'infra/docker/api/**'
+      - 'infra/docker/railway/**'
+      - '.dockerignore'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'README.md'
+      - 'apps/web/package.json'
+      - 'apps/web/package-lock.json'
+      - '.github/workflows/docker-smoke.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/docker/api/**'
+      - 'infra/docker/railway/**'
+      - '.dockerignore'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'README.md'
+      - 'apps/web/package.json'
+      - 'apps/web/package-lock.json'
+      - '.github/workflows/docker-smoke.yml'
+
+jobs:
+  docker-build-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build API / worker image
+        run: docker build -f infra/docker/api/Dockerfile -t houston-api:ci .
+      - name: Build Railway api-web image
+        run: docker build -f infra/docker/railway/Dockerfile.api-web -t houston-api-web:ci .
