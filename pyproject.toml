@@ -19,6 +19,7 @@ dependencies = [
     "pillow>=11.0,<12",
     "pillow-heif>=0.21,<1",
     "pywebpush>=2.0,<3",
+    "resend>=2.0,<3",
 ]
 
 [dependency-groups]

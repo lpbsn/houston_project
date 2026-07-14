@@ -749,7 +749,8 @@ class MembershipInvitationView(APIView):
         },
         description=(
             "Invites a staff or manager member to the active establishment. "
-            "Returns a copyable invitation link; email delivery is not included in MVP."
+            "Returns a copyable invitation link; an invitation email is sent "
+            "asynchronously when enabled."
         ),
     )
     def post(self, request, establishment_id):
@@ -1156,7 +1157,8 @@ class OnboardingSessionDirectorInvitationView(APIView):
         },
         description=(
             "Invites a Director to the draft establishment for an onboarding session. "
-            "Creates or reuses a pending user and an invited director membership."
+            "Creates or reuses a pending user and an invited director membership. "
+            "An invitation email is sent asynchronously when enabled."
         ),
     )
     def post(self, request, session_id):

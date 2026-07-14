@@ -143,8 +143,8 @@ Implemented response truths:
 - Scoped user search returns active users with active memberships in the same active establishment only.
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
 - Establishment invitation acceptance: `POST /api/v1/invitations/{token}/accept/` (password setup, session creation; CSRF required).
-- Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` for manual sharing (no email delivery in MVP).
-- Post-onboarding staff/manager invite with token: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` returns `invitation_token` for manual sharing (no email delivery in MVP).
+- Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled.
+- Post-onboarding staff/manager invite with token: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled.
 
 Candidate endpoints only:
 

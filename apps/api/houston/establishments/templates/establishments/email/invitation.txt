@@ -1,0 +1,12 @@
+Bonjour {{ first_name }},
+
+Vous êtes invité·e à rejoindre {{ establishment_name }} sur Spore en tant que {{ role_label }}.
+
+Acceptez votre invitation avant le {{ expires_at_label }} :
+{{ accept_url }}
+
+Ce lien est personnel — ne le partagez pas.
+
+Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.
+
+— Spore

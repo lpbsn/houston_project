@@ -937,7 +937,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Invites a staff or manager member to the active establishment. Returns a copyable invitation link; email delivery is not included in MVP. */
+        /** @description Invites a staff or manager member to the active establishment. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
         post: operations["v1_establishments_membership_invitations_create"];
         delete?: never;
         options?: never;
@@ -1540,7 +1540,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Invites a Director to the draft establishment for an onboarding session. Creates or reuses a pending user and an invited director membership. */
+        /** @description Invites a Director to the draft establishment for an onboarding session. Creates or reuses a pending user and an invited director membership. An invitation email is sent asynchronously when enabled. */
         post: operations["v1_onboarding_sessions_director_invitations_create"];
         delete?: never;
         options?: never;
