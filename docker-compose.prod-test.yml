@@ -80,9 +80,9 @@ services:
       test:
         [
           "CMD",
-          "curl",
-          "-fsS",
-          "http://localhost:8000/api/v1/health/",
+          "/opt/venv/bin/python",
+          "-c",
+          "import urllib.request\nurl = 'http://127.0.0.1:8000/api/v1/health/'\nwith urllib.request.urlopen(url, timeout=3) as resp:\n    if resp.status != 200:\n        raise SystemExit(1)\n    resp.read()",
         ]
       interval: 5s
       timeout: 5s
