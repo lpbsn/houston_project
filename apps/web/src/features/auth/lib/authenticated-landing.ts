@@ -102,6 +102,10 @@ export function shouldShowAuthRoutingLoading(
   auth: { isReady: boolean; isAuthenticated: boolean },
 ): boolean {
   if (!auth.isReady) {
+    if (route.kind === 'static' && route.path === '/login') {
+      return false
+    }
+
     return true
   }
 

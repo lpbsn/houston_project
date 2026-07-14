@@ -7,20 +7,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LoginPage } from './login-page'
 
 const onNavigate = vi.fn()
+const authState = vi.hoisted(() => ({
+  isReady: true,
+}))
 
 vi.mock('@/app/auth-provider', () => ({
   useAuth: () => ({
-    isReady: true,
+    isReady: authState.isReady,
   }),
 }))
 
 vi.mock('@/features/auth/components/login-form', () => ({
-  LoginForm: () => createElement('div', { 'data-testid': 'login-form-stub' }),
+  LoginForm: () => createElement('div', { 'data-testid': 'login-form-stub' }, 'Se connecter'),
 }))
 
 afterEach(() => {
   cleanup()
   onNavigate.mockReset()
+  authState.isReady = true
 })
 
 describe('LoginPage', () => {
@@ -43,5 +47,23 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Onboarding' }))
 
     expect(onNavigate).toHaveBeenCalledWith('/onboarding')
+  })
+
+  it('renders session-restore loading UI when auth is not ready', () => {
+    authState.isReady = false
+
+    render(createElement(LoginPage, { onNavigate }))
+
+    expect(screen.getByTestId('login-page')).toBeTruthy()
+    expect(screen.getByText('Restauration de votre session…')).toBeTruthy()
+  })
+
+  it('does not render the login form while auth is restoring', () => {
+    authState.isReady = false
+
+    render(createElement(LoginPage, { onNavigate }))
+
+    expect(screen.queryByTestId('login-form-stub')).toBeNull()
+    expect(screen.queryByText('Se connecter')).toBeNull()
   })
 })
