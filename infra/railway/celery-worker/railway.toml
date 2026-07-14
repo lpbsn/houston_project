@@ -4,6 +4,15 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "infra/docker/api/Dockerfile"
+watchPatterns = [
+  "/apps/api/**",
+  "/infra/docker/api/**",
+  "/infra/railway/celery-worker/**",
+  "/pyproject.toml",
+  "/uv.lock",
+  "/.dockerignore",
+  "/README.md",  # temporaire — retiré en PR3 quand COPY README.md disparaît des Dockerfiles
+]
 
 [deploy]
 startCommand = "/opt/venv/bin/celery -A config worker -l info -n houston-worker@%h"
