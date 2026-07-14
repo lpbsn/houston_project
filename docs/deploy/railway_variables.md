@@ -83,6 +83,8 @@ Forbidden placeholders: `replace-me-for-local-dev`, empty values.
 | `POSTGRES_*` | yes | yes | yes |
 | `REDIS_URL`, `CELERY_*`, `HOUSTON_CACHE_REDIS_URL` | yes | yes | yes |
 | Auth salts / `OPENAI_API_KEY` | yes | yes | yes |
+| `HOUSTON_INVITATION_EMAIL_ENABLED`, `HOUSTON_PUBLIC_APP_URL` | yes | yes | optional |
+| `HOUSTON_INVITATION_EMAIL_FROM`, `RESEND_API_KEY` | no | yes | no |
 | AI provider vars (`HOUSTON_AI_*`) | yes | yes | yes |
 | `HOUSTON_PRIVATE_MEDIA_ROOT` | yes — `/app/apps/api/private_media` | yes — `/tmp/houston-private-media` (ephemeral) | no |
 | `HOUSTON_REGISTRATION_INVITE_CODES` | yes | no | no |
@@ -138,6 +140,21 @@ nginx on `api-web` allows `12m` request bodies ([`infra/docker/railway/nginx.con
 |---|---|---|
 | `HOUSTON_REGISTRATION_INVITE_CODES` | `api-web` only | Comma-separated codes per onboarding policy |
 | `HOUSTON_DIRECTOR_INVITATION_TTL_DAYS` | `api-web` | Default `7` |
+
+---
+
+## Invitation email (Resend)
+
+Transactional invitation emails for Staff, Manager, and Director roles. Disabled by default locally (`HOUSTON_INVITATION_EMAIL_ENABLED=0`).
+
+| Variable | Service | Required | Notes |
+|---|---|---|---|
+| `HOUSTON_INVITATION_EMAIL_ENABLED` | `api-web`, `celery-worker` | no | Default `false`; set `true` in prod when ready |
+| `HOUSTON_PUBLIC_APP_URL` | `api-web`, `celery-worker` | when enabled | Public app origin for accept links, e.g. `https://app.spore-os.com` (no trailing slash) |
+| `HOUSTON_INVITATION_EMAIL_FROM` | `celery-worker` | when enabled | Default `Spore <invitation@notify.spore-os.com>` |
+| `RESEND_API_KEY` | `celery-worker` only | when enabled | **Never** on `api-web` |
+
+`celery-beat` does not send invitation emails; optional parity for `HOUSTON_INVITATION_EMAIL_ENABLED` / `HOUSTON_PUBLIC_APP_URL` only if ops require uniform env.
 
 ---
 

@@ -59,7 +59,7 @@ Activation minimum:
 - at least 1 activity subject validated in applied proposal
 - at least 1 active Owner or Director
 - exactly one active or invited Director membership on a user distinct from the initial Owner (at most one invited/active Director per establishment; deactivated Directors do not satisfy the gate)
-- Director invitation during draft onboarding via `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` (returns one-time `invitation_token` and `invitation_accept_path` for manual sharing)
+- Director invitation during draft onboarding via `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` (returns one-time `invitation_token`, `invitation_accept_path`, and schedules a transactional invitation email when enabled)
 - Director accepts via `POST /api/v1/invitations/{token}/accept/` (sets password, activates user/membership, creates auth session)
 
 Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).

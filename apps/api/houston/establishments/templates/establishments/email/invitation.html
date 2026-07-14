@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <body>
+    <p>Bonjour {{ first_name }},</p>
+    <p>
+      Vous êtes invité·e à rejoindre <strong>{{ establishment_name }}</strong> sur Spore
+      en tant que <strong>{{ role_label }}</strong>.
+    </p>
+    <p>
+      <a href="{{ accept_url }}">Accepter l'invitation</a>
+    </p>
+    <p>Acceptez votre invitation avant le {{ expires_at_label }}.</p>
+    <p>Ce lien est personnel — ne le partagez pas.</p>
+    <p>Si vous ne reconnaissez pas cette invitation, vous pouvez ignorer ce message.</p>
+    <p>— Spore</p>
+  </body>
+</html>

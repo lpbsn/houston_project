@@ -1688,8 +1688,15 @@ _INVITABLE_TARGET_ROLES_BY_ACTOR = {
 def _issue_establishment_invitation_for_membership(
     membership: EstablishmentMembership,
 ) -> DirectorInvitationResult:
+    from houston.establishments.invitation_email import schedule_establishment_invitation_email
+
     _revoke_pending_invitations(membership=membership)
     raw_token, invitation = _create_establishment_invitation(membership=membership)
+    schedule_establishment_invitation_email(
+        invitation=invitation,
+        membership=membership,
+        raw_token=raw_token,
+    )
     return DirectorInvitationResult(
         membership=_reload_membership_for_response(membership.id),
         invitation_token=raw_token,

@@ -3139,7 +3139,8 @@ paths:
     post:
       operationId: v1_establishments_membership_invitations_create
       description: Invites a staff or manager member to the active establishment.
-        Returns a copyable invitation link; email delivery is not included in MVP.
+        Returns a copyable invitation link; an invitation email is sent asynchronously
+        when enabled.
       parameters:
       - in: path
         name: establishment_id
@@ -4966,6 +4967,7 @@ paths:
       operationId: v1_onboarding_sessions_director_invitations_create
       description: Invites a Director to the draft establishment for an onboarding
         session. Creates or reuses a pending user and an invited director membership.
+        An invitation email is sent asynchronously when enabled.
       parameters:
       - in: path
         name: session_id

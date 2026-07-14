@@ -401,6 +401,14 @@ HOUSTON_VAPID_PUBLIC_KEY = env_str("HOUSTON_VAPID_PUBLIC_KEY", default="")
 HOUSTON_VAPID_PRIVATE_KEY = env_str("HOUSTON_VAPID_PRIVATE_KEY", default="")
 HOUSTON_VAPID_SUBJECT = env_str("HOUSTON_VAPID_SUBJECT", default="mailto:push@houston.local")
 
+HOUSTON_INVITATION_EMAIL_ENABLED = env_bool("HOUSTON_INVITATION_EMAIL_ENABLED", default=False)
+HOUSTON_PUBLIC_APP_URL = env_str("HOUSTON_PUBLIC_APP_URL", default="http://localhost:5173")
+HOUSTON_INVITATION_EMAIL_FROM = env_str(
+    "HOUSTON_INVITATION_EMAIL_FROM",
+    default="Spore <invitation@notify.spore-os.com>",
+)
+RESEND_API_KEY = env_str("RESEND_API_KEY", default="")
+
 OPENAI_API_KEY = env_str("OPENAI_API_KEY", "")
 
 HOUSTON_ENABLE_API_DOCS = env_bool("HOUSTON_ENABLE_API_DOCS", default=DEBUG)
