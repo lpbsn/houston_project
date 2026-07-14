@@ -87,7 +87,7 @@ up-prod-test: assert-local-dev-db
 	@echo "First boot: make migrate-prod-test"
 
 migrate-prod-test: assert-local-dev-db
-	$(COMPOSE_PROD_TEST) exec -T api sh -lc 'cd /app/apps/api && uv run python manage.py migrate'
+	$(COMPOSE_PROD_TEST) exec -T api sh -lc 'cd /app/apps/api && /opt/venv/bin/python manage.py migrate'
 
 down-prod-test:
 	$(COMPOSE_PROD_TEST) down

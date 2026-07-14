@@ -36,7 +36,7 @@ export function buildPushNotificationOptions(payload: PushPayloadData): {
     options: {
       body: payload.body ?? '',
       data: payload.data ?? {},
-      icon: '/spore-icon-192.png',
+      icon: '/spore-icon-v2-192.png',
     },
   }
 }

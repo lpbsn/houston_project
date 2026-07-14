@@ -47,7 +47,7 @@ Before `watchPatterns`, every push to the connected branch triggered a Docker re
 
 Each service's [`railway.toml`](../../infra/railway/api-web/railway.toml) now defines `watchPatterns` under `[build]`. Railway evaluates patterns from the repository root (`/`), regardless of Root Directory.
 
-Watch Paths express **functional build dependencies** — what should trigger a redeploy — not the full context currently included by `COPY . /app` in today's Dockerfiles. Changes under paths such as `/docs/**` or `/.cursor/**` do **not** match any pattern and skip deployment. A future Docker COPY alignment (PR3) will narrow the build context to match this matrix.
+Watch Paths express **functional build dependencies** — what should trigger a redeploy. Dockerfiles use selective `COPY` (not `COPY . /app`), aligned with this matrix. Changes under paths such as `/docs/**` or `/.cursor/**` do **not** match any pattern and skip deployment.
 
 ### `watchPatterns` per service
 
@@ -56,14 +56,13 @@ Watch Paths express **functional build dependencies** — what should trigger a 
 ```toml
 watchPatterns = [
   "/apps/web/**",
-  "/contracts/**",
+  "/contracts/operational-realtime-invalidation.json",
   "/apps/api/**",
   "/infra/docker/railway/**",
   "/infra/railway/api-web/**",
   "/pyproject.toml",
   "/uv.lock",
   "/.dockerignore",
-  "/README.md",  # temporary — removed in PR3 when Dockerfile COPY is dropped
 ]
 ```
 
@@ -72,12 +71,12 @@ watchPatterns = [
 ```toml
 watchPatterns = [
   "/apps/api/**",
+  "/contracts/operational-realtime-invalidation.json",
   "/infra/docker/api/**",
   "/infra/railway/celery-worker/**",
   "/pyproject.toml",
   "/uv.lock",
   "/.dockerignore",
-  "/README.md",  # temporary — removed in PR3 when Dockerfile COPY is dropped
 ]
 ```
 
@@ -86,23 +85,21 @@ watchPatterns = [
 ```toml
 watchPatterns = [
   "/apps/api/**",
+  "/contracts/operational-realtime-invalidation.json",
   "/infra/docker/api/**",
   "/infra/railway/celery-beat/**",
   "/pyproject.toml",
   "/uv.lock",
   "/.dockerignore",
-  "/README.md",  # temporary — removed in PR3 when Dockerfile COPY is dropped
 ]
 ```
-
-`/README.md` is temporary: current Dockerfiles still copy it for the `uv sync` layer (`COPY pyproject.toml uv.lock README.md`). It will be removed from `watchPatterns` in PR3 when that `COPY` is dropped.
 
 ### Trigger matrix
 
 | Change | `api-web` | `celery-worker` | `celery-beat` |
 |---|---:|---:|---:|
 | `/apps/web/**` | Yes | No | No |
-| `/contracts/**` | Yes | No | No |
+| `/contracts/operational-realtime-invalidation.json` | Yes | Yes | Yes |
 | `/apps/api/**` | Yes | Yes | Yes |
 | `/infra/docker/railway/**` | Yes | No | No |
 | `/infra/docker/api/**` | No | Yes | Yes |
@@ -111,8 +108,7 @@ watchPatterns = [
 | `/infra/railway/celery-beat/**` | No | No | Yes |
 | `/pyproject.toml`, `/uv.lock` | Yes | Yes | Yes |
 | `/.dockerignore` | Yes | Yes | Yes |
-| `/README.md` | Yes (temporary) | Yes (temporary) | Yes (temporary) |
-| `/docs/**`, `/.cursor/**` | No | No | No |
+| `/docs/**`, `/.cursor/**`, `/README.md` | No | No | No |
 
 `api-web` does **not** watch `/infra/docker/api/**` (worker/beat Dockerfile). Worker and beat do **not** watch frontend or Railway edge paths.
 
@@ -122,7 +118,7 @@ Do not use artificial test commits on the production branch. Prefer a Railway te
 
 | Scenario | Expected |
 |---|---|
-| Change under `/docs/**` only (not `/README.md`) | 0 deploys |
+| Change under `/docs/**` only | 0 deploys |
 | Change under `/apps/web/**` only | `api-web` only |
 | Change under `/apps/api/**` only | all 3 services |
 | Change under `/infra/docker/api/**` only | worker + beat only |
@@ -153,7 +149,7 @@ The image includes: Python API (uv), production SPA build (`apps/web/dist`), ngi
 Configured in [`infra/railway/api-web/railway.toml`](../../infra/railway/api-web/railway.toml):
 
 ```toml
-preDeployCommand = "cd /app/apps/api && uv run python manage.py migrate"
+preDeployCommand = "/bin/sh -c 'cd /app/apps/api && /opt/venv/bin/python manage.py migrate --noinput --verbosity 2'"
 ```
 
 * Runs in a **separate container** before the new deployment goes live.
@@ -167,7 +163,7 @@ If pre-deploy fails: fix the error, or run migrate manually (Railway shell / one
 After first migrate (or schema change), run **once** manually:
 
 ```bash
-cd /app/apps/api && uv run python manage.py import_business_unit_catalog
+cd /app/apps/api && /opt/venv/bin/python manage.py import_business_unit_catalog
 ```
 
 Use Railway service shell or `railway run` against `api-web`. Not automated in pre-deploy.
@@ -181,8 +177,8 @@ startCommand = "/app/infra/docker/railway/start-api-web.sh"
 The script ([`infra/docker/railway/start-api-web.sh`](../../infra/docker/railway/start-api-web.sh)):
 
 * Sets `PORT="${PORT:-8080}"`
-* Runs `check --deploy` when `DJANGO_DEBUG=0`
-* Starts **Daphne** on `127.0.0.1:8000` (HTTP + WebSocket)
+* Runs `/opt/venv/bin/python manage.py check --deploy` when `DJANGO_DEBUG=0`
+* Starts **Daphne** via `/opt/venv/bin/daphne` on `127.0.0.1:8000` (HTTP + WebSocket)
 * Starts **nginx** on `0.0.0.0:$PORT` (Railway edge)
 * Routes `/api/*` and `/ws/*` to Daphne; `/*` to SPA static
 * Exits non-zero if Daphne or nginx fails
@@ -233,7 +229,7 @@ Railway volumes mount as root; the start script `chown`s the media directory. If
 ### Start command
 
 ```toml
-startCommand = "cd /app/apps/api && uv run celery -A config worker -l info -n houston-worker@%h"
+startCommand = "/opt/venv/bin/celery -A config worker -l info -n houston-worker@%h"
 ```
 
 ### Health / verification
@@ -269,7 +265,7 @@ See [Known limitations V1 — private media](#known-limitations-v1--private-medi
 ### Start command
 
 ```toml
-startCommand = "cd /app/apps/api && uv run celery -A config beat -l info --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celerybeat/celerybeat-schedule"
+startCommand = "/opt/venv/bin/celery -A config beat -l info --scheduler celery.beat:PersistentScheduler --schedule /var/lib/celerybeat/celerybeat-schedule"
 ```
 
 ### Volume (beat schedule)

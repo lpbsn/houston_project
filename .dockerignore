@@ -48,3 +48,13 @@ apps/api/celerybeat-schedule*
 
 # Logs
 *.log
+
+# Non-runtime repo content (PR3 selective COPY)
+docs/
+.cursor/
+.github/
+scripts/
+INSTALL_MAC.md
+AGENTS.md
+Makefile
+docker-compose.yml

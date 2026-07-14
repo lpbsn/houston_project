@@ -7,12 +7,12 @@ builder = "DOCKERFILE"
 dockerfilePath = "infra/docker/api/Dockerfile"
 watchPatterns = [
   "/apps/api/**",
+  "/contracts/operational-realtime-invalidation.json",
   "/infra/docker/api/**",
   "/infra/railway/celery-beat/**",
   "/pyproject.toml",
   "/uv.lock",
   "/.dockerignore",
-  "/README.md",  # temporaire — retiré en PR3 quand COPY README.md disparaît des Dockerfiles
 ]
 
 [deploy]
