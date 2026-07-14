@@ -11,6 +11,9 @@ const navigate = vi.fn()
 const MVP_PHRASE =
   'Send a staff or manager invitation link. Houston does not send email in MVP; copy and share the link manually.'
 
+const SUCCESS_MESSAGE =
+  'Invitation créée. Un email va être envoyé à invitee@example.com.'
+
 const { authState, inviteFormState } = vi.hoisted(() => ({
   authState: {
     current: {
@@ -40,6 +43,7 @@ const { authState, inviteFormState } = vi.hoisted(() => ({
       selectedBusinessUnitScopes: [],
       setSelectedBusinessUnitScopes: vi.fn(),
       invitationLink: null as string | null,
+      invitedEmail: null as string | null,
       copyMessage: null as string | null,
       errorMessage: null as string | null,
       isSubmitting: false,
@@ -99,6 +103,7 @@ afterEach(() => {
     selectedBusinessUnitScopes: [],
     setSelectedBusinessUnitScopes: vi.fn(),
     invitationLink: null,
+    invitedEmail: null,
     copyMessage: null,
     errorMessage: null,
     isSubmitting: false,
@@ -193,16 +198,17 @@ describe('TeamInvitePage', () => {
     ).toBeTruthy()
   })
 
-  it('shows invitation link block after successful submit', () => {
+  it('shows invitation success message and fallback link after successful submit', () => {
     inviteFormState.current = {
       ...inviteFormState.current,
       invitationLink: 'https://example.com/invitations/token-1',
+      invitedEmail: 'invitee@example.com',
       canSubmit: true,
     }
 
     render(createElement(TeamInvitePage))
 
-    expect(screen.getByText('Invitation ready')).toBeTruthy()
+    expect(screen.getByText(SUCCESS_MESSAGE)).toBeTruthy()
     expect(screen.getByText('https://example.com/invitations/token-1')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Copy invitation link/i })).toBeTruthy()
   })

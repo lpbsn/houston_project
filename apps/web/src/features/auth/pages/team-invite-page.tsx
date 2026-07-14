@@ -13,6 +13,7 @@ import {
   TerrainSectionLabel,
 } from '@/components/ui/terrain'
 import { useMembershipInviteForm } from '@/features/auth/hooks/use-membership-invite-form'
+import { buildInvitationCreatedMessage } from '@/features/auth/lib/invitation-messaging'
 import {
   canInviteFromBootstrapHints,
   getBootstrapPermissionHints,
@@ -61,6 +62,7 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
+    invitedEmail,
     copyMessage,
     errorMessage,
     isSubmitting,
@@ -198,7 +200,10 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
         <section className="space-y-2">
           <TerrainSectionLabel>Invitation</TerrainSectionLabel>
           <TerrainCard className="space-y-3 p-3">
-            <TerrainFeedback variant="success" message="Invitation ready" />
+            <TerrainFeedback
+              variant="success"
+              message={buildInvitationCreatedMessage(invitedEmail ?? '')}
+            />
             <p className="break-all text-sm text-muted-foreground">{invitationLink}</p>
             <Button
               type="button"

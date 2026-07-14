@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { BusinessUnitScopeSelector } from '@/components/domain/business-unit-scope-selector'
 import { useMembershipInviteForm } from '@/features/auth/hooks/use-membership-invite-form'
+import { buildInvitationCreatedMessage } from '@/features/auth/lib/invitation-messaging'
 import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
 
 type MembershipInviteCardProps = {
@@ -23,6 +24,7 @@ export function MembershipInviteCard({
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
+    invitedEmail,
     copyMessage,
     errorMessage,
     isSubmitting,
@@ -47,8 +49,8 @@ export function MembershipInviteCard({
             Invite a team member
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            Send a staff or manager invitation link. Houston does not send email in MVP; copy and
-            share the link manually.
+            Invite a staff or manager member. An email will be sent automatically; copy and share the
+            link manually if needed.
           </CardDescription>
         </div>
       </CardHeader>
@@ -152,7 +154,7 @@ export function MembershipInviteCard({
           <div className="space-y-3 rounded-[1.35rem] border border-[#dce8d0] bg-[#f7fbf2] px-4 py-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#3f6d2d]">
               <CheckCircle2 className="size-4" />
-              Invitation ready
+              {buildInvitationCreatedMessage(invitedEmail ?? '')}
             </div>
             <div className="break-all text-sm text-muted-foreground">{invitationLink}</div>
             <Button type="button" variant="outline" className="h-10 rounded-[1rem]" onClick={handleCopyLink}>
