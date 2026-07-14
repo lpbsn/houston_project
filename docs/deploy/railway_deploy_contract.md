@@ -424,6 +424,54 @@ make web-check
 make backend-deploy-check
 ```
 
+CI also runs `manage.py check --deploy` in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (mirror of `make backend-deploy-check`). It fails on deploy **errors**, not necessarily on warnings — no `--fail-level WARNING`.
+
+---
+
+## Wait for CI (post-merge PR2)
+
+Railway **waits for GitHub workflows triggered on the commit** before starting a build. No manual list of GitHub job names is configured on the Railway side — Railway waits for whichever workflows GitHub runs for that commit.
+
+| Workflow | Trigger | Waited by Railway |
+|---|---|---|
+| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | **Always** (push/PR, no `paths` filter) | Yes — when triggered on the commit |
+| [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) | Only when a filtered path changes on the commit | Yes **when triggered**; not present on commits that do not match |
+
+Consequences:
+
+* Docs-only commits (`/docs/**`): `ci.yml` still runs; Railway waits for it to pass.
+* Commits touching `infra/docker/api/**` or `infra/docker/railway/**`: Railway waits for **both** `ci.yml` and `docker-smoke.yml`.
+* In GitHub branch protection, required checks are the jobs from `ci.yml` (`backend-tests`, `frontend-tests`, `docs-check`). `docker-smoke.yml` is path-filtered and is not a required branch-protection check, but Railway still blocks if that workflow is triggered on the commit and fails.
+
+### Phase A — test environment (required before prod)
+
+1. Create or reuse a **Railway test project** or clone services connected to a **non-production GitHub branch** (e.g. `railway-test`).
+2. **Enable Wait for CI** on all three test services only.
+3. Push with green CI → build starts after all workflows triggered on the commit complete.
+4. Push touching `infra/docker/api/**` or `infra/docker/railway/**` → confirm Railway waits for `ci.yml` **and** `docker-smoke.yml`.
+5. Deliberately fail CI on the test branch → Railway build must not start or promote.
+6. **Never** deliberately fail CI on the branch connected to **production**.
+
+### Phase B — production (after Phase A validated)
+
+1. Note the deploy baseline before changing settings.
+2. Check current Wait for CI state on `api-web`, `celery-worker`, and `celery-beat` prod services.
+3. **Enable** Wait for CI on all three prod services after PR2 merge and Phase A validation.
+4. Observe the first real prod push: green CI → deploy; note the additional wait time (GitHub workflow completion, not a Docker build regression).
+
+### Branch protection vs Railway
+
+| Scope | GitHub branch protection | Railway Wait for CI |
+|---|---|---|
+| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | Required jobs: `backend-tests`, `frontend-tests`, `docs-check` | Waits for the workflow when triggered on the commit |
+| [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) | Not required (path-filtered workflow) | Waits for the workflow when triggered on the commit |
+
+Railway does not expose a manual checklist of GitHub job names — only workflows triggered on the commit matter.
+
+Railway remains the CD system — no GitHub deploy workflow.
+
+Rollback: disable Wait for CI (test then prod); revert workflow changes if needed.
+
 ---
 
 ## Explicit prohibitions

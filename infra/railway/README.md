@@ -46,6 +46,18 @@ Full trigger matrix and validation scenarios: [`docs/deploy/railway_deploy_contr
 
 Values in these TOML files override dashboard build/deploy settings for each deployment. Dashboard values are not updated automatically — the repo is the source of truth.
 
+## Wait for CI (operator checklist)
+
+Enable only after PR2 merge. Full procedure: [`docs/deploy/railway_deploy_contract.md#wait-for-ci-post-merge-pr2`](../../docs/deploy/railway_deploy_contract.md#wait-for-ci-post-merge-pr2).
+
+1. Confirm **Config File path** per service (table above) on deployment details (config-file icon).
+2. **Test first, prod second:** enable Wait for CI on a Railway test project / non-prod branch before production.
+3. **Workflows Railway waits for on each commit** (workflows, not individual job names — no manual job list on Railway):
+   * [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — always triggered
+   * [`.github/workflows/docker-smoke.yml`](../../.github/workflows/docker-smoke.yml) — only when Docker-related paths change
+4. GitHub branch protection (GitHub-only): required checks are `backend-tests`, `frontend-tests`, `docs-check`; `docker-smoke.yml` is path-filtered and not required in branch protection.
+5. Dashboard Wait for CI / Watch Paths may differ from repo config — deployment details config-file icon is the effective source.
+
 ## Related
 
 * [`docs/deploy/railway_deploy_contract.md`](../../docs/deploy/railway_deploy_contract.md) — operational contract

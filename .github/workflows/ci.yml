@@ -48,12 +48,28 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: "0.11.16"
       - name: Install backend dependencies
         run: uv sync
       # GATE-01: mirror Makefile backend-check contract gates (local dev uses make/Docker).
       - name: Django system check
         working-directory: apps/api
         run: uv run python manage.py check
+      - name: Django deploy check
+        working-directory: apps/api
+        env:
+          DJANGO_DEBUG: "0"
+          DJANGO_SECRET_KEY: deploy-check-secret-with-sufficient-length-and-entropy
+          DJANGO_ALLOWED_HOSTS: example.railway.app
+          CSRF_TRUSTED_ORIGINS: https://example.railway.app
+          HOUSTON_AUTH_TOKEN_PEPPER: deploy-check-pepper-distinct
+          HOUSTON_AUTH_TOKEN_SALT: deploy-check-auth-salt
+          HOUSTON_CHAT_WS_TICKET_SALT: deploy-check-chat-salt
+          HOUSTON_REALTIME_WS_TICKET_SALT: deploy-check-realtime-salt
+          OPENAI_API_KEY: sk-deploy-check
+          HOUSTON_PRIVATE_MEDIA_ROOT: /tmp/houston-deploy-check-media
+        run: uv run python manage.py check --deploy
       - name: Check migrations
         working-directory: apps/api
         run: uv run python manage.py makemigrations --check --dry-run
