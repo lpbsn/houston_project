@@ -4,7 +4,7 @@ Railway does **not** auto-discover multiple `railway.toml` files under subdirect
 
 ## Shared monorepo
 
-Houston builds from the **repository root** (all Dockerfiles copy `pyproject.toml`, `apps/api/`, `apps/web/`, etc.).
+Houston builds from the **repository root**. Dockerfiles use selective `COPY` aligned with Watch Paths (e.g. `apps/api/`, `pyproject.toml`, `uv.lock`; `api-web` also copies frontend build inputs).
 
 | Setting | `api-web` | `celery-worker` | `celery-beat` |
 |---|---|---|---|
@@ -17,15 +17,13 @@ Do **not** set Root Directory to `infra/railway/<service>` — that narrows the 
 
 Railway evaluates `watchPatterns` from the **repository root** (`/`), even when Root Directory is `/`. Patterns are anchored with a leading `/`.
 
-Watch Paths express **functional build dependencies** — what should trigger a redeploy — not the full context currently included by `COPY . /app` in today's Dockerfiles. A future Docker COPY alignment (PR3) will narrow the build context to match this matrix.
+Watch Paths express **functional build dependencies** — what should trigger a redeploy. Dockerfiles use selective `COPY` aligned with this matrix.
 
 | Service | `watchPatterns` |
 |---|---|
-| `api-web` | `/apps/web/**`, `/contracts/**`, `/apps/api/**`, `/infra/docker/railway/**`, `/infra/railway/api-web/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore`, `/README.md` (temporary) |
-| `celery-worker` | `/apps/api/**`, `/infra/docker/api/**`, `/infra/railway/celery-worker/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore`, `/README.md` (temporary) |
-| `celery-beat` | `/apps/api/**`, `/infra/docker/api/**`, `/infra/railway/celery-beat/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore`, `/README.md` (temporary) |
-
-`/README.md` is temporary: current Dockerfiles still `COPY` it for the `uv sync` layer. It will be removed from `watchPatterns` in PR3 when that `COPY` is dropped.
+| `api-web` | `/apps/web/**`, `/contracts/operational-realtime-invalidation.json`, `/apps/api/**`, `/infra/docker/railway/**`, `/infra/railway/api-web/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `celery-worker` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-worker/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
+| `celery-beat` | `/apps/api/**`, `/contracts/operational-realtime-invalidation.json`, `/infra/docker/api/**`, `/infra/railway/celery-beat/**`, `/pyproject.toml`, `/uv.lock`, `/.dockerignore` |
 
 > Le dashboard peut afficher une valeur différente, car Railway ne le met pas à jour depuis `railway.toml`. Pour chaque déploiement, la configuration en code prévaut. Vérifier la configuration effective dans les détails du déploiement via l'icône de fichier.
 

@@ -30,11 +30,11 @@ else
 fi
 echo "=== end safe env ==="
 
-if ! uv run python manage.py check --deploy; then
+if ! /opt/venv/bin/python manage.py check --deploy; then
   STATUS=1
 fi
 
-if ! uv run python manage.py migrate --verbosity 3; then
+if ! /opt/venv/bin/python manage.py migrate --verbosity 3; then
   STATUS=1
 fi
 

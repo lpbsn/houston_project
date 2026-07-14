@@ -27,10 +27,10 @@ chown -R houston:houston "$MEDIA_ROOT" 2>/dev/null || true
 cd /app/apps/api
 
 if [ "${DJANGO_DEBUG:-1}" = "0" ]; then
-    su -s /bin/sh houston -c "uv run python manage.py check --deploy" || fail "check --deploy failed"
+    su -s /bin/sh houston -c "/opt/venv/bin/python manage.py check --deploy" || fail "check --deploy failed"
 fi
 
-su -s /bin/sh houston -c "uv run daphne -b 127.0.0.1 -p 8000 config.asgi:application" &
+su -s /bin/sh houston -c "/opt/venv/bin/daphne -b 127.0.0.1 -p 8000 config.asgi:application" &
 DAPHNE_PID=$!
 
 sleep 1

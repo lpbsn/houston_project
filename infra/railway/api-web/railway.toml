@@ -6,14 +6,13 @@ builder = "DOCKERFILE"
 dockerfilePath = "infra/docker/railway/Dockerfile.api-web"
 watchPatterns = [
   "/apps/web/**",
-  "/contracts/**",
+  "/contracts/operational-realtime-invalidation.json",
   "/apps/api/**",
   "/infra/docker/railway/**",
   "/infra/railway/api-web/**",
   "/pyproject.toml",
   "/uv.lock",
   "/.dockerignore",
-  "/README.md",  # temporaire — retiré en PR3 quand COPY README.md disparaît des Dockerfiles
 ]
 
 [deploy]

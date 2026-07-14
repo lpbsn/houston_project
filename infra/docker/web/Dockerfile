@@ -5,13 +5,20 @@ FROM node:24-alpine AS build
 
 WORKDIR /app
 
-COPY apps/web/package.json apps/web/package-lock.json* apps/web/
-COPY contracts/ contracts/
+COPY apps/web/package.json apps/web/package-lock.json apps/web/
+
+WORKDIR /app/apps/web
+
+RUN npm ci
+
+WORKDIR /app
+
+COPY contracts/operational-realtime-invalidation.json contracts/operational-realtime-invalidation.json
 COPY apps/web/ apps/web/
 
 WORKDIR /app/apps/web
 
-RUN npm ci && npm run build
+RUN npm run build
 
 # -----------------------------------------------------------------------------
 # Stage 2: local dev (docker-compose.yml target: development)

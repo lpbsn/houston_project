@@ -19,12 +19,21 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 RUN groupadd --gid 1000 houston \
     && useradd --uid 1000 --gid houston --create-home --shell /bin/sh houston
 
-COPY pyproject.toml uv.lock README.md /app/
-RUN uv sync --frozen --no-install-project --group dev
+ARG UV_SYNC_DEV=false
 
-COPY . /app
+COPY pyproject.toml uv.lock /app/
+
+RUN if [ "$UV_SYNC_DEV" = "true" ]; then \
+      uv sync --locked --no-install-project --group dev; \
+    else \
+      uv sync --locked --no-install-project --no-dev; \
+    fi
 
 RUN chown -R houston:houston /opt/venv
+
+COPY apps/api /app/apps/api
+COPY contracts/operational-realtime-invalidation.json /app/contracts/operational-realtime-invalidation.json
+COPY infra/docker/api /app/infra/docker/api
 
 WORKDIR /app/apps/api
 

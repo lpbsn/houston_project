@@ -5,13 +5,20 @@ FROM node:24-alpine AS web-build
 
 WORKDIR /app
 
-COPY apps/web/package.json apps/web/package-lock.json* apps/web/
-COPY contracts/ contracts/
+COPY apps/web/package.json apps/web/package-lock.json apps/web/
+
+WORKDIR /app/apps/web
+
+RUN npm ci
+
+WORKDIR /app
+
+COPY contracts/operational-realtime-invalidation.json contracts/operational-realtime-invalidation.json
 COPY apps/web/ apps/web/
 
 WORKDIR /app/apps/web
 
-RUN npm ci && npm run build
+RUN npm run build
 
 FROM python:3.13.13-slim AS api-base
 
@@ -34,12 +41,20 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 RUN groupadd --gid 1000 houston \
     && useradd --uid 1000 --gid houston --create-home --shell /bin/sh houston
 
-COPY pyproject.toml uv.lock README.md /app/
-RUN uv sync --frozen --no-install-project --group dev
+ARG UV_SYNC_DEV=false
 
-COPY . /app
+COPY pyproject.toml uv.lock /app/
+
+RUN if [ "$UV_SYNC_DEV" = "true" ]; then \
+      uv sync --locked --no-install-project --group dev; \
+    else \
+      uv sync --locked --no-install-project --no-dev; \
+    fi
 
 RUN chown -R houston:houston /opt/venv
+
+COPY apps/api /app/apps/api
+COPY contracts/operational-realtime-invalidation.json /app/contracts/operational-realtime-invalidation.json
 
 WORKDIR /app/apps/api
 

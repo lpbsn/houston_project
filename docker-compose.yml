@@ -1,6 +1,8 @@
 x-api-build: &api_build
   context: .
   dockerfile: infra/docker/api/Dockerfile
+  args:
+    UV_SYNC_DEV: "true"
 
 x-api-image: &api_image houston-api:dev
 

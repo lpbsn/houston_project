@@ -23,7 +23,7 @@ describe('push-handlers', () => {
     expect(title).toBe('Nouveau signal')
     expect(options.body).toBe('Un signal urgent a été créé.')
     expect(options.data).toEqual({ url: '/signals/abc', notification_id: 'n-1' })
-    expect(options.icon).toBe('/spore-icon-192.png')
+    expect(options.icon).toBe('/spore-icon-v2-192.png')
   })
 
   it('falls back to defaults when payload is missing', () => {
