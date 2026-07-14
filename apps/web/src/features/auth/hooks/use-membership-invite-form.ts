@@ -94,6 +94,7 @@ export function useMembershipInviteForm({
     setErrorMessage(null)
     setCopyMessage(null)
     setInvitedEmail(null)
+    setInvitationLink(null)
     setIsSubmitting(true)
 
     try {

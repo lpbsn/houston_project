@@ -196,7 +196,7 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
         </form>
       ) : null}
 
-      {invitationLink ? (
+      {invitationLink && invitedEmail ? (
         <section className="space-y-2">
           <TerrainSectionLabel>Invitation</TerrainSectionLabel>
           <TerrainCard className="space-y-3 p-3">

@@ -9,6 +9,7 @@ import { DirectorInviteCard } from './director-invite-card'
 import type { ActivationSummaryResponse } from '@/features/onboarding/types'
 
 const inviteDirector = vi.fn()
+let inviteDirectorPending = false
 
 vi.mock('@/features/onboarding/hooks', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/onboarding/hooks')>()
@@ -16,7 +17,7 @@ vi.mock('@/features/onboarding/hooks', async (importOriginal) => {
     ...actual,
     useInviteDirector: () => ({
       mutateAsync: inviteDirector,
-      isPending: false,
+      isPending: inviteDirectorPending,
       error: null,
     }),
   }
@@ -57,7 +58,29 @@ function renderDirectorInviteCard() {
 afterEach(() => {
   cleanup()
   inviteDirector.mockReset()
+  inviteDirectorPending = false
 })
+
+function fillDirectorForm(email = 'director@example.com') {
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: email },
+  })
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Dana' },
+  })
+  fireEvent.change(screen.getByLabelText('Last name'), {
+    target: { value: 'Rivers' },
+  })
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
 
 describe('DirectorInviteCard', () => {
   it('shows the exact success message and fallback link after invite', async () => {
@@ -67,15 +90,7 @@ describe('DirectorInviteCard', () => {
 
     renderDirectorInviteCard()
 
-    fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'director@example.com' },
-    })
-    fireEvent.change(screen.getByLabelText('First name'), {
-      target: { value: 'Dana' },
-    })
-    fireEvent.change(screen.getByLabelText('Last name'), {
-      target: { value: 'Rivers' },
-    })
+    fillDirectorForm()
 
     fireEvent.click(screen.getByRole('button', { name: /Invite Director/i }))
 
@@ -87,5 +102,36 @@ describe('DirectorInviteCard', () => {
 
     expect(screen.getByText(`${window.location.origin}/invitations/director-token`)).toBeTruthy()
     expect(screen.getByRole('button', { name: /Copy invitation link/i })).toBeTruthy()
+  })
+
+  it('hides the success block when a new submit starts', async () => {
+    const deferred = createDeferred<{ invitation_accept_path: string }>()
+
+    inviteDirector
+      .mockResolvedValueOnce({
+        invitation_accept_path: '/invitations/director-token-first',
+      })
+      .mockImplementationOnce(() => deferred.promise)
+
+    renderDirectorInviteCard()
+
+    fillDirectorForm('first@example.com')
+    fireEvent.click(screen.getByRole('button', { name: /Invite Director/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Invitation créée. Un email va être envoyé à first@example.com.'),
+      ).toBeTruthy()
+    })
+
+    fillDirectorForm('second@example.com')
+    fireEvent.click(screen.getByRole('button', { name: /Invite Director/i }))
+
+    expect(
+      screen.queryByText('Invitation créée. Un email va être envoyé à first@example.com.'),
+    ).toBeNull()
+    expect(
+      screen.queryByText(`${window.location.origin}/invitations/director-token-first`),
+    ).toBeNull()
   })
 })

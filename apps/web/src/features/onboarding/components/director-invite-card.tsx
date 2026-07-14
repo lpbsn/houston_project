@@ -90,6 +90,7 @@ export function DirectorInviteCard({
     event.preventDefault()
     setCopyMessage(null)
     setInvitedEmail(null)
+    setInvitationLink(null)
 
     try {
       const submittedEmail = form.email.trim()
@@ -280,7 +281,7 @@ export function DirectorInviteCard({
           </form>
         )}
 
-        {invitationLink ? (
+        {invitationLink && invitedEmail ? (
           <div className="space-y-3 rounded-[1rem] border border-emerald-200 bg-emerald-50/60 p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
               <CheckCircle2 className="size-4" />

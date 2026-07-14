@@ -76,6 +76,28 @@ function InviteFormProbe({
   )
 }
 
+function fillInviteForm(email = 'staff@example.com') {
+  fireEvent.change(screen.getByLabelText('Email'), {
+    target: { value: email },
+  })
+  fireEvent.change(screen.getByLabelText('First name'), {
+    target: { value: 'Alex' },
+  })
+  fireEvent.change(screen.getByLabelText('Last name'), {
+    target: { value: 'Martin' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Select scope' }))
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+
+  return { promise, resolve }
+}
+
 afterEach(() => {
   cleanup()
   inviteMembership.mockReset()
@@ -149,5 +171,77 @@ describe('useMembershipInviteForm', () => {
     })
 
     expect(result.current.invitationLink).toBe(`${window.location.origin}/invitations/token-abc`)
+  })
+
+  it('clears invitation success state when a new submit starts', async () => {
+    inviteMembership
+      .mockResolvedValueOnce({
+        invitation_accept_path: '/invitations/token-first',
+      })
+      .mockImplementationOnce(() => {
+        const deferred = createDeferred<{ invitation_accept_path: string }>()
+        return deferred.promise
+      })
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+      }),
+    )
+
+    fillInviteForm('first@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('first@example.com')
+    })
+
+    fillInviteForm('second@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    expect(screen.getByTestId('invited-email').textContent).toBe('')
+    expect(screen.getByTestId('invitation-link').textContent).toBe('')
+  })
+
+  it('clears invitation success state when a retry fails', async () => {
+    inviteMembership
+      .mockResolvedValueOnce({
+        invitation_accept_path: '/invitations/token-first',
+      })
+      .mockRejectedValueOnce(new Error('Invitation could not be created.'))
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+      }),
+    )
+
+    fillInviteForm('first@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('first@example.com')
+    })
+
+    fillInviteForm('second@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('')
+    })
+
+    expect(screen.getByTestId('invitation-link').textContent).toBe('')
   })
 })

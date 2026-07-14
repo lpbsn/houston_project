@@ -150,7 +150,7 @@ export function MembershipInviteCard({
         </form>
         ) : null}
 
-        {invitationLink ? (
+        {invitationLink && invitedEmail ? (
           <div className="space-y-3 rounded-[1.35rem] border border-[#dce8d0] bg-[#f7fbf2] px-4 py-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#3f6d2d]">
               <CheckCircle2 className="size-4" />
