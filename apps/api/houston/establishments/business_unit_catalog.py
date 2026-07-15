@@ -28,7 +28,7 @@ def suggest_business_units(
             {
                 "key": row.key,
                 "label": row.label,
-                "default_unit_type": row.default_unit_type,
+                "unit_type": row.unit_type,
             }
         )
     return results

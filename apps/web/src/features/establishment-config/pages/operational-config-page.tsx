@@ -61,7 +61,7 @@ function OperationalConfigContent({
     void handleAddBusinessUnit({
       label: suggestion.label,
       catalog_key: suggestion.key,
-      unit_type: suggestion.default_unit_type,
+      unit_type: suggestion.unit_type,
     })
   }
 

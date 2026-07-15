@@ -11,7 +11,6 @@ from houston.establishments.models import (
     EstablishmentActivityDescription,
     EstablishmentMembership,
     MembershipScope,
-    OnboardingCatalogUnit,
     OnboardingProposal,
     OnboardingSession,
 )
@@ -257,15 +256,6 @@ def test_onboarding_session_allows_historical_terminal_sessions(
         status=OnboardingSession.Status.CANCELED,
     )
     assert first.establishment == second.establishment
-
-
-def test_onboarding_catalog_unit_defaults():
-    catalog_item = OnboardingCatalogUnit.objects.create(
-        key="custom_unit",
-        label="Custom unit",
-    )
-    assert catalog_item.active is True
-    assert catalog_item.sort_order == 0
 
 
 def test_onboarding_proposal_defaults(organization, establishment, user):

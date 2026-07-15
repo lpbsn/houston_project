@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand, CommandError
 
-from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
+from houston.establishments.catalog_import import (
+    preflight_catalog_import_from_rows,
+    sync_catalog_from_normalized_rows,
+)
+from houston.establishments.catalog_preflight import CatalogImportError
 from houston.establishments.catalog_source_normalization import (
     activity_subjects_csv_path,
     business_units_csv_path,
@@ -87,13 +91,23 @@ class Command(BaseCommand):
             raise CommandError("Catalog validation produced warnings (--strict).")
 
         if dry_run:
+            try:
+                preflight_catalog_import_from_rows(
+                    business_unit_rows=business_unit_rows,
+                    activity_subject_rows=activity_subject_rows,
+                )
+            except CatalogImportError as exc:
+                raise CommandError(f"Catalog import preflight failed ({exc.code}): {exc.detail}") from exc
             self.stdout.write(self.style.WARNING("Dry run: no database changes applied."))
             return
 
-        result = sync_catalog_from_normalized_rows(
-            business_unit_rows=business_unit_rows,
-            activity_subject_rows=activity_subject_rows,
-        )
+        try:
+            result = sync_catalog_from_normalized_rows(
+                business_unit_rows=business_unit_rows,
+                activity_subject_rows=activity_subject_rows,
+            )
+        except CatalogImportError as exc:
+            raise CommandError(f"Catalog import failed ({exc.code}): {exc.detail}") from exc
         self.stdout.write(
             self.style.SUCCESS(
                 "Catalog import complete: "

@@ -78,35 +78,6 @@ class Establishment(BaseModel):
         return self.name
 
 
-class OnboardingCatalogUnit(BaseModel):
-    key = models.CharField(max_length=100, unique=True)
-    label = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default="")
-    active = models.BooleanField(default=True)
-    sort_order = models.PositiveSmallIntegerField(default=0)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=["active"], name="onbrd_cat_unit_active_idx"),
-            models.Index(
-                fields=["active", "sort_order", "key"],
-                name="onbrd_cat_unit_order_idx",
-            ),
-        ]
-        ordering = ["sort_order", "key"]
-
-    def clean(self) -> None:
-        super().clean()
-        errors: dict[str, str] = {}
-        _validate_nonblank(self.key, "key", errors)
-        _validate_nonblank(self.label, "label", errors)
-        if errors:
-            raise ValidationError(errors)
-
-    def __str__(self) -> str:
-        return f"{self.label} [{self.key}]"
-
-
 class OnboardingSession(BaseModel):
     class Status(models.TextChoices):
         STARTED = "started", "Started"
@@ -572,7 +543,7 @@ class CatalogBusinessUnit(BaseModel):
     key = models.CharField(max_length=100, unique=True)
     label = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
-    default_unit_type = models.CharField(
+    unit_type = models.CharField(
         max_length=20,
         choices=DefaultUnitType.choices,
         default=DefaultUnitType.DEDICATED,
@@ -612,6 +583,12 @@ class CatalogActivitySubject(BaseModel):
         ordering = ["sort_order", "key"]
         indexes = [
             models.Index(fields=["active"], name="cat_as_active_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(key__startswith="custom--"),
+                name="catalog_activity_subject_key_no_custom_prefix_ck",
+            ),
         ]
 
     def __str__(self) -> str:

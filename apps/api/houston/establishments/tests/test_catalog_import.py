@@ -29,7 +29,7 @@ def test_import_creates_catalog_business_units(imported_catalog):
     assert CatalogBusinessUnit.objects.count() == EXPECTED_CATALOG_BUSINESS_UNIT_COUNT
     hotel = CatalogBusinessUnit.objects.get(key="hotel")
     assert hotel.label == "Hôtel"
-    assert hotel.default_unit_type == CatalogBusinessUnit.DefaultUnitType.DEDICATED
+    assert hotel.unit_type == CatalogBusinessUnit.DefaultUnitType.DEDICATED
 
 
 def test_import_creates_catalog_activity_subjects_linked_to_business_unit(imported_catalog):
@@ -58,5 +58,5 @@ def test_import_reads_versioned_seed_csvs():
     assert len(bu_rows) == EXPECTED_CATALOG_BUSINESS_UNIT_COUNT
     assert len(as_rows) == EXPECTED_CATALOG_ACTIVITY_SUBJECT_COUNT
     assert any(
-        row.key == "maintenance" and row.default_unit_type == "transversal" for row in bu_rows
+        row.key == "maintenance" and row.unit_type == "transversal" for row in bu_rows
     )

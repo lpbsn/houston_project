@@ -2203,7 +2203,7 @@ export interface components {
         CatalogBusinessUnitSuggestion: {
             key: string;
             label: string;
-            default_unit_type: string;
+            unit_type: string;
         };
         ChatAddParticipantRequest: {
             /** Format: uuid */

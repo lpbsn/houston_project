@@ -85,7 +85,7 @@ def test_catalog_business_unit_suggest_returns_transversal_default_for_maintenan
     )
     assert response.status_code == 200
     maintenance = next(item for item in response.json() if item["key"] == "maintenance")
-    assert maintenance["default_unit_type"] == "transversal"
+    assert maintenance["unit_type"] == "transversal"
 
 
 def test_catalog_activity_subject_suggest_returns_coworking_subjects_from_db(
