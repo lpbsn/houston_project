@@ -9,7 +9,7 @@ from houston.chat.models import ChatConversation, ChatMessage
 from houston.chat.purge import purge_chat_messages
 from houston.chat.tasks import purge_chat_messages_task
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
-from houston.chat.tests.test_rest_api import create_dm
+from houston.chat.tests.helpers import create_dm
 
 
 @pytest.mark.django_db

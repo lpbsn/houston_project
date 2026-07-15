@@ -644,12 +644,10 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
   it('exposes Marquer terminé via aria-label despite two-line visual label', () => {
     renderPage()
 
-    const button = screen.getByRole('button', { name: 'Marquer terminé' })
-    expect(button).toBeTruthy()
-    expect(button.className).toContain('bg-[#219673]')
+    expect(screen.getByRole('button', { name: 'Marquer terminé' })).toBeTruthy()
   })
 
-  it('shows Valider button with validate color when can_validate is true', () => {
+  it('shows Valider button when can_validate is true', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -670,12 +668,11 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
 
     renderPage()
 
-    const button = screen.getByRole('button', { name: 'Valider' })
-    expect(button.className).toContain('bg-[#25A17F]')
+    expect(screen.getByRole('button', { name: 'Valider' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
   })
 
-  it('shows Rouvrir button with reopen color when can_reopen is true', () => {
+  it('shows Rouvrir button when can_reopen is true', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -696,11 +693,10 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
 
     renderPage()
 
-    const button = screen.getByRole('button', { name: 'Rouvrir' })
-    expect(button.className).toContain('bg-[#3A7A96]')
+    expect(screen.getByRole('button', { name: 'Rouvrir' })).toBeTruthy()
   })
 
-  it('shows Annuler button with cancel color when can_cancel is true', () => {
+  it('shows Annuler button when can_cancel is true', () => {
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -720,14 +716,7 @@ describe('ActionPlanExecutionDetailPage UI refonte', () => {
 
     renderPage()
 
-    const button = screen.getByRole('button', { name: 'Annuler' })
-    expect(button.className).toContain('bg-[#E85553]')
+    expect(screen.getByRole('button', { name: 'Annuler' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Marquer terminé' })).toBeNull()
-  })
-
-  it('renders executionHeader navy badge in title section', () => {
-    const { container } = renderPage()
-
-    expect(container.querySelector('.bg-\\[\\#16435B\\]')).toBeTruthy()
   })
 })

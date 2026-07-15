@@ -1,0 +1,42 @@
+........................................................................ [ 21%]
+........................................................................ [ 43%]
+........................................................................ [ 65%]
+........................................................................ [ 86%]
+............................................                             [100%]
+=============================== warnings summary ===============================
+apps/api/houston/action_plans/tests/test_mixed_submission_hash.py::test_request_hash_handles_assignee_datetime_fields
+  /app:0: PytestWarning: Error when trying to teardown test databases: OperationalError('database "test_houston" is being accessed by other users\nDETAIL:  There are 2 other sessions using the database.')
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+5.20s teardown apps/api/houston/action_plans/tests/test_mixed_submission_hash.py::test_request_hash_handles_assignee_datetime_fields
+3.11s setup    apps/api/houston/action_plans/tests/test_action_plan_execution_tasks_api.py::test_mark_done_does_not_change_execution_status
+0.89s call     apps/api/houston/action_plans/tests/test_materialization_services.py::test_individual_chronology_one_execution_per_occurrence_per_assignee
+0.73s call     apps/api/houston/action_plans/tests/test_mixed_submission_api.py::MixedSubmissionConcurrencyTests::test_concurrent_mixed_submit_is_idempotent
+0.67s call     apps/api/houston/action_plans/tests/test_materialization_services.py::test_shared_chronology_one_execution_per_occurrence
+0.65s setup    apps/api/houston/action_plans/tests/test_task_services.py::test_staff_non_assignee_cannot_execute_task
+0.51s call     apps/api/houston/action_plans/tests/test_action_plans_tenant_isolation_api.py::test_execution_command_cross_establishment_returns_404[validate/]
+0.43s call     apps/api/houston/action_plans/tests/test_schedule_services.py::test_update_materializes_missing_individual_assignee_occurrences
+0.42s setup    apps/api/houston/action_plans/tests/test_action_plan_executions_api.py::test_execution_detail_visible_to_assignee
+0.40s setup    apps/api/houston/action_plans/tests/test_execution_services.py::test_contributor_manager_validate_denied
+0.39s call     apps/api/houston/action_plans/tests/test_action_plans_tenant_isolation_api.py::test_execution_command_cross_establishment_returns_404[reopen/]
+0.39s setup    apps/api/houston/action_plans/tests/test_task_services.py::test_manager_can_execute_task_without_being_assignee
+0.39s call     apps/api/houston/action_plans/tests/test_action_plan_execution_tasks_api.py::test_mark_done_does_not_change_execution_status
+0.39s setup    apps/api/houston/action_plans/tests/test_execution_services.py::test_manager_cannot_assign_out_of_scope_on_catalog_launch
+0.38s setup    apps/api/houston/action_plans/tests/test_schedule_services.py::test_manager_cannot_assign_out_of_scope_on_schedule_update
+0.37s setup    apps/api/houston/action_plans/tests/test_execution_services.py::test_manager_launches_cross_pole_catalog_in_scope_pilot
+0.37s setup    apps/api/houston/action_plans/tests/test_mixed_submission_api.py::test_mixed_submit_actor_conflict
+0.36s call     apps/api/houston/action_plans/tests/test_schedule_services.py::test_update_assignees_cancels_removed_member_future_executions
+0.35s setup    apps/api/houston/action_plans/tests/test_task_services.py::test_staff_cannot_execute_task_out_of_scope
+0.35s setup    apps/api/houston/action_plans/tests/test_mixed_submission_api.py::test_mixed_submit_replay_forbidden_when_permissions_revoked
+0.35s call     apps/api/houston/action_plans/tests/test_action_plans_tenant_isolation_api.py::test_execution_command_cross_establishment_returns_404[mark-done/]
+0.35s setup    apps/api/houston/action_plans/tests/test_mixed_submission_api.py::test_mixed_submit_conflict_on_payload_mismatch
+0.34s setup    apps/api/houston/action_plans/tests/test_mixed_outbox.py::test_concurrent_workers_create_single_notification
+0.34s setup    apps/api/houston/action_plans/tests/test_mixed_submission_api.py::test_mixed_submit_replay_returns_200_without_duplicates
+0.34s setup    apps/api/houston/action_plans/tests/test_task_enrichment.py::test_create_execution_merges_task_assignee_into_plan_assignees
+0.34s setup    apps/api/houston/action_plans/tests/test_mixed_submission_api.py::test_mixed_submit_creates_schedule_and_one_shot_execution
+0.33s setup    apps/api/houston/action_plans/tests/test_selectors.py::test_partial_contribution_is_in_progress
+0.33s call     apps/api/houston/action_plans/tests/test_execution_feed_api.py::test_manager_late_scope_sees_pre_existing_execution_in_personal_view
+0.33s call     apps/api/houston/action_plans/tests/test_action_plans_tenant_isolation_api.py::test_execution_detail_cross_establishment_returns_404
+0.33s setup    apps/api/houston/action_plans/tests/test_mixed_outbox.py::test_mixed_submit_creates_unique_outbox_effect_keys
+332 passed, 1 warning in 96.65s (0:01:36)

@@ -1,0 +1,81 @@
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 13%]
+........................................................................ [ 17%]
+........................................................................ [ 22%]
+........................................................................ [ 26%]
+........................................................................ [ 31%]
+........................................................................ [ 35%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+........................................................................ [ 49%]
+........................................................................ [ 53%]
+........................................................................ [ 57%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 71%]
+........................................................................ [ 75%]
+........................................................................ [ 80%]
+........................................................................ [ 84%]
+........................................................................ [ 89%]
+........................................................................ [ 93%]
+........................................................................ [ 98%]
+..............................                                           [100%]
+=============================== warnings summary ===============================
+apps/api/houston/core/tests/test_operational_test_data_cleanup.py: 10 warnings
+  /opt/venv/lib/python3.13/site-packages/django/test/utils.py:453: UserWarning: Overriding setting DATABASES can lead to unexpected behavior.
+    with self as context:
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 50 durations =============================
+3.39s setup    apps/api/houston/accounts/tests/test_auth_api.py::test_csrf_endpoint_sets_csrf_cookie
+1.36s call     apps/api/houston/notifications/tests/test_celery_push_task_registration.py::test_send_push_for_notification_task_registered_by_celery_autodiscovery
+1.02s call     apps/api/houston/chat/tests/test_ws_hardening.py::test_ws_smoke_supports_multiple_authenticated_connections
+1.02s call     apps/api/houston/chat/tests/test_ws_consumer.py::test_ws_auth_timeout
+1.01s call     apps/api/houston/action_plans/tests/test_mixed_submission_api.py::MixedSubmissionConcurrencyTests::test_concurrent_mixed_submit_is_idempotent
+0.95s call     apps/api/houston/notifications/tests/test_comment_notification_producers.py::test_reply_notifies_root_mention_on_subsequent_reply
+0.83s teardown apps/api/houston/uploads/tests/test_checks.py::test_private_media_root_configured_check_skipped_in_debug
+0.83s call     apps/api/houston/chat/tests/test_ws_messages.py::test_ws_message_send_does_not_leak_across_conversations
+0.80s call     apps/api/houston/action_plans/tests/test_materialization_services.py::test_individual_chronology_one_execution_per_occurrence_per_assignee
+0.78s call     apps/api/houston/chat/tests/test_rest_api.py::test_chat_conversations_list_query_count_grows_with_list_size
+0.71s call     apps/api/houston/comments/tests/test_permissions.py::test_can_resolve_execution_comment_rejects_unrelated_staff
+0.61s call     apps/api/houston/signals/tests/test_signal_detail_linked_action_plans.py::test_signal_detail_includes_visible_linked_execution
+0.61s call     apps/api/houston/realtime/tests/test_realtime_ws_consumer.py::test_notification_invalidation_isolated_to_target_membership
+0.59s call     apps/api/houston/action_plans/tests/test_materialization_services.py::test_shared_chronology_one_execution_per_occurrence
+0.59s call     apps/api/houston/signals/tests/test_signal_feed_resolved_behavior.py::test_detail_resolved_returns_200
+0.59s call     apps/api/houston/signals/tests/test_signal_detail_linked_action_plans.py::test_signal_detail_hides_linked_execution_outside_rbac
+0.59s call     apps/api/houston/chat/tests/test_rest_api.py::test_group_participant_add_remove_promote_and_leave
+0.58s call     apps/api/houston/signals/tests/test_signal_feed_api.py::test_signal_feed_query_count_grows_with_item_count
+0.58s call     apps/api/houston/notifications/tests/test_push_subscriptions_api.py::test_user_cannot_revoke_other_users_subscription
+0.57s call     apps/api/houston/comments/tests/test_tenant_isolation_api.py::test_execution_comments_list_cross_establishment_returns_404
+0.57s call     apps/api/houston/establishments/tests/test_user_search_business_unit_filter.py::test_user_search_with_business_unit_id_filters_to_covering_members
+0.57s call     apps/api/houston/comments/tests/test_tenant_isolation_api.py::test_execution_comments_create_cross_establishment_returns_404
+0.57s call     apps/api/houston/notifications/tests/test_notifications_api.py::test_invalid_status_filter_returns_400
+0.56s call     apps/api/houston/notifications/tests/test_push_subscriptions_api.py::test_user_cannot_touch_other_users_subscription
+0.56s call     apps/api/houston/comments/tests/test_execution_comments_api.py::test_mentioned_out_of_scope_staff_can_reply_to_execution_thread
+0.56s call     apps/api/houston/notifications/tests/test_push_subscriptions_api.py::test_upsert_web_push_subscription_rejects_other_user_endpoint
+0.56s call     apps/api/houston/establishments/tests/test_user_search_api.py::test_search_excludes_inactive_and_foreign_memberships
+0.56s call     apps/api/houston/chat/tests/test_ws_messages.py::test_ws_message_send_is_idempotent_for_client_message_id
+0.54s call     apps/api/houston/notifications/tests/test_comment_notification_producers.py::test_second_reply_notifies_root_author_and_first_replier
+0.54s call     apps/api/houston/notifications/tests/test_signal_notification_producers.py::test_signal_canceled_e2e_notification_and_detail_navigation
+0.53s call     apps/api/houston/chat/tests/test_ws_messages.py::test_ws_delivers_first_message_for_new_dm_without_reconnect
+0.53s call     apps/api/houston/chat/tests/test_ws_messages.py::test_ws_message_send_rejects_non_participant
+0.53s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_mutations_return_404[post-proposals/-payload4]
+0.53s call     apps/api/houston/chat/tests/test_ws_messages.py::test_ws_message_send_broadcasts_to_dm_participants
+0.53s call     apps/api/houston/notifications/tests/test_signal_notification_producers.py::test_owner_director_without_pole_scope_receive_no_signal_notification
+0.52s call     apps/api/houston/notifications/tests/test_chat_message_notification_producers.py::test_group_message_notifies_all_other_active_participants
+0.52s call     apps/api/houston/notifications/tests/test_comment_notification_producers.py::test_reply_mention_only_for_reply_mentionee
+0.51s setup    apps/api/houston/action_plans/tests/test_task_enrichment.py::test_create_execution_merges_task_assignee_into_plan_assignees
+0.51s call     apps/api/houston/realtime/tests/test_comment_invalidation.py::test_create_execution_comment_root_emits_execution_created
+0.49s call     apps/api/houston/signals/tests/test_signal_feed_filters.py::test_cursor_round_trip_without_duplicates
+0.49s call     apps/api/houston/notifications/tests/test_signal_notification_producers.py::test_signal_unassigned_global_notifies_admin_when_no_staff_scoped
+0.49s call     apps/api/houston/notifications/tests/test_comment_notification_producers.py::test_assignee_not_notified_on_reply_when_not_in_thread
+0.49s call     apps/api/houston/comments/tests/test_execution_comments_api.py::test_mentioned_out_of_scope_staff_can_list_execution_comments
+0.49s call     apps/api/houston/comments/tests/test_permissions.py::test_mentioned_out_of_scope_staff_can_access_and_reply_to_execution_comments
+0.49s call     apps/api/houston/signals/tests/test_signal_detail_media.py::test_preview_rejects_wrong_establishment
+0.49s call     apps/api/houston/chat/tests/test_rest_api.py::test_chat_conversations_list_query_count_baseline
+0.48s call     apps/api/houston/comments/tests/test_tenant_isolation_api.py::test_signal_comments_create_cross_establishment_returns_404
+0.48s call     apps/api/houston/comments/tests/test_signal_comments_api.py::test_signal_comments_404_when_signal_invisible
+0.48s call     apps/api/houston/signals/tests/test_signal_tenant_isolation_api.py::test_active_signal_detail_cross_establishment_returns_404
+0.48s call     apps/api/houston/establishments/tests/test_onboarding_proposal_api.py::test_manager_and_staff_are_denied_for_proposal_endpoints
+1614 passed, 50 deselected, 10 warnings in 360.65s (0:06:00)

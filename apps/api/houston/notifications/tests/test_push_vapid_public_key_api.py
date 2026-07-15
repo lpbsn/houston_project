@@ -4,13 +4,9 @@ import pytest
 from django.test import override_settings
 
 from houston.notifications.tests.conftest import vapid_public_key_url
+from houston.notifications.tests.vapid_constants import TEST_PRIVATE_KEY, TEST_PUBLIC_KEY
 
 pytestmark = pytest.mark.django_db
-
-TEST_PUBLIC_KEY = (
-    "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U"
-)
-TEST_PRIVATE_KEY = "UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls"
 
 
 @override_settings(

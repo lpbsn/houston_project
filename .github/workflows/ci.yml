@@ -2,10 +2,157 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Detect path changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          resolve_base() {
+            local base="$1"
+            local head="$2"
+            if [ "$base" = "0000000000000000000000000000000000000000" ] || [ -z "$base" ]; then
+              git rev-parse "${head}^" 2>/dev/null || true
+            else
+              echo "$base"
+            fi
+          }
+
+          BASE="$(resolve_base "$BASE_SHA" "$HEAD_SHA")"
+          if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            {
+              echo "backend=true"
+              echo "frontend=true"
+              echo "docs=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          may_affect_api_schema() {
+            local path="$1"
+            case "$path" in
+              apps/api/schema.yml|apps/web/src/api/generated/types.ts)
+                return 0
+                ;;
+            esac
+            if [[ "$path" =~ ^apps/api/config/ ]]; then
+              return 0
+            fi
+            if [[ "$path" =~ ^apps/api/houston/[^/]+/api/ ]]; then
+              return 0
+            fi
+            if [[ "$path" =~ ^apps/api/houston/.*/urls\.py$ ]]; then
+              return 0
+            fi
+            if [[ "$path" =~ ^apps/api/houston/.*/serializers\.py$ ]]; then
+              return 0
+            fi
+            if [[ "$path" =~ ^apps/api/houston/.*/views\.py$ ]]; then
+              return 0
+            fi
+            if [[ "$path" =~ ^apps/api/houston/.*/authentication\.py$ ]]; then
+              return 0
+            fi
+            return 1
+          }
+
+          is_root_config() {
+            local path="$1"
+            [[ "$path" != */* ]] || return 1
+            case "$path" in
+              pyproject.toml|uv.lock|.dockerignore|.gitignore|.env.example|.env.prod-test.example|.python-version)
+                return 0
+                ;;
+            esac
+            return 1
+          }
+
+          classify_changed_path() {
+            local path="$1"
+            local matched=false
+
+            if may_affect_api_schema "$path"; then
+              backend=true
+              frontend=true
+              return
+            fi
+
+            case "$path" in
+              Makefile|infra/*|docker-compose*.yml|.github/workflows/*)
+                backend=true
+                frontend=true
+                docs=true
+                matched=true
+                ;;
+              apps/api/*)
+                backend=true
+                matched=true
+                ;;
+              apps/web/*|contracts/*)
+                frontend=true
+                matched=true
+                ;;
+              docs/*|scripts/docs_check.py|scripts/agent_config_check.py|.cursor/*|AGENTS.md)
+                docs=true
+                matched=true
+                ;;
+            esac
+
+            if [ "$matched" = false ] && is_root_config "$path"; then
+              backend=true
+              frontend=true
+              docs=true
+              matched=true
+            fi
+
+            if [ "$matched" = false ]; then
+              backend=true
+              frontend=true
+              docs=true
+            fi
+          }
+
+          CHANGED="$(git diff --name-only "$BASE" "$HEAD_SHA")"
+          backend=false
+          frontend=false
+          docs=false
+
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            classify_changed_path "$path"
+          done <<< "$CHANGED"
+
+          {
+            echo "backend=$backend"
+            echo "frontend=$frontend"
+            echo "docs=$docs"
+          } >> "$GITHUB_OUTPUT"
+
   backend-tests:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -88,6 +235,8 @@ jobs:
         run: uv run pytest -m "not openai_observation_smoke and not openai_smoke and not slow" -q
 
   frontend-tests:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -113,12 +262,14 @@ jobs:
       - name: Typecheck frontend
         working-directory: apps/web
         run: npm run typecheck
-      # GATE-01: mirror Makefile web-build (make verify web-check slice).
-      - name: Build frontend
+      # GATE-01: typecheck (tsc -b) once; build:bundle is vite-only (no second tsc -b).
+      - name: Build frontend bundle
         working-directory: apps/web
-        run: npm run build
+        run: npm run build:bundle
 
   docs-check:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

@@ -12,7 +12,7 @@ from rest_framework.test import APIClient
 
 from houston.chat.models import ChatParticipant
 from houston.chat.services import create_message
-from houston.chat.tests.test_rest_api import create_dm, create_group
+from houston.chat.tests.helpers import create_dm, create_group
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.constants import (
     DEDUPE_WINDOW,

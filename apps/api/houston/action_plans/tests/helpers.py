@@ -5,7 +5,7 @@ from datetime import time
 
 from django.utils import timezone
 
-from houston.action_plans.constants import CATALOG_STATUS_ACTIVE
+from houston.action_plans.constants import CATALOG_STATUS_ACTIVE, EXECUTION_STATUS_IN_PROGRESS
 from houston.action_plans.models import ActionPlan, ActionPlanTask
 from houston.signals.models import Signal
 from houston.testing.taxonomy import create_minimal_v3_signal
@@ -290,3 +290,48 @@ def create_open_signal(*, owner_membership, title: str = "Leaky pipe") -> Signal
         title=title,
         status=Signal.Status.OPEN,
     )
+
+
+def feed_query(view_mode: str) -> str:
+    return f"?view_mode={view_mode}"
+
+
+def feed_execution_ids(response_body) -> list[str]:
+    return [item["action_plan_execution"]["id"] for item in response_body["items"]]
+
+
+def create_execution(
+    owner_membership,
+    *,
+    business_unit,
+    title: str,
+    assignees=None,
+    tasks=None,
+    status=EXECUTION_STATUS_IN_PROGRESS,
+    visible_from=None,
+    last_activity_at=None,
+    end_at=None,
+    requires_validation=False,
+):
+    from houston.action_plans.services import create_action_plan_with_execution
+
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title=title,
+        requires_validation=requires_validation,
+        tasks=tasks or [build_task_payload(task=f"{title} task", business_unit=business_unit)],
+        assignees=assignees or [],
+        visible_from=visible_from,
+    )
+    update_fields = ["status"]
+    execution.status = status
+    if last_activity_at is not None:
+        execution.last_activity_at = last_activity_at
+        update_fields.append("last_activity_at")
+    if end_at is not None:
+        execution.end_at = end_at
+        update_fields.append("end_at")
+    execution.save(update_fields=update_fields + ["updated_at"])
+    return execution

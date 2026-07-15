@@ -12,7 +12,7 @@ from houston.chat.tests.conftest import (
     create_user,
     login,
 )
-from houston.chat.tests.test_rest_api import create_dm
+from houston.chat.tests.helpers import create_dm
 from rest_framework.test import APIClient
 
 pytestmark = pytest.mark.django_db

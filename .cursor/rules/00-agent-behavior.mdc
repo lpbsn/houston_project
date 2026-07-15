@@ -18,6 +18,7 @@ Validation:
 - Backend: never `cd apps/api && uv run` on host — use `make backend-*` or `docker compose exec api`
 - Frontend: `cd apps/web && npm …` or `make web-*`
 - Run targeted tests first; `make backend-check` / `make verify` only when justified
+- Adding tests: check layer rules in `docs/engineering/testing.md` and existing coverage first
 - API shape change: use `.cursor/commands/api-contract-change.md`
 
 Report: Changed · Validated · Risks / not verified

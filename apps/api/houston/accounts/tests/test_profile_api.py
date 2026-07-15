@@ -4,7 +4,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from houston.establishments.models import EstablishmentMembership
-from houston.establishments.tests.test_membership_api import (
+from houston.establishments.tests.membership_api_helpers import (
     auth_headers,
     create_membership,
     create_user,

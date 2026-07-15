@@ -1,0 +1,88 @@
+Vitest total (sum of file durations): 32908 ms (32.9s)
+Files: 164 | Tests parsed: 1060
+
+=== Top 30 files by duration ===
+file	duration_ms	num_tests	status
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	11312.774658203125	10	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/realtime/hooks/use-operational-realtime-websocket.test.ts	6765.5859375	6	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/app/lazy-terrain-pages.test.ts	1160.168701171875	2	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/hooks/use-signal-feed-quick-actions.test.ts	859.4765625	15	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-create-page.test.tsx	831.927978515625	16	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-template-detail-page.test.tsx	406.080810546875	12	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-execution-detail-page.test.tsx	398.394775390625	22	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/components/action-plan-event-planning-form.test.tsx	362.587646484375	18	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/components/action-plan-task-draft-editor.test.tsx	360.31884765625	12	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/push/hooks.test.ts	349.453369140625	6	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-detail-photo-section.test.tsx	345.952392578125	8	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/execution/components/action-plan-execution-feed-card.test.tsx	291.974853515625	21	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/notifications/notifications-center-page.test.tsx	236.456298828125	9	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/pwa/pages/install-app-page.test.tsx	232.07080078125	5	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/hooks.mutations.test.ts	231.782470703125	4	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/comments/hooks.mutations.test.ts	231.099853515625	4	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/pages/profile-page.test.tsx	227.60693359375	14	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/execution/pages/execution-feed-page.test.tsx	217.705322265625	10	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/observations/pages/report-page.test.tsx	216.54833984375	9	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/comments/comment-section.test.tsx	214.661376953125	9	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-feed-classification-filter-tree.test.tsx	213.269287109375	4	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/pages/team-member-detail-page.test.tsx	193.5263671875	6	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/onboarding/components/director-invite-card.test.tsx	190.443603515625	2	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/pages/profile-switch-establishment-page.test.tsx	180.875244140625	5	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/components/action-plan-use-sheet.test.tsx	179.052001953125	6	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/notifications/hooks.mutations.test.ts	178.216552734375	3	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-card.test.tsx	173.703125	14	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/pages/select-establishment-page.test.tsx	172.4921875	2	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/comments/comment-composer.test.tsx	171.040283203125	4	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/pages/chat-page.test.tsx	167.71337890625	9	passed
+
+=== Top 50 tests by duration ===
+file	name	duration_ms	status
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket schedules reconnect after auth timeout without staying disconnected	5111.501167	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/realtime/hooks/use-operational-realtime-websocket.test.ts	useOperationalRealtimeWebSocket schedules reconnect after auth timeout without staying disconnected	5079.85	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket handles global access.revoked without scheduling reconnect	1660.3802910000002	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket does not reconnect when enabled becomes false	1608.7747500000005	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/realtime/hooks/use-operational-realtime-websocket.test.ts	useOperationalRealtimeWebSocket calls onReconnect on second auth.ok after unplanned close	1192.585916	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket calls onReconnect on second auth.ok after unplanned close	1189.975708	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/app/lazy-terrain-pages.test.ts	lazy-terrain-pages resolves terrain page modules on dynamic import	1158.168625	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket keeps network reconnect behavior after unplanned close	1135.0742500000001	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-detail-photo-section.test.tsx	SignalDetailPage photo section order keeps photo section before comments in the page module	189.95245799999998	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-template-detail-page.test.tsx	ActionPlanTemplateDetailPage renders read-only template detail with execution action	168.78154100000006	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket reconnects on window online when disconnected	161.9696670000012	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket reconnects on visibilitychange when visible and disconnected	160.4819580000003	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/realtime/hooks/use-operational-realtime-websocket.test.ts	useOperationalRealtimeWebSocket reconnects on visibilitychange when visible and disconnected	160.06016699999964	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/realtime/hooks/use-operational-realtime-websocket.test.ts	useOperationalRealtimeWebSocket reconnects on window online when disconnected	158.86070800000016	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-create-page.test.tsx	ActionPlanCreatePage selects pilot pole via pill wheel and submits with pilot_business_unit_id	156.06733400000007	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/components/action-plan-task-draft-editor.test.tsx	ActionPlanTaskDraftEditor shows pole picker for non cross-pole users	153.88766599999997	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/comments/comment-composer.test.tsx	CommentComposer shows a removable mention chip and omits removed ids from submit payload	152.81174999999996	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/onboarding/components/director-invite-card.test.tsx	DirectorInviteCard shows the exact success message and fallback link after invite	144.66379199999994	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-execution-detail-page.test.tsx	ActionPlanExecutionDetailPage tabs shows Détails tab by default and does not mount CommentSection	141.088708	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/pages/select-establishment-page.test.tsx	SelectEstablishmentPage switches establishment and navigates to reporting on success	137.632792	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/observations/components/report-inline-mic-button.test.tsx	ReportInlineMicButton starts recording on click when idle	129.86766699999998	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-feed-classification-filter-tree.test.tsx	SignalFeedClassificationFilterTree accordion keeps all accordions closed by default	129.3812089999999	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/notifications/notifications-center-page.test.tsx	NotificationsCenterPage shows loading label while unread count is unknown	123.59983399999999	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/pages/chat-page.test.tsx	ChatPage flat conversation list renders mixed conversations in API order without sections	121.35537499999998	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/components/ui/input.test.tsx	Input uses mobile-safe font size classes to prevent iOS focus zoom	120.45358299999998	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/components/ui/terrain/terrain-collapsible-feed-section.test.tsx	TerrainCollapsibleFeedSection shows ChevronUp and children when expanded	119.890625	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/pages/team-member-detail-page.test.tsx	TeamMemberDetailPage renders member information and scopes	119.41333399999996	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/components/action-plan-use-sheet.test.tsx	ActionPlanUseSheet resets local state when closed and reopened	117.47258299999999	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/components/ui/textarea.test.tsx	Textarea uses mobile-safe font size classes to prevent iOS focus zoom	115.09179200000005	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-linked-action-plans-section.test.tsx	SignalLinkedActionPlansSection calls onSelect with execution id on card click	112.73283300000003	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/comments/components/comment-thread-item.test.tsx	ActionCommentThreadCard reply composer keeps reply composer open when submission does not succeed	112.19604200000003	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-create-page.test.tsx	ActionPlanCreatePage creates per-assignee plan with one atomic create call and hides secondary assignee buttons	110.8232079999998	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/components/action-plan-task-detail-layout.test.tsx	ActionPlanTaskDetailLayout renders title row, description, then meta and deadline below a separator	110.57241700000003	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket ignores stale socket onclose without breaking the active connection	108.57454200000029	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/components/layout/bottom-mobile-nav.test.tsx	BottomMobileNav renders above sticky page footers via z-index	107.90304099999992	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/action-plans/pages/action-plan-create-page.test.tsx	ActionPlanCreatePage renders Options section before tasks	107.48579199999995	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/push/hooks.test.ts	useWebPushToggle clears enable error after successful disable	107.04700000000003	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/realtime/hooks/use-operational-realtime-websocket.test.ts	useOperationalRealtimeWebSocket ignores stale socket onclose without breaking the active connection	106.5629170000002	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/components/signal-card.test.tsx	SignalCard feed variant keeps relative time and actions on the same row as badges with title row below	106.34424999999999	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/chat/hooks/use-chat-websocket.test.ts	useChatWebSocket handles conversation.access_revoked without closing the socket	105.65091599999869	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/comments/mention-picker.test.tsx	MentionPicker renders tap-friendly suggestions and calls onSelect	105.50725	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/pwa/pages/install-app-page.test.tsx	InstallAppPage switches visible platform content when tabs change	104.95987500000001	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/execution/components/action-plan-execution-feed-card.test.tsx	ActionPlanExecutionFeedCard shows in_progress layout with countdown, segmented progress and teal avatar	104.94554100000005	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/hooks/use-signal-feed-quick-actions.test.ts	useSignalFeedQuickActions returns abort on second lifecycle action while mutation is in flight	104.84520799999996	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/components/login-form.test.tsx	LoginForm renders French labels and placeholder	104.76733300000001	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/hooks/use-signal-feed-quick-actions.test.ts	useSignalFeedQuickActions keeps original card open when openActions is called during lifecycle pending	103.9491250000001	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/auth/hooks/use-membership-invite-form.test.ts	useMembershipInviteForm stores invitedEmail and invitationLink after successful submit	103.94387500000005	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/notifications/notification-center.test.tsx	NotificationCenter shows unread badge on the bell button	103.47170799999992	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/observations/components/report-photos-section.test.tsx	ReportPhotosSection renders optional header and preview thumbnail with descriptive alt	103.28495799999996	passed
+/Users/leobsn/Desktop/houston_project/apps/web/src/features/signals/hooks/use-signal-feed-quick-actions.test.ts	useSignalFeedQuickActions returns abort on pin while lifecycle mutation is in flight	103.22583399999985	passed

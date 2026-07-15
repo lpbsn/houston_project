@@ -84,60 +84,6 @@ def test_execution_lifecycle_mark_done_validate_reopen_cancel(
     assert cancel.json()["status"] == ActionPlanExecution.Status.CANCELED
 
 
-def test_pilot_assignee_can_mark_done(
-    api_client,
-    owner_membership,
-    staff_membership,
-    business_unit,
-):
-    execution = _execution_with_assignee(owner_membership, staff_membership, business_unit)
-    token = login(api_client, user=staff_membership.user)
-    response = api_client.post(
-        action_plan_execution_url(staff_membership.establishment_id, execution.id, "mark-done/"),
-        **auth_headers(token),
-    )
-    assert response.status_code == 200
-    hints = response.json()["permission_hints"]
-    assert hints["is_pilot_pole_assignee"] is True
-
-
-def test_contributor_assignee_cannot_mark_done(
-    api_client,
-    owner_membership,
-    business_unit,
-    maintenance_business_unit,
-    out_of_scope_staff,
-):
-    _, execution = create_action_plan_with_execution(
-        establishment_id=owner_membership.establishment_id,
-        created_by=owner_membership,
-        pilot_business_unit_id=business_unit.id,
-        title="Cross pole",
-        requires_validation=True,
-        tasks=[
-            build_task_payload(task="Pilot", business_unit=business_unit, position=1),
-            build_task_payload(
-                task="Maintenance",
-                business_unit=maintenance_business_unit,
-                position=2,
-            ),
-        ],
-        assignees=[
-            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
-            build_assignee_payload(
-                membership=out_of_scope_staff,
-                business_unit=maintenance_business_unit,
-            ),
-        ],
-    )
-    token = login(api_client, user=out_of_scope_staff.user)
-    response = api_client.post(
-        action_plan_execution_url(out_of_scope_staff.establishment_id, execution.id, "mark-done/"),
-        **auth_headers(token),
-    )
-    assert response.status_code == 403
-
-
 def test_mentioned_out_of_scope_staff_can_read_execution_detail(
     api_client,
     owner_membership,

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import time
+import time as stdlib_time
 import uuid
+from unittest.mock import patch
 
 import pytest
 from django.core.cache import cache
@@ -126,7 +127,6 @@ def test_issue_and_consume_ws_ticket_unit():
     cache.clear()
 
 
-@pytest.mark.slow
 @override_settings(HOUSTON_CHAT_WS_TICKET_TTL_SECONDS=1)
 def test_ws_ticket_expired_rejected():
     establishment = create_establishment()
@@ -137,9 +137,10 @@ def test_ws_ticket_expired_rejected():
     ticket, expires_in = issue_ws_ticket(membership=membership, session_id=session_id)
     assert expires_in == 1
 
-    time.sleep(1.1)
-
-    with pytest.raises(WsTicketError):
-        consume_ws_ticket(ticket, establishment_id=establishment.id)
+    expired_at = stdlib_time.time() + 2
+    with patch("django.core.cache.backends.locmem.time") as mock_time:
+        mock_time.time.return_value = expired_at
+        with pytest.raises(WsTicketError):
+            consume_ws_ticket(ticket, establishment_id=establishment.id)
 
     cache.clear()
