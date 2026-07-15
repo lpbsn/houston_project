@@ -1,6 +1,8 @@
 # secrets
 .env
 .env.*
+!.env.example
+!.env.prod-test.example
 *.pem
 *.key
 *.crt
@@ -42,3 +44,7 @@ storage/
 # mac/system
 .DS_Store
 __MACOSX/
+
+# cursor session artifacts
+.cursor/plans/
+cursor-config-baseline.md

@@ -28,6 +28,8 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+.cursor/plans/
+cursor-config-baseline.md
 
 # Coverage / tests
 .coverage

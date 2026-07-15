@@ -1,81 +1,47 @@
 # AGENTS.md
 
-Houston is a mobile-first, event-driven operational PWA.
+Houston is a mobile-first, event-driven operational PWA for field teams.
 
-Core loop:
-Observation -> Signal -> Action Plan -> Execution -> Validation -> Feed update
+## Core loop
 
-## Source of truth
+Observation → Signal → Action Plan → Execution → Validation → Feed update
 
-- Django owns business rules, permissions, lifecycle transitions, feed visibility, and API contracts.
-- PostgreSQL is the persisted business source of truth.
-- Redis is temporary technical state only.
-- React is the UI layer.
-- TanStack Query owns frontend server state.
-- OpenAPI/generated types define the frontend/backend contract.
-- Docs may be stale; verify behavior in code and tests first.
+## Sources of truth
 
-## Architecture
+- **Backend**: Django services, selectors, permissions, PostgreSQL, API tests
+- **API contract**: OpenAPI schema + generated frontend types
+- **Frontend server state**: TanStack Query + generated types
+- **Product state**: [`docs/product/current_state.md`](docs/product/current_state.md)
 
-Use a modular monolith.
+Docs may be stale — verify behavior in code and tests first.
 
-Prefer:
-- explicit services/selectors/permissions
-- small safe changes
-- behavior-focused tests
-- generated API contracts
-- event-driven side effects
+## Architecture principles
 
-Avoid:
-- unrelated refactors
-- frontend business logic
-- hidden side effects
-- generic abstractions
-- manual edits to generated files
-- business truth in Redis or WebSocket payloads
+- Modular monolith; explicit services/selectors/permissions
+- Backend owns business rules, RBAC, lifecycle, feed visibility
+- React is UI only; no duplicated backend logic except UX hints
+- Event-driven side effects after valid state transitions
+- Small, testable changes; no manual edits to generated files
 
-## Event-driven rule
+## Security (summary)
 
-Business tables remain source of truth.
-Events trace significant business/technical facts.
-State change first, event second.
-Consumers handle notification, realtime, audit, analytics, and async side effects.
-Do not introduce event sourcing unless explicitly requested.
+Never leak secrets, tokens, raw Observation text, private media paths, or sensitive payloads in logs, broker messages, WebSocket payloads, or frontend persistent storage.
 
-## Security
+## API contract (summary)
 
-Never leak:
-- secrets or tokens
-- raw Observation text
-- private media paths
-- sensitive business payloads in logs, broker messages, WebSocket payloads, or frontend persistent storage
+If API shape changes: update backend serializer/view/tests, regenerate schema and frontend types, update callers and query invalidation.
 
-Backend authorization is mandatory for reads, writes, signed URLs, realtime subscriptions, notifications, and async jobs.
+## Instructions by area
 
-## API contract
+| Area | Read first |
+|------|------------|
+| Backend `apps/api/**` | [`apps/api/AGENTS.md`](apps/api/AGENTS.md) |
+| Frontend `apps/web/**` | [`apps/web/AGENTS.md`](apps/web/AGENTS.md) |
+| Local dev / Docker | [`docs/engineering/local_development.md`](docs/engineering/local_development.md) |
+| Testing | [`docs/engineering/testing.md`](docs/engineering/testing.md) |
 
-If API shape changes:
-- update backend serializer/view/tests
-- update OpenAPI schema
-- regenerate frontend types
-- update frontend callers and query invalidation
+## Cursor
 
-Generated files must not be manually edited.
+Agent behavior: [`.cursor/rules/00-agent-behavior.mdc`](.cursor/rules/00-agent-behavior.mdc)
 
-## Scope
-
-Do not:
-- move files or reorganize modules unless requested
-- add dependencies without approval
-- upgrade framework versions unless requested
-- mix feature, refactor, cleanup, and formatting
-- Ne jamais lancer directement des commandes docker compose complexes si une commande Makefile existe.
-
-## Nested instructions
-
-Use nested files:
-- `apps/api/AGENTS.md` for backend work
-- `apps/web/AGENTS.md` for frontend work
-
-Use `.cursor/rules/` for Cursor-specific persistent rules.
-Use `.cursor/commands/` for repeated workflows.
+Commands (invoke explicitly): `scope` · `implement-change` · `audit` · `review` · `api-contract-change` · `mobile-pwa-debug` · `test-audit`

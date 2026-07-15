@@ -18,9 +18,12 @@ htmlcov/
 
 media/
 private_media/
-uploads/
+/uploads/
 storage/
 
 .git/
 .DS_Store
 __MACOSX/
+
+.cursor/plans/
+cursor-config-baseline.md

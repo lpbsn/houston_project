@@ -1,0 +1,15 @@
+---
+description: Use for Docker, Makefile, OrbStack, .env, or local stack workflow questions.
+alwaysApply: false
+---
+
+# Local infrastructure
+
+Full guide: [`docs/engineering/local_development.md`](../../docs/engineering/local_development.md).
+
+- Prefer Makefile targets over raw `docker compose`
+- Backend stack: `make up-backend` · frontend dev: `make web-dev`
+- After `.env` changes with stack running: `make recreate-backend` (not `restart-backend`)
+- Backend checks: `make backend-test`, `make backend-check` — Docker only, not host `uv run`
+- Contract regen: `make schema && make web-api-generate`
+- Do not edit `.env` or commit secrets; document new vars in `.env.example` only

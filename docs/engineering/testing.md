@@ -156,7 +156,7 @@ docker compose exec api uv run python manage.py evaluate_observation_pipeline --
 
 # DB aggregation metrics (pilot monitoring)
 docker compose exec api uv run python manage.py report_issue_focus_aggregation_eval --json
-make backend-test PYTEST_ARGS='houston/signals/tests/test_pipeline_v4_golden.py houston/signals/tests/test_aggregation_eval.py houston/signals/tests/test_evaluate_observation_pipeline.py -q'
+make backend-test ARGS='houston/signals/tests/test_pipeline_v4_golden.py houston/signals/tests/test_aggregation_eval.py houston/signals/tests/test_evaluate_observation_pipeline.py -q'
 ```
 
 Command: `report_issue_focus_aggregation_eval` (see `houston/signals/management/commands/`).
