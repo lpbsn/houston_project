@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import importlib
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db import IntegrityError
-
-_migration_module = importlib.import_module("houston.establishments.migrations.0022_catalog_lot1")
-_assert_no_custom_prefix_catalog_subject_keys = (
-    _migration_module._assert_no_custom_prefix_catalog_subject_keys
-)
 
 from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.catalog_preflight import CatalogImportError
@@ -32,7 +26,7 @@ from houston.establishments.models import (
 )
 from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
 from houston.testing.factories import create_establishment
-from houston.testing.taxonomy import create_activity_subject, create_business_unit
+from houston.testing.taxonomy import create_activity_subject
 
 pytestmark = pytest.mark.django_db
 
@@ -362,6 +356,11 @@ def test_catalog_subject_label_update_handles_concurrent_collision(imported_cata
 
 
 def test_catalog_custom_prefix_migration_rejects_existing_invalid_row():
+    migration_module = importlib.import_module(
+        "houston.establishments.migrations.0022_catalog_lot1"
+    )
+    assert_fn = migration_module._assert_no_custom_prefix_catalog_subject_keys
+
     mock_model = MagicMock()
     mock_model.objects.filter.return_value.order_by.return_value.values_list.return_value = [
         "custom--legacy"
@@ -370,4 +369,4 @@ def test_catalog_custom_prefix_migration_rejects_existing_invalid_row():
     mock_apps.get_model.return_value = mock_model
 
     with pytest.raises(RuntimeError, match="custom--legacy"):
-        _assert_no_custom_prefix_catalog_subject_keys(mock_apps, None)
+        assert_fn(mock_apps, None)

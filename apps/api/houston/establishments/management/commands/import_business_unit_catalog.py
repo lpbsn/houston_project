@@ -97,7 +97,9 @@ class Command(BaseCommand):
                     activity_subject_rows=activity_subject_rows,
                 )
             except CatalogImportError as exc:
-                raise CommandError(f"Catalog import preflight failed ({exc.code}): {exc.detail}") from exc
+                raise CommandError(
+                    f"Catalog import preflight failed ({exc.code}): {exc.detail}"
+                ) from exc
             self.stdout.write(self.style.WARNING("Dry run: no database changes applied."))
             return
 
