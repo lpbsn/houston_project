@@ -34,7 +34,7 @@ def test_suggest_business_units_returns_transversal_for_maintenance(imported_cat
     results = suggest_business_units(query="Maintenance")
     assert results
     maintenance = next(item for item in results if item["key"] == "maintenance")
-    assert maintenance["default_unit_type"] == "transversal"
+    assert maintenance["unit_type"] == "transversal"
 
 
 def test_suggest_activity_subjects_filters_by_business_unit(imported_catalog):
@@ -58,5 +58,5 @@ def test_default_unit_type_is_not_imposed_on_establishment_business_unit(importe
         unit_type=BusinessUnit.UnitType.DEDICATED,
     )
     catalog_row = CatalogBusinessUnit.objects.get(key="maintenance")
-    assert catalog_row.default_unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
+    assert catalog_row.unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
     assert business_unit.unit_type == BusinessUnit.UnitType.DEDICATED

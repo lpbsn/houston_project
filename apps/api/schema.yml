@@ -6838,12 +6838,12 @@ components:
           type: string
         label:
           type: string
-        default_unit_type:
+        unit_type:
           type: string
       required:
-      - default_unit_type
       - key
       - label
+      - unit_type
     ChatAddParticipantRequest:
       type: object
       properties:

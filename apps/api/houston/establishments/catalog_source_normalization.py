@@ -34,7 +34,7 @@ QUASI_DUPLICATE_RATIO = 0.85
 class CatalogBusinessUnitRow:
     key: str
     label: str
-    default_unit_type: str
+    unit_type: str
     description: str
     sort_order: int = 0
 
@@ -168,7 +168,7 @@ def normalize_catalog_from_source(*, path: Path | None = None) -> NormalizedCata
         CatalogBusinessUnitRow(
             key=bu_key,
             label=bu_labels[bu_key],
-            default_unit_type=default_unit_type_for_business_unit_key(bu_key),
+            unit_type=default_unit_type_for_business_unit_key(bu_key),
             description="",
             sort_order=(index + 1) * 10,
         )
@@ -227,7 +227,7 @@ def load_normalized_business_unit_rows(
                 CatalogBusinessUnitRow(
                     key=raw["key"],
                     label=raw["label"],
-                    default_unit_type=raw.get("default_unit_type") or "dedicated",
+                    unit_type=raw.get("unit_type") or raw.get("default_unit_type") or "dedicated",
                     description=raw.get("description") or "",
                     sort_order=int(raw.get("sort_order") or 0),
                 )
@@ -262,7 +262,7 @@ def write_normalized_catalog_csvs(*, catalog: NormalizedCatalog) -> None:
     with bu_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["key", "label", "default_unit_type", "description", "sort_order"],
+            fieldnames=["key", "label", "unit_type", "description", "sort_order"],
         )
         writer.writeheader()
         for row in catalog.business_units:
@@ -270,7 +270,7 @@ def write_normalized_catalog_csvs(*, catalog: NormalizedCatalog) -> None:
                 {
                     "key": row.key,
                     "label": row.label,
-                    "default_unit_type": row.default_unit_type,
+                    "unit_type": row.unit_type,
                     "description": row.description,
                     "sort_order": row.sort_order,
                 }

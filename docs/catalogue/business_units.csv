@@ -1,4 +1,4 @@
-key,label,default_unit_type,description,sort_order
+key,label,unit_type,description,sort_order
 hotel,Hôtel,dedicated,"Périmètre hébergement : chambres, couloirs, espaces communs et services chambre. Exclut restauration/bar sauf problème transversal maintenance.",10
 petit_dejeuner,Petit déjeuner,dedicated,"Service petit-déjeuner : buffet, salle PDJ, stocks et propreté dédiés.",20
 restaurant,Restaurant,dedicated,"Restauration sur place : salle, cuisine, service, stocks et propreté resto.",30

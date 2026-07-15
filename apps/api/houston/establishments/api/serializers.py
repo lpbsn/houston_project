@@ -168,7 +168,7 @@ class RuntimeConfigErrorResponseSerializer(serializers.Serializer):
 class CatalogBusinessUnitSuggestionSerializer(serializers.Serializer):
     key = serializers.CharField()
     label = serializers.CharField()
-    default_unit_type = serializers.CharField()
+    unit_type = serializers.CharField()
 
 
 class CatalogActivitySubjectSuggestionSerializer(serializers.Serializer):

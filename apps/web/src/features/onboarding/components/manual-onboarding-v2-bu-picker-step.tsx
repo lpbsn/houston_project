@@ -35,7 +35,7 @@ export function ManualOnboardingV2BuPickerStep({
 
   function handleSelectSuggestion(suggestion: CatalogBusinessUnitSuggestion) {
     const suggestedUnitType =
-      suggestion.default_unit_type === 'transversal' ? 'transversal' : 'dedicated'
+      suggestion.unit_type === 'transversal' ? 'transversal' : 'dedicated'
 
     addBusinessUnit(
       createDraftBusinessUnit({

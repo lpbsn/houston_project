@@ -364,7 +364,7 @@ def test_default_unit_type_is_suggestion_only(onboarding_session, owner, importe
         key="maintenance",
     )
     catalog_row = CatalogBusinessUnit.objects.get(key="maintenance")
-    assert catalog_row.default_unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
+    assert catalog_row.unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
     assert business_unit.unit_type == BusinessUnit.UnitType.DEDICATED
 
 
