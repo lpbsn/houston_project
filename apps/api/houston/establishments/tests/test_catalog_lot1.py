@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import importlib
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, close_old_connections, connection, transaction
 
 from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.catalog_preflight import CatalogImportError
@@ -91,6 +93,29 @@ def _link_runtime_activity_subject(
     )
 
 
+
+
+def _require_postgresql() -> None:
+    if connection.vendor != "postgresql":
+        pytest.skip("PostgreSQL-only concurrency test")
+
+
+def _session_has_ungranted_lock(*, pid: int) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = %s AND NOT granted)",
+            [pid],
+        )
+        return cursor.fetchone()[0]
+
+
+def _wait_until_session_waiting_for_lock(*, pid: int) -> None:
+    for _ in range(500):
+        if _session_has_ungranted_lock(pid=pid):
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"Expected PostgreSQL session {pid} to block on a lock")
+
 def test_catalog_import_rejects_duplicate_business_unit_key(imported_catalog):
     rows = (
         _business_unit_row(key="hotel", label="Hôtel"),
@@ -130,6 +155,124 @@ def test_catalog_unit_type_change_rejected_when_referenced(imported_catalog):
     assert exc_info.value.code == "catalog_immutable_field"
     assert CatalogBusinessUnit.objects.get(key="maintenance").unit_type == "transversal"
 
+
+
+
+@pytest.mark.django_db(transaction=True)
+def test_catalog_bu_lock_blocks_concurrent_business_unit_reference(imported_catalog):
+    _require_postgresql()
+
+    establishment = create_establishment()
+    catalog_bu = CatalogBusinessUnit.objects.get(key="maintenance")
+    catalog_locked = threading.Event()
+    runtime_attempting = threading.Event()
+    runtime_finished = threading.Event()
+    runtime_error: list[BaseException] = []
+    runtime_pid: dict[str, int | None] = {"value": None}
+
+    def runtime_txn() -> None:
+        close_old_connections()
+        try:
+            assert catalog_locked.wait(timeout=5)
+            runtime_pid["value"] = connection.cursor().connection.info.backend_pid
+            runtime_attempting.set()
+            with transaction.atomic():
+                BusinessUnit.objects.create(
+                    establishment=establishment,
+                    key="maintenance",
+                    label=catalog_bu.label,
+                    catalog_business_unit=catalog_bu,
+                    source=BusinessUnit.Source.CATALOG_SUGGESTION,
+                    active=True,
+                )
+            runtime_finished.set()
+        except BaseException as exc:
+            runtime_error.append(exc)
+        finally:
+            close_old_connections()
+
+    runtime_thread = threading.Thread(target=runtime_txn)
+    runtime_thread.start()
+
+    try:
+        with transaction.atomic():
+            CatalogBusinessUnit.objects.select_for_update().get(key="maintenance")
+            catalog_locked.set()
+            assert runtime_attempting.wait(timeout=5)
+            assert runtime_pid["value"] is not None
+            _wait_until_session_waiting_for_lock(pid=runtime_pid["value"])
+            assert not runtime_finished.is_set()
+    finally:
+        runtime_thread.join(timeout=10)
+
+    assert not runtime_error
+    assert runtime_finished.is_set()
+    assert BusinessUnit.objects.filter(catalog_business_unit_id=catalog_bu.id).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_catalog_subject_lock_blocks_concurrent_activity_subject_reference(imported_catalog):
+    _require_postgresql()
+
+    establishment = create_establishment()
+    catalog_bu = CatalogBusinessUnit.objects.get(key="hotel")
+    runtime_bu = BusinessUnit.objects.create(
+        establishment=establishment,
+        key="hotel",
+        label=catalog_bu.label,
+        source=BusinessUnit.Source.MANUAL,
+        active=True,
+    )
+    catalog_as = CatalogActivitySubject.objects.get(key="hotel__menage")
+    catalog_locked = threading.Event()
+    runtime_attempting = threading.Event()
+    runtime_finished = threading.Event()
+    runtime_error: list[BaseException] = []
+    runtime_pid: dict[str, int | None] = {"value": None}
+
+    def runtime_txn() -> None:
+        close_old_connections()
+        try:
+            assert catalog_locked.wait(timeout=5)
+            runtime_pid["value"] = connection.cursor().connection.info.backend_pid
+            runtime_attempting.set()
+            with transaction.atomic():
+                ActivitySubject.objects.create(
+                    establishment=establishment,
+                    business_unit=runtime_bu,
+                    normalized_name=normalize_activity_subject_name(catalog_as.label),
+                    label=catalog_as.label,
+                    catalog_activity_subject=catalog_as,
+                    source=ActivitySubject.Source.CATALOG_SUGGESTION,
+                    active=True,
+                )
+            runtime_finished.set()
+        except BaseException as exc:
+            runtime_error.append(exc)
+        finally:
+            close_old_connections()
+
+    runtime_thread = threading.Thread(target=runtime_txn)
+    runtime_thread.start()
+
+    try:
+        with transaction.atomic():
+            CatalogActivitySubject.objects.select_for_update(of=("self",)).get(
+                key="hotel__menage"
+            )
+            catalog_locked.set()
+            assert runtime_attempting.wait(timeout=5)
+            assert runtime_pid["value"] is not None
+            _wait_until_session_waiting_for_lock(pid=runtime_pid["value"])
+            assert not runtime_finished.is_set()
+    finally:
+        runtime_thread.join(timeout=10)
+
+    assert not runtime_error
+    assert runtime_finished.is_set()
+    assert (
+        ActivitySubject.objects.filter(catalog_activity_subject_id=catalog_as.id).count() == 1
+    )
 
 def test_catalog_import_rejects_subject_business_unit_change_when_referenced(imported_catalog):
     business_unit = _link_runtime_business_unit(catalog_key="hotel")
