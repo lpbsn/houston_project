@@ -1,0 +1,23 @@
+.................................................................        [100%]
+============================= slowest 20 durations =============================
+2.96s setup    apps/api/houston/establishments/tests/test_catalog_import.py::test_normalized_seed_counts
+0.52s setup    apps/api/houston/establishments/tests/test_catalog_suggest_api.py::test_catalog_business_unit_suggest_returns_empty_without_import
+0.48s call     apps/api/houston/establishments/tests/test_onboarding_proposal_api.py::test_manager_and_staff_are_denied_for_proposal_endpoints
+0.36s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_mutations_return_404[post-proposals/-payload4]
+0.35s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_get_endpoints_return_404[]
+0.35s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_proposal_mutations_return_404[apply/]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_establishment_membership_invitation_returns_404
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_mutations_return_404[post-mark-ready/-payload2]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_get_endpoints_return_404[activation-summary/]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_mismatched_proposal_id_on_actor_session_returns_404
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_proposal_mutations_return_404[submit/]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_mutations_return_404[patch-description/-payload0]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_proposal_mutations_return_404[reject/]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_proposal_detail_returns_404
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_mutations_return_404[post-activate/-payload3]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_get_endpoints_return_404[proposals/]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_get_endpoints_return_404[runtime-config/]
+0.34s setup    apps/api/houston/establishments/tests/test_onboarding_tenant_isolation_api.py::test_foreign_onboarding_session_mutations_return_404[post-director-invitations/-payload1]
+0.29s call     apps/api/houston/establishments/tests/test_onboarding_proposal_api.py::test_foreign_session_and_mismatched_proposal_are_denied
+0.24s setup    apps/api/houston/establishments/tests/test_catalog_suggest_api.py::test_catalog_business_unit_suggest_returns_coworking_after_import
+65 passed in 16.02s

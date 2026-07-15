@@ -1,0 +1,6 @@
+.                                                                        [100%]
+============================= slowest 20 durations =============================
+3.01s setup    apps/api/houston/establishments/tests/test_catalog_priority_descriptions.py::test_taxonomy_snapshot_includes_imported_catalog_descriptions
+0.06s call     apps/api/houston/establishments/tests/test_catalog_priority_descriptions.py::test_taxonomy_snapshot_includes_imported_catalog_descriptions
+0.03s teardown apps/api/houston/establishments/tests/test_catalog_priority_descriptions.py::test_taxonomy_snapshot_includes_imported_catalog_descriptions
+1 passed, 375 deselected in 3.49s

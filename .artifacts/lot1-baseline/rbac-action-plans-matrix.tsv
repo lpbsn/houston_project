@@ -1,0 +1,11 @@
+rule	permissions_unit	hints_api	api_403_or_hints	overlap_layers
+can_create_action_plan / catalog	23	2	3	3
+can_use catalog	12	6	11	3
+can_manage catalog	7	6	8	3
+can_mark_done execution	2	4	8	3
+can_validate execution	6	1	2	3
+can_cancel execution	4	1	3	3
+can_execute task	14	0	0	1
+can_schedule	0	1	3	2
+cross_pole / linked plan	28	0	11	2
+visibility / readable	75	0	64	2
