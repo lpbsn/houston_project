@@ -642,13 +642,27 @@ class BusinessUnit(BaseModel):
         blank=True,
         db_index=False,
     )
+    specific_name = models.CharField(max_length=255, null=True, blank=True)
+    normalized_specific_name = models.CharField(max_length=255, null=True, blank=True)
+    routing_key = models.CharField(max_length=180, null=True, blank=True)
+    instance_description = models.TextField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["establishment", "key"],
                 name="bu_est_key_uniq",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "normalized_specific_name"],
+                condition=Q(normalized_specific_name__isnull=False),
+                name="bu_est_normalized_specific_name_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["establishment", "routing_key"],
+                condition=Q(routing_key__isnull=False),
+                name="bu_est_routing_key_uniq",
+            ),
         ]
         indexes = [
             models.Index(fields=["establishment"], name="bu_est_idx"),
@@ -680,9 +694,10 @@ class ActivitySubject(BaseModel):
         related_name="activity_subjects",
         db_index=False,
     )
-    normalized_name = models.CharField(max_length=150)
+    normalized_name = models.CharField(max_length=255)
     label = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
+    routing_key = models.CharField(max_length=150, null=True, blank=True)
     catalog_activity_subject = models.ForeignKey(
         CatalogActivitySubject,
         on_delete=models.SET_NULL,
@@ -711,7 +726,12 @@ class ActivitySubject(BaseModel):
             models.UniqueConstraint(
                 fields=["business_unit", "normalized_name"],
                 name="as_bu_normalized_name_uniq",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["business_unit", "routing_key"],
+                condition=Q(routing_key__isnull=False),
+                name="activity_subject_bu_routing_key_uniq",
+            ),
         ]
         indexes = [
             models.Index(fields=["business_unit", "active"], name="as_bu_active_idx"),
