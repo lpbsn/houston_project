@@ -32,19 +32,19 @@ export default defineConfig({
         theme_color: '#0f3b48',
         icons: [
           {
-            src: '/spore-icon-v2-192.png',
+            src: '/spore-icon-v3-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/spore-icon-v2-512.png',
+            src: '/spore-icon-v3-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/spore-maskable-v2-512.png',
+            src: '/spore-maskable-v3-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
