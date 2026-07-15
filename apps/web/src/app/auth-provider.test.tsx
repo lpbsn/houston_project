@@ -39,7 +39,7 @@ vi.mock('@/features/auth/api', async (importOriginal) => {
     logout,
     refreshAccessToken: vi.fn(),
     restoreSession,
-    AuthApiError: class AuthApiError extends Error {},
+    AuthApiError: actual.AuthApiError,
   }
 })
 
@@ -179,5 +179,25 @@ describe('AuthProvider', () => {
     expect(authSnapshot!.user).toBeNull()
     expect(authSnapshot!.activeMembership).toBeNull()
     expect(authSnapshot!.memberships).toEqual([])
+  })
+
+  it('clears authenticated cache when bootstrap returns 401', async () => {
+    queryClient.setQueryData(['signals', 'feed', 'est-a', 'general', {}], { items: ['stale'] })
+
+    const { AuthApiError: MockedAuthApiError } = await import('@/features/auth/api')
+    fetchBootstrap.mockRejectedValueOnce(new MockedAuthApiError('Unauthorized', 401))
+
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(AuthProvider, null, createElement('div', { 'data-testid': 'child' })),
+      ),
+    )
+
+    await vi.waitFor(() => {
+      expect(queryClient.getQueryData(['signals', 'feed', 'est-a', 'general', {}])).toBeUndefined()
+      expect(queryClient.getQueryData(bootstrapQueryKey)).toBeUndefined()
+    })
   })
 })

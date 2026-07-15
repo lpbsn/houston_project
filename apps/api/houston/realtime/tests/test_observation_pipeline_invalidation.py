@@ -16,13 +16,17 @@ from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import Signal
 from houston.signals.services import apply_pipeline_output, run_observation_pipeline
 from houston.signals.tests.conftest import create_observation
-from houston.signals.tests.test_legacy_issue_focus_aggregation import (
-    _mojito_candidate,
-    _setup_bar_taxonomy,
+from houston.signals.tests.pipeline_helpers import (
+    fake_provider_payload as _fake_provider_payload,
 )
-from houston.signals.tests.test_pipeline_validation import (
-    _fake_provider_payload,
-    _setup_hotel_taxonomy,
+from houston.signals.tests.pipeline_helpers import (
+    mojito_candidate as _mojito_candidate,
+)
+from houston.signals.tests.pipeline_helpers import (
+    setup_bar_taxonomy as _setup_bar_taxonomy,
+)
+from houston.signals.tests.pipeline_helpers import (
+    setup_hotel_taxonomy as _setup_hotel_taxonomy,
 )
 from houston.testing.factories import build_membership
 

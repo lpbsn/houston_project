@@ -107,14 +107,19 @@ Respect accessibility basics: labels, accessible icon buttons, reduced motion.
 
 ## Tests
 
-Add/update tests for:
-- API hooks
-- mutations
-- routing
-- permission-based UI
-- mobile states
-- loading/error/empty states
-- query invalidation/realtime behavior
+Conventions: [`docs/engineering/testing.md`](../../docs/engineering/testing.md) · Cursor: [`.cursor/rules/40-testing.mdc`](../../.cursor/rules/40-testing.mdc).
+
+Test **product risk at the owning layer** — check lib/hook tests before adding page tests:
+
+| Layer | Owns |
+|-------|------|
+| `features/*/lib/*.test.ts` | Validation, cache keys, navigation derivation, RBAC display hints (Node) |
+| Hooks / mutations | TanStack invalidation and errors with real `QueryClient` (jsdom) |
+| Pages / auth provider | Wiring risk only: cache purge, guards, blocked submit — not layout or copy |
+
+Do not: assert Tailwind/shadcn classes or French copy unless exported as a lib rule; duplicate query-invalidation rules already in `query-invalidation.test.ts`; mock away invalidation under test.
+
+Run targeted: `cd apps/web && npm test -- path/to/file.test.ts`.
 
 ## Commands
 

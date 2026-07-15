@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from houston.chat.models import ChatConversation, ChatParticipant
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user, login
-from houston.chat.tests.test_rest_api import chat_url, create_dm, create_group
+from houston.chat.tests.helpers import chat_url, create_dm, create_group
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.services import (
     MembershipManagementForbiddenError,

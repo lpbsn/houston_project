@@ -12,10 +12,6 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
-from houston.establishments.tests.taxonomy_helpers import (
-    create_activity_subject,
-    create_business_unit,
-)
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.exceptions import SignalPipelineCandidateError
@@ -26,66 +22,18 @@ from houston.signals.services import (
     validate_pipeline_output_issue_focus,
 )
 from houston.signals.tests.conftest import create_observation
+from houston.signals.tests.pipeline_helpers import (
+    fake_provider_payload as _fake_provider_payload,
+)
+from houston.signals.tests.pipeline_helpers import (
+    output_with_candidate as _output_with_candidate,
+)
+from houston.signals.tests.pipeline_helpers import (
+    setup_hotel_taxonomy as _setup_hotel_taxonomy,
+)
 from houston.testing.factories import build_membership
 
-pytestmark = [pytest.mark.django_db, pytest.mark.slow]
-
-
-def _setup_hotel_taxonomy(establishment):
-    hotel = create_business_unit(
-        establishment=establishment,
-        key="hotel",
-        label="Hotel",
-    )
-    create_activity_subject(
-        establishment=establishment,
-        business_unit=hotel,
-        label="Maintenance",
-    )
-    return hotel
-
-
-def _output_with_candidate(
-    *,
-    affected_key: str = "hotel",
-    responsible_key: str = "hotel",
-    subject_key: str = "maintenance",
-):
-    return ObservationPipelineOutput(
-        schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        candidates=[
-            PipelineCandidateOutput(
-                title="Clim en panne",
-                structured_summary="La climatisation ne fonctionne plus.",
-                issue_focus="climatisation",
-                affected_business_unit_key=affected_key,
-                responsible_business_unit_key=responsible_key,
-                activity_subject_key=subject_key,
-                operational_unit_key=None,
-                location_text=None,
-                aggregate_into_signal_id=None,
-            )
-        ],
-    )
-
-
-def _fake_provider_payload(*, issue_focus: str = "climatisation"):
-    return {
-        "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-        "candidates": [
-            {
-                "title": "Clim en panne",
-                "structured_summary": "La climatisation ne fonctionne plus.",
-                "issue_focus": issue_focus,
-                "affected_business_unit_key": "hotel",
-                "responsible_business_unit_key": "hotel",
-                "activity_subject_key": "maintenance",
-                "operational_unit_key": None,
-                "location_text": None,
-                "aggregate_into_signal_id": None,
-            }
-        ],
-    }
+pytestmark = pytest.mark.django_db
 
 
 def test_validate_pipeline_output_rejects_whitespace_only_issue_focus():

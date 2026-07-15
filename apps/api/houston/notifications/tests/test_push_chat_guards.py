@@ -17,10 +17,7 @@ from houston.notifications.push.chat_guards import (
 )
 from houston.notifications.push.services import run_push_for_notification
 from houston.notifications.tests.conftest import create_test_notification
-from houston.notifications.tests.test_push_vapid_public_key_api import (
-    TEST_PRIVATE_KEY,
-    TEST_PUBLIC_KEY,
-)
+from houston.notifications.tests.vapid_constants import TEST_PRIVATE_KEY, TEST_PUBLIC_KEY
 from houston.testing.auth import build_api_membership
 
 pytestmark = pytest.mark.django_db

@@ -11,59 +11,23 @@ from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
-from houston.establishments.tests.taxonomy_helpers import (
-    create_activity_subject,
-    create_business_unit,
-)
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal
 from houston.signals.services import apply_pipeline_output
 from houston.signals.tests.conftest import create_observation
+from houston.signals.tests.pipeline_helpers import (
+    legacy_signal as _legacy_signal,
+)
+from houston.signals.tests.pipeline_helpers import (
+    mojito_candidate as _mojito_candidate,
+)
+from houston.signals.tests.pipeline_helpers import (
+    setup_bar_taxonomy as _setup_bar_taxonomy,
+)
 from houston.testing.factories import build_membership
 
-pytestmark = [pytest.mark.django_db, pytest.mark.slow]
-
-
-def _setup_bar_taxonomy(establishment):
-    bar = create_business_unit(
-        establishment=establishment,
-        key="bar",
-        label="Bar",
-    )
-    create_activity_subject(
-        establishment=establishment,
-        business_unit=bar,
-        label="Stock",
-    )
-    return bar
-
-
-def _legacy_signal(*, establishment, bar, subject, title="Rupture sirop mojito"):
-    return Signal.objects.create(
-        establishment=establishment,
-        affected_business_unit=bar,
-        responsible_business_unit=bar,
-        activity_subject=subject,
-        title=title,
-        structured_summary="Sirop mojito manquant au bar.",
-        issue_focus="",
-        last_activity_at=timezone.now(),
-    )
-
-
-def _mojito_candidate(*, aggregate_into_signal_id=None):
-    return PipelineCandidateOutput(
-        title="Toujours plus de sirop mojito au bar",
-        structured_summary="La rupture de sirop mojito au bar persiste.",
-        issue_focus="sirop mojito",
-        affected_business_unit_key="bar",
-        responsible_business_unit_key="bar",
-        activity_subject_key="stock",
-        operational_unit_key=None,
-        location_text="Bar",
-        aggregate_into_signal_id=aggregate_into_signal_id,
-    )
+pytestmark = pytest.mark.django_db
 
 
 def test_legacy_empty_issue_focus_aggregates_v4_candidate():

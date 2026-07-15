@@ -21,7 +21,7 @@ from houston.chat.tests.conftest import (
     ws_chat_path,
     ws_ticket_url,
 )
-from houston.chat.tests.test_rest_api import create_group
+from houston.chat.tests.helpers import create_group
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.services import deactivate_membership_for_management
 

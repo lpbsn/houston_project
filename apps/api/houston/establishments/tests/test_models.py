@@ -78,13 +78,6 @@ def test_membership_role_and_status_defaults(user, establishment):
     assert membership.status == EstablishmentMembership.Status.INVITED
 
 
-def test_membership_role_and_status_choices():
-    role_field = EstablishmentMembership._meta.get_field("role")
-    status_field = EstablishmentMembership._meta.get_field("status")
-    assert role_field.choices == EstablishmentMembership.Role.choices
-    assert status_field.choices == EstablishmentMembership.Status.choices
-
-
 def test_business_unit_unique_key_per_establishment(establishment):
     BusinessUnit.objects.create(
         establishment=establishment,
@@ -208,14 +201,6 @@ def test_onboarding_session_status_helpers_classify_terminal_and_non_terminal_st
     assert OnboardingSession.is_terminal_status(OnboardingSession.Status.CANCELED) is True
 
 
-def test_onboarding_session_source_mode_choices_include_reserved_ai_value():
-    source_field = OnboardingSession._meta.get_field("source_mode")
-    assert source_field.choices == OnboardingSession.SourceMode.choices
-    assert OnboardingSession.SourceMode.AI in {
-        choice for choice, _label in OnboardingSession.SourceMode.choices
-    }
-
-
 def test_onboarding_session_unique_non_terminal_session_per_establishment(
     organization,
     establishment,
@@ -299,16 +284,6 @@ def test_onboarding_proposal_defaults(organization, establishment, user):
     assert proposal.payload == {}
     assert proposal.section_validation == {}
     assert proposal.validation_errors == []
-
-
-def test_onboarding_proposal_choices_include_future_ai_source():
-    source_field = OnboardingProposal._meta.get_field("source")
-    status_field = OnboardingProposal._meta.get_field("status")
-    assert source_field.choices == OnboardingProposal.Source.choices
-    assert status_field.choices == OnboardingProposal.Status.choices
-    assert OnboardingProposal.Source.AI_PROPOSED in {
-        choice for choice, _label in OnboardingProposal.Source.choices
-    }
 
 
 def test_onboarding_proposal_validates_establishment_matches_session(

@@ -18,11 +18,9 @@ from houston.action_plans.tests.helpers import (
     action_plan_execution_feed_url,
     action_plan_execution_url,
     build_assignee_payload,
-)
-from houston.action_plans.tests.test_execution_feed_api import (
-    _create_execution,
-    _feed_execution_ids,
-    _feed_query,
+    create_execution,
+    feed_execution_ids,
+    feed_query,
 )
 from houston.testing.auth import auth_headers, login
 from houston.testing.auth import build_api_membership as build_foreign_membership
@@ -39,7 +37,7 @@ def _unpin_url(establishment_id, execution_id) -> str:
 
 
 def test_pin_unpin_idempotent(api_client, owner_membership, business_unit):
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Pin target",
@@ -64,12 +62,12 @@ def test_pin_unpin_idempotent(api_client, owner_membership, business_unit):
 
 
 def test_pin_is_personal(api_client, owner_membership, manager_membership, business_unit):
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Shared execution",
     )
-    pending = _create_execution(
+    pending = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Pending validation",
@@ -86,30 +84,30 @@ def test_pin_is_personal(api_client, owner_membership, manager_membership, busin
     assert response.status_code == 200
 
     owner_feed = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
         **auth_headers(owner_token),
     )
     manager_feed = api_client.get(
         action_plan_execution_feed_url(manager_membership.establishment_id)
-        + _feed_query("general"),
+        + feed_query("general"),
         **auth_headers(manager_token),
     )
     assert owner_feed.status_code == 200
     assert manager_feed.status_code == 200
-    assert _feed_execution_ids(owner_feed.json())[0] == str(execution.id)
-    assert str(execution.id) not in _feed_execution_ids(manager_feed.json())[:1]
-    assert _feed_execution_ids(manager_feed.json())[0] == str(pending.id)
+    assert feed_execution_ids(owner_feed.json())[0] == str(execution.id)
+    assert str(execution.id) not in feed_execution_ids(manager_feed.json())[:1]
+    assert feed_execution_ids(manager_feed.json())[0] == str(pending.id)
 
 
 def test_pinned_cross_status_at_top(api_client, owner_membership, business_unit):
-    pending = _create_execution(
+    pending = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Pending validation",
         status=EXECUTION_STATUS_PENDING_VALIDATION,
         requires_validation=True,
     )
-    in_progress = _create_execution(
+    in_progress = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="In progress",
@@ -122,25 +120,25 @@ def test_pinned_cross_status_at_top(api_client, owner_membership, business_unit)
     )
 
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
-    assert _feed_execution_ids(response.json())[:2] == [str(in_progress.id), str(pending.id)]
+    assert feed_execution_ids(response.json())[:2] == [str(in_progress.id), str(pending.id)]
 
 
 def test_pinned_fifo(api_client, owner_membership, business_unit):
-    first = _create_execution(
+    first = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="First pin",
     )
-    second = _create_execution(
+    second = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Second pin",
     )
-    third = _create_execution(
+    third = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Unpinned",
@@ -151,11 +149,11 @@ def test_pinned_fifo(api_client, owner_membership, business_unit):
     api_client.post(_pin_url(owner_membership.establishment_id, second.id), **auth_headers(token))
 
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200
-    assert _feed_execution_ids(response.json())[:3] == [
+    assert feed_execution_ids(response.json())[:3] == [
         str(first.id),
         str(second.id),
         str(third.id),
@@ -168,7 +166,7 @@ def test_pin_visible_in_personal_and_general(
     staff_membership,
     business_unit,
 ):
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Both views",
@@ -185,7 +183,7 @@ def test_pin_visible_in_personal_and_general(
     for view_mode in ("personal", "general"):
         response = api_client.get(
             action_plan_execution_feed_url(staff_membership.establishment_id)
-            + _feed_query(view_mode),
+            + feed_query(view_mode),
             **auth_headers(staff_token),
         )
         assert response.status_code == 200
@@ -196,7 +194,7 @@ def test_pin_visible_in_personal_and_general(
 
 def test_pin_not_visible_returns_404(api_client, owner_membership, business_unit):
     foreign = build_foreign_membership()
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Local only",
@@ -210,7 +208,7 @@ def test_pin_not_visible_returns_404(api_client, owner_membership, business_unit
 
 
 def test_staff_can_pin_for_self(api_client, owner_membership, staff_membership, business_unit):
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Staff pin",
@@ -228,7 +226,7 @@ def test_staff_can_pin_for_self(api_client, owner_membership, staff_membership, 
 
 
 def test_pins_deleted_on_done_and_cancel(api_client, owner_membership, business_unit):
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Lifecycle cleanup",
@@ -250,7 +248,7 @@ def test_pins_deleted_on_done_and_cancel(api_client, owner_membership, business_
         action_plan_execution_id=execution.id,
     ).exists()
 
-    execution_cancel = _create_execution(
+    execution_cancel = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Cancel cleanup",
@@ -270,7 +268,7 @@ def test_pins_deleted_on_done_and_cancel(api_client, owner_membership, business_
 
 def test_feed_cursor_stable_with_pins(api_client, owner_membership, business_unit):
     executions = [
-        _create_execution(
+        create_execution(
             owner_membership,
             business_unit=business_unit,
             title=f"Feed item {index}",
@@ -285,7 +283,7 @@ def test_feed_cursor_stable_with_pins(api_client, owner_membership, business_uni
 
     first = api_client.get(
         action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general")
+        + feed_query("general")
         + "&page_size=2",
         **auth_headers(token),
     )
@@ -296,13 +294,13 @@ def test_feed_cursor_stable_with_pins(api_client, owner_membership, business_uni
 
     second = api_client.get(
         action_plan_execution_feed_url(owner_membership.establishment_id)
-        + _feed_query("general")
+        + feed_query("general")
         + f"&page_size=2&cursor={first_body['next_cursor']}",
         **auth_headers(token),
     )
     assert second.status_code == 200
-    first_ids = _feed_execution_ids(first_body)
-    second_ids = _feed_execution_ids(second.json())
+    first_ids = feed_execution_ids(first_body)
+    second_ids = feed_execution_ids(second.json())
     assert len(first_ids) == 2
     assert len(second_ids) == 2
     assert first_ids[0] == str(executions[2].id)
@@ -314,7 +312,7 @@ def test_feed_item_contract_includes_is_pinned_and_can_pin(
     owner_membership,
     business_unit,
 ):
-    execution = _create_execution(
+    execution = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Contract pin fields",
@@ -325,7 +323,7 @@ def test_feed_item_contract_includes_is_pinned_and_can_pin(
         **auth_headers(token),
     )
     response = api_client.get(
-        action_plan_execution_feed_url(owner_membership.establishment_id) + _feed_query("general"),
+        action_plan_execution_feed_url(owner_membership.establishment_id) + feed_query("general"),
         **auth_headers(token),
     )
     assert response.status_code == 200

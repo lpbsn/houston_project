@@ -12,12 +12,10 @@ from rest_framework.settings import api_settings as drf_api_settings
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
-from houston.accounts.tests.test_auth_api import (
+from houston.accounts.tests.helpers import (
     create_membership,
     ensure_csrf,
     login,
-)
-from houston.accounts.tests.test_registration_api import (
     owner_validate_payload,
     registration_payload,
 )

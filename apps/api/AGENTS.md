@@ -103,17 +103,21 @@ Never log or expose:
 
 ## Tests
 
-Add/update focused tests for:
-- service behavior
-- permissions
-- tenant scoping
-- lifecycle transitions
-- API shape
-- emitted events
-- Celery/Channels behavior
-- sensitive data exposure
+Conventions: [`docs/engineering/testing.md`](../../docs/engineering/testing.md) · Cursor: [`.cursor/rules/40-testing.mdc`](../../.cursor/rules/40-testing.mdc).
 
-Prefer behavior tests over fragile internal mocks.
+Test **product risk at the owning layer** — check existing coverage before adding:
+
+| Layer | Owns |
+|-------|------|
+| `permissions.py` | RBAC combinations not trivially duplicated at API |
+| `services.py` | Transitions, invariants, DB side effects |
+| `selectors.py` | Scoping, filtering, tenant reads |
+| `test_*_api.py` | HTTP status, response shape, CSRF, tenant boundary |
+| Celery / WS / producers | After-commit side effects, idempotence, payload allowlist |
+
+Do not: re-prove the same permission rule in unit + API; import from `test_*.py`; test Django `_meta` trivia; mark `slow` without justification.
+
+Prefer behavior tests over fragile internal mocks. Run targeted tests via `make backend-test ARGS='path -q'`.
 
 ## Commands
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import io
-import time
+import time as stdlib_time
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 import pytest
@@ -262,7 +263,6 @@ def test_preview_404_without_created_from_feed_signal(api_client):
     assert Client().get(preview_url).status_code == 404
 
 
-@pytest.mark.slow
 @override_settings(HOUSTON_OBSERVATION_MEDIA_PREVIEW_TTL_SECONDS=1)
 def test_preview_404_expired_token(api_client):
     membership = build_api_membership()
@@ -279,9 +279,9 @@ def test_preview_404_expired_token(api_client):
     )
     preview_url = detail.json()["media_items"][0]["preview_url"]
 
-    time.sleep(1.1)
-
-    assert Client().get(preview_url).status_code == 404
+    with patch("django.core.signing.time") as mock_time:
+        mock_time.time.return_value = stdlib_time.time() + 2
+        assert Client().get(preview_url).status_code == 404
 
 
 def test_golden_split_keeps_media_until_last_active_signal_resolved(api_client):

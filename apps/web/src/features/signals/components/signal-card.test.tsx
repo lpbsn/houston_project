@@ -70,9 +70,6 @@ describe('SignalCard feed variant', () => {
     const actionsButton = screen.getByRole('button', { name: 'Actions du signal' })
     const metaRow = actionsButton.parentElement?.parentElement
 
-    expect(metaRow?.className).toContain('items-center')
-    expect(metaRow?.className).toContain('justify-between')
-    expect(metaRow?.className).toContain('mb-1')
     expect(metaRow?.contains(actionsButton)).toBe(true)
     expect(metaRow?.nextElementSibling?.contains(title)).toBe(true)
   })
@@ -101,8 +98,6 @@ describe('SignalCard feed variant', () => {
     const locationText = screen.getByText('Salle — Table 12')
 
     expect(badge.textContent).toBe('x2')
-    expect(badge.className).toContain('bg-[#114660]')
-    expect(badge.className).toContain('shrink-0')
     expect(locationText.parentElement?.parentElement?.contains(badge)).toBe(true)
 
     const footer = container.querySelector('.border-t')
@@ -110,8 +105,8 @@ describe('SignalCard feed variant', () => {
     expect(screen.getByText('En attente')).toBeTruthy()
   })
 
-  it('uses feed avatar color for reporter initials', () => {
-    const { container } = render(
+  it('renders reporter initials when reporter_display_name is set', () => {
+    render(
       <SignalCard
         item={buildFeedItem({ reporter_display_name: 'Léa P.' })}
         onSelect={onSelect}
@@ -119,14 +114,12 @@ describe('SignalCard feed variant', () => {
       />,
     )
 
-    const avatar = container.querySelector('.bg-\\[\\#3A7A96\\]')
-    expect(avatar).toBeTruthy()
-    expect(avatar?.textContent).toBe('LP')
+    expect(screen.getByText('LP')).toBeTruthy()
     expect(screen.getByText('Léa P.')).toBeTruthy()
   })
 
   it('does not render avatar or reporter name when reporter_display_name is empty', () => {
-    const { container } = render(
+    render(
       <SignalCard
         item={buildFeedItem({ reporter_display_name: '   ' })}
         onSelect={onSelect}
@@ -134,7 +127,7 @@ describe('SignalCard feed variant', () => {
       />,
     )
 
-    expect(container.querySelector('.bg-\\[\\#3A7A96\\]')).toBeNull()
+    expect(screen.queryByText('LP')).toBeNull()
     expect(screen.queryByText(/\u00a0/)).toBeNull()
   })
 
@@ -142,7 +135,7 @@ describe('SignalCard feed variant', () => {
     const longTitle =
       'Client mécontent — attente supérieure à vingt-cinq minutes en salle principale du restaurant'
 
-    const { container } = render(
+    render(
       <SignalCard
         item={buildFeedItem({
           title: longTitle,
@@ -154,19 +147,13 @@ describe('SignalCard feed variant', () => {
       />,
     )
 
-    const title = screen.getByRole('heading', { level: 3, name: longTitle })
-    expect(title.className).toContain('line-clamp-2')
+    screen.getByRole('heading', { level: 3, name: longTitle })
 
     const locationText = screen.getByText('Salle — Table 12')
     const locationRow = locationText.parentElement?.parentElement
-    expect(locationRow?.className).toContain('justify-between')
 
     const badge = screen.getByLabelText('2 agrégations')
-    expect(badge.className).toContain('shrink-0')
     expect(locationRow?.contains(badge)).toBe(true)
-
-    const article = container.querySelector('article')
-    expect(article?.className).toContain('rounded-[14px]')
   })
 
   it('renders MapPin for location text', () => {
@@ -198,11 +185,8 @@ describe('SignalCard pinned variant', () => {
 
     expect(screen.getByText('Épinglé')).toBeTruthy()
     expect(screen.getByText('Voir le détail →')).toBeTruthy()
-    expect(screen.getByText('Épinglé').className).toContain('text-[#114660]')
-    expect(screen.getByText('Voir le détail →').className).toContain('text-[#114660]')
     expect(screen.getByText('Plonge — Cuisine')).toBeTruthy()
     expect(container.querySelector('.lucide-map-pin')).toBeTruthy()
-    expect(container.querySelector('article')?.className).toContain('rounded-[14px]')
   })
 })
 

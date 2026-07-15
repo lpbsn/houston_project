@@ -17,21 +17,21 @@ from houston.action_plans.feed_cursor import (
     sort_end_at_for_execution,
 )
 from houston.action_plans.selectors import annotate_action_plan_execution_feed_sort_keys
-from houston.action_plans.tests.test_execution_feed_api import _create_execution
+from houston.action_plans.tests.helpers import create_execution
 
 pytestmark = pytest.mark.django_db
 
 
 def test_deadline_bucket_for_terminal_done_and_canceled(owner_membership, business_unit):
     now = timezone.now()
-    done = _create_execution(
+    done = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Done terminal",
         status=EXECUTION_STATUS_DONE,
         end_at=now - timezone.timedelta(days=1),
     )
-    canceled = _create_execution(
+    canceled = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Canceled terminal",
@@ -46,7 +46,7 @@ def test_deadline_bucket_for_terminal_done_and_canceled(owner_membership, busine
 
 def test_sort_end_at_for_terminal_is_none_even_with_db_end_at(owner_membership, business_unit):
     now = timezone.now()
-    done = _create_execution(
+    done = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Done with end_at",
@@ -63,7 +63,7 @@ def test_encode_terminal_cursor_uses_bucket_three_and_empty_end_at(
     business_unit,
 ):
     now = timezone.now()
-    done = _create_execution(
+    done = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Done encoded",
@@ -84,7 +84,7 @@ def test_after_cursor_filter_selects_terminal_by_last_activity_not_end_at(
     business_unit,
 ):
     now = timezone.now()
-    newer_done = _create_execution(
+    newer_done = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Newer done",
@@ -92,7 +92,7 @@ def test_after_cursor_filter_selects_terminal_by_last_activity_not_end_at(
         last_activity_at=now - timezone.timedelta(hours=1),
         end_at=now + timezone.timedelta(days=2),
     )
-    older_done = _create_execution(
+    older_done = create_execution(
         owner_membership,
         business_unit=business_unit,
         title="Older done",

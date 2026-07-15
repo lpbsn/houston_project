@@ -23,8 +23,8 @@ from houston.chat.tests.conftest import (
     ws_chat_path,
     ws_ticket_url,
 )
-from houston.chat.tests.test_rest_api import create_dm
-from houston.chat.tests.test_ws_messages import _connect_authenticated
+from houston.chat.tests.helpers import create_dm
+from houston.chat.tests.ws_helpers import _connect_authenticated
 from houston.chat.ws_notify import notify_session_access_revoked
 from houston.establishments.models import Establishment, EstablishmentMembership
 

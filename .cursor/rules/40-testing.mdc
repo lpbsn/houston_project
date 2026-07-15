@@ -1,0 +1,31 @@
+---
+description: Use when adding, editing, reviewing, or auditing tests. Full conventions in docs/engineering/testing.md.
+globs:
+  - "apps/api/**/tests/**"
+  - "apps/web/**/*.test.ts"
+  - "apps/web/**/*.test.tsx"
+alwaysApply: false
+---
+
+# Testing guardrails
+
+Source of truth: [`docs/engineering/testing.md`](../../docs/engineering/testing.md).
+
+Before adding a test:
+1. Search the domain for existing coverage at **permissions → service → API** (backend) or **lib → hook → page** (frontend).
+2. Add only where this layer owns **product risk** not already asserted.
+3. Prefer extending one focused test over a new file or duplicated matrix row.
+
+Do not:
+- import helpers from `test_*.py` — use `houston/testing/` or domain `tests/helpers.py`
+- duplicate the same RBAC rule across permissions unit, hints API, and 403 API without justification
+- test CSS/Tailwind, shadcn styling, French copy, or Django `_meta` trivia
+- mark `slow` without explicit justification (sleep, live API, sustained >1s, heavy concurrency)
+- conflate fake-provider tests with live OpenAI smoke (`openai_observation_smoke`)
+
+Do:
+- use `@pytest.mark.auth_throttle` for real throttle tests
+- use Node env for pure lib tests; jsdom + real `QueryClient` for invalidation/mutations
+- run targeted tests while iterating; project gates before merge
+
+Protected: auth/tenant isolation, pipeline v4 golden, fake OpenAI guards, notification producers, query cache purge.
