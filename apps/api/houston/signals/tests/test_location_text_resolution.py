@@ -30,22 +30,22 @@ pytestmark = pytest.mark.django_db
 
 def _setup_hotel(establishment):
     hotel = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=hotel,
         label="Maintenance",
     )
-    return hotel
+    return hotel, subject
 
 
-def _candidate(**overrides) -> PipelineCandidateOutput:
+def _candidate(hotel, subject, **overrides) -> PipelineCandidateOutput:
     base = {
         "title": "Issue",
         "structured_summary": "Structured summary for tests.",
         "issue_focus": "maintenance",
-        "affected_business_unit_key": "hotel",
-        "responsible_business_unit_key": "hotel",
-        "activity_subject_key": "maintenance",
+        "affected_business_unit_routing_key": hotel.routing_key,
+        "responsible_business_unit_routing_key": hotel.routing_key,
+        "activity_subject_routing_key": subject.routing_key,
         "operational_unit_key": None,
         "location_text": None,
         "aggregate_into_signal_id": None,
@@ -63,7 +63,7 @@ def test_normalize_location_text_strips_and_truncates():
 
 def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
     membership = build_membership()
-    _setup_hotel(membership.establishment)
+    hotel, subject = _setup_hotel(membership.establishment)
     unit = OperationalUnit.objects.create(
         establishment=membership.establishment,
         key="rooms",
@@ -72,6 +72,8 @@ def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
     )
     observation = create_observation(membership=membership, text="Chambre 312 sale.")
     candidate = _candidate(
+        hotel,
+        subject,
         operational_unit_key=unit.key,
         location_text="chambre 312",
     )
@@ -91,9 +93,9 @@ def test_resolve_signal_location_text_uses_unit_label_when_unit_present():
 
 def test_resolve_signal_location_text_uses_candidate_when_no_unit():
     membership = build_membership()
-    _setup_hotel(membership.establishment)
+    hotel, subject = _setup_hotel(membership.establishment)
     observation = create_observation(membership=membership, text="Problème à l'entrée.")
-    candidate = _candidate(location_text="Entrée")
+    candidate = _candidate(hotel, subject, location_text="Entrée")
     resolved = resolve_taxonomy_from_candidate(
         establishment_id=membership.establishment_id,
         candidate=candidate,
@@ -110,10 +112,10 @@ def test_resolve_signal_location_text_uses_candidate_when_no_unit():
 
 def test_resolve_signal_location_text_clears_when_equals_raw_observation():
     membership = build_membership()
-    _setup_hotel(membership.establishment)
+    hotel, subject = _setup_hotel(membership.establishment)
     raw = "Problème à l'entrée du restaurant."
     observation = create_observation(membership=membership, text=raw)
-    candidate = _candidate(location_text=raw)
+    candidate = _candidate(hotel, subject, location_text=raw)
     resolved = resolve_taxonomy_from_candidate(
         establishment_id=membership.establishment_id,
         candidate=candidate,
@@ -130,7 +132,7 @@ def test_resolve_signal_location_text_clears_when_equals_raw_observation():
 
 def test_apply_pipeline_output_persists_location_text():
     membership = build_membership()
-    _setup_hotel(membership.establishment)
+    hotel, subject = _setup_hotel(membership.establishment)
     observation = create_observation(membership=membership, text="Fuite bar.")
 
     apply_pipeline_output(
@@ -139,6 +141,8 @@ def test_apply_pipeline_output_persists_location_text():
             schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
             candidates=[
                 _candidate(
+                    hotel,
+                    subject,
                     title="Fuite",
                     structured_summary="Fuite au bar.",
                     location_text="Bar",

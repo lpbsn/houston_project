@@ -41,14 +41,14 @@ def legacy_signal(*, establishment, bar, subject, title="Rupture sirop mojito"):
     )
 
 
-def mojito_candidate(*, aggregate_into_signal_id=None):
+def mojito_candidate(*, bar, subject, aggregate_into_signal_id=None):
     return PipelineCandidateOutput(
         title="Toujours plus de sirop mojito au bar",
         structured_summary="La rupture de sirop mojito au bar persiste.",
         issue_focus="sirop mojito",
-        affected_business_unit_key="bar",
-        responsible_business_unit_key="bar",
-        activity_subject_key="stock",
+        affected_business_unit_routing_key=bar.routing_key,
+        responsible_business_unit_routing_key=bar.routing_key,
+        activity_subject_routing_key=subject.routing_key,
         operational_unit_key=None,
         location_text="Bar",
         aggregate_into_signal_id=aggregate_into_signal_id,
@@ -71,9 +71,9 @@ def setup_hotel_taxonomy(establishment):
 
 def output_with_candidate(
     *,
-    affected_key: str = "hotel",
-    responsible_key: str = "hotel",
-    subject_key: str = "maintenance",
+    affected_routing_key: str,
+    responsible_routing_key: str | None = None,
+    subject_routing_key: str,
 ):
     return ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
@@ -82,9 +82,11 @@ def output_with_candidate(
                 title="Clim en panne",
                 structured_summary="La climatisation ne fonctionne plus.",
                 issue_focus="climatisation",
-                affected_business_unit_key=affected_key,
-                responsible_business_unit_key=responsible_key,
-                activity_subject_key=subject_key,
+                affected_business_unit_routing_key=affected_routing_key,
+                responsible_business_unit_routing_key=(
+                    responsible_routing_key or affected_routing_key
+                ),
+                activity_subject_routing_key=subject_routing_key,
                 operational_unit_key=None,
                 location_text=None,
                 aggregate_into_signal_id=None,
@@ -93,7 +95,13 @@ def output_with_candidate(
     )
 
 
-def fake_provider_payload(*, issue_focus: str = "climatisation"):
+def fake_provider_payload(
+    *,
+    affected_routing_key: str,
+    responsible_routing_key: str | None = None,
+    subject_routing_key: str,
+    issue_focus: str = "climatisation",
+):
     return {
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "candidates": [
@@ -101,9 +109,11 @@ def fake_provider_payload(*, issue_focus: str = "climatisation"):
                 "title": "Clim en panne",
                 "structured_summary": "La climatisation ne fonctionne plus.",
                 "issue_focus": issue_focus,
-                "affected_business_unit_key": "hotel",
-                "responsible_business_unit_key": "hotel",
-                "activity_subject_key": "maintenance",
+                "affected_business_unit_routing_key": affected_routing_key,
+                "responsible_business_unit_routing_key": (
+                    responsible_routing_key or affected_routing_key
+                ),
+                "activity_subject_routing_key": subject_routing_key,
                 "operational_unit_key": None,
                 "location_text": None,
                 "aggregate_into_signal_id": None,

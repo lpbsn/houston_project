@@ -18,9 +18,9 @@ class PipelineCandidateOutput(_StrictModel):
     title: str = Field(min_length=1, max_length=200)
     structured_summary: str = Field(min_length=1, max_length=2000)
     issue_focus: str = Field(min_length=1, max_length=AI_ISSUE_FOCUS_MAX_LENGTH)
-    affected_business_unit_key: str = Field(min_length=1, max_length=100)
-    responsible_business_unit_key: str = Field(min_length=1, max_length=100)
-    activity_subject_key: str = Field(min_length=1, max_length=200)
+    affected_business_unit_routing_key: str = Field(min_length=1, max_length=180)
+    responsible_business_unit_routing_key: str = Field(min_length=1, max_length=180)
+    activity_subject_routing_key: str = Field(min_length=1, max_length=150)
     operational_unit_key: str | None = None
     location_text: str | None = Field(default=None, max_length=AI_LOCATION_TEXT_MAX_LENGTH)
     aggregate_into_signal_id: str | None = None

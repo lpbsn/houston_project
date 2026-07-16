@@ -45,7 +45,7 @@ def test_legacy_empty_issue_focus_aggregates_v4_candidate():
         observation=observation,
         output=ObservationPipelineOutput(
             schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[_mojito_candidate()],
+            candidates=[_mojito_candidate(bar=bar, subject=subject)],
         ),
     ).outcome
 
@@ -71,7 +71,7 @@ def test_legacy_aggregate_enriches_signal_issue_focus():
         observation=observation,
         output=ObservationPipelineOutput(
             schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[_mojito_candidate()],
+            candidates=[_mojito_candidate(bar=bar, subject=subject)],
         ),
     )
 
@@ -95,7 +95,13 @@ def test_legacy_empty_issue_focus_hint_mismatch_still_aggregates_via_fallback(ca
             observation=observation,
             output=ObservationPipelineOutput(
                 schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                candidates=[_mojito_candidate(aggregate_into_signal_id=str(legacy.id))],
+                candidates=[
+                    _mojito_candidate(
+                        bar=bar,
+                        subject=subject,
+                        aggregate_into_signal_id=str(legacy.id),
+                    )
+                ],
             ),
         )
 
@@ -135,7 +141,7 @@ def test_aggregation_match_mode_exact_on_same_focus(caplog):
             observation=observation,
             output=ObservationPipelineOutput(
                 schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                candidates=[_mojito_candidate()],
+                candidates=[_mojito_candidate(bar=bar, subject=subject)],
             ),
         )
 
@@ -175,9 +181,9 @@ def test_different_issue_focus_does_not_aggregate():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
-                    affected_business_unit_key="bar",
-                    responsible_business_unit_key="bar",
-                    activity_subject_key="stock",
+                    affected_business_unit_routing_key=bar.routing_key,
+                    responsible_business_unit_routing_key=bar.routing_key,
+                    activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
                     aggregate_into_signal_id=None,
@@ -210,7 +216,7 @@ def test_same_issue_focus_still_aggregates():
         observation=observation,
         output=ObservationPipelineOutput(
             schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[_mojito_candidate()],
+            candidates=[_mojito_candidate(bar=bar, subject=subject)],
         ),
     ).outcome
 
@@ -248,7 +254,7 @@ def test_multiple_legacy_signals_same_taxonomy_creates_new():
             observation=observation,
             output=ObservationPipelineOutput(
                 schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                candidates=[_mojito_candidate()],
+                candidates=[_mojito_candidate(bar=bar, subject=subject)],
             ),
         ).outcome
 
@@ -279,9 +285,9 @@ def test_legacy_enriched_then_different_focus_creates_new():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
-                    affected_business_unit_key="bar",
-                    responsible_business_unit_key="bar",
-                    activity_subject_key="stock",
+                    affected_business_unit_routing_key=bar.routing_key,
+                    responsible_business_unit_routing_key=bar.routing_key,
+                    activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
                     aggregate_into_signal_id=None,
@@ -302,9 +308,9 @@ def test_legacy_enriched_then_different_focus_creates_new():
                     title="Rupture de pain blanc",
                     structured_summary="Le pain blanc est en rupture.",
                     issue_focus="pain blanc",
-                    affected_business_unit_key="bar",
-                    responsible_business_unit_key="bar",
-                    activity_subject_key="stock",
+                    affected_business_unit_routing_key=bar.routing_key,
+                    responsible_business_unit_routing_key=bar.routing_key,
+                    activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
                     aggregate_into_signal_id=None,
@@ -332,7 +338,7 @@ def test_candidate_signal_persists_issue_focus():
         observation=observation,
         output=ObservationPipelineOutput(
             schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-            candidates=[_mojito_candidate()],
+            candidates=[_mojito_candidate(bar=bar, subject=subject)],
         ),
     )
 

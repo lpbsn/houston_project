@@ -38,7 +38,6 @@ from houston.signals.services import run_observation_pipeline
 from houston.signals.tasks import process_observation_task
 from houston.signals.tests.conftest import (
     GOLDEN_OBSERVATION_TEXT,
-    RESTAURANT_MODULE_KEY,
     create_observation,
     create_restaurant_v3_taxonomy,
 )
@@ -77,9 +76,9 @@ def _single_candidate_openai_payload(
                     "intervention maintenance requise."
                 ),
                 "issue_focus": "lumière entrée restaurant",
-                "affected_business_unit_key": affected_key,
-                "responsible_business_unit_key": responsible_key,
-                "activity_subject_key": subject_key,
+                "affected_business_unit_routing_key": affected_key,
+                "responsible_business_unit_routing_key": responsible_key,
+                "activity_subject_routing_key": subject_key,
                 "operational_unit_key": None,
                 "location_text": None,
                 "aggregate_into_signal_id": None,
@@ -97,7 +96,7 @@ def _openai_invalid_schema_bad_request_error():
         (
             "Invalid schema for response_format "
             f"'{AI_OBSERVATION_PIPELINE_PROVIDER_SCHEMA_NAME}': "
-            "context=('properties', 'activity_subject_key'), "
+            "context=('properties', 'activity_subject_routing_key'), "
             "$ref cannot have keywords {'description'}."
         ),
         response=response,
@@ -383,12 +382,13 @@ def test_golden_observation_with_mocked_openai_creates_candidate_and_signal(
         text=GOLDEN_OBSERVATION_TEXT,
     )
     provider = OpenAIObservationPipelineProvider(api_key="test-key")
+    assert taxonomy.maintenance is not None
     mock_openai_client.chat.completions.create.return_value = _mock_openai_completion(
         content=json.dumps(
             _single_candidate_openai_payload(
-                affected_key=RESTAURANT_MODULE_KEY,
-                responsible_key="maintenance",
-                subject_key=taxonomy.lighting_subject.normalized_name,
+                affected_key=taxonomy.restaurant.routing_key,
+                responsible_key=taxonomy.maintenance.routing_key,
+                subject_key=taxonomy.lighting_subject.routing_key,
             )
         )
     )

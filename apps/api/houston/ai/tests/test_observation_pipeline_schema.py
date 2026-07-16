@@ -15,9 +15,9 @@ def _valid_candidate(**overrides):
         "title": "Clim en panne",
         "structured_summary": "La climatisation ne fonctionne plus.",
         "issue_focus": "clim chambre 104",
-        "affected_business_unit_key": "hotel",
-        "responsible_business_unit_key": "maintenance",
-        "activity_subject_key": "climatisation",
+        "affected_business_unit_routing_key": "hotel",
+        "responsible_business_unit_routing_key": "maintenance",
+        "activity_subject_routing_key": "climatisation",
         "operational_unit_key": None,
         "location_text": None,
         "aggregate_into_signal_id": None,
@@ -46,7 +46,7 @@ def test_accepts_valid_payload():
 
     assert output.schema_version == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
     assert len(output.candidates) == 1
-    assert output.candidates[0].activity_subject_key == "climatisation"
+    assert output.candidates[0].activity_subject_routing_key == "climatisation"
 
 
 def test_rejects_wrong_top_level_shape():

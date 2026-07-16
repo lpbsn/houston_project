@@ -90,3 +90,51 @@ def setup_active_signals_from_fixture(
             status=signal_spec.get("status", Signal.Status.OPEN),
         )
     return signals
+
+
+def remap_expected_candidates_to_routing_keys(
+    *,
+    expected_candidates: list[dict[str, Any]],
+    business_units: dict[str, BusinessUnit],
+    activity_subjects: dict[str, ActivitySubject],
+) -> list[dict[str, Any]]:
+    """Map corpus logical keys to runtime routing_key values."""
+    remapped: list[dict[str, Any]] = []
+    for raw in expected_candidates:
+        affected_logical = raw.get(
+            "affected_business_unit_routing_key",
+            raw.get("affected_business_unit_key"),
+        )
+        responsible_logical = raw.get(
+            "responsible_business_unit_routing_key",
+            raw.get("responsible_business_unit_key"),
+        )
+        subject_logical = raw.get(
+            "activity_subject_routing_key",
+            raw.get("activity_subject_key"),
+        )
+        if affected_logical is None or responsible_logical is None or subject_logical is None:
+            raise KeyError("Expected candidate is missing taxonomy routing logical keys.")
+        remapped.append(
+            {
+                **{
+                    key: value
+                    for key, value in raw.items()
+                    if key
+                    not in {
+                        "affected_business_unit_key",
+                        "responsible_business_unit_key",
+                        "activity_subject_key",
+                        "affected_business_unit_routing_key",
+                        "responsible_business_unit_routing_key",
+                        "activity_subject_routing_key",
+                    }
+                },
+                "affected_business_unit_routing_key": business_units[affected_logical].routing_key,
+                "responsible_business_unit_routing_key": business_units[
+                    responsible_logical
+                ].routing_key,
+                "activity_subject_routing_key": activity_subjects[subject_logical].routing_key,
+            }
+        )
+    return remapped

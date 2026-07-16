@@ -101,7 +101,8 @@ def test_taxonomy_snapshot_includes_imported_catalog_descriptions():
 
     snapshot = build_establishment_taxonomy_snapshot(establishment_id=establishment.id)
 
-    assert snapshot["business_units"][0]["description"] == catalog_hotel.description
+    assert snapshot["business_units"][0]["generic_description"] == catalog_hotel.description
+    assert snapshot["business_units"][0]["instance_description"] == catalog_hotel.description
     assert snapshot["business_units"][0]["activity_subjects"][0]["description"] == (
         catalog_menage.description
     )

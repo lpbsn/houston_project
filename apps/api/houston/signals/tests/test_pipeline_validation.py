@@ -46,9 +46,9 @@ def test_validate_pipeline_output_rejects_whitespace_only_issue_focus():
                         title="Clim en panne",
                         structured_summary="La climatisation ne fonctionne plus.",
                         issue_focus="   ",
-                        affected_business_unit_key="hotel",
-                        responsible_business_unit_key="hotel",
-                        activity_subject_key="maintenance",
+                        affected_business_unit_routing_key="hotel--hotel--0123456789abcdef",
+                        responsible_business_unit_routing_key="hotel--hotel--0123456789abcdef",
+                        activity_subject_routing_key="custom--maintenance--0123456789abcdef",
                         operational_unit_key=None,
                         location_text=None,
                         aggregate_into_signal_id=None,
@@ -60,7 +60,8 @@ def test_validate_pipeline_output_rejects_whitespace_only_issue_focus():
 
 def test_apply_pipeline_rejects_whitespace_only_issue_focus():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
 
     with pytest.raises(SignalPipelineCandidateError):
@@ -73,9 +74,9 @@ def test_apply_pipeline_rejects_whitespace_only_issue_focus():
                         title="Clim en panne",
                         structured_summary="La climatisation ne fonctionne plus.",
                         issue_focus="   ",
-                        affected_business_unit_key="hotel",
-                        responsible_business_unit_key="hotel",
-                        activity_subject_key="maintenance",
+                        affected_business_unit_routing_key=hotel.routing_key,
+                        responsible_business_unit_routing_key=hotel.routing_key,
+                        activity_subject_routing_key=subject.routing_key,
                         operational_unit_key=None,
                         location_text=None,
                         aggregate_into_signal_id=None,
@@ -87,9 +88,16 @@ def test_apply_pipeline_rejects_whitespace_only_issue_focus():
 
 def test_run_pipeline_marks_failed_on_invalid_issue_focus():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
-    provider = FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   "))
+    provider = FakeObservationPipelineProvider(
+        payload=_fake_provider_payload(
+            affected_routing_key=hotel.routing_key,
+            subject_routing_key=subject.routing_key,
+            issue_focus="   ",
+        )
+    )
 
     run_observation_pipeline(observation.id, provider=provider)
 
@@ -100,11 +108,39 @@ def test_run_pipeline_marks_failed_on_invalid_issue_focus():
     assert processing.status != ObservationProcessing.Status.PROCESSING
 
 
+def test_run_pipeline_marks_failed_when_no_snapshot_ready_business_units():
+    membership = build_membership()
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    hotel.routing_key = ""
+    hotel.save(update_fields=["routing_key", "updated_at"])
+    observation = create_observation(membership=membership)
+    provider = FakeObservationPipelineProvider(
+        payload={"schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION, "candidates": []}
+    )
+
+    with patch.object(provider, "propose", wraps=provider.propose) as propose:
+        run_observation_pipeline(observation.id, provider=provider)
+        propose.assert_not_called()
+
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert processing.status == ObservationProcessing.Status.FAILED
+    assert processing.last_error_code == "no_snapshot_ready_business_units"
+    assert CandidateSignal.objects.filter(observation=observation).count() == 0
+
+
 def test_no_candidate_signal_on_invalid_issue_focus():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
-    provider = FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   "))
+    provider = FakeObservationPipelineProvider(
+        payload=_fake_provider_payload(
+            affected_routing_key=hotel.routing_key,
+            subject_routing_key=subject.routing_key,
+            issue_focus="   ",
+        )
+    )
 
     run_observation_pipeline(observation.id, provider=provider)
 
@@ -135,12 +171,19 @@ def test_run_pipeline_marks_failed_on_apply_integrity_error():
 
 def test_no_observation_stuck_in_processing_after_apply_error():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
 
     run_observation_pipeline(
         observation.id,
-        provider=FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   ")),
+        provider=FakeObservationPipelineProvider(
+            payload=_fake_provider_payload(
+                affected_routing_key=hotel.routing_key,
+                subject_routing_key=subject.routing_key,
+                issue_focus="   ",
+            )
+        ),
     )
     processing = observation.processing
     processing.refresh_from_db()
@@ -160,12 +203,16 @@ def test_no_observation_stuck_in_processing_after_apply_error():
 
 def test_apply_pipeline_creates_open_signal():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
 
     outcome = apply_pipeline_output(
         observation=observation,
-        output=_output_with_candidate(),
+        output=_output_with_candidate(
+            affected_routing_key=hotel.routing_key,
+            subject_routing_key=subject.routing_key,
+        ),
     ).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
@@ -178,12 +225,16 @@ def test_apply_pipeline_creates_open_signal():
 
 def test_invalid_taxonomy_key_rejects_candidate():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
 
     outcome = apply_pipeline_output(
         observation=observation,
-        output=_output_with_candidate(affected_key="unknown"),
+        output=_output_with_candidate(
+            affected_routing_key="unknown--missing--0000000000000000",
+            subject_routing_key=subject.routing_key,
+        ),
     ).outcome
 
     assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
@@ -193,12 +244,16 @@ def test_invalid_taxonomy_key_rejects_candidate():
 
 def test_observation_pipeline_links_created_signal_to_source_observation():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
 
     apply_pipeline_output(
         observation=observation,
-        output=_output_with_candidate(),
+        output=_output_with_candidate(
+            affected_routing_key=hotel.routing_key,
+            subject_routing_key=subject.routing_key,
+        ),
     )
 
     signal = Signal.objects.get()
@@ -231,9 +286,9 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
                     title="Prolongation",
                     structured_summary="Même sujet, aggravation.",
                     issue_focus="maintenance",
-                    affected_business_unit_key="hotel",
-                    responsible_business_unit_key="hotel",
-                    activity_subject_key="maintenance",
+                    affected_business_unit_routing_key=hotel.routing_key,
+                    responsible_business_unit_routing_key=hotel.routing_key,
+                    activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
                     aggregate_into_signal_id=str(existing.id),
@@ -288,9 +343,9 @@ def test_apply_pipeline_rejects_hint_when_issue_focus_mismatch():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
-                    affected_business_unit_key="hotel",
-                    responsible_business_unit_key="hotel",
-                    activity_subject_key="maintenance",
+                    affected_business_unit_routing_key=hotel.routing_key,
+                    responsible_business_unit_routing_key=hotel.routing_key,
+                    activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
                     aggregate_into_signal_id=str(mojito_signal.id),
@@ -333,9 +388,9 @@ def test_apply_pipeline_logs_candidate_applied_audit(caplog):
                         title="Prolongation",
                         structured_summary="Même sujet, aggravation.",
                         issue_focus="maintenance",
-                        affected_business_unit_key="hotel",
-                        responsible_business_unit_key="hotel",
-                        activity_subject_key="maintenance",
+                        affected_business_unit_routing_key=hotel.routing_key,
+                        responsible_business_unit_routing_key=hotel.routing_key,
+                        activity_subject_routing_key=subject.routing_key,
                         operational_unit_key=None,
                         location_text=None,
                         aggregate_into_signal_id=str(existing.id),
@@ -384,9 +439,9 @@ def test_apply_pipeline_logs_hint_rejected_on_issue_focus_mismatch(caplog):
                         title="Rupture de pain",
                         structured_summary="Plus de pain disponible.",
                         issue_focus="pain",
-                        affected_business_unit_key="hotel",
-                        responsible_business_unit_key="hotel",
-                        activity_subject_key="maintenance",
+                        affected_business_unit_routing_key=hotel.routing_key,
+                        responsible_business_unit_routing_key=hotel.routing_key,
+                        activity_subject_routing_key=subject.routing_key,
                         operational_unit_key=None,
                         location_text=None,
                         aggregate_into_signal_id=str(mojito_signal.id),

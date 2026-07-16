@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from houston.establishments.business_unit_identity import (
     build_business_unit_routing_key,
+    build_free_activity_subject_routing_key,
     normalize_business_unit_specific_name,
 )
 from houston.establishments.models import (
@@ -85,12 +86,18 @@ def create_activity_subject(
     label: str,
     description: str = "",
 ) -> ActivitySubject:
+    activity_subject_id = uuid.uuid4()
     return ActivitySubject.objects.create(
+        id=activity_subject_id,
         establishment=establishment,
         business_unit=business_unit,
         normalized_name=normalize_activity_subject_name(label),
         label=label,
         description=description,
+        routing_key=build_free_activity_subject_routing_key(
+            activity_subject_id=activity_subject_id,
+            label=label,
+        ),
         source=ActivitySubject.Source.MANUAL,
         active=True,
     )
@@ -216,16 +223,28 @@ def _get_or_create_activity_subject(
     label: str,
 ) -> ActivitySubject:
     normalized_name = normalize_activity_subject_name(label)
-    subject, _ = ActivitySubject.objects.get_or_create(
+    activity_subject_id = uuid.uuid4()
+    subject, created = ActivitySubject.objects.get_or_create(
         business_unit=business_unit,
         normalized_name=normalized_name,
         defaults={
+            "id": activity_subject_id,
             "establishment": establishment,
             "label": label,
+            "routing_key": build_free_activity_subject_routing_key(
+                activity_subject_id=activity_subject_id,
+                label=label,
+            ),
             "source": ActivitySubject.Source.MANUAL,
             "active": True,
         },
     )
+    if not created and not subject.routing_key:
+        subject.routing_key = build_free_activity_subject_routing_key(
+            activity_subject_id=subject.id,
+            label=subject.label or label,
+        )
+        subject.save(update_fields=["routing_key", "updated_at"])
     return subject
 
 

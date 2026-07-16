@@ -189,7 +189,7 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
     )
     observation = create_observation(membership=membership)
 
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=membership.establishment,
         business_unit=business_unit,
         label="Maintenance",
@@ -201,9 +201,9 @@ def test_staff_maintenance_scope_sees_maintenance_signal_in_personal_feed(api_cl
                 title="Clim en panne chambre 104",
                 structured_summary="Eau au sol, climatisation en panne.",
                 issue_focus="clim chambre 104",
-                affected_business_unit_key=business_unit.key,
-                responsible_business_unit_key=business_unit.key,
-                activity_subject_key="maintenance",
+                affected_business_unit_routing_key=business_unit.routing_key,
+                responsible_business_unit_routing_key=business_unit.routing_key,
+                activity_subject_routing_key=subject.routing_key,
                 operational_unit_key=None,
                 location_text="chambre 104",
                 aggregate_into_signal_id=None,

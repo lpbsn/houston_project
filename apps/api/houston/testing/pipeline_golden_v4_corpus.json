@@ -8,8 +8,14 @@
       "observation_text": "Plus de pain et plus de sirop mojito au bar.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "bar", "label": "Bar"},
-          {"key": "restaurant", "label": "Restaurant"}
+          {
+            "key": "bar",
+            "label": "Bar"
+          },
+          {
+            "key": "restaurant",
+            "label": "Restaurant"
+          }
         ],
         "activity_subjects": [
           {
@@ -23,24 +29,24 @@
         {
           "title": "Rupture de pain au bar",
           "structured_summary": "Plus de pain disponible au bar, réassort stock nécessaire.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "pain",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         },
         {
           "title": "Rupture de sirop mojito au bar",
           "structured_summary": "Plus de sirop mojito disponible au bar, réassort stock nécessaire.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "sirop mojito",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         }
       ],
       "expected_outcome": "signals_created",
@@ -71,10 +77,16 @@
       "observation_text": "Plus de pain au bar.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "bar", "label": "Bar"}
+          {
+            "key": "bar",
+            "label": "Bar"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "bar", "label": "Stock"}
+          {
+            "business_unit_key": "bar",
+            "label": "Stock"
+          }
         ]
       },
       "active_signals_setup": [
@@ -94,13 +106,13 @@
         {
           "title": "Rupture de pain au bar",
           "structured_summary": "Plus de pain disponible au bar, réassort stock nécessaire.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "pain",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         }
       ],
       "expected_outcome": "signals_created",
@@ -132,8 +144,15 @@
       "observation_text": "Eau par terre dans le couloir.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "hotel", "label": "Hôtel"},
-          {"key": "maintenance", "label": "Maintenance", "unit_type": "transversal"}
+          {
+            "key": "hotel",
+            "label": "Hôtel"
+          },
+          {
+            "key": "maintenance",
+            "label": "Maintenance",
+            "unit_type": "transversal"
+          }
         ],
         "activity_subjects": [
           {
@@ -152,13 +171,13 @@
         {
           "title": "Eau par terre dans le couloir",
           "structured_summary": "Flaque d'eau au sol dans le couloir, nettoyage et sécurisation nécessaires.",
-          "affected_business_unit_key": "hotel",
-          "responsible_business_unit_key": "hotel",
-          "activity_subject_key": "menage",
           "operational_unit_key": null,
           "location_text": "couloir",
           "issue_focus": "eau couloir",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "hotel",
+          "responsible_business_unit_routing_key": "hotel",
+          "activity_subject_routing_key": "menage"
         }
       ],
       "expected_outcome": "signals_created",
@@ -183,25 +202,38 @@
       "observation_text": "Fuite d'eau dans le couloir.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "hotel", "label": "Hôtel"},
-          {"key": "maintenance", "label": "Maintenance", "unit_type": "transversal"}
+          {
+            "key": "hotel",
+            "label": "Hôtel"
+          },
+          {
+            "key": "maintenance",
+            "label": "Maintenance",
+            "unit_type": "transversal"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "hotel", "label": "Ménage"},
-          {"business_unit_key": "maintenance", "label": "Plomberie & Eau"}
+          {
+            "business_unit_key": "hotel",
+            "label": "Ménage"
+          },
+          {
+            "business_unit_key": "maintenance",
+            "label": "Plomberie & Eau"
+          }
         ]
       },
       "expected_candidates": [
         {
           "title": "Fuite d'eau dans le couloir",
           "structured_summary": "Fuite d'eau active dans le couloir, intervention plomberie requise.",
-          "affected_business_unit_key": "hotel",
-          "responsible_business_unit_key": "maintenance",
-          "activity_subject_key": "plomberie_eau",
           "operational_unit_key": null,
           "location_text": "couloir",
           "issue_focus": "fuite couloir est",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "hotel",
+          "responsible_business_unit_routing_key": "maintenance",
+          "activity_subject_routing_key": "plomberie_eau"
         }
       ],
       "expected_outcome": "signals_created",
@@ -226,11 +258,21 @@
       "observation_text": "Verre cassé près des ascenseurs.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "hotel", "label": "Hôtel"},
-          {"key": "maintenance", "label": "Maintenance", "unit_type": "transversal"}
+          {
+            "key": "hotel",
+            "label": "Hôtel"
+          },
+          {
+            "key": "maintenance",
+            "label": "Maintenance",
+            "unit_type": "transversal"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "hotel", "label": "Ménage"},
+          {
+            "business_unit_key": "hotel",
+            "label": "Ménage"
+          },
           {
             "business_unit_key": "maintenance",
             "label": "Équipements d'exploitation",
@@ -242,13 +284,13 @@
         {
           "title": "Verre cassé près des ascenseurs",
           "structured_summary": "Débris de verre au sol près des ascenseurs, nettoyage et sécurisation nécessaires.",
-          "affected_business_unit_key": "hotel",
-          "responsible_business_unit_key": "hotel",
-          "activity_subject_key": "menage",
           "operational_unit_key": null,
           "location_text": "près des ascenseurs",
           "issue_focus": "verre ascenseurs",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "hotel",
+          "responsible_business_unit_routing_key": "hotel",
+          "activity_subject_routing_key": "menage"
         }
       ],
       "expected_outcome": "signals_created",
@@ -273,25 +315,38 @@
       "observation_text": "Ascenseur en panne.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "hotel", "label": "Hôtel"},
-          {"key": "maintenance", "label": "Maintenance", "unit_type": "transversal"}
+          {
+            "key": "hotel",
+            "label": "Hôtel"
+          },
+          {
+            "key": "maintenance",
+            "label": "Maintenance",
+            "unit_type": "transversal"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "hotel", "label": "Ménage"},
-          {"business_unit_key": "maintenance", "label": "Équipements d'exploitation"}
+          {
+            "business_unit_key": "hotel",
+            "label": "Ménage"
+          },
+          {
+            "business_unit_key": "maintenance",
+            "label": "Équipements d'exploitation"
+          }
         ]
       },
       "expected_candidates": [
         {
           "title": "Ascenseur en panne",
           "structured_summary": "L'ascenseur principal ne fonctionne plus, intervention maintenance équipements requise.",
-          "affected_business_unit_key": "hotel",
-          "responsible_business_unit_key": "maintenance",
-          "activity_subject_key": "equipements_d_exploitation",
           "operational_unit_key": null,
           "location_text": "ascenseur principal",
           "issue_focus": "ascenseur principal",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "hotel",
+          "responsible_business_unit_routing_key": "maintenance",
+          "activity_subject_routing_key": "equipements_d_exploitation"
         }
       ],
       "expected_outcome": "signals_created",
@@ -316,10 +371,16 @@
       "observation_text": "Toujours plus de sirop mojito au bar.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "bar", "label": "Bar"}
+          {
+            "key": "bar",
+            "label": "Bar"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "bar", "label": "Stock"}
+          {
+            "business_unit_key": "bar",
+            "label": "Stock"
+          }
         ]
       },
       "active_signals_setup": [
@@ -339,13 +400,13 @@
         {
           "title": "Toujours plus de sirop mojito au bar",
           "structured_summary": "La rupture de sirop mojito au bar persiste, réassort urgent.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "sirop mojito",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         }
       ],
       "expected_outcome": "signal_aggregated",
@@ -372,10 +433,16 @@
       "observation_text": "Plus de pain au bar.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "bar", "label": "Bar"}
+          {
+            "key": "bar",
+            "label": "Bar"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "bar", "label": "Stock"}
+          {
+            "business_unit_key": "bar",
+            "label": "Stock"
+          }
         ]
       },
       "active_signals_setup": [
@@ -395,13 +462,13 @@
         {
           "title": "Rupture de pain au bar",
           "structured_summary": "Plus de pain disponible au bar, réassort stock nécessaire.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "pain",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         }
       ],
       "expected_outcome": "signals_created",
@@ -433,10 +500,16 @@
       "observation_text": "Toujours plus de mojito syrup au bar.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "bar", "label": "Bar"}
+          {
+            "key": "bar",
+            "label": "Bar"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "bar", "label": "Stock"}
+          {
+            "business_unit_key": "bar",
+            "label": "Stock"
+          }
         ]
       },
       "active_signals_setup": [
@@ -456,13 +529,13 @@
         {
           "title": "Rupture de mojito syrup au bar",
           "structured_summary": "Plus de mojito syrup disponible au bar, réassort stock nécessaire.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "mojito syrup",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         }
       ],
       "expected_outcome": "signals_created",
@@ -494,10 +567,16 @@
       "observation_text": "Plus de pain blanc au bar.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "bar", "label": "Bar"}
+          {
+            "key": "bar",
+            "label": "Bar"
+          }
         ],
         "activity_subjects": [
-          {"business_unit_key": "bar", "label": "Stock"}
+          {
+            "business_unit_key": "bar",
+            "label": "Stock"
+          }
         ]
       },
       "active_signals_setup": [
@@ -517,13 +596,13 @@
         {
           "title": "Rupture de pain blanc au bar",
           "structured_summary": "Plus de pain blanc disponible au bar, réassort stock nécessaire.",
-          "affected_business_unit_key": "bar",
-          "responsible_business_unit_key": "bar",
-          "activity_subject_key": "stock",
           "operational_unit_key": null,
           "location_text": "Bar",
           "issue_focus": "pain blanc",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "bar",
+          "responsible_business_unit_routing_key": "bar",
+          "activity_subject_routing_key": "stock"
         }
       ],
       "expected_outcome": "signals_created",
@@ -555,8 +634,15 @@
       "observation_text": "La climatisation de la chambre 104 ne fonctionne plus.",
       "taxonomy_fixture": {
         "business_units": [
-          {"key": "hotel", "label": "Hôtel"},
-          {"key": "maintenance", "label": "Maintenance", "unit_type": "transversal"}
+          {
+            "key": "hotel",
+            "label": "Hôtel"
+          },
+          {
+            "key": "maintenance",
+            "label": "Maintenance",
+            "unit_type": "transversal"
+          }
         ],
         "activity_subjects": [
           {
@@ -583,13 +669,13 @@
         {
           "title": "Climatisation en panne chambre 104",
           "structured_summary": "La climatisation de la chambre 104 ne fonctionne plus, intervention CVC requise.",
-          "affected_business_unit_key": "hotel",
-          "responsible_business_unit_key": "maintenance",
-          "activity_subject_key": "cvc",
           "operational_unit_key": null,
           "location_text": "chambre 104",
           "issue_focus": "climatisation chambre 104",
-          "aggregate_into_signal_id": null
+          "aggregate_into_signal_id": null,
+          "affected_business_unit_routing_key": "hotel",
+          "responsible_business_unit_routing_key": "maintenance",
+          "activity_subject_routing_key": "cvc"
         }
       ],
       "expected_outcome": "signals_created",

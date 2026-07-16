@@ -23,6 +23,7 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 from houston.testing.pipeline_golden_v4 import (
     get_pipeline_golden_v4_case,
+    remap_expected_candidates_to_routing_keys,
     setup_active_signals_from_fixture,
     setup_taxonomy_from_fixture,
 )
@@ -50,16 +51,26 @@ def _skip_if_smoke_not_enabled() -> None:
 
 
 def _routing_tuple(candidate) -> tuple[str, str, str]:
+    if hasattr(candidate, "affected_business_unit_routing_key"):
+        return (
+            candidate.affected_business_unit_routing_key,
+            candidate.responsible_business_unit_routing_key,
+            candidate.activity_subject_routing_key,
+        )
     return (
-        candidate.affected_business_unit_key,
-        candidate.responsible_business_unit_key,
-        candidate.activity_subject_key,
+        candidate["affected_business_unit_routing_key"],
+        candidate["responsible_business_unit_routing_key"],
+        candidate["activity_subject_routing_key"],
     )
 
 
-def _assert_live_output_matches_corpus(*, output, case: dict) -> None:
+def _assert_live_output_matches_corpus(
+    *,
+    output,
+    case: dict,
+    expected_candidates: list[dict],
+) -> None:
     assert output.schema_version == AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
-    expected_candidates = case["expected_candidates"]
     assert len(output.candidates) == len(expected_candidates), (
         f"{case['id']}: expected {len(expected_candidates)} candidates, "
         f"got {len(output.candidates)}"
@@ -93,6 +104,11 @@ def test_live_openai_v4_corpus_case(case_id: str):
         business_units=business_units,
         activity_subjects=activity_subjects,
     )
+    expected_candidates = remap_expected_candidates_to_routing_keys(
+        expected_candidates=case["expected_candidates"],
+        business_units=business_units,
+        activity_subjects=activity_subjects,
+    )
     observation = create_observation(
         membership=membership,
         text=case["observation_text"],
@@ -114,4 +130,8 @@ def test_live_openai_v4_corpus_case(case_id: str):
         observation=observation,
         provider=OpenAIObservationPipelineProvider(),
     )
-    _assert_live_output_matches_corpus(output=output, case=case)
+    _assert_live_output_matches_corpus(
+        output=output,
+        case=case,
+        expected_candidates=expected_candidates,
+    )

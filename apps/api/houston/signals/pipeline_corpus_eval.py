@@ -24,6 +24,7 @@ from houston.testing.factories import build_membership
 from houston.testing.pipeline_golden_v4 import (
     get_pipeline_golden_v4_case,
     list_pipeline_golden_v4_case_ids,
+    remap_expected_candidates_to_routing_keys,
     setup_active_signals_from_fixture,
     setup_taxonomy_from_fixture,
 )
@@ -75,9 +76,9 @@ def resolve_eval_provider(provider_name: str) -> ObservationPipelineProvider:
 
 def candidate_signature(raw: dict[str, Any]) -> tuple[str, str, str, str, str | None]:
     return (
-        raw["affected_business_unit_key"],
-        raw["responsible_business_unit_key"],
-        raw["activity_subject_key"],
+        raw["affected_business_unit_routing_key"],
+        raw["responsible_business_unit_routing_key"],
+        raw["activity_subject_routing_key"],
         normalize_issue_focus(raw.get("issue_focus", "")),
         raw.get("operational_unit_key"),
     )
@@ -136,8 +137,11 @@ def compare_pipeline_output_to_expected(
     )
 
 
-def _fake_provider_for_case(case: dict[str, Any]) -> FakeObservationPipelineProvider:
-    candidates = [PipelineCandidateOutput(**raw) for raw in case["expected_candidates"]]
+def _fake_provider_for_case(
+    *,
+    expected_candidates: list[dict[str, Any]],
+) -> FakeObservationPipelineProvider:
+    candidates = [PipelineCandidateOutput(**raw) for raw in expected_candidates]
     payload = ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         candidates=candidates,
@@ -148,7 +152,8 @@ def _fake_provider_for_case(case: dict[str, Any]) -> FakeObservationPipelineProv
 def run_corpus_case_eval(
     *,
     case_id: str,
-    provider: ObservationPipelineProvider,
+    provider: ObservationPipelineProvider | None = None,
+    use_remapped_fake_provider: bool = False,
 ) -> CaseEvalResult:
     case = get_pipeline_golden_v4_case(case_id)
     membership = build_membership()
@@ -163,6 +168,15 @@ def run_corpus_case_eval(
         business_units=business_units,
         activity_subjects=activity_subjects,
     )
+    expected_candidates = remap_expected_candidates_to_routing_keys(
+        expected_candidates=case["expected_candidates"],
+        business_units=business_units,
+        activity_subjects=activity_subjects,
+    )
+    if use_remapped_fake_provider:
+        provider = _fake_provider_for_case(expected_candidates=expected_candidates)
+    if provider is None:
+        raise ValueError("provider is required unless use_remapped_fake_provider=True")
     observation = create_observation(
         membership=membership,
         text=case["observation_text"],
@@ -174,7 +188,7 @@ def run_corpus_case_eval(
     return compare_pipeline_output_to_expected(
         case_id=case_id,
         description=case["description"],
-        expected_candidates=case["expected_candidates"],
+        expected_candidates=expected_candidates,
         output=output,
     )
 
@@ -188,9 +202,9 @@ def evaluate_corpus_cases(
     normalized_provider = provider_name.strip().lower()
     if normalized_provider == "openai":
         assert_openai_eval_opt_in()
-        provider: ObservationPipelineProvider = OpenAIObservationPipelineProvider()
+        openai_provider: ObservationPipelineProvider = OpenAIObservationPipelineProvider()
     elif normalized_provider == "fake":
-        provider = FakeObservationPipelineProvider()
+        openai_provider = None  # type: ignore[assignment]
     else:
         raise ValueError(f"Unknown provider: {provider_name!r}. Use 'openai' or 'fake'.")
 
@@ -199,11 +213,20 @@ def evaluate_corpus_cases(
 
     for case_id in selected_case_ids:
         try:
-            case_provider = provider
             if normalized_provider == "fake":
-                case = get_pipeline_golden_v4_case(case_id)
-                case_provider = _fake_provider_for_case(case)
-            results.append(run_corpus_case_eval(case_id=case_id, provider=case_provider))
+                results.append(
+                    run_corpus_case_eval(
+                        case_id=case_id,
+                        use_remapped_fake_provider=True,
+                    )
+                )
+            else:
+                results.append(
+                    run_corpus_case_eval(
+                        case_id=case_id,
+                        provider=openai_provider,
+                    )
+                )
         except Exception as exc:
             errors.append(f"{case_id}: {exc}")
 
