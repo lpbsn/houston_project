@@ -11,6 +11,7 @@ import {
   useCreateRuntimeActivitySubject,
   useDeactivateRuntimeActivitySubject,
   useDeactivateRuntimeBusinessUnit,
+  useReactivateRuntimeActivitySubject,
   useReactivateRuntimeBusinessUnit,
   useUpdateRuntimeBusinessUnit,
 } from '@/features/establishment-config/hooks'
@@ -40,13 +41,15 @@ export function OperationalConfigBusinessUnitCard({
   const reactivateBuMutation = useReactivateRuntimeBusinessUnit(establishmentId)
   const createSubjectMutation = useCreateRuntimeActivitySubject(establishmentId)
   const deactivateSubjectMutation = useDeactivateRuntimeActivitySubject(establishmentId)
+  const reactivateSubjectMutation = useReactivateRuntimeActivitySubject(establishmentId)
 
   const isBusy =
     updateMutation.isPending ||
     deactivateBuMutation.isPending ||
     reactivateBuMutation.isPending ||
     createSubjectMutation.isPending ||
-    deactivateSubjectMutation.isPending
+    deactivateSubjectMutation.isPending ||
+    reactivateSubjectMutation.isPending
 
   async function handleSave() {
     setFeedback(null)
@@ -98,6 +101,20 @@ export function OperationalConfigBusinessUnitCard({
       setFeedback('Sujet retiré.')
     } catch (error) {
       setErrorMessage(resolveRuntimeConfigErrorMessage(error, 'Le sujet n’a pas pu être retiré.'))
+    }
+  }
+
+  async function handleReactivateSubject(subjectId: string) {
+    setFeedback(null)
+    setErrorMessage(null)
+
+    try {
+      await reactivateSubjectMutation.mutateAsync(subjectId)
+      setFeedback('Sujet réactivé.')
+    } catch (error) {
+      setErrorMessage(
+        resolveRuntimeConfigErrorMessage(error, 'Le sujet n’a pas pu être réactivé.'),
+      )
     }
   }
 
@@ -236,27 +253,60 @@ export function OperationalConfigBusinessUnitCard({
 
           {businessUnit.activity_subjects.length > 0 ? (
             <ul className="flex flex-wrap gap-2">
-              {businessUnit.activity_subjects.map((subject) => (
-                <li key={subject.id}>
-                  <div className="flex items-center gap-2 rounded-full border border-[#ece5da] bg-white px-3 py-2 text-sm">
-                    <span>{subject.label}</span>
-                    <button
-                      type="button"
-                      disabled={isBusy || isInactive || businessUnit.activity_subjects.length <= 1}
-                      className="rounded-full p-1 text-muted-foreground transition hover:text-destructive disabled:opacity-40"
-                      aria-label={`Retirer ${subject.label}`}
-                      onClick={() => {
-                        void handleRemoveSubject(subject.id)
-                      }}
+              {businessUnit.activity_subjects.map((subject) => {
+                const subjectInactive = subject.active === false
+                const activeSubjectCount = businessUnit.activity_subjects.filter(
+                  (item) => item.active !== false,
+                ).length
+                return (
+                  <li key={subject.id}>
+                    <div
+                      className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
+                        subjectInactive
+                          ? 'border-dashed border-[#ece5da] bg-[#f7f3eb] text-muted-foreground'
+                          : 'border-[#ece5da] bg-white'
+                      }`}
                     >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </li>
-              ))}
+                      <span>
+                        {subject.label}
+                        {subjectInactive ? ' · Inactif' : ''}
+                      </span>
+                      {subjectInactive ? (
+                        <button
+                          type="button"
+                          disabled={isBusy || isInactive}
+                          className="rounded-full px-2 py-0.5 text-xs text-[color:var(--primary)] transition hover:bg-[color:var(--primary)]/10 disabled:opacity-40"
+                          aria-label={`Réactiver ${subject.label}`}
+                          onClick={() => {
+                            void handleReactivateSubject(subject.id)
+                          }}
+                        >
+                          {reactivateSubjectMutation.isPending ? (
+                            <LoaderCircle className="size-3.5 animate-spin" />
+                          ) : (
+                            'Réactiver'
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isBusy || isInactive || activeSubjectCount <= 1}
+                          className="rounded-full p-1 text-muted-foreground transition hover:text-destructive disabled:opacity-40"
+                          aria-label={`Retirer ${subject.label}`}
+                          onClick={() => {
+                            void handleRemoveSubject(subject.id)
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">Aucun sujet actif.</p>
+            <p className="text-sm text-muted-foreground">Aucun sujet.</p>
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row">

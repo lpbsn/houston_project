@@ -81,6 +81,7 @@ _EXECUTION_DETAIL_SELECT_RELATED = (
     "source_signal__affected_business_unit",
     "source_signal__responsible_business_unit",
     "source_signal__activity_subject",
+    "source_signal__activity_subject__catalog_activity_subject",
     "created_by__user",
     "action_plan",
 )
@@ -331,6 +332,7 @@ _EXECUTION_FEED_SELECT_RELATED = (
     "source_signal__affected_business_unit",
     "source_signal__responsible_business_unit",
     "source_signal__activity_subject",
+    "source_signal__activity_subject__catalog_activity_subject",
     "created_by__user",
 )
 _EXECUTION_FEED_TASK_PREFETCH = Prefetch(

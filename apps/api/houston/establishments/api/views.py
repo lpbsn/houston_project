@@ -119,6 +119,7 @@ from houston.establishments.services import (
     invite_director_during_onboarding,
     invite_membership_for_establishment,
     mark_onboarding_ready_for_activation,
+    reactivate_runtime_activity_subject,
     reactivate_runtime_business_unit,
     reject_onboarding_proposal,
     start_onboarding_session,
@@ -629,6 +630,7 @@ class EstablishmentActivitySubjectCreateView(APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
         },
         description="Creates a runtime activity subject under a business unit.",
     )
@@ -653,11 +655,53 @@ class EstablishmentActivitySubjectCreateView(APIView):
             )
         except RuntimeConfigNotFoundError:
             return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
 
         response_serializer = ActivitySubjectTreeItemSerializer(
             serialize_activity_subject_tree_item(activity_subject=activity_subject)
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class EstablishmentActivitySubjectReactivateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=None,
+        responses={
+            200: ActivitySubjectTreeItemSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
+        },
+        description="Reactivates an inactive runtime activity subject.",
+    )
+    def post(self, request, establishment_id, activity_subject_id):
+        access_context = get_api_access_context(request)
+
+        try:
+            activity_subject = reactivate_runtime_activity_subject(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                activity_subject_id=activity_subject_id,
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
+
+        response_serializer = ActivitySubjectTreeItemSerializer(
+            serialize_activity_subject_tree_item(activity_subject=activity_subject)
+        )
+        return Response(response_serializer.data)
 
 
 class EstablishmentActivitySubjectDeactivateView(APIView):

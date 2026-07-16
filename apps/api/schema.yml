@@ -2022,6 +2022,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/reactivate/:
+    post:
+      operationId: v1_establishments_activity_subjects_reactivate_create
+      description: Reactivates an inactive runtime activity subject.
+      parameters:
+      - in: path
+        name: activity_subject_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivitySubjectTreeItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeConfigErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/business-units/:
     get:
       operationId: v1_establishments_business_units_retrieve
@@ -2262,6 +2314,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/deactivate/:
     post:

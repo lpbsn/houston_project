@@ -8,6 +8,7 @@ import {
   createRuntimeBusinessUnit,
   deactivateRuntimeActivitySubject,
   deactivateRuntimeBusinessUnit,
+  reactivateRuntimeActivitySubject,
   reactivateRuntimeBusinessUnit,
   updateRuntimeBusinessUnit,
 } from './api'
@@ -102,6 +103,16 @@ export function useDeactivateRuntimeActivitySubject(establishmentId: string) {
   return useMutation({
     mutationFn: (activitySubjectId: string) =>
       deactivateRuntimeActivitySubject(establishmentId, activitySubjectId),
+    onSuccess: invalidate,
+  })
+}
+
+export function useReactivateRuntimeActivitySubject(establishmentId: string) {
+  const invalidate = useInvalidateOperationalConfigTree(establishmentId)
+
+  return useMutation({
+    mutationFn: (activitySubjectId: string) =>
+      reactivateRuntimeActivitySubject(establishmentId, activitySubjectId),
     onSuccess: invalidate,
   })
 }

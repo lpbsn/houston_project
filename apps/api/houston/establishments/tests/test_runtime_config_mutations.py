@@ -88,6 +88,13 @@ def activity_subject_deactivate_url(establishment_id, activity_subject_id) -> st
     )
 
 
+def activity_subject_reactivate_url(establishment_id, activity_subject_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/activity-subjects/"
+        f"{activity_subject_id}/reactivate/"
+    )
+
+
 def create_membership_for_user(
     *,
     user: User,
@@ -404,6 +411,186 @@ def test_cannot_deactivate_last_active_activity_subject(api_client):
     assert response.status_code == 409
     assert response.json()["code"] == "last_active_activity_subject"
     assert ActivitySubject.objects.get(id=subject.id).active is True
+
+
+def test_owner_can_reactivate_inactive_free_activity_subject(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    second = create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Sujet secondaire",
+    )
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).exclude(
+        id=second.id
+    ).get()
+
+    deactivate_response = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    reactivate_response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert reactivate_response.status_code == 200
+    body = reactivate_response.json()
+    assert body["id"] == str(subject.id)
+    assert body["active"] is True
+    subject.refresh_from_db()
+    assert subject.active is True
+
+
+def test_owner_can_reactivate_inactive_catalog_activity_subject(
+    api_client,
+    imported_catalog,
+):
+    establishment, owner, _hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+
+    create_bu = api_client.post(
+        business_units_url(establishment.id),
+        {
+            "catalog_key": "restaurant",
+            "specific_name": "Food Court Reactivate",
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert create_bu.status_code == 201
+    restaurant_id = create_bu.json()["id"]
+
+    catalog_backed = list(
+        ActivitySubject.objects.filter(
+            business_unit_id=restaurant_id,
+            catalog_activity_subject__isnull=False,
+            active=True,
+        ).order_by("id")[:2]
+    )
+    assert len(catalog_backed) >= 2
+    subject = catalog_backed[0]
+    subject_id = str(subject.id)
+
+    deactivate_response = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    reactivate_response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert reactivate_response.status_code == 200
+    body = reactivate_response.json()
+    assert body["id"] == subject_id
+    assert body["active"] is True
+    assert body["is_generic"] is True
+    assert ActivitySubject.objects.get(id=subject.id).active is True
+
+
+def test_reactivate_activity_subject_already_active_returns_conflict(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).get()
+
+    response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "activity_subject_already_active"
+
+
+def test_reactivate_activity_subject_wrong_establishment_returns_not_found(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    other_establishment = create_establishment(name="Other Reactivate Hotel")
+    access_token = login(api_client, user=owner)
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).get()
+    subject.active = False
+    subject.save(update_fields=["active", "updated_at"])
+
+    response = api_client.post(
+        activity_subject_reactivate_url(other_establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 404
+
+
+def test_reactivate_activity_subject_parent_bu_inactive_returns_conflict(api_client):
+    establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    second = create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Sujet secondaire parent",
+    )
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).exclude(
+        id=second.id
+    ).get()
+
+    deactivate_subject = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_subject.status_code == 200
+
+    deactivate_bu = api_client.post(
+        business_unit_deactivate_url(establishment.id, hotel.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_bu.status_code == 200
+
+    response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "business_unit_inactive"
+    assert maintenance.active is True
+
+
+def test_create_after_deactivate_same_label_returns_conflict(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    second = create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Sujet secondaire create",
+    )
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).exclude(
+        id=second.id
+    ).get()
+    original_label = subject.label
+
+    deactivate_response = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    create_response = api_client.post(
+        activity_subjects_url(establishment.id, hotel.id),
+        {"label": original_label},
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert create_response.status_code == 409
+    assert create_response.json()["code"] == "duplicate_activity_subject_normalized_name"
+    subject.refresh_from_db()
+    assert subject.active is False
 
 
 def test_cannot_deactivate_business_unit_with_active_membership_scope(api_client):

@@ -20,6 +20,12 @@ describe('mapRuntimeConfigConflictMessage', () => {
     expect(mapRuntimeConfigConflictMessage('duplicate_business_unit_key')).toBe(
       'Un pôle avec ce libellé existe déjà.',
     )
+    expect(mapRuntimeConfigConflictMessage('duplicate_activity_subject_normalized_name')).toBe(
+      'Un sujet avec ce libellé existe déjà. Réactivez le sujet inactif si besoin.',
+    )
+    expect(mapRuntimeConfigConflictMessage('business_unit_inactive')).toBe(
+      'Réactivez d’abord le pôle parent avant de réactiver ce sujet.',
+    )
   })
 
   it('falls back to detail or generic message for unknown codes', () => {

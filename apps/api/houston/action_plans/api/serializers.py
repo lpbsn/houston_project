@@ -20,6 +20,7 @@ from houston.action_plans.models import (
 from houston.action_plans.selectors import get_involved_poles
 from houston.establishments.api.serializers import BusinessUnitGenericSerializer
 from houston.establishments.public_serialization import (
+    resolve_activity_subject_public_label,
     serialize_activity_subject_ref,
     serialize_business_unit_ref,
 )
@@ -68,7 +69,9 @@ def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
         "activity_subject_normalized_name": (
             subject.normalized_name if subject is not None else None
         ),
-        "activity_subject_label": subject.label if subject is not None else None,
+        "activity_subject_label": resolve_activity_subject_public_label(
+            activity_subject=subject
+        ),
         "location_text": signal.location_text,
     }
 

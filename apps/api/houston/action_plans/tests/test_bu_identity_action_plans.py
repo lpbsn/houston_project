@@ -7,17 +7,29 @@ import pytest
 from houston.action_plans.api.serializers import (
     _serialize_activity_subject,
     _serialize_business_unit,
+    serialize_action_plan_detail,
+    serialize_action_plan_list_item,
     serialize_execution_detail,
 )
 from houston.action_plans.exceptions import ActionPlanValidationError
+from houston.action_plans.feed_serializers import (
+    serialize_action_plan_execution_feed_item,
+)
 from houston.action_plans.services import create_action_plan_with_execution
 from houston.action_plans.tests.helpers import (
     action_plan_url,
     build_assignee_payload,
     build_task_payload,
 )
-from houston.establishments.models import CatalogBusinessUnit
-from houston.establishments.public_serialization import serialize_business_unit_ref
+from houston.establishments.models import BusinessUnit, CatalogBusinessUnit
+from houston.establishments.public_serialization import (
+    serialize_business_unit_public,
+    serialize_business_unit_ref,
+)
+from houston.establishments.selectors import (
+    get_establishment_business_unit_tree,
+    serialize_business_unit_tree_item,
+)
 from houston.testing.auth import auth_headers, login
 from houston.testing.taxonomy import (
     create_activity_subject,
@@ -257,7 +269,7 @@ def test_generic_activity_subject_label_resolved_on_execution(
         label="Local override ignored for generic path",
     )
     subject.catalog_activity_subject = catalog_subject
-    subject.label = catalog_subject.label
+    subject.label = "Local override ignored for generic path"
     subject.source = subject.Source.CATALOG_SUGGESTION
     subject.save()
 
@@ -267,6 +279,77 @@ def test_generic_activity_subject_label_resolved_on_execution(
     assert payload["label"] == "Éclairage catalogue"
     assert payload["catalog_key"] == "maintenance__eclairage"
     assert "routing_key" not in payload
+
+
+def test_signal_summary_activity_subject_label_matches_lot5_nested_ref(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    from houston.establishments.models import CatalogActivitySubject
+
+    catalog_subject = CatalogActivitySubject.objects.create(
+        catalog_business_unit=maintenance_business_unit.catalog_business_unit,
+        key="maintenance__label_drift",
+        label="Label catalogue",
+        description="",
+        active=True,
+    )
+    subject = create_activity_subject(
+        establishment=owner_membership.establishment,
+        business_unit=maintenance_business_unit,
+        label="Label instance diverge",
+    )
+    subject.catalog_activity_subject = catalog_subject
+    subject.label = "Label instance diverge"
+    subject.source = subject.Source.CATALOG_SUGGESTION
+    subject.save()
+
+    signal = create_v3_signal(
+        owner_membership.establishment,
+        affected_business_unit=business_unit,
+        responsible_business_unit=maintenance_business_unit,
+        activity_subject=subject,
+        title="Label drift signal",
+    )
+    _plan, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=maintenance_business_unit.id,
+        title="Label drift plan",
+        source_signal_id=signal.id,
+        tasks=[
+            build_task_payload(task="Inspect", business_unit=maintenance_business_unit)
+        ],
+        assignees=[
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=maintenance_business_unit,
+            )
+        ],
+    )
+    execution = (
+        type(execution)
+        .objects.select_related(
+            "pilot_business_unit__catalog_business_unit",
+            "affected_business_unit__catalog_business_unit",
+            "responsible_business_unit__catalog_business_unit",
+            "activity_subject__catalog_activity_subject",
+            "source_signal__activity_subject__catalog_activity_subject",
+            "created_by__user",
+        )
+        .prefetch_related(
+            "assignees__membership__user",
+            "assignees__execution_team__business_unit__catalog_business_unit",
+            "task_executions__execution_team__business_unit__catalog_business_unit",
+            "execution_teams__business_unit__catalog_business_unit",
+        )
+        .get(id=execution.id)
+    )
+    payload = serialize_execution_detail(execution, membership=owner_membership)
+    assert payload["activity_subject"]["label"] == "Label catalogue"
+    assert payload["signal_summary"]["activity_subject_label"] == "Label catalogue"
+    assert subject.label == "Label instance diverge"
 
 
 def test_create_rejects_inactive_business_unit_selection(
@@ -364,3 +447,116 @@ def test_execution_detail_serializes_lot5_business_units(
         signal.responsible_business_unit_id
     )
     assert plan.id is not None
+
+
+def _strip_lot5_identity(business_unit: BusinessUnit) -> BusinessUnit:
+    business_unit.catalog_business_unit = None
+    business_unit.specific_name = None
+    business_unit.normalized_specific_name = None
+    business_unit.save(
+        update_fields=[
+            "catalog_business_unit",
+            "specific_name",
+            "normalized_specific_name",
+            "updated_at",
+        ]
+    )
+    return BusinessUnit.objects.get(id=business_unit.id)
+
+
+def test_incomplete_business_unit_nested_ref_fallback_on_list_detail_feed_and_tasks(
+    owner_membership,
+    business_unit,
+    maintenance_business_unit,
+):
+    plan, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Legacy identity plan",
+        tasks=[build_task_payload(task="Task", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(
+                membership=owner_membership,
+                business_unit=business_unit,
+            )
+        ],
+    )
+    expected_specific_name = business_unit.label or business_unit.key
+    expected_generic_key = business_unit.key
+    _strip_lot5_identity(business_unit)
+
+    assert serialize_business_unit_public(business_unit=business_unit) is None
+
+    plan = (
+        type(plan)
+        .objects.select_related("pilot_business_unit")
+        .prefetch_related("tasks__business_unit")
+        .get(id=plan.id)
+    )
+    list_payload = serialize_action_plan_list_item(plan, membership=owner_membership)
+    detail_payload = serialize_action_plan_detail(plan, membership=owner_membership)
+    for payload in (list_payload, detail_payload):
+        pilot = payload["pilot_business_unit"]
+        assert pilot is not None
+        _assert_lot5_business_unit_shape(pilot)
+        assert pilot["specific_name"] == expected_specific_name
+        assert pilot["generic"]["key"] == expected_generic_key
+        assert "routing_key" not in pilot
+
+    detail_tasks = detail_payload.get("tasks") or []
+    if detail_tasks:
+        task_bu = detail_tasks[0]["business_unit"]
+        assert task_bu is not None
+        _assert_lot5_business_unit_shape(task_bu)
+
+    execution = (
+        type(execution)
+        .objects.select_related(
+            "pilot_business_unit",
+            "created_by__user",
+            "source_signal",
+        )
+        .prefetch_related(
+            "assignees__membership__user",
+            "assignees__execution_team__business_unit",
+            "task_executions__execution_team__business_unit",
+            "execution_teams__business_unit",
+        )
+        .get(id=execution.id)
+    )
+    feed_payload = serialize_action_plan_execution_feed_item(
+        execution=execution,
+        membership=owner_membership,
+    )
+    _assert_lot5_business_unit_shape(feed_payload["pilot_business_unit"])
+    assert feed_payload["pilot_business_unit"]["specific_name"] == expected_specific_name
+    assert feed_payload["task_executions"]
+    task_ref = feed_payload["task_executions"][0]["business_unit"]
+    assert task_ref is not None
+    _assert_lot5_business_unit_shape(task_ref)
+
+    execution_detail = serialize_execution_detail(execution, membership=owner_membership)
+    _assert_lot5_business_unit_shape(execution_detail["pilot_business_unit"])
+    assert maintenance_business_unit.id is not None
+
+
+def test_runtime_tree_stays_strict_for_incomplete_business_unit(
+    owner_membership,
+    business_unit,
+):
+    _strip_lot5_identity(business_unit)
+    tree = get_establishment_business_unit_tree(
+        establishment_id=owner_membership.establishment_id,
+        active_only=True,
+    )
+    assert tree is not None
+    tree_ids = {item["id"] for item in tree["business_units"]}
+    assert business_unit.id not in tree_ids
+
+    with pytest.raises(ValueError, match="incomplete"):
+        serialize_business_unit_tree_item(business_unit=business_unit)
+
+    ref = serialize_business_unit_ref(business_unit=business_unit)
+    assert ref is not None
+    _assert_lot5_business_unit_shape(ref)

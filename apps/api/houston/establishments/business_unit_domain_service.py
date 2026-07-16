@@ -550,3 +550,105 @@ def create_runtime_activity_subject(
         "business_unit",
         "business_unit__catalog_business_unit",
     ).get(id=created.id)
+
+
+@transaction.atomic
+def reactivate_activity_subject(
+    *,
+    establishment_id,
+    activity_subject_id,
+) -> ActivitySubject:
+    establishment = _lock_establishment(establishment_id=establishment_id)
+
+    subject_peek = (
+        ActivitySubject.objects.filter(
+            id=activity_subject_id,
+            establishment=establishment,
+        )
+        .only("id", "business_unit_id", "catalog_activity_subject_id")
+        .first()
+    )
+    if subject_peek is None:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    business_unit = (
+        BusinessUnit.objects.select_for_update(of=("self",))
+        .filter(
+            id=subject_peek.business_unit_id,
+            establishment=establishment,
+        )
+        .first()
+    )
+    if business_unit is None:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    catalog_subject = None
+    if subject_peek.catalog_activity_subject_id is not None:
+        catalog_subject = (
+            CatalogActivitySubject.objects.select_for_update(of=("self",))
+            .filter(id=subject_peek.catalog_activity_subject_id)
+            .first()
+        )
+        if catalog_subject is None:
+            raise DomainNotFoundError(
+                "Catalog activity subject was not found.",
+                code="catalog_activity_subject_not_found",
+            )
+
+    activity_subject = (
+        ActivitySubject.objects.select_for_update(of=("self",))
+        .filter(
+            id=activity_subject_id,
+            establishment=establishment,
+        )
+        .select_related(
+            "catalog_activity_subject",
+            "business_unit",
+            "business_unit__catalog_business_unit",
+        )
+        .first()
+    )
+    if activity_subject is None:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    if activity_subject.business_unit_id != business_unit.id:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+    if catalog_subject is not None and (
+        activity_subject.catalog_activity_subject_id != catalog_subject.id
+    ):
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    if activity_subject.active:
+        raise DomainConflictError(
+            "Activity subject is already active.",
+            code="activity_subject_already_active",
+        )
+    if not business_unit.active:
+        raise DomainConflictError(
+            "Parent business unit is inactive.",
+            code="business_unit_inactive",
+        )
+    if catalog_subject is not None and not catalog_subject.active:
+        raise DomainConflictError(
+            "Catalog activity subject is inactive.",
+            code="catalog_activity_subject_inactive",
+        )
+
+    activity_subject.active = True
+    activity_subject.save(update_fields=["active", "updated_at"])
+    return activity_subject

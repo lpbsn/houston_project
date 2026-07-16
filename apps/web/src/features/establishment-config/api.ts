@@ -225,3 +225,26 @@ export async function deactivateRuntimeActivitySubject(
     ),
   )
 }
+
+export async function reactivateRuntimeActivitySubject(
+  establishmentId: string,
+  activitySubjectId: string,
+): Promise<ActivitySubjectTreeItem> {
+  return withRuntimeConfigMutation(
+    'Le sujet n’a pas pu être réactivé.',
+    (accessToken, csrfToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/reactivate/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              activity_subject_id: activitySubjectId,
+            },
+          },
+          credentials: 'include',
+          headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+        },
+      ),
+  )
+}

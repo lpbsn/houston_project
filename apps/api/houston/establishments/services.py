@@ -28,6 +28,9 @@ from houston.establishments.business_unit_domain_service import (
     create_runtime_business_unit as create_runtime_business_unit_domain,
 )
 from houston.establishments.business_unit_domain_service import (
+    reactivate_activity_subject as reactivate_activity_subject_domain,
+)
+from houston.establishments.business_unit_domain_service import (
     reactivate_business_unit as reactivate_business_unit_domain,
 )
 from houston.establishments.business_unit_domain_service import (
@@ -3049,6 +3052,27 @@ def create_runtime_activity_subject(
             label=label,
             description=description,
             catalog_key=catalog_key,
+        )
+    except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
+        _map_runtime_domain_error(exc)
+        raise
+
+
+@transaction.atomic
+def reactivate_runtime_activity_subject(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    activity_subject_id,
+) -> ActivitySubject:
+    _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
+    )
+    try:
+        return reactivate_activity_subject_domain(
+            establishment_id=establishment_id,
+            activity_subject_id=activity_subject_id,
         )
     except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
         _map_runtime_domain_error(exc)

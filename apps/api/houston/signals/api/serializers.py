@@ -7,6 +7,9 @@ from houston.action_plans.api.serializers import (
     _serialize_business_unit,
 )
 from houston.action_plans.models import ActionPlanExecution
+from houston.establishments.public_serialization import (
+    resolve_activity_subject_public_label,
+)
 from houston.observations.media_access import build_observation_media_preview_url
 from houston.signals.models import Signal
 from houston.signals.reporter_display import (
@@ -122,8 +125,10 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "activity_subject_normalized_name": (
             signal.activity_subject.normalized_name if signal.activity_subject_id else None
         ),
-        "activity_subject_label": (
-            signal.activity_subject.label if signal.activity_subject_id else None
+        "activity_subject_label": resolve_activity_subject_public_label(
+            activity_subject=signal.activity_subject
+            if signal.activity_subject_id
+            else None
         ),
         "operational_unit_key": signal.operational_unit.key if signal.operational_unit else None,
         "location_text": signal.location_text,
