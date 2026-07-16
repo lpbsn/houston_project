@@ -626,10 +626,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns the active BusinessUnit / ActivitySubject tree for the establishment. */
+        /** @description Returns the BusinessUnit / ActivitySubject tree for the establishment. */
         get: operations["v1_establishments_business_units_retrieve"];
         put?: never;
-        /** @description Creates or reactivates a runtime business unit for an active establishment. */
+        /** @description Creates a runtime business unit for an active establishment. */
         post: operations["v1_establishments_business_units_create"];
         delete?: never;
         options?: never;
@@ -650,7 +650,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Updates a runtime business unit for an active establishment. */
+        /** @description Updates a runtime business unit specific_name and/or instance_description. */
         patch: operations["v1_establishments_business_units_partial_update"];
         trace?: never;
     };
@@ -663,7 +663,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates or reactivates a runtime activity subject under a business unit. */
+        /** @description Creates a runtime activity subject under a business unit. */
         post: operations["v1_establishments_business_units_activity_subjects_create"];
         delete?: never;
         options?: never;
@@ -682,6 +682,23 @@ export interface paths {
         put?: never;
         /** @description Soft-deactivates a runtime business unit and its activity subjects. */
         post: operations["v1_establishments_business_units_deactivate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/reactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reactivates an inactive runtime business unit without reseeding subjects. */
+        post: operations["v1_establishments_business_units_reactivate_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1575,7 +1592,7 @@ export interface paths {
         /** @description Lists onboarding proposals for a path-scoped onboarding session. */
         get: operations["v1_onboarding_sessions_proposals_list"];
         put?: never;
-        /** @description Creates a manual onboarding proposal for Onboarding manuel V2 (schema onboarding_proposal_v3). */
+        /** @description Creates a manual onboarding proposal for Onboarding manuel V2 (schema onboarding_proposal_v3 or onboarding_proposal_v4). */
         post: operations["v1_onboarding_sessions_proposals_create"];
         delete?: never;
         options?: never;
@@ -1597,7 +1614,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Updates a draft onboarding proposal payload (onboarding_proposal_v3). */
+        /** @description Updates a draft onboarding proposal payload (onboarding_proposal_v3 or onboarding_proposal_v4). */
         patch: operations["v1_onboarding_sessions_proposals_partial_update"];
         trace?: never;
     };
@@ -1644,7 +1661,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Validates and accepts all sections of an onboarding_proposal_v3 manual proposal. */
+        /** @description Validates and accepts all sections of an onboarding_proposal_v3 or onboarding_proposal_v4 manual proposal. */
         post: operations["v1_onboarding_sessions_proposals_submit_create"];
         delete?: never;
         options?: never;
@@ -2132,9 +2149,12 @@ export interface components {
         ActivitySubjectTreeItem: {
             /** Format: uuid */
             id: string;
-            normalized_name: string;
+            catalog_key?: string;
             label: string;
             description: string;
+            source: string;
+            active: boolean;
+            is_generic: boolean;
         };
         ApiErrorResponse: {
             code: string;
@@ -2180,13 +2200,19 @@ export interface components {
             pending_onboarding_memberships: components["schemas"]["PendingOnboardingMembership"][];
             permission_hints: components["schemas"]["BootstrapPermissionHints"];
         };
-        BusinessUnitTreeItem: {
-            /** Format: uuid */
-            id: string;
+        BusinessUnitGeneric: {
             key: string;
             label: string;
             description: string;
             unit_type: string;
+        };
+        BusinessUnitTreeItem: {
+            /** Format: uuid */
+            id: string;
+            specific_name: string;
+            instance_description: string;
+            active: boolean;
+            generic: components["schemas"]["BusinessUnitGeneric"];
             activity_subjects: components["schemas"]["ActivitySubjectTreeItem"][];
         };
         BusinessUnitTreeResponse: {
@@ -2203,6 +2229,7 @@ export interface components {
         CatalogBusinessUnitSuggestion: {
             key: string;
             label: string;
+            description: string;
             unit_type: string;
         };
         ChatAddParticipantRequest: {
@@ -2648,14 +2675,27 @@ export interface components {
             detail: string;
             errors?: components["schemas"]["ProposalValidationErrorItem"][];
         };
-        OnboardingProposalPayload: {
-            schema_version: string;
-            business_units?: components["schemas"]["ProposalBusinessUnitItem"][];
-            activity_subjects?: components["schemas"]["ProposalActivitySubjectItem"][];
+        OnboardingProposalPayload: components["schemas"]["OnboardingProposalPayloadV3"] | components["schemas"]["OnboardingProposalPayloadV4"];
+        OnboardingProposalPayloadV3: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            schema_version: "onboarding_proposal_v3";
+            business_units?: components["schemas"]["ProposalBusinessUnitItemV3"][];
+            activity_subjects?: components["schemas"]["ProposalActivitySubjectItemV3"][];
             excluded_catalog_subject_keys?: {
                 [key: string]: string[];
             };
-            operational_units?: components["schemas"]["ProposalDomainOrUnitItem"][];
+        };
+        OnboardingProposalPayloadV4: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            schema_version: "onboarding_proposal_v4";
+            business_units?: components["schemas"]["ProposalBusinessUnitItemV4"][];
+            activity_subjects?: components["schemas"]["ProposalActivitySubjectItemV4"][];
         };
         OnboardingProposalResponse: {
             /** Format: uuid */
@@ -2768,9 +2808,8 @@ export interface components {
             payload?: components["schemas"]["OnboardingProposalPayload"];
         };
         PatchedRuntimeBusinessUnitUpdateRequest: {
-            label?: string;
-            description?: string;
-            unit_type?: components["schemas"]["UnitTypeEnum"];
+            specific_name?: string;
+            instance_description?: string;
         };
         PatchedUserProfileUpdateRequest: {
             first_name?: string;
@@ -2804,7 +2843,7 @@ export interface components {
          * @enum {string}
          */
         PriorityEnum: "info" | "action_required" | "urgent" | "system";
-        ProposalActivitySubjectItem: {
+        ProposalActivitySubjectItemV3: {
             client_key: string;
             label: string;
             /** @default  */
@@ -2812,7 +2851,15 @@ export interface components {
             business_unit_client_key: string;
             catalog_key?: string | null;
         };
-        ProposalBusinessUnitItem: {
+        ProposalActivitySubjectItemV4: {
+            client_key: string;
+            business_unit_client_key: string;
+            catalog_key?: string | null;
+            label?: string | null;
+            /** @default  */
+            description: string;
+        };
+        ProposalBusinessUnitItemV3: {
             client_key: string;
             label: string;
             /** @default  */
@@ -2820,17 +2867,16 @@ export interface components {
             unit_type?: string | null;
             catalog_key?: string | null;
         };
+        ProposalBusinessUnitItemV4: {
+            client_key: string;
+            catalog_key: string;
+            specific_name: string;
+            /** @default  */
+            instance_description: string;
+        };
         ProposalCommandResponse: {
             session: components["schemas"]["OnboardingSessionResponse"];
             proposal: components["schemas"]["OnboardingProposalResponse"];
-        };
-        ProposalDomainOrUnitItem: {
-            key: string;
-            label: string;
-            reason?: string;
-            /** Format: double */
-            confidence_score?: number | null;
-            related_modules?: string[];
         };
         ProposalValidationErrorItem: {
             code: string;
@@ -2886,18 +2932,16 @@ export interface components {
          */
         RoleEnum: "owner" | "director" | "manager" | "staff";
         RuntimeActivitySubjectCreateRequest: {
-            label: string;
+            label?: string | null;
             /** @default  */
             description: string;
             catalog_key?: string | null;
         };
         RuntimeBusinessUnitCreateRequest: {
-            label: string;
+            catalog_key: string;
+            specific_name: string;
             /** @default  */
-            description: string;
-            /** @default dedicated */
-            unit_type: components["schemas"]["UnitTypeEnum"];
-            catalog_key?: string | null;
+            instance_description: string;
         };
         RuntimeConfigErrorResponse: {
             code: string;
@@ -3031,12 +3075,6 @@ export interface components {
             /** Format: uuid */
             correlation_id: string;
         };
-        /**
-         * @description * `dedicated` - Dedicated
-         *     * `transversal` - Transversal
-         * @enum {string}
-         */
-        UnitTypeEnum: "dedicated" | "transversal";
         UserPublic: {
             /** Format: uuid */
             id: string;
@@ -5050,7 +5088,10 @@ export interface operations {
     };
     v1_establishments_business_units_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true and the actor can manage runtime context, include inactive business units. */
+                include_inactive?: boolean;
+            };
             header?: never;
             path: {
                 establishment_id: string;
@@ -5238,7 +5279,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["RuntimeActivitySubjectCreateRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["RuntimeActivitySubjectCreateRequest"];
@@ -5289,6 +5330,60 @@ export interface operations {
         };
     };
     v1_establishments_business_units_deactivate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                business_unit_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUnitTreeItem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeConfigErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_business_units_reactivate_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -6972,8 +7067,8 @@ export interface operations {
             query: {
                 /** @description Comma-separated ActivitySubject UUIDs (max 50). */
                 activity_subject_ids?: string;
-                /** @description Comma-separated BusinessUnit keys (max 20). Matches affected_business_unit OR responsible_business_unit. */
-                business_unit_keys?: string;
+                /** @description Comma-separated BusinessUnit UUIDs (max 20). Matches affected_business_unit OR responsible_business_unit. */
+                business_unit_ids?: string;
                 /** @description Opaque pagination cursor from a previous response next_cursor. */
                 cursor?: string;
                 page_size?: number;

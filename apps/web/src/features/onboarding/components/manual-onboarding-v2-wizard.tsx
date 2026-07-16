@@ -448,7 +448,7 @@ export function ManualOnboardingV2Wizard({
             <div>
               <h3 className="text-lg font-semibold">Étape 3 — Validation et application</h3>
               <p className="text-sm leading-6 text-muted-foreground">
-                La proposition technique <code>onboarding_proposal_v3</code> sera validée puis
+                La proposition technique <code>onboarding_proposal_v4</code> sera validée puis
                 appliquée au runtime de l&apos;établissement.
               </p>
             </div>

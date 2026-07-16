@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
+from drf_spectacular.utils import (
+    PolymorphicProxySerializer,
+    extend_schema_field,
+    extend_schema_serializer,
+)
 from rest_framework import serializers
 
 from houston.establishments.membership_scope import (
@@ -14,6 +18,9 @@ from houston.establishments.models import (
     OnboardingSession,
 )
 from houston.establishments.role_constants import ADMIN_ROLES
+
+PROPOSAL_SCHEMA_VERSION_V3 = "onboarding_proposal_v3"
+PROPOSAL_SCHEMA_VERSION_V4 = "onboarding_proposal_v4"
 
 
 class MembershipUserSummarySerializer(serializers.Serializer):
@@ -112,19 +119,29 @@ class MembershipUpdateRequestSerializer(serializers.Serializer):
         return attrs
 
 
-class ActivitySubjectTreeItemSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    normalized_name = serializers.CharField()
-    label = serializers.CharField()
-    description = serializers.CharField()
-
-
-class BusinessUnitTreeItemSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
+class BusinessUnitGenericSerializer(serializers.Serializer):
     key = serializers.CharField()
     label = serializers.CharField()
     description = serializers.CharField()
     unit_type = serializers.CharField()
+
+
+class ActivitySubjectTreeItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    catalog_key = serializers.CharField(required=False)
+    label = serializers.CharField()
+    description = serializers.CharField()
+    source = serializers.CharField()
+    active = serializers.BooleanField()
+    is_generic = serializers.BooleanField()
+
+
+class BusinessUnitTreeItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    specific_name = serializers.CharField()
+    instance_description = serializers.CharField()
+    active = serializers.BooleanField()
+    generic = BusinessUnitGenericSerializer()
     activity_subjects = ActivitySubjectTreeItemSerializer(many=True)
 
 
@@ -135,29 +152,56 @@ class BusinessUnitTreeResponseSerializer(serializers.Serializer):
 
 
 class RuntimeBusinessUnitCreateRequestSerializer(serializers.Serializer):
-    label = serializers.CharField(trim_whitespace=True, max_length=255)
-    description = serializers.CharField(required=False, allow_blank=True, default="")
-    unit_type = serializers.ChoiceField(
-        choices=BusinessUnit.UnitType.choices,
+    catalog_key = serializers.CharField(trim_whitespace=True, max_length=100)
+    specific_name = serializers.CharField(trim_whitespace=True, max_length=255)
+    instance_description = serializers.CharField(
         required=False,
-        default=BusinessUnit.UnitType.DEDICATED,
+        allow_blank=True,
+        default="",
     )
-    catalog_key = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
 
 class RuntimeBusinessUnitUpdateRequestSerializer(serializers.Serializer):
-    label = serializers.CharField(trim_whitespace=True, max_length=255, required=False)
-    description = serializers.CharField(required=False, allow_blank=True)
-    unit_type = serializers.ChoiceField(
-        choices=BusinessUnit.UnitType.choices,
+    specific_name = serializers.CharField(
+        trim_whitespace=True,
+        max_length=255,
         required=False,
     )
+    instance_description = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError(
+                "At least one of specific_name or instance_description must be provided."
+            )
+        return attrs
 
 
 class RuntimeActivitySubjectCreateRequestSerializer(serializers.Serializer):
-    label = serializers.CharField(trim_whitespace=True, max_length=255)
+    label = serializers.CharField(
+        trim_whitespace=True,
+        max_length=255,
+        required=False,
+        allow_null=True,
+    )
     description = serializers.CharField(required=False, allow_blank=True, default="")
-    catalog_key = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    catalog_key = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+    )
+
+    def validate(self, attrs):
+        catalog_key = attrs.get("catalog_key")
+        if isinstance(catalog_key, str) and catalog_key.strip() == "":
+            catalog_key = None
+            attrs["catalog_key"] = None
+        label = attrs.get("label")
+        if catalog_key is None and not (isinstance(label, str) and label.strip()):
+            raise serializers.ValidationError(
+                {"label": ["Label is required when catalog_key is omitted."]}
+            )
+        return attrs
 
 
 class RuntimeConfigErrorResponseSerializer(serializers.Serializer):
@@ -168,6 +212,7 @@ class RuntimeConfigErrorResponseSerializer(serializers.Serializer):
 class CatalogBusinessUnitSuggestionSerializer(serializers.Serializer):
     key = serializers.CharField()
     label = serializers.CharField()
+    description = serializers.CharField()
     unit_type = serializers.CharField()
 
 
@@ -463,7 +508,7 @@ class ProposalDomainOrUnitItemSerializer(ProposalCatalogItemSerializer):
     )
 
 
-class ProposalBusinessUnitItemSerializer(serializers.Serializer):
+class ProposalBusinessUnitItemV3Serializer(serializers.Serializer):
     client_key = serializers.CharField()
     label = serializers.CharField()
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -471,7 +516,7 @@ class ProposalBusinessUnitItemSerializer(serializers.Serializer):
     catalog_key = serializers.CharField(required=False, allow_null=True)
 
 
-class ProposalActivitySubjectItemSerializer(serializers.Serializer):
+class ProposalActivitySubjectItemV3Serializer(serializers.Serializer):
     client_key = serializers.CharField()
     label = serializers.CharField()
     description = serializers.CharField(required=False, allow_blank=True, default="")
@@ -479,39 +524,119 @@ class ProposalActivitySubjectItemSerializer(serializers.Serializer):
     catalog_key = serializers.CharField(required=False, allow_null=True)
 
 
-class OnboardingProposalPayloadSerializer(serializers.Serializer):
-    MANUAL_V2_SCHEMA_VERSION = "onboarding_proposal_v3"
+class ProposalBusinessUnitItemV4Serializer(serializers.Serializer):
+    client_key = serializers.CharField()
+    catalog_key = serializers.CharField()
+    specific_name = serializers.CharField()
+    instance_description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+    )
 
+
+class ProposalActivitySubjectItemV4Serializer(serializers.Serializer):
+    client_key = serializers.CharField()
+    business_unit_client_key = serializers.CharField()
+    catalog_key = serializers.CharField(required=False, allow_null=True)
+    label = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+@extend_schema_serializer(component_name="OnboardingProposalPayloadV3")
+class OnboardingProposalPayloadV3Serializer(serializers.Serializer):
     schema_version = serializers.CharField()
-    business_units = ProposalBusinessUnitItemSerializer(many=True, required=False)
-    activity_subjects = ProposalActivitySubjectItemSerializer(many=True, required=False)
+    business_units = ProposalBusinessUnitItemV3Serializer(many=True, required=False)
+    activity_subjects = ProposalActivitySubjectItemV3Serializer(many=True, required=False)
     excluded_catalog_subject_keys = serializers.DictField(
         child=serializers.ListField(child=serializers.CharField()),
         required=False,
     )
-    operational_units = ProposalDomainOrUnitItemSerializer(many=True, required=False)
 
     def validate(self, attrs):
-        schema_version = attrs.get("schema_version")
-        if schema_version == self.MANUAL_V2_SCHEMA_VERSION:
-            result = {
-                "schema_version": schema_version,
-                "business_units": attrs.get("business_units", []),
-                "activity_subjects": attrs.get("activity_subjects", []),
-            }
-            excluded = attrs.get("excluded_catalog_subject_keys")
-            if excluded:
-                result["excluded_catalog_subject_keys"] = excluded
-            return result
-        return attrs
+        if attrs.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3:
+            raise serializers.ValidationError(
+                {"schema_version": ["Must be onboarding_proposal_v3."]}
+            )
+        result = {
+            "schema_version": PROPOSAL_SCHEMA_VERSION_V3,
+            "business_units": attrs.get("business_units", []),
+            "activity_subjects": attrs.get("activity_subjects", []),
+        }
+        excluded = attrs.get("excluded_catalog_subject_keys")
+        if excluded:
+            result["excluded_catalog_subject_keys"] = excluded
+        return result
+
+
+@extend_schema_serializer(component_name="OnboardingProposalPayloadV4")
+class OnboardingProposalPayloadV4Serializer(serializers.Serializer):
+    schema_version = serializers.CharField()
+    business_units = ProposalBusinessUnitItemV4Serializer(many=True, required=False)
+    activity_subjects = ProposalActivitySubjectItemV4Serializer(many=True, required=False)
+
+    def validate(self, attrs):
+        if attrs.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V4:
+            raise serializers.ValidationError(
+                {"schema_version": ["Must be onboarding_proposal_v4."]}
+            )
+        return {
+            "schema_version": PROPOSAL_SCHEMA_VERSION_V4,
+            "business_units": attrs.get("business_units", []),
+            "activity_subjects": attrs.get("activity_subjects", []),
+        }
+
+
+ONBOARDING_PROPOSAL_PAYLOAD_OPENAPI = PolymorphicProxySerializer(
+    component_name="OnboardingProposalPayload",
+    serializers={
+        PROPOSAL_SCHEMA_VERSION_V3: OnboardingProposalPayloadV3Serializer,
+        PROPOSAL_SCHEMA_VERSION_V4: OnboardingProposalPayloadV4Serializer,
+    },
+    resource_type_field_name="schema_version",
+)
+
+
+@extend_schema_field(ONBOARDING_PROPOSAL_PAYLOAD_OPENAPI)
+class OnboardingProposalPayloadField(serializers.Field):
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("Invalid payload.")
+        schema_version = data.get("schema_version")
+        if schema_version == PROPOSAL_SCHEMA_VERSION_V4:
+            serializer = OnboardingProposalPayloadV4Serializer(data=data)
+        elif schema_version == PROPOSAL_SCHEMA_VERSION_V3:
+            serializer = OnboardingProposalPayloadV3Serializer(data=data)
+        else:
+            raise serializers.ValidationError(
+                {"schema_version": ["Unsupported onboarding proposal schema version."]}
+            )
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+
+    def to_representation(self, value):
+        if not isinstance(value, dict):
+            return value
+        schema_version = value.get("schema_version")
+        if schema_version == PROPOSAL_SCHEMA_VERSION_V4:
+            return OnboardingProposalPayloadV4Serializer(value).data
+        if schema_version == PROPOSAL_SCHEMA_VERSION_V3:
+            return OnboardingProposalPayloadV3Serializer(value).data
+        return value
+
+
+# Backward-compatible aliases for imports that still reference old names.
+OnboardingProposalPayloadSerializer = OnboardingProposalPayloadField
+ProposalBusinessUnitItemSerializer = ProposalBusinessUnitItemV3Serializer
+ProposalActivitySubjectItemSerializer = ProposalActivitySubjectItemV3Serializer
 
 
 class OnboardingProposalCreateRequestSerializer(serializers.Serializer):
-    payload = OnboardingProposalPayloadSerializer()
+    payload = OnboardingProposalPayloadField()
 
 
 class OnboardingProposalUpdateRequestSerializer(serializers.Serializer):
-    payload = OnboardingProposalPayloadSerializer()
+    payload = OnboardingProposalPayloadField()
 
 
 class OnboardingProposalResponseSerializer(serializers.Serializer):
@@ -520,7 +645,7 @@ class OnboardingProposalResponseSerializer(serializers.Serializer):
     establishment_id = serializers.UUIDField()
     source = serializers.CharField()
     status = serializers.CharField()
-    payload = OnboardingProposalPayloadSerializer()
+    payload = OnboardingProposalPayloadField()
     section_validation = serializers.DictField(child=serializers.CharField())
     validation_errors = ProposalValidationErrorItemSerializer(many=True)
     created_by_id = serializers.UUIDField(allow_null=True)

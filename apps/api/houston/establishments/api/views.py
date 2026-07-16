@@ -63,6 +63,7 @@ from houston.establishments.permissions import (
     CanViewTeamMemberships,
     HasActiveMembership,
     can_invite_memberships,
+    can_manage_runtime_context,
 )
 from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
@@ -119,6 +120,7 @@ from houston.establishments.services import (
     invite_director_during_onboarding,
     invite_membership_for_establishment,
     mark_onboarding_ready_for_activation,
+    reactivate_runtime_business_unit,
     reject_onboarding_proposal,
     start_onboarding_session,
     submit_activity_description,
@@ -406,19 +408,35 @@ class EstablishmentBusinessUnitTreeView(APIView):
 
     @extend_schema(
         tags=["establishments"],
+        parameters=[
+            OpenApiParameter(
+                name="include_inactive",
+                required=False,
+                type=bool,
+                description=(
+                    "When true and the actor can manage runtime context, include inactive "
+                    "business units."
+                ),
+            ),
+        ],
         responses={
             200: BusinessUnitTreeResponseSerializer,
             401: OpenApiResponse(response=DetailResponseSerializer),
             403: OpenApiResponse(response=DetailResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
-        description="Returns the active BusinessUnit / ActivitySubject tree for the establishment.",
+        description="Returns the BusinessUnit / ActivitySubject tree for the establishment.",
     )
     def get(self, request, establishment_id):
         access_context = get_api_access_context(request)
+        include_inactive_raw = request.query_params.get("include_inactive", "").strip().lower()
+        include_inactive = include_inactive_raw in {"1", "true", "yes"} and can_manage_runtime_context(
+            access_context.active_membership
+        )
         tree = get_business_units_for_establishment(
             current_membership=access_context.active_membership,
             establishment_id=establishment_id,
+            include_inactive=include_inactive,
         )
         if tree is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -437,29 +455,24 @@ class EstablishmentBusinessUnitTreeView(APIView):
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
         },
-        description="Creates or reactivates a runtime business unit for an active establishment.",
+        description="Creates a runtime business unit for an active establishment.",
     )
     def post(self, request, establishment_id):
         serializer = RuntimeBusinessUnitCreateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         access_context = get_api_access_context(request)
-        catalog_key = serializer.validated_data.get("catalog_key")
-        normalized_catalog_key = catalog_key.strip() if isinstance(catalog_key, str) else None
-        if normalized_catalog_key == "":
-            normalized_catalog_key = None
 
         try:
             business_unit = create_runtime_business_unit(
                 current_membership=access_context.active_membership,
                 establishment_id=establishment_id,
-                label=serializer.validated_data["label"],
-                description=serializer.validated_data.get("description", ""),
-                unit_type=serializer.validated_data.get(
-                    "unit_type",
-                    BusinessUnit.UnitType.DEDICATED,
+                catalog_key=serializer.validated_data["catalog_key"],
+                specific_name=serializer.validated_data["specific_name"],
+                instance_description=serializer.validated_data.get(
+                    "instance_description",
+                    "",
                 ),
-                catalog_key=normalized_catalog_key,
             )
         except RuntimeConfigNotFoundError:
             return _not_found_response()
@@ -491,7 +504,7 @@ class EstablishmentBusinessUnitDetailView(APIView):
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
         },
-        description="Updates a runtime business unit for an active establishment.",
+        description="Updates a runtime business unit specific_name and/or instance_description.",
     )
     def patch(self, request, establishment_id, business_unit_id):
         serializer = RuntimeBusinessUnitUpdateRequestSerializer(data=request.data)
@@ -504,9 +517,48 @@ class EstablishmentBusinessUnitDetailView(APIView):
                 current_membership=access_context.active_membership,
                 establishment_id=establishment_id,
                 business_unit_id=business_unit_id,
-                label=serializer.validated_data.get("label"),
-                description=serializer.validated_data.get("description"),
-                unit_type=serializer.validated_data.get("unit_type"),
+                specific_name=serializer.validated_data.get("specific_name"),
+                instance_description=serializer.validated_data.get("instance_description"),
+            )
+        except RuntimeConfigNotFoundError:
+            return _not_found_response()
+        except RuntimeConfigConflictError as exc:
+            return _runtime_config_conflict_response(exc)
+
+        response_serializer = BusinessUnitTreeItemSerializer(
+            serialize_business_unit_tree_item(business_unit=business_unit)
+        )
+        return Response(response_serializer.data)
+
+
+class EstablishmentBusinessUnitReactivateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanManageRuntimeContext,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=None,
+        responses={
+            200: BusinessUnitTreeItemSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=RuntimeConfigErrorResponseSerializer),
+        },
+        description="Reactivates an inactive runtime business unit without reseeding subjects.",
+    )
+    def post(self, request, establishment_id, business_unit_id):
+        access_context = get_api_access_context(request)
+
+        try:
+            business_unit = reactivate_runtime_business_unit(
+                current_membership=access_context.active_membership,
+                establishment_id=establishment_id,
+                business_unit_id=business_unit_id,
             )
         except RuntimeConfigNotFoundError:
             return _not_found_response()
@@ -577,7 +629,7 @@ class EstablishmentActivitySubjectCreateView(APIView):
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
         },
-        description="Creates or reactivates a runtime activity subject under a business unit.",
+        description="Creates a runtime activity subject under a business unit.",
     )
     def post(self, request, establishment_id, business_unit_id):
         serializer = RuntimeActivitySubjectCreateRequestSerializer(data=request.data)
@@ -594,7 +646,7 @@ class EstablishmentActivitySubjectCreateView(APIView):
                 current_membership=access_context.active_membership,
                 establishment_id=establishment_id,
                 business_unit_id=business_unit_id,
-                label=serializer.validated_data["label"],
+                label=serializer.validated_data.get("label"),
                 description=serializer.validated_data.get("description", ""),
                 catalog_key=normalized_catalog_key,
             )
@@ -1405,7 +1457,7 @@ class OnboardingSessionProposalListView(APIView):
         },
         description=(
             "Creates a manual onboarding proposal for Onboarding manuel V2 "
-            "(schema onboarding_proposal_v3)."
+            "(schema onboarding_proposal_v3 or onboarding_proposal_v4)."
         ),
     )
     def post(self, request, session_id):
@@ -1481,7 +1533,10 @@ class OnboardingSessionProposalDetailView(APIView):
             404: OpenApiResponse(response=DetailResponseSerializer),
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },
-        description="Updates a draft onboarding proposal payload (onboarding_proposal_v3).",
+        description=(
+            "Updates a draft onboarding proposal payload "
+            "(onboarding_proposal_v3 or onboarding_proposal_v4)."
+        ),
     )
     def patch(self, request, session_id, proposal_id):
         serializer = OnboardingProposalUpdateRequestSerializer(data=request.data)
@@ -1528,7 +1583,8 @@ class OnboardingSessionProposalSubmitView(APIView):
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },
         description=(
-            "Validates and accepts all sections of an onboarding_proposal_v3 manual proposal."
+            "Validates and accepts all sections of an onboarding_proposal_v3 or "
+            "onboarding_proposal_v4 manual proposal."
         ),
     )
     def post(self, request, session_id, proposal_id):

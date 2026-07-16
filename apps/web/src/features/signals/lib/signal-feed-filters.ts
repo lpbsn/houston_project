@@ -2,13 +2,13 @@ export type SignalFeedStatusFilter = 'open' | 'in_progress' | 'resolved' | 'canc
 
 export type SignalFeedFilters = {
   statuses: SignalFeedStatusFilter[]
-  businessUnitKeys: string[]
+  businessUnitIds: string[]
   activitySubjectIds: string[]
 }
 
 export const EMPTY_SIGNAL_FEED_FILTERS: SignalFeedFilters = {
   statuses: [],
-  businessUnitKeys: [],
+  businessUnitIds: [],
   activitySubjectIds: [],
 }
 
@@ -35,7 +35,9 @@ export function normalizeSignalFeedFilters(filters: SignalFeedFilters): SignalFe
     statuses: dedupeSorted(filters.statuses).filter((value): value is SignalFeedStatusFilter =>
       FEED_STATUS_SET.has(value),
     ),
-    businessUnitKeys: dedupeSorted(filters.businessUnitKeys),
+    businessUnitIds: dedupeSorted(filters.businessUnitIds).filter((value) =>
+      UUID_PATTERN.test(value),
+    ),
     activitySubjectIds: dedupeSorted(filters.activitySubjectIds).filter((value) =>
       UUID_PATTERN.test(value),
     ),
@@ -46,7 +48,7 @@ export function hasActiveSignalFeedFilters(filters: SignalFeedFilters): boolean 
   const normalized = normalizeSignalFeedFilters(filters)
   return (
     normalized.statuses.length > 0 ||
-    normalized.businessUnitKeys.length > 0 ||
+    normalized.businessUnitIds.length > 0 ||
     normalized.activitySubjectIds.length > 0
   )
 }
@@ -59,8 +61,8 @@ export function appendSignalFeedFiltersToSearchParams(
   if (normalized.statuses.length > 0) {
     params.set('statuses', normalized.statuses.join(','))
   }
-  if (normalized.businessUnitKeys.length > 0) {
-    params.set('business_unit_keys', normalized.businessUnitKeys.join(','))
+  if (normalized.businessUnitIds.length > 0) {
+    params.set('business_unit_ids', normalized.businessUnitIds.join(','))
   }
   if (normalized.activitySubjectIds.length > 0) {
     params.set('activity_subject_ids', normalized.activitySubjectIds.join(','))
@@ -81,12 +83,12 @@ export function formatStatusFilterSummary(filters: SignalFeedFilters): string {
 
 export function countClassificationFilterSelections(filters: SignalFeedFilters): number {
   const normalized = normalizeSignalFeedFilters(filters)
-  return normalized.businessUnitKeys.length + normalized.activitySubjectIds.length
+  return normalized.businessUnitIds.length + normalized.activitySubjectIds.length
 }
 
 export function formatClassificationFilterSummary(
   filters: SignalFeedFilters,
-  labelByBusinessUnitKey: Map<string, string>,
+  labelByBusinessUnitId: Map<string, string>,
   labelByActivitySubjectId: Map<string, string>,
 ): string {
   const normalized = normalizeSignalFeedFilters(filters)
@@ -96,12 +98,8 @@ export function formatClassificationFilterSummary(
   }
 
   const orderedLabels = [
-    ...normalized.businessUnitKeys.map(
-      (key) => labelByBusinessUnitKey.get(key) ?? key,
-    ),
-    ...normalized.activitySubjectIds.map(
-      (id) => labelByActivitySubjectId.get(id) ?? id,
-    ),
+    ...normalized.businessUnitIds.map((id) => labelByBusinessUnitId.get(id) ?? id),
+    ...normalized.activitySubjectIds.map((id) => labelByActivitySubjectId.get(id) ?? id),
   ]
   const firstLabel = orderedLabels[0]
 

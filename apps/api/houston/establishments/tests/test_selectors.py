@@ -20,6 +20,7 @@ from houston.establishments.selectors import (
 )
 from houston.establishments.services import build_activation_summary
 from houston.organizations.models import Organization
+from houston.testing.taxonomy import create_activity_subject, create_business_unit
 
 pytestmark = pytest.mark.django_db
 
@@ -142,26 +143,24 @@ def test_runtime_config_selector_returns_only_same_establishment_data(
         organization=organization,
         status=Establishment.Status.DRAFT,
     )
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="hotel",
         label="Hotel",
     )
-    foreign_business_unit = BusinessUnit.objects.create(
+    foreign_business_unit = create_business_unit(
         establishment=foreign_establishment,
         key="restaurant",
         label="Restaurant",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Proprete",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=foreign_establishment,
         business_unit=foreign_business_unit,
-        normalized_name="foreign",
         label="Foreign",
     )
     OperationalUnit.objects.create(
@@ -172,7 +171,7 @@ def test_runtime_config_selector_returns_only_same_establishment_data(
 
     config = get_runtime_config_for_session(session=session)
 
-    assert [item["key"] for item in config["active_business_units"]] == ["hotel"]
+    assert [item["generic"]["key"] for item in config["active_business_units"]] == ["hotel"]
     assert [item.key for item in config["optional_units"]] == ["lobby"]
 
 
@@ -188,15 +187,14 @@ def test_activation_summary_selector_exposes_active_business_units(
         submitted_by=actor,
         validated_at=timezone.now(),
     )
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="hotel",
         label="Hotel",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Proprete",
     )
     manager = User.objects.create_user(
@@ -218,4 +216,4 @@ def test_activation_summary_selector_exposes_active_business_units(
     summary = build_activation_summary(session=session)
 
     assert "active_business_units" in summary
-    assert summary["active_business_units"][0]["key"] == "hotel"
+    assert summary["active_business_units"][0]["generic"]["key"] == "hotel"

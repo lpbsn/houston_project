@@ -70,7 +70,10 @@ def test_catalog_business_unit_suggest_returns_coworking_after_import(
     )
     assert response.status_code == 200
     body = response.json()
-    assert any(item["key"] == "coworking" and item["label"] == "Coworking" for item in body)
+    coworking = next(item for item in body if item["key"] == "coworking")
+    assert coworking["label"] == "Coworking"
+    assert "description" in coworking
+    assert isinstance(coworking["description"], str)
 
 
 def test_catalog_business_unit_suggest_returns_transversal_default_for_maintenance(

@@ -37,7 +37,7 @@ export function SignalFeedFiltersBar({
   const classificationLabels = useMemo(() => {
     if (!treeQuery.data) {
       return {
-        labelByBusinessUnitKey: new Map<string, string>(),
+        labelByBusinessUnitId: new Map<string, string>(),
         labelByActivitySubjectId: new Map<string, string>(),
       }
     }
@@ -64,7 +64,7 @@ export function SignalFeedFiltersBar({
             label="Pôle / Sujet"
             value={formatClassificationFilterSummary(
               normalizedFilters,
-              classificationLabels.labelByBusinessUnitKey,
+              classificationLabels.labelByBusinessUnitId,
               classificationLabels.labelByActivitySubjectId,
             )}
             disabled={false}
@@ -91,7 +91,7 @@ export function SignalFeedFiltersBar({
 
       {classificationSheetOpen ? (
         <SignalFeedClassificationFilterSheet
-          key={`classification-${normalizedFilters.businessUnitKeys.join(',')}-${normalizedFilters.activitySubjectIds.join(',')}`}
+          key={`classification-${normalizedFilters.businessUnitIds.join(',')}-${normalizedFilters.activitySubjectIds.join(',')}`}
           establishmentId={establishmentId}
           appliedFilters={normalizedFilters}
           onClose={() => setClassificationSheetOpen(false)}

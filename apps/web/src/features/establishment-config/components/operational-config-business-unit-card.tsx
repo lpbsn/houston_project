@@ -11,6 +11,7 @@ import {
   useCreateRuntimeActivitySubject,
   useDeactivateRuntimeActivitySubject,
   useDeactivateRuntimeBusinessUnit,
+  useReactivateRuntimeBusinessUnit,
   useUpdateRuntimeBusinessUnit,
 } from '@/features/establishment-config/hooks'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
@@ -28,35 +29,41 @@ export function OperationalConfigBusinessUnitCard({
   establishmentId,
   canRemoveBusinessUnit,
 }: OperationalConfigBusinessUnitCardProps) {
-  const [description, setDescription] = useState(businessUnit.description)
+  const [description, setDescription] = useState(businessUnit.instance_description)
+  const [specificName, setSpecificName] = useState(businessUnit.specific_name)
   const [subjectLabel, setSubjectLabel] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const updateMutation = useUpdateRuntimeBusinessUnit(establishmentId)
   const deactivateBuMutation = useDeactivateRuntimeBusinessUnit(establishmentId)
+  const reactivateBuMutation = useReactivateRuntimeBusinessUnit(establishmentId)
   const createSubjectMutation = useCreateRuntimeActivitySubject(establishmentId)
   const deactivateSubjectMutation = useDeactivateRuntimeActivitySubject(establishmentId)
 
   const isBusy =
     updateMutation.isPending ||
     deactivateBuMutation.isPending ||
+    reactivateBuMutation.isPending ||
     createSubjectMutation.isPending ||
     deactivateSubjectMutation.isPending
 
-  async function handleSaveDescription() {
+  async function handleSave() {
     setFeedback(null)
     setErrorMessage(null)
 
     try {
       await updateMutation.mutateAsync({
         businessUnitId: businessUnit.id,
-        input: { description: description.trim() },
+        input: {
+          specific_name: specificName.trim(),
+          instance_description: description.trim(),
+        },
       })
-      setFeedback('Description enregistrée.')
+      setFeedback('Pôle enregistré.')
     } catch (error) {
       setErrorMessage(
-        resolveRuntimeConfigErrorMessage(error, 'La description n’a pas pu être enregistrée.'),
+        resolveRuntimeConfigErrorMessage(error, 'Le pôle n’a pas pu être enregistré.'),
       )
     }
   }
@@ -106,18 +113,50 @@ export function OperationalConfigBusinessUnitCard({
     }
   }
 
+  async function handleReactivateBusinessUnit() {
+    setFeedback(null)
+    setErrorMessage(null)
+
+    try {
+      await reactivateBuMutation.mutateAsync(businessUnit.id)
+      setFeedback('Pôle réactivé.')
+    } catch (error) {
+      setErrorMessage(resolveRuntimeConfigErrorMessage(error, 'Le pôle n’a pas pu être réactivé.'))
+    }
+  }
+
+  const isInactive = businessUnit.active === false
+
   return (
     <Card className="rounded-[1.75rem] border-[#ece5da] bg-[#fffdf9] shadow-[0_22px_48px_-38px_rgba(59,90,184,0.28)]">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-2">
             <Badge className="w-fit bg-[color:var(--primary)]/12 text-[color:var(--primary)]">
-              {businessUnit.unit_type === 'transversal' ? 'Transversal' : 'Dédié'}
+              {businessUnit.generic.unit_type === 'transversal' ? 'Transversal' : 'Dédié'}
             </Badge>
-            <CardTitle className="text-xl font-semibold">{businessUnit.label}</CardTitle>
-            <CardDescription className="text-sm">{businessUnit.key}</CardDescription>
+            <CardTitle className="text-xl font-semibold">{businessUnit.specific_name}</CardTitle>
+            <CardDescription className="text-sm">
+              {businessUnit.generic.label}
+              {isInactive ? ' · Inactif' : ''}
+            </CardDescription>
           </div>
-          {canRemoveBusinessUnit ? (
+          {isInactive ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+              disabled={isBusy}
+              onClick={() => {
+                void handleReactivateBusinessUnit()
+              }}
+            >
+              {reactivateBuMutation.isPending ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : null}
+              Réactiver
+            </Button>
+          ) : canRemoveBusinessUnit ? (
             <Button
               type="button"
               variant="outline"
@@ -140,14 +179,27 @@ export function OperationalConfigBusinessUnitCard({
 
       <CardContent className="space-y-5">
         <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor={`name-${businessUnit.id}`}>
+            Nom d’instance
+          </label>
+          <Input
+            id={`name-${businessUnit.id}`}
+            value={specificName}
+            disabled={isBusy || isInactive}
+            onChange={(event) => setSpecificName(event.target.value)}
+            className="h-11 rounded-[1rem] border-[#e7dfd1] bg-white"
+          />
+        </div>
+
+        <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor={`description-${businessUnit.id}`}>
-            Description libre
+            Description d’instance
           </label>
           <Textarea
             id={`description-${businessUnit.id}`}
             value={description}
             maxLength={DESCRIPTION_MAX_LENGTH}
-            disabled={isBusy}
+            disabled={isBusy || isInactive}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Décrivez le rôle opérationnel de ce pôle…"
             className="min-h-28 rounded-[1rem] border-[#e7dfd1] bg-white"
@@ -156,9 +208,14 @@ export function OperationalConfigBusinessUnitCard({
             <Button
               type="button"
               className="h-10 rounded-[1rem]"
-              disabled={isBusy || description.trim() === businessUnit.description.trim()}
+              disabled={
+                isBusy ||
+                isInactive ||
+                (specificName.trim() === businessUnit.specific_name.trim() &&
+                  description.trim() === businessUnit.instance_description.trim())
+              }
               onClick={() => {
-                void handleSaveDescription()
+                void handleSave()
               }}
             >
               {updateMutation.isPending ? (
@@ -173,7 +230,7 @@ export function OperationalConfigBusinessUnitCard({
           <div>
             <h3 className="text-sm font-medium">Sujets opérationnels</h3>
             <p className="text-sm text-muted-foreground">
-              Chaque pôle doit conserver au moins un sujet actif.
+              Chaque pôle actif doit conserver au moins un sujet actif.
             </p>
           </div>
 
@@ -185,7 +242,7 @@ export function OperationalConfigBusinessUnitCard({
                     <span>{subject.label}</span>
                     <button
                       type="button"
-                      disabled={isBusy || businessUnit.activity_subjects.length <= 1}
+                      disabled={isBusy || isInactive || businessUnit.activity_subjects.length <= 1}
                       className="rounded-full p-1 text-muted-foreground transition hover:text-destructive disabled:opacity-40"
                       aria-label={`Retirer ${subject.label}`}
                       onClick={() => {
@@ -205,7 +262,7 @@ export function OperationalConfigBusinessUnitCard({
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={subjectLabel}
-              disabled={isBusy}
+              disabled={isBusy || isInactive}
               onChange={(event) => setSubjectLabel(event.target.value)}
               placeholder="Ajouter un sujet…"
               className="h-11 rounded-[1rem] border-[#e7dfd1] bg-white"
@@ -214,7 +271,7 @@ export function OperationalConfigBusinessUnitCard({
               type="button"
               variant="outline"
               className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2] sm:shrink-0"
-              disabled={isBusy || !subjectLabel.trim()}
+              disabled={isBusy || isInactive || !subjectLabel.trim()}
               onClick={() => {
                 void handleAddSubject()
               }}

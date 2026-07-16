@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 
+from houston.establishments.business_unit_identity import (
+    build_business_unit_routing_key,
+    normalize_business_unit_specific_name,
+)
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
+    CatalogBusinessUnit,
     Establishment,
     EstablishmentMembership,
     MembershipScope,
@@ -39,12 +45,34 @@ def create_business_unit(
     description: str = "",
     unit_type: str = BusinessUnit.UnitType.DEDICATED,
 ) -> BusinessUnit:
+    label_value = label or key.replace("_", " ").title()
+    catalog, _ = CatalogBusinessUnit.objects.get_or_create(
+        key=key,
+        defaults={
+            "label": label_value,
+            "description": "",
+            "unit_type": unit_type,
+            "active": True,
+            "sort_order": 0,
+        },
+    )
+    business_unit_id = uuid.uuid4()
     return BusinessUnit.objects.create(
+        id=business_unit_id,
         establishment=establishment,
         key=key,
-        label=label or key.replace("_", " ").title(),
+        label=label_value,
         description=description,
-        unit_type=unit_type,
+        unit_type=catalog.unit_type,
+        catalog_business_unit=catalog,
+        specific_name=label_value,
+        normalized_specific_name=normalize_business_unit_specific_name(label_value),
+        routing_key=build_business_unit_routing_key(
+            business_unit_id=business_unit_id,
+            catalog_key=catalog.key,
+            specific_name=label_value,
+        ),
+        instance_description=description,
         source=BusinessUnit.Source.MANUAL,
         active=True,
     )

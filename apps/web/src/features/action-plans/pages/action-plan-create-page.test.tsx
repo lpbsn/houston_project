@@ -69,7 +69,14 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
 
 const { mockAuthState, mockBusinessUnitTree, perAssigneeTestMode } = vi.hoisted(() => ({
   mockBusinessUnitTree: {
-    business_units: [{ id: 'bu-1', label: 'Rooftop', key: 'rooftop', unit_type: 'service' }],
+    business_units: [{
+      id: 'bu-1',
+      specific_name: 'Rooftop',
+      instance_description: '',
+      active: true,
+      generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    }],
   },
   perAssigneeTestMode: { enabled: false, incomplete: false },
   mockAuthState: {
@@ -316,7 +323,14 @@ describe('ActionPlanCreatePage', () => {
       scopes: [],
     }
     mockBusinessUnitTree.business_units = [
-      { id: 'bu-1', label: 'Rooftop', key: 'rooftop', unit_type: 'service' },
+      {
+      id: 'bu-1',
+      specific_name: 'Rooftop',
+      instance_description: '',
+      active: true,
+      generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
     ]
   })
 
@@ -375,8 +389,22 @@ describe('ActionPlanCreatePage', () => {
 
   it('selects pilot pole via pill wheel and submits with pilot_business_unit_id', async () => {
     mockBusinessUnitTree.business_units = [
-      { id: 'bu-restaurant', label: 'Restaurant', key: 'restaurant', unit_type: 'service' },
-      { id: 'bu-maintenance', label: 'Maintenance', key: 'maintenance', unit_type: 'service' },
+      {
+      id: 'bu-restaurant',
+      specific_name: 'Restaurant',
+      instance_description: '',
+      active: true,
+      generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
+      {
+      id: 'bu-maintenance',
+      specific_name: 'Maintenance',
+      instance_description: '',
+      active: true,
+      generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
     ]
 
     renderPage({ mode: 'catalog' })
@@ -403,8 +431,22 @@ describe('ActionPlanCreatePage', () => {
 
   it('keeps selected pilot pole when reopening the picker', () => {
     mockBusinessUnitTree.business_units = [
-      { id: 'bu-comm', label: 'Communication', key: 'communication', unit_type: 'service' },
-      { id: 'bu-coworking', label: 'Coworking', key: 'coworking', unit_type: 'service' },
+      {
+      id: 'bu-comm',
+      specific_name: 'Communication',
+      instance_description: '',
+      active: true,
+      generic: { key: 'communication', label: 'Communication', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
+      {
+      id: 'bu-coworking',
+      specific_name: 'Coworking',
+      instance_description: '',
+      active: true,
+      generic: { key: 'coworking', label: 'Coworking', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
     ]
 
     renderPage({ mode: 'catalog' })
@@ -440,8 +482,22 @@ describe('ActionPlanCreatePage', () => {
       scopes: [],
     }
     mockBusinessUnitTree.business_units = [
-      { id: 'bu-restaurant', label: 'Restaurant', key: 'restaurant', unit_type: 'service' },
-      { id: 'bu-maintenance', label: 'Maintenance', key: 'maintenance', unit_type: 'service' },
+      {
+      id: 'bu-restaurant',
+      specific_name: 'Restaurant',
+      instance_description: '',
+      active: true,
+      generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
+      {
+      id: 'bu-maintenance',
+      specific_name: 'Maintenance',
+      instance_description: '',
+      active: true,
+      generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' },
+      activity_subjects: [],
+    },
     ]
 
     renderPage({ mode: 'catalog' })

@@ -12,18 +12,22 @@ from houston.signals.constants import FEED_SIGNAL_STATUSES
 FEED_FILTERABLE_STATUSES = frozenset(FEED_SIGNAL_STATUSES)
 
 MAX_FILTER_STATUSES = 4
-MAX_FILTER_BUSINESS_UNIT_KEYS = 20
+MAX_FILTER_BUSINESS_UNIT_IDS = 20
 MAX_FILTER_ACTIVITY_SUBJECT_IDS = 50
+
+LEGACY_BUSINESS_UNIT_KEYS_PARAM_DETAIL = (
+    "business_unit_keys is no longer supported; use business_unit_ids."
+)
 
 
 @dataclass(frozen=True)
 class SignalFeedFilters:
     statuses: tuple[str, ...] = ()
-    business_unit_keys: tuple[str, ...] = ()
+    business_unit_ids: tuple[uuid.UUID, ...] = ()
     activity_subject_ids: tuple[uuid.UUID, ...] = ()
 
     def has_any(self) -> bool:
-        return bool(self.statuses or self.business_unit_keys or self.activity_subject_ids)
+        return bool(self.statuses or self.business_unit_ids or self.activity_subject_ids)
 
 
 class SignalFeedFilterValidationError(Exception):
@@ -37,19 +41,20 @@ def parse_signal_feed_filters(
     query_params: Any,
     establishment_id: uuid.UUID,
 ) -> SignalFeedFilters:
+    if "business_unit_keys" in query_params:
+        raise SignalFeedFilterValidationError(LEGACY_BUSINESS_UNIT_KEYS_PARAM_DETAIL)
+
     statuses = _parse_statuses(query_params.get("statuses"))
-    business_unit_keys = _parse_taxonomy_keys(
-        raw=query_params.get("business_unit_keys"),
-        max_count=MAX_FILTER_BUSINESS_UNIT_KEYS,
-        param_name="business_unit_keys",
+    business_unit_ids = _parse_business_unit_ids(
+        raw=query_params.get("business_unit_ids"),
     )
     activity_subject_ids = _parse_activity_subject_ids(
         raw=query_params.get("activity_subject_ids"),
     )
 
-    _validate_business_unit_keys_exist(
+    _validate_business_unit_ids_exist(
         establishment_id=establishment_id,
-        business_unit_keys=business_unit_keys,
+        business_unit_ids=business_unit_ids,
     )
     _validate_activity_subject_ids_exist(
         establishment_id=establishment_id,
@@ -58,7 +63,7 @@ def parse_signal_feed_filters(
 
     return SignalFeedFilters(
         statuses=statuses,
-        business_unit_keys=business_unit_keys,
+        business_unit_ids=business_unit_ids,
         activity_subject_ids=activity_subject_ids,
     )
 
@@ -71,12 +76,12 @@ def build_applied_filters_payload(
     payload: dict[str, Any] = {"view_mode": view_mode}
     if filters is None:
         payload["statuses"] = []
-        payload["business_unit_keys"] = []
+        payload["business_unit_ids"] = []
         payload["activity_subject_ids"] = []
         return payload
 
     payload["statuses"] = list(filters.statuses)
-    payload["business_unit_keys"] = list(filters.business_unit_keys)
+    payload["business_unit_ids"] = [str(value) for value in filters.business_unit_ids]
     payload["activity_subject_ids"] = [str(value) for value in filters.activity_subject_ids]
     return payload
 
@@ -88,10 +93,10 @@ def apply_feed_filters(queryset, *, filters: SignalFeedFilters | None):
     if filters.statuses:
         queryset = queryset.filter(status__in=filters.statuses)
 
-    if filters.business_unit_keys:
+    if filters.business_unit_ids:
         queryset = queryset.filter(
-            Q(affected_business_unit__key__in=filters.business_unit_keys)
-            | Q(responsible_business_unit__key__in=filters.business_unit_keys)
+            Q(affected_business_unit_id__in=filters.business_unit_ids)
+            | Q(responsible_business_unit_id__in=filters.business_unit_ids)
         )
 
     if filters.activity_subject_ids:
@@ -130,7 +135,7 @@ def _parse_statuses(raw: str | None) -> tuple[str, ...]:
     return normalized
 
 
-def _parse_taxonomy_keys(*, raw: str | None, max_count: int, param_name: str) -> tuple[str, ...]:
+def _parse_uuid_list(*, raw: str | None, max_count: int, param_name: str) -> tuple[uuid.UUID, ...]:
     values = _parse_csv_values(raw=raw)
     if not values:
         return ()
@@ -139,20 +144,6 @@ def _parse_taxonomy_keys(*, raw: str | None, max_count: int, param_name: str) ->
     if len(normalized) > max_count:
         raise SignalFeedFilterValidationError(
             f"{param_name} accepts at most {max_count} values.",
-        )
-
-    return normalized
-
-
-def _parse_activity_subject_ids(*, raw: str | None) -> tuple[uuid.UUID, ...]:
-    values = _parse_csv_values(raw=raw)
-    if not values:
-        return ()
-
-    normalized = _dedupe_sorted(values)
-    if len(normalized) > MAX_FILTER_ACTIVITY_SUBJECT_IDS:
-        raise SignalFeedFilterValidationError(
-            f"activity_subject_ids accepts at most {MAX_FILTER_ACTIVITY_SUBJECT_IDS} values.",
         )
 
     parsed: list[uuid.UUID] = []
@@ -165,31 +156,47 @@ def _parse_activity_subject_ids(*, raw: str | None) -> tuple[uuid.UUID, ...]:
 
     if invalid:
         raise SignalFeedFilterValidationError(
-            f"Invalid activity_subject_ids: {', '.join(invalid)}.",
+            f"Invalid {param_name}: {', '.join(invalid)}.",
         )
 
     return tuple(parsed)
 
 
-def _validate_business_unit_keys_exist(
+def _parse_business_unit_ids(*, raw: str | None) -> tuple[uuid.UUID, ...]:
+    return _parse_uuid_list(
+        raw=raw,
+        max_count=MAX_FILTER_BUSINESS_UNIT_IDS,
+        param_name="business_unit_ids",
+    )
+
+
+def _parse_activity_subject_ids(*, raw: str | None) -> tuple[uuid.UUID, ...]:
+    return _parse_uuid_list(
+        raw=raw,
+        max_count=MAX_FILTER_ACTIVITY_SUBJECT_IDS,
+        param_name="activity_subject_ids",
+    )
+
+
+def _validate_business_unit_ids_exist(
     *,
     establishment_id: uuid.UUID,
-    business_unit_keys: tuple[str, ...],
+    business_unit_ids: tuple[uuid.UUID, ...],
 ) -> None:
-    if not business_unit_keys:
+    if not business_unit_ids:
         return
 
     found = set(
         BusinessUnit.objects.filter(
             establishment_id=establishment_id,
             active=True,
-            key__in=business_unit_keys,
-        ).values_list("key", flat=True),
+            id__in=business_unit_ids,
+        ).values_list("id", flat=True),
     )
-    unknown = [key for key in business_unit_keys if key not in found]
+    unknown = [str(value) for value in business_unit_ids if value not in found]
     if unknown:
         raise SignalFeedFilterValidationError(
-            f"Unknown or inactive business_unit_keys: {', '.join(unknown)}.",
+            f"Unknown or inactive business_unit_ids: {', '.join(unknown)}.",
         )
 
 

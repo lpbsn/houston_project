@@ -64,8 +64,8 @@ function buildSignalFeedQuery(
   return {
     view_mode: viewMode,
     ...(normalized.statuses.length > 0 ? { statuses: normalized.statuses.join(',') } : {}),
-    ...(normalized.businessUnitKeys.length > 0
-      ? { business_unit_keys: normalized.businessUnitKeys.join(',') }
+    ...(normalized.businessUnitIds.length > 0
+      ? { business_unit_ids: normalized.businessUnitIds.join(',') }
       : {}),
     ...(normalized.activitySubjectIds.length > 0
       ? { activity_subject_ids: normalized.activitySubjectIds.join(',') }

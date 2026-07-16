@@ -89,10 +89,9 @@ async function withRuntimeConfigMutation<T>(
 export async function createRuntimeBusinessUnit(
   establishmentId: string,
   input: {
-    label: string
-    description?: string
-    unit_type?: string
-    catalog_key?: string | null
+    catalog_key: string
+    specific_name: string
+    instance_description?: string
   },
 ): Promise<BusinessUnitTreeItem> {
   return withRuntimeConfigMutation('Le pôle n’a pas pu être créé.', (accessToken, csrfToken) =>
@@ -111,9 +110,8 @@ export async function updateRuntimeBusinessUnit(
   establishmentId: string,
   businessUnitId: string,
   input: {
-    label?: string
-    description?: string
-    unit_type?: string
+    specific_name?: string
+    instance_description?: string
   },
 ): Promise<BusinessUnitTreeItem> {
   return withRuntimeConfigMutation(
@@ -157,11 +155,34 @@ export async function deactivateRuntimeBusinessUnit(
   )
 }
 
+export async function reactivateRuntimeBusinessUnit(
+  establishmentId: string,
+  businessUnitId: string,
+): Promise<BusinessUnitTreeItem> {
+  return withRuntimeConfigMutation(
+    'Le pôle n’a pas pu être réactivé.',
+    (accessToken, csrfToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/reactivate/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              business_unit_id: businessUnitId,
+            },
+          },
+          credentials: 'include',
+          headers: getRuntimeConfigHeaders(accessToken, csrfToken),
+        },
+      ),
+  )
+}
+
 export async function createRuntimeActivitySubject(
   establishmentId: string,
   businessUnitId: string,
   input: {
-    label: string
+    label?: string
     description?: string
     catalog_key?: string | null
   },

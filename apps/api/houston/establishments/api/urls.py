@@ -8,6 +8,7 @@ from houston.establishments.api.views import (
     EstablishmentActivitySubjectDeactivateView,
     EstablishmentBusinessUnitDeactivateView,
     EstablishmentBusinessUnitDetailView,
+    EstablishmentBusinessUnitReactivateView,
     EstablishmentBusinessUnitTreeView,
     MembershipActivateView,
     MembershipDeactivateView,
@@ -116,6 +117,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/business-units/<uuid:business_unit_id>/deactivate/",
         EstablishmentBusinessUnitDeactivateView.as_view(),
         name="establishment-business-unit-deactivate",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/business-units/<uuid:business_unit_id>/reactivate/",
+        EstablishmentBusinessUnitReactivateView.as_view(),
+        name="establishment-business-unit-reactivate",
     ),
     path(
         "establishments/<uuid:establishment_id>/business-units/<uuid:business_unit_id>/activity-subjects/",

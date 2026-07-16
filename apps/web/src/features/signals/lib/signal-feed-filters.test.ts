@@ -10,23 +10,26 @@ import {
 } from './signal-feed-filters'
 
 const SAMPLE_SUBJECT_ID = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
+const BU_RESTAURANT = '11111111-1111-4111-8111-111111111111'
+const BU_BAR = '22222222-2222-4222-8222-222222222222'
+const BU_MAINTENANCE = '33333333-3333-4333-8333-333333333333'
 
 describe('normalizeSignalFeedFilters', () => {
   it('deduplicates and sorts values for stable query keys', () => {
     const a = normalizeSignalFeedFilters({
       statuses: ['in_progress', 'open', 'open'],
-      businessUnitKeys: ['z_bar', 'a_restaurant', 'a_restaurant'],
+      businessUnitIds: [BU_BAR, BU_RESTAURANT, BU_RESTAURANT],
       activitySubjectIds: [SAMPLE_SUBJECT_ID, SAMPLE_SUBJECT_ID],
     })
     const b = normalizeSignalFeedFilters({
       statuses: ['open', 'in_progress'],
-      businessUnitKeys: ['a_restaurant', 'z_bar'],
+      businessUnitIds: [BU_RESTAURANT, BU_BAR],
       activitySubjectIds: [SAMPLE_SUBJECT_ID],
     })
 
     expect(a).toEqual(b)
     expect(a.statuses).toEqual(['in_progress', 'open'])
-    expect(a.businessUnitKeys).toEqual(['a_restaurant', 'z_bar'])
+    expect(a.businessUnitIds).toEqual([BU_BAR, BU_RESTAURANT].sort())
     expect(a.activitySubjectIds).toEqual([SAMPLE_SUBJECT_ID])
   })
 
@@ -36,10 +39,11 @@ describe('normalizeSignalFeedFilters', () => {
         ...EMPTY_SIGNAL_FEED_FILTERS,
         statuses: ['open', 'canceled'],
         activitySubjectIds: ['not-a-uuid'],
+        businessUnitIds: ['not-a-uuid'],
       }),
     ).toEqual({
       statuses: ['canceled', 'open'],
-      businessUnitKeys: [],
+      businessUnitIds: [],
       activitySubjectIds: [],
     })
   })
@@ -54,7 +58,7 @@ describe('hasActiveSignalFeedFilters', () => {
     expect(
       hasActiveSignalFeedFilters({
         ...EMPTY_SIGNAL_FEED_FILTERS,
-        businessUnitKeys: ['maintenance'],
+        businessUnitIds: [BU_MAINTENANCE],
       }),
     ).toBe(true)
   })
@@ -65,13 +69,13 @@ describe('appendSignalFeedFiltersToSearchParams', () => {
     const params = new URLSearchParams({ view_mode: 'general' })
     appendSignalFeedFiltersToSearchParams(params, {
       statuses: ['resolved', 'open'],
-      businessUnitKeys: ['restaurant', 'bar'],
+      businessUnitIds: [BU_RESTAURANT, BU_BAR],
       activitySubjectIds: [SAMPLE_SUBJECT_ID],
     })
 
     expect(params.get('view_mode')).toBe('general')
     expect(params.get('statuses')).toBe('open,resolved')
-    expect(params.get('business_unit_keys')).toBe('bar,restaurant')
+    expect(params.get('business_unit_ids')).toBe([BU_BAR, BU_RESTAURANT].sort().join(','))
     expect(params.get('activity_subject_ids')).toBe(SAMPLE_SUBJECT_ID)
   })
 
@@ -106,8 +110,8 @@ describe('formatStatusFilterSummary', () => {
 
 describe('formatClassificationFilterSummary', () => {
   const businessUnitLabels = new Map([
-    ['restaurant', 'Restaurant'],
-    ['bar', 'Bar'],
+    [BU_RESTAURANT, 'Restaurant'],
+    [BU_BAR, 'Bar'],
   ])
   const subjectLabels = new Map([[SAMPLE_SUBJECT_ID, 'Électricité']])
 
@@ -121,7 +125,7 @@ describe('formatClassificationFilterSummary', () => {
     ).toBe('Tous ▾')
     expect(
       formatClassificationFilterSummary(
-        { ...EMPTY_SIGNAL_FEED_FILTERS, businessUnitKeys: ['restaurant'] },
+        { ...EMPTY_SIGNAL_FEED_FILTERS, businessUnitIds: [BU_RESTAURANT] },
         businessUnitLabels,
         subjectLabels,
       ),
@@ -130,7 +134,7 @@ describe('formatClassificationFilterSummary', () => {
       formatClassificationFilterSummary(
         {
           ...EMPTY_SIGNAL_FEED_FILTERS,
-          businessUnitKeys: ['restaurant'],
+          businessUnitIds: [BU_RESTAURANT],
           activitySubjectIds: [SAMPLE_SUBJECT_ID],
         },
         businessUnitLabels,
@@ -141,12 +145,12 @@ describe('formatClassificationFilterSummary', () => {
       formatClassificationFilterSummary(
         {
           ...EMPTY_SIGNAL_FEED_FILTERS,
-          businessUnitKeys: ['restaurant', 'bar'],
+          businessUnitIds: [BU_RESTAURANT, BU_BAR],
           activitySubjectIds: [SAMPLE_SUBJECT_ID, 'b2c3d4e5-f6a7-4890-b123-456789abcdef'],
         },
         businessUnitLabels,
         subjectLabels,
       ),
-    ).toBe('Bar +3 ▾')
+    ).toBe('Restaurant +3 ▾')
   })
 })

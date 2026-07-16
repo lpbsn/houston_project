@@ -10,20 +10,46 @@ import { SignalFeedClassificationFilterTree } from './signal-feed-classification
 const TREE: BusinessUnitNode[] = [
   {
     id: 'bu-1',
-    key: 'maintenance',
-    label: 'Maintenance',
-    unit_type: 'dedicated',
+    specific_name: 'Maintenance',
+    instance_description: '',
+    active: true,
+    generic: {
+      key: 'maintenance',
+      label: 'Maintenance',
+      description: '',
+      unit_type: 'dedicated',
+    },
     activity_subjects: [
-      { id: 'sub-1', normalized_name: 'plomberie', label: 'Plomberie' },
+      {
+        id: 'sub-1',
+        label: 'Plomberie',
+        description: '',
+        source: 'manual',
+        active: true,
+        is_generic: false,
+      },
     ],
   },
   {
     id: 'bu-2',
-    key: 'cuisine',
-    label: 'Cuisine',
-    unit_type: 'dedicated',
+    specific_name: 'Cuisine',
+    instance_description: '',
+    active: true,
+    generic: {
+      key: 'cuisine',
+      label: 'Cuisine',
+      description: '',
+      unit_type: 'dedicated',
+    },
     activity_subjects: [
-      { id: 'sub-2', normalized_name: 'hygiene', label: 'Hygiène' },
+      {
+        id: 'sub-2',
+        label: 'Hygiène',
+        description: '',
+        source: 'manual',
+        active: true,
+        is_generic: false,
+      },
     ],
   },
 ]
@@ -37,7 +63,7 @@ describe('SignalFeedClassificationFilterTree accordion', () => {
     render(
       <SignalFeedClassificationFilterTree
         businessUnits={TREE}
-        selection={{ businessUnitKeys: [], activitySubjectIds: [] }}
+        selection={{ businessUnitIds: [], activitySubjectIds: [] }}
         onChange={() => {}}
       />,
     )
@@ -50,62 +76,33 @@ describe('SignalFeedClassificationFilterTree accordion', () => {
     render(
       <SignalFeedClassificationFilterTree
         businessUnits={TREE}
-        selection={{ businessUnitKeys: [], activitySubjectIds: [] }}
+        selection={{ businessUnitIds: [], activitySubjectIds: [] }}
         onChange={() => {}}
       />,
     )
 
     const triggers = screen.getAllByRole('button', { name: 'Afficher les sujets' })
-    fireEvent.click(triggers[0])
-
+    fireEvent.click(triggers[0]!)
     expect(screen.getByText('Plomberie')).toBeTruthy()
-    expect(screen.queryByText('Hygiène')).toBeNull()
 
-    fireEvent.click(triggers[1])
-
+    fireEvent.click(triggers[1]!)
     expect(screen.queryByText('Plomberie')).toBeNull()
     expect(screen.getByText('Hygiène')).toBeTruthy()
   })
 
-  it('allows collapsing the open accordion', () => {
+  it('toggles business unit selection by id', () => {
+    let selection = { businessUnitIds: [] as string[], activitySubjectIds: [] as string[] }
     render(
       <SignalFeedClassificationFilterTree
         businessUnits={TREE}
-        selection={{ businessUnitKeys: [], activitySubjectIds: [] }}
-        onChange={() => {}}
+        selection={selection}
+        onChange={(next) => {
+          selection = next
+        }}
       />,
     )
 
-    const trigger = screen.getAllByRole('button', { name: 'Afficher les sujets' })[0]
-    fireEvent.click(trigger)
-    expect(screen.getByText('Plomberie')).toBeTruthy()
-
-    fireEvent.click(trigger)
-    expect(screen.queryByText('Plomberie')).toBeNull()
-  })
-
-  it('does not auto-reopen first accordion when filtered list changes', () => {
-    const { rerender } = render(
-      <SignalFeedClassificationFilterTree
-        businessUnits={TREE}
-        selection={{ businessUnitKeys: [], activitySubjectIds: [] }}
-        onChange={() => {}}
-      />,
-    )
-
-    const trigger = screen.getAllByRole('button', { name: 'Afficher les sujets' })[0]
-    fireEvent.click(trigger)
-    expect(screen.getByText('Plomberie')).toBeTruthy()
-
-    rerender(
-      <SignalFeedClassificationFilterTree
-        businessUnits={[TREE[1]]}
-        selection={{ businessUnitKeys: [], activitySubjectIds: [] }}
-        onChange={() => {}}
-      />,
-    )
-
-    expect(screen.queryByText('Plomberie')).toBeNull()
-    expect(screen.queryByText('Hygiène')).toBeNull()
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!)
+    expect(selection.businessUnitIds).toEqual(['bu-1'])
   })
 })

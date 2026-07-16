@@ -135,7 +135,12 @@ export function ActionPlanCreatePage({
 
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = useMemo(
-    () => businessUnitQuery.data?.business_units ?? [],
+    () =>
+      (businessUnitQuery.data?.business_units ?? []).map((unit) => ({
+        id: unit.id,
+        label: unit.specific_name,
+        key: unit.generic.key,
+      })),
     [businessUnitQuery.data?.business_units],
   )
 

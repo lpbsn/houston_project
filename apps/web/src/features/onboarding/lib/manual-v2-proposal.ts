@@ -1,10 +1,10 @@
 import type { components } from '@/api/generated/types'
 
-export const MANUAL_V2_SCHEMA_VERSION = 'onboarding_proposal_v3'
+export const MANUAL_V2_SCHEMA_VERSION = 'onboarding_proposal_v4' as const
+export const MANUAL_V2_SCHEMA_VERSION_V3 = 'onboarding_proposal_v3' as const
 
 export type OnboardingProposalPayload = components['schemas']['OnboardingProposalPayload']
-export type ProposalBusinessUnitItem = components['schemas']['ProposalBusinessUnitItem']
-export type ProposalActivitySubjectItem = components['schemas']['ProposalActivitySubjectItem']
+export type OnboardingProposalPayloadV4 = components['schemas']['OnboardingProposalPayloadV4']
 
 export type BusinessUnitType = 'dedicated' | 'transversal'
 
@@ -36,13 +36,15 @@ export function createDraftBusinessUnit(input: {
   catalog_key?: string | null
   description?: string
 }): DraftBusinessUnit {
+  const suggested = input.suggested_unit_type ?? 'dedicated'
+  const hasCatalog = Boolean(input.catalog_key)
   return {
     client_key: createClientKey(),
     label: input.label.trim(),
     description: input.description?.trim() ?? '',
-    unit_type: null,
-    unit_type_confirmed: false,
-    suggested_unit_type: input.suggested_unit_type ?? 'dedicated',
+    unit_type: hasCatalog ? suggested : null,
+    unit_type_confirmed: hasCatalog,
+    suggested_unit_type: suggested,
     catalog_key: input.catalog_key ?? null,
   }
 }
@@ -65,39 +67,24 @@ export function createDraftActivitySubject(input: {
 export function buildManualV2Payload(
   businessUnits: DraftBusinessUnit[],
   activitySubjects: DraftActivitySubject[],
-  seedTrackers?: SubjectSeedTrackers,
-): OnboardingProposalPayload {
-  const payload: OnboardingProposalPayload = {
+  _seedTrackers?: SubjectSeedTrackers,
+): OnboardingProposalPayloadV4 {
+  return {
     schema_version: MANUAL_V2_SCHEMA_VERSION,
-    business_units: businessUnits.map((item) => {
-      const businessUnit: ProposalBusinessUnitItem = {
-        client_key: item.client_key,
-        label: item.label,
-        description: item.description.trim(),
-        catalog_key: item.catalog_key,
-      }
-
-      if (item.unit_type_confirmed && item.unit_type) {
-        businessUnit.unit_type = item.unit_type
-      }
-
-      return businessUnit
-    }),
+    business_units: businessUnits.map((item) => ({
+      client_key: item.client_key,
+      catalog_key: item.catalog_key ?? '',
+      specific_name: item.label,
+      instance_description: item.description.trim(),
+    })),
     activity_subjects: activitySubjects.map((item) => ({
       client_key: item.client_key,
-      label: item.label,
-      description: item.description.trim(),
       business_unit_client_key: item.business_unit_client_key,
       catalog_key: item.catalog_key,
+      description: item.catalog_key ? '' : item.description.trim(),
+      ...(item.catalog_key ? {} : { label: item.label }),
     })),
   }
-
-  const excluded = serializeExcludedCatalogSubjectKeys(seedTrackers)
-  if (Object.keys(excluded).length > 0) {
-    payload.excluded_catalog_subject_keys = excluded
-  }
-
-  return payload
 }
 
 export function serializeExcludedCatalogSubjectKeys(
@@ -122,7 +109,10 @@ export function hydrateSeedTrackersFromPayload(
   businessUnits: DraftBusinessUnit[],
 ): SubjectSeedTrackers {
   const trackers = createEmptySubjectSeedTrackers()
-  const rawExcluded = payload.excluded_catalog_subject_keys
+  const rawExcluded =
+    'excluded_catalog_subject_keys' in payload
+      ? payload.excluded_catalog_subject_keys
+      : undefined
 
   if (rawExcluded && typeof rawExcluded === 'object' && !Array.isArray(rawExcluded)) {
     for (const [businessUnitClientKey, catalogKeys] of Object.entries(rawExcluded)) {
@@ -164,6 +154,7 @@ export function hydrateDraftFromProposalPayload(
   activitySubjects: DraftActivitySubject[]
   seedTrackers: SubjectSeedTrackers
 } {
+  const schemaVersion = String(payload.schema_version ?? '')
   const rawBusinessUnits = Array.isArray(payload.business_units) ? payload.business_units : []
   const rawActivitySubjects = Array.isArray(payload.activity_subjects)
     ? payload.activity_subjects
@@ -172,14 +163,29 @@ export function hydrateDraftFromProposalPayload(
   const businessUnits: DraftBusinessUnit[] = rawBusinessUnits
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
     .map((item) => {
-      const unitType = parseBusinessUnitType(item.unit_type)
+      if (schemaVersion === MANUAL_V2_SCHEMA_VERSION) {
+        const specificName = String(item.specific_name ?? item.label ?? '')
+        return {
+          client_key: String(item.client_key ?? createClientKey()),
+          label: specificName,
+          description: String(item.instance_description ?? item.description ?? ''),
+          unit_type: null,
+          unit_type_confirmed: Boolean(item.catalog_key),
+          suggested_unit_type: 'dedicated',
+          catalog_key:
+            item.catalog_key === null || item.catalog_key === undefined
+              ? null
+              : String(item.catalog_key),
+        }
+      }
 
+      const unitType = parseBusinessUnitType(item.unit_type)
       return {
         client_key: String(item.client_key ?? createClientKey()),
-        label: String(item.label ?? ''),
-        description: String(item.description ?? ''),
+        label: String(item.label ?? item.specific_name ?? ''),
+        description: String(item.description ?? item.instance_description ?? ''),
         unit_type: unitType,
-        unit_type_confirmed: unitType !== null,
+        unit_type_confirmed: unitType !== null || Boolean(item.catalog_key),
         suggested_unit_type: unitType ?? 'dedicated',
         catalog_key:
           item.catalog_key === null || item.catalog_key === undefined
@@ -411,6 +417,10 @@ export function hasValidBusinessUnitLabel(businessUnit: DraftBusinessUnit) {
   return businessUnit.label.trim().length > 0
 }
 
+export function hasCatalogKey(businessUnit: DraftBusinessUnit) {
+  return Boolean(businessUnit.catalog_key?.trim())
+}
+
 export function isBusinessUnitConfigured(
   businessUnit: DraftBusinessUnit,
   activitySubjects: DraftActivitySubject[],
@@ -441,13 +451,17 @@ export function allBusinessUnitsHaveValidLabels(businessUnits: DraftBusinessUnit
   return businessUnits.length > 0 && businessUnits.every(hasValidBusinessUnitLabel)
 }
 
+export function allBusinessUnitsHaveCatalogKeys(businessUnits: DraftBusinessUnit[]) {
+  return businessUnits.length > 0 && businessUnits.every(hasCatalogKey)
+}
+
 export function allBusinessUnitsReadyForApplyStep(
   businessUnits: DraftBusinessUnit[],
   activitySubjects: DraftActivitySubject[],
 ) {
   return (
     allBusinessUnitsHaveValidLabels(businessUnits) &&
-    allBusinessUnitsHaveConfirmedUnitType(businessUnits) &&
+    allBusinessUnitsHaveCatalogKeys(businessUnits) &&
     allBusinessUnitsConfigured(businessUnits, activitySubjects)
   )
 }

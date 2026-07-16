@@ -71,8 +71,8 @@ export function BusinessUnitScopeSelector({
               />
               <span className="flex-1 space-y-1">
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{bu.label}</span>
-                  <Badge variant="outline">{bu.unit_type}</Badge>
+                  <span className="font-medium">{bu.specific_name}</span>
+                  <Badge variant="outline">{bu.generic.unit_type}</Badge>
                 </span>
                 {bu.activity_subjects.length > 0 ? (
                   <span className="block text-xs text-muted-foreground">

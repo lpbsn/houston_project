@@ -65,12 +65,12 @@ export function SignalFeedClassificationFilterTree({
           <Accordion.Header className="flex items-center gap-1 px-2 py-2">
             <SignalFeedCategoryCheckbox
               disabled={disabled}
-              label={businessUnit.label}
+              label={businessUnit.specific_name}
               levelLabel="Pôle"
               onToggle={() => {
                 const checked =
                   getBusinessUnitSelectionState(businessUnit, selection) === 'checked'
-                onChange(toggleBusinessUnitKey(selection, businessUnit.key, !checked))
+                onChange(toggleBusinessUnitKey(selection, businessUnit.id, !checked))
               }}
               selectionState={getBusinessUnitSelectionState(businessUnit, selection)}
             />

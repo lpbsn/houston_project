@@ -24,7 +24,11 @@ from houston.organizations.models import Organization
 from houston.testing.auth import auth_headers, login
 from houston.testing.factories import create_user
 from houston.testing.onboarding import create_onboarding_session, create_ready_runtime
-from houston.testing.taxonomy import create_membership_with_business_unit_scope
+from houston.testing.taxonomy import (
+    create_activity_subject,
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -382,26 +386,24 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
         organization=session.organization,
         status=Establishment.Status.DRAFT,
     )
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="hotel",
         label="Hotel",
     )
-    foreign_business_unit = BusinessUnit.objects.create(
+    foreign_business_unit = create_business_unit(
         establishment=foreign_establishment,
         key="restaurant",
         label="Restaurant",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Proprete",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=foreign_establishment,
         business_unit=foreign_business_unit,
-        normalized_name="foreign",
         label="Foreign",
     )
     OperationalUnit.objects.create(
@@ -418,7 +420,7 @@ def test_runtime_config_get_returns_same_establishment_active_data_only(api_clie
 
     assert response.status_code == 200
     body = response.json()
-    assert [item["key"] for item in body["active_business_units"]] == ["hotel"]
+    assert [item["generic"]["key"] for item in body["active_business_units"]] == ["hotel"]
     assert [item["key"] for item in body["optional_units"]] == ["lobby"]
 
 
@@ -461,7 +463,7 @@ def test_activation_summary_returns_effective_can_activate_when_ready(api_client
     assert body["access"]["can_activate"] is True
     assert body["effective_can_activate"] is True
     assert len(body["active_business_units"]) == 1
-    assert body["active_business_units"][0]["key"] == "coworking"
+    assert body["active_business_units"][0]["generic"]["key"] == "coworking"
 
 
 def test_mark_ready_success_does_not_activate_establishment(api_client):

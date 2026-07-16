@@ -6,30 +6,32 @@ import {
   createDraftActivitySubject,
   createDraftBusinessUnit,
   createEmptySubjectSeedTrackers,
+  hydrateDraftFromProposalPayload,
+  MANUAL_V2_SCHEMA_VERSION,
   mergeCatalogSubjectSuggestions,
   recordExcludedCatalogSubject,
   removeBusinessUnitFromDraft,
-  updateBusinessUnitType,
 } from '@/features/onboarding/lib/manual-v2-proposal'
 
 describe('createDraftBusinessUnit', () => {
-  it('stores catalogue default as suggestion only', () => {
+  it('auto-confirms unit type when catalogue key is present', () => {
     const businessUnit = createDraftBusinessUnit({
       label: 'Maintenance',
       suggested_unit_type: 'transversal',
       catalog_key: 'maintenance',
     })
 
-    expect(businessUnit.unit_type).toBeNull()
-    expect(businessUnit.unit_type_confirmed).toBe(false)
+    expect(businessUnit.unit_type).toBe('transversal')
+    expect(businessUnit.unit_type_confirmed).toBe(true)
     expect(businessUnit.suggested_unit_type).toBe('transversal')
   })
 
-  it('defaults free-text suggestion to dedicated', () => {
+  it('defaults free-text suggestion to dedicated without confirmation', () => {
     const businessUnit = createDraftBusinessUnit({ label: 'Mon pôle' })
 
     expect(businessUnit.suggested_unit_type).toBe('dedicated')
     expect(businessUnit.unit_type).toBeNull()
+    expect(businessUnit.unit_type_confirmed).toBe(false)
   })
 })
 
@@ -118,76 +120,112 @@ describe('removeBusinessUnitFromDraft', () => {
 })
 
 describe('buildManualV2Payload', () => {
-  it('trims business unit descriptions', () => {
+  it('emits onboarding_proposal_v4 with specific_name and instance_description', () => {
     const businessUnit = createDraftBusinessUnit({
       label: 'Hébergement',
       description: '  Chambres et étages  ',
+      catalog_key: 'hotel',
     })
 
     const payload = buildManualV2Payload([businessUnit], [])
 
-    expect(payload.business_units[0]?.description).toBe('Chambres et étages')
-  })
-
-  it('omits unit_type until user confirms', () => {
-    const businessUnit = createDraftBusinessUnit({
-      label: 'Coworking',
-      suggested_unit_type: 'transversal',
-      catalog_key: 'coworking',
+    expect(payload.schema_version).toBe(MANUAL_V2_SCHEMA_VERSION)
+    expect(payload.business_units?.[0]).toMatchObject({
+      catalog_key: 'hotel',
+      specific_name: 'Hébergement',
+      instance_description: 'Chambres et étages',
     })
-
-    const payload = buildManualV2Payload([businessUnit], [])
-
-    expect(payload.business_units[0]?.unit_type).toBeUndefined()
+    expect(payload.business_units?.[0]).not.toHaveProperty('label')
+    expect(payload.business_units?.[0]).not.toHaveProperty('unit_type')
+    expect(payload).not.toHaveProperty('excluded_catalog_subject_keys')
   })
 
-  it('includes confirmed unit_type', () => {
-    const businessUnit = createDraftBusinessUnit({
-      label: 'Coworking',
-      suggested_unit_type: 'transversal',
-      catalog_key: 'coworking',
-    })
-    const confirmed = updateBusinessUnitType([businessUnit], businessUnit.client_key, 'dedicated')[0]!
-
-    const payload = buildManualV2Payload([confirmed], [])
-
-    expect(payload.business_units[0]?.unit_type).toBe('dedicated')
-  })
-
-  it('serializes excluded catalog subject keys', () => {
+  it('omits local label for generic catalog subjects', () => {
     const businessUnit = createDraftBusinessUnit({
       label: 'Coworking',
       catalog_key: 'coworking',
     })
-    const trackers = recordExcludedCatalogSubject(
-      createEmptySubjectSeedTrackers(),
-      businessUnit.client_key,
-      'wifi',
-    )
+    const subject = createDraftActivitySubject({
+      label: 'Wi-Fi',
+      business_unit_client_key: businessUnit.client_key,
+      catalog_key: 'wifi',
+    })
 
-    const payload = buildManualV2Payload([businessUnit], [], trackers)
+    const payload = buildManualV2Payload([businessUnit], [subject])
 
-    expect(payload.excluded_catalog_subject_keys).toEqual({
-      [businessUnit.client_key]: ['wifi'],
+    expect(payload.activity_subjects?.[0]).toMatchObject({
+      catalog_key: 'wifi',
+      business_unit_client_key: businessUnit.client_key,
+    })
+    expect(payload.activity_subjects?.[0]).not.toHaveProperty('label')
+  })
+})
+
+describe('hydrateDraftFromProposalPayload', () => {
+  it('hydrates v4 specific_name into draft label', () => {
+    const hydrated = hydrateDraftFromProposalPayload({
+      schema_version: 'onboarding_proposal_v4',
+      business_units: [
+        {
+          client_key: 'bu-1',
+          catalog_key: 'restaurant',
+          specific_name: 'Food Court',
+          instance_description: 'Niveau 0',
+        },
+      ],
+      activity_subjects: [],
+    })
+
+    expect(hydrated.businessUnits[0]).toMatchObject({
+      label: 'Food Court',
+      description: 'Niveau 0',
+      catalog_key: 'restaurant',
+    })
+  })
+
+  it('still hydrates legacy v3 payloads', () => {
+    const hydrated = hydrateDraftFromProposalPayload({
+      schema_version: 'onboarding_proposal_v3',
+      business_units: [
+        {
+          client_key: 'bu-1',
+          label: 'Coworking',
+          description: 'Espace',
+          unit_type: 'dedicated',
+          catalog_key: 'coworking',
+        },
+      ],
+      activity_subjects: [],
+    })
+
+    expect(hydrated.businessUnits[0]).toMatchObject({
+      label: 'Coworking',
+      description: 'Espace',
+      unit_type: 'dedicated',
+      catalog_key: 'coworking',
     })
   })
 })
 
 describe('canContinueFromConfigStep', () => {
-  it('requires confirmed unit type and at least one subject per pole', () => {
-    const businessUnit = createDraftBusinessUnit({
+  it('requires catalog key and at least one subject per pole', () => {
+    const withoutCatalog = createDraftBusinessUnit({
+      label: 'Libre',
+    })
+    const withCatalog = createDraftBusinessUnit({
       label: 'Coworking',
       catalog_key: 'coworking',
     })
 
-    expect(canContinueFromConfigStep([businessUnit], [])).toBe(false)
+    expect(canContinueFromConfigStep([withoutCatalog], [])).toBe(false)
+    expect(canContinueFromConfigStep([withCatalog], [])).toBe(false)
 
-    const withType = updateBusinessUnitType([businessUnit], businessUnit.client_key, 'dedicated')[0]!
     const subject = createDraftActivitySubject({
       label: 'Wi-Fi',
-      business_unit_client_key: businessUnit.client_key,
+      business_unit_client_key: withCatalog.client_key,
+      catalog_key: 'wifi',
     })
 
-    expect(canContinueFromConfigStep([withType], [subject])).toBe(true)
+    expect(canContinueFromConfigStep([withCatalog], [subject])).toBe(true)
   })
 })

@@ -8,6 +8,7 @@ import {
   createRuntimeBusinessUnit,
   deactivateRuntimeActivitySubject,
   deactivateRuntimeBusinessUnit,
+  reactivateRuntimeBusinessUnit,
   updateRuntimeBusinessUnit,
 } from './api'
 
@@ -19,7 +20,10 @@ export function useOperationalConfigTree(
   establishmentId: string | null | undefined,
   options?: QueryOptions,
 ) {
-  return useBusinessUnitTreeQuery(establishmentId, options)
+  return useBusinessUnitTreeQuery(establishmentId, {
+    ...options,
+    includeInactive: true,
+  })
 }
 
 function useInvalidateOperationalConfigTree(establishmentId: string) {
@@ -63,6 +67,16 @@ export function useDeactivateRuntimeBusinessUnit(establishmentId: string) {
   return useMutation({
     mutationFn: (businessUnitId: string) =>
       deactivateRuntimeBusinessUnit(establishmentId, businessUnitId),
+    onSuccess: invalidate,
+  })
+}
+
+export function useReactivateRuntimeBusinessUnit(establishmentId: string) {
+  const invalidate = useInvalidateOperationalConfigTree(establishmentId)
+
+  return useMutation({
+    mutationFn: (businessUnitId: string) =>
+      reactivateRuntimeBusinessUnit(establishmentId, businessUnitId),
     onSuccess: invalidate,
   })
 }
