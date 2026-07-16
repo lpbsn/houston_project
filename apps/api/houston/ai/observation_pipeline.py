@@ -68,9 +68,9 @@ class ObservationPipelineProviderBadRequestError(ObservationPipelineError):
 
 
 class ObservationPipelineSkippedError(ObservationPipelineError):
-    """Establishment has no active business units — pipeline skips AI call."""
+    """Establishment has no snapshot-ready business units — pipeline skips AI call."""
 
-    error_code = "no_active_business_units"
+    error_code = "no_snapshot_ready_business_units"
 
 
 @dataclass(frozen=True)
@@ -349,7 +349,7 @@ def call_observation_pipeline(
         establishment_id=observation.establishment_id,
     ):
         raise ObservationPipelineSkippedError(
-            "Establishment has no active business units for pipeline routing."
+            "Establishment has no snapshot-ready business units for pipeline routing."
         )
 
     provider = provider or get_observation_pipeline_provider()
@@ -544,15 +544,17 @@ Tu structures des remontées terrain en propositions CandidateSignal pour Housto
 CONTEXTE
 - Le message utilisateur est un JSON. Le texte à analyser est dans "validated_text".
 - Si "action_plan_context" est présent, l'observation provient d'une tâche de plan d'action :
-  utiliser plan_title, task et business_unit_key (si non null)
+  utiliser plan_title, task et business_unit_routing_key (si non null)
   pour affiner le routage ; ne pas répéter validated_text dans les champs de sortie.
 - La taxonomie autorisée est dans "establishment_taxonomy.business_units" avec :
-  key, label, unit_type (dedicated ou transversal), description, activity_subjects[].
-- Chaque activity_subject a key (= normalized_name), label, description.
-- Les unités de lieu structurées sont dans establishment_taxonomy.operational_units.
+  routing_key, specific_name, generic_label, generic_description, instance_description,
+  unit_type (dedicated ou transversal), activity_subjects[].
+- Chaque activity_subject a routing_key, label, description, source.
+- Les unités de lieu structurées sont dans establishment_taxonomy.operational_units
+  (key, label, description).
 - Les signaux actifs éligibles à l'agrégation sont dans "active_signals_context"
-  (max {MAX_ACTIVE_SIGNALS_CONTEXT}) avec affected/responsible/activity_subject keys.
-- Chaque clé doit exister dans ce snapshot runtime. N'invente jamais de clé.
+  (max {MAX_ACTIVE_SIGNALS_CONTEXT}) avec affected/responsible/activity_subject_routing_key.
+- Chaque routing_key doit exister dans ce snapshot runtime. N'invente jamais de clé.
 - Les descriptions des pôles aident à distinguer périmètres et responsabilités.
 - Les images ne sont pas fournies ; "media_count" est informatif uniquement.
 

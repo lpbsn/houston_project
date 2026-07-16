@@ -382,22 +382,30 @@ def _resolve_v3_candidate(
     establishment_id: uuid.UUID,
     candidate: PipelineCandidateOutput,
 ) -> ResolvedTaxonomy:
-    affected = BusinessUnit.objects.filter(
-        establishment_id=establishment_id,
-        routing_key=candidate.affected_business_unit_routing_key,
-        active=True,
-    ).first()
+    affected = (
+        BusinessUnit.objects.filter(
+            establishment_id=establishment_id,
+            routing_key=candidate.affected_business_unit_routing_key,
+            active=True,
+        )
+        .select_related("catalog_business_unit")
+        .first()
+    )
     if affected is None:
         raise SignalValidationError(
             "Unknown affected business unit routing key.",
             code="unknown_affected_business_unit_routing_key",
         )
 
-    responsible = BusinessUnit.objects.filter(
-        establishment_id=establishment_id,
-        routing_key=candidate.responsible_business_unit_routing_key,
-        active=True,
-    ).first()
+    responsible = (
+        BusinessUnit.objects.filter(
+            establishment_id=establishment_id,
+            routing_key=candidate.responsible_business_unit_routing_key,
+            active=True,
+        )
+        .select_related("catalog_business_unit")
+        .first()
+    )
     subject_under_affected = _resolve_activity_subject(
         business_unit=affected,
         activity_subject_routing_key=candidate.activity_subject_routing_key,
@@ -1032,37 +1040,8 @@ def run_observation_pipeline(
             observation=observation,
             provider=provider,
         )
-    except ObservationPipelineSkippedError:
-        with transaction.atomic():
-            processing = ObservationProcessing.objects.select_for_update().get(id=processing.id)
-            apply_result = apply_pipeline_output(
-                observation=observation,
-                output=ObservationPipelineOutput(
-                    schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                    candidates=[],
-                ),
-            )
-            processing.status = ObservationProcessing.Status.PROCESSED
-            processing.processed_at = timezone.now()
-            processing.outcome = apply_result.outcome
-            processing.last_error_code = ""
-            processing.save(
-                update_fields=[
-                    "status",
-                    "processed_at",
-                    "outcome",
-                    "last_error_code",
-                    "updated_at",
-                ]
-            )
-        processing.refresh_from_db()
-        _log_observation_pipeline_completed(
-            observation=observation,
-            processing=processing,
-            pipeline_started_at=pipeline_started_at,
-            apply_result=apply_result,
-            apply_duration_ms=0,
-        )
+    except ObservationPipelineSkippedError as exc:
+        _mark_processing_failed(processing_id=processing.id, error_code=exc.error_code)
         return
     except (
         ObservationPipelineUnavailableError,

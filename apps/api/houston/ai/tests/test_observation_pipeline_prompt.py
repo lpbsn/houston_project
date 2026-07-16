@@ -42,6 +42,13 @@ def test_system_prompt_is_french_and_covers_v4_rules():
     assert "affected_business_unit_routing_key" in prompt
     assert "responsible_business_unit_routing_key" in prompt
     assert "activity_subject_routing_key" in prompt
+    assert "business_unit_routing_key" in prompt
+    assert "routing_key" in prompt
+    assert "specific_name" in prompt
+    assert "generic_label" in prompt
+    assert "instance_description" in prompt
+    assert "business_unit_key" not in prompt
+    assert "normalized_name" not in prompt
     assert "location_text" in prompt
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION in prompt
 

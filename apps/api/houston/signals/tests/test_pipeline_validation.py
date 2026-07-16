@@ -108,6 +108,27 @@ def test_run_pipeline_marks_failed_on_invalid_issue_focus():
     assert processing.status != ObservationProcessing.Status.PROCESSING
 
 
+def test_run_pipeline_marks_failed_when_no_snapshot_ready_business_units():
+    membership = build_membership()
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    hotel.routing_key = ""
+    hotel.save(update_fields=["routing_key", "updated_at"])
+    observation = create_observation(membership=membership)
+    provider = FakeObservationPipelineProvider(
+        payload={"schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION, "candidates": []}
+    )
+
+    with patch.object(provider, "propose", wraps=provider.propose) as propose:
+        run_observation_pipeline(observation.id, provider=provider)
+        propose.assert_not_called()
+
+    processing = observation.processing
+    processing.refresh_from_db()
+    assert processing.status == ObservationProcessing.Status.FAILED
+    assert processing.last_error_code == "no_snapshot_ready_business_units"
+    assert CandidateSignal.objects.filter(observation=observation).count() == 0
+
+
 def test_no_candidate_signal_on_invalid_issue_focus():
     membership = build_membership()
     hotel = _setup_hotel_taxonomy(membership.establishment)

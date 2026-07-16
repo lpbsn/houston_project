@@ -39,10 +39,26 @@ def validate_signal_classification(
         raise InvalidSignalClassificationError(
             "activity_subject must belong to responsible_business_unit."
         )
+    responsible_unit_type = _responsible_unit_type_for_classification(
+        responsible_business_unit=responsible_business_unit,
+    )
     if (
         affected_business_unit.id != responsible_business_unit.id
-        and responsible_business_unit.unit_type != BusinessUnit.UnitType.TRANSVERSAL
+        and responsible_unit_type != BusinessUnit.UnitType.TRANSVERSAL
     ):
         raise InvalidSignalClassificationError(
             "responsible_business_unit must be transversal when different from affected."
         )
+
+
+def _responsible_unit_type_for_classification(
+    *,
+    responsible_business_unit: BusinessUnit,
+) -> str:
+    """Catalogue unit_type when linked; otherwise legacy BusinessUnit.unit_type."""
+    if responsible_business_unit.catalog_business_unit_id is None:
+        return responsible_business_unit.unit_type
+    catalog = responsible_business_unit.catalog_business_unit
+    if catalog is None:
+        return responsible_business_unit.unit_type
+    return catalog.unit_type
