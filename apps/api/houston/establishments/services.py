@@ -13,6 +13,9 @@ from django.utils import timezone
 from houston.accounts import tokens as auth_tokens
 from houston.accounts.models import User, UserSession
 from houston.establishments.access import get_onboarding_access_context
+from houston.establishments.business_unit_domain_service import (
+    create_onboarding_business_unit,
+)
 from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
@@ -185,6 +188,7 @@ class MembershipUpdateInput:
 # Product: Onboarding manuel V2 (Lot 4)
 # Technical schema: onboarding_proposal_v3 — BusinessUnit / ActivitySubject payload
 PROPOSAL_SCHEMA_VERSION_V3_BU = "onboarding_proposal_v3"
+PROPOSAL_SCHEMA_VERSION_V4_BU = "onboarding_proposal_v4"
 PROPOSAL_V3_BU_REQUIRED_SECTIONS = frozenset(
     {
         "business_units",
@@ -217,6 +221,33 @@ PROPOSAL_V3_BU_EXCLUDED_SECTIONS = frozenset(
         "permissions",
     }
 )
+PROPOSAL_V4_BU_REQUIRED_SECTIONS = frozenset(
+    {
+        "business_units",
+        "activity_subjects",
+    }
+)
+PROPOSAL_V4_BU_SECTION_CAPS = {
+    "business_units": 50,
+    "activity_subjects": 500,
+}
+PROPOSAL_V4_BU_BUSINESS_UNIT_FIELDS = frozenset(
+    {
+        "client_key",
+        "catalog_key",
+        "specific_name",
+        "instance_description",
+    }
+)
+PROPOSAL_V4_BU_ACTIVITY_SUBJECT_FIELDS = frozenset(
+    {
+        "client_key",
+        "business_unit_client_key",
+        "catalog_key",
+        "label",
+        "description",
+    }
+)
 PROPOSAL_SECTION_ACCEPTED = "accepted"
 PROPOSAL_VALIDATION_MODE_DRAFT = "draft"
 PROPOSAL_VALIDATION_MODE_FINAL = "final"
@@ -236,10 +267,99 @@ def validate_onboarding_proposal_payload(
     schema_version = payload.get("schema_version")
     if schema_version == PROPOSAL_SCHEMA_VERSION_V3_BU:
         return _validate_onboarding_proposal_payload_v3_bu(payload, mode=mode)
+    if schema_version == PROPOSAL_SCHEMA_VERSION_V4_BU:
+        return _validate_onboarding_proposal_payload_v4_bu(payload, mode=mode)
 
     raise OnboardingProposalValidationError(
         [_proposal_error("unsupported_schema_version", field="schema_version")]
     )
+
+
+def _validate_onboarding_proposal_payload_v4_bu(payload: dict, *, mode: str) -> dict:
+    errors: list[dict] = []
+
+    for section in PROPOSAL_V4_BU_REQUIRED_SECTIONS:
+        if section not in payload:
+            errors.append(_proposal_error("missing_required_section", section=section))
+
+    for section in payload:
+        if section != "schema_version" and section not in PROPOSAL_V4_BU_REQUIRED_SECTIONS:
+            errors.append(_proposal_error("unknown_section", section=section))
+
+    raw_business_units = _section_items_v4_bu(payload, "business_units", errors)
+    raw_activity_subjects = _section_items_v4_bu(payload, "activity_subjects", errors)
+    catalog_keys = _active_business_unit_catalog_keys()
+
+    business_units, seen_client_keys = _validate_business_unit_section_v4(
+        items=raw_business_units,
+        catalog_keys=catalog_keys["business_units"],
+        errors=errors,
+    )
+    business_unit_client_keys = {item["client_key"] for item in business_units}
+    activity_subjects = _validate_activity_subject_section_v4(
+        items=raw_activity_subjects,
+        business_unit_client_keys=business_unit_client_keys,
+        catalog_keys=catalog_keys["activity_subjects"],
+        seen_client_keys=seen_client_keys,
+        errors=errors,
+    )
+    business_unit_catalog_by_client_key = {
+        item["client_key"]: item["catalog_key"] for item in business_units
+    }
+    subject_catalog_parent_by_key = dict(
+        CatalogActivitySubject.objects.filter(
+            key__in={
+                item["catalog_key"]
+                for item in activity_subjects
+                if item["catalog_key"] is not None
+            },
+            active=True,
+        ).values_list("key", "catalog_business_unit__key")
+    )
+    for subject in activity_subjects:
+        catalog_key = subject["catalog_key"]
+        if catalog_key is None:
+            continue
+        expected_parent_key = business_unit_catalog_by_client_key.get(
+            subject["business_unit_client_key"]
+        )
+        if subject_catalog_parent_by_key.get(catalog_key) != expected_parent_key:
+            errors.append(
+                _proposal_error(
+                    "catalog_subject_business_unit_mismatch",
+                    section="activity_subjects",
+                    key=subject["client_key"],
+                    field="catalog_key",
+                )
+            )
+
+    if not business_units:
+        errors.append(_proposal_error("insufficient_business_units"))
+
+    if mode == PROPOSAL_VALIDATION_MODE_FINAL:
+        subjects_by_bu_client_key: dict[str, int] = {}
+        for subject in activity_subjects:
+            client_key = subject["business_unit_client_key"]
+            subjects_by_bu_client_key[client_key] = (
+                subjects_by_bu_client_key.get(client_key, 0) + 1
+            )
+        for business_unit in business_units:
+            if subjects_by_bu_client_key.get(business_unit["client_key"], 0) < 1:
+                errors.append(
+                    _proposal_error(
+                        "business_unit_without_subjects",
+                        key=business_unit["client_key"],
+                    )
+                )
+
+    if errors:
+        raise OnboardingProposalValidationError(errors)
+
+    return {
+        "schema_version": PROPOSAL_SCHEMA_VERSION_V4_BU,
+        "business_units": business_units,
+        "activity_subjects": activity_subjects,
+    }
 
 
 def _validate_onboarding_proposal_payload_v3_bu(payload: dict, *, mode: str) -> dict:
@@ -344,7 +464,10 @@ def update_onboarding_proposal_payload(
     _ensure_proposal_editable(proposal)
     _ensure_can_manage_onboarding_proposal(proposal=proposal, actor=actor)
 
-    if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V3_BU:
+    if payload.get("schema_version") not in {
+        PROPOSAL_SCHEMA_VERSION_V3_BU,
+        PROPOSAL_SCHEMA_VERSION_V4_BU,
+    }:
         raise OnboardingProposalValidationError(
             [_proposal_error("unsupported_schema_version", field="schema_version")]
         )
@@ -383,14 +506,23 @@ def submit_manual_onboarding_proposal(
         proposal.payload,
         mode=PROPOSAL_VALIDATION_MODE_FINAL,
     )
-    if payload["schema_version"] != PROPOSAL_SCHEMA_VERSION_V3_BU:
+    schema_version = payload["schema_version"]
+    if schema_version not in {
+        PROPOSAL_SCHEMA_VERSION_V3_BU,
+        PROPOSAL_SCHEMA_VERSION_V4_BU,
+    }:
         raise OnboardingProposalValidationError(
             [_proposal_error("unsupported_schema_version", field="schema_version")]
         )
 
     proposal.payload = payload
+    required_sections = (
+        PROPOSAL_V3_BU_REQUIRED_SECTIONS
+        if schema_version == PROPOSAL_SCHEMA_VERSION_V3_BU
+        else PROPOSAL_V4_BU_REQUIRED_SECTIONS
+    )
     proposal.section_validation = {
-        section: PROPOSAL_SECTION_ACCEPTED for section in PROPOSAL_V3_BU_REQUIRED_SECTIONS
+        section: PROPOSAL_SECTION_ACCEPTED for section in required_sections
     }
     proposal.validation_errors = []
     proposal.status = OnboardingProposal.Status.VALIDATED
@@ -444,11 +576,23 @@ def apply_onboarding_proposal(*, proposal: OnboardingProposal, actor) -> Onboard
         mode=PROPOSAL_VALIDATION_MODE_FINAL,
     )
 
-    bu_keys, _subject_pairs = _apply_business_unit_sections(
-        establishment=establishment,
-        payload=payload,
-        proposal=proposal,
-    )
+    schema_version = payload["schema_version"]
+    if schema_version == PROPOSAL_SCHEMA_VERSION_V3_BU:
+        bu_keys, _subject_pairs = _apply_business_unit_sections(
+            establishment=establishment,
+            payload=payload,
+            proposal=proposal,
+        )
+    elif schema_version == PROPOSAL_SCHEMA_VERSION_V4_BU:
+        bu_keys = apply_onboarding_proposal_v4(
+            establishment=establishment,
+            payload=payload,
+            proposal=proposal,
+        )
+    else:
+        raise OnboardingProposalValidationError(
+            [_proposal_error("unsupported_schema_version", field="schema_version")]
+        )
     assert bu_keys
 
     proposal.payload = payload
@@ -562,6 +706,244 @@ def _section_items_v3_bu(payload: dict, section: str, errors: list[dict]) -> lis
         errors.append(_proposal_error("section_cap_exceeded", section=section))
         return items[: PROPOSAL_V3_BU_SECTION_CAPS[section]]
     return items
+
+
+def _section_items_v4_bu(payload: dict, section: str, errors: list[dict]) -> list:
+    items = payload.get(section, [])
+    if not isinstance(items, list):
+        errors.append(_proposal_error("section_must_be_array", section=section))
+        return []
+    if len(items) > PROPOSAL_V4_BU_SECTION_CAPS[section]:
+        errors.append(_proposal_error("section_cap_exceeded", section=section))
+        return items[: PROPOSAL_V4_BU_SECTION_CAPS[section]]
+    return items
+
+
+def _validate_business_unit_section_v4(
+    *,
+    items: list,
+    catalog_keys: set[str],
+    errors: list[dict],
+) -> tuple[list[dict], set[str]]:
+    sanitized: list[dict] = []
+    seen_client_keys: set[str] = set()
+    seen_specific_names: set[str] = set()
+
+    for item in items:
+        if not isinstance(item, dict):
+            errors.append(_proposal_error("invalid_payload_type", section="business_units"))
+            continue
+
+        for field in item.keys() - PROPOSAL_V4_BU_BUSINESS_UNIT_FIELDS:
+            errors.append(
+                _proposal_error(
+                    "unknown_field",
+                    section="business_units",
+                    field=field,
+                )
+            )
+
+        client_key = _normalized_string(item.get("client_key"))
+        catalog_key = _normalized_string(item.get("catalog_key"))
+        specific_name = _normalized_string(item.get("specific_name"))
+        instance_description = _normalized_string(item.get("instance_description"))
+
+        if not client_key:
+            errors.append(
+                _proposal_error("missing_client_key", section="business_units", field="client_key")
+            )
+            continue
+        if client_key in seen_client_keys:
+            errors.append(
+                _proposal_error(
+                    "duplicate_client_key",
+                    section="business_units",
+                    key=client_key,
+                )
+            )
+            continue
+        seen_client_keys.add(client_key)
+
+        if not catalog_key:
+            errors.append(
+                _proposal_error(
+                    "missing_catalog_key",
+                    section="business_units",
+                    key=client_key,
+                    field="catalog_key",
+                )
+            )
+            continue
+        if catalog_key not in catalog_keys:
+            errors.append(
+                _proposal_error(
+                    "unknown_catalog_key",
+                    section="business_units",
+                    key=catalog_key,
+                )
+            )
+            continue
+        if not specific_name:
+            errors.append(
+                _proposal_error(
+                    "missing_business_unit_specific_name",
+                    section="business_units",
+                    key=client_key,
+                    field="specific_name",
+                )
+            )
+            continue
+
+        normalized_specific_name = slugify_label(specific_name)
+        if not normalized_specific_name:
+            errors.append(
+                _proposal_error(
+                    "invalid_normalized_name",
+                    section="business_units",
+                    key=client_key,
+                    field="specific_name",
+                )
+            )
+            continue
+        if normalized_specific_name in seen_specific_names:
+            errors.append(
+                _proposal_error(
+                    "duplicate_business_unit_key",
+                    section="business_units",
+                    key=client_key,
+                )
+            )
+            continue
+        seen_specific_names.add(normalized_specific_name)
+        sanitized.append(
+            {
+                "client_key": client_key,
+                "catalog_key": catalog_key,
+                "specific_name": specific_name,
+                "instance_description": instance_description,
+            }
+        )
+
+    return sanitized, seen_client_keys
+
+
+def _validate_activity_subject_section_v4(
+    *,
+    items: list,
+    business_unit_client_keys: set[str],
+    catalog_keys: set[str],
+    seen_client_keys: set[str],
+    errors: list[dict],
+) -> list[dict]:
+    sanitized: list[dict] = []
+    seen_subject_identities_by_bu: dict[str, set[str]] = {}
+
+    for item in items:
+        if not isinstance(item, dict):
+            errors.append(_proposal_error("invalid_payload_type", section="activity_subjects"))
+            continue
+
+        for field in item.keys() - PROPOSAL_V4_BU_ACTIVITY_SUBJECT_FIELDS:
+            errors.append(
+                _proposal_error(
+                    "unknown_field",
+                    section="activity_subjects",
+                    field=field,
+                )
+            )
+
+        client_key = _normalized_string(item.get("client_key"))
+        business_unit_client_key = _normalized_string(item.get("business_unit_client_key"))
+        catalog_key = _nullable_normalized_string(item.get("catalog_key"))
+        label = _nullable_normalized_string(item.get("label"))
+        description = _normalized_string(item.get("description"))
+
+        if not client_key:
+            errors.append(
+                _proposal_error(
+                    "missing_client_key",
+                    section="activity_subjects",
+                    field="client_key",
+                )
+            )
+            continue
+        if client_key in seen_client_keys:
+            errors.append(
+                _proposal_error(
+                    "duplicate_client_key",
+                    section="activity_subjects",
+                    key=client_key,
+                )
+            )
+            continue
+        seen_client_keys.add(client_key)
+
+        if business_unit_client_key not in business_unit_client_keys:
+            errors.append(
+                _proposal_error(
+                    "orphan_activity_subject",
+                    section="activity_subjects",
+                    key=client_key,
+                    field="business_unit_client_key",
+                )
+            )
+            continue
+        if (catalog_key is None) == (label is None):
+            errors.append(
+                _proposal_error(
+                    "activity_subject_catalog_key_or_label_required",
+                    section="activity_subjects",
+                    key=client_key,
+                )
+            )
+            continue
+        if catalog_key is not None and catalog_key not in catalog_keys:
+            errors.append(
+                _proposal_error(
+                    "unknown_catalog_key",
+                    section="activity_subjects",
+                    key=catalog_key,
+                )
+            )
+            continue
+
+        identity = catalog_key or slugify_label(label or "")
+        if not identity:
+            errors.append(
+                _proposal_error(
+                    "invalid_free_activity_subject_label",
+                    section="activity_subjects",
+                    key=client_key,
+                    field="label",
+                )
+            )
+            continue
+        seen_subject_identities = seen_subject_identities_by_bu.setdefault(
+            business_unit_client_key,
+            set(),
+        )
+        if identity in seen_subject_identities:
+            errors.append(
+                _proposal_error(
+                    "duplicate_activity_subject",
+                    section="activity_subjects",
+                    key=client_key,
+                )
+            )
+            continue
+        seen_subject_identities.add(identity)
+
+        sanitized_item = {
+            "client_key": client_key,
+            "business_unit_client_key": business_unit_client_key,
+            "catalog_key": catalog_key,
+        }
+        if label is not None:
+            sanitized_item["label"] = label
+            sanitized_item["description"] = description
+        sanitized.append(sanitized_item)
+
+    return sanitized
 
 
 def _validate_business_unit_section(
@@ -816,6 +1198,74 @@ def _validate_excluded_catalog_subject_keys(
             sanitized[normalized_bu_key] = normalized_catalog_keys
 
     return sanitized
+
+
+def apply_onboarding_proposal_v4(
+    *,
+    establishment: Establishment,
+    payload: dict,
+    proposal: OnboardingProposal,
+) -> set[str]:
+    if payload.get("schema_version") != PROPOSAL_SCHEMA_VERSION_V4_BU:
+        raise OnboardingProposalValidationError(
+            [_proposal_error("unsupported_schema_version", field="schema_version")]
+        )
+
+    catalog_keys = {item["catalog_key"] for item in payload["business_units"]}
+    catalog_business_units = {
+        row.key: row
+        for row in CatalogBusinessUnit.objects.filter(
+            key__in=catalog_keys,
+            active=True,
+        )
+    }
+    subjects_by_business_unit: dict[str, list[dict]] = {}
+    for subject in payload["activity_subjects"]:
+        subjects_by_business_unit.setdefault(
+            subject["business_unit_client_key"],
+            [],
+        ).append(subject)
+
+    routing_keys: set[str] = set()
+    for item in payload["business_units"]:
+        catalog_business_unit = catalog_business_units.get(item["catalog_key"])
+        if catalog_business_unit is None:
+            raise OnboardingProposalValidationError(
+                [
+                    _proposal_error(
+                        "unknown_catalog_key",
+                        section="business_units",
+                        key=item["catalog_key"],
+                    )
+                ]
+            )
+
+        selected_subjects = subjects_by_business_unit.get(item["client_key"], [])
+        generic_activity_subject_keys = [
+            subject["catalog_key"]
+            for subject in selected_subjects
+            if subject["catalog_key"] is not None
+        ]
+        free_activity_subjects = [
+            {
+                "label": subject["label"],
+                "description": subject.get("description", ""),
+            }
+            for subject in selected_subjects
+            if subject["catalog_key"] is None
+        ]
+        business_unit = create_onboarding_business_unit(
+            establishment=establishment,
+            catalog_business_unit=catalog_business_unit,
+            specific_name=item["specific_name"],
+            instance_description=item["instance_description"],
+            generic_activity_subject_keys=generic_activity_subject_keys,
+            free_activity_subjects=free_activity_subjects,
+            managed_by_onboarding_proposal=proposal,
+        )
+        routing_keys.add(business_unit.routing_key)
+
+    return routing_keys
 
 
 def _apply_business_unit_sections(
