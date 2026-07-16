@@ -16,7 +16,7 @@ function buildLinkedExecution(overrides: Partial<LinkedExecution> = {}): LinkedE
     title: 'Contrôle chaîne du froid',
     status: 'in_progress',
     requires_validation: false,
-    pilot_business_unit: { id: 'bu-1', key: 'maintenance', label: 'Maintenance' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
     last_activity_at: '2026-06-30T10:00:00Z',
     created_at: '2026-06-30T08:00:00Z',
     ...overrides,

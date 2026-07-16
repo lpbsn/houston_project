@@ -9,6 +9,7 @@ from houston.accounts.models import User
 from houston.establishments.models import (
     ActivitySubject,
     BusinessUnit,
+    CatalogBusinessUnit,
     Establishment,
     EstablishmentMembership,
 )
@@ -67,6 +68,12 @@ def business_unit_deactivate_url(establishment_id, business_unit_id) -> str:
     )
 
 
+def business_unit_reactivate_url(establishment_id, business_unit_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/reactivate/"
+    )
+
+
 def activity_subjects_url(establishment_id, business_unit_id) -> str:
     return (
         f"/api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/"
@@ -81,6 +88,13 @@ def activity_subject_deactivate_url(establishment_id, activity_subject_id) -> st
     )
 
 
+def activity_subject_reactivate_url(establishment_id, activity_subject_id) -> str:
+    return (
+        f"/api/v1/establishments/{establishment_id}/activity-subjects/"
+        f"{activity_subject_id}/reactivate/"
+    )
+
+
 def create_membership_for_user(
     *,
     user: User,
@@ -92,6 +106,24 @@ def create_membership_for_user(
         establishment=establishment,
         role=role,
         status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+
+def create_activity_subject(
+    *,
+    establishment: Establishment,
+    business_unit: BusinessUnit,
+    label: str,
+) -> ActivitySubject:
+    from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
+
+    return ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name=normalize_activity_subject_name(label),
+        label=label,
+        source=ActivitySubject.Source.MANUAL,
+        active=True,
     )
 
 
@@ -127,55 +159,63 @@ def setup_active_establishment_with_runtime(*, owner_username: str = "runtime_ow
     return establishment, owner, hotel, maintenance
 
 
-def create_activity_subject(
-    *,
-    establishment: Establishment,
-    business_unit: BusinessUnit,
-    label: str,
-) -> ActivitySubject:
-    from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
-
-    return ActivitySubject.objects.create(
-        establishment=establishment,
-        business_unit=business_unit,
-        normalized_name=normalize_activity_subject_name(label),
-        label=label,
-        source=ActivitySubject.Source.MANUAL,
-        active=True,
-    )
-
-
-def test_owner_can_create_update_and_deactivate_runtime_taxonomy(api_client):
+def test_owner_can_create_update_and_deactivate_runtime_taxonomy(
+    api_client,
+    imported_catalog,
+):
     establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
     access_token = login(api_client, user=owner)
+    routing_key_before = None
 
     create_response = api_client.post(
         business_units_url(establishment.id),
-        {"label": "Restaurant", "description": "Service restauration"},
+        {
+            "catalog_key": "restaurant",
+            "specific_name": "Food Court",
+            "instance_description": "Service restauration",
+        },
         format="json",
         **auth_headers(access_token),
     )
     assert create_response.status_code == 201
-    restaurant_id = create_response.json()["id"]
-    assert create_response.json()["description"] == "Service restauration"
+    body = create_response.json()
+    restaurant_id = body["id"]
+    assert body["specific_name"] == "Food Court"
+    assert body["instance_description"] == "Service restauration"
+    assert body["generic"]["key"] == "restaurant"
+    assert "routing_key" not in body
+    assert "key" not in body
+    restaurant = BusinessUnit.objects.get(id=restaurant_id)
+    routing_key_before = restaurant.routing_key
+    assert restaurant.activity_subjects.filter(active=True).exists()
 
     patch_response = api_client.patch(
         business_unit_detail_url(establishment.id, restaurant_id),
-        {"description": "Restauration et bar"},
+        {
+            "specific_name": "Rooftop",
+            "instance_description": "Restauration et bar",
+        },
         format="json",
         **auth_headers(access_token),
     )
     assert patch_response.status_code == 200
-    assert patch_response.json()["description"] == "Restauration et bar"
+    patch_body = patch_response.json()
+    assert patch_body["specific_name"] == "Rooftop"
+    assert patch_body["instance_description"] == "Restauration et bar"
+    restaurant.refresh_from_db()
+    assert restaurant.routing_key == routing_key_before
 
     subject_response = api_client.post(
         activity_subjects_url(establishment.id, restaurant_id),
-        {"label": "Cuisine"},
+        {"label": "Cuisine libre"},
         format="json",
         **auth_headers(access_token),
     )
     assert subject_response.status_code == 201
-    subject_id = subject_response.json()["id"]
+    subject_body = subject_response.json()
+    subject_id = subject_body["id"]
+    assert subject_body["is_generic"] is False
+    assert subject_body["label"] == "Cuisine libre"
 
     second_subject_response = api_client.post(
         activity_subjects_url(establishment.id, restaurant_id),
@@ -201,7 +241,80 @@ def test_owner_can_create_update_and_deactivate_runtime_taxonomy(api_client):
     assert deactivate_bu_response.status_code == 200
     restaurant = BusinessUnit.objects.get(id=restaurant_id)
     assert restaurant.active is False
-    assert ActivitySubject.objects.filter(id=subject_id, active=False).exists()
+
+
+def test_create_duplicate_specific_name_does_not_reactivate(
+    api_client,
+    imported_catalog,
+):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+
+    api_client.post(
+        business_unit_deactivate_url(establishment.id, hotel.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    response = api_client.post(
+        business_units_url(establishment.id),
+        {
+            "catalog_key": hotel.catalog_business_unit.key,
+            "specific_name": hotel.specific_name,
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "duplicate_specific_name"
+    hotel.refresh_from_db()
+    assert hotel.active is False
+
+
+def test_owner_can_reactivate_inactive_business_unit(api_client, imported_catalog):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    original_routing_key = hotel.routing_key
+
+    deactivate_response = api_client.post(
+        business_unit_deactivate_url(establishment.id, hotel.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    reactivate_response = api_client.post(
+        business_unit_reactivate_url(establishment.id, hotel.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert reactivate_response.status_code == 200
+    body = reactivate_response.json()
+    assert body["id"] == str(hotel.id)
+    assert body["active"] is True
+    hotel.refresh_from_db()
+    assert hotel.active is True
+    assert hotel.routing_key == original_routing_key
+
+
+def test_create_with_inactive_catalog_returns_conflict(api_client, imported_catalog):
+    establishment, owner, _hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    catalog = CatalogBusinessUnit.objects.get(key="restaurant")
+    catalog.active = False
+    catalog.save(update_fields=["active", "updated_at"])
+
+    response = api_client.post(
+        business_units_url(establishment.id),
+        {
+            "catalog_key": "restaurant",
+            "specific_name": "Food Court",
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "catalog_business_unit_inactive"
 
 
 def test_director_has_same_runtime_mutation_rights(api_client):
@@ -216,13 +329,13 @@ def test_director_has_same_runtime_mutation_rights(api_client):
 
     response = api_client.patch(
         business_unit_detail_url(establishment.id, hotel.id),
-        {"description": "Description director"},
+        {"instance_description": "Description director"},
         format="json",
         **auth_headers(access_token),
     )
 
     assert response.status_code == 200
-    assert response.json()["description"] == "Description director"
+    assert response.json()["instance_description"] == "Description director"
 
 
 @pytest.mark.parametrize("role", ["manager", "staff"])
@@ -234,7 +347,7 @@ def test_manager_and_staff_cannot_mutate_runtime_config(api_client, role):
 
     response = api_client.patch(
         business_unit_detail_url(establishment.id, hotel.id),
-        {"description": "Forbidden"},
+        {"instance_description": "Forbidden"},
         format="json",
         **auth_headers(access_token),
     )
@@ -249,7 +362,7 @@ def test_mutations_are_scoped_to_active_membership_establishment(api_client):
 
     response = api_client.patch(
         business_unit_detail_url(other_establishment.id, hotel.id),
-        {"description": "Cross tenant"},
+        {"instance_description": "Cross tenant"},
         format="json",
         **auth_headers(access_token),
     )
@@ -300,6 +413,186 @@ def test_cannot_deactivate_last_active_activity_subject(api_client):
     assert ActivitySubject.objects.get(id=subject.id).active is True
 
 
+def test_owner_can_reactivate_inactive_free_activity_subject(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    second = create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Sujet secondaire",
+    )
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).exclude(
+        id=second.id
+    ).get()
+
+    deactivate_response = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    reactivate_response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert reactivate_response.status_code == 200
+    body = reactivate_response.json()
+    assert body["id"] == str(subject.id)
+    assert body["active"] is True
+    subject.refresh_from_db()
+    assert subject.active is True
+
+
+def test_owner_can_reactivate_inactive_catalog_activity_subject(
+    api_client,
+    imported_catalog,
+):
+    establishment, owner, _hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+
+    create_bu = api_client.post(
+        business_units_url(establishment.id),
+        {
+            "catalog_key": "restaurant",
+            "specific_name": "Food Court Reactivate",
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert create_bu.status_code == 201
+    restaurant_id = create_bu.json()["id"]
+
+    catalog_backed = list(
+        ActivitySubject.objects.filter(
+            business_unit_id=restaurant_id,
+            catalog_activity_subject__isnull=False,
+            active=True,
+        ).order_by("id")[:2]
+    )
+    assert len(catalog_backed) >= 2
+    subject = catalog_backed[0]
+    subject_id = str(subject.id)
+
+    deactivate_response = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    reactivate_response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert reactivate_response.status_code == 200
+    body = reactivate_response.json()
+    assert body["id"] == subject_id
+    assert body["active"] is True
+    assert body["is_generic"] is True
+    assert ActivitySubject.objects.get(id=subject.id).active is True
+
+
+def test_reactivate_activity_subject_already_active_returns_conflict(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).get()
+
+    response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "activity_subject_already_active"
+
+
+def test_reactivate_activity_subject_wrong_establishment_returns_not_found(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    other_establishment = create_establishment(name="Other Reactivate Hotel")
+    access_token = login(api_client, user=owner)
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).get()
+    subject.active = False
+    subject.save(update_fields=["active", "updated_at"])
+
+    response = api_client.post(
+        activity_subject_reactivate_url(other_establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 404
+
+
+def test_reactivate_activity_subject_parent_bu_inactive_returns_conflict(api_client):
+    establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    second = create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Sujet secondaire parent",
+    )
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).exclude(
+        id=second.id
+    ).get()
+
+    deactivate_subject = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_subject.status_code == 200
+
+    deactivate_bu = api_client.post(
+        business_unit_deactivate_url(establishment.id, hotel.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_bu.status_code == 200
+
+    response = api_client.post(
+        activity_subject_reactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "business_unit_inactive"
+    assert maintenance.active is True
+
+
+def test_create_after_deactivate_same_label_returns_conflict(api_client):
+    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
+    access_token = login(api_client, user=owner)
+    second = create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Sujet secondaire create",
+    )
+    subject = ActivitySubject.objects.filter(business_unit=hotel, active=True).exclude(
+        id=second.id
+    ).get()
+    original_label = subject.label
+
+    deactivate_response = api_client.post(
+        activity_subject_deactivate_url(establishment.id, subject.id),
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert deactivate_response.status_code == 200
+
+    create_response = api_client.post(
+        activity_subjects_url(establishment.id, hotel.id),
+        {"label": original_label},
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert create_response.status_code == 409
+    assert create_response.json()["code"] == "duplicate_activity_subject_normalized_name"
+    subject.refresh_from_db()
+    assert subject.active is False
+
+
 def test_cannot_deactivate_business_unit_with_active_membership_scope(api_client):
     establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
     manager = create_user(username="runtime_scope_manager")
@@ -340,31 +633,6 @@ def test_deactivate_business_unit_cascades_subjects(api_client):
     assert ActivitySubject.objects.filter(business_unit=maintenance, active=False).exists()
 
 
-def test_recreate_same_label_reactivates_existing_business_unit(api_client):
-    establishment, owner, hotel, _maintenance = setup_active_establishment_with_runtime()
-    access_token = login(api_client, user=owner)
-
-    deactivate_response = api_client.post(
-        business_unit_deactivate_url(establishment.id, hotel.id),
-        format="json",
-        **auth_headers(access_token),
-    )
-    assert deactivate_response.status_code == 200
-
-    recreate_response = api_client.post(
-        business_units_url(establishment.id),
-        {"label": "Hôtel", "description": "Réactivé"},
-        format="json",
-        **auth_headers(access_token),
-    )
-
-    assert recreate_response.status_code == 201
-    assert recreate_response.json()["id"] == str(hotel.id)
-    hotel.refresh_from_db()
-    assert hotel.active is True
-    assert hotel.description == "Réactivé"
-
-
 def test_owner_can_get_business_unit_tree(api_client):
     establishment, owner, hotel, maintenance = setup_active_establishment_with_runtime()
     access_token = login(api_client, user=owner)
@@ -375,8 +643,11 @@ def test_owner_can_get_business_unit_tree(api_client):
     )
 
     assert response.status_code == 200
-    keys = {item["key"] for item in response.json()["business_units"]}
-    assert keys == {hotel.key, maintenance.key}
+    names = {item["specific_name"] for item in response.json()["business_units"]}
+    assert names == {hotel.specific_name, maintenance.specific_name}
+    for item in response.json()["business_units"]:
+        assert "routing_key" not in item
+        assert "generic" in item
 
 
 def test_manager_with_hotel_scope_can_get_scoped_business_unit_tree(api_client):
@@ -402,7 +673,7 @@ def test_manager_with_hotel_scope_can_get_scoped_business_unit_tree(api_client):
     body = response.json()
     assert len(body["business_units"]) == 1
     assert body["business_units"][0]["id"] == str(hotel.id)
-    assert body["business_units"][0]["key"] == hotel.key
+    assert body["business_units"][0]["specific_name"] == hotel.specific_name
 
 
 def test_manager_without_scope_gets_empty_business_unit_tree(api_client):
@@ -447,10 +718,10 @@ def test_staff_with_scope_can_get_scoped_business_unit_tree(api_client):
     body = response.json()
     assert len(body["business_units"]) == 1
     assert body["business_units"][0]["id"] == str(maintenance.id)
-    assert body["business_units"][0]["key"] == maintenance.key
+    assert body["business_units"][0]["specific_name"] == maintenance.specific_name
 
 
-def test_manager_cannot_post_business_unit(api_client):
+def test_manager_cannot_post_business_unit(api_client, imported_catalog):
     establishment, _owner, _hotel, _maintenance = setup_active_establishment_with_runtime()
     manager = create_user(username="runtime_tree_post_manager")
     create_membership_for_user(
@@ -462,7 +733,7 @@ def test_manager_cannot_post_business_unit(api_client):
 
     response = api_client.post(
         business_units_url(establishment.id),
-        {"label": "Restaurant"},
+        {"catalog_key": "restaurant", "specific_name": "Food Court"},
         format="json",
         **auth_headers(access_token),
     )
@@ -470,7 +741,7 @@ def test_manager_cannot_post_business_unit(api_client):
     assert response.status_code == 403
 
 
-def test_draft_establishment_runtime_mutations_return_forbidden(api_client):
+def test_draft_establishment_runtime_mutations_return_forbidden(api_client, imported_catalog):
     organization = Organization.objects.create(
         name=f"Draft Org {uuid.uuid4().hex[:6]}",
         status=Organization.Status.ACTIVE,
@@ -490,7 +761,7 @@ def test_draft_establishment_runtime_mutations_return_forbidden(api_client):
 
     response = api_client.post(
         business_units_url(establishment.id),
-        {"label": "Restaurant"},
+        {"catalog_key": "restaurant", "specific_name": "Food Court"},
         format="json",
         **auth_headers(access_token),
     )

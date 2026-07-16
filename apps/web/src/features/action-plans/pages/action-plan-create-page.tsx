@@ -135,7 +135,11 @@ export function ActionPlanCreatePage({
 
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
   const businessUnits = useMemo(
-    () => businessUnitQuery.data?.business_units ?? [],
+    () =>
+      (businessUnitQuery.data?.business_units ?? []).map((unit) => ({
+        id: unit.id,
+        label: unit.specific_name,
+      })),
     [businessUnitQuery.data?.business_units],
   )
 
@@ -159,12 +163,8 @@ export function ActionPlanCreatePage({
     if (!modeConfig.lockPilotBusinessUnit) {
       return ''
     }
-    const responsibleKey = signalDetailQuery.data?.responsible_business_unit_key
-    if (!responsibleKey) {
-      return ''
-    }
-    return businessUnits.find((unit) => unit.key === responsibleKey)?.id ?? ''
-  }, [businessUnits, modeConfig.lockPilotBusinessUnit, signalDetailQuery.data])
+    return signalDetailQuery.data?.responsible_business_unit_id ?? ''
+  }, [modeConfig.lockPilotBusinessUnit, signalDetailQuery.data])
 
   const resolvedPilotBusinessUnitId = useMemo(() => {
     if (isTemplateEdit && templateDetailQuery.data) {

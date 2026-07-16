@@ -38,18 +38,16 @@ function OperationalConfigContent({
   const businessUnits = treeQuery.data?.business_units ?? []
 
   async function handleAddBusinessUnit(input: {
-    label: string
-    catalog_key?: string | null
-    unit_type?: string
+    specific_name: string
+    catalog_key: string
   }) {
     setPageError(null)
     setPageFeedback(null)
 
     try {
       await createBusinessUnitMutation.mutateAsync({
-        label: input.label,
-        catalog_key: input.catalog_key ?? null,
-        unit_type: input.unit_type,
+        specific_name: input.specific_name,
+        catalog_key: input.catalog_key,
       })
       setPageFeedback('Pôle ajouté.')
     } catch (error) {
@@ -59,14 +57,13 @@ function OperationalConfigContent({
 
   function handleSelectSuggestion(suggestion: CatalogBusinessUnitSuggestion) {
     void handleAddBusinessUnit({
-      label: suggestion.label,
+      specific_name: suggestion.label,
       catalog_key: suggestion.key,
-      unit_type: suggestion.unit_type,
     })
   }
 
-  function handleAddFreeText(label: string) {
-    void handleAddBusinessUnit({ label })
+  function handleAddFreeText() {
+    setPageError('Sélectionnez un pôle catalogue pour créer une instance.')
   }
 
   if (treeQuery.isPending) {
@@ -130,7 +127,7 @@ function OperationalConfigContent({
         <CardHeader className="gap-2">
           <CardTitle className="text-lg font-semibold">Ajouter un pôle</CardTitle>
           <CardDescription className="text-sm">
-            Recherchez dans le catalogue ou saisissez un libellé libre.
+            Recherchez un pôle catalogue, puis créez une instance nommée.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -157,10 +154,12 @@ function OperationalConfigContent({
       ) : (
         businessUnits.map((businessUnit) => (
           <OperationalConfigBusinessUnitCard
-            key={`${businessUnit.id}:${businessUnit.description}:${businessUnit.activity_subjects.length}`}
+            key={`${businessUnit.id}:${businessUnit.instance_description}:${businessUnit.activity_subjects.length}:${businessUnit.active}`}
             businessUnit={businessUnit}
             establishmentId={establishmentId}
-            canRemoveBusinessUnit={businessUnits.length > 1}
+            canRemoveBusinessUnit={
+              businessUnits.filter((item) => item.active).length > 1 && businessUnit.active
+            }
           />
         ))
       )}

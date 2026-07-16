@@ -365,12 +365,19 @@ def reactivate_business_unit(
 
 
 @transaction.atomic
-def update_business_unit_specific_name(
+def update_business_unit(
     *,
     establishment_id,
     business_unit_id,
-    specific_name: str,
+    specific_name: str | None = None,
+    instance_description: str | None = None,
 ) -> BusinessUnit:
+    if specific_name is None and instance_description is None:
+        raise DomainValidationError(
+            "At least one of specific_name or instance_description must be provided.",
+            code="empty_business_unit_update",
+        )
+
     establishment = _lock_establishment(establishment_id=establishment_id)
     business_unit = (
         BusinessUnit.objects.select_for_update()
@@ -384,57 +391,264 @@ def update_business_unit_specific_name(
             "Business unit has no catalog identity.",
             code="business_unit_catalog_missing",
         )
+    if not business_unit.specific_name:
+        raise DomainConflictError(
+            "Business unit has incomplete identity.",
+            code="business_unit_identity_incomplete",
+        )
+
     catalog_business_unit = _lock_catalog_business_unit(
         catalog_business_unit_id=business_unit.catalog_business_unit_id
     )
 
-    normalized_name_input = specific_name.strip()
-    if not normalized_name_input:
-        raise DomainValidationError(
-            "Specific name is required.",
-            code="invalid_normalized_name",
-        )
-    normalized_specific_name = normalize_business_unit_specific_name(
-        normalized_name_input
-    )
-    key_max_length = BusinessUnit._meta.get_field("key").max_length
-    legacy_key = slugify_label(normalized_name_input)[:key_max_length]
-    collisions = BusinessUnit.objects.filter(establishment=establishment).exclude(
-        id=business_unit.id
-    )
-    if collisions.filter(
-        normalized_specific_name=normalized_specific_name
-    ).exists() or collisions.filter(key=legacy_key).exists():
-        raise DomainConflictError(
-            "A business unit with this specific name already exists.",
-            code="duplicate_specific_name",
-        )
+    next_specific_name = business_unit.specific_name
+    next_normalized_specific_name = business_unit.normalized_specific_name
+    next_instance_description = business_unit.instance_description or ""
+    legacy_key = business_unit.key
+    update_fields: list[str] = []
 
-    business_unit.specific_name = normalized_name_input
-    business_unit.normalized_specific_name = normalized_specific_name
+    if specific_name is not None:
+        normalized_name_input = specific_name.strip()
+        if not normalized_name_input:
+            raise DomainValidationError(
+                "Specific name is required.",
+                code="invalid_normalized_name",
+            )
+        next_normalized_specific_name = normalize_business_unit_specific_name(
+            normalized_name_input
+        )
+        if not next_normalized_specific_name:
+            raise DomainValidationError(
+                "Specific name must produce a valid normalized name.",
+                code="invalid_normalized_name",
+            )
+        key_max_length = BusinessUnit._meta.get_field("key").max_length
+        legacy_key = slugify_label(normalized_name_input)[:key_max_length]
+        collisions = BusinessUnit.objects.filter(establishment=establishment).exclude(
+            id=business_unit.id
+        )
+        if collisions.filter(
+            normalized_specific_name=next_normalized_specific_name
+        ).exists() or collisions.filter(key=legacy_key).exists():
+            raise DomainConflictError(
+                "A business unit with this specific name already exists.",
+                code="duplicate_specific_name",
+            )
+        next_specific_name = normalized_name_input
+        business_unit.specific_name = next_specific_name
+        business_unit.normalized_specific_name = next_normalized_specific_name
+        update_fields.extend(["specific_name", "normalized_specific_name", "key", "label"])
+
+    if instance_description is not None:
+        next_instance_description = instance_description.strip()
+        business_unit.instance_description = next_instance_description
+        update_fields.extend(["instance_description", "description"])
+
     populate_business_unit_legacy_fields(
         business_unit=business_unit,
-        specific_name=normalized_name_input,
-        instance_description=business_unit.instance_description or "",
+        specific_name=next_specific_name,
+        instance_description=next_instance_description,
         catalog_business_unit=catalog_business_unit,
     )
+    if "unit_type" not in update_fields:
+        update_fields.append("unit_type")
+
     try:
         with transaction.atomic():
-            business_unit.save(
-                update_fields=[
-                    "specific_name",
-                    "normalized_specific_name",
-                    "key",
-                    "label",
-                    "description",
-                    "unit_type",
-                    "updated_at",
-                ]
-            )
+            business_unit.save(update_fields=[*dict.fromkeys(update_fields), "updated_at"])
     except IntegrityError:
         _raise_business_unit_integrity_conflict(
             establishment=establishment,
-            normalized_specific_name=normalized_specific_name,
+            normalized_specific_name=next_normalized_specific_name or "",
             legacy_key=legacy_key,
         )
     return business_unit
+
+
+@transaction.atomic
+def update_business_unit_specific_name(
+    *,
+    establishment_id,
+    business_unit_id,
+    specific_name: str,
+) -> BusinessUnit:
+    return update_business_unit(
+        establishment_id=establishment_id,
+        business_unit_id=business_unit_id,
+        specific_name=specific_name,
+    )
+
+
+@transaction.atomic
+def create_runtime_activity_subject(
+    *,
+    establishment_id,
+    business_unit_id,
+    label: str | None = None,
+    description: str = "",
+    catalog_key: str | None = None,
+) -> ActivitySubject:
+    establishment = _lock_establishment(establishment_id=establishment_id)
+    business_unit = (
+        BusinessUnit.objects.select_for_update(of=("self",))
+        .filter(
+            id=business_unit_id,
+            establishment=establishment,
+            active=True,
+        )
+        .first()
+    )
+    if business_unit is None:
+        raise _not_found("Business unit was not found.")
+    if business_unit.catalog_business_unit_id is None:
+        raise DomainConflictError(
+            "Business unit has no catalog identity.",
+            code="business_unit_catalog_missing",
+        )
+
+    normalized_catalog_key = catalog_key.strip() if isinstance(catalog_key, str) else None
+    if normalized_catalog_key == "":
+        normalized_catalog_key = None
+
+    if normalized_catalog_key is not None:
+        catalog_subject = (
+            CatalogActivitySubject.objects.select_for_update(of=("self",))
+            .filter(key=normalized_catalog_key)
+            .first()
+        )
+        if catalog_subject is None:
+            raise DomainNotFoundError(
+                "Catalog activity subject was not found.",
+                code="catalog_activity_subject_not_found",
+            )
+        if not catalog_subject.active:
+            raise DomainConflictError(
+                "Catalog activity subject is inactive.",
+                code="catalog_activity_subject_inactive",
+            )
+        rows = build_activity_subject_rows_for_insert(
+            business_unit=business_unit,
+            catalog_activity_subjects=[catalog_subject],
+        )
+    else:
+        if label is None:
+            raise DomainValidationError(
+                "Free activity subject label is required.",
+                code="invalid_free_activity_subject_label",
+            )
+        rows = build_activity_subject_rows_for_insert(
+            business_unit=business_unit,
+            free_activity_subjects=[
+                {"label": label, "description": description},
+            ],
+        )
+
+    _bulk_create_activity_subjects(business_unit=business_unit, rows=rows)
+    created = rows[0]
+    return ActivitySubject.objects.select_related(
+        "catalog_activity_subject",
+        "business_unit",
+        "business_unit__catalog_business_unit",
+    ).get(id=created.id)
+
+
+@transaction.atomic
+def reactivate_activity_subject(
+    *,
+    establishment_id,
+    activity_subject_id,
+) -> ActivitySubject:
+    establishment = _lock_establishment(establishment_id=establishment_id)
+
+    subject_peek = (
+        ActivitySubject.objects.filter(
+            id=activity_subject_id,
+            establishment=establishment,
+        )
+        .only("id", "business_unit_id", "catalog_activity_subject_id")
+        .first()
+    )
+    if subject_peek is None:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    business_unit = (
+        BusinessUnit.objects.select_for_update(of=("self",))
+        .filter(
+            id=subject_peek.business_unit_id,
+            establishment=establishment,
+        )
+        .first()
+    )
+    if business_unit is None:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    catalog_subject = None
+    if subject_peek.catalog_activity_subject_id is not None:
+        catalog_subject = (
+            CatalogActivitySubject.objects.select_for_update(of=("self",))
+            .filter(id=subject_peek.catalog_activity_subject_id)
+            .first()
+        )
+        if catalog_subject is None:
+            raise DomainNotFoundError(
+                "Catalog activity subject was not found.",
+                code="catalog_activity_subject_not_found",
+            )
+
+    activity_subject = (
+        ActivitySubject.objects.select_for_update(of=("self",))
+        .filter(
+            id=activity_subject_id,
+            establishment=establishment,
+        )
+        .select_related(
+            "catalog_activity_subject",
+            "business_unit",
+            "business_unit__catalog_business_unit",
+        )
+        .first()
+    )
+    if activity_subject is None:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    if activity_subject.business_unit_id != business_unit.id:
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+    if catalog_subject is not None and (
+        activity_subject.catalog_activity_subject_id != catalog_subject.id
+    ):
+        raise DomainNotFoundError(
+            "Activity subject was not found.",
+            code="activity_subject_not_found",
+        )
+
+    if activity_subject.active:
+        raise DomainConflictError(
+            "Activity subject is already active.",
+            code="activity_subject_already_active",
+        )
+    if not business_unit.active:
+        raise DomainConflictError(
+            "Parent business unit is inactive.",
+            code="business_unit_inactive",
+        )
+    if catalog_subject is not None and not catalog_subject.active:
+        raise DomainConflictError(
+            "Catalog activity subject is inactive.",
+            code="catalog_activity_subject_inactive",
+        )
+
+    activity_subject.active = True
+    activity_subject.save(update_fields=["active", "updated_at"])
+    return activity_subject

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  actionPlanBusinessUnitGenericLabel,
+  actionPlanBusinessUnitPrimaryLabel,
   buildActionPlanExecutionClassificationDisplay,
+  buildActionPlanExecutionClassificationInput,
   buildActionPlanPoleTaskSummaries,
   buildActionPlanTemplatePoleSummaries,
   computeActionPlanDeadlineState,
@@ -20,7 +23,7 @@ function buildListItem(partial: Partial<ActionPlanListItem> & Pick<ActionPlanLis
     title: 'Plan',
     description: '',
     catalog_status: 'active',
-    pilot_business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     task_count: 1,
     involved_pole_count: 1,
     created_at: '2026-01-01T00:00:00Z',
@@ -41,7 +44,7 @@ describe('groupActionPlansByPilotBusinessUnit', () => {
       buildListItem({ id: 'p1' }),
       buildListItem({
         id: 'p2',
-        pilot_business_unit: { id: 'bu-2', key: 'hotel', label: 'Hôtel' },
+        pilot_business_unit: { id: 'bu-2', specific_name: 'Hôtel', instance_description: '', active: true, generic: { key: 'hotel', label: 'Hôtel', description: '', unit_type: 'dedicated' } },
       }),
     ])
 
@@ -145,7 +148,7 @@ function buildExecutionDetail(
     title: 'Plan test',
     description: '',
     requires_validation: false,
-    pilot_business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     affected_business_unit: null,
     responsible_business_unit: null,
     activity_subject: null,
@@ -190,14 +193,14 @@ describe('flattenActionPlanAssignees', () => {
   it('deduplicates assignees across poles', () => {
     const assignees = flattenActionPlanAssignees([
       {
-        business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+        business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
         assignees: [
           { membership_id: 'm-1', display_name: 'Jean D.' },
           { membership_id: 'm-2', display_name: 'Paul B.' },
         ],
       },
       {
-        business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+        business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
         assignees: [{ membership_id: 'm-1', display_name: 'Jean D.' }],
       },
     ])
@@ -209,21 +212,79 @@ describe('flattenActionPlanAssignees', () => {
   })
 })
 
+describe('actionPlanBusinessUnit labels', () => {
+  it('uses specific_name as primary and generic.label as context', () => {
+    const unit = {
+      id: 'bu-1',
+      specific_name: 'Food Court',
+      instance_description: '',
+      active: true,
+      generic: {
+        key: 'restaurant',
+        label: 'Restaurant',
+        description: '',
+        unit_type: 'dedicated',
+      },
+    }
+    expect(actionPlanBusinessUnitPrimaryLabel(unit)).toBe('Food Court')
+    expect(actionPlanBusinessUnitGenericLabel(unit)).toBe('Restaurant')
+  })
+})
+
 describe('buildActionPlanExecutionClassificationDisplay', () => {
   it('prefers responsible business unit over pilot for pole badge', () => {
     const display = buildActionPlanExecutionClassificationDisplay(
       buildExecutionDetail({
-        responsible_business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+        responsible_business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
         activity_subject: {
           id: 'sub-1',
-          normalized_name: 'climatisation',
+          catalog_key: 'maintenance__climatisation',
           label: 'Climatisation',
+          description: '',
+          source: 'catalog_suggestion',
+          active: true,
+          is_generic: true,
         },
       }),
     )
 
     expect(display.poleLabel).toBe('Maintenance')
     expect(display.subjectLabel).toBe('Climatisation')
+  })
+})
+
+describe('buildActionPlanExecutionClassificationInput', () => {
+  it('bridges Lot 5 nested BU/AS into signal classification input', () => {
+    const input = buildActionPlanExecutionClassificationInput(
+      buildExecutionDetail({
+        responsible_business_unit: {
+          id: 'bu-2',
+          specific_name: 'Food Court',
+          instance_description: '',
+          active: true,
+          generic: {
+            key: 'restaurant',
+            label: 'Restaurant',
+            description: '',
+            unit_type: 'dedicated',
+          },
+        },
+        activity_subject: {
+          id: 'sub-1',
+          catalog_key: 'restaurant__stock',
+          label: 'Stock',
+          description: '',
+          source: 'catalog_suggestion',
+          active: true,
+          is_generic: true,
+        },
+      }),
+    )
+
+    expect(input.responsible_business_unit_key).toBe('restaurant')
+    expect(input.responsible_business_unit_label).toBe('Food Court')
+    expect(input.activity_subject_key).toBe('restaurant__stock')
+    expect(input.activity_subject_label).toBe('Stock')
   })
 })
 
@@ -241,7 +302,7 @@ describe('buildActionPlanPoleTaskSummaries', () => {
             assigned_display_name: null,
             position: 1,
             status: 'pending',
-            business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+            business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
             observation_id: null,
             skipped_reason: null,
             completed_at: null,
@@ -263,7 +324,7 @@ describe('buildActionPlanPoleTaskSummaries', () => {
             assigned_display_name: null,
             position: 2,
             status: 'done',
-            business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+            business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
             observation_id: null,
             skipped_reason: null,
             completed_at: null,
@@ -285,7 +346,7 @@ describe('buildActionPlanPoleTaskSummaries', () => {
             assigned_display_name: null,
             position: 3,
             status: 'pending',
-            business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+            business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
             observation_id: null,
             skipped_reason: null,
             completed_at: null,
@@ -324,7 +385,7 @@ describe('buildActionPlanPoleTaskSummaries', () => {
 describe('buildActionPlanTemplatePoleSummaries', () => {
   it('groups template tasks by pole with pilot first', () => {
     const summaries = buildActionPlanTemplatePoleSummaries({
-      pilot_business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+      pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
       tasks: [
         {
           id: 'task-1',
@@ -334,7 +395,7 @@ describe('buildActionPlanTemplatePoleSummaries', () => {
           assigned_membership_id: null,
           assigned_display_name: null,
           position: 1,
-          business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+          business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
         },
         {
           id: 'task-2',
@@ -344,7 +405,7 @@ describe('buildActionPlanTemplatePoleSummaries', () => {
           assigned_membership_id: null,
           assigned_display_name: null,
           position: 2,
-          business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+          business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
         },
       ],
     })

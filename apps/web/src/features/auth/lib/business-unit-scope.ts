@@ -5,13 +5,23 @@ export type BusinessUnitScopeSelection = {
 
 export type BusinessUnitNode = {
   id: string
-  key: string
-  label: string
-  unit_type: string
+  specific_name: string
+  instance_description: string
+  active: boolean
+  generic: {
+    key: string
+    label: string
+    description: string
+    unit_type: string
+  }
   activity_subjects: Array<{
     id: string
-    normalized_name: string
     label: string
+    description: string
+    source: string
+    active: boolean
+    is_generic: boolean
+    catalog_key?: string
   }>
 }
 

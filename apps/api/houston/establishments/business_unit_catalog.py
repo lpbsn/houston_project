@@ -28,6 +28,7 @@ def suggest_business_units(
             {
                 "key": row.key,
                 "label": row.label,
+                "description": row.description or "",
                 "unit_type": row.unit_type,
             }
         )

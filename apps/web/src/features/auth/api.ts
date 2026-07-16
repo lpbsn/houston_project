@@ -604,11 +604,16 @@ export type { BusinessUnitTreeResponse }
 
 export async function fetchBusinessUnitTree(
   establishmentId: string,
+  options?: { includeInactive?: boolean },
 ): Promise<BusinessUnitTreeResponse> {
   const csrfToken = await ensureCsrfToken()
+  let path = `/api/v1/establishments/${establishmentId}/business-units/`
+  if (options?.includeInactive) {
+    path += '?include_inactive=true'
+  }
   const result = await withAuthRetry(
     (accessToken) =>
-      fetch(`/api/v1/establishments/${establishmentId}/business-units/`, {
+      fetch(path, {
         credentials: 'include',
         headers: {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),

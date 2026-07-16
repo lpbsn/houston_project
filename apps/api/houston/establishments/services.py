@@ -12,9 +12,29 @@ from django.utils import timezone
 
 from houston.accounts import tokens as auth_tokens
 from houston.accounts.models import User, UserSession
+from houston.core.exceptions import (
+    DomainConflictError,
+    DomainNotFoundError,
+    DomainValidationError,
+)
 from houston.establishments.access import get_onboarding_access_context
 from houston.establishments.business_unit_domain_service import (
     create_onboarding_business_unit,
+)
+from houston.establishments.business_unit_domain_service import (
+    create_runtime_activity_subject as create_runtime_activity_subject_domain,
+)
+from houston.establishments.business_unit_domain_service import (
+    create_runtime_business_unit as create_runtime_business_unit_domain,
+)
+from houston.establishments.business_unit_domain_service import (
+    reactivate_activity_subject as reactivate_activity_subject_domain,
+)
+from houston.establishments.business_unit_domain_service import (
+    reactivate_business_unit as reactivate_business_unit_domain,
+)
+from houston.establishments.business_unit_domain_service import (
+    update_business_unit as update_business_unit_domain,
 )
 from houston.establishments.business_unit_identity import (
     normalize_generic_activity_subject_name,
@@ -2867,49 +2887,51 @@ def _get_establishment_for_runtime_mutation(
     return establishment
 
 
+def _map_runtime_domain_error(exc: Exception) -> None:
+    if isinstance(exc, DomainNotFoundError):
+        raise RuntimeConfigNotFoundError from exc
+    if isinstance(exc, DomainValidationError):
+        raise ValidationError({"detail": [exc.message]}) from exc
+    if isinstance(exc, DomainConflictError):
+        raise RuntimeConfigConflictError(code=exc.code, detail=exc.message) from exc
+    raise exc
+
+
 @transaction.atomic
 def create_runtime_business_unit(
     *,
     current_membership: EstablishmentMembership | None,
     establishment_id,
-    label: str,
-    description: str = "",
-    unit_type: str = BusinessUnit.UnitType.DEDICATED,
-    catalog_key: str | None = None,
+    catalog_key: str,
+    specific_name: str,
+    instance_description: str = "",
 ) -> BusinessUnit:
     establishment = _get_establishment_for_runtime_mutation(
         current_membership=current_membership,
         establishment_id=establishment_id,
     )
 
-    normalized_label = label.strip()
-    if not normalized_label:
-        raise ValidationError({"label": ["Label is required."]})
+    normalized_catalog_key = catalog_key.strip()
+    if not normalized_catalog_key:
+        raise ValidationError({"catalog_key": ["Catalog key is required."]})
 
-    runtime_key = slugify_label(normalized_label)
-    if not runtime_key:
-        raise ValidationError({"label": ["Label must produce a valid runtime key."]})
+    catalog_business_unit = CatalogBusinessUnit.objects.filter(
+        key=normalized_catalog_key
+    ).first()
+    if catalog_business_unit is None:
+        raise RuntimeConfigNotFoundError
 
-    catalog_bu = None
-    if catalog_key:
-        catalog_bu = CatalogBusinessUnit.objects.filter(key=catalog_key, active=True).first()
-
-    source = BusinessUnit.Source.CATALOG_SUGGESTION if catalog_key else BusinessUnit.Source.MANUAL
-
-    business_unit, _created = BusinessUnit.objects.update_or_create(
-        establishment=establishment,
-        key=runtime_key,
-        defaults={
-            "label": normalized_label,
-            "description": description.strip(),
-            "unit_type": unit_type,
-            "catalog_business_unit": catalog_bu,
-            "source": source,
-            "active": True,
-            "managed_by_onboarding_proposal": None,
-        },
-    )
-    return business_unit
+    try:
+        return create_runtime_business_unit_domain(
+            establishment=establishment,
+            catalog_business_unit=catalog_business_unit,
+            specific_name=specific_name,
+            instance_description=instance_description,
+            source=BusinessUnit.Source.CATALOG_SUGGESTION,
+        )
+    except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
+        _map_runtime_domain_error(exc)
+        raise
 
 
 @transaction.atomic
@@ -2918,68 +2940,44 @@ def update_runtime_business_unit(
     current_membership: EstablishmentMembership | None,
     establishment_id,
     business_unit_id,
-    label: str | None = None,
-    description: str | None = None,
-    unit_type: str | None = None,
+    specific_name: str | None = None,
+    instance_description: str | None = None,
 ) -> BusinessUnit:
-    establishment = _get_establishment_for_runtime_mutation(
+    _get_establishment_for_runtime_mutation(
         current_membership=current_membership,
         establishment_id=establishment_id,
     )
-
-    business_unit = (
-        BusinessUnit.objects.select_for_update()
-        .filter(
-            id=business_unit_id,
-            establishment_id=establishment.id,
-            active=True,
+    try:
+        return update_business_unit_domain(
+            establishment_id=establishment_id,
+            business_unit_id=business_unit_id,
+            specific_name=specific_name,
+            instance_description=instance_description,
         )
-        .first()
+    except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
+        _map_runtime_domain_error(exc)
+        raise
+
+
+@transaction.atomic
+def reactivate_runtime_business_unit(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    business_unit_id,
+) -> BusinessUnit:
+    _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
     )
-    if business_unit is None:
-        raise RuntimeConfigNotFoundError
-
-    update_fields: list[str] = []
-
-    if label is not None:
-        normalized_label = label.strip()
-        if not normalized_label:
-            raise ValidationError({"label": ["Label is required."]})
-
-        runtime_key = slugify_label(normalized_label)
-        if not runtime_key:
-            raise ValidationError({"label": ["Label must produce a valid runtime key."]})
-
-        if runtime_key != business_unit.key:
-            if (
-                BusinessUnit.objects.filter(
-                    establishment=establishment,
-                    key=runtime_key,
-                )
-                .exclude(id=business_unit.id)
-                .exists()
-            ):
-                raise RuntimeConfigConflictError(
-                    code="duplicate_business_unit_key",
-                    detail="A business unit with this label already exists.",
-                )
-            business_unit.key = runtime_key
-
-        business_unit.label = normalized_label
-        update_fields.extend(["label", "key"])
-
-    if description is not None:
-        business_unit.description = description.strip()
-        update_fields.append("description")
-
-    if unit_type is not None:
-        business_unit.unit_type = unit_type
-        update_fields.append("unit_type")
-
-    if update_fields:
-        business_unit.save(update_fields=[*update_fields, "updated_at"])
-
-    return business_unit
+    try:
+        return reactivate_business_unit_domain(
+            establishment_id=establishment_id,
+            business_unit_id=business_unit_id,
+        )
+    except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
+        _map_runtime_domain_error(exc)
+        raise
 
 
 @transaction.atomic
@@ -3039,53 +3037,46 @@ def create_runtime_activity_subject(
     current_membership: EstablishmentMembership | None,
     establishment_id,
     business_unit_id,
-    label: str,
+    label: str | None = None,
     description: str = "",
     catalog_key: str | None = None,
 ) -> ActivitySubject:
-    establishment = _get_establishment_for_runtime_mutation(
+    _get_establishment_for_runtime_mutation(
         current_membership=current_membership,
         establishment_id=establishment_id,
     )
+    try:
+        return create_runtime_activity_subject_domain(
+            establishment_id=establishment_id,
+            business_unit_id=business_unit_id,
+            label=label,
+            description=description,
+            catalog_key=catalog_key,
+        )
+    except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
+        _map_runtime_domain_error(exc)
+        raise
 
-    business_unit = BusinessUnit.objects.filter(
-        id=business_unit_id,
-        establishment_id=establishment.id,
-        active=True,
-    ).first()
-    if business_unit is None:
-        raise RuntimeConfigNotFoundError
 
-    normalized_label = label.strip()
-    if not normalized_label:
-        raise ValidationError({"label": ["Label is required."]})
-
-    normalized_name = normalize_activity_subject_name(normalized_label)
-    if not normalized_name:
-        raise ValidationError({"label": ["Label must produce a valid subject name."]})
-
-    catalog_as = None
-    if catalog_key:
-        catalog_as = CatalogActivitySubject.objects.filter(key=catalog_key, active=True).first()
-
-    source = (
-        ActivitySubject.Source.CATALOG_SUGGESTION if catalog_key else ActivitySubject.Source.MANUAL
+@transaction.atomic
+def reactivate_runtime_activity_subject(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    activity_subject_id,
+) -> ActivitySubject:
+    _get_establishment_for_runtime_mutation(
+        current_membership=current_membership,
+        establishment_id=establishment_id,
     )
-
-    activity_subject, _created = ActivitySubject.objects.update_or_create(
-        establishment=establishment,
-        business_unit=business_unit,
-        normalized_name=normalized_name,
-        defaults={
-            "label": normalized_label,
-            "description": description.strip(),
-            "catalog_activity_subject": catalog_as,
-            "source": source,
-            "active": True,
-            "managed_by_onboarding_proposal": None,
-        },
-    )
-    return activity_subject
+    try:
+        return reactivate_activity_subject_domain(
+            establishment_id=establishment_id,
+            activity_subject_id=activity_subject_id,
+        )
+    except (DomainConflictError, DomainValidationError, DomainNotFoundError) as exc:
+        _map_runtime_domain_error(exc)
+        raise
 
 
 @transaction.atomic

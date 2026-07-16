@@ -19,10 +19,10 @@ function buildFeedItem(
     description_short: 'Description longue à ne pas afficher',
     status: 'in_progress',
     requires_validation: false,
-    pilot_business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     involved_poles: [
       {
-        business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+        business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
       },
     ],
     signal_summary: null,
@@ -36,13 +36,13 @@ function buildFeedItem(
         position: 1,
         task: 'Tâche 1',
         status: 'done',
-        business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+        business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
       },
       {
         position: 2,
         task: 'Tâche 2',
         status: 'pending',
-        business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+        business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
       },
     ],
     last_activity_at: '2026-07-06T10:00:00Z',

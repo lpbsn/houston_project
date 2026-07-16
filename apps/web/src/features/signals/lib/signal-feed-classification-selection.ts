@@ -4,7 +4,7 @@ import type { SignalFeedFilters } from './signal-feed-filters'
 
 export type ClassificationKeySelection = Pick<
   SignalFeedFilters,
-  'businessUnitKeys' | 'activitySubjectIds'
+  'businessUnitIds' | 'activitySubjectIds'
 >
 
 export type FeedClassificationSelectionState = 'checked' | 'indeterminate' | 'unchecked'
@@ -12,18 +12,18 @@ export type FeedClassificationSelectionState = 'checked' | 'indeterminate' | 'un
 export function collectClassificationKeysFromTree(
   businessUnits: BusinessUnitNode[],
 ): ClassificationKeySelection {
-  const businessUnitKeys: string[] = []
+  const businessUnitIds: string[] = []
   const activitySubjectIds: string[] = []
 
   for (const businessUnit of businessUnits) {
-    businessUnitKeys.push(businessUnit.key)
+    businessUnitIds.push(businessUnit.id)
     for (const subject of businessUnit.activity_subjects) {
       activitySubjectIds.push(subject.id)
     }
   }
 
   return {
-    businessUnitKeys: [...new Set(businessUnitKeys)].sort(),
+    businessUnitIds: [...new Set(businessUnitIds)].sort(),
     activitySubjectIds: [...new Set(activitySubjectIds)].sort(),
   }
 }
@@ -33,7 +33,7 @@ export function mergeClassificationSelections(
   addition: ClassificationKeySelection,
 ): ClassificationKeySelection {
   return {
-    businessUnitKeys: [...new Set([...current.businessUnitKeys, ...addition.businessUnitKeys])].sort(),
+    businessUnitIds: [...new Set([...current.businessUnitIds, ...addition.businessUnitIds])].sort(),
     activitySubjectIds: [
       ...new Set([...current.activitySubjectIds, ...addition.activitySubjectIds]),
     ].sort(),
@@ -42,14 +42,14 @@ export function mergeClassificationSelections(
 
 export function toggleBusinessUnitKey(
   selection: ClassificationKeySelection,
-  businessUnitKey: string,
+  businessUnitId: string,
   checked: boolean,
 ): ClassificationKeySelection {
   return {
     ...selection,
-    businessUnitKeys: checked
-      ? [...new Set([...selection.businessUnitKeys, businessUnitKey])].sort()
-      : selection.businessUnitKeys.filter((key) => key !== businessUnitKey),
+    businessUnitIds: checked
+      ? [...new Set([...selection.businessUnitIds, businessUnitId])].sort()
+      : selection.businessUnitIds.filter((id) => id !== businessUnitId),
   }
 }
 
@@ -70,7 +70,7 @@ export function getBusinessUnitSelectionState(
   businessUnit: BusinessUnitNode,
   selection: ClassificationKeySelection,
 ): FeedClassificationSelectionState {
-  if (selection.businessUnitKeys.includes(businessUnit.key)) {
+  if (selection.businessUnitIds.includes(businessUnit.id)) {
     return 'checked'
   }
 
@@ -89,26 +89,26 @@ export function getActivitySubjectSelectionState(
 }
 
 export function countClassificationSelections(selection: ClassificationKeySelection): number {
-  return selection.businessUnitKeys.length + selection.activitySubjectIds.length
+  return selection.businessUnitIds.length + selection.activitySubjectIds.length
 }
 
 export function buildClassificationLabelsFromTree(
   businessUnits: BusinessUnitNode[],
 ): {
-  labelByBusinessUnitKey: Map<string, string>
+  labelByBusinessUnitId: Map<string, string>
   labelByActivitySubjectId: Map<string, string>
 } {
-  const labelByBusinessUnitKey = new Map<string, string>()
+  const labelByBusinessUnitId = new Map<string, string>()
   const labelByActivitySubjectId = new Map<string, string>()
 
   for (const businessUnit of businessUnits) {
-    labelByBusinessUnitKey.set(businessUnit.key, businessUnit.label)
+    labelByBusinessUnitId.set(businessUnit.id, businessUnit.specific_name)
     for (const subject of businessUnit.activity_subjects) {
       labelByActivitySubjectId.set(subject.id, subject.label)
     }
   }
 
-  return { labelByBusinessUnitKey, labelByActivitySubjectId }
+  return { labelByBusinessUnitId, labelByActivitySubjectId }
 }
 
 export function filterBusinessUnitsBySearch(
@@ -123,12 +123,11 @@ export function filterBusinessUnitsBySearch(
   return businessUnits
     .map((businessUnit) => {
       const businessUnitMatches =
-        businessUnit.label.toLowerCase().includes(normalizedQuery) ||
-        businessUnit.key.toLowerCase().includes(normalizedQuery)
-      const matchingSubjects = businessUnit.activity_subjects.filter(
-        (subject) =>
-          subject.label.toLowerCase().includes(normalizedQuery) ||
-          subject.normalized_name.toLowerCase().includes(normalizedQuery),
+        businessUnit.specific_name.toLowerCase().includes(normalizedQuery) ||
+        businessUnit.generic.label.toLowerCase().includes(normalizedQuery) ||
+        businessUnit.generic.key.toLowerCase().includes(normalizedQuery)
+      const matchingSubjects = businessUnit.activity_subjects.filter((subject) =>
+        subject.label.toLowerCase().includes(normalizedQuery),
       )
 
       if (businessUnitMatches) {

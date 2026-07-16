@@ -10,7 +10,6 @@ from houston.establishments.models import (
 from houston.establishments.tests.taxonomy_helpers import create_membership_with_business_unit_scope
 from houston.signals.models import Signal
 from houston.signals.tests.conftest import (
-    RESTAURANT_MODULE_KEY,
     auth_headers,
     build_api_membership,
     create_minimal_v3_signal,
@@ -71,7 +70,7 @@ def test_feed_without_filters_unchanged(api_client):
     assert body["items"][0]["id"] == str(signal.id)
     assert body["applied_filters"]["view_mode"] == "general"
     assert body["applied_filters"]["statuses"] == []
-    assert body["applied_filters"]["business_unit_keys"] == []
+    assert body["applied_filters"]["business_unit_ids"] == []
 
 
 def test_feed_filters_by_single_status(api_client):
@@ -170,14 +169,14 @@ def test_feed_filters_v3_by_responsible_business_unit(api_client):
     response = _feed_get(
         api_client,
         membership,
-        "?view_mode=general&business_unit_keys=maintenance",
+        f"?view_mode=general&business_unit_ids={taxonomy.maintenance.id}",
     )
 
     assert response.status_code == 200
     body = response.json()
     assert len(body["items"]) == 1
     assert body["items"][0]["id"] == str(signal.id)
-    assert body["applied_filters"]["business_unit_keys"] == ["maintenance"]
+    assert body["applied_filters"]["business_unit_ids"] == [str(taxonomy.maintenance.id)]
 
 
 def test_feed_filters_v3_by_affected_business_unit(api_client):
@@ -203,7 +202,7 @@ def test_feed_filters_v3_by_affected_business_unit(api_client):
     response = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&business_unit_keys={RESTAURANT_MODULE_KEY}",
+        f"?view_mode=general&business_unit_ids={taxonomy.restaurant.id}",
     )
 
     assert response.status_code == 200
@@ -271,7 +270,7 @@ def test_feed_combines_bu_and_activity_subject(api_client):
         api_client,
         membership,
         "?view_mode=general"
-        f"&business_unit_keys={RESTAURANT_MODULE_KEY}"
+        f"&business_unit_ids={taxonomy.restaurant.id}"
         f"&activity_subject_ids={taxonomy.lighting_subject.id}",
     )
 
@@ -309,7 +308,7 @@ def test_personal_feed_bu_filter_within_scope(api_client):
     response = _feed_get(
         api_client,
         membership,
-        f"?view_mode=personal&business_unit_keys={taxonomy.bar.key}",
+        f"?view_mode=personal&business_unit_ids={taxonomy.bar.id}",
     )
 
     assert response.status_code == 200
@@ -340,7 +339,7 @@ def test_owner_sees_filtered_v3_signals(api_client):
     response = _feed_get(
         api_client,
         membership,
-        f"?view_mode=personal&business_unit_keys={taxonomy.maintenance.key}",
+        f"?view_mode=personal&business_unit_ids={taxonomy.maintenance.id}",
     )
 
     assert response.status_code == 200
@@ -358,13 +357,16 @@ def test_applied_filters_echoes_bu_as(api_client):
         api_client,
         membership,
         "?view_mode=general"
-        f"&business_unit_keys=bar,{RESTAURANT_MODULE_KEY}"
+        f"&business_unit_ids={taxonomy.bar.id},{taxonomy.restaurant.id}"
         f"&activity_subject_ids={taxonomy.lighting_subject.id}",
     )
 
     assert response.status_code == 200
     applied = response.json()["applied_filters"]
-    assert applied["business_unit_keys"] == ["bar", RESTAURANT_MODULE_KEY]
+    assert set(applied["business_unit_ids"]) == {
+        str(taxonomy.bar.id),
+        str(taxonomy.restaurant.id),
+    }
     assert applied["activity_subject_ids"] == [str(taxonomy.lighting_subject.id)]
 
 
@@ -385,7 +387,7 @@ def test_pagination_with_bu_filter_returns_next_cursor(api_client):
     response = _feed_get(
         api_client,
         membership,
-        "?view_mode=general&business_unit_keys=maintenance&page_size=2",
+        f"?view_mode=general&business_unit_ids={taxonomy.maintenance.id}&page_size=2",
     )
 
     assert response.status_code == 200
@@ -397,7 +399,10 @@ def test_pagination_with_bu_filter_returns_next_cursor(api_client):
     page_two = _feed_get(
         api_client,
         membership,
-        f"?view_mode=general&business_unit_keys=maintenance&page_size=2&cursor={body['next_cursor']}",
+        (
+            f"?view_mode=general&business_unit_ids={taxonomy.maintenance.id}"
+            f"&page_size=2&cursor={body['next_cursor']}"
+        ),
     )
 
     assert page_two.status_code == 200
@@ -458,3 +463,19 @@ def test_invalid_cursor_returns_400(api_client):
 
     assert response.status_code == 400
     assert response.json()["code"] == "validation_error"
+
+
+def test_legacy_business_unit_keys_param_returns_400(api_client):
+    membership = build_api_membership()
+    _create_signal(membership, title="One")
+
+    response = _feed_get(
+        api_client,
+        membership,
+        "?view_mode=general&business_unit_keys=restaurant",
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert "business_unit_ids" in body["detail"]

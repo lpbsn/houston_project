@@ -97,11 +97,11 @@ class SignalFeedView(EstablishmentScopedSignalMixin, APIView):
                 description="Comma-separated feed statuses: open, in_progress, resolved (max 3).",
             ),
             OpenApiParameter(
-                name="business_unit_keys",
+                name="business_unit_ids",
                 required=False,
                 type=str,
                 description=(
-                    "Comma-separated BusinessUnit keys (max 20). "
+                    "Comma-separated BusinessUnit UUIDs (max 20). "
                     "Matches affected_business_unit OR responsible_business_unit."
                 ),
             ),

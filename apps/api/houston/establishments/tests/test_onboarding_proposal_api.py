@@ -51,6 +51,27 @@ def test_proposal_endpoints_require_authentication(api_client):
     assert {response.status_code for response in responses} == {401}
 
 
+def _valid_manual_v4_payload() -> dict:
+    return {
+        "schema_version": "onboarding_proposal_v4",
+        "business_units": [
+            {
+                "client_key": "bu-coworking",
+                "catalog_key": "coworking",
+                "specific_name": "Coworking",
+                "instance_description": "",
+            }
+        ],
+        "activity_subjects": [
+            {
+                "client_key": "subject-proprete",
+                "business_unit_client_key": "bu-coworking",
+                "catalog_key": "coworking__proprete",
+            }
+        ],
+    }
+
+
 def test_owner_can_list_and_retrieve_v3_proposals(api_client):
     owner = create_user(username="proposal_api_owner")
     session = create_onboarding_session(actor=owner)
@@ -77,6 +98,60 @@ def test_owner_can_list_and_retrieve_v3_proposals(api_client):
     assert body["id"] == str(proposal.id)
     assert body["source"] == OnboardingProposal.Source.MANUAL
     assert body["payload"]["schema_version"] == "onboarding_proposal_v3"
+
+
+def test_owner_can_create_and_retrieve_v4_proposals(api_client):
+    owner = create_user(username="proposal_api_v4_owner")
+    session = create_onboarding_session(actor=owner)
+    payload = _valid_manual_v4_payload()
+
+    access_token = login(api_client, user=owner)
+    create_response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/",
+        {"payload": payload},
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert create_response.status_code == 201
+    proposal = create_response.json()["proposal"]
+    assert proposal["payload"]["schema_version"] == "onboarding_proposal_v4"
+    assert proposal["payload"]["business_units"][0]["specific_name"] == "Coworking"
+    assert "excluded_catalog_subject_keys" not in proposal["payload"]
+
+    detail_response = api_client.get(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/{proposal['id']}/",
+        **auth_headers(access_token),
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["payload"]["schema_version"] == "onboarding_proposal_v4"
+
+
+def test_v4_payload_rejects_v3_business_unit_shape(api_client):
+    owner = create_user(username="proposal_api_v4_shape_owner")
+    session = create_onboarding_session(actor=owner)
+    payload = {
+        "schema_version": "onboarding_proposal_v4",
+        "business_units": [
+            {
+                "client_key": "bu-coworking",
+                "label": "Coworking",
+                "unit_type": "dedicated",
+            }
+        ],
+        "activity_subjects": [],
+    }
+
+    access_token = login(api_client, user=owner)
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/proposals/",
+        {"payload": payload},
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 400
+    errors = response.json()["errors"]["payload"]["business_units"][0]
+    assert "catalog_key" in errors
+    assert "specific_name" in errors
 
 
 @pytest.mark.django_db(transaction=True)

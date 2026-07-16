@@ -22,6 +22,7 @@ _SIGNAL_LIST_SELECT_RELATED = (
     "affected_business_unit",
     "responsible_business_unit",
     "activity_subject",
+    "activity_subject__catalog_activity_subject",
 )
 _SIGNAL_REPORTER_PREFETCH = Prefetch(
     "source_observation_links",

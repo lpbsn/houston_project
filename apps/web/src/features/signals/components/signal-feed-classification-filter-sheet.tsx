@@ -32,7 +32,7 @@ export function SignalFeedClassificationFilterSheet({
 }: SignalFeedClassificationFilterSheetProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [draftSelection, setDraftSelection] = useState<ClassificationKeySelection>(() => ({
-    businessUnitKeys: [...appliedFilters.businessUnitKeys],
+    businessUnitIds: [...appliedFilters.businessUnitIds],
     activitySubjectIds: [...appliedFilters.activitySubjectIds],
   }))
 
@@ -64,7 +64,7 @@ export function SignalFeedClassificationFilterSheet({
 
   function handleClearAll() {
     setDraftSelection({
-      businessUnitKeys: [],
+      businessUnitIds: [],
       activitySubjectIds: [],
     })
   }
@@ -72,7 +72,7 @@ export function SignalFeedClassificationFilterSheet({
   function handleApply() {
     onApply({
       ...appliedFilters,
-      businessUnitKeys: draftSelection.businessUnitKeys,
+      businessUnitIds: draftSelection.businessUnitIds,
       activitySubjectIds: draftSelection.activitySubjectIds,
     })
     onClose()

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { BusinessUnitAutocomplete } from '@/features/onboarding/components/business-unit-autocomplete'
 import type { CatalogBusinessUnitSuggestion } from '@/features/onboarding/types'
 import {
+  allocateDistinctDraftSpecificName,
+  canAddDraftBusinessUnit,
   createDraftBusinessUnit,
   type DraftBusinessUnit,
 } from '@/features/onboarding/lib/manual-v2-proposal'
@@ -15,18 +17,13 @@ type ManualOnboardingV2BuPickerStepProps = {
   onChange: (businessUnits: DraftBusinessUnit[]) => void
 }
 
-function hasDuplicateLabel(businessUnits: DraftBusinessUnit[], label: string) {
-  const normalized = label.trim().toLowerCase()
-  return businessUnits.some((item) => item.label.trim().toLowerCase() === normalized)
-}
-
 export function ManualOnboardingV2BuPickerStep({
   businessUnits,
   disabled = false,
   onChange,
 }: ManualOnboardingV2BuPickerStepProps) {
   function addBusinessUnit(draft: DraftBusinessUnit) {
-    if (hasDuplicateLabel(businessUnits, draft.label)) {
+    if (!canAddDraftBusinessUnit(businessUnits, draft)) {
       return
     }
 
@@ -39,7 +36,7 @@ export function ManualOnboardingV2BuPickerStep({
 
     addBusinessUnit(
       createDraftBusinessUnit({
-        label: suggestion.label,
+        label: allocateDistinctDraftSpecificName(businessUnits, suggestion.label),
         suggested_unit_type: suggestedUnitType,
         catalog_key: suggestion.key,
       }),
@@ -47,7 +44,11 @@ export function ManualOnboardingV2BuPickerStep({
   }
 
   function handleAddFreeText(label: string) {
-    addBusinessUnit(createDraftBusinessUnit({ label }))
+    addBusinessUnit(
+      createDraftBusinessUnit({
+        label: allocateDistinctDraftSpecificName(businessUnits, label),
+      }),
+    )
   }
 
   function handleRemove(clientKey: string) {

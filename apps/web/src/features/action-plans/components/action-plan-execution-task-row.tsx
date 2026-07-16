@@ -98,7 +98,7 @@ export function ActionPlanExecutionTaskRow({
   const showMarkDone = isPending && canShowMarkDone
   const showUnmarkDone = isDone && canShowUnmarkDone
   const showSecondaryActions = isPending && canShowSecondaryActions
-  const poleLabel = task.business_unit?.label ?? null
+  const poleLabel = task.business_unit?.specific_name ?? null
   const deadlineLabel = formatActionPlanTaskDeadlineLabel(task.deadline_at)
   const assigneePoleLine = formatActionPlanTaskAssigneePoleLine({
     assigneeDisplayName: task.assigned_display_name,

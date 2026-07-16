@@ -567,6 +567,6 @@ def test_build_activation_summary_includes_business_units_and_readiness(
 
     summary = build_activation_summary(session=onboarding_session)
 
-    assert summary["active_business_units"][0]["key"] == "coworking"
+    assert summary["active_business_units"][0]["generic"]["key"] == "coworking"
     assert summary["readiness"]["is_ready"] is True
     assert summary["blockers"] == []

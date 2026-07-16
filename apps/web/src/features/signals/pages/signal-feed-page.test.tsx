@@ -88,7 +88,7 @@ vi.mock('@/features/signals/hooks/use-signal-feed-quick-actions', () => ({
 vi.mock('@/features/signals/components/signal-feed-filters-bar', () => ({
   EMPTY_SIGNAL_FEED_FILTERS: {
     statuses: [],
-    businessUnitKeys: [],
+    businessUnitIds: [],
     activitySubjectIds: [],
   },
   SignalFeedFiltersBar: () => null,

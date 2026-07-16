@@ -1,10 +1,10 @@
 import type { components } from '@/api/generated/types'
 
-export const MANUAL_V2_SCHEMA_VERSION = 'onboarding_proposal_v3'
+export const MANUAL_V2_SCHEMA_VERSION = 'onboarding_proposal_v4' as const
+export const MANUAL_V2_SCHEMA_VERSION_V3 = 'onboarding_proposal_v3' as const
 
 export type OnboardingProposalPayload = components['schemas']['OnboardingProposalPayload']
-export type ProposalBusinessUnitItem = components['schemas']['ProposalBusinessUnitItem']
-export type ProposalActivitySubjectItem = components['schemas']['ProposalActivitySubjectItem']
+export type OnboardingProposalPayloadV4 = components['schemas']['OnboardingProposalPayloadV4']
 
 export type BusinessUnitType = 'dedicated' | 'transversal'
 
@@ -30,19 +30,122 @@ export function createClientKey() {
   return crypto.randomUUID()
 }
 
+/** Mirrors apps/api/houston/establishments/taxonomy_normalization.py LABEL_FIXES + slugify_label. */
+const LABEL_FIXES: Record<string, string> = {
+  'Acceuil site': 'Accueil site',
+  'Communication/ commercialisation': 'Communication / commercialisation',
+  Evenements: 'Événements',
+}
+
+export function slugifyLabel(text: string): string {
+  let value = text.trim()
+  value = LABEL_FIXES[value] ?? value
+  value = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  value = Array.from(value)
+    .map((char) => (char.charCodeAt(0) <= 0x7f ? char : ''))
+    .join('')
+  value = value.replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase()
+  value = value.replace(/^_+|_+$/g, '')
+  return value || 'item'
+}
+
+export function normalizeDraftSpecificName(value: string): string {
+  return slugifyLabel(value)
+}
+
+export type DraftBusinessUnitNameIssue =
+  | { code: 'empty'; clientKey: string }
+  | { code: 'duplicate'; clientKey: string; normalized: string }
+
+export function validateDraftBusinessUnitNames(businessUnits: DraftBusinessUnit[]): {
+  ok: boolean
+  issues: DraftBusinessUnitNameIssue[]
+} {
+  const issues: DraftBusinessUnitNameIssue[] = []
+  const byNormalized = new Map<string, string[]>()
+
+  for (const businessUnit of businessUnits) {
+    if (businessUnit.label.trim().length === 0) {
+      issues.push({ code: 'empty', clientKey: businessUnit.client_key })
+      continue
+    }
+
+    const normalized = normalizeDraftSpecificName(businessUnit.label)
+    const clientKeys = byNormalized.get(normalized) ?? []
+    clientKeys.push(businessUnit.client_key)
+    byNormalized.set(normalized, clientKeys)
+  }
+
+  for (const [normalized, clientKeys] of byNormalized) {
+    if (clientKeys.length < 2) {
+      continue
+    }
+
+    for (const clientKey of clientKeys) {
+      issues.push({ code: 'duplicate', clientKey, normalized })
+    }
+  }
+
+  return { ok: issues.length === 0, issues }
+}
+
+function getDraftBusinessUnitType(businessUnit: DraftBusinessUnit): BusinessUnitType {
+  return businessUnit.unit_type ?? businessUnit.suggested_unit_type
+}
+
+export function canAddDraftBusinessUnit(
+  existing: DraftBusinessUnit[],
+  draft: DraftBusinessUnit,
+): boolean {
+  const catalogKey = draft.catalog_key?.trim()
+  if (!catalogKey || getDraftBusinessUnitType(draft) !== 'transversal') {
+    return true
+  }
+
+  return !existing.some(
+    (item) =>
+      item.catalog_key?.trim() === catalogKey && getDraftBusinessUnitType(item) === 'transversal',
+  )
+}
+
+export function allocateDistinctDraftSpecificName(
+  existing: DraftBusinessUnit[],
+  baseLabel: string,
+): string {
+  const base = baseLabel.trim() || 'Pôle'
+  const taken = new Set(
+    existing
+      .filter((businessUnit) => businessUnit.label.trim().length > 0)
+      .map((businessUnit) => normalizeDraftSpecificName(businessUnit.label)),
+  )
+
+  if (!taken.has(normalizeDraftSpecificName(base))) {
+    return base
+  }
+
+  let suffix = 2
+  while (taken.has(normalizeDraftSpecificName(`${base} ${suffix}`))) {
+    suffix += 1
+  }
+
+  return `${base} ${suffix}`
+}
+
 export function createDraftBusinessUnit(input: {
   label: string
   suggested_unit_type?: BusinessUnitType
   catalog_key?: string | null
   description?: string
 }): DraftBusinessUnit {
+  const suggested = input.suggested_unit_type ?? 'dedicated'
+  const hasCatalog = Boolean(input.catalog_key)
   return {
     client_key: createClientKey(),
     label: input.label.trim(),
     description: input.description?.trim() ?? '',
-    unit_type: null,
-    unit_type_confirmed: false,
-    suggested_unit_type: input.suggested_unit_type ?? 'dedicated',
+    unit_type: hasCatalog ? suggested : null,
+    unit_type_confirmed: hasCatalog,
+    suggested_unit_type: suggested,
     catalog_key: input.catalog_key ?? null,
   }
 }
@@ -65,39 +168,26 @@ export function createDraftActivitySubject(input: {
 export function buildManualV2Payload(
   businessUnits: DraftBusinessUnit[],
   activitySubjects: DraftActivitySubject[],
-  seedTrackers?: SubjectSeedTrackers,
-): OnboardingProposalPayload {
-  const payload: OnboardingProposalPayload = {
+  _seedTrackers?: SubjectSeedTrackers,
+): OnboardingProposalPayloadV4 {
+  void _seedTrackers
+
+  return {
     schema_version: MANUAL_V2_SCHEMA_VERSION,
-    business_units: businessUnits.map((item) => {
-      const businessUnit: ProposalBusinessUnitItem = {
-        client_key: item.client_key,
-        label: item.label,
-        description: item.description.trim(),
-        catalog_key: item.catalog_key,
-      }
-
-      if (item.unit_type_confirmed && item.unit_type) {
-        businessUnit.unit_type = item.unit_type
-      }
-
-      return businessUnit
-    }),
+    business_units: businessUnits.map((item) => ({
+      client_key: item.client_key,
+      catalog_key: item.catalog_key ?? '',
+      specific_name: item.label,
+      instance_description: item.description.trim(),
+    })),
     activity_subjects: activitySubjects.map((item) => ({
       client_key: item.client_key,
-      label: item.label,
-      description: item.description.trim(),
       business_unit_client_key: item.business_unit_client_key,
       catalog_key: item.catalog_key,
+      description: item.catalog_key ? '' : item.description.trim(),
+      ...(item.catalog_key ? {} : { label: item.label }),
     })),
   }
-
-  const excluded = serializeExcludedCatalogSubjectKeys(seedTrackers)
-  if (Object.keys(excluded).length > 0) {
-    payload.excluded_catalog_subject_keys = excluded
-  }
-
-  return payload
 }
 
 export function serializeExcludedCatalogSubjectKeys(
@@ -122,7 +212,10 @@ export function hydrateSeedTrackersFromPayload(
   businessUnits: DraftBusinessUnit[],
 ): SubjectSeedTrackers {
   const trackers = createEmptySubjectSeedTrackers()
-  const rawExcluded = payload.excluded_catalog_subject_keys
+  const rawExcluded =
+    'excluded_catalog_subject_keys' in payload
+      ? payload.excluded_catalog_subject_keys
+      : undefined
 
   if (rawExcluded && typeof rawExcluded === 'object' && !Array.isArray(rawExcluded)) {
     for (const [businessUnitClientKey, catalogKeys] of Object.entries(rawExcluded)) {
@@ -164,6 +257,7 @@ export function hydrateDraftFromProposalPayload(
   activitySubjects: DraftActivitySubject[]
   seedTrackers: SubjectSeedTrackers
 } {
+  const schemaVersion = String(payload.schema_version ?? '')
   const rawBusinessUnits = Array.isArray(payload.business_units) ? payload.business_units : []
   const rawActivitySubjects = Array.isArray(payload.activity_subjects)
     ? payload.activity_subjects
@@ -172,14 +266,29 @@ export function hydrateDraftFromProposalPayload(
   const businessUnits: DraftBusinessUnit[] = rawBusinessUnits
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
     .map((item) => {
-      const unitType = parseBusinessUnitType(item.unit_type)
+      if (schemaVersion === MANUAL_V2_SCHEMA_VERSION) {
+        const specificName = String(item.specific_name ?? item.label ?? '')
+        return {
+          client_key: String(item.client_key ?? createClientKey()),
+          label: specificName,
+          description: String(item.instance_description ?? item.description ?? ''),
+          unit_type: null,
+          unit_type_confirmed: Boolean(item.catalog_key),
+          suggested_unit_type: 'dedicated',
+          catalog_key:
+            item.catalog_key === null || item.catalog_key === undefined
+              ? null
+              : String(item.catalog_key),
+        }
+      }
 
+      const unitType = parseBusinessUnitType(item.unit_type)
       return {
         client_key: String(item.client_key ?? createClientKey()),
-        label: String(item.label ?? ''),
-        description: String(item.description ?? ''),
+        label: String(item.label ?? item.specific_name ?? ''),
+        description: String(item.description ?? item.instance_description ?? ''),
         unit_type: unitType,
-        unit_type_confirmed: unitType !== null,
+        unit_type_confirmed: unitType !== null || Boolean(item.catalog_key),
         suggested_unit_type: unitType ?? 'dedicated',
         catalog_key:
           item.catalog_key === null || item.catalog_key === undefined
@@ -391,6 +500,16 @@ export function updateBusinessUnitDescription(
   )
 }
 
+export function updateBusinessUnitLabel(
+  businessUnits: DraftBusinessUnit[],
+  clientKey: string,
+  label: string,
+): DraftBusinessUnit[] {
+  return businessUnits.map((item) =>
+    item.client_key === clientKey ? { ...item, label } : item,
+  )
+}
+
 export function updateBusinessUnitType(
   businessUnits: DraftBusinessUnit[],
   clientKey: string,
@@ -409,6 +528,10 @@ export function getBusinessUnitTypeDisplayValue(businessUnit: DraftBusinessUnit)
 
 export function hasValidBusinessUnitLabel(businessUnit: DraftBusinessUnit) {
   return businessUnit.label.trim().length > 0
+}
+
+export function hasCatalogKey(businessUnit: DraftBusinessUnit) {
+  return Boolean(businessUnit.catalog_key?.trim())
 }
 
 export function isBusinessUnitConfigured(
@@ -441,13 +564,17 @@ export function allBusinessUnitsHaveValidLabels(businessUnits: DraftBusinessUnit
   return businessUnits.length > 0 && businessUnits.every(hasValidBusinessUnitLabel)
 }
 
+export function allBusinessUnitsHaveCatalogKeys(businessUnits: DraftBusinessUnit[]) {
+  return businessUnits.length > 0 && businessUnits.every(hasCatalogKey)
+}
+
 export function allBusinessUnitsReadyForApplyStep(
   businessUnits: DraftBusinessUnit[],
   activitySubjects: DraftActivitySubject[],
 ) {
   return (
-    allBusinessUnitsHaveValidLabels(businessUnits) &&
-    allBusinessUnitsHaveConfirmedUnitType(businessUnits) &&
+    validateDraftBusinessUnitNames(businessUnits).ok &&
+    allBusinessUnitsHaveCatalogKeys(businessUnits) &&
     allBusinessUnitsConfigured(businessUnits, activitySubjects)
   )
 }
@@ -457,4 +584,14 @@ export function canContinueFromConfigStep(
   activitySubjects: DraftActivitySubject[],
 ) {
   return allBusinessUnitsReadyForApplyStep(businessUnits, activitySubjects)
+}
+
+export function getDraftBusinessUnitNameError(
+  businessUnit: DraftBusinessUnit,
+  businessUnits: DraftBusinessUnit[],
+): 'empty' | 'duplicate' | null {
+  const issue = validateDraftBusinessUnitNames(businessUnits).issues.find(
+    (item) => item.clientKey === businessUnit.client_key,
+  )
+  return issue?.code ?? null
 }

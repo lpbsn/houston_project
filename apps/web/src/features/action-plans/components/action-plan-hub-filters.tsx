@@ -31,7 +31,10 @@ export function ActionPlanHubFilters({
   onCreatedByMeChange,
 }: ActionPlanHubFiltersProps) {
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
-  const businessUnits = businessUnitQuery.data?.business_units ?? []
+  const businessUnits = (businessUnitQuery.data?.business_units ?? []).map((unit) => ({
+    id: unit.id,
+    label: unit.specific_name,
+  }))
 
   return (
     <div className="space-y-3">

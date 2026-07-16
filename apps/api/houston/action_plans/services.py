@@ -1154,10 +1154,18 @@ def create_action_plan_with_execution(
             catalog_status=catalog_status,
         )
     elif source_signal_id is not None:
-        signal = Signal.objects.filter(
-            id=source_signal_id,
-            establishment_id=establishment_id,
-        ).first()
+        signal = (
+            Signal.objects.filter(
+                id=source_signal_id,
+                establishment_id=establishment_id,
+            )
+            .select_related(
+                "affected_business_unit",
+                "responsible_business_unit",
+                "activity_subject",
+            )
+            .first()
+        )
         if signal is None:
             raise ActionPlanValidationError("Invalid signal.")
         _validate_linked_signal_active(signal=signal)
@@ -1196,10 +1204,19 @@ def create_action_plan_with_execution(
     normalized_title = _normalize_title(title)
     normalized_description = _normalize_description(description)
 
+    affected_business_unit = signal.affected_business_unit if signal is not None else None
+    responsible_business_unit = (
+        signal.responsible_business_unit if signal is not None else None
+    )
+    activity_subject = signal.activity_subject if signal is not None else None
+
     action_plan = ActionPlan.objects.create(
         establishment_id=establishment_id,
         created_by=created_by,
         pilot_business_unit=pilot_business_unit,
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible_business_unit,
+        activity_subject=activity_subject,
         title=normalized_title,
         description=normalized_description,
         requires_validation=requires_validation,
@@ -1222,6 +1239,9 @@ def create_action_plan_with_execution(
         end_at=end_at,
         visible_from=visible_from,
         occurrence_date=occurrence_date,
+        affected_business_unit=affected_business_unit,
+        responsible_business_unit=responsible_business_unit,
+        activity_subject=activity_subject,
     )
     _materialize_execution_structure(
         execution=execution,

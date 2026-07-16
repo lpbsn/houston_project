@@ -7,6 +7,9 @@ from typing import Literal
 from django.db.models import F
 
 from houston.establishments.models import EstablishmentMembership
+from houston.establishments.public_serialization import (
+    resolve_activity_subject_public_label,
+)
 from houston.observations.models import Observation, ObservationProcessing
 from houston.observations.permissions import can_view_observation_processing_status
 from houston.signals.models import CandidateSignal, Signal
@@ -95,10 +98,16 @@ def signal_summaries_for_observation(
             "affected_business_unit",
             "responsible_business_unit",
             "activity_subject",
+            "activity_subject__catalog_activity_subject",
         )
         .order_by("created_at")
     )
     for signal in signals:
+        subject_label = resolve_activity_subject_public_label(
+            activity_subject=signal.activity_subject
+            if signal.activity_subject_id
+            else None
+        )
         summaries.append(
             ObservationProcessingSignalSummary(
                 id=signal.id,
@@ -122,9 +131,7 @@ def signal_summaries_for_observation(
                 activity_subject_key=(
                     signal.activity_subject.normalized_name if signal.activity_subject_id else ""
                 ),
-                activity_subject_label=(
-                    signal.activity_subject.label if signal.activity_subject_id else ""
-                ),
+                activity_subject_label=subject_label or "",
                 location_text=signal.location_text,
             )
         )

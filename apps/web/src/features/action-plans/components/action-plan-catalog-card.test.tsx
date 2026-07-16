@@ -15,7 +15,7 @@ function buildListItem(
     title: 'Réassort bar hebdomadaire',
     description: 'Contrôle des stocks et réassort des produits bar.',
     catalog_status: 'active',
-    pilot_business_unit: { id: 'bu-1', key: 'bar', label: 'Bar' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Bar', instance_description: '', active: true, generic: { key: 'bar', label: 'Bar', description: '', unit_type: 'dedicated' } },
     task_count: 3,
     involved_pole_count: 1,
     created_at: '2026-01-01T00:00:00Z',

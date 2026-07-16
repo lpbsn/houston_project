@@ -38,7 +38,7 @@ export function ActionPlanCatalogCard({ item, onOpen, onUse }: ActionPlanCatalog
         <div className="flex items-center gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className={cn(catalogBadgeClassName, 'bg-black font-medium text-white')}>
-              {item.pilot_business_unit.label}
+              {item.pilot_business_unit.specific_name}
             </span>
             <span
               className={cn(

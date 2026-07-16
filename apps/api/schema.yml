@@ -2022,11 +2022,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/activity-subjects/{activity_subject_id}/reactivate/:
+    post:
+      operationId: v1_establishments_activity_subjects_reactivate_create
+      description: Reactivates an inactive runtime activity subject.
+      parameters:
+      - in: path
+        name: activity_subject_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivitySubjectTreeItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeConfigErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/business-units/:
     get:
       operationId: v1_establishments_business_units_retrieve
-      description: Returns the active BusinessUnit / ActivitySubject tree for the
-        establishment.
+      description: Returns the BusinessUnit / ActivitySubject tree for the establishment.
       parameters:
       - in: path
         name: establishment_id
@@ -2034,6 +2085,12 @@ paths:
           type: string
           format: uuid
         required: true
+      - in: query
+        name: include_inactive
+        schema:
+          type: boolean
+        description: When true and the actor can manage runtime context, include inactive
+          business units.
       tags:
       - establishments
       security:
@@ -2065,7 +2122,7 @@ paths:
           description: ''
     post:
       operationId: v1_establishments_business_units_create
-      description: Creates or reactivates a runtime business unit for an active establishment.
+      description: Creates a runtime business unit for an active establishment.
       parameters:
       - in: path
         name: establishment_id
@@ -2129,7 +2186,7 @@ paths:
   /api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/:
     patch:
       operationId: v1_establishments_business_units_partial_update
-      description: Updates a runtime business unit for an active establishment.
+      description: Updates a runtime business unit specific_name and/or instance_description.
       parameters:
       - in: path
         name: business_unit_id
@@ -2198,8 +2255,7 @@ paths:
   /api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/activity-subjects/:
     post:
       operationId: v1_establishments_business_units_activity_subjects_create
-      description: Creates or reactivates a runtime activity subject under a business
-        unit.
+      description: Creates a runtime activity subject under a business unit.
       parameters:
       - in: path
         name: business_unit_id
@@ -2226,7 +2282,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/RuntimeActivitySubjectCreateRequest'
-        required: true
       security:
       - BearerAccessToken: []
       responses:
@@ -2260,10 +2315,69 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeConfigErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/deactivate/:
     post:
       operationId: v1_establishments_business_units_deactivate_create
       description: Soft-deactivates a runtime business unit and its activity subjects.
+      parameters:
+      - in: path
+        name: business_unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishments
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessUnitTreeItem'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeConfigErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/business-units/{business_unit_id}/reactivate/:
+    post:
+      operationId: v1_establishments_business_units_reactivate_create
+      description: Reactivates an inactive runtime business unit without reseeding
+        subjects.
       parameters:
       - in: path
         name: business_unit_id
@@ -3897,10 +4011,10 @@ paths:
           type: string
         description: Comma-separated ActivitySubject UUIDs (max 50).
       - in: query
-        name: business_unit_keys
+        name: business_unit_ids
         schema:
           type: string
-        description: Comma-separated BusinessUnit keys (max 20). Matches affected_business_unit
+        description: Comma-separated BusinessUnit UUIDs (max 20). Matches affected_business_unit
           OR responsible_business_unit.
       - in: query
         name: cursor
@@ -5126,7 +5240,7 @@ paths:
     post:
       operationId: v1_onboarding_sessions_proposals_create
       description: Creates a manual onboarding proposal for Onboarding manuel V2 (schema
-        onboarding_proposal_v3).
+        onboarding_proposal_v3 or onboarding_proposal_v4).
       parameters:
       - in: path
         name: session_id
@@ -5235,7 +5349,8 @@ paths:
           description: ''
     patch:
       operationId: v1_onboarding_sessions_proposals_partial_update
-      description: Updates a draft onboarding proposal payload (onboarding_proposal_v3).
+      description: Updates a draft onboarding proposal payload (onboarding_proposal_v3
+        or onboarding_proposal_v4).
       parameters:
       - in: path
         name: proposal_id
@@ -5416,7 +5531,7 @@ paths:
     post:
       operationId: v1_onboarding_sessions_proposals_submit_create
       description: Validates and accepts all sections of an onboarding_proposal_v3
-        manual proposal.
+        or onboarding_proposal_v4 manual proposal.
       parameters:
       - in: path
         name: proposal_id
@@ -5548,14 +5663,25 @@ components:
         id:
           type: string
           format: uuid
-        normalized_name:
+        catalog_key:
           type: string
         label:
           type: string
+        description:
+          type: string
+        source:
+          type: string
+        active:
+          type: boolean
+        is_generic:
+          type: boolean
       required:
+      - active
+      - description
       - id
+      - is_generic
       - label
-      - normalized_name
+      - source
     ActionPlanAssigneeInput:
       type: object
       properties:
@@ -5609,14 +5735,20 @@ components:
         id:
           type: string
           format: uuid
-        key:
+        specific_name:
           type: string
-        label:
+        instance_description:
           type: string
+        active:
+          type: boolean
+        generic:
+          $ref: '#/components/schemas/BusinessUnitGeneric'
       required:
+      - active
+      - generic
       - id
-      - key
-      - label
+      - instance_description
+      - specific_name
     ActionPlanCreate201Response:
       oneOf:
       - $ref: '#/components/schemas/ActionPlanDetail'
@@ -6480,17 +6612,29 @@ components:
           type: string
         status:
           type: string
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         affected_business_unit_key:
           type: string
           nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         responsible_business_unit_key:
           type: string
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
           nullable: true
         activity_subject_normalized_name:
           type: string
@@ -6501,12 +6645,15 @@ components:
         location_text:
           type: string
       required:
+      - activity_subject_id
       - activity_subject_label
       - activity_subject_normalized_name
+      - affected_business_unit_id
       - affected_business_unit_key
       - affected_business_unit_label
       - id
       - location_text
+      - responsible_business_unit_id
       - responsible_business_unit_key
       - responsible_business_unit_label
       - status
@@ -6644,17 +6791,25 @@ components:
         id:
           type: string
           format: uuid
-        normalized_name:
+        catalog_key:
           type: string
         label:
           type: string
         description:
           type: string
+        source:
+          type: string
+        active:
+          type: boolean
+        is_generic:
+          type: boolean
       required:
+      - active
       - description
       - id
+      - is_generic
       - label
-      - normalized_name
+      - source
     ApiErrorResponse:
       type: object
       properties:
@@ -6777,12 +6932,9 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
-    BusinessUnitTreeItem:
+    BusinessUnitGeneric:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
         key:
           type: string
         label:
@@ -6791,17 +6943,36 @@ components:
           type: string
         unit_type:
           type: string
+      required:
+      - description
+      - key
+      - label
+      - unit_type
+    BusinessUnitTreeItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        specific_name:
+          type: string
+        instance_description:
+          type: string
+        active:
+          type: boolean
+        generic:
+          $ref: '#/components/schemas/BusinessUnitGeneric'
         activity_subjects:
           type: array
           items:
             $ref: '#/components/schemas/ActivitySubjectTreeItem'
       required:
+      - active
       - activity_subjects
-      - description
+      - generic
       - id
-      - key
-      - label
-      - unit_type
+      - instance_description
+      - specific_name
     BusinessUnitTreeResponse:
       type: object
       properties:
@@ -6838,9 +7009,12 @@ components:
           type: string
         label:
           type: string
+        description:
+          type: string
         unit_type:
           type: string
       required:
+      - description
       - key
       - label
       - unit_type
@@ -7959,6 +8133,15 @@ components:
       - code
       - detail
     OnboardingProposalPayload:
+      oneOf:
+      - $ref: '#/components/schemas/OnboardingProposalPayloadV3'
+      - $ref: '#/components/schemas/OnboardingProposalPayloadV4'
+      discriminator:
+        propertyName: schema_version
+        mapping:
+          onboarding_proposal_v3: '#/components/schemas/OnboardingProposalPayloadV3'
+          onboarding_proposal_v4: '#/components/schemas/OnboardingProposalPayloadV4'
+    OnboardingProposalPayloadV3:
       type: object
       properties:
         schema_version:
@@ -7966,21 +8149,32 @@ components:
         business_units:
           type: array
           items:
-            $ref: '#/components/schemas/ProposalBusinessUnitItem'
+            $ref: '#/components/schemas/ProposalBusinessUnitItemV3'
         activity_subjects:
           type: array
           items:
-            $ref: '#/components/schemas/ProposalActivitySubjectItem'
+            $ref: '#/components/schemas/ProposalActivitySubjectItemV3'
         excluded_catalog_subject_keys:
           type: object
           additionalProperties:
             type: array
             items:
               type: string
-        operational_units:
+      required:
+      - schema_version
+    OnboardingProposalPayloadV4:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        business_units:
           type: array
           items:
-            $ref: '#/components/schemas/ProposalDomainOrUnitItem'
+            $ref: '#/components/schemas/ProposalBusinessUnitItemV4'
+        activity_subjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalActivitySubjectItemV4'
       required:
       - schema_version
     OnboardingProposalResponse:
@@ -8225,13 +8419,11 @@ components:
     PatchedRuntimeBusinessUnitUpdateRequest:
       type: object
       properties:
-        label:
+        specific_name:
           type: string
           maxLength: 255
-        description:
+        instance_description:
           type: string
-        unit_type:
-          $ref: '#/components/schemas/UnitTypeEnum'
     PatchedUserProfileUpdateRequest:
       type: object
       properties:
@@ -8300,7 +8492,7 @@ components:
         * `action_required` - Action required
         * `urgent` - Urgent
         * `system` - System
-    ProposalActivitySubjectItem:
+    ProposalActivitySubjectItemV3:
       type: object
       properties:
         client_key:
@@ -8319,7 +8511,26 @@ components:
       - business_unit_client_key
       - client_key
       - label
-    ProposalBusinessUnitItem:
+    ProposalActivitySubjectItemV4:
+      type: object
+      properties:
+        client_key:
+          type: string
+        business_unit_client_key:
+          type: string
+        catalog_key:
+          type: string
+          nullable: true
+        label:
+          type: string
+          nullable: true
+        description:
+          type: string
+          default: ''
+      required:
+      - business_unit_client_key
+      - client_key
+    ProposalBusinessUnitItemV3:
       type: object
       properties:
         client_key:
@@ -8338,6 +8549,22 @@ components:
       required:
       - client_key
       - label
+    ProposalBusinessUnitItemV4:
+      type: object
+      properties:
+        client_key:
+          type: string
+        catalog_key:
+          type: string
+        specific_name:
+          type: string
+        instance_description:
+          type: string
+          default: ''
+      required:
+      - catalog_key
+      - client_key
+      - specific_name
     ProposalCommandResponse:
       type: object
       properties:
@@ -8348,26 +8575,6 @@ components:
       required:
       - proposal
       - session
-    ProposalDomainOrUnitItem:
-      type: object
-      properties:
-        key:
-          type: string
-        label:
-          type: string
-        reason:
-          type: string
-        confidence_score:
-          type: number
-          format: double
-          nullable: true
-        related_modules:
-          type: array
-          items:
-            type: string
-      required:
-      - key
-      - label
     ProposalValidationErrorItem:
       type: object
       properties:
@@ -8503,6 +8710,7 @@ components:
       properties:
         label:
           type: string
+          nullable: true
           maxLength: 255
         description:
           type: string
@@ -8510,26 +8718,21 @@ components:
         catalog_key:
           type: string
           nullable: true
-      required:
-      - label
     RuntimeBusinessUnitCreateRequest:
       type: object
       properties:
-        label:
-          type: string
-          maxLength: 255
-        description:
-          type: string
-          default: ''
-        unit_type:
-          allOf:
-          - $ref: '#/components/schemas/UnitTypeEnum'
-          default: dedicated
         catalog_key:
           type: string
-          nullable: true
+          maxLength: 100
+        specific_name:
+          type: string
+          maxLength: 255
+        instance_description:
+          type: string
+          default: ''
       required:
-      - label
+      - catalog_key
+      - specific_name
     RuntimeConfigErrorResponse:
       type: object
       properties:
@@ -8610,17 +8813,29 @@ components:
           type: string
         is_pinned:
           type: boolean
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         affected_business_unit_key:
           type: string
           nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         responsible_business_unit_key:
           type: string
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
           nullable: true
         activity_subject_normalized_name:
           type: string
@@ -8716,17 +8931,29 @@ components:
           type: string
         is_pinned:
           type: boolean
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         affected_business_unit_key:
           type: string
           nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         responsible_business_unit_key:
           type: string
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
           nullable: true
         activity_subject_normalized_name:
           type: string
@@ -8867,14 +9094,6 @@ components:
       - correlation_id
       - language
       - text
-    UnitTypeEnum:
-      enum:
-      - dedicated
-      - transversal
-      type: string
-      description: |-
-        * `dedicated` - Dedicated
-        * `transversal` - Transversal
     UserPublic:
       type: object
       properties:

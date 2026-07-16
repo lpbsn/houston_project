@@ -26,7 +26,7 @@ function buildPlanFeedWrapper(
       description_short: 'Description plan',
       status: 'in_progress',
       requires_validation: false,
-      pilot_business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+      pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
       involved_poles: [],
       signal_summary: null,
       assignees: [{ membership_id: 'member-1', display_name: 'Alice' }],

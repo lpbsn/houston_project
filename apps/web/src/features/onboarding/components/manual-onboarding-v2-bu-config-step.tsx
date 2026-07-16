@@ -9,6 +9,7 @@ import { useActivitySubjectSuggestions } from '@/features/onboarding/hooks'
 import {
   createDraftActivitySubject,
   getBusinessUnitTypeDisplayValue,
+  getDraftBusinessUnitNameError,
   isBusinessUnitConfigured,
   type BusinessUnitType,
   type DraftActivitySubject,
@@ -23,6 +24,7 @@ type ManualOnboardingV2BuConfigStepProps = {
   disabled?: boolean
   isSeedingSubjects?: boolean
   onBusinessUnitDescriptionChange: (clientKey: string, description: string) => void
+  onBusinessUnitLabelChange: (clientKey: string, label: string) => void
   onBusinessUnitTypeChange: (clientKey: string, unitType: BusinessUnitType) => void
   onChange: (activitySubjects: DraftActivitySubject[]) => void
   onExcludeCatalogSubject: (businessUnitClientKey: string, catalogKey: string) => void
@@ -96,21 +98,26 @@ function BusinessUnitTypeSelector({
 
 function ActivitySubjectEditor({
   businessUnit,
+  businessUnits,
   activitySubjects,
   disabled,
   onBusinessUnitDescriptionChange,
+  onBusinessUnitLabelChange,
   onBusinessUnitTypeChange,
   onChange,
   onExcludeCatalogSubject,
 }: {
   businessUnit: DraftBusinessUnit
+  businessUnits: DraftBusinessUnit[]
   activitySubjects: DraftActivitySubject[]
   disabled?: boolean
   onBusinessUnitDescriptionChange: (clientKey: string, description: string) => void
+  onBusinessUnitLabelChange: (clientKey: string, label: string) => void
   onBusinessUnitTypeChange: (clientKey: string, unitType: BusinessUnitType) => void
   onChange: (activitySubjects: DraftActivitySubject[]) => void
   onExcludeCatalogSubject: (businessUnitClientKey: string, catalogKey: string) => void
 }) {
+  const nameError = getDraftBusinessUnitNameError(businessUnit, businessUnits)
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
@@ -169,13 +176,46 @@ function ActivitySubjectEditor({
   return (
     <div className="space-y-3 rounded-[1.25rem] border border-[#ece5da] bg-[#fffdf9] p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h4 className="font-semibold">{businessUnit.label}</h4>
+        <h4 className="font-semibold">{businessUnit.label.trim() || 'Pôle sans nom'}</h4>
+        {businessUnit.catalog_key ? (
+          <Badge variant="secondary">{businessUnit.catalog_key}</Badge>
+        ) : null}
         {businessUnit.unit_type_confirmed &&
         isBusinessUnitConfigured(businessUnit, activitySubjects) ? (
           <Badge className="bg-emerald-600 text-white">Configuré</Badge>
         ) : (
           <Badge variant="outline">Configuration requise</Badge>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <label
+          className="text-sm font-medium"
+          htmlFor={`bu-specific-name-${businessUnit.client_key}`}
+        >
+          Nom d’instance
+        </label>
+        <Input
+          id={`bu-specific-name-${businessUnit.client_key}`}
+          disabled={disabled}
+          value={businessUnit.label}
+          onChange={(event) => {
+            onBusinessUnitLabelChange(businessUnit.client_key, event.target.value)
+          }}
+          placeholder="Nom unique de ce pôle dans l’établissement"
+          className="h-10 rounded-[0.9rem] border-[#e7dfd1] bg-white"
+          aria-invalid={nameError !== null}
+        />
+        {nameError === 'empty' ? (
+          <p className="text-xs text-[#8f3f37]" role="alert">
+            Le nom d’instance est requis.
+          </p>
+        ) : null}
+        {nameError === 'duplicate' ? (
+          <p className="text-xs text-[#8f3f37]" role="alert">
+            Ce nom d’instance est déjà utilisé par un autre pôle.
+          </p>
+        ) : null}
       </div>
 
       <BusinessUnitTypeSelector
@@ -311,6 +351,7 @@ export function ManualOnboardingV2BuConfigStep({
   disabled = false,
   isSeedingSubjects = false,
   onBusinessUnitDescriptionChange,
+  onBusinessUnitLabelChange,
   onBusinessUnitTypeChange,
   onChange,
   onExcludeCatalogSubject,
@@ -320,8 +361,9 @@ export function ManualOnboardingV2BuConfigStep({
       <div>
         <h3 className="text-lg font-semibold">Étape 2 — Vos pôles</h3>
         <p className="text-sm leading-6 text-muted-foreground">
-          Pour chaque pôle, choisissez s&apos;il est dédié ou transversal, ajoutez au moins un sujet
-          d&apos;activité, et complétez la description si besoin.
+          Pour chaque pôle, renseignez un nom d&apos;instance unique, choisissez s&apos;il est dédié
+          ou transversal, ajoutez au moins un sujet d&apos;activité, et complétez la description si
+          besoin.
         </p>
       </div>
 
@@ -337,9 +379,11 @@ export function ManualOnboardingV2BuConfigStep({
           <ActivitySubjectEditor
             key={businessUnit.client_key}
             businessUnit={businessUnit}
+            businessUnits={businessUnits}
             activitySubjects={activitySubjects}
             disabled={disabled}
             onBusinessUnitDescriptionChange={onBusinessUnitDescriptionChange}
+            onBusinessUnitLabelChange={onBusinessUnitLabelChange}
             onBusinessUnitTypeChange={onBusinessUnitTypeChange}
             onChange={onChange}
             onExcludeCatalogSubject={onExcludeCatalogSubject}
