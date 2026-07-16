@@ -74,14 +74,16 @@ def try_convert_v3_payload_to_v4(payload: dict[str, Any]) -> dict[str, Any] | No
         subject: dict[str, Any] = {
             "client_key": client_key,
             "business_unit_client_key": business_unit_client_key,
-            "description": description,
         }
         if isinstance(catalog_key, str) and catalog_key.strip():
+            # Catalog identity wins; omit label/description for v4 XOR.
             subject["catalog_key"] = catalog_key.strip()
-        else:
+        elif isinstance(label, str) and label.strip():
             subject["catalog_key"] = None
-        if isinstance(label, str):
             subject["label"] = label
+            subject["description"] = description
+        else:
+            return None
         activity_subjects.append(subject)
 
     return {

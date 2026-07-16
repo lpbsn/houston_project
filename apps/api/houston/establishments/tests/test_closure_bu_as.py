@@ -65,7 +65,15 @@ def test_process_non_terminal_v3_proposals_converts_convertible_rows(imported_ca
                     "client_key": "subject-proprete",
                     "business_unit_client_key": "bu-coworking",
                     "catalog_key": "coworking__proprete",
-                }
+                    "label": "Propreté",
+                    "description": "Catalog desc ignored",
+                },
+                {
+                    "client_key": "subject-free",
+                    "business_unit_client_key": "bu-coworking",
+                    "label": "Salle libre",
+                    "description": "Espace dédié",
+                },
             ],
         },
     )
@@ -77,6 +85,18 @@ def test_process_non_terminal_v3_proposals_converts_convertible_rows(imported_ca
     assert proposal.payload["schema_version"] == "onboarding_proposal_v4"
     assert proposal.payload["business_units"][0]["specific_name"] == "Coworking"
     assert proposal.status == OnboardingProposal.Status.DRAFT
+
+    catalog_subject = proposal.payload["activity_subjects"][0]
+    assert catalog_subject["catalog_key"] == "coworking__proprete"
+    assert "label" not in catalog_subject
+    assert "description" not in catalog_subject
+
+    free_subject = proposal.payload["activity_subjects"][1]
+    assert free_subject["catalog_key"] is None
+    assert free_subject["label"] == "Salle libre"
+    assert free_subject["description"] == "Espace dédié"
+
+    validate_onboarding_proposal_payload(proposal.payload)
 
 
 def test_process_non_terminal_v3_proposals_rejects_unconvertible_rows():
