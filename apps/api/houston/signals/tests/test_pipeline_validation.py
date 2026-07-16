@@ -111,8 +111,8 @@ def test_run_pipeline_marks_failed_on_invalid_issue_focus():
 def test_run_pipeline_marks_failed_when_no_snapshot_ready_business_units():
     membership = build_membership()
     hotel = _setup_hotel_taxonomy(membership.establishment)
-    hotel.routing_key = ""
-    hotel.save(update_fields=["routing_key", "updated_at"])
+    hotel.active = False
+    hotel.save(update_fields=["active", "updated_at"])
     observation = create_observation(membership=membership)
     provider = FakeObservationPipelineProvider(
         payload={"schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION, "candidates": []}
@@ -219,7 +219,7 @@ def test_apply_pipeline_creates_open_signal():
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
     signal = Signal.objects.get()
     assert signal.status == Signal.Status.OPEN
-    assert signal.affected_business_unit.key == "hotel"
+    assert signal.affected_business_unit.catalog_business_unit.key == "hotel"
     assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.CREATED_SIGNAL).exists()
 
 

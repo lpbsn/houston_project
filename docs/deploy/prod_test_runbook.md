@@ -123,26 +123,28 @@ Destructive — use only on prod-test, not production.
 
 ---
 
-## 7b. Taxonomy contraction / reset (future — documentation only)
+## 7b. Taxonomy contraction / reset
 
-Use when dropping dual-write legacy BU/AS columns or resetting an environment for taxonomy identity. **Do not execute as part of Lot 8 docs.** Domain context: [`../product/domains/business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md).
+Contraction migrations ship as `establishments.0024` (v3 proposal preflight) → `0025` (identity harden + PROTECT) → `0026` (drop BU legacy columns). Domain: [`../product/domains/business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md).
 
-**If data must be retained:** do **not** reset Postgres. Plan an explicit backfill / data migration, then continue from step 6 with the contraction deploy.
+**Before deploy on an environment with data:** run `make preflight-onboarding-v3` (or `manage.py preflight_onboarding_v3 --fail-if-present`). Non-terminal v3 proposals must be converted or rejected first.
+
+**If data must be retained:** do **not** reset Postgres. Rely on the backfill in `0025` (fails hard on incomplete/colliding rows). Import catalogue before/after as needed so catalog FKs resolve.
 
 **If no data must be retained**, follow this order:
 
-1. Readers and writers migrated (all read/write paths on identity fields; no remaining dependence on legacy instance columns)
+1. Readers and writers already on identity fields (this release)
 2. Tests green
 3. Maintenance and stop writes / workers
 4. Railway backup (Postgres + media per contract)
-5. Reset Postgres **only** when nothing must be kept (empty restore / new instance + update `POSTGRES_*`); clear `private_media` on api-web
-6. Deploy the version that contains the contraction migrations
-7. Run migrations
+5. Reset Postgres **only** when nothing must be kept; clear `private_media` on api-web
+6. Deploy this version
+7. Run migrations (`0024`–`0026`)
 8. Import catalogue (`import_business_unit_catalog`)
 9. Smoke tests and golden IA v5
 10. Reactivate workers and reopen writes after validation
 
-Local equivalent of a full wipe (no data retained): `make reset-dev-db` — see [`../engineering/local_development.md`](../engineering/local_development.md).
+Local equivalent of a full wipe: `make reset-dev-db` — see [`../engineering/local_development.md`](../engineering/local_development.md).
 
 ---
 

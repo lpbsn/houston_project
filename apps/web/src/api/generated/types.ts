@@ -1609,7 +1609,7 @@ export interface paths {
         /** @description Lists onboarding proposals for a path-scoped onboarding session. */
         get: operations["v1_onboarding_sessions_proposals_list"];
         put?: never;
-        /** @description Creates a manual onboarding proposal for Onboarding manuel V2 (schema onboarding_proposal_v3 or onboarding_proposal_v4). */
+        /** @description Creates a manual onboarding proposal for Onboarding manuel (schema onboarding_proposal_v4). */
         post: operations["v1_onboarding_sessions_proposals_create"];
         delete?: never;
         options?: never;
@@ -1631,7 +1631,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Updates a draft onboarding proposal payload (onboarding_proposal_v3 or onboarding_proposal_v4). */
+        /** @description Updates a draft onboarding proposal payload (onboarding_proposal_v4). */
         patch: operations["v1_onboarding_sessions_proposals_partial_update"];
         trace?: never;
     };
@@ -1678,7 +1678,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Validates and accepts all sections of an onboarding_proposal_v3 or onboarding_proposal_v4 manual proposal. */
+        /** @description Validates and accepts all sections of an onboarding_proposal_v4 manual proposal. */
         post: operations["v1_onboarding_sessions_proposals_submit_create"];
         delete?: never;
         options?: never;

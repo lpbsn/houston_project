@@ -5,7 +5,6 @@ from django.db import IntegrityError
 from houston.accounts.models import User
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
-    ActivitySubject,
     BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
@@ -20,6 +19,7 @@ from houston.establishments.services import (
     start_onboarding_session,
 )
 from houston.organizations.models import Organization
+from houston.testing.taxonomy import create_activity_subject, create_business_unit
 
 pytestmark = pytest.mark.django_db
 
@@ -77,53 +77,85 @@ def test_membership_role_and_status_defaults(user, establishment):
     assert membership.status == EstablishmentMembership.Status.INVITED
 
 
-def test_business_unit_unique_key_per_establishment(establishment):
+def test_business_unit_unique_normalized_specific_name_per_establishment(
+    establishment,
+    imported_catalog,
+):
+    import uuid
+
+    from houston.establishments.business_unit_identity import (
+        build_business_unit_routing_key,
+        normalize_business_unit_specific_name,
+    )
+    from houston.establishments.models import CatalogBusinessUnit
+
+    catalog = CatalogBusinessUnit.objects.get(key="maintenance")
+    business_unit_id = uuid.uuid4()
     BusinessUnit.objects.create(
+        id=business_unit_id,
         establishment=establishment,
-        key="maintenance",
-        label="Maintenance",
+        catalog_business_unit=catalog,
+        specific_name="Maintenance",
+        normalized_specific_name=normalize_business_unit_specific_name("Maintenance"),
+        routing_key=build_business_unit_routing_key(
+            business_unit_id=business_unit_id,
+            catalog_key=catalog.key,
+            specific_name="Maintenance",
+        ),
+        instance_description="",
+        source=BusinessUnit.Source.MANUAL,
+        active=True,
     )
     with pytest.raises(IntegrityError):
+        duplicate_id = uuid.uuid4()
         BusinessUnit.objects.create(
+            id=duplicate_id,
             establishment=establishment,
-            key="maintenance",
-            label="Maintenance Duplicate",
+            catalog_business_unit=catalog,
+            specific_name="Maintenance",
+            normalized_specific_name=normalize_business_unit_specific_name("Maintenance"),
+            routing_key=build_business_unit_routing_key(
+                business_unit_id=duplicate_id,
+                catalog_key=catalog.key,
+                specific_name="Maintenance",
+            ),
+            instance_description="",
+            source=BusinessUnit.Source.MANUAL,
+            active=True,
         )
 
 
-def test_business_unit_same_key_allowed_across_establishments(organization, establishment):
+def test_business_unit_same_catalog_key_allowed_across_establishments(organization, establishment):
     other_establishment = Establishment.objects.create(name="Cannes", organization=organization)
-    first = BusinessUnit.objects.create(
+    first = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
     )
-    second = BusinessUnit.objects.create(
+    second = create_business_unit(
         establishment=other_establishment,
         key="maintenance",
         label="Maintenance",
     )
-    assert first.key == second.key
+    assert first.catalog_business_unit_id == second.catalog_business_unit_id
 
 
 def test_activity_subject_unique_per_business_unit(establishment):
-    bu = BusinessUnit.objects.create(
+    bu = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=bu,
-        normalized_name="plomberie",
         label="Plomberie",
     )
     with pytest.raises(IntegrityError):
-        ActivitySubject.objects.create(
+        create_activity_subject(
             establishment=establishment,
             business_unit=bu,
-            normalized_name="plomberie",
-            label="Plomberie duplicate",
+            label="Plomberie",
         )
 
 
@@ -141,7 +173,7 @@ def test_auth_user_model_setting():
 
 def test_membership_scope_unique_business_unit_per_membership(user, establishment):
     membership = EstablishmentMembership.objects.create(user=user, establishment=establishment)
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
@@ -153,7 +185,7 @@ def test_membership_scope_unique_business_unit_per_membership(user, establishmen
 
 def test_membership_delete_cascades_membership_scope(user, establishment):
     membership = EstablishmentMembership.objects.create(user=user, establishment=establishment)
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
@@ -165,7 +197,7 @@ def test_membership_delete_cascades_membership_scope(user, establishment):
 
 def test_business_unit_delete_cascades_membership_scope(user, establishment):
     membership = EstablishmentMembership.objects.create(user=user, establishment=establishment)
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",

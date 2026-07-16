@@ -72,7 +72,7 @@ def _valid_manual_v4_payload() -> dict:
     }
 
 
-def test_owner_can_list_and_retrieve_v3_proposals(api_client):
+def test_owner_can_list_and_retrieve_v4_proposals(api_client):
     owner = create_user(username="proposal_api_owner")
     session = create_onboarding_session(actor=owner)
     proposal = create_manual_onboarding_proposal(
@@ -97,7 +97,7 @@ def test_owner_can_list_and_retrieve_v3_proposals(api_client):
     body = detail_response.json()
     assert body["id"] == str(proposal.id)
     assert body["source"] == OnboardingProposal.Source.MANUAL
-    assert body["payload"]["schema_version"] == "onboarding_proposal_v3"
+    assert body["payload"]["schema_version"] == "onboarding_proposal_v4"
 
 
 def test_owner_can_create_and_retrieve_v4_proposals(api_client):

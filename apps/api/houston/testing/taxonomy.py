@@ -57,17 +57,20 @@ def create_business_unit(
             "sort_order": 0,
         },
     )
+    normalized = normalize_business_unit_specific_name(label_value)
+    existing = BusinessUnit.objects.filter(
+        establishment=establishment,
+        normalized_specific_name=normalized,
+    ).first()
+    if existing is not None:
+        return existing
     business_unit_id = uuid.uuid4()
     return BusinessUnit.objects.create(
         id=business_unit_id,
         establishment=establishment,
-        key=key,
-        label=label_value,
-        description=description,
-        unit_type=catalog.unit_type,
         catalog_business_unit=catalog,
         specific_name=label_value,
-        normalized_specific_name=normalize_business_unit_specific_name(label_value),
+        normalized_specific_name=normalized,
         routing_key=build_business_unit_routing_key(
             business_unit_id=business_unit_id,
             catalog_key=catalog.key,
@@ -118,7 +121,7 @@ def business_unit_scope_payload(business_unit: BusinessUnit) -> dict[str, str]:
     return {
         "scope_type": "business_unit",
         "scope_id": str(business_unit.id),
-        "scope_label": business_unit.label or business_unit.key or str(business_unit.id),
+        "scope_label": business_unit.specific_name or str(business_unit.id),
     }
 
 
@@ -154,66 +157,12 @@ def _get_or_create_business_unit(
     label: str,
     unit_type: str = BusinessUnit.UnitType.DEDICATED,
 ) -> BusinessUnit:
-    catalog, _ = CatalogBusinessUnit.objects.get_or_create(
-        key=key,
-        defaults={
-            "label": label,
-            "description": "",
-            "unit_type": unit_type,
-            "active": True,
-            "sort_order": 0,
-        },
-    )
-    business_unit_id = uuid.uuid4()
-    business_unit, created = BusinessUnit.objects.get_or_create(
+    return create_business_unit(
         establishment=establishment,
         key=key,
-        defaults={
-            "id": business_unit_id,
-            "label": label,
-            "description": "",
-            "unit_type": catalog.unit_type,
-            "catalog_business_unit": catalog,
-            "specific_name": label,
-            "normalized_specific_name": normalize_business_unit_specific_name(label),
-            "routing_key": build_business_unit_routing_key(
-                business_unit_id=business_unit_id,
-                catalog_key=catalog.key,
-                specific_name=label,
-            ),
-            "instance_description": "",
-            "source": BusinessUnit.Source.MANUAL,
-            "active": True,
-        },
+        label=label,
+        unit_type=unit_type,
     )
-    if not created and (
-        not business_unit.specific_name or business_unit.catalog_business_unit_id is None
-    ):
-        update_fields = ["updated_at"]
-        if business_unit.catalog_business_unit_id is None:
-            business_unit.catalog_business_unit = catalog
-            update_fields.append("catalog_business_unit")
-        if not business_unit.specific_name:
-            business_unit.specific_name = label
-            business_unit.normalized_specific_name = normalize_business_unit_specific_name(
-                label
-            )
-            business_unit.routing_key = build_business_unit_routing_key(
-                business_unit_id=business_unit.id,
-                catalog_key=catalog.key,
-                specific_name=label,
-            )
-            business_unit.instance_description = business_unit.instance_description or ""
-            update_fields.extend(
-                [
-                    "specific_name",
-                    "normalized_specific_name",
-                    "routing_key",
-                    "instance_description",
-                ]
-            )
-        business_unit.save(update_fields=update_fields)
-    return business_unit
 
 
 def _get_or_create_activity_subject(
@@ -223,29 +172,23 @@ def _get_or_create_activity_subject(
     label: str,
 ) -> ActivitySubject:
     normalized_name = normalize_activity_subject_name(label)
-    activity_subject_id = uuid.uuid4()
-    subject, created = ActivitySubject.objects.get_or_create(
+    existing = ActivitySubject.objects.filter(
         business_unit=business_unit,
         normalized_name=normalized_name,
-        defaults={
-            "id": activity_subject_id,
-            "establishment": establishment,
-            "label": label,
-            "routing_key": build_free_activity_subject_routing_key(
-                activity_subject_id=activity_subject_id,
-                label=label,
-            ),
-            "source": ActivitySubject.Source.MANUAL,
-            "active": True,
-        },
+    ).first()
+    if existing is not None:
+        if not existing.routing_key:
+            existing.routing_key = build_free_activity_subject_routing_key(
+                activity_subject_id=existing.id,
+                label=existing.label or label,
+            )
+            existing.save(update_fields=["routing_key", "updated_at"])
+        return existing
+    return create_activity_subject(
+        establishment=establishment,
+        business_unit=business_unit,
+        label=label,
     )
-    if not created and not subject.routing_key:
-        subject.routing_key = build_free_activity_subject_routing_key(
-            activity_subject_id=subject.id,
-            label=subject.label or label,
-        )
-        subject.save(update_fields=["routing_key", "updated_at"])
-    return subject
 
 
 def create_restaurant_business_units(establishment: Establishment) -> RestaurantBusinessUnits:

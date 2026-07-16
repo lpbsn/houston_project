@@ -115,15 +115,12 @@ def create_activity_subject(
     business_unit: BusinessUnit,
     label: str,
 ) -> ActivitySubject:
-    from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
+    from houston.testing.taxonomy import create_activity_subject as taxonomy_create_activity_subject
 
-    return ActivitySubject.objects.create(
+    return taxonomy_create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name=normalize_activity_subject_name(label),
         label=label,
-        source=ActivitySubject.Source.MANUAL,
-        active=True,
     )
 
 

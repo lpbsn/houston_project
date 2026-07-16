@@ -101,7 +101,7 @@ def test_login_with_csrf_succeeds_for_valid_email(api_client, active_user):
     assert len(body["memberships"]) == 1
     housekeeping_business_unit = BusinessUnit.objects.get(
         establishment=membership.establishment,
-        key="housekeeping",
+        catalog_business_unit__key="housekeeping",
     )
     assert_business_unit_scope_response(
         body["memberships"][0],
@@ -217,7 +217,7 @@ def test_bootstrap_with_valid_bearer_returns_authenticated_payload(api_client, a
     assert "active_memberships" not in body
     housekeeping_business_unit = BusinessUnit.objects.get(
         establishment=membership.establishment,
-        key="housekeeping",
+        catalog_business_unit__key="housekeeping",
     )
     assert_business_unit_scope_response(
         body["memberships"][0],

@@ -58,10 +58,9 @@ def test_create_business_unit_core_does_not_seed_subjects_and_dual_writes_legacy
     assert business_unit.specific_name == "Food Court"
     assert business_unit.normalized_specific_name == "food_court"
     assert business_unit.routing_key.startswith("restaurant--food-court--")
-    assert business_unit.key == "food_court"
-    assert business_unit.label == "Food Court"
-    assert business_unit.description == "Ground floor"
-    assert business_unit.unit_type == restaurant.unit_type
+    assert business_unit.instance_description == "Ground floor"
+    assert business_unit.catalog_business_unit_id == restaurant.id
+    assert business_unit.catalog_business_unit.unit_type == restaurant.unit_type
     assert not ActivitySubject.objects.filter(business_unit=business_unit).exists()
 
 
@@ -107,8 +106,9 @@ def test_runtime_seeds_all_active_catalog_subjects_with_derived_establishment(
         establishment.id
     }
     assert all(
-        subject.label == subject.catalog_activity_subject.label
-        and subject.description == subject.catalog_activity_subject.description
+        subject.label == ""
+        and subject.description == ""
+        and subject.catalog_activity_subject_id is not None
         for subject in subjects.select_related("catalog_activity_subject")
     )
 
@@ -382,8 +382,6 @@ def test_rename_updates_normalized_name_and_preserves_routing_key(imported_catal
 
     assert renamed.specific_name == "Rooftop"
     assert renamed.normalized_specific_name == "rooftop"
-    assert renamed.key == "rooftop"
-    assert renamed.label == "Rooftop"
     assert renamed.routing_key == initial_routing_key
 
 

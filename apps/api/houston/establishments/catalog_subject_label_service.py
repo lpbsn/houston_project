@@ -102,9 +102,13 @@ def _apply_catalog_activity_subject_label_update(
     try:
         catalog_subject.save(update_fields=["label", "updated_at"])
         for association in associations:
-            association.label = new_label
+            # Generics store display label on catalogue only (local copies cleared).
+            association.label = ""
+            association.description = ""
             association.normalized_name = new_normalized
-            association.save(update_fields=["label", "normalized_name", "updated_at"])
+            association.save(
+                update_fields=["label", "description", "normalized_name", "updated_at"]
+            )
     except IntegrityError as exc:
         raise CatalogSubjectLabelConflictError(
             detail=(

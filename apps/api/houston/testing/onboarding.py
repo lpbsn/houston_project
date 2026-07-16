@@ -4,7 +4,6 @@ import uuid
 
 from houston.accounts.models import User
 from houston.establishments.models import (
-    ActivitySubject,
     Establishment,
     EstablishmentMembership,
     OnboardingSession,
@@ -16,9 +15,9 @@ from houston.establishments.services import (
 )
 from houston.organizations.models import Organization
 from houston.testing.factories import create_user
-from houston.testing.taxonomy import create_business_unit
+from houston.testing.taxonomy import create_activity_subject, create_business_unit
 
-MANUAL_V2_PROPOSAL_SCHEMA_VERSION = "onboarding_proposal_v3"
+MANUAL_V2_PROPOSAL_SCHEMA_VERSION = "onboarding_proposal_v4"
 
 
 def valid_manual_v2_payload(**overrides) -> dict:
@@ -29,17 +28,14 @@ def valid_manual_v2_payload(**overrides) -> dict:
         "business_units": [
             {
                 "client_key": business_unit_client_key,
-                "label": "Coworking",
-                "description": "",
-                "unit_type": "dedicated",
                 "catalog_key": "coworking",
+                "specific_name": "Coworking",
+                "instance_description": "",
             }
         ],
         "activity_subjects": [
             {
                 "client_key": activity_subject_client_key,
-                "label": "Propreté",
-                "description": "",
                 "business_unit_client_key": business_unit_client_key,
                 "catalog_key": "coworking__proprete",
             }
@@ -56,9 +52,9 @@ def draft_manual_v2_payload_bu_only(**overrides) -> dict:
         "business_units": [
             {
                 "client_key": business_unit_client_key,
-                "label": "Coworking",
-                "description": "",
                 "catalog_key": "coworking",
+                "specific_name": "Coworking",
+                "instance_description": "",
             }
         ],
         "activity_subjects": [],
@@ -125,12 +121,10 @@ def create_ready_runtime(session, owner):
         key="coworking",
         label="Coworking",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Propreté",
-        active=True,
     )
     director = create_user(username=f"director_ready_{uuid.uuid4().hex[:8]}")
     EstablishmentMembership.objects.create(

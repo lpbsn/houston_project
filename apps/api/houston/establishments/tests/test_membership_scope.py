@@ -107,7 +107,7 @@ def test_normalize_dedupes_redundant_business_unit_scope_inputs():
     )
 
     assert len(normalized) == 1
-    assert normalized[0].business_unit.key == "hotel"
+    assert normalized[0].business_unit.catalog_business_unit.key == "hotel"
 
 
 def test_cross_establishment_business_unit_rejected():

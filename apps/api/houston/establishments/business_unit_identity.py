@@ -12,7 +12,6 @@ if TYPE_CHECKING:
         ActivitySubject,
         BusinessUnit,
         CatalogActivitySubject,
-        CatalogBusinessUnit,
         OnboardingProposal,
     )
 
@@ -49,6 +48,31 @@ def normalize_generic_activity_subject_name(catalog_label: str) -> str:
     return slugify_label(catalog_label)
 
 
+def business_unit_public_key(*, business_unit: BusinessUnit) -> str:
+    """Compatibility public *_key value — never an identifier.
+
+    Canonical source: ``normalized_specific_name``.
+    """
+    value = (business_unit.normalized_specific_name or "").strip()
+    if not value:
+        raise DomainValidationError(
+            "Business unit public key requires normalized_specific_name.",
+            code="business_unit_identity_incomplete",
+        )
+    return value
+
+
+def business_unit_public_label(*, business_unit: BusinessUnit) -> str:
+    """Compatibility public *_label value — display only, never an identifier."""
+    value = (business_unit.specific_name or "").strip()
+    if not value:
+        raise DomainValidationError(
+            "Business unit public label requires specific_name.",
+            code="business_unit_identity_incomplete",
+        )
+    return value
+
+
 def derive_activity_subject_establishment(
     activity_subject: ActivitySubjectEstablishmentDerivation,
 ) -> None:
@@ -70,20 +94,6 @@ def validate_activity_subject_catalog_coherence(
         )
 
 
-def populate_business_unit_legacy_fields(
-    *,
-    business_unit: BusinessUnit,
-    specific_name: str,
-    instance_description: str,
-    catalog_business_unit: CatalogBusinessUnit,
-) -> None:
-    key_max_length = business_unit._meta.get_field("key").max_length
-    business_unit.key = slugify_label(specific_name)[:key_max_length]
-    business_unit.label = specific_name
-    business_unit.description = instance_description
-    business_unit.unit_type = catalog_business_unit.unit_type
-
-
 def build_generic_activity_subject_row(
     *,
     business_unit: BusinessUnit,
@@ -103,8 +113,8 @@ def build_generic_activity_subject_row(
             catalog_activity_subject.label
         ),
         routing_key=catalog_activity_subject.key,
-        label=catalog_activity_subject.label,
-        description=catalog_activity_subject.description,
+        label="",
+        description="",
         source=ActivitySubject.Source.CATALOG_SUGGESTION,
         active=True,
         managed_by_onboarding_proposal=managed_by_onboarding_proposal,

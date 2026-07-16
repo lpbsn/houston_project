@@ -22,7 +22,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`product/product_operating_model.md`](product/product_operating_model.md) | Operating model |
 | [`product/decisions/action_plan.md`](product/decisions/action_plan.md) | Action plan §26 + schedules |
 | [`product/domains/`](product/domains/) | Domain specs (16 files) |
-| [`product/domains/business_unit_taxonomy_domain.md`](product/domains/business_unit_taxonomy_domain.md) | BU/AS identity, `routing_key`, dual-write, Lot 5 public shapes |
+| [`product/domains/business_unit_taxonomy_domain.md`](product/domains/business_unit_taxonomy_domain.md) | BU/AS identity, `routing_key`, contracted storage, Lot 5 public shapes |
 
 ## Architecture & engineering
 

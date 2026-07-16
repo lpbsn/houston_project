@@ -5,7 +5,6 @@ from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
-    ActivitySubject,
     BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
@@ -26,6 +25,7 @@ from houston.establishments.services import (
 )
 from houston.establishments.tests.conftest import create_ready_runtime
 from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
     create_business_unit,
     create_membership_with_business_unit_scope,
 )
@@ -203,12 +203,10 @@ def test_activation_readiness_blocks_when_one_active_business_unit_lacks_subject
         label="Coworking",
     )
     create_business_unit(establishment=establishment, key="hotel", label="Hotel")
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=staffed_business_unit,
-        normalized_name="proprete",
         label="Propreté",
-        active=True,
     )
     director = User.objects.create_user(
         username="director_one_bu_without_subjects",
@@ -237,12 +235,10 @@ def test_manager_invited_does_not_satisfy_readiness(onboarding_session, owner):
         key="coworking",
         label="Coworking",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Propreté",
-        active=True,
     )
     manager = User.objects.create_user(
         username="manager_only_readiness",
@@ -270,12 +266,10 @@ def test_owner_alone_does_not_satisfy_director_readiness(onboarding_session, own
         key="coworking",
         label="Coworking",
     )
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Propreté",
-        active=True,
     )
 
     readiness = compute_activation_readiness(session=onboarding_session)

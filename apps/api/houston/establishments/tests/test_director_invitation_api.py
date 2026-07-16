@@ -10,13 +10,15 @@ from rest_framework.test import APIClient
 from houston.accounts.models import User
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
-    ActivitySubject,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,
     OnboardingSession,
 )
-from houston.establishments.tests.taxonomy_helpers import create_business_unit
+from houston.establishments.tests.taxonomy_helpers import (
+    create_activity_subject,
+    create_business_unit,
+)
 from houston.testing.auth import auth_headers, login
 from houston.testing.factories import create_user
 from houston.testing.onboarding import create_onboarding_session, create_ready_runtime
@@ -168,12 +170,10 @@ def test_mark_ready_fails_without_director(api_client):
         label="Hotel",
     )
 
-    ActivitySubject.objects.create(
+    create_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
         label="Proprete",
-        active=True,
     )
     access_token = login(api_client, user=owner)
 

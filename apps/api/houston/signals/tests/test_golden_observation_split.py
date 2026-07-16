@@ -104,12 +104,14 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
     signal = Signal.objects.get()
-    assert signal.responsible_business_unit.key == "maintenance"
+    assert signal.responsible_business_unit.catalog_business_unit.key == "maintenance"
     assert CandidateSignal.objects.filter(
         observation=observation,
         outcome=CandidateSignal.Outcome.REJECTED,
     ).exists()
-    assert not Signal.objects.filter(affected_business_unit__key="bar").exists()
+    assert not Signal.objects.filter(
+        affected_business_unit__catalog_business_unit__key="bar"
+    ).exists()
 
 
 def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
@@ -155,12 +157,14 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert Signal.objects.filter(establishment=membership.establishment).count() == 1
     signal = Signal.objects.get()
-    assert signal.affected_business_unit.key == "bar"
+    assert signal.affected_business_unit.catalog_business_unit.key == "bar"
     assert CandidateSignal.objects.filter(
         observation=observation,
         outcome=CandidateSignal.Outcome.REJECTED,
     ).exists()
-    assert not Signal.objects.filter(affected_business_unit__key=RESTAURANT_MODULE_KEY).exists()
+    assert not Signal.objects.filter(
+        affected_business_unit__catalog_business_unit__key=RESTAURANT_MODULE_KEY
+    ).exists()
 
 
 def test_golden_invented_taxonomy_key_does_not_create_signal():
