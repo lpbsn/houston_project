@@ -52,7 +52,6 @@ from houston.establishments.business_unit_catalog import (
 )
 from houston.establishments.membership_scope import parse_membership_scope_inputs
 from houston.establishments.models import (
-    BusinessUnit,
     Establishment,
     EstablishmentMembership,
     OnboardingProposal,
@@ -430,9 +429,11 @@ class EstablishmentBusinessUnitTreeView(APIView):
     def get(self, request, establishment_id):
         access_context = get_api_access_context(request)
         include_inactive_raw = request.query_params.get("include_inactive", "").strip().lower()
-        include_inactive = include_inactive_raw in {"1", "true", "yes"} and can_manage_runtime_context(
-            access_context.active_membership
-        )
+        include_inactive = include_inactive_raw in {
+            "1",
+            "true",
+            "yes",
+        } and can_manage_runtime_context(access_context.active_membership)
         tree = get_business_units_for_establishment(
             current_membership=access_context.active_membership,
             establishment_id=establishment_id,

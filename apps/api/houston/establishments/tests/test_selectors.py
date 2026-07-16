@@ -3,8 +3,6 @@ from django.utils import timezone
 
 from houston.accounts.models import User
 from houston.establishments.models import (
-    ActivitySubject,
-    BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,

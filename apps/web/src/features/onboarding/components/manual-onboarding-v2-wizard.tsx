@@ -25,6 +25,7 @@ import {
   recordExcludedCatalogSubject,
   removeBusinessUnitFromDraft,
   updateBusinessUnitDescription,
+  updateBusinessUnitLabel,
   updateBusinessUnitType,
   type BusinessUnitType,
   type DraftActivitySubject,
@@ -231,6 +232,10 @@ export function ManualOnboardingV2Wizard({
     setBusinessUnits((current) => updateBusinessUnitDescription(current, clientKey, description))
   }
 
+  function handleBusinessUnitLabelChange(clientKey: string, label: string) {
+    setBusinessUnits((current) => updateBusinessUnitLabel(current, clientKey, label))
+  }
+
   function handleBusinessUnitTypeChange(clientKey: string, unitType: BusinessUnitType) {
     setBusinessUnits((current) => updateBusinessUnitType(current, clientKey, unitType))
   }
@@ -425,6 +430,7 @@ export function ManualOnboardingV2Wizard({
             activitySubjects={activitySubjects}
             isSeedingSubjects={isSeedingSubjects}
             onBusinessUnitDescriptionChange={handleBusinessUnitDescriptionChange}
+            onBusinessUnitLabelChange={handleBusinessUnitLabelChange}
             onBusinessUnitTypeChange={handleBusinessUnitTypeChange}
             onChange={setActivitySubjects}
             onExcludeCatalogSubject={handleExcludeCatalogSubject}

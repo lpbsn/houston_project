@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  allocateDistinctDraftSpecificName,
   buildManualV2Payload,
+  canAddDraftBusinessUnit,
   canContinueFromConfigStep,
   createDraftActivitySubject,
   createDraftBusinessUnit,
@@ -11,6 +13,9 @@ import {
   mergeCatalogSubjectSuggestions,
   recordExcludedCatalogSubject,
   removeBusinessUnitFromDraft,
+  slugifyLabel,
+  updateBusinessUnitLabel,
+  validateDraftBusinessUnitNames,
 } from '@/features/onboarding/lib/manual-v2-proposal'
 
 describe('createDraftBusinessUnit', () => {
@@ -227,5 +232,227 @@ describe('canContinueFromConfigStep', () => {
     })
 
     expect(canContinueFromConfigStep([withCatalog], [subject])).toBe(true)
+  })
+
+  it('blocks progression when specific names collide after slugify', () => {
+    const restaurant = createDraftBusinessUnit({
+      label: 'Food Court',
+      catalog_key: 'restaurant',
+    })
+    const hotel = createDraftBusinessUnit({
+      label: 'food court',
+      catalog_key: 'hotel',
+    })
+    const subjectA = createDraftActivitySubject({
+      label: 'Stock',
+      business_unit_client_key: restaurant.client_key,
+      catalog_key: 'restaurant__stock',
+    })
+    const subjectB = createDraftActivitySubject({
+      label: 'Chambres',
+      business_unit_client_key: hotel.client_key,
+      catalog_key: 'hotel__rooms',
+    })
+
+    expect(canContinueFromConfigStep([restaurant, hotel], [subjectA, subjectB])).toBe(false)
+  })
+})
+
+describe('slugifyLabel', () => {
+  it('matches backend-style normalization for accents, case, and spaces', () => {
+    expect(slugifyLabel('Food Court')).toBe('food_court')
+    expect(slugifyLabel('  food court  ')).toBe('food_court')
+    expect(slugifyLabel('Hébergement')).toBe('hebergement')
+  })
+})
+
+describe('allocateDistinctDraftSpecificName', () => {
+  it('allocates Restaurant, Restaurant 2, Restaurant 3 successively', () => {
+    const firstLabel = allocateDistinctDraftSpecificName([], 'Restaurant')
+    const first = createDraftBusinessUnit({
+      label: firstLabel,
+      catalog_key: 'restaurant',
+    })
+    const secondLabel = allocateDistinctDraftSpecificName([first], 'Restaurant')
+    const second = createDraftBusinessUnit({
+      label: secondLabel,
+      catalog_key: 'restaurant',
+    })
+    const thirdLabel = allocateDistinctDraftSpecificName([first, second], 'Restaurant')
+
+    expect(firstLabel).toBe('Restaurant')
+    expect(secondLabel).toBe('Restaurant 2')
+    expect(thirdLabel).toBe('Restaurant 3')
+  })
+
+  it('avoids normalized collisions such as Food Court / Food-Court', () => {
+    const existing = createDraftBusinessUnit({
+      label: 'Food Court',
+      catalog_key: 'restaurant',
+    })
+
+    expect(allocateDistinctDraftSpecificName([existing], 'Food-Court')).toBe('Food-Court 2')
+    expect(slugifyLabel('Food-Court 2')).not.toBe(slugifyLabel('Food Court'))
+  })
+})
+
+describe('canAddDraftBusinessUnit', () => {
+  it('adds two dedicated instances of the same catalog with distinct client_keys and specific_names', () => {
+    const first = createDraftBusinessUnit({
+      label: allocateDistinctDraftSpecificName([], 'Restaurant'),
+      catalog_key: 'restaurant',
+      suggested_unit_type: 'dedicated',
+    })
+    const second = createDraftBusinessUnit({
+      label: allocateDistinctDraftSpecificName([first], 'Restaurant'),
+      catalog_key: 'restaurant',
+      suggested_unit_type: 'dedicated',
+    })
+
+    expect(canAddDraftBusinessUnit([first], second)).toBe(true)
+    expect(first.client_key).not.toBe(second.client_key)
+    expect(first.client_key).not.toBe('restaurant')
+    expect(second.client_key).not.toBe('restaurant')
+    expect(first.catalog_key).toBe('restaurant')
+    expect(second.catalog_key).toBe('restaurant')
+    expect(first.label).toBe('Restaurant')
+    expect(second.label).toBe('Restaurant 2')
+    expect(validateDraftBusinessUnitNames([first, second]).ok).toBe(true)
+
+    const payload = buildManualV2Payload([first, second], [])
+    expect(payload.schema_version).toBe(MANUAL_V2_SCHEMA_VERSION)
+    expect(payload.business_units).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          client_key: first.client_key,
+          catalog_key: 'restaurant',
+          specific_name: 'Restaurant',
+        }),
+        expect.objectContaining({
+          client_key: second.client_key,
+          catalog_key: 'restaurant',
+          specific_name: 'Restaurant 2',
+        }),
+      ]),
+    )
+  })
+
+  it('rejects a second transversal instance of the same catalog', () => {
+    const first = createDraftBusinessUnit({
+      label: 'Maintenance Nord',
+      catalog_key: 'maintenance',
+      suggested_unit_type: 'transversal',
+    })
+    const second = createDraftBusinessUnit({
+      label: 'Maintenance Sud',
+      catalog_key: 'maintenance',
+      suggested_unit_type: 'transversal',
+    })
+
+    expect(canAddDraftBusinessUnit([first], second)).toBe(false)
+  })
+})
+
+describe('validateDraftBusinessUnitNames', () => {
+  it('rejects empty and whitespace-only names', () => {
+    const empty = createDraftBusinessUnit({ label: 'Valid', catalog_key: 'restaurant' })
+    const blank = { ...empty, client_key: 'bu-blank', label: '   ' }
+
+    expect(validateDraftBusinessUnitNames([blank]).ok).toBe(false)
+    expect(validateDraftBusinessUnitNames([blank]).issues[0]?.code).toBe('empty')
+  })
+
+  it('rejects the same normalized name across different catalogs', () => {
+    const restaurant = createDraftBusinessUnit({
+      label: 'Food Court',
+      catalog_key: 'restaurant',
+    })
+    const coworking = createDraftBusinessUnit({
+      label: 'food-court',
+      catalog_key: 'coworking',
+    })
+
+    const result = validateDraftBusinessUnitNames([restaurant, coworking])
+    expect(result.ok).toBe(false)
+    expect(result.issues.every((issue) => issue.code === 'duplicate')).toBe(true)
+  })
+
+  it('rejects rename to normalized-equivalent names', () => {
+    const first = createDraftBusinessUnit({
+      label: 'Rooftop',
+      catalog_key: 'restaurant',
+    })
+    const second = createDraftBusinessUnit({
+      label: 'Bar',
+      catalog_key: 'restaurant',
+    })
+
+    expect(validateDraftBusinessUnitNames([first, second]).ok).toBe(true)
+
+    const renamed = updateBusinessUnitLabel(
+      updateBusinessUnitLabel([first, second], first.client_key, 'Food Court'),
+      second.client_key,
+      'food court',
+    )
+
+    expect(validateDraftBusinessUnitNames(renamed).ok).toBe(false)
+    expect(validateDraftBusinessUnitNames(renamed).issues.every((issue) => issue.code === 'duplicate')).toBe(
+      true,
+    )
+  })
+})
+
+describe('hydrate then rename', () => {
+  it('emits the renamed specific_name after v4 hydration', () => {
+    const hydrated = hydrateDraftFromProposalPayload({
+      schema_version: 'onboarding_proposal_v4',
+      business_units: [
+        {
+          client_key: 'bu-1',
+          catalog_key: 'restaurant',
+          specific_name: 'Food Court',
+          instance_description: 'Niveau 0',
+        },
+      ],
+      activity_subjects: [],
+    })
+
+    const renamed = updateBusinessUnitLabel(
+      hydrated.businessUnits,
+      hydrated.businessUnits[0]!.client_key,
+      'Rooftop Bar',
+    )
+    const payload = buildManualV2Payload(renamed, [])
+
+    expect(payload.business_units?.[0]).toMatchObject({
+      catalog_key: 'restaurant',
+      specific_name: 'Rooftop Bar',
+    })
+  })
+
+  it('preserves persisted client_key and generates a new one for a subsequent add', () => {
+    const hydrated = hydrateDraftFromProposalPayload({
+      schema_version: 'onboarding_proposal_v4',
+      business_units: [
+        {
+          client_key: 'bu-persisted',
+          catalog_key: 'restaurant',
+          specific_name: 'Restaurant',
+          instance_description: '',
+        },
+      ],
+      activity_subjects: [],
+    })
+
+    expect(hydrated.businessUnits[0]?.client_key).toBe('bu-persisted')
+
+    const next = createDraftBusinessUnit({
+      label: allocateDistinctDraftSpecificName(hydrated.businessUnits, 'Restaurant'),
+      catalog_key: 'restaurant',
+    })
+
+    expect(next.client_key).not.toBe('bu-persisted')
+    expect(next.client_key).not.toBe('restaurant')
+    expect(next.label).toBe('Restaurant 2')
   })
 })

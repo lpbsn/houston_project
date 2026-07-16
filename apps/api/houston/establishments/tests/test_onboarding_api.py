@@ -12,8 +12,6 @@ from houston.accounts.models import User
 from houston.ai.models import AIUsageLog
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
-    ActivitySubject,
-    BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
     EstablishmentMembership,

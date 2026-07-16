@@ -30,6 +30,107 @@ export function createClientKey() {
   return crypto.randomUUID()
 }
 
+/** Mirrors apps/api/houston/establishments/taxonomy_normalization.py LABEL_FIXES + slugify_label. */
+const LABEL_FIXES: Record<string, string> = {
+  'Acceuil site': 'Accueil site',
+  'Communication/ commercialisation': 'Communication / commercialisation',
+  Evenements: 'Événements',
+}
+
+export function slugifyLabel(text: string): string {
+  let value = text.trim()
+  value = LABEL_FIXES[value] ?? value
+  value = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  value = Array.from(value)
+    .map((char) => (char.charCodeAt(0) <= 0x7f ? char : ''))
+    .join('')
+  value = value.replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase()
+  value = value.replace(/^_+|_+$/g, '')
+  return value || 'item'
+}
+
+export function normalizeDraftSpecificName(value: string): string {
+  return slugifyLabel(value)
+}
+
+export type DraftBusinessUnitNameIssue =
+  | { code: 'empty'; clientKey: string }
+  | { code: 'duplicate'; clientKey: string; normalized: string }
+
+export function validateDraftBusinessUnitNames(businessUnits: DraftBusinessUnit[]): {
+  ok: boolean
+  issues: DraftBusinessUnitNameIssue[]
+} {
+  const issues: DraftBusinessUnitNameIssue[] = []
+  const byNormalized = new Map<string, string[]>()
+
+  for (const businessUnit of businessUnits) {
+    if (businessUnit.label.trim().length === 0) {
+      issues.push({ code: 'empty', clientKey: businessUnit.client_key })
+      continue
+    }
+
+    const normalized = normalizeDraftSpecificName(businessUnit.label)
+    const clientKeys = byNormalized.get(normalized) ?? []
+    clientKeys.push(businessUnit.client_key)
+    byNormalized.set(normalized, clientKeys)
+  }
+
+  for (const [normalized, clientKeys] of byNormalized) {
+    if (clientKeys.length < 2) {
+      continue
+    }
+
+    for (const clientKey of clientKeys) {
+      issues.push({ code: 'duplicate', clientKey, normalized })
+    }
+  }
+
+  return { ok: issues.length === 0, issues }
+}
+
+function getDraftBusinessUnitType(businessUnit: DraftBusinessUnit): BusinessUnitType {
+  return businessUnit.unit_type ?? businessUnit.suggested_unit_type
+}
+
+export function canAddDraftBusinessUnit(
+  existing: DraftBusinessUnit[],
+  draft: DraftBusinessUnit,
+): boolean {
+  const catalogKey = draft.catalog_key?.trim()
+  if (!catalogKey || getDraftBusinessUnitType(draft) !== 'transversal') {
+    return true
+  }
+
+  return !existing.some(
+    (item) =>
+      item.catalog_key?.trim() === catalogKey && getDraftBusinessUnitType(item) === 'transversal',
+  )
+}
+
+export function allocateDistinctDraftSpecificName(
+  existing: DraftBusinessUnit[],
+  baseLabel: string,
+): string {
+  const base = baseLabel.trim() || 'Pôle'
+  const taken = new Set(
+    existing
+      .filter((businessUnit) => businessUnit.label.trim().length > 0)
+      .map((businessUnit) => normalizeDraftSpecificName(businessUnit.label)),
+  )
+
+  if (!taken.has(normalizeDraftSpecificName(base))) {
+    return base
+  }
+
+  let suffix = 2
+  while (taken.has(normalizeDraftSpecificName(`${base} ${suffix}`))) {
+    suffix += 1
+  }
+
+  return `${base} ${suffix}`
+}
+
 export function createDraftBusinessUnit(input: {
   label: string
   suggested_unit_type?: BusinessUnitType
@@ -397,6 +498,16 @@ export function updateBusinessUnitDescription(
   )
 }
 
+export function updateBusinessUnitLabel(
+  businessUnits: DraftBusinessUnit[],
+  clientKey: string,
+  label: string,
+): DraftBusinessUnit[] {
+  return businessUnits.map((item) =>
+    item.client_key === clientKey ? { ...item, label } : item,
+  )
+}
+
 export function updateBusinessUnitType(
   businessUnits: DraftBusinessUnit[],
   clientKey: string,
@@ -460,7 +571,7 @@ export function allBusinessUnitsReadyForApplyStep(
   activitySubjects: DraftActivitySubject[],
 ) {
   return (
-    allBusinessUnitsHaveValidLabels(businessUnits) &&
+    validateDraftBusinessUnitNames(businessUnits).ok &&
     allBusinessUnitsHaveCatalogKeys(businessUnits) &&
     allBusinessUnitsConfigured(businessUnits, activitySubjects)
   )
@@ -471,4 +582,14 @@ export function canContinueFromConfigStep(
   activitySubjects: DraftActivitySubject[],
 ) {
   return allBusinessUnitsReadyForApplyStep(businessUnits, activitySubjects)
+}
+
+export function getDraftBusinessUnitNameError(
+  businessUnit: DraftBusinessUnit,
+  businessUnits: DraftBusinessUnit[],
+): 'empty' | 'duplicate' | null {
+  const issue = validateDraftBusinessUnitNames(businessUnits).issues.find(
+    (item) => item.clientKey === businessUnit.client_key,
+  )
+  return issue?.code ?? null
 }
