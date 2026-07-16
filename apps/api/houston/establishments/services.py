@@ -16,6 +16,9 @@ from houston.establishments.access import get_onboarding_access_context
 from houston.establishments.business_unit_domain_service import (
     create_onboarding_business_unit,
 )
+from houston.establishments.business_unit_identity import (
+    normalize_generic_activity_subject_name,
+)
 from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
@@ -289,10 +292,17 @@ def _validate_onboarding_proposal_payload_v4_bu(payload: dict, *, mode: str) -> 
     raw_business_units = _section_items_v4_bu(payload, "business_units", errors)
     raw_activity_subjects = _section_items_v4_bu(payload, "activity_subjects", errors)
     catalog_keys = _active_business_unit_catalog_keys()
+    catalog_unit_types = dict(
+        CatalogBusinessUnit.objects.filter(active=True).values_list("key", "unit_type")
+    )
+    catalog_subject_labels = dict(
+        CatalogActivitySubject.objects.filter(active=True).values_list("key", "label")
+    )
 
     business_units, seen_client_keys = _validate_business_unit_section_v4(
         items=raw_business_units,
         catalog_keys=catalog_keys["business_units"],
+        catalog_unit_types=catalog_unit_types,
         errors=errors,
     )
     business_unit_client_keys = {item["client_key"] for item in business_units}
@@ -300,6 +310,7 @@ def _validate_onboarding_proposal_payload_v4_bu(payload: dict, *, mode: str) -> 
         items=raw_activity_subjects,
         business_unit_client_keys=business_unit_client_keys,
         catalog_keys=catalog_keys["activity_subjects"],
+        catalog_subject_labels=catalog_subject_labels,
         seen_client_keys=seen_client_keys,
         errors=errors,
     )
@@ -723,11 +734,13 @@ def _validate_business_unit_section_v4(
     *,
     items: list,
     catalog_keys: set[str],
+    catalog_unit_types: dict[str, str],
     errors: list[dict],
 ) -> tuple[list[dict], set[str]]:
     sanitized: list[dict] = []
     seen_client_keys: set[str] = set()
     seen_specific_names: set[str] = set()
+    seen_transversal_catalog_keys: set[str] = set()
 
     for item in items:
         if not isinstance(item, dict):
@@ -783,6 +796,21 @@ def _validate_business_unit_section_v4(
                 )
             )
             continue
+        if (
+            catalog_unit_types.get(catalog_key)
+            == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
+        ):
+            if catalog_key in seen_transversal_catalog_keys:
+                errors.append(
+                    _proposal_error(
+                        "duplicate_transversal_catalog_instance",
+                        section="business_units",
+                        key=client_key,
+                        field="catalog_key",
+                    )
+                )
+                continue
+            seen_transversal_catalog_keys.add(catalog_key)
         if not specific_name:
             errors.append(
                 _proposal_error(
@@ -832,11 +860,12 @@ def _validate_activity_subject_section_v4(
     items: list,
     business_unit_client_keys: set[str],
     catalog_keys: set[str],
+    catalog_subject_labels: dict[str, str],
     seen_client_keys: set[str],
     errors: list[dict],
 ) -> list[dict]:
     sanitized: list[dict] = []
-    seen_subject_identities_by_bu: dict[str, set[str]] = {}
+    seen_normalized_names_by_bu: dict[str, set[str]] = {}
 
     for item in items:
         if not isinstance(item, dict):
@@ -897,18 +926,30 @@ def _validate_activity_subject_section_v4(
                 )
             )
             continue
-        if catalog_key is not None and catalog_key not in catalog_keys:
-            errors.append(
-                _proposal_error(
-                    "unknown_catalog_key",
-                    section="activity_subjects",
-                    key=catalog_key,
+        if catalog_key is not None:
+            if catalog_key not in catalog_keys:
+                errors.append(
+                    _proposal_error(
+                        "unknown_catalog_key",
+                        section="activity_subjects",
+                        key=catalog_key,
+                    )
                 )
-            )
-            continue
-
-        identity = catalog_key or slugify_label(label or "")
-        if not identity:
+                continue
+            catalog_label = catalog_subject_labels.get(catalog_key)
+            if not catalog_label:
+                errors.append(
+                    _proposal_error(
+                        "unknown_catalog_key",
+                        section="activity_subjects",
+                        key=catalog_key,
+                    )
+                )
+                continue
+            normalized_name = normalize_generic_activity_subject_name(catalog_label)
+        else:
+            normalized_name = slugify_label(label or "")
+        if not normalized_name:
             errors.append(
                 _proposal_error(
                     "invalid_free_activity_subject_label",
@@ -918,11 +959,11 @@ def _validate_activity_subject_section_v4(
                 )
             )
             continue
-        seen_subject_identities = seen_subject_identities_by_bu.setdefault(
+        seen_normalized_names = seen_normalized_names_by_bu.setdefault(
             business_unit_client_key,
             set(),
         )
-        if identity in seen_subject_identities:
+        if normalized_name in seen_normalized_names:
             errors.append(
                 _proposal_error(
                     "duplicate_activity_subject",
@@ -931,7 +972,7 @@ def _validate_activity_subject_section_v4(
                 )
             )
             continue
-        seen_subject_identities.add(identity)
+        seen_normalized_names.add(normalized_name)
 
         sanitized_item = {
             "client_key": client_key,

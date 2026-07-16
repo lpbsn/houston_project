@@ -190,6 +190,62 @@ def test_v4_validation_canonicalizes_complete_payload_before_writes(imported_cat
             ),
             "catalog_subject_business_unit_mismatch",
         ),
+        (
+            _v4_payload(
+                business_units=[
+                    {
+                        "client_key": "bu-restaurant",
+                        "catalog_key": "restaurant",
+                        "specific_name": "Rooftop",
+                        "instance_description": "",
+                    }
+                ],
+                activity_subjects=[
+                    {
+                        "client_key": "subject-stock",
+                        "business_unit_client_key": "bu-restaurant",
+                        "catalog_key": "restaurant__stock",
+                    },
+                    {
+                        "client_key": "subject-free-stock",
+                        "business_unit_client_key": "bu-restaurant",
+                        "label": "Stock",
+                    },
+                ],
+            ),
+            "duplicate_activity_subject",
+        ),
+        (
+            _v4_payload(
+                business_units=[
+                    {
+                        "client_key": "bu-maintenance-a",
+                        "catalog_key": "maintenance",
+                        "specific_name": "Maintenance Nord",
+                        "instance_description": "",
+                    },
+                    {
+                        "client_key": "bu-maintenance-b",
+                        "catalog_key": "maintenance",
+                        "specific_name": "Maintenance Sud",
+                        "instance_description": "",
+                    },
+                ],
+                activity_subjects=[
+                    {
+                        "client_key": "subject-cvc",
+                        "business_unit_client_key": "bu-maintenance-a",
+                        "catalog_key": "maintenance__cvc",
+                    },
+                    {
+                        "client_key": "subject-elec",
+                        "business_unit_client_key": "bu-maintenance-b",
+                        "catalog_key": "maintenance__electricite",
+                    },
+                ],
+            ),
+            "duplicate_transversal_catalog_instance",
+        ),
     ],
 )
 def test_v4_validation_enforces_subject_identity_guards(
@@ -198,6 +254,101 @@ def test_v4_validation_enforces_subject_identity_guards(
     expected_code,
 ):
     assert expected_code in _error_codes(payload)
+
+
+def test_v4_submit_rejects_catalog_free_subject_normalized_name_collision(
+    imported_catalog,
+):
+    owner = create_user(username=f"lot4_owner_{uuid.uuid4().hex[:8]}")
+    session = create_onboarding_session(actor=owner)
+    proposal = create_manual_onboarding_proposal(
+        session=session,
+        actor=owner,
+        payload=_v4_payload(),
+    )
+    colliding_payload = _v4_payload(
+        business_units=[
+            {
+                "client_key": "bu-restaurant",
+                "catalog_key": "restaurant",
+                "specific_name": "Rooftop",
+                "instance_description": "",
+            }
+        ],
+        activity_subjects=[
+            {
+                "client_key": "subject-stock",
+                "business_unit_client_key": "bu-restaurant",
+                "catalog_key": "restaurant__stock",
+            },
+            {
+                "client_key": "subject-free-stock",
+                "business_unit_client_key": "bu-restaurant",
+                "label": "Stock",
+            },
+        ],
+    )
+    OnboardingProposal.objects.filter(id=proposal.id).update(payload=colliding_payload)
+    proposal.refresh_from_db()
+
+    with pytest.raises(OnboardingProposalValidationError) as exc_info:
+        submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
+
+    assert any(
+        error.get("code") == "duplicate_activity_subject" for error in exc_info.value.errors
+    )
+    proposal.refresh_from_db()
+    assert proposal.status != OnboardingProposal.Status.VALIDATED
+
+
+def test_v4_submit_rejects_duplicate_transversal_catalog_instance(imported_catalog):
+    owner = create_user(username=f"lot4_owner_{uuid.uuid4().hex[:8]}")
+    session = create_onboarding_session(actor=owner)
+    proposal = create_manual_onboarding_proposal(
+        session=session,
+        actor=owner,
+        payload=_v4_payload(),
+    )
+    colliding_payload = _v4_payload(
+        business_units=[
+            {
+                "client_key": "bu-maintenance-a",
+                "catalog_key": "maintenance",
+                "specific_name": "Maintenance Nord",
+                "instance_description": "",
+            },
+            {
+                "client_key": "bu-maintenance-b",
+                "catalog_key": "maintenance",
+                "specific_name": "Maintenance Sud",
+                "instance_description": "",
+            },
+        ],
+        activity_subjects=[
+            {
+                "client_key": "subject-cvc",
+                "business_unit_client_key": "bu-maintenance-a",
+                "catalog_key": "maintenance__cvc",
+            },
+            {
+                "client_key": "subject-elec",
+                "business_unit_client_key": "bu-maintenance-b",
+                "catalog_key": "maintenance__electricite",
+            },
+        ],
+    )
+    OnboardingProposal.objects.filter(id=proposal.id).update(payload=colliding_payload)
+    proposal.refresh_from_db()
+
+    with pytest.raises(OnboardingProposalValidationError) as exc_info:
+        submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
+
+    assert any(
+        error.get("code") == "duplicate_transversal_catalog_instance"
+        for error in exc_info.value.errors
+    )
+    proposal.refresh_from_db()
+    assert proposal.status != OnboardingProposal.Status.VALIDATED
 
 
 def test_v4_rejects_removed_v3_fields_and_unknown_schema(imported_catalog):
