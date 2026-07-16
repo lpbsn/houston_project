@@ -431,28 +431,9 @@ def _management_membership_queryset(*, establishment_id):
 
 
 def _serialize_activity_subject_public(*, activity_subject: ActivitySubject) -> dict | None:
-    catalog = activity_subject.catalog_activity_subject
-    is_generic = catalog is not None
-    if is_generic:
-        return {
-            "id": activity_subject.id,
-            "catalog_key": catalog.key,
-            "label": catalog.label,
-            "description": catalog.description or "",
-            "source": activity_subject.source,
-            "active": activity_subject.active,
-            "is_generic": True,
-        }
-    if not activity_subject.label:
-        return None
-    return {
-        "id": activity_subject.id,
-        "label": activity_subject.label,
-        "description": activity_subject.description or "",
-        "source": activity_subject.source,
-        "active": activity_subject.active,
-        "is_generic": False,
-    }
+    from houston.establishments.public_serialization import serialize_activity_subject_public
+
+    return serialize_activity_subject_public(activity_subject=activity_subject)
 
 
 def _serialize_business_unit_public(
@@ -460,40 +441,13 @@ def _serialize_business_unit_public(
     business_unit: BusinessUnit,
     activity_subjects: list[ActivitySubject] | None = None,
 ) -> dict | None:
-    catalog = business_unit.catalog_business_unit
-    if catalog is None or not business_unit.specific_name:
-        return None
+    from houston.establishments.public_serialization import serialize_business_unit_public
 
-    subjects = activity_subjects
-    if subjects is None:
-        subjects = list(
-            ActivitySubject.objects.filter(
-                business_unit=business_unit,
-                active=True,
-            )
-            .select_related("catalog_activity_subject")
-            .order_by("label", "normalized_name", "id")
-        )
-
-    serialized_subjects = []
-    for subject in subjects:
-        item = _serialize_activity_subject_public(activity_subject=subject)
-        if item is not None:
-            serialized_subjects.append(item)
-
-    return {
-        "id": business_unit.id,
-        "specific_name": business_unit.specific_name,
-        "instance_description": business_unit.instance_description or "",
-        "active": business_unit.active,
-        "generic": {
-            "key": catalog.key,
-            "label": catalog.label,
-            "description": catalog.description or "",
-            "unit_type": catalog.unit_type,
-        },
-        "activity_subjects": serialized_subjects,
-    }
+    return serialize_business_unit_public(
+        business_unit=business_unit,
+        activity_subjects=activity_subjects,
+        include_activity_subjects=True,
+    )
 
 
 def get_establishment_business_unit_tree(

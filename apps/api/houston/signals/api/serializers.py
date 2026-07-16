@@ -32,10 +32,13 @@ class SignalFeedItemSerializer(serializers.Serializer):
     structured_summary_short = serializers.CharField()
     status = serializers.CharField()
     is_pinned = serializers.BooleanField()
+    affected_business_unit_id = serializers.UUIDField(allow_null=True, required=False)
     affected_business_unit_key = serializers.CharField(allow_null=True, required=False)
     affected_business_unit_label = serializers.CharField(allow_null=True, required=False)
+    responsible_business_unit_id = serializers.UUIDField(allow_null=True, required=False)
     responsible_business_unit_key = serializers.CharField(allow_null=True, required=False)
     responsible_business_unit_label = serializers.CharField(allow_null=True, required=False)
+    activity_subject_id = serializers.UUIDField(allow_null=True, required=False)
     activity_subject_normalized_name = serializers.CharField(allow_null=True, required=False)
     activity_subject_label = serializers.CharField(allow_null=True, required=False)
     operational_unit_key = serializers.CharField(allow_null=True)
@@ -101,18 +104,21 @@ def serialize_signal_feed_item(*, signal: Signal, membership) -> dict:
         "structured_summary_short": structured_summary_short(signal.structured_summary),
         "status": signal.status,
         "is_pinned": signal.is_pinned,
+        "affected_business_unit_id": signal.affected_business_unit_id,
         "affected_business_unit_key": (
             signal.affected_business_unit.key if signal.affected_business_unit_id else None
         ),
         "affected_business_unit_label": (
             signal.affected_business_unit.label if signal.affected_business_unit_id else None
         ),
+        "responsible_business_unit_id": signal.responsible_business_unit_id,
         "responsible_business_unit_key": (
             signal.responsible_business_unit.key if signal.responsible_business_unit_id else None
         ),
         "responsible_business_unit_label": (
             signal.responsible_business_unit.label if signal.responsible_business_unit_id else None
         ),
+        "activity_subject_id": signal.activity_subject_id,
         "activity_subject_normalized_name": (
             signal.activity_subject.normalized_name if signal.activity_subject_id else None
         ),

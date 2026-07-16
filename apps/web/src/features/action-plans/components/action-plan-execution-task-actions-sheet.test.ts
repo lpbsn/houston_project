@@ -9,7 +9,7 @@ function buildTask(overrides: Partial<ActionPlanTaskExecution> = {}): ActionPlan
     task: 'Nettoyer',
     position: 1,
     status: 'pending',
-    business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     observation_id: null,
     skipped_reason: null,
     completed_at: null,

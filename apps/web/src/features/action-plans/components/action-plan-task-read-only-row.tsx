@@ -11,7 +11,7 @@ type ActionPlanTaskReadOnlyRowProps = {
 }
 
 export function ActionPlanTaskReadOnlyRow({ task }: ActionPlanTaskReadOnlyRowProps) {
-  const poleLabel = task.business_unit?.label ?? null
+  const poleLabel = task.business_unit?.specific_name ?? null
   const deadlineLabel = formatActionPlanTaskDeadlineLabel(task.deadline_at)
   const assigneePoleLine = formatActionPlanTaskAssigneePoleLine({
     assigneeDisplayName: task.assigned_display_name,

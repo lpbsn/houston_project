@@ -17,7 +17,7 @@ function buildPlan(overrides: Partial<ActionPlanDetail> = {}): ActionPlanDetail 
     title: 'Plan catalogue',
     description: 'Description',
     catalog_status: 'active',
-    pilot_business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     task_count: 1,
     involved_pole_count: 1,
     created_at: '2026-06-30T08:00:00Z',

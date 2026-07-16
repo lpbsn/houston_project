@@ -34,11 +34,11 @@ describe('filterActionPlanTasksByPole', () => {
   const tasks = [
     buildTask({
       id: 'task-1',
-      business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+      business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     }),
     buildTask({
       id: 'task-2',
-      business_unit: { id: 'bu-2', key: 'maintenance', label: 'Maintenance' },
+      business_unit: { id: 'bu-2', specific_name: 'Maintenance', instance_description: '', active: true, generic: { key: 'maintenance', label: 'Maintenance', description: '', unit_type: 'dedicated' } },
     }),
   ]
 

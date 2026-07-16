@@ -18,6 +18,11 @@ from houston.action_plans.models import (
     ActionPlanTask,
 )
 from houston.action_plans.selectors import get_involved_poles
+from houston.establishments.api.serializers import BusinessUnitGenericSerializer
+from houston.establishments.public_serialization import (
+    serialize_activity_subject_ref,
+    serialize_business_unit_ref,
+)
 from houston.observations.constants import (
     MAX_OBSERVATION_PHOTOS,
     OBSERVATION_RAW_TEXT_MAX_LENGTH,
@@ -31,42 +36,39 @@ def _membership_display_name(membership) -> str:
 
 
 def _serialize_business_unit(business_unit) -> dict | None:
-    if business_unit is None:
-        return None
-    return {
-        "id": business_unit.id,
-        "key": business_unit.key,
-        "label": business_unit.label,
-    }
+    return serialize_business_unit_ref(business_unit=business_unit)
 
 
 def _serialize_activity_subject(activity_subject) -> dict | None:
-    if activity_subject is None:
-        return None
-    return {
-        "id": activity_subject.id,
-        "normalized_name": activity_subject.normalized_name,
-        "label": activity_subject.label,
-    }
+    return serialize_activity_subject_ref(activity_subject=activity_subject)
 
 
 def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
     signal = execution.source_signal
     if signal is None:
         return None
-    affected = _serialize_business_unit(signal.affected_business_unit)
-    responsible = _serialize_business_unit(signal.responsible_business_unit)
-    subject = _serialize_activity_subject(signal.activity_subject)
+    affected = signal.affected_business_unit
+    responsible = signal.responsible_business_unit
+    subject = signal.activity_subject
     return {
         "id": signal.id,
         "title": signal.title,
         "status": signal.status,
-        "affected_business_unit_key": affected["key"] if affected else None,
-        "affected_business_unit_label": affected["label"] if affected else None,
-        "responsible_business_unit_key": responsible["key"] if responsible else None,
-        "responsible_business_unit_label": responsible["label"] if responsible else None,
-        "activity_subject_normalized_name": subject["normalized_name"] if subject else None,
-        "activity_subject_label": subject["label"] if subject else None,
+        "affected_business_unit_id": signal.affected_business_unit_id,
+        "affected_business_unit_key": affected.key if affected is not None else None,
+        "affected_business_unit_label": affected.label if affected is not None else None,
+        "responsible_business_unit_id": signal.responsible_business_unit_id,
+        "responsible_business_unit_key": (
+            responsible.key if responsible is not None else None
+        ),
+        "responsible_business_unit_label": (
+            responsible.label if responsible is not None else None
+        ),
+        "activity_subject_id": signal.activity_subject_id,
+        "activity_subject_normalized_name": (
+            subject.normalized_name if subject is not None else None
+        ),
+        "activity_subject_label": subject.label if subject is not None else None,
         "location_text": signal.location_text,
     }
 
@@ -75,10 +77,13 @@ class ActionSignalSummarySerializer(serializers.Serializer):
     id = serializers.UUIDField()
     title = serializers.CharField()
     status = serializers.CharField()
+    affected_business_unit_id = serializers.UUIDField(allow_null=True)
     affected_business_unit_key = serializers.CharField(allow_null=True)
     affected_business_unit_label = serializers.CharField(allow_null=True)
+    responsible_business_unit_id = serializers.UUIDField(allow_null=True)
     responsible_business_unit_key = serializers.CharField(allow_null=True)
     responsible_business_unit_label = serializers.CharField(allow_null=True)
+    activity_subject_id = serializers.UUIDField(allow_null=True)
     activity_subject_normalized_name = serializers.CharField(allow_null=True)
     activity_subject_label = serializers.CharField(allow_null=True)
     location_text = serializers.CharField(allow_blank=True)
@@ -86,14 +91,20 @@ class ActionSignalSummarySerializer(serializers.Serializer):
 
 class ActionPlanBusinessUnitSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    key = serializers.CharField()
-    label = serializers.CharField()
+    specific_name = serializers.CharField()
+    instance_description = serializers.CharField()
+    active = serializers.BooleanField()
+    generic = BusinessUnitGenericSerializer()
 
 
 class ActionPlanActivitySubjectSerializer(serializers.Serializer):
     id = serializers.UUIDField()
-    normalized_name = serializers.CharField()
+    catalog_key = serializers.CharField(required=False)
     label = serializers.CharField()
+    description = serializers.CharField()
+    source = serializers.CharField()
+    active = serializers.BooleanField()
+    is_generic = serializers.BooleanField()
 
 
 class ActionPlanTaskTemplateSerializer(serializers.Serializer):

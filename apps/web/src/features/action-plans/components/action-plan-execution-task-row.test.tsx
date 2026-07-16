@@ -17,7 +17,7 @@ function buildTask(overrides: Partial<ActionPlanTaskExecution> = {}): ActionPlan
     assigned_display_name: null,
     position: 1,
     status: 'pending',
-    business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     observation_id: null,
     skipped_reason: null,
     completed_at: null,
@@ -210,7 +210,7 @@ describe('ActionPlanExecutionTaskRow', () => {
     renderRow({
       task: buildTask({
         assigned_display_name: null,
-        business_unit: { id: 'bu-1', key: 'restaurant', label: '' },
+        business_unit: { id: 'bu-1', specific_name: '', instance_description: '', active: true, generic: { key: 'restaurant', label: 'restaurant', description: '', unit_type: 'dedicated' } },
       }),
     })
 

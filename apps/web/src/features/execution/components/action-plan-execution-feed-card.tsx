@@ -81,7 +81,7 @@ type ActionPlanFeedHeaderBadgesProps = {
 function ActionPlanFeedHeaderBadges({ item, signalInput }: ActionPlanFeedHeaderBadgesProps) {
   return (
     <>
-      <ActionPlanFeedPilotBadge label={item.pilot_business_unit.label} />
+      <ActionPlanFeedPilotBadge label={item.pilot_business_unit.specific_name} />
       {signalInput ? <SignalClassificationBadges signal={signalInput} /> : null}
     </>
   )

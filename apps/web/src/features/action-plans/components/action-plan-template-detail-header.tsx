@@ -61,7 +61,7 @@ export function ActionPlanTemplateDetailHeader({
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <HoustonBadge variant="gray" className="text-[10px]">
-              {plan.pilot_business_unit.label}
+              {plan.pilot_business_unit.specific_name}
             </HoustonBadge>
             {plan.requires_validation ? (
               <HoustonBadge variant="gray" className="bg-[#F0EFE9] text-[10px] text-[#555]">

@@ -20,7 +20,7 @@ function buildTemplatePlan(overrides: Record<string, unknown> = {}) {
     title: 'Plan catalogue',
     description: 'Description',
     catalog_status: 'active',
-    pilot_business_unit: { id: 'bu-1', key: 'rooftop', label: 'Rooftop' },
+    pilot_business_unit: { id: 'bu-1', specific_name: 'Rooftop', instance_description: '', active: true, generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' } },
     task_count: 1,
     involved_pole_count: 1,
     created_at: '2026-06-30T08:00:00Z',
@@ -38,7 +38,7 @@ function buildTemplatePlan(overrides: Record<string, unknown> = {}) {
         assigned_membership_id: 'member-2',
         assigned_display_name: 'Bob',
         position: 1,
-        business_unit: { id: 'bu-1', key: 'rooftop', label: 'Rooftop' },
+        business_unit: { id: 'bu-1', specific_name: 'Rooftop', instance_description: '', active: true, generic: { key: 'rooftop', label: 'Rooftop', description: '', unit_type: 'dedicated' } },
       },
     ],
     permission_hints: {
@@ -58,8 +58,11 @@ function buildSignalDetail(overrides: Record<string, unknown> = {}) {
     title: 'Fuite d eau',
     location_text: 'Cuisine',
     status: 'open',
+    responsible_business_unit_id: 'bu-1',
     responsible_business_unit_key: 'rooftop',
     responsible_business_unit_label: 'Rooftop',
+    affected_business_unit_id: null,
+    activity_subject_id: null,
     permission_hints: {
       can_create_linked_action_plan: true,
     },
@@ -661,6 +664,70 @@ describe('ActionPlanCreatePage', () => {
       )
     })
     expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-1')
+  })
+
+  it('resolves locked pilot from responsible_business_unit_id without matching generic.key', async () => {
+    signalDetailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildSignalDetail({
+        responsible_business_unit_id: 'bu-food-court',
+        responsible_business_unit_key: 'food_court',
+        responsible_business_unit_label: 'Food Court',
+      }),
+    })
+    mockBusinessUnitTree.business_units = [
+      {
+        id: 'bu-food-court',
+        specific_name: 'Food Court',
+        instance_description: '',
+        active: true,
+        generic: {
+          key: 'restaurant',
+          label: 'Restaurant',
+          description: '',
+          unit_type: 'dedicated',
+        },
+        activity_subjects: [],
+      },
+      {
+        id: 'bu-rooftop',
+        specific_name: 'Rooftop',
+        instance_description: '',
+        active: true,
+        generic: {
+          key: 'restaurant',
+          label: 'Restaurant',
+          description: '',
+          unit_type: 'dedicated',
+        },
+        activity_subjects: [],
+      },
+    ]
+
+    renderPage({
+      mode: 'signal-linked',
+      signalId: 'sig-1',
+      backPath: '/signals/sig-1',
+    })
+
+    const titleInput = screen.getAllByRole('textbox')[0]
+    fireEvent.change(titleInput, { target: { value: 'Plan Food Court' } })
+    addTask()
+    fireEvent.change(screen.getByLabelText('Titre de la tâche'), {
+      target: { value: 'Tâche Food Court' },
+    })
+    selectTaskBusinessUnit(0, 'Food Court')
+    fireEvent.click(screen.getByRole('button', { name: 'Créer le plan d’action' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pilot_business_unit_id: 'bu-food-court',
+          source_signal_id: 'sig-1',
+        }),
+      )
+    })
   })
 
   it('blocks signal-linked create for staff before showing the form', () => {

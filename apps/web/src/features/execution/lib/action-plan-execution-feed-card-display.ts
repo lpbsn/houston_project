@@ -8,7 +8,7 @@ import type {
 
 type InvolvedPoleLike = {
   business_unit?: {
-    label?: string
+    specific_name?: string
   }
 }
 
@@ -51,7 +51,7 @@ export function formatActionPlanFeedInvolvedPoleLabels(
     return null
   }
   const labels = involvedPoles
-    .map((pole) => (pole as InvolvedPoleLike).business_unit?.label?.trim())
+    .map((pole) => (pole as InvolvedPoleLike).business_unit?.specific_name?.trim())
     .filter((label): label is string => Boolean(label))
   if (labels.length <= 1) {
     return null

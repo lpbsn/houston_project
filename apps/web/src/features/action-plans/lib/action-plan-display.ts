@@ -1,5 +1,22 @@
 import type { SignalClassificationInput } from '@/lib/signal-classification'
 
+import type { ActionPlanBusinessUnit } from '@/features/action-plans/types'
+
+/** Primary display name for nested Action Plan BusinessUnit (Lot 5). */
+export function actionPlanBusinessUnitPrimaryLabel(
+  unit: Pick<ActionPlanBusinessUnit, 'specific_name'>,
+): string {
+  return unit.specific_name
+}
+
+/** Secondary context label (catalog generic). */
+export function actionPlanBusinessUnitGenericLabel(
+  unit: Pick<ActionPlanBusinessUnit, 'generic'>,
+): string {
+  return unit.generic.label
+}
+
+
 import type {
   ActionPlanAssigneesByPole,
   ActionPlanDetail,
@@ -140,10 +157,8 @@ export function buildActionPlanExecutionClassificationDisplay(
     'pilot_business_unit' | 'responsible_business_unit' | 'activity_subject'
   >,
 ): ActionPlanExecutionClassificationDisplay {
-  const poleLabel =
-    execution.responsible_business_unit?.label?.trim() ||
-    execution.pilot_business_unit.label?.trim() ||
-    null
+  const poleUnit = execution.responsible_business_unit ?? execution.pilot_business_unit
+  const poleLabel = actionPlanBusinessUnitPrimaryLabel(poleUnit).trim() || null
   const subjectLabel = execution.activity_subject?.label?.trim() || null
 
   return { poleLabel, subjectLabel }
@@ -158,17 +173,17 @@ export function buildActionPlanExecutionClassificationInput(
     | 'activity_subject'
   >,
 ): SignalClassificationInput {
+  const responsible = execution.responsible_business_unit ?? execution.pilot_business_unit
   return {
-    responsible_business_unit_key: execution.responsible_business_unit?.key ?? null,
-    responsible_business_unit_label:
-      execution.responsible_business_unit?.label ??
-      execution.pilot_business_unit.label ??
-      null,
-    affected_business_unit_key: execution.affected_business_unit?.key ?? null,
-    affected_business_unit_label: execution.affected_business_unit?.label ?? null,
-    activity_subject_key: execution.activity_subject?.normalized_name ?? null,
+    responsible_business_unit_key: responsible.generic.key,
+    responsible_business_unit_label: actionPlanBusinessUnitPrimaryLabel(responsible),
+    affected_business_unit_key: execution.affected_business_unit?.generic.key ?? null,
+    affected_business_unit_label: execution.affected_business_unit
+      ? actionPlanBusinessUnitPrimaryLabel(execution.affected_business_unit)
+      : null,
+    activity_subject_key: execution.activity_subject?.catalog_key ?? null,
     activity_subject_label: execution.activity_subject?.label ?? null,
-    activity_subject_normalized_name: execution.activity_subject?.normalized_name ?? null,
+    activity_subject_normalized_name: null,
   }
 }
 
@@ -193,7 +208,7 @@ export function buildActionPlanPoleTaskSummaries(
       continue
     }
     grouped.set(businessUnitId, {
-      label: task.business_unit.label,
+      label: actionPlanBusinessUnitPrimaryLabel(task.business_unit),
       tasks: [task],
     })
   }
@@ -230,7 +245,7 @@ export function buildActionPlanTemplatePoleSummaries(
       continue
     }
     grouped.set(businessUnitId, {
-      label: task.business_unit.label,
+      label: actionPlanBusinessUnitPrimaryLabel(task.business_unit),
       tasks: [task],
     })
   }
@@ -448,7 +463,7 @@ export function groupActionPlansByPilotBusinessUnit(
     }
     sections.set(businessUnitId, {
       businessUnitId,
-      businessUnitLabel: item.pilot_business_unit.label,
+      businessUnitLabel: actionPlanBusinessUnitPrimaryLabel(item.pilot_business_unit),
       items: [item],
     })
   }

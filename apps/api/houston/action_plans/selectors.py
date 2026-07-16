@@ -53,12 +53,14 @@ _CONTRIBUTION_PREFETCH = (
 
 _PLAN_DETAIL_SELECT_RELATED = (
     "pilot_business_unit",
+    "pilot_business_unit__catalog_business_unit",
     "created_by__user",
 )
 _PLAN_TASK_DETAIL_PREFETCH = Prefetch(
     "tasks",
     queryset=ActionPlanTask.objects.select_related(
         "business_unit",
+        "business_unit__catalog_business_unit",
         "assigned_membership__user",
     ).order_by(
         "position",
@@ -68,9 +70,13 @@ _PLAN_TASK_DETAIL_PREFETCH = Prefetch(
 
 _EXECUTION_DETAIL_SELECT_RELATED = (
     "pilot_business_unit",
+    "pilot_business_unit__catalog_business_unit",
     "affected_business_unit",
+    "affected_business_unit__catalog_business_unit",
     "responsible_business_unit",
+    "responsible_business_unit__catalog_business_unit",
     "activity_subject",
+    "activity_subject__catalog_activity_subject",
     "source_signal",
     "source_signal__affected_business_unit",
     "source_signal__responsible_business_unit",
@@ -83,18 +89,21 @@ _EXECUTION_ASSIGNEE_PREFETCH = Prefetch(
     queryset=ActionPlanAssignee.objects.select_related(
         "membership__user",
         "execution_team__business_unit",
+        "execution_team__business_unit__catalog_business_unit",
     ),
 )
 _EXECUTION_TASK_DETAIL_PREFETCH = Prefetch(
     "task_executions",
     queryset=ActionPlanExecutionTask.objects.select_related(
         "execution_team__business_unit",
+        "execution_team__business_unit__catalog_business_unit",
     ).order_by("position", "created_at"),
 )
 _EXECUTION_DETAIL_PREFETCH = (
     _EXECUTION_ASSIGNEE_PREFETCH,
     _EXECUTION_TASK_DETAIL_PREFETCH,
     "execution_teams__business_unit",
+    "execution_teams__business_unit__catalog_business_unit",
 )
 
 
@@ -124,7 +133,11 @@ def catalog_action_plans_for_list(
     queryset = ActionPlan.objects.filter(
         establishment_id=membership.establishment_id,
         is_reusable=True,
-    ).select_related("pilot_business_unit", "created_by__user")
+    ).select_related(
+        "pilot_business_unit",
+        "pilot_business_unit__catalog_business_unit",
+        "created_by__user",
+    )
 
     if membership.role in ADMIN_ROLES:
         filtered = queryset
@@ -208,7 +221,10 @@ def linked_action_plan_executions_for_signal_detail(
             establishment_id=membership.establishment_id,
             source_signal_id=signal.id,
         )
-        .select_related("pilot_business_unit")
+        .select_related(
+            "pilot_business_unit",
+            "pilot_business_unit__catalog_business_unit",
+        )
         .order_by("-last_activity_at", "-created_at")
     )
     return [
@@ -295,6 +311,7 @@ def get_involved_poles(execution: ActionPlanExecution) -> list[InvolvedPoleSnaps
 _SCHEDULE_DETAIL_SELECT_RELATED = (
     "action_plan",
     "action_plan__pilot_business_unit",
+    "action_plan__pilot_business_unit__catalog_business_unit",
     "created_by__user",
     "establishment",
 )
@@ -303,12 +320,14 @@ _SCHEDULE_ASSIGNEE_PREFETCH = Prefetch(
     queryset=ActionPlanScheduleAssignee.objects.select_related(
         "membership__user",
         "business_unit",
+        "business_unit__catalog_business_unit",
     ),
 )
 
 
 _EXECUTION_FEED_SELECT_RELATED = (
     "pilot_business_unit",
+    "pilot_business_unit__catalog_business_unit",
     "source_signal__affected_business_unit",
     "source_signal__responsible_business_unit",
     "source_signal__activity_subject",
@@ -318,6 +337,7 @@ _EXECUTION_FEED_TASK_PREFETCH = Prefetch(
     "task_executions",
     queryset=ActionPlanExecutionTask.objects.select_related(
         "execution_team__business_unit",
+        "execution_team__business_unit__catalog_business_unit",
     ).order_by("position", "created_at"),
 )
 _EXECUTION_FEED_ASSIGNEE_PREFETCH = Prefetch(
@@ -325,6 +345,7 @@ _EXECUTION_FEED_ASSIGNEE_PREFETCH = Prefetch(
     queryset=ActionPlanAssignee.objects.select_related(
         "membership__user",
         "execution_team__business_unit",
+        "execution_team__business_unit__catalog_business_unit",
     ),
 )
 _EXECUTION_FEED_PREFETCH = (

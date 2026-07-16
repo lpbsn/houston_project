@@ -5605,14 +5605,25 @@ components:
         id:
           type: string
           format: uuid
-        normalized_name:
+        catalog_key:
           type: string
         label:
           type: string
+        description:
+          type: string
+        source:
+          type: string
+        active:
+          type: boolean
+        is_generic:
+          type: boolean
       required:
+      - active
+      - description
       - id
+      - is_generic
       - label
-      - normalized_name
+      - source
     ActionPlanAssigneeInput:
       type: object
       properties:
@@ -5666,14 +5677,20 @@ components:
         id:
           type: string
           format: uuid
-        key:
+        specific_name:
           type: string
-        label:
+        instance_description:
           type: string
+        active:
+          type: boolean
+        generic:
+          $ref: '#/components/schemas/BusinessUnitGeneric'
       required:
+      - active
+      - generic
       - id
-      - key
-      - label
+      - instance_description
+      - specific_name
     ActionPlanCreate201Response:
       oneOf:
       - $ref: '#/components/schemas/ActionPlanDetail'
@@ -6537,17 +6554,29 @@ components:
           type: string
         status:
           type: string
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         affected_business_unit_key:
           type: string
           nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         responsible_business_unit_key:
           type: string
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
           nullable: true
         activity_subject_normalized_name:
           type: string
@@ -6558,12 +6587,15 @@ components:
         location_text:
           type: string
       required:
+      - activity_subject_id
       - activity_subject_label
       - activity_subject_normalized_name
+      - affected_business_unit_id
       - affected_business_unit_key
       - affected_business_unit_label
       - id
       - location_text
+      - responsible_business_unit_id
       - responsible_business_unit_key
       - responsible_business_unit_label
       - status
@@ -8723,17 +8755,29 @@ components:
           type: string
         is_pinned:
           type: boolean
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         affected_business_unit_key:
           type: string
           nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         responsible_business_unit_key:
           type: string
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
           nullable: true
         activity_subject_normalized_name:
           type: string
@@ -8829,17 +8873,29 @@ components:
           type: string
         is_pinned:
           type: boolean
+        affected_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         affected_business_unit_key:
           type: string
           nullable: true
         affected_business_unit_label:
           type: string
           nullable: true
+        responsible_business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
         responsible_business_unit_key:
           type: string
           nullable: true
         responsible_business_unit_label:
           type: string
+          nullable: true
+        activity_subject_id:
+          type: string
+          format: uuid
           nullable: true
         activity_subject_normalized_name:
           type: string

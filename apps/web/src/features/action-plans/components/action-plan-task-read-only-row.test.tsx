@@ -16,7 +16,7 @@ function buildTask(overrides: Partial<ActionPlanTaskTemplate> = {}): ActionPlanT
     assigned_membership_id: 'member-1',
     assigned_display_name: 'Alice Martin',
     position: 1,
-    business_unit: { id: 'bu-1', key: 'restaurant', label: 'Restaurant' },
+    business_unit: { id: 'bu-1', specific_name: 'Restaurant', instance_description: '', active: true, generic: { key: 'restaurant', label: 'Restaurant', description: '', unit_type: 'dedicated' } },
     ...overrides,
   }
 }
@@ -41,7 +41,7 @@ describe('ActionPlanTaskReadOnlyRow', () => {
       createElement(ActionPlanTaskReadOnlyRow, {
         task: buildTask({
           assigned_display_name: null,
-          business_unit: { id: 'bu-1', key: 'restaurant', label: '' },
+          business_unit: { id: 'bu-1', specific_name: '', instance_description: '', active: true, generic: { key: 'restaurant', label: 'restaurant', description: '', unit_type: 'dedicated' } },
         }),
       }),
     )

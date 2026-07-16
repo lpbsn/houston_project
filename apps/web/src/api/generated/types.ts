@@ -1716,8 +1716,12 @@ export interface components {
         ActionPlanActivitySubject: {
             /** Format: uuid */
             id: string;
-            normalized_name: string;
+            catalog_key?: string;
             label: string;
+            description: string;
+            source: string;
+            active: boolean;
+            is_generic: boolean;
         };
         ActionPlanAssigneeInput: {
             /** Format: uuid */
@@ -1743,8 +1747,10 @@ export interface components {
         ActionPlanBusinessUnit: {
             /** Format: uuid */
             id: string;
-            key: string;
-            label: string;
+            specific_name: string;
+            instance_description: string;
+            active: boolean;
+            generic: components["schemas"]["BusinessUnitGeneric"];
         };
         ActionPlanCreate201Response: components["schemas"]["ActionPlanDetail"] | components["schemas"]["ActionPlanExecutionDetail"];
         ActionPlanCreateRequest: {
@@ -2089,10 +2095,16 @@ export interface components {
             id: string;
             title: string;
             status: string;
+            /** Format: uuid */
+            affected_business_unit_id: string | null;
             affected_business_unit_key: string | null;
             affected_business_unit_label: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id: string | null;
             responsible_business_unit_key: string | null;
             responsible_business_unit_label: string | null;
+            /** Format: uuid */
+            activity_subject_id: string | null;
             activity_subject_normalized_name: string | null;
             activity_subject_label: string | null;
             location_text: string;
@@ -2976,10 +2988,16 @@ export interface components {
             structured_summary_short: string;
             status: string;
             is_pinned: boolean;
+            /** Format: uuid */
+            affected_business_unit_id?: string | null;
             affected_business_unit_key?: string | null;
             affected_business_unit_label?: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id?: string | null;
             responsible_business_unit_key?: string | null;
             responsible_business_unit_label?: string | null;
+            /** Format: uuid */
+            activity_subject_id?: string | null;
             activity_subject_normalized_name?: string | null;
             activity_subject_label?: string | null;
             operational_unit_key: string | null;
@@ -3015,10 +3033,16 @@ export interface components {
             structured_summary_short: string;
             status: string;
             is_pinned: boolean;
+            /** Format: uuid */
+            affected_business_unit_id?: string | null;
             affected_business_unit_key?: string | null;
             affected_business_unit_label?: string | null;
+            /** Format: uuid */
+            responsible_business_unit_id?: string | null;
             responsible_business_unit_key?: string | null;
             responsible_business_unit_label?: string | null;
+            /** Format: uuid */
+            activity_subject_id?: string | null;
             activity_subject_normalized_name?: string | null;
             activity_subject_label?: string | null;
             operational_unit_key: string | null;
