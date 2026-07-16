@@ -189,7 +189,7 @@ Candidate events only:
 Current API truth is `apps/api/schema.yml`.
 
 Implemented in `apps/api/schema.yml` (establishment-scoped under `/api/v1/establishments/{establishment_id}/`):
-- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `business_unit_keys`, `activity_subject_ids` (comma-separated); response includes `applied_filters`
+- `GET signal-feed/` — feed-visible Signals (`view_mode=personal|general`); optional filters `statuses` (open, in_progress, resolved), `business_unit_ids` (UUID, comma-separated), `activity_subject_ids` (comma-separated); response includes `applied_filters`. Legacy query param `business_unit_keys` is rejected.
 - `GET signals/{signal_id}/` — active Signal detail
 - `POST signals/{signal_id}/pin/`
 - `POST signals/{signal_id}/unpin/`

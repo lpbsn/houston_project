@@ -169,7 +169,7 @@ Current API truth is `apps/api/schema.yml`.
 
 Implemented endpoints (establishment-scoped):
 
-- `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_keys`, `activity_subject_ids`. **Cursor pagination implemented** (reference).
+- `GET /api/v1/establishments/{establishment_id}/signal-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size`, `statuses`, `business_unit_ids` (UUID), `activity_subject_ids`. Legacy `business_unit_keys` is rejected. **Cursor pagination implemented** (reference).
 - `GET /api/v1/establishments/{establishment_id}/action-plan-execution-feed/?view_mode=personal|general` — required `view_mode`; optional `cursor`, `page_size` (default 25, max 50). **Cursor pagination implemented** (single-type feed; opaque cursor).
 - `POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/pin/` — personal feed pin (membership-scoped).
 - `POST /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/unpin/` — remove personal feed pin.

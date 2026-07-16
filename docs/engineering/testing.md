@@ -78,9 +78,10 @@ Do not run `cd apps/api && uv run pytest` on the host — use Make targets or `d
   - `pipeline.py` — observation/golden pipeline helpers
 - Domain-specific shared helpers (Lot 4): `tests/helpers.py`, `tests/ws_helpers.py`, `tests/pipeline_helpers.py`, etc. — import these, not `test_*.py`.
 - Catalog fixtures in `establishments/tests/conftest.py`:
-  - `imported_catalog` — function-scoped sync via `sync_catalog_from_normalized_rows()`
+  - `imported_catalog` — function-scoped sync via `sync_catalog_from_normalized_rows()` (**do not change** scope or seed strategy for taxonomy contraction work)
   - `requires_empty_catalog` — assert no catalog rows (tests that expect an empty DB)
 - **Do not** widen `imported_catalog` to session scope without a measured pilot on a single file; shared catalog state breaks isolation and blocks xdist.
+- **Taxonomy contraction / env reset:** when an environment has **no data to retain**, prefer a full DB reset + migrate + `make import-catalog` (local: `make reset-dev-db`) over a complex business backfill. When data **must** be retained, **do not reset** — plan an explicit backfill / data migration. Operator order: [`../deploy/prod_test_runbook.md`](../deploy/prod_test_runbook.md).
 
 ### Markers
 
@@ -120,7 +121,7 @@ Dedicated throttle tests (`test_auth_throttling_api.py`, invitation accept over-
 
 - Auth / bootstrap / CSRF / refresh rotation
 - RBAC and cross-establishment isolation
-- Signal lifecycle (pipeline v4 golden + cancel/resolve)
+- Signal lifecycle (pipeline golden G01–G11 + schema/prompt v5 `routing_key` + cancel/resolve)
 - Action lifecycle (service + API transitions + permissions)
 - Checklist permissions and materialization
 - Chat WS ticket auth and message delivery

@@ -1,7 +1,7 @@
 # Houston documentation
 
 Status: authoritative  
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-16
 
 Git is the only history. There is no `archive/` or `audits/` folder in active docs.
 
@@ -22,6 +22,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 | [`product/product_operating_model.md`](product/product_operating_model.md) | Operating model |
 | [`product/decisions/action_plan.md`](product/decisions/action_plan.md) | Action plan §26 + schedules |
 | [`product/domains/`](product/domains/) | Domain specs (16 files) |
+| [`product/domains/business_unit_taxonomy_domain.md`](product/domains/business_unit_taxonomy_domain.md) | BU/AS identity, `routing_key`, dual-write, Lot 5 public shapes |
 
 ## Architecture & engineering
 
@@ -49,7 +50,7 @@ Git is the only history. There is no `archive/` or `audits/` folder in active do
 
 [`00_ai_documentation_policy.md`](00_ai_documentation_policy.md) — how to write and maintain docs.
 
-## Data (not prose docs)
+## Data
 
-- [`catalogue/`](catalogue/) — CSV import for global catalog (`make import-catalog`)
+- [`catalogue/README.md`](catalogue/README.md) — catalogue import policy + Make targets; CSVs in the same folder (`make import-catalog`)
 - [`../contracts/`](../contracts/) — machine contracts (realtime invalidation)

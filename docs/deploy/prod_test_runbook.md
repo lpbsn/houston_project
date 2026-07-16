@@ -116,8 +116,33 @@ Destructive — use only on prod-test, not production.
 
 1. Reset Postgres (restore empty backup or Railway plugin reset / new instance + update `POSTGRES_*` on all services)
 2. Clear `private_media` on the **api-web** volume
+3. After empty DB: redeploy / migrate, then `import_business_unit_catalog` (same as §2)
+4. Smoke: [`smoke_checklist.md`](smoke_checklist.md)
 
 **V1 limitation:** worker and api-web do not share a volume — cross-service media purge is not fully guaranteed. See contract § Known limitations V1 — private media.
+
+---
+
+## 7b. Taxonomy contraction / reset (future — documentation only)
+
+Use when dropping dual-write legacy BU/AS columns or resetting an environment for taxonomy identity. **Do not execute as part of Lot 8 docs.** Domain context: [`../product/domains/business_unit_taxonomy_domain.md`](../product/domains/business_unit_taxonomy_domain.md).
+
+**If data must be retained:** do **not** reset Postgres. Plan an explicit backfill / data migration, then continue from step 6 with the contraction deploy.
+
+**If no data must be retained**, follow this order:
+
+1. Readers and writers migrated (all read/write paths on identity fields; no remaining dependence on legacy instance columns)
+2. Tests green
+3. Maintenance and stop writes / workers
+4. Railway backup (Postgres + media per contract)
+5. Reset Postgres **only** when nothing must be kept (empty restore / new instance + update `POSTGRES_*`); clear `private_media` on api-web
+6. Deploy the version that contains the contraction migrations
+7. Run migrations
+8. Import catalogue (`import_business_unit_catalog`)
+9. Smoke tests and golden IA v5
+10. Reactivate workers and reopen writes after validation
+
+Local equivalent of a full wipe (no data retained): `make reset-dev-db` — see [`../engineering/local_development.md`](../engineering/local_development.md).
 
 ---
 

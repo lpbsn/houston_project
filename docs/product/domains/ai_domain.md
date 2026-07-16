@@ -1,8 +1,8 @@
 # AI Domain
 
 Status: authoritative
-Last reviewed: 2026-06-13
-Implementation status: partial (transcription + observation pipeline v4 implemented — prompt/schema `ai_observation_pipeline_v4`, aggregation on `issue_focus`, golden corpus G01–G11 green; AI onboarding permanently removed from product)
+Last reviewed: 2026-07-16
+Implementation status: partial (transcription + observation pipeline **v5** implemented — prompt/schema `ai_observation_pipeline_v5`, `routing_key` snapshot/resolver, aggregation on `issue_focus`, golden corpus G01–G11 green; AI onboarding permanently removed from product). Authoritative pipeline contract: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
 
 ## 1. Purpose
 
@@ -106,7 +106,7 @@ It does not own:
 - `PromptVersion`
   - Version identifier for control text used by an AI flow.
   - Full prompt text storage does not belong in this domain reference.
-  - Observation pipeline: `prompt_version` and `schema_version` are both `ai_observation_pipeline_v4`; recorded on `AIUsageLog`. Structured output requires `issue_focus` per candidate (v4).
+  - Observation pipeline: `prompt_version` and `schema_version` are both `ai_observation_pipeline_v5`; recorded on `AIUsageLog`. Structured output uses `*_routing_key` fields and requires `issue_focus` per candidate. Details: [`ai_observation_pipeline_contract.md`](ai_observation_pipeline_contract.md).
 
 - `AIError`
   - Safe technical failure state with normalized error metadata.

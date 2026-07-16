@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-16
 
 ## Branding
 
@@ -27,9 +27,10 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Area | Status | Notes |
 |------|--------|-------|
 | Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
-| Runtime config / onboarding v2 | Live | BusinessUnit / ActivitySubject |
+| Runtime config / onboarding | Live | `onboarding_proposal_v4` (v3 still accepted); BU/AS instances |
+| BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; public API Lot 5 (no `routing_key`); dual-write legacy columns still in DB |
 | Observations + media + transcription | Live | Celery pipeline |
-| AI observation → Signal | Live | Fake (tests) / OpenAI (manual) |
+| AI observation → Signal | Live | Pipeline **v5** (`routing_key` snapshot/resolver); Fake (tests) / OpenAI (manual) |
 | Signal feed + lifecycle | Live | Pin, urgency, resolve, cancel |
 | Action Plan catalog + executions + feed | Live | See [`decisions/action_plan.md`](decisions/action_plan.md) |
 | Comments (signal + execution threads) | Live | REST + mention picker |
@@ -92,9 +93,18 @@ Preserved names (do not rename without explicit decision):
 - Push notifications depend on user opt-in and VAPID config.
 - Full device QA matrix not automated in CI.
 
+## BusinessUnit / ActivitySubject (summary)
+
+- Catalogue generics + concrete instances (`specific_name`, immutable internal `routing_key`).
+- Public API exposes UUID + `specific_name` + nested `generic` — never `routing_key`.
+- Dual-write: legacy `key` / `label` / `description` / `unit_type` still populated pending final contraction.
+- Import policy and seed: [`../catalogue/README.md`](../catalogue/README.md).
+- Domain detail: [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md).
+- Local reset / deploy contraction order: [`../engineering/local_development.md`](../engineering/local_development.md), [`../deploy/prod_test_runbook.md`](../deploy/prod_test_runbook.md).
+
 ## Reading order
 
 1. [`mvp_scope.md`](mvp_scope.md) — pilot boundaries  
-2. Domain docs under [`domains/`](domains/)  
+2. Domain docs under [`domains/`](domains/) — start with [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md) for BU/AS
 3. [`decisions/action_plan.md`](decisions/action_plan.md) — action plan RBAC and schedules  
 4. [`../engineering/local_development.md`](../engineering/local_development.md) — daily workflow

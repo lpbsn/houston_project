@@ -1,8 +1,8 @@
 # Runtime Config / Onboarding Domain
 
 Status: authoritative
-Last reviewed: 2026-06-24
-Implementation status: **implemented** — **Manual onboarding V2 only** (`onboarding_proposal_v3`, BusinessUnit / ActivitySubject). Legacy Module→Domain→Subject proposals are rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
+Last reviewed: 2026-07-16
+Implementation status: **implemented** — Manual onboarding with **`onboarding_proposal_v4`** (preferred) and **`onboarding_proposal_v3`** (still accepted for compatibility). Legacy Module→Domain→Subject / `onboarding_proposal_v2` rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
 
 ## 1. Purpose
 
@@ -19,8 +19,8 @@ Domain boundaries:
 
 - Initialize the initial `Organization` and `Establishment` context required before operational use, while their core lifecycle remains owned by Identity / Membership.
 - Capture an **optional but recommended** free-text `EstablishmentActivityDescription` to enrich runtime and AI context when provided.
-- Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual V2 wizard).
-- Product activation accepts **`onboarding_proposal_v3`** payloads only.
+- Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual wizard).
+- Product activation accepts **`onboarding_proposal_v4`** (current) and **`onboarding_proposal_v3`** (compatibility).
 - Legacy proposals (`onboarding_proposal_v2`) are rejected at validation/apply.
 - Require human validation before backend activation of runtime context.
 - Allow high-level post-activation runtime edits, subject to RBAC and human validation.
@@ -48,9 +48,11 @@ Domain boundaries:
 - Business units are required for activation minimum.
 - **Activity subjects** are required at activation minimum: at least one active subject linked to active business units in the applied proposal.
 - Activity description is **optional** at activation; when submitted via `POST .../description/`, it enriches AI/runtime context but does not gate activation.
-- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); proposal v3 is BusinessUnit / ActivitySubject only.
+- Legacy runtime vocabulary, runtime tags, and routing hints were removed from implementation (migration `0016_drop_legacy_taxonomy`); proposals are BusinessUnit / ActivitySubject only.
+- **`apply_onboarding_proposal_v4`**: single `transaction.atomic()` for the whole proposal; materializes **exactly** the subjects in the payload via `create_onboarding_business_unit` (no catalog completion); **never** implicitly reactivates inactive instances. Failure rolls back all BU/AS created by that apply.
 - Frontend cannot activate or mutate authoritative runtime state by itself.
 - Post-activation destructive runtime changes must be explicit and authorized.
+- Post-activation create uses `create_runtime_business_unit` (core + seed all active catalog subjects). Reactivation is a separate `POST …/business-units/{id}/reactivate/` path (`reactivate_business_unit` — no seed, no scope recreation). See [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 
 Activation minimum:
 - organization created
@@ -84,7 +86,7 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 - `ActivitySubject`
   - Finest operational classification under a business unit.
-  - Required in onboarding proposal v3 activation minimum.
+  - Required in onboarding proposal activation minimum (v3 or v4).
 
 - `OperationalUnit`
   - Physical or contextual **location** used to localize activity.
@@ -93,11 +95,12 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 
 - `RuntimeVocabulary`, `RuntimeTag`, `RoutingHint` (removed)
   - Legacy product concepts dropped in migration `0016_drop_legacy_taxonomy`.
-  - Not part of onboarding proposal v3 or activation minimum.
+  - Not part of onboarding proposal v3/v4 or activation minimum.
 
 - `OnboardingProposal`
   - Candidate runtime structure proposed manually before activation.
-  - Target payload: `schema_version: onboarding_proposal_v3` with BusinessUnit and ActivitySubject sections only.
+  - Preferred payload: `schema_version: onboarding_proposal_v4` with BusinessUnit sections (`catalog_key`, `specific_name`, `instance_description?`) and retained activity subjects per BU.
+  - Compatibility: `onboarding_proposal_v3` still accepted and applied via the legacy apply path.
 
 - `OnboardingProposalItemMutation` (implemented API)
   - Proposal create/update/apply via `/api/v1/onboarding-sessions/{session_id}/proposals/` — add/remove BusinessUnit and ActivitySubject entries with parent/child coherence per [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
@@ -156,10 +159,10 @@ Implemented runtime/onboarding endpoints (under `/api/v1/onboarding-sessions/`):
 - `POST /` — create onboarding session
 - `GET/PATCH /{session_id}/` — session detail and updates
 - `POST /{session_id}/description/` — submit establishment activity description
-- `GET/POST /{session_id}/proposals/` — list/create proposals (`onboarding_proposal_v3`)
+- `GET/POST /{session_id}/proposals/` — list/create proposals (`onboarding_proposal_v3` or `onboarding_proposal_v4`)
 - `GET/PATCH /{session_id}/proposals/{proposal_id}/` — draft proposal payload
 - `POST .../proposals/{proposal_id}/submit/` — validate proposal sections
-- `POST .../proposals/{proposal_id}/apply/` — apply validated proposal to runtime
+- `POST .../proposals/{proposal_id}/apply/` — apply validated proposal to runtime (v4 → `apply_onboarding_proposal_v4`)
 - `POST .../proposals/{proposal_id}/reject/` — reject proposal
 - `POST /{session_id}/mark-ready/` — mark session ready for activation
 - `POST /{session_id}/activate/` — activate establishment
@@ -167,7 +170,7 @@ Implemented runtime/onboarding endpoints (under `/api/v1/onboarding-sessions/`):
 - `GET /{session_id}/runtime-config/` — read runtime config snapshot
 - `POST /{session_id}/director-invitations/` — invite Director during onboarding
 
-Post-activation establishment runtime mutations (active establishments) also exist under `/api/v1/establishments/{establishment_id}/` — BusinessUnit and ActivitySubject CRUD, `runtime-config/`, catalogue suggest endpoints. See `schema.yml` for the current list.
+Post-activation establishment runtime mutations (active establishments) under `/api/v1/establishments/{establishment_id}/` — BusinessUnit create/PATCH/reactivate, ActivitySubject create/reactivate, `runtime-config/`, catalogue suggest. Public shapes omit `routing_key` (Lot 5). See `schema.yml` and [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
 
 ## 10. Frontend Expectations
 
