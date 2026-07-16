@@ -170,6 +170,8 @@ export function buildManualV2Payload(
   activitySubjects: DraftActivitySubject[],
   _seedTrackers?: SubjectSeedTrackers,
 ): OnboardingProposalPayloadV4 {
+  void _seedTrackers
+
   return {
     schema_version: MANUAL_V2_SCHEMA_VERSION,
     business_units: businessUnits.map((item) => ({

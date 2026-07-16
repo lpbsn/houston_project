@@ -62,7 +62,7 @@ function OperationalConfigContent({
     })
   }
 
-  function handleAddFreeText(_label: string) {
+  function handleAddFreeText() {
     setPageError('Sélectionnez un pôle catalogue pour créer une instance.')
   }
 
