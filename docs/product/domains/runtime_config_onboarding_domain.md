@@ -2,7 +2,7 @@
 
 Status: authoritative
 Last reviewed: 2026-07-16
-Implementation status: **implemented** — Manual onboarding with **`onboarding_proposal_v4`** (preferred) and **`onboarding_proposal_v3`** (still accepted for compatibility). Legacy Module→Domain→Subject / `onboarding_proposal_v2` rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
+Implementation status: **implemented** — Manual onboarding with **`onboarding_proposal_v4` only** (v3 rejected at runtime after preflight convert/REJECTED). Legacy Module→Domain→Subject / `onboarding_proposal_v2` rejected. AI onboarding is permanently removed from Houston product scope (Lot 6).
 
 ## 1. Purpose
 
@@ -20,8 +20,8 @@ Domain boundaries:
 - Initialize the initial `Organization` and `Establishment` context required before operational use, while their core lifecycle remains owned by Identity / Membership.
 - Capture an **optional but recommended** free-text `EstablishmentActivityDescription` to enrich runtime and AI context when provided.
 - Define the initial establishment runtime structure using **BusinessUnit → ActivitySubject** (manual wizard).
-- Product activation accepts **`onboarding_proposal_v4`** (current) and **`onboarding_proposal_v3`** (compatibility).
-- Legacy proposals (`onboarding_proposal_v2`) are rejected at validation/apply.
+- Product activation accepts **`onboarding_proposal_v4` only**.
+- Legacy proposals (`onboarding_proposal_v3`, `onboarding_proposal_v2`) are rejected at validation/apply (terminal v3 history may remain in DB).
 - Require human validation before backend activation of runtime context.
 - Allow high-level post-activation runtime edits, subject to RBAC and human validation.
 
@@ -100,7 +100,7 @@ Proposal parent/child coherence follows BU/AS hierarchy rules in [`business_unit
 - `OnboardingProposal`
   - Candidate runtime structure proposed manually before activation.
   - Preferred payload: `schema_version: onboarding_proposal_v4` with BusinessUnit sections (`catalog_key`, `specific_name`, `instance_description?`) and retained activity subjects per BU.
-  - Compatibility: `onboarding_proposal_v3` still accepted and applied via the legacy apply path.
+  - `onboarding_proposal_v3` is rejected at validation/apply. Non-terminal v3 rows are converted to v4 or `REJECTED` (`unsupported_schema_version_v3`) via preflight/migration; terminal applied/rejected history may remain.
 
 - `OnboardingProposalItemMutation` (implemented API)
   - Proposal create/update/apply via `/api/v1/onboarding-sessions/{session_id}/proposals/` — add/remove BusinessUnit and ActivitySubject entries with parent/child coherence per [`business_unit_taxonomy_domain.md`](business_unit_taxonomy_domain.md).
@@ -159,10 +159,10 @@ Implemented runtime/onboarding endpoints (under `/api/v1/onboarding-sessions/`):
 - `POST /` — create onboarding session
 - `GET/PATCH /{session_id}/` — session detail and updates
 - `POST /{session_id}/description/` — submit establishment activity description
-- `GET/POST /{session_id}/proposals/` — list/create proposals (`onboarding_proposal_v3` or `onboarding_proposal_v4`)
-- `GET/PATCH /{session_id}/proposals/{proposal_id}/` — draft proposal payload
-- `POST .../proposals/{proposal_id}/submit/` — validate proposal sections
-- `POST .../proposals/{proposal_id}/apply/` — apply validated proposal to runtime (v4 → `apply_onboarding_proposal_v4`)
+- `GET/POST /{session_id}/proposals/` — list/create proposals (write: `onboarding_proposal_v4` only; historical v3 payloads may appear on read for terminal rows)
+- `GET/PATCH /{session_id}/proposals/{proposal_id}/` — draft proposal payload (write: v4 only)
+- `POST .../proposals/{proposal_id}/submit/` — validate proposal sections (v4 only)
+- `POST .../proposals/{proposal_id}/apply/` — apply validated proposal to runtime (`apply_onboarding_proposal_v4`)
 - `POST .../proposals/{proposal_id}/reject/` — reject proposal
 - `POST /{session_id}/mark-ready/` — mark session ready for activation
 - `POST /{session_id}/activate/` — activate establishment

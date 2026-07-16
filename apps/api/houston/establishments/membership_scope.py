@@ -262,7 +262,7 @@ def _scope_business_unit_label(scope: MembershipScope) -> str:
     business_unit = getattr(scope, "business_unit", None)
     if business_unit is None:
         return ""
-    return business_unit.label or business_unit.key or str(business_unit.id)
+    return business_unit.specific_name or str(business_unit.id)
 
 
 def parse_membership_scope_inputs(

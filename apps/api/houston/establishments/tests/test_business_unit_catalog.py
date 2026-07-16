@@ -6,7 +6,9 @@ from houston.establishments.business_unit_catalog import (
     suggest_activity_subjects,
     suggest_business_units,
 )
-from houston.establishments.models import BusinessUnit, CatalogBusinessUnit
+from houston.establishments.models import CatalogBusinessUnit
+from houston.establishments.tests.taxonomy_helpers import create_establishment
+from houston.testing.taxonomy import create_business_unit
 
 pytestmark = pytest.mark.django_db
 
@@ -47,16 +49,13 @@ def test_suggest_activity_subjects_filters_by_business_unit(imported_catalog):
     assert any("Propreté" in item["label"] for item in results)
 
 
-def test_default_unit_type_is_not_imposed_on_establishment_business_unit(imported_catalog):
-    from houston.establishments.tests.taxonomy_helpers import create_establishment
-
+def test_catalog_unit_type_lives_on_catalog_not_runtime_business_unit(imported_catalog):
     establishment = create_establishment(name="Catalog Override Hotel")
-    business_unit = BusinessUnit.objects.create(
+    business_unit = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
-        unit_type=BusinessUnit.UnitType.DEDICATED,
     )
     catalog_row = CatalogBusinessUnit.objects.get(key="maintenance")
     assert catalog_row.unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
-    assert business_unit.unit_type == BusinessUnit.UnitType.DEDICATED
+    assert business_unit.catalog_business_unit.unit_type == "transversal"

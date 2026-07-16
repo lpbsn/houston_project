@@ -50,7 +50,8 @@ def test_generic_activity_subject_uses_catalog_routing_key_and_source(imported_c
     assert subject.normalized_name == normalize_generic_activity_subject_name(
         catalog_subject.label
     )
-    assert subject.label == catalog_subject.label
+    assert subject.label == ""
+    assert subject.description == ""
     assert subject.establishment_id == establishment.id
 
 

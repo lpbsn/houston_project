@@ -55,10 +55,14 @@ def _responsible_unit_type_for_classification(
     *,
     responsible_business_unit: BusinessUnit,
 ) -> str:
-    """Catalogue unit_type when linked; otherwise legacy BusinessUnit.unit_type."""
+    """Authoritative unit_type from catalogue generic only."""
     if responsible_business_unit.catalog_business_unit_id is None:
-        return responsible_business_unit.unit_type
+        raise InvalidSignalClassificationError(
+            "responsible_business_unit must have a catalog business unit."
+        )
     catalog = responsible_business_unit.catalog_business_unit
     if catalog is None:
-        return responsible_business_unit.unit_type
+        raise InvalidSignalClassificationError(
+            "responsible_business_unit catalog business unit could not be loaded."
+        )
     return catalog.unit_type

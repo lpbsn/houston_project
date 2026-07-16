@@ -440,7 +440,7 @@ def _serialize_business_unit_public(
     *,
     business_unit: BusinessUnit,
     activity_subjects: list[ActivitySubject] | None = None,
-) -> dict | None:
+) -> dict:
     from houston.establishments.public_serialization import serialize_business_unit_public
 
     return serialize_business_unit_public(
@@ -466,7 +466,7 @@ def get_establishment_business_unit_tree(
             **active_filter,
         )
         .select_related("catalog_business_unit")
-        .order_by("specific_name", "label", "key", "id")
+        .order_by("specific_name", "normalized_specific_name", "id")
     )
     subjects = list(
         ActivitySubject.objects.filter(
@@ -474,20 +474,19 @@ def get_establishment_business_unit_tree(
             **active_filter,
         )
         .select_related("catalog_activity_subject")
-        .order_by("label", "normalized_name", "id")
+        .order_by("normalized_name", "id")
     )
     subjects_by_bu: dict = {}
     for subject in subjects:
         subjects_by_bu.setdefault(subject.business_unit_id, []).append(subject)
 
-    serialized_units = []
-    for bu in business_units:
-        item = _serialize_business_unit_public(
+    serialized_units = [
+        _serialize_business_unit_public(
             business_unit=bu,
             activity_subjects=subjects_by_bu.get(bu.id, []),
         )
-        if item is not None:
-            serialized_units.append(item)
+        for bu in business_units
+    ]
 
     return {
         "establishment_id": establishment.id,

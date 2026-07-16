@@ -1,8 +1,8 @@
 # Signal Domain
 
 Status: authoritative
-Last reviewed: 2026-06-13
-Implementation status: partial (feed, detail, pin, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline v4 aggregation on `issue_focus`; archive, timeline not implemented)
+Last reviewed: 2026-07-16
+Implementation status: partial (feed, detail, pin, cancel, resolve implemented; Phase 5 core Action side effects implemented; pipeline v5 aggregation on `issue_focus`; archive, timeline not implemented)
 
 ## 1. Purpose
 
@@ -66,7 +66,7 @@ This domain describes the validated MVP target behavior. Current code and `apps/
 - Frontend cannot treat local state as Signal status authority.
 - AI does not decide urgency in MVP.
 - AI does not create Actions in MVP.
-- **One primary v3 classification per Signal** (`affected_business_unit`, `responsible_business_unit`, `activity_subject`). Legacy Module/Domain/Subject FKs are removed (Lot 6).
+- **One primary BU/AS classification per Signal** (`affected_business_unit`, `responsible_business_unit`, `activity_subject`). Legacy Module/Domain/Subject FKs are removed (Lot 6).
 - An Observation describing **multiple distinct problems** produces **multiple CandidateSignals** and, after validation, **multiple Signals** — never multiple categorizations on one Signal.
 - Ma vue feed visibility uses **BusinessUnit `MembershipScope`** matching (Owner/Director: all active). RBAC action uses affected/responsible BusinessUnit scopes and role rules. Feed subscription is deferred (future BU-only, then ActivitySubject subscribe/unsubscribe) — not used today.
 - Visibility does not imply actionability.
@@ -87,14 +87,15 @@ This domain describes the validated MVP target behavior. Current code and `apps/
   - Controls whether the Signal remains part of active operational supervision.
 
 - `SignalCategorization`
-  - v3 classification: affected/responsible BusinessUnit + ActivitySubject FKs on the Signal row.
+  - BU/AS classification: affected/responsible BusinessUnit + ActivitySubject FKs on the Signal row.
   - Optional operational unit for physical location only.
+  - Public feed/detail may expose compatibility `*_business_unit_key` / `*_label` (`normalized_specific_name` / `specific_name`) — **never identifiers**; filter/RBAC use UUIDs.
 
 - ~~`SignalDomain` / `detected_domains`~~ — removed from MVP; classification is BU/AS only.
 
 - `SignalAggregation`
   - Backend decision that a candidate Signal belongs to an existing active Signal instead of creating a new one.
-  - Match key (v4): `(affected_bu, responsible_bu, activity_subject, operational_unit | null, normalize(issue_focus))`.
+  - Match key (pipeline v5): `(affected_bu, responsible_bu, activity_subject, operational_unit | null, normalize(issue_focus))`.
   - `aggregate_into_signal_id` LLM hint is accepted only when taxonomy and `issue_focus` align with the target active Signal.
 
 - `LinkedObservationContext`

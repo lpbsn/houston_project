@@ -493,21 +493,6 @@ class ProposalValidationErrorItemSerializer(serializers.Serializer):
     key = serializers.CharField(required=False)
 
 
-class ProposalCatalogItemSerializer(serializers.Serializer):
-    key = serializers.CharField()
-    label = serializers.CharField()
-    reason = serializers.CharField(allow_blank=True, required=False)
-    confidence_score = serializers.FloatField(allow_null=True, required=False)
-
-
-class ProposalDomainOrUnitItemSerializer(ProposalCatalogItemSerializer):
-    related_modules = serializers.ListField(
-        child=serializers.CharField(),
-        required=False,
-        default=list,
-    )
-
-
 class ProposalBusinessUnitItemV3Serializer(serializers.Serializer):
     client_key = serializers.CharField()
     label = serializers.CharField()
@@ -606,7 +591,9 @@ class OnboardingProposalPayloadField(serializers.Field):
         if schema_version == PROPOSAL_SCHEMA_VERSION_V4:
             serializer = OnboardingProposalPayloadV4Serializer(data=data)
         elif schema_version == PROPOSAL_SCHEMA_VERSION_V3:
-            serializer = OnboardingProposalPayloadV3Serializer(data=data)
+            raise serializers.ValidationError(
+                {"schema_version": ["onboarding_proposal_v3 is no longer accepted."]}
+            )
         else:
             raise serializers.ValidationError(
                 {"schema_version": ["Unsupported onboarding proposal schema version."]}
@@ -621,14 +608,15 @@ class OnboardingProposalPayloadField(serializers.Field):
         if schema_version == PROPOSAL_SCHEMA_VERSION_V4:
             return OnboardingProposalPayloadV4Serializer(value).data
         if schema_version == PROPOSAL_SCHEMA_VERSION_V3:
+            # Historical terminal payloads only (applied/rejected).
             return OnboardingProposalPayloadV3Serializer(value).data
         return value
 
 
 # Backward-compatible aliases for imports that still reference old names.
 OnboardingProposalPayloadSerializer = OnboardingProposalPayloadField
-ProposalBusinessUnitItemSerializer = ProposalBusinessUnitItemV3Serializer
-ProposalActivitySubjectItemSerializer = ProposalActivitySubjectItemV3Serializer
+ProposalBusinessUnitItemSerializer = ProposalBusinessUnitItemV4Serializer
+ProposalActivitySubjectItemSerializer = ProposalActivitySubjectItemV4Serializer
 
 
 class OnboardingProposalCreateRequestSerializer(serializers.Serializer):

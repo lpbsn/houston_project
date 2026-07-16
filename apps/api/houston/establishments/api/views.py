@@ -1501,8 +1501,8 @@ class OnboardingSessionProposalListView(APIView):
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },
         description=(
-            "Creates a manual onboarding proposal for Onboarding manuel V2 "
-            "(schema onboarding_proposal_v3 or onboarding_proposal_v4)."
+            "Creates a manual onboarding proposal for Onboarding manuel "
+            "(schema onboarding_proposal_v4)."
         ),
     )
     def post(self, request, session_id):
@@ -1580,7 +1580,7 @@ class OnboardingSessionProposalDetailView(APIView):
         },
         description=(
             "Updates a draft onboarding proposal payload "
-            "(onboarding_proposal_v3 or onboarding_proposal_v4)."
+            "(onboarding_proposal_v4)."
         ),
     )
     def patch(self, request, session_id, proposal_id):
@@ -1628,8 +1628,8 @@ class OnboardingSessionProposalSubmitView(APIView):
             409: OpenApiResponse(response=OnboardingProposalErrorResponseSerializer),
         },
         description=(
-            "Validates and accepts all sections of an onboarding_proposal_v3 or "
-            "onboarding_proposal_v4 manual proposal."
+            "Validates and accepts all sections of an onboarding_proposal_v4 "
+            "manual proposal."
         ),
     )
     def post(self, request, session_id, proposal_id):

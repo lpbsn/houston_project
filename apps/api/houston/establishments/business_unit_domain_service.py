@@ -14,7 +14,6 @@ from houston.establishments.business_unit_identity import (
     build_activity_subject_rows_for_insert,
     build_business_unit_routing_key,
     normalize_business_unit_specific_name,
-    populate_business_unit_legacy_fields,
 )
 from houston.establishments.models import (
     ActivitySubject,
@@ -24,7 +23,6 @@ from houston.establishments.models import (
     Establishment,
     OnboardingProposal,
 )
-from houston.establishments.taxonomy_normalization import slugify_label
 
 
 def _not_found(message: str) -> DomainNotFoundError:
@@ -107,14 +105,10 @@ def _raise_business_unit_integrity_conflict(
     *,
     establishment: Establishment,
     normalized_specific_name: str,
-    legacy_key: str,
 ) -> None:
     if BusinessUnit.objects.filter(
         establishment=establishment,
         normalized_specific_name=normalized_specific_name,
-    ).exists() or BusinessUnit.objects.filter(
-        establishment=establishment,
-        key=legacy_key,
     ).exists():
         raise DomainConflictError(
             "A business unit with this specific name already exists.",
@@ -187,14 +181,9 @@ def _create_business_unit_core(
             code="invalid_normalized_name",
         )
 
-    key_max_length = BusinessUnit._meta.get_field("key").max_length
-    legacy_key = slugify_label(normalized_name_input)[:key_max_length]
     if BusinessUnit.objects.filter(
         establishment=locked_establishment,
         normalized_specific_name=normalized_specific_name,
-    ).exists() or BusinessUnit.objects.filter(
-        establishment=locked_establishment,
-        key=legacy_key,
     ).exists():
         raise DomainConflictError(
             "A business unit with this specific name already exists.",
@@ -224,12 +213,6 @@ def _create_business_unit_core(
         active=True,
         managed_by_onboarding_proposal=managed_by_onboarding_proposal,
     )
-    populate_business_unit_legacy_fields(
-        business_unit=business_unit,
-        specific_name=normalized_name_input,
-        instance_description=normalized_description,
-        catalog_business_unit=locked_catalog,
-    )
     try:
         with transaction.atomic():
             business_unit.save(force_insert=True)
@@ -237,7 +220,6 @@ def _create_business_unit_core(
         _raise_business_unit_integrity_conflict(
             establishment=locked_establishment,
             normalized_specific_name=normalized_specific_name,
-            legacy_key=legacy_key,
         )
     return business_unit
 
@@ -400,11 +382,9 @@ def update_business_unit(
     catalog_business_unit = _lock_catalog_business_unit(
         catalog_business_unit_id=business_unit.catalog_business_unit_id
     )
+    _validate_catalog_business_unit_active(catalog_business_unit)
 
-    next_specific_name = business_unit.specific_name
     next_normalized_specific_name = business_unit.normalized_specific_name
-    next_instance_description = business_unit.instance_description or ""
-    legacy_key = business_unit.key
     update_fields: list[str] = []
 
     if specific_name is not None:
@@ -422,36 +402,26 @@ def update_business_unit(
                 "Specific name must produce a valid normalized name.",
                 code="invalid_normalized_name",
             )
-        key_max_length = BusinessUnit._meta.get_field("key").max_length
-        legacy_key = slugify_label(normalized_name_input)[:key_max_length]
         collisions = BusinessUnit.objects.filter(establishment=establishment).exclude(
             id=business_unit.id
         )
         if collisions.filter(
             normalized_specific_name=next_normalized_specific_name
-        ).exists() or collisions.filter(key=legacy_key).exists():
+        ).exists():
             raise DomainConflictError(
                 "A business unit with this specific name already exists.",
                 code="duplicate_specific_name",
             )
-        next_specific_name = normalized_name_input
-        business_unit.specific_name = next_specific_name
+        business_unit.specific_name = normalized_name_input
         business_unit.normalized_specific_name = next_normalized_specific_name
-        update_fields.extend(["specific_name", "normalized_specific_name", "key", "label"])
+        update_fields.extend(["specific_name", "normalized_specific_name"])
 
     if instance_description is not None:
-        next_instance_description = instance_description.strip()
-        business_unit.instance_description = next_instance_description
-        update_fields.extend(["instance_description", "description"])
+        business_unit.instance_description = instance_description.strip()
+        update_fields.append("instance_description")
 
-    populate_business_unit_legacy_fields(
-        business_unit=business_unit,
-        specific_name=next_specific_name,
-        instance_description=next_instance_description,
-        catalog_business_unit=catalog_business_unit,
-    )
-    if "unit_type" not in update_fields:
-        update_fields.append("unit_type")
+    if not update_fields:
+        return business_unit
 
     try:
         with transaction.atomic():
@@ -460,7 +430,6 @@ def update_business_unit(
         _raise_business_unit_integrity_conflict(
             establishment=establishment,
             normalized_specific_name=next_normalized_specific_name or "",
-            legacy_key=legacy_key,
         )
     return business_unit
 

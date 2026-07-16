@@ -2,7 +2,7 @@
 
 Status: authoritative  
 Last reviewed: 2026-07-16
-Implementation status: **implemented** (BusinessUnit / ActivitySubject authoritative; Module/Domain/Subject v1 removed). Current base is **dual-write**: identity fields coexist with legacy instance columns pending final contraction.
+Implementation status: **implemented** (BusinessUnit / ActivitySubject authoritative; Module/Domain/Subject v1 removed). Identity contracted: required `specific_name` / `normalized_specific_name` / `routing_key` + catalog FK (`PROTECT`); legacy instance columns `key` / `label` / `description` / `unit_type` removed.
 
 > **Legacy model:** Module → Domain → Subject is obsolete and removed from active product contracts.
 
@@ -67,7 +67,7 @@ Two dedicated instances of catalog `restaurant` in the same establishment:
 
 ### ActivitySubject
 
-- Generic association: `catalog_activity_subject` set; `routing_key = catalog.key`; `source = catalog_suggestion`. Effective representation for API/IA prefers catalog label/description. **Current dual-write still stores local `label`/`description` copies** — target NULL-only generics is deferred until final contraction.
+- Generic association: `catalog_activity_subject` set; `routing_key = catalog.key`; `source = catalog_suggestion`; local `label`/`description` empty (display via catalogue).
 - Free subject: no catalog FK; local `label` required; `routing_key = custom--{slug}--{uuidhex}`; `source = manual`.
 - Catalog subject must belong to the same catalog BU as the instance (`catalog_subject_business_unit_mismatch`).
 - Uniqueness `(business_unit, normalized_name)` and `(business_unit, routing_key)`; inactive rows still reserve names.
@@ -142,31 +142,18 @@ Each Signal carries:
 | Manager | 1+ BusinessUnit UUID | affected OR responsible in scopes | responsible in scopes |
 | Staff | 1+ BusinessUnit UUID | affected OR responsible in scopes | None |
 
-## Dual-write and legacy fields (current)
+## Contracted identity (current)
 
-Identity path is authoritative for new writes; legacy columns remain for coexistence:
-
-| Model | Identity / current | Legacy still present |
+| Model | Required identity | Notes |
 | --- | --- | --- |
-| BusinessUnit | `specific_name`, `normalized_specific_name`, `routing_key`, `instance_description`, `catalog_business_unit` | `key`, `label`, `description`, `unit_type` — dual-written by `populate_business_unit_legacy_fields` |
-| ActivitySubject | `routing_key`, catalog FK vs free | Local `label`/`description` still stored for generics (copy of catalog) |
+| BusinessUnit | `specific_name`, `normalized_specific_name`, `routing_key`, `instance_description`, `catalog_business_unit` (`PROTECT`) | Legacy instance columns `key` / `label` / `description` / `unit_type` **removed** |
+| ActivitySubject | `routing_key` required; generics: catalog FK (`PROTECT`) + empty local `label`/`description`; free: no catalog FK + local `label` + `custom--…` routing_key | CheckConstraint `activity_subject_generic_or_free_ck` |
 
-Do not remove legacy columns until the contraction sequence in the deploy runbook is complete.
+`routing_key` is internal only — never in public OpenAPI. Public Signal/Obs/AP summaries may still expose compatibility fields `*_business_unit_key` / `*_label` sourced from `normalized_specific_name` / `specific_name` — **never identifiers** (UUID filters/RBAC remain authoritative).
 
-## Final contraction (future — not executed in Lot 8)
+Onboarding: **`onboarding_proposal_v4` only** at runtime. Non-terminal v3 rows are converted or `REJECTED` (`unsupported_schema_version_v3`) via migration/`make preflight-onboarding-v3`; terminal v3 payloads kept as history.
 
-Documented for operators in [`prod_test_runbook.md`](../../deploy/prod_test_runbook.md) § Taxonomy contraction / reset. Summary prerequisites and order:
-
-1. Readers and writers migrated off legacy fields
-2. Tests green
-3. Maintenance: stop writes / workers
-4. Railway backup
-5. Reset **only** if no data must be retained; otherwise backfill / data migration (no reset)
-6. Deploy the version that contains contraction migrations
-7. Run migrations
-8. Import catalogue
-9. Smoke tests and golden IA v5
-10. Reactivate workers and reopen writes after validation
+Deploy / reset order for environments: [`prod_test_runbook.md`](../../deploy/prod_test_runbook.md) §7b.
 
 ## Catalogue source
 

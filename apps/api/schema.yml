@@ -5239,8 +5239,8 @@ paths:
           description: ''
     post:
       operationId: v1_onboarding_sessions_proposals_create
-      description: Creates a manual onboarding proposal for Onboarding manuel V2 (schema
-        onboarding_proposal_v3 or onboarding_proposal_v4).
+      description: Creates a manual onboarding proposal for Onboarding manuel (schema
+        onboarding_proposal_v4).
       parameters:
       - in: path
         name: session_id
@@ -5349,8 +5349,7 @@ paths:
           description: ''
     patch:
       operationId: v1_onboarding_sessions_proposals_partial_update
-      description: Updates a draft onboarding proposal payload (onboarding_proposal_v3
-        or onboarding_proposal_v4).
+      description: Updates a draft onboarding proposal payload (onboarding_proposal_v4).
       parameters:
       - in: path
         name: proposal_id
@@ -5530,8 +5529,8 @@ paths:
   /api/v1/onboarding-sessions/{session_id}/proposals/{proposal_id}/submit/:
     post:
       operationId: v1_onboarding_sessions_proposals_submit_create
-      description: Validates and accepts all sections of an onboarding_proposal_v3
-        or onboarding_proposal_v4 manual proposal.
+      description: Validates and accepts all sections of an onboarding_proposal_v4
+        manual proposal.
       parameters:
       - in: path
         name: proposal_id

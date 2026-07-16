@@ -6,6 +6,10 @@ from typing import Literal
 
 from django.db.models import F
 
+from houston.establishments.business_unit_identity import (
+    business_unit_public_key,
+    business_unit_public_label,
+)
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.public_serialization import (
     resolve_activity_subject_public_label,
@@ -113,18 +117,24 @@ def signal_summaries_for_observation(
                 id=signal.id,
                 title=signal.title,
                 affected_business_unit_key=(
-                    signal.affected_business_unit.key if signal.affected_business_unit_id else ""
+                    business_unit_public_key(business_unit=signal.affected_business_unit)
+                    if signal.affected_business_unit_id
+                    else ""
                 ),
                 affected_business_unit_label=(
-                    signal.affected_business_unit.label if signal.affected_business_unit_id else ""
+                    business_unit_public_label(business_unit=signal.affected_business_unit)
+                    if signal.affected_business_unit_id
+                    else ""
                 ),
                 responsible_business_unit_key=(
-                    signal.responsible_business_unit.key
+                    business_unit_public_key(business_unit=signal.responsible_business_unit)
                     if signal.responsible_business_unit_id
                     else ""
                 ),
                 responsible_business_unit_label=(
-                    signal.responsible_business_unit.label
+                    business_unit_public_label(
+                        business_unit=signal.responsible_business_unit
+                    )
                     if signal.responsible_business_unit_id
                     else ""
                 ),

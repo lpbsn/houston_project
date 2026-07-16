@@ -8,6 +8,7 @@ from django.db.migrations.executor import MigrationExecutor
 
 from houston.establishments.business_unit_identity import (
     build_business_unit_routing_key,
+    build_free_activity_subject_routing_key,
     derive_activity_subject_establishment,
     normalize_business_unit_specific_name,
 )
@@ -19,6 +20,7 @@ from houston.establishments.models import (
 )
 from houston.establishments.taxonomy_normalization import slugify_label
 from houston.organizations.models import Organization
+from houston.testing.taxonomy import create_business_unit
 
 
 def _create_establishment() -> Establishment:
@@ -26,18 +28,56 @@ def _create_establishment() -> Establishment:
     return Establishment.objects.create(organization=org, name="Est")
 
 
-def _create_legacy_business_unit(
+def _raw_business_unit(
     *,
     establishment: Establishment,
-    key: str = "hotel",
-    label: str = "Hotel",
+    catalog_key: str,
+    specific_name: str,
+    routing_key: str | None = None,
 ) -> BusinessUnit:
+    catalog = CatalogBusinessUnit.objects.get(key=catalog_key)
+    business_unit_id = uuid.uuid4()
+    normalized = normalize_business_unit_specific_name(specific_name)
     return BusinessUnit.objects.create(
+        id=business_unit_id,
         establishment=establishment,
-        key=key,
+        catalog_business_unit=catalog,
+        specific_name=specific_name,
+        normalized_specific_name=normalized,
+        routing_key=routing_key
+        or build_business_unit_routing_key(
+            business_unit_id=business_unit_id,
+            catalog_key=catalog.key,
+            specific_name=specific_name,
+        ),
+        instance_description="",
+        source=BusinessUnit.Source.MANUAL,
+        active=True,
+    )
+
+
+def _raw_free_activity_subject(
+    *,
+    establishment: Establishment,
+    business_unit: BusinessUnit,
+    label: str,
+    normalized_name: str | None = None,
+    routing_key: str | None = None,
+) -> ActivitySubject:
+    activity_subject_id = uuid.uuid4()
+    return ActivitySubject.objects.create(
+        id=activity_subject_id,
+        establishment=establishment,
+        business_unit=business_unit,
+        normalized_name=normalized_name or slugify_label(label),
         label=label,
-        description="Legacy BU description",
-        unit_type=BusinessUnit.UnitType.DEDICATED,
+        routing_key=routing_key
+        or build_free_activity_subject_routing_key(
+            activity_subject_id=activity_subject_id,
+            label=label,
+        ),
+        source=ActivitySubject.Source.MANUAL,
+        active=True,
     )
 
 
@@ -67,41 +107,46 @@ def test_build_business_unit_routing_key_format():
 
 
 @pytest.mark.django_db
-def test_business_unit_partial_unique_normalized_specific_name():
+def test_business_unit_unique_normalized_specific_name(imported_catalog):
     establishment = _create_establishment()
-    _create_legacy_business_unit(establishment=establishment, key="hotel_a")
-    BusinessUnit.objects.create(
+    _raw_business_unit(
         establishment=establishment,
-        key="hotel_b",
-        label="Hotel B",
-        unit_type=BusinessUnit.UnitType.DEDICATED,
-        normalized_specific_name="food_court",
+        catalog_key="hotel",
+        specific_name="Food Court",
     )
     with pytest.raises(IntegrityError):
-        BusinessUnit.objects.create(
+        _raw_business_unit(
             establishment=establishment,
-            key="hotel_c",
-            label="Hotel C",
-            unit_type=BusinessUnit.UnitType.DEDICATED,
-            normalized_specific_name="food_court",
+            catalog_key="hotel",
+            specific_name="Food Court",
         )
 
 
 @pytest.mark.django_db
-def test_business_unit_partial_unique_allows_multiple_null_normalized_specific_name():
+def test_business_unit_rejects_empty_normalized_specific_name(imported_catalog):
     establishment = _create_establishment()
-    _create_legacy_business_unit(establishment=establishment, key="hotel_a")
-    BusinessUnit.objects.create(
-        establishment=establishment,
-        key="hotel_b",
-        label="Hotel B",
-        unit_type=BusinessUnit.UnitType.DEDICATED,
-    )
-    assert BusinessUnit.objects.filter(establishment=establishment).count() == 2
+    catalog = CatalogBusinessUnit.objects.get(key="hotel")
+    business_unit_id = uuid.uuid4()
+    with pytest.raises(IntegrityError):
+        BusinessUnit.objects.create(
+            id=business_unit_id,
+            establishment=establishment,
+            catalog_business_unit=catalog,
+            specific_name="Food Court",
+            normalized_specific_name="",
+            routing_key=build_business_unit_routing_key(
+                business_unit_id=business_unit_id,
+                catalog_key=catalog.key,
+                specific_name="Food Court",
+            ),
+            instance_description="",
+            source=BusinessUnit.Source.MANUAL,
+            active=True,
+        )
 
 
 @pytest.mark.django_db
-def test_business_unit_partial_unique_routing_key(imported_catalog):
+def test_business_unit_unique_routing_key(imported_catalog):
     establishment = _create_establishment()
     catalog = CatalogBusinessUnit.objects.get(key="hotel")
     bu_id = uuid.uuid4()
@@ -110,75 +155,72 @@ def test_business_unit_partial_unique_routing_key(imported_catalog):
         catalog_key=catalog.key,
         specific_name="Food Court",
     )
-    BusinessUnit.objects.create(
-        id=bu_id,
+    _raw_business_unit(
         establishment=establishment,
-        key="hotel_a",
-        label="Hotel A",
-        unit_type=BusinessUnit.UnitType.DEDICATED,
-        catalog_business_unit=catalog,
+        catalog_key="hotel",
+        specific_name="Food Court",
         routing_key=routing_key,
     )
     with pytest.raises(IntegrityError):
-        BusinessUnit.objects.create(
+        _raw_business_unit(
             establishment=establishment,
-            key="hotel_b",
-            label="Hotel B",
-            unit_type=BusinessUnit.UnitType.DEDICATED,
-            catalog_business_unit=catalog,
+            catalog_key="hotel",
+            specific_name="Rooftop",
             routing_key=routing_key,
         )
 
 
 @pytest.mark.django_db
-def test_activity_subject_routing_key_partial_unique():
+def test_activity_subject_routing_key_unique_per_business_unit(imported_catalog):
     establishment = _create_establishment()
-    business_unit = _create_legacy_business_unit(establishment=establishment)
-    ActivitySubject.objects.create(
+    business_unit = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    routing_key = build_free_activity_subject_routing_key(
+        activity_subject_id=uuid.uuid4(),
+        label="Stock",
+    )
+    _raw_free_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name="stock",
         label="Stock",
-        routing_key="hotel__gestion_des_stocks",
+        normalized_name="stock",
+        routing_key=routing_key,
     )
     with pytest.raises(IntegrityError):
-        ActivitySubject.objects.create(
+        _raw_free_activity_subject(
             establishment=establishment,
             business_unit=business_unit,
-            normalized_name="stock_duplicate",
             label="Stock duplicate",
-            routing_key="hotel__gestion_des_stocks",
+            normalized_name="stock_duplicate",
+            routing_key=routing_key,
         )
 
 
 @pytest.mark.django_db
-def test_activity_subject_routing_key_partial_unique_allows_multiple_null():
+def test_activity_subject_rejects_empty_routing_key(imported_catalog):
     establishment = _create_establishment()
-    business_unit = _create_legacy_business_unit(establishment=establishment)
-    ActivitySubject.objects.create(
-        establishment=establishment,
-        business_unit=business_unit,
-        normalized_name="stock",
-        label="Stock",
-    )
-    ActivitySubject.objects.create(
-        establishment=establishment,
-        business_unit=business_unit,
-        normalized_name="maintenance",
-        label="Maintenance",
-    )
+    business_unit = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
+    with pytest.raises(IntegrityError):
+        ActivitySubject.objects.create(
+            establishment=establishment,
+            business_unit=business_unit,
+            normalized_name="stock",
+            label="Stock",
+            routing_key="",
+            source=ActivitySubject.Source.MANUAL,
+            active=True,
+        )
 
 
 @pytest.mark.django_db
-def test_activity_subject_normalized_name_accepts_255_chars():
+def test_activity_subject_normalized_name_accepts_255_chars(imported_catalog):
     establishment = _create_establishment()
-    business_unit = _create_legacy_business_unit(establishment=establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
     normalized_name = "a" * 255
-    subject = ActivitySubject.objects.create(
+    subject = _raw_free_activity_subject(
         establishment=establishment,
         business_unit=business_unit,
-        normalized_name=normalized_name,
         label="Long normalized name",
+        normalized_name=normalized_name,
     )
     subject.refresh_from_db()
     assert subject.normalized_name == normalized_name
@@ -186,24 +228,25 @@ def test_activity_subject_normalized_name_accepts_255_chars():
 
 
 @pytest.mark.django_db
-def test_derive_activity_subject_establishment_sets_establishment_id():
+def test_derive_activity_subject_establishment_sets_establishment_id(imported_catalog):
     establishment = _create_establishment()
-    business_unit = _create_legacy_business_unit(establishment=establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
     other_establishment = _create_establishment()
     subject = ActivitySubject(
         establishment=other_establishment,
         business_unit=business_unit,
         normalized_name="stock",
         label="Stock",
+        routing_key="custom--stock--0123456789abcdef",
     )
     derive_activity_subject_establishment(subject)
     assert subject.establishment_id == business_unit.establishment_id
 
 
 @pytest.mark.django_db
-def test_bulk_create_activity_subject_with_explicit_establishment_derivation():
+def test_bulk_create_activity_subject_with_explicit_establishment_derivation(imported_catalog):
     establishment = _create_establishment()
-    business_unit = _create_legacy_business_unit(establishment=establishment)
+    business_unit = create_business_unit(establishment=establishment, key="hotel", label="Hotel")
     other_establishment = _create_establishment()
     rows = [
         ActivitySubject(
@@ -211,12 +254,14 @@ def test_bulk_create_activity_subject_with_explicit_establishment_derivation():
             business_unit=business_unit,
             normalized_name="stock",
             label="Stock",
+            routing_key="custom--stock--0123456789abcdef",
         ),
         ActivitySubject(
             establishment=other_establishment,
             business_unit=business_unit,
             normalized_name="maintenance",
             label="Maintenance",
+            routing_key="custom--maintenance--0123456789abcde0",
         ),
     ]
     for row in rows:
@@ -231,72 +276,14 @@ def test_bulk_create_activity_subject_with_explicit_establishment_derivation():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_lot2_migration_preserves_legacy_rows():
+def test_lot2_legacy_columns_dropped_after_0026():
     executor = MigrationExecutor(connection)
-    executor.migrate([("establishments", "0022_catalog_lot1")])
-    apps = executor.loader.project_state([("establishments", "0022_catalog_lot1")]).apps
+    executor.migrate([("establishments", "0026_drop_bu_legacy_columns")])
 
-    Organization = apps.get_model("organizations", "Organization")
-    Establishment = apps.get_model("establishments", "Establishment")
-    BusinessUnit = apps.get_model("establishments", "BusinessUnit")
-    ActivitySubject = apps.get_model("establishments", "ActivitySubject")
+    field_names = {field.name for field in BusinessUnit._meta.get_fields()}
+    assert "key" not in field_names
+    assert "label" not in field_names
+    assert "description" not in field_names
+    assert "unit_type" not in field_names
 
-    org = Organization.objects.create(name="Migration Org")
-    establishment = Establishment.objects.create(organization=org, name="Migration Est")
-    business_unit = BusinessUnit.objects.create(
-        establishment=establishment,
-        key="hotel",
-        label="Hotel",
-        description="Legacy BU description",
-        unit_type="dedicated",
-    )
-    activity_subject = ActivitySubject.objects.create(
-        establishment=establishment,
-        business_unit=business_unit,
-        normalized_name="climatisation",
-        label="Climatisation",
-        description="Legacy subject description",
-        source="manual",
-    )
-
-    legacy_business_unit = {
-        "key": business_unit.key,
-        "label": business_unit.label,
-        "description": business_unit.description,
-        "unit_type": business_unit.unit_type,
-    }
-    legacy_activity_subject = {
-        "normalized_name": activity_subject.normalized_name,
-        "label": activity_subject.label,
-        "description": activity_subject.description,
-        "source": activity_subject.source,
-    }
-    business_unit_id = business_unit.id
-    activity_subject_id = activity_subject.id
-
-    executor = MigrationExecutor(connection)
-    executor.migrate([("establishments", "0023_bu_as_lot2_identity")])
-
-    from houston.establishments.models import ActivitySubject as RealActivitySubject
-    from houston.establishments.models import BusinessUnit as RealBusinessUnit
-
-    business_unit = RealBusinessUnit.objects.get(pk=business_unit_id)
-    activity_subject = RealActivitySubject.objects.get(pk=activity_subject_id)
-
-    assert business_unit.key == legacy_business_unit["key"]
-    assert business_unit.label == legacy_business_unit["label"]
-    assert business_unit.description == legacy_business_unit["description"]
-    assert business_unit.unit_type == legacy_business_unit["unit_type"]
-    assert business_unit.specific_name is None
-    assert business_unit.normalized_specific_name is None
-    assert business_unit.routing_key is None
-    assert business_unit.instance_description is None
-
-    assert activity_subject.normalized_name == legacy_activity_subject["normalized_name"]
-    assert activity_subject.label == legacy_activity_subject["label"]
-    assert activity_subject.description == legacy_activity_subject["description"]
-    assert activity_subject.source == legacy_activity_subject["source"]
-    assert activity_subject.routing_key is None
-
-    executor = MigrationExecutor(connection)
     executor.migrate(executor.loader.graph.leaf_nodes())

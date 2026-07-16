@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from houston.establishments.business_unit_identity import normalize_generic_activity_subject_name
 from houston.establishments.models import ActivitySubject, CatalogActivitySubject
 from houston.establishments.taxonomy_snapshot import (
     build_establishment_taxonomy_snapshot,
@@ -68,9 +69,9 @@ def test_snapshot_subject_includes_label_description_source():
         establishment=establishment,
         business_unit=hotel,
         catalog_activity_subject=catalog_subject,
-        normalized_name="proprete_catalogue",
-        label=catalog_subject.label,
-        description=catalog_subject.description,
+        normalized_name=normalize_generic_activity_subject_name(catalog_subject.label),
+        label="",
+        description="",
         routing_key=catalog_subject.key,
         source=ActivitySubject.Source.CATALOG_SUGGESTION,
         active=True,
@@ -144,18 +145,18 @@ def test_snapshot_empty_when_no_active_business_units():
 @pytest.mark.django_db
 def test_establishment_has_active_business_units_requires_snapshot_ready_identity():
     establishment = create_establishment()
-    incomplete = create_business_unit(
+    inactive = create_business_unit(
         establishment=establishment,
         key="hotel",
         label="Hotel",
     )
-    incomplete.routing_key = ""
-    incomplete.save(update_fields=["routing_key", "updated_at"])
+    inactive.active = False
+    inactive.save(update_fields=["active", "updated_at"])
 
     assert establishment_has_active_business_units(establishment_id=establishment.id) is False
 
-    incomplete.routing_key = "hotel--hotel--0123456789abcdef"
-    incomplete.save(update_fields=["routing_key", "updated_at"])
+    inactive.active = True
+    inactive.save(update_fields=["active", "updated_at"])
     assert establishment_has_active_business_units(establishment_id=establishment.id) is True
 
 

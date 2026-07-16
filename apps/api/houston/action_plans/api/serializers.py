@@ -19,6 +19,10 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.selectors import get_involved_poles
 from houston.establishments.api.serializers import BusinessUnitGenericSerializer
+from houston.establishments.business_unit_identity import (
+    business_unit_public_key,
+    business_unit_public_label,
+)
 from houston.establishments.public_serialization import (
     resolve_activity_subject_public_label,
     serialize_activity_subject_ref,
@@ -56,14 +60,26 @@ def _serialize_signal_summary(execution: ActionPlanExecution) -> dict | None:
         "title": signal.title,
         "status": signal.status,
         "affected_business_unit_id": signal.affected_business_unit_id,
-        "affected_business_unit_key": affected.key if affected is not None else None,
-        "affected_business_unit_label": affected.label if affected is not None else None,
+        "affected_business_unit_key": (
+            business_unit_public_key(business_unit=affected)
+            if affected is not None
+            else None
+        ),
+        "affected_business_unit_label": (
+            business_unit_public_label(business_unit=affected)
+            if affected is not None
+            else None
+        ),
         "responsible_business_unit_id": signal.responsible_business_unit_id,
         "responsible_business_unit_key": (
-            responsible.key if responsible is not None else None
+            business_unit_public_key(business_unit=responsible)
+            if responsible is not None
+            else None
         ),
         "responsible_business_unit_label": (
-            responsible.label if responsible is not None else None
+            business_unit_public_label(business_unit=responsible)
+            if responsible is not None
+            else None
         ),
         "activity_subject_id": signal.activity_subject_id,
         "activity_subject_normalized_name": (

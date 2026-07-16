@@ -27,8 +27,8 @@ API contract: [`apps/api/schema.yml`](../../apps/api/schema.yml).
 | Area | Status | Notes |
 |------|--------|-------|
 | Identity / memberships / RBAC | Live | Bootstrap, establishment scoping |
-| Runtime config / onboarding | Live | `onboarding_proposal_v4` (v3 still accepted); BU/AS instances |
-| BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; public API Lot 5 (no `routing_key`); dual-write legacy columns still in DB |
+| Runtime config / onboarding | Live | `onboarding_proposal_v4` only (v3 rejected at runtime after preflight); BU/AS instances |
+| BusinessUnit / ActivitySubject taxonomy | Live | Identity: `specific_name` + internal `routing_key`; catalog FK required (`PROTECT`); public API Lot 5 (no `routing_key`); legacy instance columns removed |
 | Observations + media + transcription | Live | Celery pipeline |
 | AI observation → Signal | Live | Pipeline **v5** (`routing_key` snapshot/resolver); Fake (tests) / OpenAI (manual) |
 | Signal feed + lifecycle | Live | Pin, urgency, resolve, cancel |
@@ -97,7 +97,7 @@ Preserved names (do not rename without explicit decision):
 
 - Catalogue generics + concrete instances (`specific_name`, immutable internal `routing_key`).
 - Public API exposes UUID + `specific_name` + nested `generic` — never `routing_key`.
-- Dual-write: legacy `key` / `label` / `description` / `unit_type` still populated pending final contraction.
+- Legacy instance columns removed; Signal summary `*_key` / `*_label` kept as display compatibility only (`normalized_specific_name` / `specific_name`).
 - Import policy and seed: [`../catalogue/README.md`](../catalogue/README.md).
 - Domain detail: [`domains/business_unit_taxonomy_domain.md`](domains/business_unit_taxonomy_domain.md).
 - Local reset / deploy contraction order: [`../engineering/local_development.md`](../engineering/local_development.md), [`../deploy/prod_test_runbook.md`](../deploy/prod_test_runbook.md).

@@ -152,12 +152,13 @@ def test_action_plan_execution_team_one_pilot(
         business_unit=business_unit,
         is_pilot=True,
     )
-    maintenance = business_unit.__class__.objects.create(
+    from houston.testing.taxonomy import create_business_unit
+
+    maintenance = create_business_unit(
         establishment=establishment,
         key="maintenance",
         label="Maintenance",
-        source=business_unit.Source.MANUAL,
-        active=True,
+        unit_type=business_unit.UnitType.TRANSVERSAL,
     )
     with pytest.raises(IntegrityError):
         ActionPlanExecutionTeam.objects.create(

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.db import IntegrityError, close_old_connections, connection, transaction
 
+from houston.establishments.business_unit_identity import normalize_generic_activity_subject_name
 from houston.establishments.catalog_import import sync_catalog_from_normalized_rows
 from houston.establishments.catalog_preflight import CatalogImportError
 from houston.establishments.catalog_source_normalization import (
@@ -28,7 +29,7 @@ from houston.establishments.models import (
 )
 from houston.establishments.taxonomy_normalization import normalize_activity_subject_name
 from houston.testing.factories import create_establishment
-from houston.testing.taxonomy import create_activity_subject
+from houston.testing.taxonomy import create_activity_subject, create_business_unit
 
 pytestmark = pytest.mark.django_db
 
@@ -66,13 +67,10 @@ def _activity_subject_row(
 def _link_runtime_business_unit(*, catalog_key: str) -> BusinessUnit:
     establishment = create_establishment()
     catalog_business_unit = CatalogBusinessUnit.objects.get(key=catalog_key)
-    return BusinessUnit.objects.create(
+    return create_business_unit(
         establishment=establishment,
         key=catalog_key,
         label=catalog_business_unit.label,
-        catalog_business_unit=catalog_business_unit,
-        source=BusinessUnit.Source.CATALOG_SUGGESTION,
-        active=True,
     )
 
 
@@ -85,9 +83,11 @@ def _link_runtime_activity_subject(
     return ActivitySubject.objects.create(
         establishment=business_unit.establishment,
         business_unit=business_unit,
-        normalized_name=normalize_activity_subject_name(catalog_subject.label),
-        label=catalog_subject.label,
         catalog_activity_subject=catalog_subject,
+        normalized_name=normalize_generic_activity_subject_name(catalog_subject.label),
+        label="",
+        description="",
+        routing_key=catalog_subject.key,
         source=ActivitySubject.Source.CATALOG_SUGGESTION,
         active=True,
     )
@@ -177,13 +177,10 @@ def test_catalog_bu_lock_blocks_concurrent_business_unit_reference(imported_cata
             runtime_pid["value"] = connection.cursor().connection.info.backend_pid
             runtime_attempting.set()
             with transaction.atomic():
-                BusinessUnit.objects.create(
+                create_business_unit(
                     establishment=establishment,
                     key="maintenance",
                     label=catalog_bu.label,
-                    catalog_business_unit=catalog_bu,
-                    source=BusinessUnit.Source.CATALOG_SUGGESTION,
-                    active=True,
                 )
             runtime_finished.set()
         except BaseException as exc:
@@ -216,12 +213,10 @@ def test_catalog_subject_lock_blocks_concurrent_activity_subject_reference(impor
 
     establishment = create_establishment()
     catalog_bu = CatalogBusinessUnit.objects.get(key="hotel")
-    runtime_bu = BusinessUnit.objects.create(
+    runtime_bu = create_business_unit(
         establishment=establishment,
         key="hotel",
         label=catalog_bu.label,
-        source=BusinessUnit.Source.MANUAL,
-        active=True,
     )
     catalog_as = CatalogActivitySubject.objects.get(key="hotel__menage")
     catalog_locked = threading.Event()
@@ -240,9 +235,11 @@ def test_catalog_subject_lock_blocks_concurrent_activity_subject_reference(impor
                 ActivitySubject.objects.create(
                     establishment=establishment,
                     business_unit=runtime_bu,
-                    normalized_name=normalize_activity_subject_name(catalog_as.label),
-                    label=catalog_as.label,
                     catalog_activity_subject=catalog_as,
+                    normalized_name=normalize_generic_activity_subject_name(catalog_as.label),
+                    label="",
+                    description="",
+                    routing_key=catalog_as.key,
                     source=ActivitySubject.Source.CATALOG_SUGGESTION,
                     active=True,
                 )
@@ -496,7 +493,7 @@ def test_catalog_import_label_change_propagates_runtime_subject_label_and_normal
 
     runtime_subject.refresh_from_db()
     assert CatalogActivitySubject.objects.get(key="hotel__menage").label == "Housekeeping"
-    assert runtime_subject.label == "Housekeeping"
+    assert runtime_subject.label == ""
     assert runtime_subject.normalized_name == normalize_activity_subject_name("Housekeeping")
 
 
@@ -528,7 +525,7 @@ def test_catalog_subject_label_update_propagates_normalized_name(imported_catalo
     )
 
     runtime_subject.refresh_from_db()
-    assert runtime_subject.label == "Housekeeping"
+    assert runtime_subject.label == ""
     assert runtime_subject.normalized_name == normalize_activity_subject_name("Housekeeping")
 
 
@@ -572,7 +569,7 @@ def test_catalog_subject_label_update_is_atomic(imported_catalog):
     catalog_subject.refresh_from_db()
     first_subject.refresh_from_db()
     assert catalog_subject.label == "Ménage"
-    assert first_subject.label == "Ménage"
+    assert first_subject.label == ""
 
 
 def test_catalog_subject_label_update_rejects_empty_normalized_name(imported_catalog):
@@ -614,7 +611,7 @@ def test_catalog_subject_label_update_handles_concurrent_collision(imported_cata
 
     runtime_subject.refresh_from_db()
     assert CatalogActivitySubject.objects.get(key="hotel__menage").label == "Ménage"
-    assert runtime_subject.label == "Ménage"
+    assert runtime_subject.label == ""
 
 
 def test_catalog_custom_prefix_migration_rejects_existing_invalid_row():

@@ -4,9 +4,9 @@ import pytest
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
-from houston.establishments.models import BusinessUnit
 from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.establishments.tests.taxonomy_helpers import create_establishment
+from houston.testing.taxonomy import create_business_unit
 
 pytestmark = pytest.mark.django_db
 
@@ -107,12 +107,14 @@ def test_catalog_activity_subject_suggest_returns_coworking_subjects_from_db(
     assert all(item["business_unit_key"] == "coworking" for item in body)
 
 
-def test_establishment_business_unit_can_exist_without_catalog_match(imported_catalog):
-    establishment = create_establishment(name="Free Text Hotel")
-    business_unit = BusinessUnit.objects.create(
+def test_establishment_business_unit_requires_catalog_business_unit(imported_catalog):
+    establishment = create_establishment(name="Catalog Required Hotel")
+    business_unit = create_business_unit(
         establishment=establishment,
-        key="custom_free_pole",
-        label="Mon pôle perso",
-        unit_type=BusinessUnit.UnitType.DEDICATED,
+        key="coworking",
+        label="Coworking",
     )
-    assert business_unit.catalog_business_unit_id is None
+    from houston.establishments.models import CatalogBusinessUnit
+
+    catalog_business_unit = CatalogBusinessUnit.objects.get(key="coworking")
+    assert business_unit.catalog_business_unit_id == catalog_business_unit.id

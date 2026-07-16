@@ -568,10 +568,8 @@ class CatalogBusinessUnit(BaseModel):
 class CatalogActivitySubject(BaseModel):
     catalog_business_unit = models.ForeignKey(
         CatalogBusinessUnit,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="catalog_activity_subjects",
-        null=True,
-        blank=True,
     )
     key = models.CharField(max_length=150, unique=True)
     label = models.CharField(max_length=255)
@@ -597,6 +595,8 @@ class CatalogActivitySubject(BaseModel):
 
 class BusinessUnit(BaseModel):
     class UnitType(models.TextChoices):
+        """String constants for unit_type comparisons (authoritative on catalog)."""
+
         DEDICATED = "dedicated", "Dedicated"
         TRANSVERSAL = "transversal", "Transversal"
 
@@ -612,20 +612,10 @@ class BusinessUnit(BaseModel):
         related_name="business_units",
         db_index=False,
     )
-    key = models.CharField(max_length=100)
-    label = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default="")
-    unit_type = models.CharField(
-        max_length=20,
-        choices=UnitType.choices,
-        default=UnitType.DEDICATED,
-    )
     catalog_business_unit = models.ForeignKey(
         CatalogBusinessUnit,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="establishment_business_units",
-        null=True,
-        blank=True,
         db_index=False,
     )
     source = models.CharField(
@@ -642,37 +632,41 @@ class BusinessUnit(BaseModel):
         blank=True,
         db_index=False,
     )
-    specific_name = models.CharField(max_length=255, null=True, blank=True)
-    normalized_specific_name = models.CharField(max_length=255, null=True, blank=True)
-    routing_key = models.CharField(max_length=180, null=True, blank=True)
-    instance_description = models.TextField(null=True, blank=True)
+    specific_name = models.CharField(max_length=255)
+    normalized_specific_name = models.CharField(max_length=255)
+    routing_key = models.CharField(max_length=180)
+    instance_description = models.TextField(blank=True, default="")
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["establishment", "key"],
-                name="bu_est_key_uniq",
-            ),
-            models.UniqueConstraint(
                 fields=["establishment", "normalized_specific_name"],
-                condition=Q(normalized_specific_name__isnull=False),
                 name="bu_est_normalized_specific_name_uniq",
             ),
             models.UniqueConstraint(
                 fields=["establishment", "routing_key"],
-                condition=Q(routing_key__isnull=False),
                 name="bu_est_routing_key_uniq",
+            ),
+            models.CheckConstraint(
+                condition=~Q(specific_name=""),
+                name="bu_specific_name_nonempty_ck",
+            ),
+            models.CheckConstraint(
+                condition=~Q(normalized_specific_name=""),
+                name="bu_normalized_specific_name_nonempty_ck",
+            ),
+            models.CheckConstraint(
+                condition=~Q(routing_key=""),
+                name="bu_routing_key_nonempty_ck",
             ),
         ]
         indexes = [
             models.Index(fields=["establishment"], name="bu_est_idx"),
             models.Index(fields=["establishment", "active"], name="bu_est_active_idx"),
-            models.Index(fields=["establishment", "unit_type"], name="bu_est_type_idx"),
-            models.Index(fields=["key"], name="bu_key_idx"),
         ]
 
     def __str__(self) -> str:
-        return f"{self.establishment} :: {self.label} [{self.key}]"
+        return f"{self.establishment} :: {self.specific_name} [{self.routing_key}]"
 
 
 class ActivitySubject(BaseModel):
@@ -695,12 +689,12 @@ class ActivitySubject(BaseModel):
         db_index=False,
     )
     normalized_name = models.CharField(max_length=255)
-    label = models.CharField(max_length=255)
+    label = models.CharField(max_length=255, blank=True, default="")
     description = models.TextField(blank=True, default="")
-    routing_key = models.CharField(max_length=150, null=True, blank=True)
+    routing_key = models.CharField(max_length=150)
     catalog_activity_subject = models.ForeignKey(
         CatalogActivitySubject,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="establishment_activity_subjects",
         null=True,
         blank=True,
@@ -729,8 +723,27 @@ class ActivitySubject(BaseModel):
             ),
             models.UniqueConstraint(
                 fields=["business_unit", "routing_key"],
-                condition=Q(routing_key__isnull=False),
                 name="activity_subject_bu_routing_key_uniq",
+            ),
+            models.CheckConstraint(
+                condition=~Q(routing_key=""),
+                name="as_routing_key_nonempty_ck",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    (
+                        Q(catalog_activity_subject__isnull=False)
+                        & Q(label="")
+                        & Q(description="")
+                        & ~Q(routing_key__startswith="custom--")
+                    )
+                    | (
+                        Q(catalog_activity_subject__isnull=True)
+                        & ~Q(label="")
+                        & Q(routing_key__startswith="custom--")
+                    )
+                ),
+                name="activity_subject_generic_or_free_ck",
             ),
         ]
         indexes = [
@@ -750,4 +763,5 @@ class ActivitySubject(BaseModel):
             )
 
     def __str__(self) -> str:
-        return f"{self.business_unit.key} :: {self.label} [{self.normalized_name}]"
+        display = self.label or self.routing_key
+        return f"{self.business_unit.specific_name} :: {display} [{self.normalized_name}]"

@@ -116,7 +116,6 @@ def test_draft_accepts_business_unit_without_unit_type(onboarding_session, owner
 
 def test_submit_rejects_business_unit_without_subjects(onboarding_session, owner, imported_catalog):
     payload = draft_manual_v2_payload_bu_only()
-    payload["business_units"][0]["unit_type"] = "dedicated"
     proposal = create_manual_onboarding_proposal(
         session=onboarding_session,
         actor=owner,
@@ -131,7 +130,7 @@ def test_submit_rejects_business_unit_without_subjects(onboarding_session, owner
     )
 
 
-def test_submit_rejects_business_unit_without_unit_type(
+def test_submit_rejects_business_unit_without_catalog_key(
     onboarding_session, owner, imported_catalog
 ):
     business_unit_client_key = str(uuid.uuid4())
@@ -140,31 +139,23 @@ def test_submit_rejects_business_unit_without_unit_type(
         business_units=[
             {
                 "client_key": business_unit_client_key,
-                "label": "Coworking",
-                "description": "",
-                "catalog_key": "coworking",
+                "specific_name": "Coworking",
+                "instance_description": "",
             }
         ],
         activity_subjects=[
             {
                 "client_key": subject_client_key,
-                "label": "Propreté",
-                "description": "",
                 "business_unit_client_key": business_unit_client_key,
                 "catalog_key": "coworking__proprete",
             }
         ],
     )
-    proposal = create_manual_onboarding_proposal(
-        session=onboarding_session,
-        actor=owner,
-        payload=payload,
-    )
 
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
-        submit_manual_onboarding_proposal(proposal=proposal, actor=owner)
+        validate_onboarding_proposal_payload(payload)
 
-    assert any(error.get("code") == "invalid_unit_type" for error in exc_info.value.errors)
+    assert any(error.get("code") == "missing_catalog_key" for error in exc_info.value.errors)
 
 
 def test_submit_accepts_complete_manual_v2_payload(onboarding_session, owner, imported_catalog):
@@ -184,9 +175,9 @@ def test_manual_v2_creates_business_units(onboarding_session, owner, imported_ca
 
     business_unit = BusinessUnit.objects.get(
         establishment=onboarding_session.establishment,
-        key="coworking",
+        normalized_specific_name="coworking",
     )
-    assert business_unit.label == "Coworking"
+    assert business_unit.specific_name == "Coworking"
     assert business_unit.active is True
 
 
@@ -197,17 +188,14 @@ def test_manual_v2_persists_business_unit_description(onboarding_session, owner,
         business_units=[
             {
                 "client_key": business_unit_client_key,
-                "label": "Hébergement",
-                "description": "  Chambres, étages et housekeeping  ",
-                "unit_type": "dedicated",
                 "catalog_key": "coworking",
+                "specific_name": "Hébergement",
+                "instance_description": "  Chambres, étages et housekeeping  ",
             }
         ],
         activity_subjects=[
             {
                 "client_key": subject_client_key,
-                "label": "Propreté",
-                "description": "",
                 "business_unit_client_key": business_unit_client_key,
                 "catalog_key": "coworking__proprete",
             }
@@ -224,43 +212,22 @@ def test_manual_v2_persists_business_unit_description(onboarding_session, owner,
 
     business_unit = BusinessUnit.objects.get(
         establishment=onboarding_session.establishment,
-        key="hebergement",
+        normalized_specific_name="hebergement",
     )
-    assert business_unit.description == "Chambres, étages et housekeeping"
+    assert business_unit.instance_description == "Chambres, étages et housekeeping"
 
 
-def test_manual_v2_persists_excluded_subject_keys(onboarding_session, owner, imported_catalog):
+def test_manual_v2_rejects_excluded_subject_keys(onboarding_session, owner, imported_catalog):
     payload = valid_manual_v2_payload()
     business_unit_client_key = payload["business_units"][0]["client_key"]
     payload["excluded_catalog_subject_keys"] = {
         business_unit_client_key: ["wifi", "desk"],
     }
 
-    proposal = create_manual_onboarding_proposal(
-        session=onboarding_session,
-        actor=owner,
-        payload=payload,
-    )
-
-    assert proposal.payload["excluded_catalog_subject_keys"] == {
-        business_unit_client_key: ["wifi", "desk"],
-    }
-
-
-def test_manual_v2_rejects_orphan_excluded_subject_keys(
-    onboarding_session, owner, imported_catalog
-):
-    payload = valid_manual_v2_payload()
-    payload["excluded_catalog_subject_keys"] = {
-        str(uuid.uuid4()): ["wifi"],
-    }
-
     with pytest.raises(OnboardingProposalValidationError) as exc_info:
         validate_onboarding_proposal_payload(payload)
 
-    assert any(
-        error.get("code") == "orphan_excluded_catalog_subject" for error in exc_info.value.errors
-    )
+    assert "unknown_section" in {error.get("code") for error in exc_info.value.errors}
 
 
 def test_manual_v2_creates_activity_subjects(onboarding_session, owner, imported_catalog):
@@ -268,14 +235,14 @@ def test_manual_v2_creates_activity_subjects(onboarding_session, owner, imported
 
     business_unit = BusinessUnit.objects.get(
         establishment=onboarding_session.establishment,
-        key="coworking",
+        normalized_specific_name="coworking",
     )
     subject = ActivitySubject.objects.get(
         establishment=onboarding_session.establishment,
         business_unit=business_unit,
-        normalized_name="proprete",
+        routing_key="coworking__proprete",
     )
-    assert subject.label == "Propreté"
+    assert subject.label == ""
     assert subject.active is True
 
 
@@ -284,71 +251,60 @@ def test_catalog_selection_links_catalog_fk(onboarding_session, owner, imported_
 
     business_unit = BusinessUnit.objects.get(
         establishment=onboarding_session.establishment,
-        key="coworking",
+        normalized_specific_name="coworking",
     )
     catalog_business_unit = CatalogBusinessUnit.objects.get(key="coworking")
     assert business_unit.catalog_business_unit_id == catalog_business_unit.id
     assert business_unit.source == BusinessUnit.Source.CATALOG_SUGGESTION
 
 
-def test_free_text_bu_without_catalog_fk(onboarding_session, owner):
+def test_free_text_bu_without_catalog_fk_rejected(onboarding_session, owner):
     business_unit_client_key = str(uuid.uuid4())
     subject_client_key = str(uuid.uuid4())
     payload = valid_manual_v2_payload(
         business_units=[
             {
                 "client_key": business_unit_client_key,
-                "label": "Mon pôle custom",
-                "description": "",
-                "unit_type": "transversal",
-                "catalog_key": None,
+                "specific_name": "Mon pôle custom",
+                "instance_description": "",
             }
         ],
         activity_subjects=[
             {
                 "client_key": subject_client_key,
+                "business_unit_client_key": business_unit_client_key,
                 "label": "Sujet libre",
                 "description": "",
-                "business_unit_client_key": business_unit_client_key,
-                "catalog_key": None,
             }
         ],
     )
 
-    apply_validated_manual_v2_proposal(
-        session=onboarding_session,
-        owner=owner,
-        payload=payload,
-    )
+    with pytest.raises(OnboardingProposalValidationError) as exc_info:
+        validate_onboarding_proposal_payload(payload)
 
-    business_unit = BusinessUnit.objects.get(
-        establishment=onboarding_session.establishment,
-        key="mon_pole_custom",
-    )
-    assert business_unit.catalog_business_unit_id is None
-    assert business_unit.source == BusinessUnit.Source.MANUAL
+    assert any(error.get("code") == "missing_catalog_key" for error in exc_info.value.errors)
 
 
-def test_default_unit_type_is_suggestion_only(onboarding_session, owner, imported_catalog):
+def test_catalog_unit_type_is_authoritative_on_runtime_business_unit(
+    onboarding_session, owner, imported_catalog
+):
     business_unit_client_key = str(uuid.uuid4())
     subject_client_key = str(uuid.uuid4())
     payload = valid_manual_v2_payload(
         business_units=[
             {
                 "client_key": business_unit_client_key,
-                "label": "Maintenance",
-                "description": "",
-                "unit_type": "dedicated",
                 "catalog_key": "maintenance",
+                "specific_name": "Maintenance",
+                "instance_description": "",
             }
         ],
         activity_subjects=[
             {
                 "client_key": subject_client_key,
+                "business_unit_client_key": business_unit_client_key,
                 "label": "Intervention",
                 "description": "",
-                "business_unit_client_key": business_unit_client_key,
-                "catalog_key": None,
             }
         ],
     )
@@ -361,14 +317,14 @@ def test_default_unit_type_is_suggestion_only(onboarding_session, owner, importe
 
     business_unit = BusinessUnit.objects.get(
         establishment=onboarding_session.establishment,
-        key="maintenance",
+        normalized_specific_name="maintenance",
     )
     catalog_row = CatalogBusinessUnit.objects.get(key="maintenance")
     assert catalog_row.unit_type == CatalogBusinessUnit.DefaultUnitType.TRANSVERSAL
-    assert business_unit.unit_type == BusinessUnit.UnitType.DEDICATED
+    assert business_unit.catalog_business_unit.unit_type == "transversal"
 
 
-def test_client_key_stable_when_label_changes(onboarding_session, owner):
+def test_client_key_stable_when_specific_name_changes(onboarding_session, owner, imported_catalog):
     business_unit_client_key = str(uuid.uuid4())
     subject_client_key = str(uuid.uuid4())
     payload = {
@@ -376,56 +332,51 @@ def test_client_key_stable_when_label_changes(onboarding_session, owner):
         "business_units": [
             {
                 "client_key": business_unit_client_key,
-                "label": "Nom initial",
-                "description": "",
-                "unit_type": "dedicated",
-                "catalog_key": None,
+                "catalog_key": "coworking",
+                "specific_name": "Nom initial",
+                "instance_description": "",
             }
         ],
         "activity_subjects": [
             {
                 "client_key": subject_client_key,
+                "business_unit_client_key": business_unit_client_key,
                 "label": "Sujet A",
                 "description": "",
-                "business_unit_client_key": business_unit_client_key,
-                "catalog_key": None,
             }
         ],
     }
     validate_onboarding_proposal_payload(payload)
 
-    payload["business_units"][0]["label"] = "Nom modifié"
+    payload["business_units"][0]["specific_name"] = "Nom modifié"
     validate_onboarding_proposal_payload(payload)
     assert payload["activity_subjects"][0]["business_unit_client_key"] == business_unit_client_key
 
 
-def test_remove_proposed_subject_before_submit(onboarding_session, owner):
+def test_remove_proposed_subject_before_submit(onboarding_session, owner, imported_catalog):
     business_unit_client_key = str(uuid.uuid4())
     payload = {
         "schema_version": MANUAL_V2_PROPOSAL_SCHEMA_VERSION,
         "business_units": [
             {
                 "client_key": business_unit_client_key,
-                "label": "Pôle A",
-                "description": "",
-                "unit_type": "dedicated",
-                "catalog_key": None,
+                "catalog_key": "coworking",
+                "specific_name": "Pôle A",
+                "instance_description": "",
             }
         ],
         "activity_subjects": [
             {
                 "client_key": str(uuid.uuid4()),
+                "business_unit_client_key": business_unit_client_key,
                 "label": "Sujet gardé",
                 "description": "",
-                "business_unit_client_key": business_unit_client_key,
-                "catalog_key": None,
             },
             {
                 "client_key": str(uuid.uuid4()),
+                "business_unit_client_key": business_unit_client_key,
                 "label": "Sujet retiré",
                 "description": "",
-                "business_unit_client_key": business_unit_client_key,
-                "catalog_key": None,
             },
         ],
     }
@@ -511,7 +462,7 @@ def test_invitation_manager_with_bu_scopes_after_manual_v2_apply(
     apply_validated_manual_v2_proposal(session=onboarding_session, owner=owner)
     business_unit = BusinessUnit.objects.get(
         establishment=onboarding_session.establishment,
-        key="coworking",
+        normalized_specific_name="coworking",
     )
 
     access_token = login(api_client, user=owner)

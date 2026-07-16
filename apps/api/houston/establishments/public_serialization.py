@@ -6,10 +6,21 @@ module — not private selectors helpers.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from houston.establishments.models import ActivitySubject, BusinessUnit
+
+logger = logging.getLogger(__name__)
+
+
+class IncompleteBusinessUnitIdentityError(RuntimeError):
+    """Raised when a BusinessUnit row is missing required identity fields."""
+
+
+class IncompleteActivitySubjectIdentityError(RuntimeError):
+    """Raised when an ActivitySubject row is missing required identity fields."""
 
 
 def resolve_activity_subject_public_label(
@@ -28,11 +39,19 @@ def resolve_activity_subject_public_label(
     return label
 
 
-def serialize_activity_subject_public(*, activity_subject: ActivitySubject) -> dict | None:
+def serialize_activity_subject_public(*, activity_subject: ActivitySubject) -> dict:
     """Lot 5 public ActivitySubject shape (no routing_key)."""
     catalog = activity_subject.catalog_activity_subject
     is_generic = catalog is not None
     if is_generic:
+        if not activity_subject.routing_key:
+            logger.error(
+                "incomplete_activity_subject_identity",
+                extra={"activity_subject_id": str(activity_subject.id), "kind": "generic"},
+            )
+            raise IncompleteActivitySubjectIdentityError(
+                f"ActivitySubject {activity_subject.id} has incomplete generic identity."
+            )
         return {
             "id": activity_subject.id,
             "catalog_key": catalog.key,
@@ -42,8 +61,14 @@ def serialize_activity_subject_public(*, activity_subject: ActivitySubject) -> d
             "active": activity_subject.active,
             "is_generic": True,
         }
-    if not activity_subject.label:
-        return None
+    if not activity_subject.label or not activity_subject.routing_key:
+        logger.error(
+            "incomplete_activity_subject_identity",
+            extra={"activity_subject_id": str(activity_subject.id), "kind": "free"},
+        )
+        raise IncompleteActivitySubjectIdentityError(
+            f"ActivitySubject {activity_subject.id} has incomplete free identity."
+        )
     return {
         "id": activity_subject.id,
         "label": activity_subject.label,
@@ -59,15 +84,30 @@ def serialize_business_unit_public(
     business_unit: BusinessUnit,
     activity_subjects: list | None = None,
     include_activity_subjects: bool = True,
-) -> dict | None:
-    """Lot 5 public BusinessUnit shape (no routing_key).
+) -> dict:
+    """Lot 5 public BusinessUnit shape (no routing_key)."""
+    catalog = None
+    if business_unit.catalog_business_unit_id is not None:
+        catalog = getattr(business_unit, "catalog_business_unit", None)
+        if catalog is None:
+            from houston.establishments.models import CatalogBusinessUnit
 
-    When ``include_activity_subjects`` is False, omits the ``activity_subjects``
-    key (nested Action Plan / feed refs).
-    """
-    catalog = business_unit.catalog_business_unit
-    if catalog is None or not business_unit.specific_name:
-        return None
+            catalog = CatalogBusinessUnit.objects.filter(
+                id=business_unit.catalog_business_unit_id
+            ).first()
+    if (
+        catalog is None
+        or not (business_unit.specific_name or "").strip()
+        or not (business_unit.normalized_specific_name or "").strip()
+        or not (business_unit.routing_key or "").strip()
+    ):
+        logger.error(
+            "incomplete_business_unit_identity",
+            extra={"business_unit_id": str(business_unit.id)},
+        )
+        raise IncompleteBusinessUnitIdentityError(
+            f"BusinessUnit {business_unit.id} has incomplete identity."
+        )
 
     payload: dict = {
         "id": business_unit.id,
@@ -94,50 +134,14 @@ def serialize_business_unit_public(
                 active=True,
             )
             .select_related("catalog_activity_subject")
-            .order_by("label", "normalized_name", "id")
+            .order_by("normalized_name", "id")
         )
 
-    serialized_subjects = []
-    for subject in subjects:
-        item = serialize_activity_subject_public(activity_subject=subject)
-        if item is not None:
-            serialized_subjects.append(item)
-    payload["activity_subjects"] = serialized_subjects
+    payload["activity_subjects"] = [
+        serialize_activity_subject_public(activity_subject=subject)
+        for subject in subjects
+    ]
     return payload
-
-
-def _serialize_degraded_business_unit_ref(*, business_unit: BusinessUnit) -> dict:
-    """Complete Lot 5 nested shape for incomplete identity (legacy / missing catalog)."""
-    catalog = getattr(business_unit, "catalog_business_unit", None)
-    specific_name = (
-        business_unit.specific_name or business_unit.label or business_unit.key or ""
-    )
-    instance_description = (
-        business_unit.instance_description
-        if business_unit.instance_description is not None
-        else (business_unit.description or "")
-    )
-    if catalog is not None:
-        generic = {
-            "key": catalog.key,
-            "label": catalog.label,
-            "description": catalog.description or "",
-            "unit_type": catalog.unit_type,
-        }
-    else:
-        generic = {
-            "key": business_unit.key or "unknown",
-            "label": business_unit.label or business_unit.key or "Unknown",
-            "description": business_unit.description or "",
-            "unit_type": business_unit.unit_type,
-        }
-    return {
-        "id": business_unit.id,
-        "specific_name": specific_name,
-        "instance_description": instance_description or "",
-        "active": business_unit.active,
-        "generic": generic,
-    }
 
 
 def serialize_business_unit_ref(*, business_unit: BusinessUnit | None) -> dict | None:
@@ -156,13 +160,10 @@ def serialize_business_unit_ref(*, business_unit: BusinessUnit | None) -> dict |
             .first()
             or business_unit
         )
-    payload = serialize_business_unit_public(
+    return serialize_business_unit_public(
         business_unit=business_unit,
         include_activity_subjects=False,
     )
-    if payload is not None:
-        return payload
-    return _serialize_degraded_business_unit_ref(business_unit=business_unit)
 
 
 def serialize_activity_subject_ref(*, activity_subject: ActivitySubject | None) -> dict | None:

@@ -1,3 +1,4 @@
+/** Compatibility display fields from Signal/Obs summaries — never use *_key as identifiers (UUIDs only). */
 export type SignalClassificationInput = {
   affected_business_unit_key?: string | null
   affected_business_unit_label?: string | null
