@@ -560,3 +560,61 @@ def test_runtime_tree_stays_strict_for_incomplete_business_unit(
     ref = serialize_business_unit_ref(business_unit=business_unit)
     assert ref is not None
     _assert_lot5_business_unit_shape(ref)
+
+
+def test_business_unit_tree_query_count_flat_across_business_units():
+    from houston.testing.factories import create_establishment
+    from houston.testing.query_baseline import capture_queries
+
+    one_bu_establishment = create_establishment(name="Tree One BU")
+    single_unit = create_business_unit(
+        establishment=one_bu_establishment,
+        key="hotel",
+        label="Hotel",
+    )
+    create_activity_subject(
+        establishment=one_bu_establishment,
+        business_unit=single_unit,
+        label="Maintenance",
+    )
+
+    three_bu_establishment = create_establishment(name="Tree Three BU")
+    for key, label in (("hotel", "Hotel"), ("bar", "Bar"), ("kitchen", "Kitchen")):
+        unit = create_business_unit(
+            establishment=three_bu_establishment,
+            key=key,
+            label=label,
+        )
+        create_activity_subject(
+            establishment=three_bu_establishment,
+            business_unit=unit,
+            label=f"{label} subject",
+        )
+
+    with capture_queries() as one_bu_context:
+        one_tree = get_establishment_business_unit_tree(
+            establishment_id=one_bu_establishment.id,
+            active_only=True,
+        )
+    with capture_queries() as three_bu_context:
+        three_tree = get_establishment_business_unit_tree(
+            establishment_id=three_bu_establishment.id,
+            active_only=True,
+        )
+
+    assert one_tree is not None
+    assert three_tree is not None
+    assert len(one_tree["business_units"]) == 1
+    assert len(three_tree["business_units"]) == 3
+    for unit in three_tree["business_units"]:
+        _assert_lot5_business_unit_shape(
+            {
+                "id": unit["id"],
+                "specific_name": unit["specific_name"],
+                "instance_description": unit["instance_description"],
+                "active": unit["active"],
+                "generic": unit["generic"],
+            }
+        )
+        assert "routing_key" not in unit
+    assert len(one_bu_context.captured_queries) == len(three_bu_context.captured_queries)
