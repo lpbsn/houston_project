@@ -117,7 +117,7 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(screen.getByText('1/4')).toBeTruthy()
   })
 
-  it('shows overdue sidebar with bell when is_overdue is true even if end_at is future', () => {
+  it('shows overdue 0h without an icon when is_overdue is true and end_at is future', () => {
     render(
       <ActionPlanExecutionFeedCard
         item={buildFeedItem({
@@ -129,8 +129,10 @@ describe('ActionPlanExecutionFeedCard', () => {
     )
 
     expect(screen.queryByText('DANS')).toBeNull()
-    expect(screen.queryByText('4h')).toBeNull()
-    expect(screen.getByLabelText('Échéance dépassée')).toBeTruthy()
+    expect(screen.getByText('RETARD')).toBeTruthy()
+    expect(screen.getByText('0h')).toBeTruthy()
+    const sidebar = screen.getByLabelText('Échéance dépassée de 0h')
+    expect(sidebar.querySelector('svg')).toBeNull()
     expect(document.querySelector('.bg-\\[\\#E24B4A\\]')).toBeTruthy()
   })
 
@@ -149,7 +151,7 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(document.querySelector('.bg-\\[\\#3A7A96\\]')).toBeTruthy()
   })
 
-  it('shows overdue sidebar with bell when is_overdue is true and end_at is past', () => {
+  it('shows overdue duration when is_overdue is true and end_at is past', () => {
     render(
       <ActionPlanExecutionFeedCard
         item={buildFeedItem({ end_at: '2026-07-10T11:00:00Z', is_overdue: true })}
@@ -158,8 +160,9 @@ describe('ActionPlanExecutionFeedCard', () => {
     )
 
     expect(screen.queryByText('DANS')).toBeNull()
-    expect(screen.queryByText(/-\d/)).toBeNull()
-    expect(screen.getByLabelText('Échéance dépassée')).toBeTruthy()
+    expect(screen.getByText('RETARD')).toBeTruthy()
+    expect(screen.getByText('1h')).toBeTruthy()
+    expect(screen.getByLabelText('Échéance dépassée de 1h')).toBeTruthy()
     expect(document.querySelector('.bg-\\[\\#E24B4A\\]')).toBeTruthy()
   })
 

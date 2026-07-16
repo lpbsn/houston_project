@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Bell, Check, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 
 import type { ActionPlanFeedSidebarState } from '@/features/execution/lib/action-plan-execution-feed-card-display'
 import {
@@ -22,7 +22,7 @@ function getSidebarAriaLabel(state: ActionPlanFeedSidebarState): string {
     case 'no_deadline':
       return 'Sans échéance'
     case 'overdue':
-      return 'Échéance dépassée'
+      return `Échéance dépassée de ${state.value}`
   }
 }
 
@@ -85,9 +85,11 @@ export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanF
       )}
       aria-label={getSidebarAriaLabel(state)}
     >
-      {state.variant === 'countdown' ? (
+      {state.variant === 'countdown' || state.variant === 'overdue' ? (
         <>
-          <span className="text-[10px] font-medium uppercase leading-none tracking-wide">DANS</span>
+          <span className="text-[10px] font-medium uppercase leading-none tracking-wide">
+            {state.prefix}
+          </span>
           <span className="mt-0.5 text-xl font-bold leading-none tabular-nums">{state.value}</span>
         </>
       ) : null}
@@ -96,7 +98,6 @@ export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanF
           <span className="text-lg font-bold leading-none">∞</span>
         </SidebarIconCircle>
       ) : null}
-      {state.variant === 'overdue' ? <Bell className="h-5 w-5 shrink-0" aria-hidden /> : null}
     </div>
   )
 }

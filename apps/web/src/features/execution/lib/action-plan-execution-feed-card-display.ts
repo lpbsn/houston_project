@@ -98,10 +98,22 @@ export function formatActionPlanFeedMetaParts(
 export type ActionPlanFeedSidebarState =
   | { variant: 'countdown'; prefix: 'DANS'; value: string }
   | { variant: 'no_deadline' }
-  | { variant: 'overdue' }
+  | { variant: 'overdue'; prefix: 'RETARD'; value: string }
 
 const MS_PER_HOUR = 60 * 60 * 1000
 const MS_PER_DAY = 24 * MS_PER_HOUR
+
+function formatActionPlanFeedDuration(durationMs: number): string {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return '0h'
+  }
+
+  if (durationMs >= MS_PER_DAY) {
+    return `${Math.floor(durationMs / MS_PER_DAY)}j`
+  }
+
+  return `${Math.max(1, Math.ceil(durationMs / MS_PER_HOUR))}h`
+}
 
 export function getActionPlanFeedSidebarState(
   endAt: string | null,
@@ -109,7 +121,13 @@ export function getActionPlanFeedSidebarState(
   isOverdue = false,
 ): ActionPlanFeedSidebarState {
   if (isOverdue) {
-    return { variant: 'overdue' }
+    const endMs = endAt ? Date.parse(endAt) : Number.NaN
+    const overdueMs = Number.isNaN(endMs) ? 0 : Math.max(0, now - endMs)
+    return {
+      variant: 'overdue',
+      prefix: 'RETARD',
+      value: formatActionPlanFeedDuration(overdueMs),
+    }
   }
 
   if (!endAt) {
@@ -121,29 +139,10 @@ export function getActionPlanFeedSidebarState(
     return { variant: 'no_deadline' }
   }
 
-  const remainingMs = Math.max(0, endMs - now)
-  if (remainingMs === 0) {
-    return {
-      variant: 'countdown',
-      prefix: 'DANS',
-      value: '0h',
-    }
-  }
-
-  if (remainingMs >= MS_PER_DAY) {
-    const days = Math.floor(remainingMs / MS_PER_DAY)
-    return {
-      variant: 'countdown',
-      prefix: 'DANS',
-      value: `${days}j`,
-    }
-  }
-
-  const hours = Math.max(1, Math.ceil(remainingMs / MS_PER_HOUR))
   return {
     variant: 'countdown',
     prefix: 'DANS',
-    value: `${hours}h`,
+    value: formatActionPlanFeedDuration(Math.max(0, endMs - now)),
   }
 }
 

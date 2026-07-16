@@ -38,9 +38,28 @@ describe('getActionPlanFeedSidebarState', () => {
     })
   })
 
-  it('returns overdue only when isOverdue is true', () => {
-    expect(getActionPlanFeedSidebarState('2026-07-10T16:00:00Z', NOW, true)).toEqual({
+  it.each([
+    ['less than one hour', '2026-07-10T11:45:00Z', '1h'],
+    ['several hours', '2026-07-10T08:00:00Z', '4h'],
+    ['exactly 24 hours', '2026-07-09T12:00:00Z', '1j'],
+    ['several days with remaining hours', '2026-07-07T04:00:00Z', '3j'],
+  ])('returns overdue duration for %s', (_case, endAt, value) => {
+    expect(getActionPlanFeedSidebarState(endAt, NOW, true)).toEqual({
       variant: 'overdue',
+      prefix: 'RETARD',
+      value,
+    })
+  })
+
+  it.each([
+    ['absent', null],
+    ['invalid', 'not-a-date'],
+    ['in the future', '2026-07-10T16:00:00Z'],
+  ])('returns overdue 0h when end_at is %s', (_case, endAt) => {
+    expect(getActionPlanFeedSidebarState(endAt, NOW, true)).toEqual({
+      variant: 'overdue',
+      prefix: 'RETARD',
+      value: '0h',
     })
   })
 
