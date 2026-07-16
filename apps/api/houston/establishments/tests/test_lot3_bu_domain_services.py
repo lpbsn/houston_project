@@ -231,6 +231,45 @@ def test_onboarding_rejects_catalog_subject_from_another_business_unit(
     assert not BusinessUnit.objects.filter(establishment=establishment).exists()
 
 
+def test_onboarding_rejects_inactive_foreign_catalog_subject_as_mismatch(
+    imported_catalog,
+):
+    establishment = create_establishment()
+    restaurant = _catalog("restaurant")
+    hotel_subject = CatalogActivitySubject.objects.filter(
+        catalog_business_unit__key="hotel"
+    ).first()
+    assert hotel_subject is not None
+    CatalogActivitySubject.objects.filter(id=hotel_subject.id).update(active=False)
+
+    with pytest.raises(DomainValidationError) as exc_info:
+        create_onboarding_business_unit(
+            establishment=establishment,
+            catalog_business_unit=restaurant,
+            specific_name="Food Court",
+            generic_activity_subject_keys=[hotel_subject.key],
+        )
+
+    assert exc_info.value.code == "catalog_subject_business_unit_mismatch"
+    assert not BusinessUnit.objects.filter(establishment=establishment).exists()
+
+
+def test_lock_catalog_activity_subjects_scopes_keys_to_catalog(imported_catalog):
+    restaurant = _catalog("restaurant")
+    hotel_subject = CatalogActivitySubject.objects.filter(
+        catalog_business_unit__key="hotel"
+    ).first()
+    assert hotel_subject is not None
+
+    with transaction.atomic():
+        subjects = _lock_catalog_activity_subjects(
+            catalog_business_unit=restaurant,
+            keys=[hotel_subject.key],
+        )
+
+    assert subjects == []
+
+
 def test_onboarding_rejects_duplicate_generic_keys_and_rolls_back(imported_catalog):
     establishment = create_establishment()
     restaurant = _catalog("restaurant")

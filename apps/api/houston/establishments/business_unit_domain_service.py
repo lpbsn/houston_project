@@ -62,7 +62,7 @@ def _lock_catalog_activity_subjects(
         catalog_business_unit_id=catalog_business_unit.id
     )
     if keys is not None:
-        queryset = CatalogActivitySubject.objects.filter(key__in=set(keys))
+        queryset = queryset.filter(key__in=set(keys))
     return list(
         queryset.select_for_update(of=("self",))
         .select_related("catalog_business_unit")
