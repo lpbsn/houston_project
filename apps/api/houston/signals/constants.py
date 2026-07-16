@@ -9,8 +9,8 @@ AI_LOCATION_TEXT_MAX_LENGTH = 120
 AI_ISSUE_FOCUS_MAX_LENGTH = 80
 STRUCTURED_SUMMARY_SHORT_MAX_LENGTH = 280
 
-AI_OBSERVATION_PIPELINE_SCHEMA_VERSION = "ai_observation_pipeline_v4"
-AI_OBSERVATION_PIPELINE_PROMPT_VERSION = "ai_observation_pipeline_v4"
+AI_OBSERVATION_PIPELINE_SCHEMA_VERSION = "ai_observation_pipeline_v5"
+AI_OBSERVATION_PIPELINE_PROMPT_VERSION = "ai_observation_pipeline_v5"
 
 # Must stay aligned with Signal.Status.OPEN and Signal.Status.IN_PROGRESS.
 ACTIVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})

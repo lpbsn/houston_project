@@ -10,10 +10,7 @@ from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.observations.models import Observation, ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import Signal
-from houston.testing.taxonomy import (
-    RESTAURANT_MODULE_KEY,
-    RestaurantV3Taxonomy,
-)
+from houston.testing.taxonomy import RestaurantV3Taxonomy
 
 GOLDEN_OBSERVATION_TEXT = (
     "La lumière clignote à l'entrée de restaurant. Il n'y a plus de sirop mojito au bar."
@@ -37,9 +34,9 @@ def golden_two_candidate_pipeline_output(
                     "intervention maintenance requise."
                 ),
                 issue_focus="lumière entrée restaurant",
-                affected_business_unit_key=RESTAURANT_MODULE_KEY,
-                responsible_business_unit_key="maintenance",
-                activity_subject_key=taxonomy.lighting_subject.normalized_name,
+                affected_business_unit_routing_key=taxonomy.restaurant.routing_key,
+                responsible_business_unit_routing_key=taxonomy.maintenance.routing_key,
+                activity_subject_routing_key=taxonomy.lighting_subject.routing_key,
                 operational_unit_key=None,
                 location_text="Entrée restaurant",
                 aggregate_into_signal_id=None,
@@ -50,9 +47,9 @@ def golden_two_candidate_pipeline_output(
                     "Plus de sirop mojito disponible au bar, réassort stock nécessaire."
                 ),
                 issue_focus="sirop mojito",
-                affected_business_unit_key="bar",
-                responsible_business_unit_key="bar",
-                activity_subject_key=taxonomy.stock_subject.normalized_name,
+                affected_business_unit_routing_key=taxonomy.bar.routing_key,
+                responsible_business_unit_routing_key=taxonomy.bar.routing_key,
+                activity_subject_routing_key=taxonomy.stock_subject.routing_key,
                 operational_unit_key=None,
                 location_text="Bar",
                 aggregate_into_signal_id=None,

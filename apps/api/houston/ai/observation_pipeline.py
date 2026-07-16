@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from django.conf import settings
+from django.db.models import F, Q
 from pydantic import ValidationError as PydanticValidationError
 
 from houston.ai.models import AIUsageLog
@@ -21,6 +22,7 @@ from houston.core.observability import build_observation_pipeline_timing_log_con
 from houston.establishments.taxonomy_snapshot import (
     build_establishment_taxonomy_snapshot,
     establishment_has_active_business_units,
+    is_snapshot_ready_business_unit,
 )
 from houston.observations.models import Observation
 from houston.signals.constants import (
@@ -98,9 +100,11 @@ def _build_action_plan_context(*, observation: Observation) -> dict[str, Any] | 
 
     execution = observation.action_plan_execution
     task_execution = observation.action_plan_execution_task
-    business_unit_key = None
+    business_unit_routing_key = None
     if execution.pilot_business_unit_id is not None:
-        business_unit_key = execution.pilot_business_unit.key
+        pilot = execution.pilot_business_unit
+        if is_snapshot_ready_business_unit(pilot):
+            business_unit_routing_key = pilot.routing_key
 
     return {
         "origin": Observation.Origin.ACTION_PLAN_TASK,
@@ -108,7 +112,7 @@ def _build_action_plan_context(*, observation: Observation) -> dict[str, Any] | 
         "action_plan_execution_task_id": str(task_execution.id),
         "plan_title": execution.title,
         "task": task_execution.task,
-        "business_unit_key": business_unit_key,
+        "business_unit_routing_key": business_unit_routing_key,
     }
 
 
@@ -117,6 +121,7 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
         "establishment",
         "action_plan_execution",
         "action_plan_execution__pilot_business_unit",
+        "action_plan_execution__pilot_business_unit__catalog_business_unit",
         "action_plan_execution_task",
     ).get(pk=observation.pk)
     establishment = observation.establishment
@@ -148,27 +153,43 @@ def establishment_can_run_observation_pipeline(*, establishment_id: uuid.UUID) -
 
 
 def _build_active_signals_context(*, establishment_id: uuid.UUID) -> list[dict[str, Any]]:
-    signals = active_signals_for_establishment(establishment_id=establishment_id).order_by(
-        "-last_activity_at",
-        "-created_at",
-    )[:MAX_ACTIVE_SIGNALS_CONTEXT]
+    signals = (
+        active_signals_for_establishment(establishment_id=establishment_id)
+        .filter(
+            affected_business_unit__isnull=False,
+            responsible_business_unit__isnull=False,
+            activity_subject__isnull=False,
+            affected_business_unit__active=True,
+            responsible_business_unit__active=True,
+            activity_subject__active=True,
+            activity_subject__business_unit_id=F("responsible_business_unit_id"),
+        )
+        .exclude(
+            Q(affected_business_unit__routing_key__isnull=True)
+            | Q(affected_business_unit__routing_key="")
+            | Q(responsible_business_unit__routing_key__isnull=True)
+            | Q(responsible_business_unit__routing_key="")
+            | Q(activity_subject__routing_key__isnull=True)
+            | Q(activity_subject__routing_key="")
+        )
+        .order_by(
+            "-last_activity_at",
+            "-created_at",
+        )[:MAX_ACTIVE_SIGNALS_CONTEXT]
+    )
     entries: list[dict[str, Any]] = []
     for signal in signals:
-        if (
-            signal.affected_business_unit_id is None
-            or signal.responsible_business_unit_id is None
-            or signal.activity_subject_id is None
-        ):
-            continue
         entries.append(
             {
                 "signal_id": str(signal.id),
                 "status": signal.status,
                 "title": signal.title,
                 "structured_summary": signal.structured_summary,
-                "affected_business_unit_key": signal.affected_business_unit.key,
-                "responsible_business_unit_key": signal.responsible_business_unit.key,
-                "activity_subject_key": signal.activity_subject.normalized_name,
+                "affected_business_unit_routing_key": signal.affected_business_unit.routing_key,
+                "responsible_business_unit_routing_key": (
+                    signal.responsible_business_unit.routing_key
+                ),
+                "activity_subject_routing_key": signal.activity_subject.routing_key,
                 "operational_unit_key": (
                     signal.operational_unit.key if signal.operational_unit_id else None
                 ),
@@ -569,9 +590,9 @@ DÉSAMBIGUÏSATION (contexte grammatical, pas de liste mots-clé)
   si la nature du problème relève d'un pôle transversal du snapshot.
 
 ROUTAGE — LIEU VS NATURE DU PROBLÈME
-- affected_business_unit_key : où le problème est observé (lieu, espace, pôle impacté).
-- responsible_business_unit_key : qui doit traiter (nature opérationnelle du problème).
-- activity_subject_key : sujet sous responsible_business_unit (normalized_name exact).
+- affected_business_unit_routing_key : où le problème est observé (routing_key du snapshot).
+- responsible_business_unit_routing_key : qui doit traiter (routing_key du snapshot).
+- activity_subject_routing_key : sujet sous responsible (routing_key exact du snapshot).
 - location_text : contexte libre ou localisation précise pour l'affichage (chambre 104, bar).
   Ne remplace pas issue_focus ; n'entre jamais dans une clé d'agrégation backend.
 
@@ -619,8 +640,9 @@ FORMAT DE RÉPONSE
 Un seul objet JSON strict :
 schema_version = "{AI_OBSERVATION_PIPELINE_SCHEMA_VERSION}"
 candidates[] avec title, structured_summary, issue_focus,
-affected_business_unit_key, responsible_business_unit_key, activity_subject_key,
-operational_unit_key, location_text, aggregate_into_signal_id.
+affected_business_unit_routing_key, responsible_business_unit_routing_key,
+activity_subject_routing_key, operational_unit_key, location_text,
+aggregate_into_signal_id.
 """
 
 
@@ -651,9 +673,9 @@ def _default_fake_payload(input_payload: dict[str, Any]) -> dict[str, Any]:
                 "title": "Structured issue",
                 "structured_summary": "Validated structured summary for tests.",
                 "issue_focus": "structured issue",
-                "affected_business_unit_key": unit["key"],
-                "responsible_business_unit_key": unit["key"],
-                "activity_subject_key": subject["key"],
+                "affected_business_unit_routing_key": unit["routing_key"],
+                "responsible_business_unit_routing_key": unit["routing_key"],
+                "activity_subject_routing_key": subject["routing_key"],
                 "operational_unit_key": None,
                 "location_text": None,
                 "aggregate_into_signal_id": None,

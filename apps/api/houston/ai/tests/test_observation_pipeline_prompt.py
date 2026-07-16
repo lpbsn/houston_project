@@ -22,8 +22,8 @@ from houston.signals.tests.conftest import create_observation
 from houston.testing.factories import build_membership
 
 
-def test_prompt_version_constant_is_v4():
-    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v4"
+def test_prompt_version_constant_is_v5():
+    assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v5"
 
 
 def test_system_prompt_is_french_and_covers_v4_rules():
@@ -39,9 +39,9 @@ def test_system_prompt_is_french_and_covers_v4_rules():
     assert "Anti-biais active_signals_context" in prompt
     assert "PRIORITÉ TRANSVERSALE" in prompt
     assert "issue_focus" in prompt
-    assert "affected_business_unit_key" in prompt
-    assert "responsible_business_unit_key" in prompt
-    assert "activity_subject_key" in prompt
+    assert "affected_business_unit_routing_key" in prompt
+    assert "responsible_business_unit_routing_key" in prompt
+    assert "activity_subject_routing_key" in prompt
     assert "location_text" in prompt
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION in prompt
 
@@ -81,9 +81,9 @@ def test_build_pipeline_input_includes_prompt_version_not_system_text():
     }
     assert "action_plan_context" not in payload
     assert payload["active_signals_context"] == []
-    assert payload["establishment_taxonomy"]["business_units"][0]["description"] == (
-        "Chambres et couloirs."
-    )
+    assert payload["establishment_taxonomy"]["business_units"][0][
+        "instance_description"
+    ] == ("Chambres et couloirs.")
 
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "Tu es un analyste qualité opérationnel" not in serialized
@@ -126,8 +126,8 @@ def test_build_pipeline_input_includes_active_signals_context_with_issue_focus()
     assert entry["signal_id"] == str(signal.id)
     assert entry["status"] == Signal.Status.OPEN
     assert entry["title"] == "Fuite existante"
-    assert entry["affected_business_unit_key"] == "hotel"
-    assert entry["responsible_business_unit_key"] == "hotel"
-    assert entry["activity_subject_key"] == subject.normalized_name
+    assert entry["affected_business_unit_routing_key"] == hotel.routing_key
+    assert entry["responsible_business_unit_routing_key"] == hotel.routing_key
+    assert entry["activity_subject_routing_key"] == subject.routing_key
     assert entry["operational_unit_key"] is None
     assert entry["issue_focus"] == "fuite couloir nord"

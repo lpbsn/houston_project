@@ -26,9 +26,6 @@ def _v3_candidate(**kwargs) -> PipelineCandidateOutput:
         "title": "Issue",
         "structured_summary": "Structured summary for test.",
         "issue_focus": "climatisation",
-        "affected_business_unit_key": "hotel",
-        "responsible_business_unit_key": "hotel",
-        "activity_subject_key": "climatisation",
         "operational_unit_key": None,
         "location_text": None,
         "aggregate_into_signal_id": None,
@@ -63,7 +60,7 @@ def test_g1_clim_hs_chambre_104_transversal_maintenance():
         description="Électricité, plomberie, CVC.",
         unit_type="transversal",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=maintenance,
         label="Climatisation",
@@ -78,9 +75,9 @@ def test_g1_clim_hs_chambre_104_transversal_maintenance():
         candidate=_v3_candidate(
             title="Climatisation en panne chambre 104",
             structured_summary="La climatisation ne fonctionne plus en chambre 104.",
-            affected_business_unit_key="hotel",
-            responsible_business_unit_key="maintenance",
-            activity_subject_key="climatisation",
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=maintenance.routing_key,
+            activity_subject_routing_key=subject.routing_key,
             location_text="chambre 104",
         ),
     )
@@ -106,7 +103,7 @@ def test_g2_lumiere_hs_restaurant_maintenance_transversal():
         label="Maintenance",
         unit_type="transversal",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=maintenance,
         label="Électricité",
@@ -119,9 +116,9 @@ def test_g2_lumiere_hs_restaurant_maintenance_transversal():
     _apply_single(
         observation=observation,
         candidate=_v3_candidate(
-            affected_business_unit_key="restaurant",
-            responsible_business_unit_key="maintenance",
-            activity_subject_key="electricite",
+            affected_business_unit_routing_key=restaurant.routing_key,
+            responsible_business_unit_routing_key=maintenance.routing_key,
+            activity_subject_routing_key=subject.routing_key,
             location_text="restaurant",
         ),
     )
@@ -139,7 +136,7 @@ def test_g3_lumiere_hs_restaurant_local_maintenance_subject():
         key="restaurant",
         label="Restaurant",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=restaurant,
         label="Maintenance",
@@ -152,9 +149,9 @@ def test_g3_lumiere_hs_restaurant_local_maintenance_subject():
     _apply_single(
         observation=observation,
         candidate=_v3_candidate(
-            affected_business_unit_key="restaurant",
-            responsible_business_unit_key="restaurant",
-            activity_subject_key="maintenance",
+            affected_business_unit_routing_key=restaurant.routing_key,
+            responsible_business_unit_routing_key=restaurant.routing_key,
+            activity_subject_routing_key=subject.routing_key,
             location_text="restaurant",
         ),
     )
@@ -172,7 +169,7 @@ def test_g4_sale_chambre_104_hotel_proprete():
         key="hotel",
         label="Hôtel",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=hotel,
         label="Propreté chambre",
@@ -185,9 +182,9 @@ def test_g4_sale_chambre_104_hotel_proprete():
     _apply_single(
         observation=observation,
         candidate=_v3_candidate(
-            affected_business_unit_key="hotel",
-            responsible_business_unit_key="hotel",
-            activity_subject_key="proprete_chambre",
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=hotel.routing_key,
+            activity_subject_routing_key=subject.routing_key,
             location_text="chambre 104",
         ),
     )
@@ -206,7 +203,7 @@ def test_g5_stock_au_bar():
         key="bar",
         label="Bar",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=bar,
         label="Stock",
@@ -219,9 +216,9 @@ def test_g5_stock_au_bar():
     _apply_single(
         observation=observation,
         candidate=_v3_candidate(
-            affected_business_unit_key="bar",
-            responsible_business_unit_key="bar",
-            activity_subject_key="stock",
+            affected_business_unit_routing_key=bar.routing_key,
+            responsible_business_unit_routing_key=bar.routing_key,
+            activity_subject_routing_key=subject.routing_key,
             location_text="bar",
         ),
     )
@@ -242,7 +239,7 @@ def test_g6_subject_hors_responsible_rejected():
         label="Maintenance",
         unit_type="transversal",
     )
-    create_activity_subject(
+    hotel_subject = create_activity_subject(
         establishment=establishment,
         business_unit=hotel,
         label="Propreté chambre",
@@ -257,9 +254,9 @@ def test_g6_subject_hors_responsible_rejected():
     outcome = _apply_single(
         observation=observation,
         candidate=_v3_candidate(
-            affected_business_unit_key="hotel",
-            responsible_business_unit_key="maintenance",
-            activity_subject_key="proprete_chambre",
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=maintenance.routing_key,
+            activity_subject_routing_key=hotel_subject.routing_key,
         ),
     ).outcome
 
@@ -271,13 +268,13 @@ def test_g6_subject_hors_responsible_rejected():
 def test_g7_non_transversal_responsible_rejected():
     membership = build_membership()
     establishment = membership.establishment
-    create_business_unit(establishment=establishment, key="hotel", label="Hôtel")
+    hotel = create_business_unit(establishment=establishment, key="hotel", label="Hôtel")
     restaurant = create_business_unit(
         establishment=establishment,
         key="restaurant",
         label="Restaurant",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=restaurant,
         label="Service",
@@ -287,9 +284,9 @@ def test_g7_non_transversal_responsible_rejected():
     outcome = _apply_single(
         observation=observation,
         candidate=_v3_candidate(
-            affected_business_unit_key="hotel",
-            responsible_business_unit_key="restaurant",
-            activity_subject_key="service",
+            affected_business_unit_routing_key=hotel.routing_key,
+            responsible_business_unit_routing_key=restaurant.routing_key,
+            activity_subject_routing_key=subject.routing_key,
         ),
     ).outcome
 
@@ -315,7 +312,8 @@ def test_g8_business_unit_description_in_pipeline_input():
     payload = build_pipeline_input(observation=observation)
 
     hotel_unit = payload["establishment_taxonomy"]["business_units"][0]
-    assert hotel_unit["description"] == "Regroupe chambres et couloirs."
+    assert hotel_unit["instance_description"] == "Regroupe chambres et couloirs."
+    assert hotel_unit["routing_key"] == hotel.routing_key
 
 
 def test_no_signal_created_when_candidates_empty():

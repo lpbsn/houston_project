@@ -48,14 +48,20 @@ def _setup_hotel_taxonomy(establishment):
         key="hotel",
         label="Hotel",
     )
-    create_activity_subject(
+    subject = create_activity_subject(
         establishment=establishment,
         business_unit=hotel,
         label="Maintenance",
     )
+    return hotel, subject
 
 
-def _fake_provider_payload(*, issue_focus: str = "climatisation"):
+def _fake_provider_payload(
+    *,
+    hotel,
+    subject,
+    issue_focus: str = "climatisation",
+):
     return {
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "candidates": [
@@ -63,9 +69,9 @@ def _fake_provider_payload(*, issue_focus: str = "climatisation"):
                 "title": "Clim en panne",
                 "structured_summary": "La climatisation ne fonctionne plus.",
                 "issue_focus": issue_focus,
-                "affected_business_unit_key": "hotel",
-                "responsible_business_unit_key": "hotel",
-                "activity_subject_key": "maintenance",
+                "affected_business_unit_routing_key": hotel.routing_key,
+                "responsible_business_unit_routing_key": hotel.routing_key,
+                "activity_subject_routing_key": subject.routing_key,
                 "operational_unit_key": None,
                 "location_text": None,
                 "aggregate_into_signal_id": None,
@@ -359,11 +365,17 @@ def test_processing_status_invalid_issue_focus(api_client):
     membership = build_membership()
     membership.user.set_password(TEST_PASSWORD)
     membership.user.save(update_fields=["password"])
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel, subject = _setup_hotel_taxonomy(membership.establishment)
     observation = create_observation(membership=membership)
     run_observation_pipeline(
         observation.id,
-        provider=FakeObservationPipelineProvider(payload=_fake_provider_payload(issue_focus="   ")),
+        provider=FakeObservationPipelineProvider(
+            payload=_fake_provider_payload(
+                hotel=hotel,
+                subject=subject,
+                issue_focus="   ",
+            )
+        ),
     )
 
     token = login(api_client, user=membership.user)

@@ -35,9 +35,9 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                 "title",
                 "structured_summary",
                 "issue_focus",
-                "affected_business_unit_key",
-                "responsible_business_unit_key",
-                "activity_subject_key",
+                "affected_business_unit_routing_key",
+                "responsible_business_unit_routing_key",
+                "activity_subject_routing_key",
                 "operational_unit_key",
                 "location_text",
                 "aggregate_into_signal_id",
@@ -60,24 +60,28 @@ _OPENAI_STRICT_OBSERVATION_PIPELINE_SCHEMA: dict = {
                         "(include discriminant location when needed, e.g. clim chambre 104)."
                     ),
                 },
-                "affected_business_unit_key": {
+                "affected_business_unit_routing_key": {
                     "type": "string",
+                    "maxLength": 180,
                     "description": (
-                        "Business unit key where the issue is observed "
+                        "Business unit routing_key where the issue is observed "
                         "(from establishment_taxonomy)."
                     ),
                 },
-                "responsible_business_unit_key": {
+                "responsible_business_unit_routing_key": {
                     "type": "string",
+                    "maxLength": 180,
                     "description": (
-                        "Business unit responsible for treatment "
+                        "Business unit routing_key responsible for treatment "
                         "(transversal when different from affected)."
                     ),
                 },
-                "activity_subject_key": {
+                "activity_subject_routing_key": {
                     "type": "string",
+                    "maxLength": 150,
                     "description": (
-                        "Activity subject normalized_name under responsible_business_unit."
+                        "Activity subject routing_key under responsible_business_unit "
+                        "(from establishment_taxonomy)."
                     ),
                 },
                 "operational_unit_key": {

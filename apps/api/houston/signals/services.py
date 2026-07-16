@@ -324,26 +324,49 @@ def _issue_focus_eval_log_fields(
 
 def _resolve_activity_subject(
     *,
-    establishment_id: uuid.UUID,
     business_unit: BusinessUnit | None,
-    activity_subject_key: str,
+    activity_subject_routing_key: str,
 ) -> ActivitySubject | None:
     if business_unit is None:
         return None
-    subject = ActivitySubject.objects.filter(
-        establishment_id=establishment_id,
-        normalized_name=activity_subject_key,
-        active=True,
+    return ActivitySubject.objects.filter(
         business_unit=business_unit,
+        routing_key=activity_subject_routing_key,
+        active=True,
     ).first()
+
+
+def _require_activity_subject_under_responsible(
+    *,
+    establishment_id: uuid.UUID,
+    responsible: BusinessUnit,
+    activity_subject_routing_key: str,
+) -> ActivitySubject:
+    subject = _resolve_activity_subject(
+        business_unit=responsible,
+        activity_subject_routing_key=activity_subject_routing_key,
+    )
     if subject is not None:
         return subject
-    return ActivitySubject.objects.filter(
-        establishment_id=establishment_id,
-        business_unit=business_unit,
-        active=True,
-        label__iexact=activity_subject_key,
-    ).first()
+    other = (
+        ActivitySubject.objects.filter(
+            establishment_id=establishment_id,
+            routing_key=activity_subject_routing_key,
+            active=True,
+            business_unit__active=True,
+        )
+        .exclude(business_unit_id=responsible.id)
+        .first()
+    )
+    if other is not None:
+        raise SignalValidationError(
+            "activity_subject belongs to another business unit.",
+            code="activity_subject_under_other_business_unit",
+        )
+    raise SignalValidationError(
+        "Unknown activity subject routing key.",
+        code="unknown_activity_subject_routing_key",
+    )
 
 
 def resolve_taxonomy_from_candidate(
@@ -361,26 +384,23 @@ def _resolve_v3_candidate(
 ) -> ResolvedTaxonomy:
     affected = BusinessUnit.objects.filter(
         establishment_id=establishment_id,
-        key=candidate.affected_business_unit_key,
+        routing_key=candidate.affected_business_unit_routing_key,
         active=True,
     ).first()
     if affected is None:
-        raise SignalValidationError("Invalid affected business unit key.")
+        raise SignalValidationError(
+            "Unknown affected business unit routing key.",
+            code="unknown_affected_business_unit_routing_key",
+        )
 
     responsible = BusinessUnit.objects.filter(
         establishment_id=establishment_id,
-        key=candidate.responsible_business_unit_key,
+        routing_key=candidate.responsible_business_unit_routing_key,
         active=True,
     ).first()
-    activity_subject = _resolve_activity_subject(
-        establishment_id=establishment_id,
-        business_unit=responsible,
-        activity_subject_key=candidate.activity_subject_key,
-    )
     subject_under_affected = _resolve_activity_subject(
-        establishment_id=establishment_id,
         business_unit=affected,
-        activity_subject_key=candidate.activity_subject_key,
+        activity_subject_routing_key=candidate.activity_subject_routing_key,
     )
 
     establishment = affected.establishment
@@ -394,17 +414,19 @@ def _resolve_v3_candidate(
             subject_under_affected=subject_under_affected,
         )
         if fallback is None:
-            raise SignalValidationError("Invalid responsible business unit key.")
+            raise SignalValidationError(
+                "Unknown responsible business unit routing key.",
+                code="unknown_responsible_business_unit_routing_key",
+            )
         resolved_affected = fallback.affected_business_unit
         resolved_responsible = fallback.responsible_business_unit
         resolved_subject = fallback.activity_subject
-    elif activity_subject is None:
-        raise SignalValidationError("activity_subject must belong to responsible_business_unit.")
     else:
-        if activity_subject.business_unit_id != responsible.id:
-            raise SignalValidationError(
-                "activity_subject must belong to responsible_business_unit."
-            )
+        activity_subject = _require_activity_subject_under_responsible(
+            establishment_id=establishment_id,
+            responsible=responsible,
+            activity_subject_routing_key=candidate.activity_subject_routing_key,
+        )
         try:
             validate_signal_classification(
                 establishment=establishment,
@@ -413,7 +435,10 @@ def _resolve_v3_candidate(
                 activity_subject=activity_subject,
             )
         except InvalidSignalClassificationError as exc:
-            raise SignalValidationError(str(exc)) from exc
+            raise SignalValidationError(
+                str(exc),
+                code="invalid_signal_classification",
+            ) from exc
         resolved_affected = affected
         resolved_responsible = responsible
         resolved_subject = activity_subject
@@ -599,7 +624,16 @@ def apply_pipeline_output(
                 establishment_id=observation.establishment_id,
                 candidate=candidate,
             )
-        except SignalValidationError:
+        except SignalValidationError as exc:
+            logger.info(
+                "observation_pipeline_candidate_rejected",
+                extra={
+                    "event": "observation_pipeline_candidate_rejected",
+                    "observation_id": str(observation.id),
+                    "establishment_id": str(observation.establishment_id),
+                    "rejection_code": exc.code,
+                },
+            )
             CandidateSignal.objects.create(
                 observation=observation,
                 establishment=observation.establishment,

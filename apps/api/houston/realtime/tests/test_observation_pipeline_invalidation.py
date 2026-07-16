@@ -115,7 +115,7 @@ def test_apply_pipeline_output_aggregate_emits_signal_updated():
             observation=observation,
             output=ObservationPipelineOutput(
                 schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                candidates=[_mojito_candidate()],
+                candidates=[_mojito_candidate(bar=bar, subject=subject)],
             ),
         )
 
@@ -130,7 +130,8 @@ def test_apply_pipeline_output_aggregate_emits_signal_updated():
 
 def test_apply_pipeline_output_rollback_does_not_emit_invalidation():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
     output = ObservationPipelineOutput(
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
@@ -139,9 +140,9 @@ def test_apply_pipeline_output_rollback_does_not_emit_invalidation():
                 title="Clim en panne",
                 structured_summary="La climatisation ne fonctionne plus.",
                 issue_focus="climatisation",
-                affected_business_unit_key="hotel",
-                responsible_business_unit_key="hotel",
-                activity_subject_key="maintenance",
+                affected_business_unit_routing_key=hotel.routing_key,
+                responsible_business_unit_routing_key=hotel.routing_key,
+                activity_subject_routing_key=subject.routing_key,
                 operational_unit_key=None,
                 location_text=None,
                 aggregate_into_signal_id=None,
@@ -178,10 +179,16 @@ def test_signal_invalidate_payload_allowlist(reason: str):
 
 def test_run_observation_pipeline_payload_does_not_leak_observation_text():
     membership = build_membership()
-    _setup_hotel_taxonomy(membership.establishment)
+    hotel = _setup_hotel_taxonomy(membership.establishment)
+    subject = hotel.activity_subjects.get()
     sensitive_text = "Sensitive observation body must not leak"
     observation = create_observation(membership=membership, text=sensitive_text)
-    provider = FakeObservationPipelineProvider(payload=_fake_provider_payload())
+    provider = FakeObservationPipelineProvider(
+        payload=_fake_provider_payload(
+            affected_routing_key=hotel.routing_key,
+            subject_routing_key=subject.routing_key,
+        )
+    )
 
     with patch("houston.realtime.broadcast.notify_establishment_invalidation") as mock_notify:
         run_observation_pipeline(observation.id, provider=provider)

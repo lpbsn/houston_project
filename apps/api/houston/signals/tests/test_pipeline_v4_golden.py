@@ -15,6 +15,7 @@ from houston.testing.factories import build_membership
 from houston.testing.pipeline_golden_v4 import (
     get_pipeline_golden_v4_case,
     list_pipeline_golden_v4_case_ids,
+    remap_expected_candidates_to_routing_keys,
     setup_active_signals_from_fixture,
     setup_taxonomy_from_fixture,
 )
@@ -56,7 +57,12 @@ def _run_golden_case(case_id: str):
         membership=membership,
         text=case["observation_text"],
     )
-    candidates = [_candidate_from_corpus(raw) for raw in case["expected_candidates"]]
+    remapped_candidates = remap_expected_candidates_to_routing_keys(
+        expected_candidates=case["expected_candidates"],
+        business_units=business_units,
+        activity_subjects=activity_subjects,
+    )
+    candidates = [_candidate_from_corpus(raw) for raw in remapped_candidates]
     result = apply_pipeline_output(
         observation=observation,
         output=ObservationPipelineOutput(

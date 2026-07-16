@@ -69,6 +69,7 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
     )
     assert taxonomy.stock_subject is None
     assert taxonomy.lighting_subject is not None
+    assert taxonomy.maintenance is not None
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
 
     output = ObservationPipelineOutput(
@@ -78,9 +79,9 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
                 title="Lumière clignote à l'entrée du restaurant",
                 structured_summary="Entrée restaurant, éclairage instable.",
                 issue_focus="lumière entrée restaurant",
-                affected_business_unit_key=RESTAURANT_MODULE_KEY,
-                responsible_business_unit_key="maintenance",
-                activity_subject_key=taxonomy.lighting_subject.normalized_name,
+                affected_business_unit_routing_key=taxonomy.restaurant.routing_key,
+                responsible_business_unit_routing_key=taxonomy.maintenance.routing_key,
+                activity_subject_routing_key=taxonomy.lighting_subject.routing_key,
                 operational_unit_key=None,
                 location_text="Entrée restaurant",
                 aggregate_into_signal_id=None,
@@ -89,9 +90,9 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
                 title="Rupture de sirop mojito au bar",
                 structured_summary="Bar, sirop mojito manquant.",
                 issue_focus="sirop mojito",
-                affected_business_unit_key="bar",
-                responsible_business_unit_key="bar",
-                activity_subject_key="stock",
+                affected_business_unit_routing_key=taxonomy.bar.routing_key,
+                responsible_business_unit_routing_key=taxonomy.bar.routing_key,
+                activity_subject_routing_key="custom--stock--missing00000000",
                 operational_unit_key=None,
                 location_text="Bar",
                 aggregate_into_signal_id=None,
@@ -119,6 +120,7 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
     )
     assert taxonomy.lighting_subject is None
     assert taxonomy.stock_subject is not None
+    assert taxonomy.maintenance is not None
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
 
     output = ObservationPipelineOutput(
@@ -128,9 +130,9 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
                 title="Lumière clignote à l'entrée du restaurant",
                 structured_summary="Entrée restaurant, éclairage instable.",
                 issue_focus="lumière entrée restaurant",
-                affected_business_unit_key=RESTAURANT_MODULE_KEY,
-                responsible_business_unit_key="maintenance",
-                activity_subject_key="electricite",
+                affected_business_unit_routing_key=taxonomy.restaurant.routing_key,
+                responsible_business_unit_routing_key=taxonomy.maintenance.routing_key,
+                activity_subject_routing_key="custom--electricite--missing000000",
                 operational_unit_key=None,
                 location_text="Entrée restaurant",
                 aggregate_into_signal_id=None,
@@ -139,9 +141,9 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
                 title="Rupture de sirop mojito au bar",
                 structured_summary="Bar, sirop mojito manquant.",
                 issue_focus="sirop mojito",
-                affected_business_unit_key="bar",
-                responsible_business_unit_key="bar",
-                activity_subject_key=taxonomy.stock_subject.normalized_name,
+                affected_business_unit_routing_key=taxonomy.bar.routing_key,
+                responsible_business_unit_routing_key=taxonomy.bar.routing_key,
+                activity_subject_routing_key=taxonomy.stock_subject.routing_key,
                 operational_unit_key=None,
                 location_text="Bar",
                 aggregate_into_signal_id=None,
@@ -164,6 +166,8 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
 def test_golden_invented_taxonomy_key_does_not_create_signal():
     membership = build_membership()
     taxonomy = create_restaurant_v3_taxonomy(membership.establishment)
+    assert taxonomy.maintenance is not None
+    assert taxonomy.lighting_subject is not None
     observation = create_observation(membership=membership, text=GOLDEN_OBSERVATION_TEXT)
 
     output = ObservationPipelineOutput(
@@ -173,9 +177,9 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
                 title="Lumière entrée",
                 structured_summary="Entrée restaurant.",
                 issue_focus="lumière entrée restaurant",
-                affected_business_unit_key=RESTAURANT_MODULE_KEY,
-                responsible_business_unit_key="maintenance",
-                activity_subject_key=taxonomy.lighting_subject.normalized_name,
+                affected_business_unit_routing_key=taxonomy.restaurant.routing_key,
+                responsible_business_unit_routing_key=taxonomy.maintenance.routing_key,
+                activity_subject_routing_key=taxonomy.lighting_subject.routing_key,
                 operational_unit_key=None,
                 location_text=None,
                 aggregate_into_signal_id=None,
@@ -184,9 +188,9 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
                 title="Stock inventé",
                 structured_summary="Bar.",
                 issue_focus="stock inventé",
-                affected_business_unit_key="invented",
-                responsible_business_unit_key="invented",
-                activity_subject_key="invented_subject",
+                affected_business_unit_routing_key="invented--missing--0000000000000000",
+                responsible_business_unit_routing_key="invented--missing--0000000000000000",
+                activity_subject_routing_key="invented_subject",
                 operational_unit_key=None,
                 location_text=None,
                 aggregate_into_signal_id=None,
