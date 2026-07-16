@@ -287,32 +287,7 @@ def test_membership_patch_rejects_foreign_or_inactive_scopes(api_client):
     assert MembershipScope.objects.filter(membership=target_membership).count() == 1
 
 
-def test_membership_patch_cannot_demote_last_active_owner(api_client):
-    actor = create_user(username="owner_actor")
-    actor_membership = create_membership(
-        user=actor,
-        role=EstablishmentMembership.Role.OWNER,
-        name="Nice",
-    )
-
-    access_token = login(api_client, identifier=actor.email)
-    response = api_client.patch(
-        (
-            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
-            f"{actor_membership.id}/"
-        ),
-        {"role": EstablishmentMembership.Role.DIRECTOR},
-        format="json",
-        **auth_headers(access_token),
-    )
-
-    assert response.status_code == 400
-    assert response.json() == {"detail": "The last active owner cannot be demoted."}
-    actor_membership.refresh_from_db()
-    assert actor_membership.role == EstablishmentMembership.Role.OWNER
-
-
-def test_membership_patch_can_demote_owner_when_another_active_owner_exists(api_client):
+def test_membership_patch_cannot_demote_owner(api_client):
     actor = create_user(username="owner_actor")
     actor_membership = create_membership(
         user=actor,
@@ -332,15 +307,54 @@ def test_membership_patch_can_demote_owner_when_another_active_owner_exists(api_
             f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
             f"{second_owner.id}/"
         ),
-        {"role": EstablishmentMembership.Role.DIRECTOR},
+        {"role": EstablishmentMembership.Role.MANAGER},
         format="json",
         **auth_headers(access_token),
     )
 
-    assert response.status_code == 200
-    assert response.json()["role"] == EstablishmentMembership.Role.DIRECTOR
+    assert response.status_code == 403
+    body = response.json()
+    assert body["code"] == "membership_role_change_forbidden"
+    assert isinstance(body["detail"], str)
     second_owner.refresh_from_db()
-    assert second_owner.role == EstablishmentMembership.Role.DIRECTOR
+    assert second_owner.role == EstablishmentMembership.Role.OWNER
+
+
+def test_membership_patch_rejects_role_change_to_owner_or_director(api_client):
+    actor = create_user(username="owner_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    target = EstablishmentMembership.objects.create(
+        user=create_user(username="target_manager"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    for next_role in (
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    ):
+        response = api_client.patch(
+            (
+                f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+                f"{target.id}/"
+            ),
+            {"role": next_role},
+            format="json",
+            **auth_headers(access_token),
+        )
+        assert response.status_code == 403
+        body = response.json()
+        assert body["code"] == "membership_role_change_forbidden"
+        assert isinstance(body["detail"], str)
+
+    target.refresh_from_db()
+    assert target.role == EstablishmentMembership.Role.MANAGER
 
 
 def test_membership_patch_rejects_scopes_for_owner_membership(api_client):

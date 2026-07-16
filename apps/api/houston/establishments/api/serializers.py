@@ -294,10 +294,27 @@ class MembershipInvitationRequestSerializer(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=EstablishmentMembership.Role.choices,
     )
-    scopes = MembershipScopeWriteItemSerializer(many=True)
+    scopes = MembershipScopeWriteItemSerializer(many=True, required=False, default=list)
 
     def validate(self, attrs):
-        scopes = attrs.get("scopes")
+        role = attrs.get("role")
+        scopes = attrs.get("scopes") or []
+        if role in {
+            EstablishmentMembership.Role.OWNER,
+            EstablishmentMembership.Role.DIRECTOR,
+        }:
+            if scopes:
+                raise serializers.ValidationError(
+                    {
+                        "scopes": (
+                            "Operational scopes are not allowed for owner or "
+                            "director invitations."
+                        )
+                    }
+                )
+            attrs["scopes"] = []
+            return attrs
+
         if not scopes:
             raise serializers.ValidationError(
                 {
