@@ -319,6 +319,125 @@ def test_catalog_import_missing_existing_key_is_noop(imported_catalog):
     assert orphan.sort_order == 999
 
 
+def test_catalog_import_does_not_deactivate_absent_keys(imported_catalog):
+    hotel = CatalogBusinessUnit.objects.get(key="hotel")
+    menage = CatalogActivitySubject.objects.get(key="hotel__menage")
+    assert hotel.active is True
+    assert menage.active is True
+
+    sync_catalog_from_normalized_rows(
+        business_unit_rows=(
+            _business_unit_row(key="restaurant", label="Restaurant"),
+        ),
+        activity_subject_rows=(
+            _activity_subject_row(
+                key="restaurant__stock",
+                label="Stock",
+                business_unit_key="restaurant",
+            ),
+        ),
+    )
+
+    hotel.refresh_from_db()
+    menage.refresh_from_db()
+    assert hotel.active is True
+    assert menage.active is True
+
+
+def test_catalog_import_new_key_creates_new_definition_without_modifying_old_key(
+    imported_catalog,
+):
+    hotel_before = CatalogBusinessUnit.objects.get(key="hotel")
+    hotel_snapshot = (
+        hotel_before.label,
+        hotel_before.description,
+        hotel_before.unit_type,
+        hotel_before.active,
+        hotel_before.sort_order,
+    )
+    before_count = CatalogBusinessUnit.objects.count()
+
+    sync_catalog_from_normalized_rows(
+        business_unit_rows=(
+            _business_unit_row(
+                key="spa_wellness",
+                label="Spa Wellness",
+                unit_type="dedicated",
+            ),
+        ),
+        activity_subject_rows=(),
+    )
+
+    hotel_after = CatalogBusinessUnit.objects.get(key="hotel")
+    assert (
+        hotel_after.label,
+        hotel_after.description,
+        hotel_after.unit_type,
+        hotel_after.active,
+        hotel_after.sort_order,
+    ) == hotel_snapshot
+    assert CatalogBusinessUnit.objects.count() == before_count + 1
+    created = CatalogBusinessUnit.objects.get(key="spa_wellness")
+    assert created.label == "Spa Wellness"
+    assert created.active is True
+
+
+def test_catalog_import_missing_referenced_key_is_noop(imported_catalog):
+    business_unit = _link_runtime_business_unit(catalog_key="hotel")
+    subject = _link_runtime_activity_subject(
+        business_unit=business_unit,
+        catalog_key="hotel__menage",
+    )
+    catalog_bu = CatalogBusinessUnit.objects.get(key="hotel")
+    catalog_subject = CatalogActivitySubject.objects.get(key="hotel__menage")
+    bu_snapshot = (
+        catalog_bu.label,
+        catalog_bu.description,
+        catalog_bu.active,
+        catalog_bu.sort_order,
+    )
+    subject_snapshot = (
+        catalog_subject.label,
+        catalog_subject.description,
+        catalog_subject.active,
+        catalog_subject.sort_order,
+        catalog_subject.catalog_business_unit_id,
+    )
+
+    sync_catalog_from_normalized_rows(
+        business_unit_rows=(
+            _business_unit_row(key="restaurant", label="Restaurant"),
+        ),
+        activity_subject_rows=(
+            _activity_subject_row(
+                key="restaurant__stock",
+                label="Stock",
+                business_unit_key="restaurant",
+            ),
+        ),
+    )
+
+    catalog_bu.refresh_from_db()
+    catalog_subject.refresh_from_db()
+    business_unit.refresh_from_db()
+    subject.refresh_from_db()
+    assert (
+        catalog_bu.label,
+        catalog_bu.description,
+        catalog_bu.active,
+        catalog_bu.sort_order,
+    ) == bu_snapshot
+    assert (
+        catalog_subject.label,
+        catalog_subject.description,
+        catalog_subject.active,
+        catalog_subject.sort_order,
+        catalog_subject.catalog_business_unit_id,
+    ) == subject_snapshot
+    assert business_unit.catalog_business_unit_id == catalog_bu.id
+    assert subject.catalog_activity_subject_id == catalog_subject.id
+
+
 def test_catalog_import_is_atomic_on_preflight_failure(imported_catalog):
     _link_runtime_business_unit(catalog_key="maintenance")
     before_label = CatalogBusinessUnit.objects.get(key="hotel").label

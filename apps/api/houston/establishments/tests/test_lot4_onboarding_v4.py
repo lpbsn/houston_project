@@ -409,6 +409,74 @@ def test_v4_apply_materializes_exact_payload_without_catalog_completion(imported
     assert subjects.get(catalog_activity_subject=None).label == "Terrasse VIP"
 
 
+def test_v4_apply_creates_multiple_dedicated_instances_same_catalog_with_distinct_routing_keys(
+    imported_catalog,
+):
+    payload = _v4_payload(
+        business_units=[
+            {
+                "client_key": "bu-food-court",
+                "catalog_key": "restaurant",
+                "specific_name": "Food Court",
+                "instance_description": "Niveau 0",
+            },
+            {
+                "client_key": "bu-rooftop",
+                "catalog_key": "restaurant",
+                "specific_name": "Rooftop",
+                "instance_description": "Terrasse",
+            },
+        ],
+        activity_subjects=[
+            {
+                "client_key": "subject-stock-food",
+                "business_unit_client_key": "bu-food-court",
+                "catalog_key": "restaurant__stock",
+            },
+            {
+                "client_key": "subject-free-food",
+                "business_unit_client_key": "bu-food-court",
+                "label": "Cuisine libre",
+                "description": "Zone libre",
+            },
+            {
+                "client_key": "subject-stock-rooftop",
+                "business_unit_client_key": "bu-rooftop",
+                "catalog_key": "restaurant__stock",
+            },
+        ],
+    )
+    owner, session, proposal = _validated_proposal(payload=payload)
+
+    applied = apply_onboarding_proposal(proposal=proposal, actor=owner)
+
+    units = list(
+        BusinessUnit.objects.filter(establishment=session.establishment).order_by(
+            "specific_name"
+        )
+    )
+    assert applied.status == OnboardingProposal.Status.APPLIED
+    assert len(units) == 2
+    food_court, rooftop = units
+    assert food_court.specific_name == "Food Court"
+    assert rooftop.specific_name == "Rooftop"
+    assert food_court.catalog_business_unit_id == rooftop.catalog_business_unit_id
+    assert food_court.routing_key.startswith("restaurant--food-court--")
+    assert rooftop.routing_key.startswith("restaurant--rooftop--")
+    assert food_court.routing_key != rooftop.routing_key
+
+    food_subjects = ActivitySubject.objects.filter(business_unit=food_court)
+    rooftop_subjects = ActivitySubject.objects.filter(business_unit=rooftop)
+    assert food_subjects.count() == 2
+    assert rooftop_subjects.count() == 1
+    assert food_subjects.filter(routing_key="restaurant__stock").exists()
+    assert food_subjects.filter(routing_key__startswith="custom--cuisine-libre--").exists()
+    assert rooftop_subjects.filter(routing_key="restaurant__stock").exists()
+    assert (
+        ActivitySubject.objects.filter(establishment=session.establishment).count() == 3
+    )
+
+
 def test_v4_apply_never_reactivates_and_rolls_back_statuses(imported_catalog):
     owner = create_user(username=f"lot4_owner_{uuid.uuid4().hex[:8]}")
     session = create_onboarding_session(actor=owner)
