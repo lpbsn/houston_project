@@ -305,10 +305,12 @@ class MembershipDeactivateView(APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
         },
         description=(
             "Deactivates one membership in the current active establishment context. "
-            "The last active owner cannot be deactivated."
+            "Owner deactivation fans out across draft and active establishments in the "
+            "organization. The last full-coverage active owner cannot be deactivated."
         ),
     )
     def post(self, request, establishment_id, membership_id):
@@ -326,6 +328,14 @@ class MembershipDeactivateView(APIView):
             return Response(
                 {"detail": "The last active owner cannot be deactivated."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OrganizationalOwnerInvariantConflictError as exc:
+            return Response(
+                {
+                    "code": "organizational_owner_invariant_conflict",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
         except MembershipManagementForbiddenError:
             return Response(
@@ -360,10 +370,13 @@ class MembershipActivateView(APIView):
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
         },
         description=(
             "Activates one membership in the current active establishment context. "
-            "Invited memberships cannot be activated until the invitation is accepted."
+            "Owner reactivation fans out across draft and active establishments in the "
+            "organization without issuing an invitation email. Invited memberships "
+            "cannot be activated until the invitation is accepted."
         ),
     )
     def post(self, request, establishment_id, membership_id):
@@ -384,6 +397,14 @@ class MembershipActivateView(APIView):
                     "detail": "Invited memberships cannot be activated until accepted.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OrganizationalOwnerInvariantConflictError as exc:
+            return Response(
+                {
+                    "code": "organizational_owner_invariant_conflict",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
         except MembershipManagementForbiddenError:
             return Response(

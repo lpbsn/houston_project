@@ -2437,12 +2437,12 @@ def deactivate_membership_for_management(
     ):
         raise MembershipManagementForbiddenError
 
-    if (
-        membership.status == EstablishmentMembership.Status.ACTIVE
-        and membership.role == EstablishmentMembership.Role.OWNER
-        and _is_last_active_owner(membership)
-    ):
-        raise CannotDeactivateLastActiveOwnerError
+    if membership.role == EstablishmentMembership.Role.OWNER:
+        assert current_membership is not None
+        return _deactivate_organizational_owner(
+            current_membership=current_membership,
+            membership=membership,
+        )
 
     if membership.status != EstablishmentMembership.Status.DEACTIVATED:
         membership.status = EstablishmentMembership.Status.DEACTIVATED
@@ -2490,6 +2490,13 @@ def activate_membership_for_management(
     if membership.status == EstablishmentMembership.Status.INVITED:
         raise InvitedMembershipActivationError
 
+    if membership.role == EstablishmentMembership.Role.OWNER:
+        assert current_membership is not None
+        return _reactivate_organizational_owner(
+            current_membership=current_membership,
+            membership=membership,
+        )
+
     if membership.status != EstablishmentMembership.Status.ACTIVE:
         membership.status = EstablishmentMembership.Status.ACTIVE
         membership.save(update_fields=["status", "updated_at"])
@@ -2504,6 +2511,257 @@ def activate_membership_for_management(
 
     membership.refresh_from_db()
     return _reload_membership_for_response(membership.id)
+
+
+def _deactivate_organizational_owner(
+    *,
+    current_membership: EstablishmentMembership,
+    membership: EstablishmentMembership,
+) -> EstablishmentMembership:
+    organization_id = membership.establishment.organization_id
+    actor_membership_id = current_membership.id
+    anchor_membership_id = membership.id
+    actor_user_id = current_membership.user_id
+    target_user_id = membership.user_id
+    path_establishment_id = membership.establishment_id
+
+    establishment_ids = list(
+        Establishment.objects.filter(
+            organization_id=organization_id,
+            status__in=[
+                Establishment.Status.DRAFT,
+                Establishment.Status.ACTIVE,
+            ],
+        )
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+    actor_membership_ids = list(
+        EstablishmentMembership.objects.filter(
+            user_id=actor_user_id,
+            establishment_id__in=establishment_ids,
+        ).values_list("id", flat=True)
+    )
+    target_membership_ids = list(
+        EstablishmentMembership.objects.filter(
+            user_id=target_user_id,
+            establishment_id__in=establishment_ids,
+        ).values_list("id", flat=True)
+    )
+
+    organization = _lock_organization(organization_id=organization_id)
+    other_membership_ids = [
+        membership_id
+        for membership_id in {*actor_membership_ids, *target_membership_ids}
+        if membership_id not in {actor_membership_id, anchor_membership_id}
+    ]
+    locked = _lock_memberships_for_owner_workflow(
+        actor_membership_id=actor_membership_id,
+        anchor_membership_id=anchor_membership_id,
+        other_membership_ids=other_membership_ids,
+    )
+
+    actor = locked["actor"]
+    anchor = locked["anchor"]
+    if actor is None or anchor is None:
+        raise OrganizationalOwnerInvariantConflictError
+
+    if organization.status != Organization.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.establishment_id != path_establishment_id:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.establishment.organization_id != organization_id:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.establishment.status != Establishment.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.role != EstablishmentMembership.Role.OWNER:
+        raise OrganizationalOwnerInvariantConflictError
+    if actor.user.status != User.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+    if (
+        actor.role != EstablishmentMembership.Role.OWNER
+        or actor.status != EstablishmentMembership.Status.ACTIVE
+    ):
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.user.status != User.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+
+    establishments = org_establishments_draft_active(organization_id=organization_id)
+    establishment_id_list = [row.id for row in establishments]
+    actor_memberships_by_establishment_id = _collect_org_memberships_for_user(
+        user_id=actor.user_id,
+        establishment_ids=establishment_id_list,
+    )
+    if not _actor_has_full_coverage_active_org_owner(
+        user_id=actor.user_id,
+        establishments=establishments,
+        memberships_by_establishment_id=actor_memberships_by_establishment_id,
+    ):
+        raise OrganizationalOwnerInvariantConflictError
+
+    target_memberships_by_establishment_id = _collect_org_memberships_for_user(
+        user_id=target_user_id,
+        establishment_ids=establishment_id_list,
+    )
+    target_memberships: list[EstablishmentMembership] = []
+    target_statuses: set[str] = set()
+    for establishment in establishments:
+        target = target_memberships_by_establishment_id.get(establishment.id)
+        if target is None or target.role != EstablishmentMembership.Role.OWNER:
+            raise OrganizationalOwnerInvariantConflictError
+        target_statuses.add(target.status)
+        target_memberships.append(target)
+
+    if target_statuses == {EstablishmentMembership.Status.DEACTIVATED}:
+        return _reload_membership_for_response(anchor.id)
+
+    if target_statuses != {EstablishmentMembership.Status.ACTIVE}:
+        raise OrganizationalOwnerInvariantConflictError
+
+    if not _has_other_full_coverage_active_org_owner(
+        exclude_user_id=target_user_id,
+        establishments=establishments,
+    ):
+        raise CannotDeactivateLastActiveOwnerError
+
+    from houston.chat.services import handle_membership_chat_deactivation
+    from houston.realtime.broadcast import schedule_access_event
+
+    for target in target_memberships:
+        target.status = EstablishmentMembership.Status.DEACTIVATED
+        target.save(update_fields=["status", "updated_at"])
+        handle_membership_chat_deactivation(membership=target)
+        schedule_access_event(
+            reason="membership.deactivated",
+            establishment_id=target.establishment_id,
+            membership_id=target.id,
+        )
+
+    _clear_selected_establishments_for_org_owner(
+        user_id=target_user_id,
+        establishment_ids=establishment_id_list,
+    )
+
+    return _reload_membership_for_response(anchor.id)
+
+
+def _reactivate_organizational_owner(
+    *,
+    current_membership: EstablishmentMembership,
+    membership: EstablishmentMembership,
+) -> EstablishmentMembership:
+    organization_id = membership.establishment.organization_id
+    actor_membership_id = current_membership.id
+    anchor_membership_id = membership.id
+    actor_user_id = current_membership.user_id
+    target_user_id = membership.user_id
+    path_establishment_id = membership.establishment_id
+
+    establishment_ids = list(
+        Establishment.objects.filter(
+            organization_id=organization_id,
+            status__in=[
+                Establishment.Status.DRAFT,
+                Establishment.Status.ACTIVE,
+            ],
+        )
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+    actor_membership_ids = list(
+        EstablishmentMembership.objects.filter(
+            user_id=actor_user_id,
+            establishment_id__in=establishment_ids,
+        ).values_list("id", flat=True)
+    )
+    target_membership_ids = list(
+        EstablishmentMembership.objects.filter(
+            user_id=target_user_id,
+            establishment_id__in=establishment_ids,
+        ).values_list("id", flat=True)
+    )
+
+    organization = _lock_organization(organization_id=organization_id)
+    other_membership_ids = [
+        membership_id
+        for membership_id in {*actor_membership_ids, *target_membership_ids}
+        if membership_id not in {actor_membership_id, anchor_membership_id}
+    ]
+    locked = _lock_memberships_for_owner_workflow(
+        actor_membership_id=actor_membership_id,
+        anchor_membership_id=anchor_membership_id,
+        other_membership_ids=other_membership_ids,
+    )
+
+    actor = locked["actor"]
+    anchor = locked["anchor"]
+    if actor is None or anchor is None:
+        raise OrganizationalOwnerInvariantConflictError
+
+    if organization.status != Organization.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.establishment_id != path_establishment_id:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.establishment.organization_id != organization_id:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.establishment.status != Establishment.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.role != EstablishmentMembership.Role.OWNER:
+        raise OrganizationalOwnerInvariantConflictError
+    if actor.user.status != User.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+    if (
+        actor.role != EstablishmentMembership.Role.OWNER
+        or actor.status != EstablishmentMembership.Status.ACTIVE
+    ):
+        raise OrganizationalOwnerInvariantConflictError
+    if anchor.user.status != User.Status.ACTIVE:
+        raise OrganizationalOwnerInvariantConflictError
+
+    establishments = org_establishments_draft_active(organization_id=organization_id)
+    establishment_id_list = [row.id for row in establishments]
+    actor_memberships_by_establishment_id = _collect_org_memberships_for_user(
+        user_id=actor.user_id,
+        establishment_ids=establishment_id_list,
+    )
+    if not _actor_has_full_coverage_active_org_owner(
+        user_id=actor.user_id,
+        establishments=establishments,
+        memberships_by_establishment_id=actor_memberships_by_establishment_id,
+    ):
+        raise OrganizationalOwnerInvariantConflictError
+
+    target_memberships_by_establishment_id = _collect_org_memberships_for_user(
+        user_id=target_user_id,
+        establishment_ids=establishment_id_list,
+    )
+    target_memberships: list[EstablishmentMembership] = []
+    target_statuses: set[str] = set()
+    for establishment in establishments:
+        target = target_memberships_by_establishment_id.get(establishment.id)
+        if target is None or target.role != EstablishmentMembership.Role.OWNER:
+            raise OrganizationalOwnerInvariantConflictError
+        target_statuses.add(target.status)
+        target_memberships.append(target)
+
+    if target_statuses == {EstablishmentMembership.Status.ACTIVE}:
+        return _reload_membership_for_response(anchor.id)
+
+    if target_statuses != {EstablishmentMembership.Status.DEACTIVATED}:
+        raise OrganizationalOwnerInvariantConflictError
+
+    from houston.realtime.broadcast import schedule_access_event
+
+    for target in target_memberships:
+        target.status = EstablishmentMembership.Status.ACTIVE
+        target.save(update_fields=["status", "updated_at"])
+        schedule_access_event(
+            reason="membership.updated",
+            establishment_id=target.establishment_id,
+            membership_id=target.id,
+        )
+
+    return _reload_membership_for_response(anchor.id)
 
 
 def _actor_has_full_coverage_active_org_owner(
@@ -2524,6 +2782,39 @@ def _actor_has_full_coverage_active_org_owner(
     return True
 
 
+def _has_other_full_coverage_active_org_owner(
+    *,
+    exclude_user_id,
+    establishments: list[Establishment],
+) -> bool:
+    if not establishments:
+        return False
+
+    establishment_ids = [establishment.id for establishment in establishments]
+    candidate_user_ids = (
+        EstablishmentMembership.objects.filter(
+            establishment_id__in=establishment_ids,
+            role=EstablishmentMembership.Role.OWNER,
+            status=EstablishmentMembership.Status.ACTIVE,
+        )
+        .exclude(user_id=exclude_user_id)
+        .values_list("user_id", flat=True)
+        .distinct()
+    )
+    for user_id in candidate_user_ids:
+        memberships_by_establishment_id = _collect_org_memberships_for_user(
+            user_id=user_id,
+            establishment_ids=establishment_ids,
+        )
+        if _actor_has_full_coverage_active_org_owner(
+            user_id=user_id,
+            establishments=establishments,
+            memberships_by_establishment_id=memberships_by_establishment_id,
+        ):
+            return True
+    return False
+
+
 def _collect_org_memberships_for_user(*, user_id, establishment_ids) -> dict:
     return {
         membership.establishment_id: membership
@@ -2532,6 +2823,22 @@ def _collect_org_memberships_for_user(*, user_id, establishment_ids) -> dict:
             establishment_id__in=establishment_ids,
         )
     }
+
+
+def _clear_selected_establishments_for_org_owner(
+    *,
+    user_id,
+    establishment_ids,
+) -> None:
+    if not establishment_ids:
+        return
+    UserSession.objects.filter(
+        user_id=user_id,
+        selected_establishment_id__in=establishment_ids,
+    ).update(
+        selected_establishment=None,
+        updated_at=timezone.now(),
+    )
 
 
 def _lock_organization(*, organization_id) -> Organization:

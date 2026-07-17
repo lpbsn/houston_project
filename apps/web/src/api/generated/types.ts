@@ -1023,7 +1023,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Activates one membership in the current active establishment context. Invited memberships cannot be activated until the invitation is accepted. */
+        /** @description Activates one membership in the current active establishment context. Owner reactivation fans out across draft and active establishments in the organization without issuing an invitation email. Invited memberships cannot be activated until the invitation is accepted. */
         post: operations["v1_establishments_memberships_activate_create"];
         delete?: never;
         options?: never;
@@ -1040,7 +1040,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Deactivates one membership in the current active establishment context. The last active owner cannot be deactivated. */
+        /** @description Deactivates one membership in the current active establishment context. Owner deactivation fans out across draft and active establishments in the organization. The last full-coverage active owner cannot be deactivated. */
         post: operations["v1_establishments_memberships_deactivate_create"];
         delete?: never;
         options?: never;
@@ -6679,6 +6679,14 @@ export interface operations {
                     "application/json": components["schemas"]["DetailResponse"];
                 };
             };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
         };
     };
     v1_establishments_memberships_deactivate_create: {
@@ -6731,6 +6739,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
                 };
             };
         };
