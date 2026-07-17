@@ -971,7 +971,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Invites a staff, manager, or organizational owner to the establishment. Owner invitations require an active path establishment and fan out to all draft and active establishments in the organization. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
+        /** @description Invites a staff, manager, director, or organizational owner to the establishment. Director and owner invitations require an active path establishment; owner invitations fan out to all draft and active establishments in the organization. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
         post: operations["v1_establishments_membership_invitations_create"];
         delete?: never;
         options?: never;

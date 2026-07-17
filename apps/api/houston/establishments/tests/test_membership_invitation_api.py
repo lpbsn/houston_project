@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 import pytest
 from django.db import close_old_connections
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
+from houston.accounts.services import tokens as auth_tokens
 from houston.establishments.models import (
     Establishment,
+    EstablishmentInvitation,
     EstablishmentMembership,
     MembershipScope,
 )
@@ -25,6 +28,8 @@ from houston.organizations.models import Organization
 pytestmark = pytest.mark.django_db
 
 ROLE_OWNER = EstablishmentMembership.Role.OWNER
+ROLE_DIRECTOR = EstablishmentMembership.Role.DIRECTOR
+REGISTRATION_PASSWORD = "SecurePass123!"
 
 
 @pytest.fixture
@@ -46,7 +51,11 @@ def create_user(
     )
 
 
-def create_establishment(*, name: str = "Demo Hotel") -> Establishment:
+def create_establishment(
+    *,
+    name: str = "Demo Hotel",
+    status: str = Establishment.Status.ACTIVE,
+) -> Establishment:
     organization = Organization.objects.create(
         name=f"{name} Group {uuid.uuid4().hex[:6]}",
         status=Organization.Status.ACTIVE,
@@ -54,7 +63,31 @@ def create_establishment(*, name: str = "Demo Hotel") -> Establishment:
     return Establishment.objects.create(
         name=name,
         organization=organization,
-        status=Establishment.Status.ACTIVE,
+        status=status,
+    )
+
+
+def director_invite_payload(*, email: str = "new-director@example.com", **overrides):
+    payload = {
+        "email": email,
+        "first_name": "New",
+        "last_name": "Director",
+        "role": ROLE_DIRECTOR,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def post_accept(api_client: APIClient, *, token: str, password: str = REGISTRATION_PASSWORD):
+    csrf_token = ensure_csrf(api_client)
+    return api_client.post(
+        f"/api/v1/invitations/{token}/accept/",
+        {
+            "password": password,
+            "password_confirmation": password,
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
     )
 
 
@@ -350,30 +383,123 @@ def test_invitation_normalizes_duplicate_business_unit_scope(api_client):
     )
 
 
-def test_cannot_invite_director_role_via_membership_invitations(api_client):
-    establishment = create_establishment(name="Role Guard Hotel")
-    owner = create_user(username="role_guard_owner")
+@pytest.mark.parametrize(
+    "actor_role",
+    [ROLE_OWNER, ROLE_DIRECTOR],
+)
+def test_owner_and_director_can_invite_multiple_directors_on_active_establishment(
+    api_client,
+    actor_role,
+):
+    establishment = create_establishment(name=f"Multi Director {actor_role}")
+    actor = create_user(username=f"multi_director_actor_{actor_role}")
+    create_membership(user=actor, establishment=establishment, role=actor_role)
+
+    first = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=actor,
+        payload=director_invite_payload(email=f"director-one-{actor_role}@example.com"),
+    )
+    second = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=actor,
+        payload=director_invite_payload(email=f"director-two-{actor_role}@example.com"),
+    )
+
+    assert first.status_code == 201, first.json()
+    assert second.status_code == 201, second.json()
+    assert first.json()["membership"]["role"] == ROLE_DIRECTOR
+    assert second.json()["membership"]["role"] == ROLE_DIRECTOR
+    assert first.json()["membership"]["id"] != second.json()["membership"]["id"]
+    assert (
+        EstablishmentMembership.objects.filter(
+            establishment=establishment,
+            role=ROLE_DIRECTOR,
+            status=EstablishmentMembership.Status.INVITED,
+        ).count()
+        == 2
+    )
+
+
+@pytest.mark.parametrize(
+    "actor_role,membership_status",
+    [
+        (ROLE_OWNER, EstablishmentMembership.Status.INVITED),
+        (ROLE_OWNER, EstablishmentMembership.Status.DEACTIVATED),
+        (ROLE_DIRECTOR, EstablishmentMembership.Status.INVITED),
+        (ROLE_DIRECTOR, EstablishmentMembership.Status.DEACTIVATED),
+    ],
+)
+def test_non_active_owner_or_director_cannot_invite_director(
+    api_client,
+    actor_role,
+    membership_status,
+):
+    establishment = create_establishment(name=f"Non Active {actor_role} {membership_status}")
+    actor = create_user(username=f"non_active_{actor_role}_{membership_status}")
+    create_membership(
+        user=actor,
+        establishment=establishment,
+        role=actor_role,
+        membership_status=membership_status,
+    )
+
+    response = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=actor,
+        payload=director_invite_payload(
+            email=f"blocked-{actor_role}-{membership_status}@example.com"
+        ),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Not found."
+    assert not EstablishmentMembership.objects.filter(
+        establishment=establishment,
+        role=ROLE_DIRECTOR,
+        user__email__iexact=f"blocked-{actor_role}-{membership_status}@example.com",
+    ).exists()
+
+
+def test_director_invite_rejects_draft_establishment(api_client):
+    establishment = create_establishment(
+        name="Draft Director Invite",
+        status=Establishment.Status.DRAFT,
+    )
+    owner = create_user(username="draft_director_invite_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
 
-    access_token = login(api_client, identifier=owner.email)
-    csrf_token = ensure_csrf(api_client)
-
-    response = api_client.post(
-        f"/api/v1/establishments/{establishment.id}/membership-invitations/",
-        {
-            "email": "director@example.com",
-            "first_name": "New",
-            "last_name": "Member",
-            "role": EstablishmentMembership.Role.DIRECTOR,
-        },
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
+    response = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=owner,
+        payload=director_invite_payload(email="draft-director@example.com"),
     )
-    assert response.status_code == 403
-    body = response.json()
-    assert body["code"] == "membership_invitation_role_not_allowed"
-    assert isinstance(body["detail"], str)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "membership_invitation_invalid"
+
+
+def test_director_invite_rejects_deactivated_establishment(api_client):
+    establishment = create_establishment(
+        name="Deactivated Director Invite",
+        status=Establishment.Status.DEACTIVATED,
+    )
+    owner = create_user(username="deactivated_director_invite_owner")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+
+    response = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=owner,
+        payload=director_invite_payload(email="deactivated-director@example.com"),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Not found."
 
 
 def test_owner_or_director_invitation_rejects_non_empty_scopes(api_client):
@@ -872,3 +998,242 @@ def test_create_invited_membership_race_returns_duplicate_regardless_of_role():
     membership = EstablishmentMembership.objects.get(user=user, establishment=establishment)
     assert membership.role == EstablishmentMembership.Role.MANAGER
     assert membership.status == EstablishmentMembership.Status.DEACTIVATED
+
+
+@pytest.mark.parametrize(
+    "user_status",
+    [
+        User.Status.ACTIVE,
+        User.Status.SUSPENDED,
+        User.Status.ANONYMIZED,
+    ],
+)
+def test_director_invitation_rejects_existing_non_pending_user(api_client, user_status):
+    establishment = create_establishment(name=f"Director User Exists {user_status}")
+    owner = create_user(username=f"owner_director_exists_{user_status}")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    existing = create_user(
+        username=f"existing_director_{user_status}",
+        email=f"existing-director-{user_status}@example.com",
+        status=user_status,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email=existing.email),
+    )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "membership_invitation_user_exists"
+    assert body["detail"] == "A Houston account with this email already exists."
+
+
+def test_director_invitation_rejects_pending_user_without_membership(api_client):
+    establishment = create_establishment(name="Director Pending No Membership")
+    owner = create_user(username="owner_director_pending_no_m")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    pending = create_user(
+        username="pending_director_elsewhere",
+        email="pending-director-elsewhere@example.com",
+        status=User.Status.PENDING,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email=pending.email),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "membership_invitation_user_exists"
+
+
+@pytest.mark.parametrize(
+    "membership_status,expected_code",
+    [
+        (EstablishmentMembership.Status.INVITED, "membership_invitation_duplicate"),
+        (EstablishmentMembership.Status.ACTIVE, "membership_invitation_duplicate"),
+    ],
+)
+def test_director_invitation_pending_same_role_invited_or_active_is_duplicate(
+    api_client,
+    membership_status,
+    expected_code,
+):
+    establishment = create_establishment(name=f"Director Dup {membership_status}")
+    owner = create_user(username=f"owner_director_dup_{membership_status}")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    pending = create_user(
+        username=f"pending_director_dup_{membership_status}",
+        email=f"pending-director-dup-{membership_status}@example.com",
+        status=User.Status.PENDING,
+    )
+    create_membership(
+        user=pending,
+        establishment=establishment,
+        role=ROLE_DIRECTOR,
+        membership_status=membership_status,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email=pending.email),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == expected_code
+
+
+def test_director_invitation_resumes_deactivated_same_role(api_client):
+    establishment = create_establishment(name="Director Resume")
+    owner = create_user(username="owner_director_resume")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    pending = create_user(
+        username="pending_director_resume",
+        email="resume-director@example.com",
+        status=User.Status.PENDING,
+    )
+    membership = create_membership(
+        user=pending,
+        establishment=establishment,
+        role=ROLE_DIRECTOR,
+        membership_status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(
+            email=pending.email,
+            first_name="Resumed",
+            last_name="Director",
+        ),
+    )
+
+    assert response.status_code == 201, response.json()
+    membership.refresh_from_db()
+    pending.refresh_from_db()
+    assert membership.status == EstablishmentMembership.Status.INVITED
+    assert membership.role == ROLE_DIRECTOR
+    assert pending.first_name == "Resumed"
+    assert pending.last_name == "Director"
+
+
+def test_director_invitation_rejects_deactivated_different_role(api_client):
+    establishment = create_establishment(name="Director Incompat Role")
+    owner = create_user(username="owner_director_incompat")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    pending = create_user(
+        username="pending_director_incompat",
+        email="incompat-director@example.com",
+        status=User.Status.PENDING,
+    )
+    membership = create_membership(
+        user=pending,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        membership_status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email=pending.email),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "membership_invitation_duplicate"
+    membership.refresh_from_db()
+    assert membership.status == EstablishmentMembership.Status.DEACTIVATED
+    assert membership.role == EstablishmentMembership.Role.STAFF
+
+
+def test_accept_director_invitation_activates_only_target_membership(api_client):
+    establishment = create_establishment(name="Accept Director Isolation")
+    owner = create_user(username="accept_director_isolation_owner")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+
+    first = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email="accept-director-one@example.com"),
+    )
+    second = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email="accept-director-two@example.com"),
+    )
+    assert first.status_code == 201, first.json()
+    assert second.status_code == 201, second.json()
+
+    first_membership = EstablishmentMembership.objects.get(id=first.json()["membership"]["id"])
+    second_membership = EstablishmentMembership.objects.get(id=second.json()["membership"]["id"])
+    first_token = first.json()["invitation_token"]
+
+    with patch("houston.realtime.broadcast.schedule_access_event") as access_mock:
+        accept_response = post_accept(
+            APIClient(enforce_csrf_checks=True),
+            token=first_token,
+        )
+
+    assert accept_response.status_code == 201, accept_response.json()
+    first_membership.refresh_from_db()
+    second_membership.refresh_from_db()
+    assert first_membership.status == EstablishmentMembership.Status.ACTIVE
+    assert second_membership.status == EstablishmentMembership.Status.INVITED
+
+    updated_calls = [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.updated"
+    ]
+    assert len(updated_calls) == 1
+    assert updated_calls[0].kwargs["membership_id"] == first_membership.id
+    assert updated_calls[0].kwargs["establishment_id"] == establishment.id
+
+
+def test_accept_director_invitation_invalid_emits_no_access_event(api_client):
+    establishment = create_establishment(name="Accept Director Invalid")
+    owner = create_user(username="accept_director_invalid_owner")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+
+    invite = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=director_invite_payload(email="invalid-accept-director@example.com"),
+    )
+    assert invite.status_code == 201, invite.json()
+    token = invite.json()["invitation_token"]
+    membership = EstablishmentMembership.objects.get(id=invite.json()["membership"]["id"])
+    invitation = EstablishmentInvitation.objects.get(
+        token_digest=auth_tokens.digest_token(token),
+    )
+    invitation.revoked_at = invitation.created_at
+    invitation.save(update_fields=["revoked_at", "updated_at"])
+
+    with patch("houston.realtime.broadcast.schedule_access_event") as access_mock:
+        accept_response = post_accept(
+            APIClient(enforce_csrf_checks=True),
+            token=token,
+        )
+
+    assert accept_response.status_code == 400
+    assert accept_response.json()["code"] == "invitation_invalid"
+    membership.refresh_from_db()
+    assert membership.status == EstablishmentMembership.Status.INVITED
+    assert not [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.updated"
+    ]

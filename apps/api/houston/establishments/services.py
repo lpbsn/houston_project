@@ -1717,6 +1717,14 @@ def _finalize_establishment_invitation_accept(
     membership.status = EstablishmentMembership.Status.ACTIVE
     membership.save(update_fields=["status", "updated_at"])
 
+    from houston.realtime.broadcast import schedule_access_event
+
+    schedule_access_event(
+        reason="membership.updated",
+        establishment_id=membership.establishment_id,
+        membership_id=membership.id,
+    )
+
     invitation.accepted_at = now
     invitation.save(update_fields=["accepted_at", "updated_at"])
 
@@ -1780,6 +1788,7 @@ def invite_membership_for_establishment(
         EstablishmentMembership.Role.STAFF,
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
     }:
         raise MembershipInvitationRoleNotAllowedError
 
@@ -1821,7 +1830,22 @@ def invite_membership_for_establishment(
             last_name=normalized_last_name,
         )
 
-    if establishment.status == Establishment.Status.DRAFT:
+    if role == EstablishmentMembership.Role.DIRECTOR:
+        if (
+            current_membership.status != EstablishmentMembership.Status.ACTIVE
+            or current_membership.role
+            not in {
+                EstablishmentMembership.Role.OWNER,
+                EstablishmentMembership.Role.DIRECTOR,
+            }
+            or current_membership.establishment_id != establishment_id
+        ):
+            raise MembershipManagementForbiddenError
+        if establishment.status != Establishment.Status.ACTIVE:
+            raise InvalidMembershipInvitationInputError(
+                "Director invitations are only allowed for active establishments."
+            )
+    elif establishment.status == Establishment.Status.DRAFT:
         if current_membership.role not in {
             EstablishmentMembership.Role.OWNER,
             EstablishmentMembership.Role.DIRECTOR,
@@ -2168,7 +2192,20 @@ def _can_actor_manage_target_role(
     return target_role in allowed_targets
 
 
+_HARDCODED_INVITABLE_ROLES = frozenset(
+    {
+        EstablishmentMembership.Role.STAFF,
+        EstablishmentMembership.Role.MANAGER,
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }
+)
+
+
 def _can_actor_invite_role(*, actor_role: str, invited_role: str) -> bool:
+    if invited_role not in _HARDCODED_INVITABLE_ROLES:
+        return False
+
     allowed_targets = _INVITABLE_TARGET_ROLES_BY_ACTOR.get(actor_role)
     if allowed_targets is None:
         return False
@@ -2217,10 +2254,12 @@ _MANAGEABLE_TARGET_ROLES_BY_ACTOR = {
 _INVITABLE_TARGET_ROLES_BY_ACTOR = {
     EstablishmentMembership.Role.OWNER: {
         EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.STAFF,
     },
     EstablishmentMembership.Role.DIRECTOR: {
+        EstablishmentMembership.Role.DIRECTOR,
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.STAFF,
     },

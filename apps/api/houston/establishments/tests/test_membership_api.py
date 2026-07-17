@@ -547,6 +547,97 @@ def test_director_cannot_deactivate_owner_membership(api_client):
     assert response.json()["code"] == "membership_management_forbidden"
 
 
+def test_director_cannot_deactivate_another_director(api_client):
+    actor = create_user(username="director_peer_deactivate_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        name="Nice",
+    )
+    peer = EstablishmentMembership.objects.create(
+        user=create_user(username="peer_director_deactivate"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{peer.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+    peer.refresh_from_db()
+    assert peer.status == EstablishmentMembership.Status.ACTIVE
+
+
+def test_director_cannot_reactivate_another_director(api_client):
+    actor = create_user(username="director_peer_activate_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        name="Nice",
+    )
+    peer = EstablishmentMembership.objects.create(
+        user=create_user(username="peer_director_activate"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{peer.id}/activate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+    peer.refresh_from_db()
+    assert peer.status == EstablishmentMembership.Status.DEACTIVATED
+
+
+def test_director_cannot_patch_another_director(api_client):
+    actor = create_user(username="director_peer_patch_actor")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        name="Nice",
+    )
+    peer = EstablishmentMembership.objects.create(
+        user=create_user(username="peer_director_patch"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{peer.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.MANAGER},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+    peer.refresh_from_db()
+    assert peer.role == EstablishmentMembership.Role.DIRECTOR
+
+
 def test_director_can_patch_manager_membership(api_client):
     actor = create_user(username="director_patch_manager")
     actor_membership = create_membership(
