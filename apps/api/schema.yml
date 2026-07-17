@@ -3252,9 +3252,10 @@ paths:
   /api/v1/establishments/{establishment_id}/membership-invitations/:
     post:
       operationId: v1_establishments_membership_invitations_create
-      description: Invites a staff or manager member to the active establishment.
-        Returns a copyable invitation link; an invitation email is sent asynchronously
-        when enabled.
+      description: Invites a staff, manager, or organizational owner to the establishment.
+        Owner invitations require an active path establishment and fan out to all
+        draft and active establishments in the organization. Returns a copyable invitation
+        link; an invitation email is sent asynchronously when enabled.
       parameters:
       - in: path
         name: establishment_id
@@ -3472,7 +3473,9 @@ paths:
     post:
       operationId: v1_establishments_memberships_activate_create
       description: Activates one membership in the current active establishment context.
-        Invited memberships cannot be activated until the invitation is accepted.
+        Owner reactivation fans out across draft and active establishments in the
+        organization without issuing an invitation email. Invited memberships cannot
+        be activated until the invitation is accepted.
       parameters:
       - in: path
         name: establishment_id
@@ -3520,12 +3523,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/memberships/{membership_id}/deactivate/:
     post:
       operationId: v1_establishments_memberships_deactivate_create
       description: Deactivates one membership in the current active establishment
-        context. The last active owner cannot be deactivated.
+        context. Owner deactivation fans out across draft and active establishments
+        in the organization. The last full-coverage active owner cannot be deactivated.
       parameters:
       - in: path
         name: establishment_id
@@ -3573,6 +3583,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/notifications/:
     get:
@@ -4683,8 +4699,9 @@ paths:
     post:
       operationId: v1_invitations_accept_create
       description: Accepts an establishment invitation, sets the account password,
-        activates the user and membership, and creates an auth session. Requires a
-        valid Django CSRF cookie and X-CSRFToken header.
+        activates the user and membership, and creates an auth session. Owner invitations
+        activate all compatible owner/invited memberships in the same organization.
+        Requires a valid Django CSRF cookie and X-CSRFToken header.
       parameters:
       - in: path
         name: token
@@ -4723,6 +4740,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationAcceptErrorResponse'
           description: ''
         '429':
           content:

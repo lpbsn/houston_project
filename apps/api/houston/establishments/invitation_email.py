@@ -20,6 +20,7 @@ _INVITATION_EMAIL_ROLES = frozenset(
         EstablishmentMembership.Role.STAFF,
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.DIRECTOR,
+        EstablishmentMembership.Role.OWNER,
     }
 )
 
@@ -27,6 +28,7 @@ _ROLE_LABELS_FR = {
     EstablishmentMembership.Role.STAFF: "Staff",
     EstablishmentMembership.Role.MANAGER: "Manager",
     EstablishmentMembership.Role.DIRECTOR: "Directeur",
+    EstablishmentMembership.Role.OWNER: "Owner",
 }
 
 

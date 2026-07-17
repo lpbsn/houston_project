@@ -272,7 +272,7 @@ def test_apply_async_never_uses_delay(api_client):
 
 
 @override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)
-def test_owner_role_never_schedules_task():
+def test_owner_role_schedules_task():
     establishment = _create_establishment(name="Owner Role Hotel")
     owner = create_user(username="owner_role_user")
     membership = _create_membership(
@@ -293,7 +293,7 @@ def test_owner_role_never_schedules_task():
             raw_token="secret-token",
         )
 
-    apply_async.assert_not_called()
+    apply_async.assert_called_once()
 
 
 @override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)

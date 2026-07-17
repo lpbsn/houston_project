@@ -60,6 +60,7 @@ from houston.establishments.services import (
     EstablishmentInvitationAlreadyAcceptedError,
     EstablishmentInvitationExpiredError,
     InvalidEstablishmentInvitationError,
+    OrganizationalOwnerInvariantConflictError,
     accept_establishment_invitation,
 )
 
@@ -255,12 +256,14 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
             201: DirectorInvitationAcceptResponseSerializer,
             400: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=DirectorInvitationAcceptErrorResponseSerializer),
             429: _THROTTLED_OPENAPI_RESPONSE,
         },
         description=(
             "Accepts an establishment invitation, sets the account password, "
-            "activates the user and membership, and creates an auth session. Requires "
-            "a valid Django CSRF cookie and X-CSRFToken header."
+            "activates the user and membership, and creates an auth session. "
+            "Owner invitations activate all compatible owner/invited memberships in the "
+            "same organization. Requires a valid Django CSRF cookie and X-CSRFToken header."
         ),
     )
     def post(self, request, token: str):
@@ -301,6 +304,14 @@ class DirectorInvitationAcceptView(AuthRateLimitedMixin, APIView):
                     "detail": "This invitation is not valid.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OrganizationalOwnerInvariantConflictError as exc:
+            return Response(
+                {
+                    "code": "organizational_owner_invariant_conflict",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
 
         response = Response(result.payload, status=status.HTTP_201_CREATED)

@@ -971,7 +971,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Invites a staff or manager member to the active establishment. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
+        /** @description Invites a staff, manager, or organizational owner to the establishment. Owner invitations require an active path establishment and fan out to all draft and active establishments in the organization. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
         post: operations["v1_establishments_membership_invitations_create"];
         delete?: never;
         options?: never;
@@ -1023,7 +1023,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Activates one membership in the current active establishment context. Invited memberships cannot be activated until the invitation is accepted. */
+        /** @description Activates one membership in the current active establishment context. Owner reactivation fans out across draft and active establishments in the organization without issuing an invitation email. Invited memberships cannot be activated until the invitation is accepted. */
         post: operations["v1_establishments_memberships_activate_create"];
         delete?: never;
         options?: never;
@@ -1040,7 +1040,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Deactivates one membership in the current active establishment context. The last active owner cannot be deactivated. */
+        /** @description Deactivates one membership in the current active establishment context. Owner deactivation fans out across draft and active establishments in the organization. The last full-coverage active owner cannot be deactivated. */
         post: operations["v1_establishments_memberships_deactivate_create"];
         delete?: never;
         options?: never;
@@ -1421,7 +1421,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. Requires a valid Django CSRF cookie and X-CSRFToken header. */
+        /** @description Accepts an establishment invitation, sets the account password, activates the user and membership, and creates an auth session. Owner invitations activate all compatible owner/invited memberships in the same organization. Requires a valid Django CSRF cookie and X-CSRFToken header. */
         post: operations["v1_invitations_accept_create"];
         delete?: never;
         options?: never;
@@ -6679,6 +6679,14 @@ export interface operations {
                     "application/json": components["schemas"]["DetailResponse"];
                 };
             };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
         };
     };
     v1_establishments_memberships_deactivate_create: {
@@ -6731,6 +6739,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
                 };
             };
         };
@@ -7882,6 +7898,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationAcceptErrorResponse"];
                 };
             };
             429: {
