@@ -35,6 +35,7 @@ from .constants import CHAT_GROUP_TITLE_MAX_LENGTH, CHAT_MESSAGE_BODY_MAX_LENGTH
 from .ws_notify import (
     schedule_conversation_access_revoked,
     schedule_conversation_access_revoked_for_memberships,
+    schedule_conversation_updated,
     schedule_membership_access_revoked,
 )
 
@@ -102,6 +103,46 @@ def _ensure_group_has_admin(*, conversation: ChatConversation) -> None:
     oldest.save(update_fields=["role", "updated_at"])
 
 
+def _lock_conversation(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+) -> ChatConversation | None:
+    return (
+        ChatConversation.objects.select_for_update()
+        .filter(
+            id=conversation_id,
+            establishment_id=establishment_id,
+            deleted_at__isnull=True,
+        )
+        .first()
+    )
+
+
+def _require_locked_group_for_actor(
+    *,
+    actor_membership: EstablishmentMembership,
+    conversation_id: uuid.UUID,
+) -> ChatConversation:
+    conversation = _lock_conversation(
+        establishment_id=actor_membership.establishment_id,
+        conversation_id=conversation_id,
+    )
+    if conversation is None:
+        raise ChatNotFoundError()
+    if (
+        get_active_participant(
+            conversation_id=conversation.id,
+            membership_id=actor_membership.id,
+        )
+        is None
+    ):
+        raise ChatNotFoundError()
+    if conversation.type != ChatConversation.Type.GROUP:
+        raise ChatValidationError("Only groups support participant management.")
+    return conversation
+
+
 @transaction.atomic
 def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) -> None:
     establishment_id = membership.establishment_id
@@ -125,24 +166,40 @@ def handle_membership_chat_deactivation(*, membership: EstablishmentMembership) 
         )
         conversation.delete()
 
-    active_group_participants = list(
+    group_conversation_ids = list(
         ChatParticipant.objects.filter(
             membership_id=membership_id,
             left_at__isnull=True,
             conversation__establishment_id=establishment_id,
             conversation__type=ChatConversation.Type.GROUP,
             conversation__deleted_at__isnull=True,
-        ).select_related("conversation")
+        )
+        .order_by("conversation_id")
+        .values_list("conversation_id", flat=True)
+        .distinct()
     )
     now = timezone.now()
-    for participant in active_group_participants:
+    for conversation_id in group_conversation_ids:
+        conversation = _lock_conversation(
+            establishment_id=establishment_id,
+            conversation_id=conversation_id,
+        )
+        if conversation is None:
+            continue
+        participant = get_active_participant(
+            conversation_id=conversation.id,
+            membership_id=membership_id,
+        )
+        if participant is None:
+            continue
         participant.left_at = now
-        participant.save(update_fields=["left_at", "updated_at"])
-        _ensure_group_has_admin(conversation=participant.conversation)
+        participant.pinned_at = None
+        participant.save(update_fields=["left_at", "pinned_at", "updated_at"])
+        _ensure_group_has_admin(conversation=conversation)
         schedule_conversation_access_revoked(
             establishment_id=establishment_id,
             membership_id=membership_id,
-            conversation_id=participant.conversation_id,
+            conversation_id=conversation.id,
             reason="membership_deactivated",
         )
 
@@ -365,15 +422,10 @@ def add_group_participant(
     conversation_id: uuid.UUID,
     target_membership_id: uuid.UUID,
 ) -> ChatParticipant:
-    conversation = get_conversation_for_participant(
-        establishment_id=actor_membership.establishment_id,
+    conversation = _require_locked_group_for_actor(
+        actor_membership=actor_membership,
         conversation_id=conversation_id,
-        membership_id=actor_membership.id,
     )
-    if conversation is None:
-        raise ChatNotFoundError()
-    if conversation.type != ChatConversation.Type.GROUP:
-        raise ChatValidationError("Participants can only be added to groups.")
     if not can_manage_group(actor_membership, conversation):
         raise ChatPermissionError()
 
@@ -381,23 +433,35 @@ def add_group_participant(
         actor_membership,
         target_membership_id=target_membership_id,
     )
-    existing = ChatParticipant.objects.filter(
-        conversation=conversation,
-        membership=target_membership,
-    ).first()
+    existing = (
+        ChatParticipant.objects.select_for_update()
+        .filter(
+            conversation=conversation,
+            membership=target_membership,
+        )
+        .first()
+    )
     if existing is not None and existing.left_at is None:
         raise ChatValidationError("Membership is already an active participant.")
     if existing is not None:
         existing.left_at = None
         existing.role = ChatParticipant.Role.MEMBER
-        existing.save(update_fields=["left_at", "role", "updated_at"])
-        return existing
+        existing.pinned_at = None
+        existing.save(update_fields=["left_at", "role", "pinned_at", "updated_at"])
+        participant = existing
+    else:
+        participant = _create_participant(
+            conversation=conversation,
+            membership=target_membership,
+            role=ChatParticipant.Role.MEMBER,
+        )
 
-    return _create_participant(
-        conversation=conversation,
-        membership=target_membership,
-        role=ChatParticipant.Role.MEMBER,
+    schedule_conversation_updated(
+        establishment_id=conversation.establishment_id,
+        conversation_id=conversation.id,
+        membership_ids=_active_participant_membership_ids(conversation_id=conversation.id),
     )
+    return participant
 
 
 @transaction.atomic
@@ -407,15 +471,10 @@ def remove_group_participant(
     conversation_id: uuid.UUID,
     target_membership_id: uuid.UUID,
 ) -> ChatParticipant:
-    conversation = get_conversation_for_participant(
-        establishment_id=actor_membership.establishment_id,
+    conversation = _require_locked_group_for_actor(
+        actor_membership=actor_membership,
         conversation_id=conversation_id,
-        membership_id=actor_membership.id,
     )
-    if conversation is None:
-        raise ChatNotFoundError()
-    if conversation.type != ChatConversation.Type.GROUP:
-        raise ChatValidationError("Participants can only be removed from groups.")
     if not can_manage_group(actor_membership, conversation):
         raise ChatPermissionError()
 
@@ -430,13 +489,19 @@ def remove_group_participant(
 
     now = timezone.now()
     participant.left_at = now
-    participant.save(update_fields=["left_at", "updated_at"])
+    participant.pinned_at = None
+    participant.save(update_fields=["left_at", "pinned_at", "updated_at"])
     _ensure_group_has_admin(conversation=conversation)
     schedule_conversation_access_revoked(
         establishment_id=conversation.establishment_id,
         membership_id=target_membership_id,
         conversation_id=conversation.id,
         reason="participant_removed",
+    )
+    schedule_conversation_updated(
+        establishment_id=conversation.establishment_id,
+        conversation_id=conversation.id,
+        membership_ids=_active_participant_membership_ids(conversation_id=conversation.id),
     )
     return participant
 
@@ -448,15 +513,10 @@ def promote_group_participant(
     conversation_id: uuid.UUID,
     target_membership_id: uuid.UUID,
 ) -> ChatParticipant:
-    conversation = get_conversation_for_participant(
-        establishment_id=actor_membership.establishment_id,
+    conversation = _require_locked_group_for_actor(
+        actor_membership=actor_membership,
         conversation_id=conversation_id,
-        membership_id=actor_membership.id,
     )
-    if conversation is None:
-        raise ChatNotFoundError()
-    if conversation.type != ChatConversation.Type.GROUP:
-        raise ChatValidationError("Only group participants can be promoted.")
     if not can_manage_group(actor_membership, conversation):
         raise ChatPermissionError()
 
@@ -469,6 +529,11 @@ def promote_group_participant(
 
     participant.role = ChatParticipant.Role.ADMIN
     participant.save(update_fields=["role", "updated_at"])
+    schedule_conversation_updated(
+        establishment_id=conversation.establishment_id,
+        conversation_id=conversation.id,
+        membership_ids=_active_participant_membership_ids(conversation_id=conversation.id),
+    )
     return participant
 
 
@@ -478,15 +543,10 @@ def leave_group_conversation(
     actor_membership: EstablishmentMembership,
     conversation_id: uuid.UUID,
 ) -> ChatParticipant:
-    conversation = get_conversation_for_participant(
-        establishment_id=actor_membership.establishment_id,
+    conversation = _require_locked_group_for_actor(
+        actor_membership=actor_membership,
         conversation_id=conversation_id,
-        membership_id=actor_membership.id,
     )
-    if conversation is None:
-        raise ChatNotFoundError()
-    if conversation.type != ChatConversation.Type.GROUP:
-        raise ChatValidationError("Only groups can be left.")
 
     participant = get_active_participant(
         conversation_id=conversation.id,
@@ -505,6 +565,11 @@ def leave_group_conversation(
         membership_id=actor_membership.id,
         conversation_id=conversation.id,
         reason="participant_left",
+    )
+    schedule_conversation_updated(
+        establishment_id=conversation.establishment_id,
+        conversation_id=conversation.id,
+        membership_ids=_active_participant_membership_ids(conversation_id=conversation.id),
     )
     return participant
 

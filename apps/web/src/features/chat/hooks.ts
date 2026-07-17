@@ -4,10 +4,12 @@ import {
   useQuery,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
 import {
+  addGroupParticipant,
   chatQueryKeys,
   createDmConversation,
   createGroupConversation,
@@ -21,6 +23,8 @@ import {
   leaveGroupConversation,
   markConversationSeen,
   pinConversation,
+  promoteGroupParticipant,
+  removeGroupParticipant,
   unpinConversation,
 } from './api'
 import { applyChatAvailabilityFromStatus } from './lib/apply-chat-availability-cache'
@@ -173,19 +177,81 @@ export function useChatMessagesInfiniteQuery(
 export function useEligibleChatMembershipsQuery(
   establishmentId: string | null,
   query: string,
-  options: { enabled?: boolean } = {},
+  options: { enabled?: boolean; conversationId?: string | null } = {},
 ) {
+  const conversationId = options.conversationId ?? null
   return useQuery({
     queryKey: establishmentId
-      ? chatQueryKeys.eligibleMemberships(establishmentId, query)
+      ? chatQueryKeys.eligibleMemberships(establishmentId, query, conversationId)
       : ['chat', 'eligible-memberships', 'none'],
     queryFn: () => {
       if (!establishmentId) {
         throw new Error('Établissement non sélectionné.')
       }
-      return fetchEligibleChatMemberships(establishmentId, query)
+      return fetchEligibleChatMemberships(establishmentId, query, { conversationId })
     },
     enabled: Boolean(establishmentId) && (options.enabled ?? true),
+  })
+}
+
+export function invalidateConversationStructureQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+  conversationId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: chatQueryKeys.conversations(establishmentId) })
+  void queryClient.invalidateQueries({
+    queryKey: chatQueryKeys.conversation(establishmentId, conversationId),
+  })
+}
+
+export function useAddGroupParticipantMutation(
+  establishmentId: string | null,
+  conversationId: string | null,
+) {
+  return useMutation({
+    mutationFn: async (membershipId: string) => {
+      if (!establishmentId || !conversationId) {
+        throw new Error('Conversation introuvable.')
+      }
+      await addGroupParticipant(establishmentId, conversationId, membershipId)
+    },
+  })
+}
+
+export function useRemoveGroupParticipantMutation(
+  establishmentId: string | null,
+  conversationId: string | null,
+) {
+  return useMutation({
+    mutationFn: async (membershipId: string) => {
+      if (!establishmentId || !conversationId) {
+        throw new Error('Conversation introuvable.')
+      }
+      await removeGroupParticipant(establishmentId, conversationId, membershipId)
+    },
+  })
+}
+
+export function usePromoteGroupParticipantMutation(
+  establishmentId: string | null,
+  conversationId: string | null,
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (membershipId: string) => {
+      if (!establishmentId || !conversationId) {
+        throw new Error('Conversation introuvable.')
+      }
+      await promoteGroupParticipant(establishmentId, conversationId, membershipId)
+    },
+    onSuccess: () => {
+      if (!establishmentId || !conversationId) {
+        return
+      }
+      invalidateConversationStructureQueries(queryClient, establishmentId, conversationId)
+    },
   })
 }
 

@@ -54,6 +54,13 @@ def build_conversation_access_revoked_payload(
     }
 
 
+def build_conversation_updated_payload(*, conversation_id: UUID) -> dict:
+    return {
+        "type": "conversation.updated",
+        "conversation_id": str(conversation_id),
+    }
+
+
 def build_membership_access_revoked_payload(*, reason: str) -> dict:
     return {
         "type": "access.revoked",

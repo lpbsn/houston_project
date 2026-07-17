@@ -4,7 +4,7 @@ Status: authoritative
 Last reviewed: 2026-06-09
 Implementation status: **implemented_core** (Lots 2–6 done — REST, WS messages, Terrain UI, purge, hardening ; Lot 7 doc alignment)
 
-**Dettes techniques actives** : post-MVP product gaps documented in this domain doc (P0/Lot 6 closed ; group settings UI, bootstrap flag, and related items remain open).
+**Dettes techniques actives** : post-MVP product gaps documented in this domain doc (P0/Lot 6 closed ; Lot 1–2 conversation/member admin UI live ; bootstrap flag and related items remain open).
 
 ## 1. Purpose
 
@@ -63,14 +63,16 @@ Chat V1 is **not** a single establishment-wide general chat room.
   - `message.rejected`
   - `access.revoked` (global Chat WS access loss — closes socket)
   - `conversation.access_revoked` (targeted to the affected user only — does **not** close global socket)
-- **Not allowed** in V1 : `conversation.updated` broadcast, typing, read/delivered events, notification events.
+  - `conversation.updated` (structure invalidation hint after add/promote/remove/leave — to remaining active participants only ; `{ conversation_id }` only ; no sensitive payload)
+- **Not allowed** in V1 : typing, read/delivered events, notification events.
 
-#### `access.revoked` vs `conversation.access_revoked`
+#### `access.revoked` vs `conversation.access_revoked` vs `conversation.updated`
 
 | Event | Meaning | Client behavior |
 |-------|---------|-----------------|
 | `access.revoked` | Global Chat WS access is no longer valid | Stop auto-reconnect ; close current Chat socket ; purge/invalidate Chat queries |
 | `conversation.access_revoked` | Loss of access to one conversation only | Leave active conversation route if needed ; keep socket open |
+| `conversation.updated` | Conversation structure changed (add/promote/remove/leave) for remaining actives | Invalidate conversation list + detail for that id ; keep socket open |
 
 Supported `access.revoked` `reason` values :
 
@@ -227,8 +229,8 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 - `POST conversations/{id}/seen/`
 - `POST conversations/{id}/pin/` / `DELETE conversations/{id}/pin/`
 - `POST conversations/{id}/hide/` (DM only)
-- `GET eligible-memberships/`
-- Participant management endpoints (add, remove, promote, leave)
+- `GET eligible-memberships/` (optional `conversation_id` excludes active group participants before the 100-item limit)
+- Participant management endpoints (add, remove, promote, leave) — group admin only ; mutations lock the conversation row to keep ≥1 admin
 - `PATCH settings/` (`chat_enabled` toggle)
 
 **No** `POST conversations/{id}/messages/` in V1.
@@ -251,7 +253,9 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 
 - Route `/chat` ; mobile-first Terrain UI (WhatsApp-inspired), not a parallel design system.
 - TanStack Query : conversations, messages, eligible-memberships, seen mutations.
+- Group detail (`/chat/:id`) : when `can_manage`, show « Gérer les membres » (add/remove multi-select sequential ops with partial-failure summary ; promote with confirm).
 - WebSocket : message send + receive ; failed send → local `failed` state → retry after reconnect (WS only).
+- On `conversation.updated` : invalidate conversations list + that conversation detail.
 - Reconnect : new ws-ticket ; refetch conversations and open conversation messages.
 - No localStorage/sessionStorage for tokens or chat payloads.
 - No read-receipt UI ; minimal unread badge only.
@@ -261,7 +265,7 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 ## 11. AI Agent Notes
 
 - Inspect `apps/api/schema.yml` for the current Chat REST surface (implemented).
-- Inspect §1–§10 of this doc for remaining post-core gaps (events, group settings UI, bootstrap flag).
+- Inspect §1–§10 of this doc for remaining post-core gaps (bootstrap flag, no REST message write).
 - Inspect [`realtime_domain.md`](realtime_domain.md) for Chat vs global realtime boundary.
 - Inspect [`authentication_charter.md`](../../architecture/authentication_charter.md) before WebSocket auth work.
 - Inspect [`rbac_permissions_domain.md`](rbac_permissions_domain.md) and [`identity_membership_domain.md`](identity_membership_domain.md) for eligibility.

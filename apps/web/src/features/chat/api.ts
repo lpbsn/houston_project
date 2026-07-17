@@ -20,8 +20,11 @@ export const chatQueryKeys = {
     ['chat', 'conversation', establishmentId, conversationId] as const,
   messages: (establishmentId: string, conversationId: string) =>
     ['chat', 'messages', establishmentId, conversationId] as const,
-  eligibleMemberships: (establishmentId: string, query: string) =>
-    ['chat', 'eligible-memberships', establishmentId, query] as const,
+  eligibleMemberships: (
+    establishmentId: string,
+    query: string,
+    conversationId: string | null = null,
+  ) => ['chat', 'eligible-memberships', establishmentId, conversationId, query] as const,
 }
 
 export class ChatApiError extends Error {
@@ -153,13 +156,23 @@ export async function fetchChatMessages(
 export async function fetchEligibleChatMemberships(
   establishmentId: string,
   query: string,
+  options: { conversationId?: string | null } = {},
 ): Promise<ChatEligibleMembershipsResponse> {
+  const queryParams: { q?: string; conversation_id?: string } = {}
+  const trimmed = query.trim()
+  if (trimmed) {
+    queryParams.q = trimmed
+  }
+  if (options.conversationId) {
+    queryParams.conversation_id = options.conversationId
+  }
+
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.GET('/api/v1/establishments/{establishment_id}/chat/eligible-memberships/', {
         params: {
           ...chatPathParams(establishmentId),
-          query: query.trim() ? { q: query.trim() } : undefined,
+          query: Object.keys(queryParams).length > 0 ? queryParams : undefined,
         },
         headers: getAuthHeaders(accessToken),
       }),
@@ -167,6 +180,87 @@ export async function fetchEligibleChatMemberships(
   )
 
   return assertChatData<ChatEligibleMembershipsResponse>(result)
+}
+
+export async function addGroupParticipant(
+  establishmentId: string,
+  conversationId: string,
+  membershipId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/',
+        {
+          params: conversationPathParams(establishmentId, conversationId),
+          headers: getAuthHeaders(accessToken),
+          body: {
+            membership_id: membershipId,
+          },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
+export async function removeGroupParticipant(
+  establishmentId: string,
+  conversationId: string,
+  membershipId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.DELETE(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/{membership_id}/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              conversation_id: conversationId,
+              membership_id: membershipId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
+export async function promoteGroupParticipant(
+  establishmentId: string,
+  conversationId: string,
+  membershipId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/participants/{membership_id}/promote/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              conversation_id: conversationId,
+              membership_id: membershipId,
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
 }
 
 export async function createDmConversation(

@@ -6404,6 +6404,8 @@ export interface operations {
     v1_establishments_chat_eligible_memberships_retrieve: {
         parameters: {
             query?: {
+                /** @description When set, exclude active participants of this group conversation before applying the result limit. */
+                conversation_id?: string;
                 q?: string;
             };
             header?: never;
@@ -6420,6 +6422,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatEligibleMembershipsResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             401: {

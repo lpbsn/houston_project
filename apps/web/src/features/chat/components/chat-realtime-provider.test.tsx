@@ -4,21 +4,28 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { chatQueryKeys } from '../api'
-import type { ChatConversationListItem, ChatWsMessageCreatedEvent } from '../types'
+import type {
+  ChatConversationListItem,
+  ChatWsConversationUpdatedEvent,
+  ChatWsMessageCreatedEvent,
+} from '../types'
 import { ChatRealtimeProvider } from './chat-realtime-provider'
 
 const ESTABLISHMENT_ID = 'est-1'
 const VIEWER_MEMBERSHIP_ID = 'mbr-viewer'
 
 let capturedOnMessageCreated: ((event: ChatWsMessageCreatedEvent) => void) | undefined
+let capturedOnConversationUpdated: ((event: ChatWsConversationUpdatedEvent) => void) | undefined
 let capturedOnReconnect: (() => void) | undefined
 
 vi.mock('../hooks/use-chat-websocket', () => ({
   useChatWebSocket: (options: {
     onMessageCreated?: (event: ChatWsMessageCreatedEvent) => void
+    onConversationUpdated?: (event: ChatWsConversationUpdatedEvent) => void
     onReconnect?: () => void
   }) => {
     capturedOnMessageCreated = options.onMessageCreated
+    capturedOnConversationUpdated = options.onConversationUpdated
     capturedOnReconnect = options.onReconnect
     return {
       connectionStatus: 'connected',
@@ -72,6 +79,7 @@ const sampleConversation = (): ChatConversationListItem => ({
 describe('ChatRealtimeProvider', () => {
   beforeEach(() => {
     capturedOnMessageCreated = undefined
+    capturedOnConversationUpdated = undefined
     capturedOnReconnect = undefined
   })
 
@@ -187,6 +195,92 @@ describe('ChatRealtimeProvider', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: chatQueryKeys.messages(ESTABLISHMENT_ID, 'conv-active'),
+    })
+  })
+
+  it('invalidates list and detail on conversation.updated', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(ChatRealtimeProvider, {
+          establishmentId: ESTABLISHMENT_ID,
+          activeConversationId: null,
+        }),
+      ),
+    )
+
+    capturedOnConversationUpdated?.({
+      type: 'conversation.updated',
+      conversation_id: 'conv-added',
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: chatQueryKeys.conversations(ESTABLISHMENT_ID),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: chatQueryKeys.conversation(ESTABLISHMENT_ID, 'conv-added'),
+    })
+  })
+
+  it('invalidates list and detail so auto-promoted clients can refetch can_manage', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const conversationId = 'conv-auto-promote'
+
+    queryClient.setQueryData(chatQueryKeys.conversations(ESTABLISHMENT_ID), {
+      items: [
+        {
+          ...sampleConversation(),
+          id: conversationId,
+          type: 'group',
+          title: 'Shift',
+          can_delete: false,
+        },
+      ],
+    })
+    queryClient.setQueryData(chatQueryKeys.conversation(ESTABLISHMENT_ID, conversationId), {
+      id: conversationId,
+      type: 'group',
+      title: 'Shift',
+      created_at: '2026-06-01T09:00:00.000Z',
+      last_message_at: null,
+      unread: false,
+      participants: [],
+      can_manage: false,
+      can_delete: false,
+      pinned: false,
+    })
+
+    renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(ChatRealtimeProvider, {
+          establishmentId: ESTABLISHMENT_ID,
+          activeConversationId: conversationId,
+        }),
+      ),
+    )
+
+    capturedOnConversationUpdated?.({
+      type: 'conversation.updated',
+      conversation_id: conversationId,
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(2)
+    expect(invalidateSpy).toHaveBeenNthCalledWith(1, {
+      queryKey: chatQueryKeys.conversations(ESTABLISHMENT_ID),
+    })
+    expect(invalidateSpy).toHaveBeenNthCalledWith(2, {
+      queryKey: chatQueryKeys.conversation(ESTABLISHMENT_ID, conversationId),
     })
   })
 })

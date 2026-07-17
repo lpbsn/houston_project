@@ -113,6 +113,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_conversation_access_revoked(self, event: dict) -> None:
         await self.send(text_data=json.dumps(event["payload"]))
 
+    async def chat_conversation_updated(self, event: dict) -> None:
+        await self.send(text_data=json.dumps(event["payload"]))
+
     async def chat_membership_access_revoked(self, event: dict) -> None:
         await self._revoke_access_and_close(event["payload"].get("reason", "access_denied"))
 

@@ -4,6 +4,7 @@ export type ChatStatus = components['schemas']['ChatStatus']
 export type ChatConversationListItem = components['schemas']['ChatConversationListItem']
 export type ChatConversationListResponse = components['schemas']['ChatConversationListResponse']
 export type ChatConversationDetail = components['schemas']['ChatConversationDetail']
+export type ChatParticipantSummary = components['schemas']['ChatParticipantSummary']
 export type ChatMessage = components['schemas']['ChatMessage']
 export type ChatMessageListResponse = components['schemas']['ChatMessageListResponse']
 export type ChatEligibleMembership = components['schemas']['ChatMembershipSummary']
@@ -54,6 +55,11 @@ export type ChatWsConversationAccessRevokedEvent = {
   reason: string
 }
 
+export type ChatWsConversationUpdatedEvent = {
+  type: 'conversation.updated'
+  conversation_id: string
+}
+
 /** @deprecated Use ChatWsConversationAccessRevokedEvent */
 export type ChatWsAccessRevokedEvent = ChatWsConversationAccessRevokedEvent
 
@@ -62,5 +68,6 @@ export type ChatWsServerEvent =
   | ChatWsMessageRejectedEvent
   | ChatWsGlobalAccessRevokedEvent
   | ChatWsConversationAccessRevokedEvent
+  | ChatWsConversationUpdatedEvent
   | { type: 'auth.ok' }
   | { type: 'error'; code?: string; detail?: string }

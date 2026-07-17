@@ -737,9 +737,21 @@ class ChatEligibleMembershipsView(EstablishmentScopedChatMixin, APIView):
 
     @extend_schema(
         tags=["chat"],
-        parameters=[OpenApiParameter(name="q", required=False, type=str)],
+        parameters=[
+            OpenApiParameter(name="q", required=False, type=str),
+            OpenApiParameter(
+                name="conversation_id",
+                required=False,
+                type=uuid.UUID,
+                description=(
+                    "When set, exclude active participants of this group conversation "
+                    "before applying the result limit."
+                ),
+            ),
+        ],
         responses={
             200: ChatEligibleMembershipsResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -763,9 +775,40 @@ class ChatEligibleMembershipsView(EstablishmentScopedChatMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        exclude_active_conversation_id = None
+        raw_conversation_id = request.query_params.get("conversation_id")
+        if raw_conversation_id:
+            try:
+                conversation_id = uuid.UUID(str(raw_conversation_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {
+                        "code": "validation_error",
+                        "detail": "conversation_id must be a valid UUID.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            conversation = get_conversation_for_participant(
+                establishment_id=self.establishment_id,
+                conversation_id=conversation_id,
+                membership_id=membership.id,
+            )
+            if conversation is None:
+                return _chat_error_response(ChatNotFoundError())
+            if conversation.type != ChatConversation.Type.GROUP:
+                return Response(
+                    {
+                        "code": "validation_error",
+                        "detail": "conversation_id must refer to a group conversation.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            exclude_active_conversation_id = conversation.id
+
         memberships = get_eligible_chat_memberships_queryset(
             establishment_id=self.establishment_id,
             query=query,
+            exclude_active_conversation_id=exclude_active_conversation_id,
         ).exclude(id=membership.id)
         items = [serialize_membership_summary(item) for item in memberships[:100]]
         return Response(ChatEligibleMembershipsResponseSerializer({"items": items}).data)

@@ -4,6 +4,7 @@ import { issueChatWsTicket } from '../api'
 import type {
   ChatConnectionStatus,
   ChatWsConversationAccessRevokedEvent,
+  ChatWsConversationUpdatedEvent,
   ChatWsGlobalAccessRevokedEvent,
   ChatWsMessageCreatedEvent,
   ChatWsMessageRejectedEvent,
@@ -51,6 +52,7 @@ type UseChatWebSocketOptions = {
   onMessageRejected?: (event: ChatWsMessageRejectedEvent) => void
   onGlobalAccessRevoked?: (event: ChatWsGlobalAccessRevokedEvent) => void
   onConversationAccessRevoked?: (event: ChatWsConversationAccessRevokedEvent) => void
+  onConversationUpdated?: (event: ChatWsConversationUpdatedEvent) => void
   onReconnect?: () => void
 }
 
@@ -61,6 +63,7 @@ export function useChatWebSocket({
   onMessageRejected,
   onGlobalAccessRevoked,
   onConversationAccessRevoked,
+  onConversationUpdated,
   onReconnect,
 }: UseChatWebSocketOptions) {
   const [connectionStatus, setConnectionStatusState] = useState<ChatConnectionStatus>('idle')
@@ -83,6 +86,7 @@ export function useChatWebSocket({
   const onMessageRejectedRef = useRef(onMessageRejected)
   const onGlobalAccessRevokedRef = useRef(onGlobalAccessRevoked)
   const onConversationAccessRevokedRef = useRef(onConversationAccessRevoked)
+  const onConversationUpdatedRef = useRef(onConversationUpdated)
   const onReconnectRef = useRef(onReconnect)
 
   useEffect(() => {
@@ -94,9 +98,11 @@ export function useChatWebSocket({
     onMessageRejectedRef.current = onMessageRejected
     onGlobalAccessRevokedRef.current = onGlobalAccessRevoked
     onConversationAccessRevokedRef.current = onConversationAccessRevoked
+    onConversationUpdatedRef.current = onConversationUpdated
     onReconnectRef.current = onReconnect
   }, [
     onConversationAccessRevoked,
+    onConversationUpdated,
     onGlobalAccessRevoked,
     onMessageCreated,
     onMessageRejected,
@@ -232,6 +238,11 @@ export function useChatWebSocket({
 
         if (parsed.type === 'conversation.access_revoked') {
           onConversationAccessRevokedRef.current?.(parsed)
+          return
+        }
+
+        if (parsed.type === 'conversation.updated') {
+          onConversationUpdatedRef.current?.(parsed)
         }
       }
 
