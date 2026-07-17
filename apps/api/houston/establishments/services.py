@@ -1588,6 +1588,7 @@ def _accept_organizational_owner_invitation(
     if user.status != User.Status.PENDING:
         raise InvalidEstablishmentInvitationError
 
+    # Re-read draft/active under the organization lock (do not trust pre-lock ids alone).
     establishments = org_establishments_draft_active(organization_id=organization_id)
     memberships_by_establishment_id = {
         row.establishment_id: row
@@ -1600,12 +1601,28 @@ def _accept_organizational_owner_invitation(
     for establishment in establishments:
         target = memberships_by_establishment_id.get(establishment.id)
         if target is None:
+            try:
+                target = _create_invited_membership(
+                    user=user,
+                    establishment=establishment,
+                    role=EstablishmentMembership.Role.OWNER,
+                )
+            except DirectorInvitationDuplicateError:
+                target = EstablishmentMembership.objects.filter(
+                    user=user,
+                    establishment=establishment,
+                ).first()
+                if (
+                    target is None
+                    or target.role != EstablishmentMembership.Role.OWNER
+                    or target.status != EstablishmentMembership.Status.INVITED
+                ):
+                    raise OrganizationalOwnerInvariantConflictError
+        elif target.role != EstablishmentMembership.Role.OWNER:
             raise OrganizationalOwnerInvariantConflictError
-        if target.role != EstablishmentMembership.Role.OWNER:
+        elif target.status == EstablishmentMembership.Status.ACTIVE:
             raise OrganizationalOwnerInvariantConflictError
-        if target.status == EstablishmentMembership.Status.ACTIVE:
-            raise OrganizationalOwnerInvariantConflictError
-        if target.status != EstablishmentMembership.Status.INVITED:
+        elif target.status != EstablishmentMembership.Status.INVITED:
             raise OrganizationalOwnerInvariantConflictError
         memberships_to_activate.append(target)
 
@@ -1613,9 +1630,16 @@ def _accept_organizational_owner_invitation(
     user.status = User.Status.ACTIVE
     user.save(update_fields=["password", "status", "updated_at"])
 
+    from houston.realtime.broadcast import schedule_access_event
+
     for target in memberships_to_activate:
         target.status = EstablishmentMembership.Status.ACTIVE
         target.save(update_fields=["status", "updated_at"])
+        schedule_access_event(
+            reason="membership.updated",
+            establishment_id=target.establishment_id,
+            membership_id=target.id,
+        )
 
     invitation.accepted_at = now
     invitation.save(update_fields=["accepted_at", "updated_at"])
@@ -2548,6 +2572,13 @@ def _deactivate_organizational_owner(
             establishment_id__in=establishment_ids,
         ).values_list("id", flat=True)
     )
+    pending_invitation_ids = list(
+        EstablishmentInvitation.objects.filter(
+            membership_id__in=target_membership_ids,
+            accepted_at__isnull=True,
+            revoked_at__isnull=True,
+        ).values_list("id", flat=True)
+    )
 
     organization = _lock_organization(organization_id=organization_id)
     other_membership_ids = [
@@ -2560,6 +2591,7 @@ def _deactivate_organizational_owner(
         anchor_membership_id=anchor_membership_id,
         other_membership_ids=other_membership_ids,
     )
+    _lock_invitations_for_owner_workflow(invitation_ids=pending_invitation_ids)
 
     actor = locked["actor"]
     anchor = locked["anchor"]
@@ -2582,8 +2614,6 @@ def _deactivate_organizational_owner(
         actor.role != EstablishmentMembership.Role.OWNER
         or actor.status != EstablishmentMembership.Status.ACTIVE
     ):
-        raise OrganizationalOwnerInvariantConflictError
-    if anchor.user.status != User.Status.ACTIVE:
         raise OrganizationalOwnerInvariantConflictError
 
     establishments = org_establishments_draft_active(organization_id=organization_id)
@@ -2615,7 +2645,34 @@ def _deactivate_organizational_owner(
     if target_statuses == {EstablishmentMembership.Status.DEACTIVATED}:
         return _reload_membership_for_response(anchor.id)
 
+    from houston.chat.services import handle_membership_chat_deactivation
+    from houston.realtime.broadcast import schedule_access_event
+
+    if target_statuses == {EstablishmentMembership.Status.INVITED}:
+        if anchor.user.status != User.Status.PENDING:
+            raise OrganizationalOwnerInvariantConflictError
+
+        for target in target_memberships:
+            target.status = EstablishmentMembership.Status.DEACTIVATED
+            target.save(update_fields=["status", "updated_at"])
+            _revoke_pending_invitations(membership=target)
+            handle_membership_chat_deactivation(membership=target)
+            schedule_access_event(
+                reason="membership.deactivated",
+                establishment_id=target.establishment_id,
+                membership_id=target.id,
+            )
+
+        _clear_selected_establishments_for_org_owner(
+            user_id=target_user_id,
+            establishment_ids=establishment_id_list,
+        )
+        return _reload_membership_for_response(anchor.id)
+
     if target_statuses != {EstablishmentMembership.Status.ACTIVE}:
+        raise OrganizationalOwnerInvariantConflictError
+
+    if anchor.user.status != User.Status.ACTIVE:
         raise OrganizationalOwnerInvariantConflictError
 
     if not _has_other_full_coverage_active_org_owner(
@@ -2623,9 +2680,6 @@ def _deactivate_organizational_owner(
         establishments=establishments,
     ):
         raise CannotDeactivateLastActiveOwnerError
-
-    from houston.chat.services import handle_membership_chat_deactivation
-    from houston.realtime.broadcast import schedule_access_event
 
     for target in target_memberships:
         target.status = EstablishmentMembership.Status.DEACTIVATED

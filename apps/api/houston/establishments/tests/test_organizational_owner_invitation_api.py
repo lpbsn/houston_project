@@ -560,28 +560,25 @@ def test_accept_owner_activates_all_org_invited_memberships(api_client):
         membership_status=EstablishmentMembership.Status.INVITED,
     )
 
-    accept_response = post_accept(APIClient(enforce_csrf_checks=True), token=token)
+    with patch("houston.realtime.broadcast.schedule_access_event") as access_mock:
+        accept_response = post_accept(APIClient(enforce_csrf_checks=True), token=token)
     assert accept_response.status_code == 201, accept_response.json()
     assert str(accept_response.data["establishment_id"]) == str(active_a.id)
 
     invitee.refresh_from_db()
     assert invitee.status == User.Status.ACTIVE
 
-    assert (
-        EstablishmentMembership.objects.get(
-            user=invitee,
-            establishment=active_a,
-            role=ROLE_OWNER,
-        ).status
-        == EstablishmentMembership.Status.ACTIVE
+    membership_a = EstablishmentMembership.objects.get(
+        user=invitee,
+        establishment=active_a,
+        role=ROLE_OWNER,
     )
-    assert (
-        EstablishmentMembership.objects.get(
-            user=invitee,
-            establishment=draft_b,
-        ).status
-        == EstablishmentMembership.Status.ACTIVE
+    membership_b = EstablishmentMembership.objects.get(
+        user=invitee,
+        establishment=draft_b,
     )
+    assert membership_a.status == EstablishmentMembership.Status.ACTIVE
+    assert membership_b.status == EstablishmentMembership.Status.ACTIVE
     assert (
         EstablishmentMembership.objects.get(
             user=invitee,
@@ -597,33 +594,157 @@ def test_accept_owner_activates_all_org_invited_memberships(api_client):
         == EstablishmentMembership.Status.INVITED
     )
 
+    updated_calls = [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.updated"
+    ]
+    assert {
+        (call.kwargs["membership_id"], call.kwargs["establishment_id"])
+        for call in updated_calls
+    } == {
+        (membership_a.id, active_a.id),
+        (membership_b.id, draft_b.id),
+    }
 
-def test_accept_owner_incomplete_coverage_returns_invariant(api_client):
-    organization = create_organization(name="Incomplete Accept Org")
-    active_a = create_establishment(name="Incomplete A", organization=organization)
-    create_establishment(name="Incomplete B", organization=organization)
-    pending = create_user(
-        username="incomplete_pending",
-        email="incomplete-owner@example.com",
-        status=User.Status.PENDING,
+
+def test_accept_owner_heals_missing_coverage_before_activate(api_client):
+    organization = create_organization(name="Heal Accept Org")
+    active_a = create_establishment(name="Heal A", organization=organization)
+    actor = setup_full_coverage_actor(
+        establishments=[active_a],
+        username="heal_actor",
     )
-    anchor = create_membership(
-        user=pending,
-        establishment=active_a,
-        role=ROLE_OWNER,
+    response = post_owner_invitation(
+        api_client,
+        establishment_id=active_a.id,
+        actor=actor,
+        payload=owner_invite_payload(email="heal-owner@example.com"),
+    )
+    assert response.status_code == 201
+    token = response.json()["invitation_token"]
+    invitee = User.objects.get(email__iexact="heal-owner@example.com")
+
+    # Gap: new draft/active establishment after invite, without invitee membership.
+    draft_b = create_establishment(
+        name="Heal B",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    create_membership(user=actor, establishment=draft_b, role=ROLE_OWNER)
+    active_c = create_establishment(name="Heal C", organization=organization)
+    create_membership(user=actor, establishment=active_c, role=ROLE_OWNER)
+
+    assert not EstablishmentMembership.objects.filter(
+        user=invitee,
+        establishment__in=[draft_b, active_c],
+    ).exists()
+
+    with patch("houston.realtime.broadcast.schedule_access_event") as access_mock:
+        accept_response = post_accept(APIClient(enforce_csrf_checks=True), token=token)
+    assert accept_response.status_code == 201, accept_response.json()
+
+    invitee.refresh_from_db()
+    assert invitee.status == User.Status.ACTIVE
+    memberships = {
+        membership.establishment_id: membership
+        for membership in EstablishmentMembership.objects.filter(
+            user=invitee,
+            establishment__in=[active_a, draft_b, active_c],
+        )
+    }
+    assert set(memberships) == {active_a.id, draft_b.id, active_c.id}
+    assert {
+        membership.status for membership in memberships.values()
+    } == {EstablishmentMembership.Status.ACTIVE}
+    assert {
+        membership.role for membership in memberships.values()
+    } == {ROLE_OWNER}
+
+    updated_calls = [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.updated"
+    ]
+    assert {
+        (call.kwargs["membership_id"], call.kwargs["establishment_id"])
+        for call in updated_calls
+    } == {
+        (memberships[active_a.id].id, active_a.id),
+        (memberships[draft_b.id].id, draft_b.id),
+        (memberships[active_c.id].id, active_c.id),
+    }
+
+
+def test_accept_owner_heal_rolls_back_when_non_owner_conflict(api_client):
+    organization = create_organization(name="Heal Rollback Org")
+    active_a = create_establishment(name="Heal Rollback A", organization=organization)
+    actor = setup_full_coverage_actor(
+        establishments=[active_a],
+        username="heal_rollback_actor",
+    )
+    response = post_owner_invitation(
+        api_client,
+        establishment_id=active_a.id,
+        actor=actor,
+        payload=owner_invite_payload(email="heal-rollback-owner@example.com"),
+    )
+    assert response.status_code == 201
+    token = response.json()["invitation_token"]
+    invitee = User.objects.get(email__iexact="heal-rollback-owner@example.com")
+    invitation = EstablishmentInvitation.objects.get(
+        token_digest=auth_tokens.digest_token(token),
+    )
+
+    # Repairable gap on draft_b, plus a non-owner conflict on active_c.
+    draft_b = create_establishment(
+        name="Heal Rollback B",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    create_membership(user=actor, establishment=draft_b, role=ROLE_OWNER)
+    active_c = create_establishment(name="Heal Rollback C", organization=organization)
+    create_membership(user=actor, establishment=active_c, role=ROLE_OWNER)
+    create_membership(
+        user=invitee,
+        establishment=active_c,
+        role=EstablishmentMembership.Role.STAFF,
         membership_status=EstablishmentMembership.Status.INVITED,
     )
-    invitation = create_pending_invitation(membership=anchor, raw_token="incomplete-token")
 
-    accept_response = post_accept(api_client, token="incomplete-token")
+    with patch("houston.realtime.broadcast.schedule_access_event") as access_mock:
+        accept_response = post_accept(APIClient(enforce_csrf_checks=True), token=token)
+
     assert accept_response.status_code == 409
     assert accept_response.json()["code"] == "organizational_owner_invariant_conflict"
-    pending.refresh_from_db()
-    assert pending.status == User.Status.PENDING
-    anchor.refresh_from_db()
-    assert anchor.status == EstablishmentMembership.Status.INVITED
+    invitee.refresh_from_db()
+    assert invitee.status == User.Status.PENDING
     invitation.refresh_from_db()
     assert invitation.accepted_at is None
+    assert invitation.revoked_at is None
+    assert not EstablishmentMembership.objects.filter(
+        user=invitee,
+        establishment=draft_b,
+    ).exists()
+    assert (
+        EstablishmentMembership.objects.get(
+            user=invitee,
+            establishment=active_a,
+        ).status
+        == EstablishmentMembership.Status.INVITED
+    )
+    assert (
+        EstablishmentMembership.objects.get(
+            user=invitee,
+            establishment=active_c,
+        ).role
+        == EstablishmentMembership.Role.STAFF
+    )
+    assert not [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.updated"
+    ]
 
 
 def test_accept_owner_with_active_membership_under_pending_returns_invariant(api_client):
@@ -649,9 +770,15 @@ def test_accept_owner_with_active_membership_under_pending_returns_invariant(api
     )
     create_pending_invitation(membership=anchor, raw_token="aup-token")
 
-    accept_response = post_accept(api_client, token="aup-token")
+    with patch("houston.realtime.broadcast.schedule_access_event") as access_mock:
+        accept_response = post_accept(api_client, token="aup-token")
     assert accept_response.status_code == 409
     assert accept_response.json()["code"] == "organizational_owner_invariant_conflict"
+    assert not [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.updated"
+    ]
 
 
 def test_accept_owner_revokes_other_pending_tokens(api_client):

@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User, UserSession
+from houston.accounts.services import tokens as auth_tokens
 from houston.establishments.models import (
     Establishment,
     EstablishmentInvitation,
@@ -22,6 +23,7 @@ from houston.organizations.models import Organization
 pytestmark = pytest.mark.django_db
 
 ROLE_OWNER = EstablishmentMembership.Role.OWNER
+REGISTRATION_PASSWORD = "SecurePass123!"
 
 
 @pytest.fixture
@@ -185,6 +187,19 @@ def owner_statuses_for_user(*, user: User, establishments: list[Establishment]) 
         ).status
         for establishment in establishments
     }
+
+
+def post_accept(api_client: APIClient, *, token: str, password: str = REGISTRATION_PASSWORD):
+    csrf_token = ensure_csrf(api_client)
+    return api_client.post(
+        f"/api/v1/invitations/{token}/accept/",
+        {
+            "password": password,
+            "password_confirmation": password,
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
 
 
 def test_owner_deactivate_fanout_across_draft_and_active(api_client):
@@ -559,6 +574,107 @@ def test_owner_deactivate_mixed_statuses_rolls_back(api_client):
         EstablishmentMembership.Status.ACTIVE,
         EstablishmentMembership.Status.DEACTIVATED,
     }
+
+
+def test_owner_deactivate_withdraws_pending_invite(api_client):
+    organization = create_organization(name="Withdraw Invite Org")
+    active_a = create_establishment(name="Withdraw A", organization=organization)
+    draft_b = create_establishment(
+        name="Withdraw B",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    actor = setup_full_coverage_owner(
+        establishments=[active_a, draft_b],
+        username="withdraw_actor",
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    access_token = switch_establishment(
+        api_client,
+        access_token=access_token,
+        establishment_id=active_a.id,
+    )
+    csrf_token = ensure_csrf(api_client)
+    invite_response = api_client.post(
+        f"/api/v1/establishments/{active_a.id}/membership-invitations/",
+        {
+            "email": "withdraw-owner@example.com",
+            "first_name": "Withdraw",
+            "last_name": "Owner",
+            "role": ROLE_OWNER,
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+    assert invite_response.status_code == 201, invite_response.json()
+    token = invite_response.json()["invitation_token"]
+    invitee = User.objects.get(email__iexact="withdraw-owner@example.com")
+    path_membership = EstablishmentMembership.objects.get(
+        user=invitee,
+        establishment=active_a,
+    )
+
+    with (
+        patch("houston.chat.services.handle_membership_chat_deactivation") as chat_mock,
+        patch("houston.realtime.broadcast.schedule_access_event") as access_mock,
+        patch(
+            "houston.establishments.invitation_email.schedule_establishment_invitation_email"
+        ) as email_mock,
+    ):
+        response = post_membership_action(
+            api_client,
+            actor=actor,
+            establishment_id=active_a.id,
+            membership_id=path_membership.id,
+            action="deactivate",
+        )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["status"] == EstablishmentMembership.Status.DEACTIVATED
+    assert owner_statuses_for_user(user=invitee, establishments=[active_a, draft_b]) == {
+        EstablishmentMembership.Status.DEACTIVATED,
+    }
+    assert not EstablishmentMembership.objects.filter(
+        user=invitee,
+        establishment__in=[active_a, draft_b],
+        status=EstablishmentMembership.Status.ACTIVE,
+    ).exists()
+
+    invitation = EstablishmentInvitation.objects.get(
+        token_digest=auth_tokens.digest_token(token),
+    )
+    assert invitation.revoked_at is not None
+    assert invitation.accepted_at is None
+    assert (
+        EstablishmentInvitation.objects.filter(
+            membership__user=invitee,
+            membership__establishment__in=[active_a, draft_b],
+            accepted_at__isnull=True,
+            revoked_at__isnull=True,
+        ).count()
+        == 0
+    )
+
+    assert chat_mock.call_count == 2
+    membership_access_calls = [
+        call
+        for call in access_mock.call_args_list
+        if call.kwargs.get("reason") == "membership.deactivated"
+    ]
+    assert len(membership_access_calls) == 2
+    email_mock.assert_not_called()
+
+    accept_response = post_accept(APIClient(enforce_csrf_checks=True), token=token)
+    assert accept_response.status_code == 400
+    assert accept_response.json()["code"] == "invitation_invalid"
+    invitee.refresh_from_db()
+    assert invitee.status == User.Status.PENDING
+    assert not EstablishmentMembership.objects.filter(
+        user=invitee,
+        status=EstablishmentMembership.Status.ACTIVE,
+    ).exists()
 
 
 def test_owner_reactivate_invited_or_mixed_returns_invariant(api_client):
