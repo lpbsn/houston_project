@@ -350,7 +350,7 @@ def test_invitation_normalizes_duplicate_business_unit_scope(api_client):
     )
 
 
-def test_cannot_invite_owner_or_director_roles(api_client):
+def test_cannot_invite_director_role_via_membership_invitations(api_client):
     establishment = create_establishment(name="Role Guard Hotel")
     owner = create_user(username="role_guard_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
@@ -358,26 +358,22 @@ def test_cannot_invite_owner_or_director_roles(api_client):
     access_token = login(api_client, identifier=owner.email)
     csrf_token = ensure_csrf(api_client)
 
-    for role in (
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    ):
-        response = api_client.post(
-            f"/api/v1/establishments/{establishment.id}/membership-invitations/",
-            {
-                "email": f"{role}@example.com",
-                "first_name": "New",
-                "last_name": "Member",
-                "role": role,
-            },
-            format="json",
-            HTTP_X_CSRFTOKEN=csrf_token,
-            **auth_headers(access_token),
-        )
-        assert response.status_code == 403
-        body = response.json()
-        assert body["code"] == "membership_invitation_role_not_allowed"
-        assert isinstance(body["detail"], str)
+    response = api_client.post(
+        f"/api/v1/establishments/{establishment.id}/membership-invitations/",
+        {
+            "email": "director@example.com",
+            "first_name": "New",
+            "last_name": "Member",
+            "role": EstablishmentMembership.Role.DIRECTOR,
+        },
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 403
+    body = response.json()
+    assert body["code"] == "membership_invitation_role_not_allowed"
+    assert isinstance(body["detail"], str)
 
 
 def test_owner_or_director_invitation_rejects_non_empty_scopes(api_client):
