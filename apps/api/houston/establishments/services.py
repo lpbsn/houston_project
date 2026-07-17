@@ -136,6 +136,14 @@ class OrganizationalOwnerInvariantConflictError(Exception):
         super().__init__(detail)
 
 
+class InvalidEstablishmentCreationError(Exception):
+    """Establishment creation input or organization state is invalid."""
+
+    def __init__(self, detail: str = "Establishment cannot be created."):
+        self.detail = detail
+        super().__init__(detail)
+
+
 class ActiveOnboardingSessionExistsError(Exception):
     pass
 
@@ -1588,6 +1596,9 @@ def _accept_organizational_owner_invitation(
     if user.status != User.Status.PENDING:
         raise InvalidEstablishmentInvitationError
 
+    # Create-in-org fan-out is the primary coverage guarantee when
+    # ``create_establishment_for_organization`` is used; heal here remains the
+    # defense for ORM/legacy gaps that appear before accept.
     # Re-read draft/active under the organization lock (do not trust pre-lock ids alone).
     establishments = org_establishments_draft_active(organization_id=organization_id)
     memberships_by_establishment_id = {
@@ -2893,6 +2904,109 @@ def _clear_selected_establishments_for_org_owner(
         selected_establishment=None,
         updated_at=timezone.now(),
     )
+
+
+@transaction.atomic
+def create_establishment_for_organization(
+    *,
+    organization_id,
+    name: str,
+    timezone: str | None = None,
+    status: str = Establishment.Status.DRAFT,
+) -> Establishment:
+    """Create a DRAFT establishment in an existing organization and seed owners.
+
+    Preparatory product contract: this is the mandatory entry point for any
+    future in-organization establishment creation. Direct
+    ``Establishment.objects.create(...)`` is forbidden outside tests,
+    migrations, or controlled scripts.
+
+    Always creates ``DRAFT`` only. Organizational owners are seeded using Lot B
+    consistency rules (homogeneous owner status + exact ``User.status``
+    compatibility). Emits ``membership.updated`` after commit for each
+    ``owner``/``active`` membership created on the new establishment.
+    """
+    if status != Establishment.Status.DRAFT:
+        raise InvalidEstablishmentCreationError(
+            "Only draft establishments can be created in an existing organization."
+        )
+
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise InvalidEstablishmentCreationError("Establishment name is required.")
+
+    organization = _lock_organization(organization_id=organization_id)
+    if organization.status != Organization.Status.ACTIVE:
+        raise InvalidEstablishmentCreationError(
+            "Establishments can only be created in an active organization."
+        )
+
+    create_kwargs: dict = {
+        "name": normalized_name,
+        "organization": organization,
+        "status": Establishment.Status.DRAFT,
+    }
+    if timezone is not None:
+        create_kwargs["timezone"] = timezone
+
+    establishment = Establishment.objects.create(**create_kwargs)
+    _seed_organizational_owners_on_establishment(establishment=establishment)
+    return establishment
+
+
+def _seed_organizational_owners_on_establishment(
+    *,
+    establishment: Establishment,
+) -> list[EstablishmentMembership]:
+    """Seed owner memberships on a new establishment using Lot B rules.
+
+    Call only after ``_lock_organization``. Rolls back with the surrounding
+    transaction on hard conflicts.
+    """
+    from houston.establishments.organizational_owners_consistency import (
+        plan_owner_memberships_for_establishment,
+    )
+    from houston.realtime.broadcast import schedule_access_event
+
+    report, plans = plan_owner_memberships_for_establishment(
+        organization_id=establishment.organization_id,
+        establishment_id=establishment.id,
+    )
+    if report.has_hard_conflicts:
+        raise OrganizationalOwnerInvariantConflictError
+
+    created: list[EstablishmentMembership] = []
+    for plan in plans:
+        try:
+            with transaction.atomic():
+                membership = EstablishmentMembership.objects.create(
+                    user_id=plan.user_id,
+                    establishment_id=plan.establishment_id,
+                    role=EstablishmentMembership.Role.OWNER,
+                    status=plan.status,
+                )
+        except IntegrityError:
+            membership = EstablishmentMembership.objects.filter(
+                user_id=plan.user_id,
+                establishment_id=plan.establishment_id,
+            ).first()
+            if (
+                membership is None
+                or membership.role != EstablishmentMembership.Role.OWNER
+                or membership.status != plan.status
+            ):
+                raise OrganizationalOwnerInvariantConflictError from None
+            continue
+
+        created.append(membership)
+        if membership.status == EstablishmentMembership.Status.ACTIVE:
+            schedule_access_event(
+                reason="membership.updated",
+                establishment_id=membership.establishment_id,
+                membership_id=membership.id,
+            )
+
+    return created
 
 
 def _lock_organization(*, organization_id) -> Organization:

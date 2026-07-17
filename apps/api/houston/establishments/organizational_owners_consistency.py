@@ -295,6 +295,27 @@ def _analyze_organization(
     return report
 
 
+def plan_owner_memberships_for_establishment(
+    *,
+    organization_id,
+    establishment_id,
+) -> tuple[OrganizationConsistencyReport, list[PlannedOwnerCreate]]:
+    """Lot B analysis; return planned owner creates for one establishment.
+
+    Caller should hold the organization row lock. Hard conflicts
+    (``status_mix`` / ``non_owner_conflict`` / ``owner_user_status_conflict``)
+    are reported on the full organization; ``planned_creates`` are filtered to
+    ``establishment_id`` only.
+    """
+    report = _analyze_organization(organization_id=organization_id)
+    plans = [
+        plan
+        for plan in report.planned_creates
+        if plan.establishment_id == establishment_id
+    ]
+    return report, plans
+
+
 def inventory_organizational_owners(
     *,
     organization_ids: list | None = None,
