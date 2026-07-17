@@ -2562,7 +2562,7 @@ export interface components {
             first_name: string;
             last_name: string;
             role: components["schemas"]["RoleEnum"];
-            scopes: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
+            scopes?: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
         };
         MembershipUserSummary: {
             /** Format: uuid */

@@ -97,6 +97,7 @@ from houston.establishments.services import (
     MembershipInvitationRoleNotAllowedError,
     MembershipManagementForbiddenError,
     MembershipManagementNotFoundError,
+    MembershipRoleChangeForbiddenError,
     MembershipUpdateInput,
     OnboardingAccessDeniedError,
     OnboardingProposalStateError,
@@ -259,6 +260,14 @@ class MembershipDetailView(APIView):
             return Response(
                 {"detail": "The last active owner cannot be demoted."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except MembershipRoleChangeForbiddenError:
+            return Response(
+                {
+                    "code": "membership_role_change_forbidden",
+                    "detail": "This membership role change is not allowed.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
         except MembershipManagementForbiddenError:
             return Response(
@@ -885,7 +894,9 @@ class MembershipInvitationView(APIView):
                 first_name=request_serializer.validated_data["first_name"],
                 last_name=request_serializer.validated_data["last_name"],
                 role=request_serializer.validated_data["role"],
-                scopes=parse_membership_scope_inputs(request_serializer.validated_data["scopes"]),
+                scopes=parse_membership_scope_inputs(
+                    request_serializer.validated_data.get("scopes") or []
+                ),
             )
         except MembershipManagementNotFoundError:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)

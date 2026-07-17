@@ -348,6 +348,36 @@ def test_cannot_invite_owner_or_director_roles(api_client):
     establishment = create_establishment(name="Role Guard Hotel")
     owner = create_user(username="role_guard_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+
+    access_token = login(api_client, identifier=owner.email)
+    csrf_token = ensure_csrf(api_client)
+
+    for role in (
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    ):
+        response = api_client.post(
+            f"/api/v1/establishments/{establishment.id}/membership-invitations/",
+            {
+                "email": f"{role}@example.com",
+                "first_name": "New",
+                "last_name": "Member",
+                "role": role,
+            },
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+            **auth_headers(access_token),
+        )
+        assert response.status_code == 403
+        body = response.json()
+        assert body["code"] == "membership_invitation_role_not_allowed"
+        assert isinstance(body["detail"], str)
+
+
+def test_owner_or_director_invitation_rejects_non_empty_scopes(api_client):
+    establishment = create_establishment(name="Scope Guard Hotel")
+    owner = create_user(username="scope_guard_owner")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
     business_unit = create_business_unit(establishment=establishment, key="hotel")
 
     access_token = login(api_client, identifier=owner.email)
@@ -360,7 +390,7 @@ def test_cannot_invite_owner_or_director_roles(api_client):
         response = api_client.post(
             f"/api/v1/establishments/{establishment.id}/membership-invitations/",
             invite_payload(
-                email=f"{role}@example.com",
+                email=f"{role}-scoped@example.com",
                 role=role,
                 scopes=[business_unit_scope_payload(business_unit)],
             ),
@@ -368,10 +398,10 @@ def test_cannot_invite_owner_or_director_roles(api_client):
             HTTP_X_CSRFTOKEN=csrf_token,
             **auth_headers(access_token),
         )
-        assert response.status_code == 403
+        assert response.status_code == 400
         body = response.json()
-        assert body["code"] == "membership_invitation_role_not_allowed"
-        assert isinstance(body["detail"], str)
+        assert body["code"] == "validation_error"
+        assert "scopes" in body["errors"]
 
 
 def test_staff_cannot_invite_members(api_client):
@@ -444,18 +474,32 @@ def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
         business_unit=business_unit,
     )
 
+    if target_role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        payload = {
+            "email": f"{target_role}@example.com",
+            "first_name": "New",
+            "last_name": "Member",
+            "role": target_role,
+        }
+    else:
+        payload = invite_payload(
+            email=f"{target_role}@example.com",
+            role=target_role,
+            scopes=[business_unit_scope_payload(business_unit)],
+        )
+
     response = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=invite_payload(
-            email=f"{target_role}@example.com",
-            role=target_role,
-            scopes=[business_unit_scope_payload(business_unit)],
-        ),
+        payload=payload,
     )
 
     assert response.status_code == 403
+    assert response.json()["code"] == "membership_invitation_role_not_allowed"
 
 
 def test_manager_with_business_unit_scope_can_invite_staff_on_same_unit(api_client):

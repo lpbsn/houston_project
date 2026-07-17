@@ -89,6 +89,10 @@ class MembershipManagementForbiddenError(Exception):
     pass
 
 
+class MembershipRoleChangeForbiddenError(Exception):
+    pass
+
+
 class InvitedMembershipActivationError(Exception):
     pass
 
@@ -1527,14 +1531,24 @@ def invite_membership_for_establishment(
     if not normalized_first_name or not normalized_last_name:
         raise InvalidMembershipInvitationInputError("First and last name are required.")
 
-    if not scopes:
+    scope_inputs = scopes or []
+    if scopes_not_allowed_for_role(role):
+        if scope_inputs:
+            raise InvalidMembershipInvitationInputError(
+                "Operational scopes cannot be assigned to owner or director invitations."
+            )
+    elif not scope_inputs:
         raise InvalidMembershipInvitationInputError(
             "At least one operational scope is required for staff and manager invitations."
         )
 
-    normalized_scopes = normalize_membership_scope_inputs(
-        establishment=establishment,
-        scope_inputs=scopes,
+    normalized_scopes = (
+        normalize_membership_scope_inputs(
+            establishment=establishment,
+            scope_inputs=scope_inputs,
+        )
+        if scope_inputs
+        else []
     )
     if (
         current_membership.role == EstablishmentMembership.Role.MANAGER
@@ -1567,10 +1581,11 @@ def invite_membership_for_establishment(
             existing_user.first_name = normalized_first_name
             existing_user.last_name = normalized_last_name
             existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
-            assign_membership_scopes(
-                membership=existing_membership,
-                scope_inputs=scopes,
-            )
+            if scope_inputs:
+                assign_membership_scopes(
+                    membership=existing_membership,
+                    scope_inputs=scope_inputs,
+                )
             return _issue_establishment_invitation_for_membership(existing_membership)
 
         raise DirectorInvitationDuplicateError
@@ -1590,7 +1605,8 @@ def invite_membership_for_establishment(
         role=role,
     )
 
-    assign_membership_scopes(membership=membership, scope_inputs=scopes)
+    if scope_inputs:
+        assign_membership_scopes(membership=membership, scope_inputs=scope_inputs)
 
     return _issue_establishment_invitation_for_membership(membership)
 
@@ -1881,6 +1897,12 @@ def update_membership_for_management(
     scopes_changed = False
 
     if update_input.role is not None and membership.role != update_input.role:
+        if _is_forbidden_membership_role_change(
+            current_role=membership.role,
+            next_role=update_input.role,
+        ):
+            raise MembershipRoleChangeForbiddenError
+
         if not _can_actor_manage_target_role(
             actor_membership=current_membership,
             target_role=update_input.role,
@@ -2019,6 +2041,94 @@ def activate_membership_for_management(
 
     membership.refresh_from_db()
     return _reload_membership_for_response(membership.id)
+
+
+def _lock_organization(*, organization_id) -> Organization:
+    """Lock organization row — first step of organizational-owner workflows (§2.10)."""
+    return Organization.objects.select_for_update().get(id=organization_id)
+
+
+def org_establishments_draft_active(*, organization_id):
+    """Draft and active establishments for an organization, deterministic id order."""
+    return list(
+        Establishment.objects.filter(
+            organization_id=organization_id,
+            status__in=[
+                Establishment.Status.DRAFT,
+                Establishment.Status.ACTIVE,
+            ],
+        ).order_by("id")
+    )
+
+
+def _lock_memberships_for_owner_workflow(
+    *,
+    actor_membership_id=None,
+    anchor_membership_id=None,
+    other_membership_ids=(),
+) -> dict:
+    """Lock memberships in §2.10 order: actor → anchor → others by id ascending.
+
+    Call only after ``_lock_organization``. Returns locked rows keyed by role in
+    the workflow (``actor``, ``anchor``, ``others``). Missing ids are omitted.
+    """
+    ordered_ids: list = []
+    for membership_id in (actor_membership_id, anchor_membership_id):
+        if membership_id is not None and membership_id not in ordered_ids:
+            ordered_ids.append(membership_id)
+
+    others_sorted = sorted(
+        {
+            membership_id
+            for membership_id in other_membership_ids
+            if membership_id is not None and membership_id not in ordered_ids
+        }
+    )
+    ordered_ids.extend(others_sorted)
+
+    locked_by_id: dict = {}
+    membership_qs = EstablishmentMembership.objects.select_for_update().select_related(
+        "user",
+        "establishment",
+        "establishment__organization",
+    )
+    for membership_id in ordered_ids:
+        membership = membership_qs.filter(id=membership_id).first()
+        if membership is not None:
+            locked_by_id[membership_id] = membership
+
+    return {
+        "actor": locked_by_id.get(actor_membership_id),
+        "anchor": locked_by_id.get(anchor_membership_id),
+        "others": [
+            locked_by_id[membership_id]
+            for membership_id in others_sorted
+            if membership_id in locked_by_id
+        ],
+    }
+
+
+def _lock_invitations_for_owner_workflow(*, invitation_ids=()) -> list[EstablishmentInvitation]:
+    """Lock invitations after memberships, stable by id ascending (§2.10)."""
+    ordered_ids = sorted({invitation_id for invitation_id in invitation_ids if invitation_id})
+    locked: list[EstablishmentInvitation] = []
+    invitation_qs = EstablishmentInvitation.objects.select_for_update()
+    for invitation_id in ordered_ids:
+        invitation = invitation_qs.filter(id=invitation_id).first()
+        if invitation is not None:
+            locked.append(invitation)
+    return locked
+
+
+def _is_forbidden_membership_role_change(*, current_role: str, next_role: str) -> bool:
+    if next_role in {
+        EstablishmentMembership.Role.OWNER,
+        EstablishmentMembership.Role.DIRECTOR,
+    }:
+        return True
+    if current_role == EstablishmentMembership.Role.OWNER:
+        return True
+    return False
 
 
 def _lock_onboarding_session(session: OnboardingSession) -> OnboardingSession:

@@ -344,14 +344,6 @@ class EstablishmentMembership(BaseModel):
                 fields=["user", "establishment"],
                 name="unique_user_establishment_membership",
             ),
-            models.UniqueConstraint(
-                fields=["establishment"],
-                condition=Q(
-                    role="director",
-                    status__in=["invited", "active"],
-                ),
-                name="unique_active_or_invited_director_per_establishment",
-            ),
         ]
         indexes = [
             models.Index(fields=["establishment"], name="membership_est_idx"),
