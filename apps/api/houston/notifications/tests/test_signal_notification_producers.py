@@ -12,7 +12,9 @@ from houston.action_plans.services import (
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.ai.observation_pipeline_schema import PipelineCandidateOutput
-from houston.establishments.models import EstablishmentMembership
+from django.utils import timezone
+
+from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.signals.exceptions import SignalStateError
 from houston.signals.models import Signal
@@ -132,6 +134,7 @@ def test_signal_created_notifies_responsible_pole_scope_only():
     assert notifications[0].recipient_membership_id == staff.id
     assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED
     assert notifications[0].actor_membership_id is None
+    assert notifications[0].title == f"Signal {maintenance.specific_name} créé"
     _assert_generic_copy(notifications[0])
 
 
@@ -206,13 +209,14 @@ def test_owner_director_without_pole_scope_receive_no_signal_notification():
     assert director.id not in _recipient_ids(notifications)
 
 
-def test_signal_unassigned_global_notifies_admin_when_no_staff_scoped():
+def test_signal_assigned_without_scoped_staff_notifies_admins_with_pole_title():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
         role=EstablishmentMembership.Role.DIRECTOR,
     )
     signal = _open_signal(owner)
+    pole_name = signal.responsible_business_unit.specific_name
     Notification.objects.filter(subject_id=signal.id).delete()
 
     from houston.notifications.scheduling import schedule_signal_created_notification
@@ -222,16 +226,14 @@ def test_signal_unassigned_global_notifies_admin_when_no_staff_scoped():
     notifications = _notifications_for_signal(signal_id=signal.id)
     assert len(notifications) == 2
     assert _recipient_ids(notifications) == {owner.id, director.id}
-    assert all(
-        item.event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
-        for item in notifications
-    )
+    assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
+    assert all(item.title == f"Signal {pole_name} créé" for item in notifications)
     _assert_mutual_exclusivity(notifications)
     for notification in notifications:
         _assert_generic_copy(notification)
 
 
-def test_signal_out_of_scope_notifies_admins_unassigned_global():
+def test_signal_out_of_scope_notifies_admins_with_assigned_pole_title():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
@@ -241,6 +243,7 @@ def test_signal_out_of_scope_notifies_admins_unassigned_global():
     taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
     assign_business_unit_scope(staff, taxonomy.bar)
     signal = _open_signal(owner)
+    pole_name = signal.responsible_business_unit.specific_name
     Notification.objects.filter(subject_id=signal.id).delete()
 
     from houston.notifications.scheduling import schedule_signal_created_notification
@@ -250,14 +253,12 @@ def test_signal_out_of_scope_notifies_admins_unassigned_global():
     notifications = _notifications_for_signal(signal_id=signal.id)
     assert _recipient_ids(notifications) == {owner.id, director.id}
     assert staff.id not in _recipient_ids(notifications)
-    assert all(
-        item.event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
-        for item in notifications
-    )
+    assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
+    assert all(item.title == f"Signal {pole_name} créé" for item in notifications)
     _assert_mutual_exclusivity(notifications)
 
 
-def test_signal_unassigned_global_manager_without_scope_not_notified():
+def test_signal_assigned_admin_fallback_manager_without_scope_not_notified():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
@@ -277,9 +278,10 @@ def test_signal_unassigned_global_manager_without_scope_not_notified():
     notifications = _notifications_for_signal(signal_id=signal.id)
     assert _recipient_ids(notifications) == {owner.id, director.id}
     assert manager.id not in _recipient_ids(notifications)
+    assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
 
 
-def test_signal_unassigned_global_mutual_exclusivity_on_create():
+def test_signal_created_mutual_exclusivity_on_create():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.DIRECTOR)
     signal = _open_signal(owner)
@@ -292,7 +294,7 @@ def test_signal_unassigned_global_mutual_exclusivity_on_create():
     _assert_mutual_exclusivity(_notifications_for_signal(signal_id=signal.id))
 
 
-def test_signal_unassigned_global_tenant_isolation():
+def test_signal_created_admin_fallback_tenant_isolation():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     outsider = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     signal = _open_signal(owner)
@@ -312,7 +314,7 @@ def test_signal_unassigned_global_tenant_isolation():
     ).exists()
 
 
-def test_signal_unassigned_global_inactive_director_excluded():
+def test_signal_assigned_admin_fallback_inactive_director_excluded():
     owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
     director = build_api_membership_on_establishment(
         owner,
@@ -330,7 +332,66 @@ def test_signal_unassigned_global_inactive_director_excluded():
     notifications = _notifications_for_signal(signal_id=signal.id)
     assert len(notifications) == 1
     assert notifications[0].recipient_membership_id == owner.id
-    assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
+    assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED
+
+
+def test_signal_truly_unassigned_notifies_admins_unassigned_global():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    director = build_api_membership_on_establishment(
+        owner,
+        role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    signal = Signal.objects.create(
+        establishment=owner.establishment,
+        affected_business_unit=None,
+        responsible_business_unit=None,
+        activity_subject=None,
+        title="Sensitive signal title",
+        structured_summary="Sensitive observation summary",
+        issue_focus="unassigned focus",
+        status=Signal.Status.OPEN,
+        last_activity_at=timezone.now(),
+    )
+
+    from houston.notifications.scheduling import schedule_signal_created_notification
+
+    schedule_signal_created_notification(signal_id=signal.id)
+
+    notifications = _notifications_for_signal(signal_id=signal.id)
+    assert len(notifications) == 2
+    assert _recipient_ids(notifications) == {owner.id, director.id}
+    assert all(
+        item.event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
+        for item in notifications
+    )
+    assert all(item.title == "Signal sans pôle" for item in notifications)
+    _assert_mutual_exclusivity(notifications)
+    for notification in notifications:
+        _assert_generic_copy(notification)
+
+
+def test_signal_created_uses_catalog_label_when_specific_name_blank():
+    owner = build_api_membership(role=EstablishmentMembership.Role.OWNER)
+    staff = build_api_membership_on_establishment(owner, role=EstablishmentMembership.Role.STAFF)
+    taxonomy = create_restaurant_v3_taxonomy(owner.establishment)
+    assert taxonomy.maintenance is not None
+    assign_business_unit_scope(staff, taxonomy.maintenance)
+    signal = _open_signal(owner)
+    catalog_label = taxonomy.maintenance.catalog_business_unit.label
+    # Whitespace-only specific_name: DB nonempty check passes, display falls back to catalog.
+    BusinessUnit.objects.filter(pk=taxonomy.maintenance.pk).update(specific_name=" ")
+    Notification.objects.filter(subject_id=signal.id).delete()
+
+    from houston.notifications.scheduling import schedule_signal_created_notification
+
+    schedule_signal_created_notification(signal_id=signal.id)
+
+    notifications = _notifications_for_signal(signal_id=signal.id)
+    assert len(notifications) == 1
+    assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED
+    assert notifications[0].title == f"Signal {catalog_label} créé"
+    assert "Signal  créé" not in notifications[0].title
+    _assert_generic_copy(notifications[0])
 
 
 def test_signal_pinned_notifies_pole_excludes_actor():

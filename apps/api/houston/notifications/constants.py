@@ -73,13 +73,14 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
         "Quelqu'un a répondu dans une discussion de commentaires.",
     ),
     "signal.created": (
-        "Nouveau signal",
+        "Signal {pole_name} créé",
         "Un signal a été créé sur votre pôle.",
     ),
     "signal.created.unassigned_global": (
-        "Signal sans pôle couvert",
+        "Signal sans pôle",
         "Un signal nécessite une attention globale.",
     ),
+
     "signal.pinned": (
         "Signal épinglé",
         "Un signal a été épinglé.",
@@ -99,6 +100,7 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
 }
 
 DEFAULT_ACTOR_DISPLAY_NAME = "Quelqu'un"
+SIGNAL_CREATED_FALLBACK_TITLE = "Nouveau signal"
 
 INVALID_STATUS_FILTER_ERROR_DETAIL = "Filtre de statut invalide."
 INVALID_PAGE_SIZE_ERROR_DETAIL = "page_size must be between 1 and 50."
@@ -143,17 +145,23 @@ def render_notification_copy(
     event_key: str,
     *,
     actor_display_name: str | None = None,
+    pole_name: str | None = None,
 ) -> tuple[str, str]:
     title_template, body_template = NOTIFICATION_COPY[event_key]
     display_name = actor_display_name or DEFAULT_ACTOR_DISPLAY_NAME
-    title = (
-        title_template.format(actor_display_name=display_name)
-        if "{actor_display_name}" in title_template
-        else title_template
-    )
+    resolved_pole_name = (pole_name or "").strip()
+    if "{pole_name}" in title_template:
+        if resolved_pole_name:
+            title = title_template.format(pole_name=resolved_pole_name)
+        else:
+            title = SIGNAL_CREATED_FALLBACK_TITLE
+    elif "{actor_display_name}" in title_template:
+        title = title_template.format(actor_display_name=display_name)
+    else:
+        title = title_template
     body = (
         body_template.format(actor_display_name=display_name)
         if "{actor_display_name}" in body_template
         else body_template
     )
-    return title, body
+    return title[:NOTIFICATION_TITLE_MAX_LENGTH], body[:NOTIFICATION_BODY_MAX_LENGTH]

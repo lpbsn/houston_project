@@ -10,7 +10,7 @@ from django.db.models import Prefetch
 from houston.action_plans.models import ActionPlanExecution
 from houston.chat.models import ChatMessage
 from houston.comments.models import Comment, CommentMention
-from houston.establishments.models import EstablishmentMembership
+from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.notifications.constants import (
     build_chat_message_dedupe_key,
     build_mention_dedupe_key,
@@ -522,9 +522,31 @@ def schedule_comment_reply_created_notification(
 def _load_signal(*, signal_id: uuid.UUID) -> Signal | None:
     return (
         Signal.objects.filter(id=signal_id)
-        .select_related("affected_business_unit", "responsible_business_unit")
+        .select_related(
+            "affected_business_unit__catalog_business_unit",
+            "responsible_business_unit__catalog_business_unit",
+        )
         .first()
     )
+
+
+def _resolve_signal_assigned_pole(*, signal: Signal) -> BusinessUnit | None:
+    if signal.responsible_business_unit_id is not None:
+        return signal.responsible_business_unit
+    if signal.affected_business_unit_id is not None:
+        return signal.affected_business_unit
+    return None
+
+
+def _business_unit_display_name(*, business_unit: BusinessUnit) -> str | None:
+    specific_name = (business_unit.specific_name or "").strip()
+    if specific_name:
+        return specific_name
+    catalog = getattr(business_unit, "catalog_business_unit", None)
+    if catalog is None:
+        return None
+    catalog_label = (catalog.label or "").strip()
+    return catalog_label or None
 
 
 def _deliver_signal_notifications(
@@ -535,6 +557,7 @@ def _deliver_signal_notifications(
     recipients: list[EstablishmentMembership],
     actor_membership: EstablishmentMembership | None,
     exclude_actor_if_recipient: bool = True,
+    pole_name: str | None = None,
 ) -> None:
     if not recipients:
         return
@@ -547,6 +570,7 @@ def _deliver_signal_notifications(
         priority=priority,
         actor_membership=actor_membership,
         exclude_actor_if_recipient=exclude_actor_if_recipient,
+        pole_name=pole_name,
     )
 
 
@@ -555,25 +579,30 @@ def schedule_signal_created_notification(*, signal_id: uuid.UUID) -> None:
         signal = _load_signal(signal_id=signal_id)
         if signal is None:
             return
-        pole_recipients = resolve_signal_pole_recipients(signal=signal)
-        if pole_recipients:
+        assigned_pole = _resolve_signal_assigned_pole(signal=signal)
+        if assigned_pole is not None and signal.activity_subject_id is not None:
+            pole_recipients = resolve_signal_pole_recipients(signal=signal)
+            recipients = pole_recipients or resolve_signal_unassigned_global_recipients(
+                signal=signal
+            )
             _deliver_signal_notifications(
                 signal=signal,
                 event_key=Notification.EventKey.SIGNAL_CREATED,
                 priority=Notification.Priority.ACTION_REQUIRED,
-                recipients=pole_recipients,
+                recipients=recipients,
                 actor_membership=None,
                 exclude_actor_if_recipient=False,
+                pole_name=_business_unit_display_name(business_unit=assigned_pole),
             )
-        else:
-            _deliver_signal_notifications(
-                signal=signal,
-                event_key=Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
-                priority=Notification.Priority.ACTION_REQUIRED,
-                recipients=resolve_signal_unassigned_global_recipients(signal=signal),
-                actor_membership=None,
-                exclude_actor_if_recipient=False,
-            )
+            return
+        _deliver_signal_notifications(
+            signal=signal,
+            event_key=Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=resolve_signal_unassigned_global_recipients(signal=signal),
+            actor_membership=None,
+            exclude_actor_if_recipient=False,
+        )
 
     _run_notification_after_commit(
         deliver=deliver,

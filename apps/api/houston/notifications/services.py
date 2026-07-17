@@ -83,6 +83,7 @@ def create_in_app_notification(
     idempotency_key: str | None = None,
     exclude_actor_if_recipient: bool = True,
     skip_subject_visibility_recheck: bool = False,
+    pole_name: str | None = None,
 ) -> Notification | None:
     if event_key not in LOT1_EVENT_KEYS:
         raise NotificationValidationError("Invalid event_key.")
@@ -134,6 +135,7 @@ def create_in_app_notification(
     title, body = render_notification_copy(
         event_key,
         actor_display_name=_membership_display_name(actor_membership),
+        pole_name=pole_name,
     )
 
     try:
@@ -195,6 +197,7 @@ def create_in_app_notifications_for_recipients(
     dedupe_key: str | None = None,
     exclude_actor_if_recipient: bool = True,
     skip_subject_visibility_recheck: bool = False,
+    pole_name: str | None = None,
 ) -> list[Notification]:
     seen_recipient_ids: set[uuid.UUID] = set()
     created: list[Notification] = []
@@ -215,6 +218,7 @@ def create_in_app_notifications_for_recipients(
             dedupe_key=dedupe_key,
             exclude_actor_if_recipient=exclude_actor_if_recipient,
             skip_subject_visibility_recheck=skip_subject_visibility_recheck,
+            pole_name=pole_name,
         )
         if notification is not None:
             created.append(notification)

@@ -324,6 +324,19 @@ def test_render_notification_copy_keeps_existing_events_unchanged():
     assert body == "Un signal a été créé sur votre pôle."
 
     title, body = render_notification_copy(
+        Notification.EventKey.SIGNAL_CREATED,
+        pole_name="Maintenance",
+    )
+    assert title == "Signal Maintenance créé"
+    assert body == "Un signal a été créé sur votre pôle."
+
+    title, body = render_notification_copy(
+        Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
+    )
+    assert title == "Signal sans pôle"
+    assert body == "Un signal nécessite une attention globale."
+
+    title, body = render_notification_copy(
         Notification.EventKey.COMMENT_MENTION_CREATED,
         actor_display_name="Alice",
     )
