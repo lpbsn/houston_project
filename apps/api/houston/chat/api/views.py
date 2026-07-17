@@ -218,6 +218,7 @@ def _serialize_conversation_list_item(
             conversation=conversation,
             viewer_membership_id=viewer_membership_id,
         ),
+        "created_at": conversation.created_at,
         "unread": unread_count > 0,
         "unread_count": unread_count,
         "last_message_at": latest_message.created_at if latest_message else None,

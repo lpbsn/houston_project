@@ -11,6 +11,7 @@ from houston.chat.models import ChatConversation, ChatMessage, ChatParticipant
 from houston.chat.selectors import (
     count_unread_messages_for_participant,
     get_unread_message_counts_by_conversation_ids,
+    list_conversations_for_membership,
 )
 from houston.chat.tests.conftest import create_establishment, create_membership, create_user
 
@@ -28,6 +29,26 @@ def _create_dm_conversation(*, establishment, membership_a, membership_b):
     )
     ChatParticipant.objects.create(conversation=conversation, membership=membership_a)
     ChatParticipant.objects.create(conversation=conversation, membership=membership_b)
+    return conversation
+
+
+def _create_group_conversation(*, establishment, memberships, title: str = "Group"):
+    conversation = ChatConversation.objects.create(
+        establishment=establishment,
+        type=ChatConversation.Type.GROUP,
+        title=title,
+        created_by_membership=memberships[0],
+    )
+    for index, membership in enumerate(memberships):
+        ChatParticipant.objects.create(
+            conversation=conversation,
+            membership=membership,
+            role=(
+                ChatParticipant.Role.ADMIN
+                if index == 0
+                else ChatParticipant.Role.MEMBER
+            ),
+        )
     return conversation
 
 
@@ -174,3 +195,143 @@ def test_bulk_unread_counts_use_single_aggregated_query():
     assert len(captured.captured_queries) == 1
     assert counts[first_conversation.id] == 1
     assert counts[second_conversation.id] == 0
+
+
+def test_list_conversations_orders_empty_by_created_at_fallback():
+    establishment = create_establishment()
+    actor = create_membership(
+        user=create_user(username="list_order_actor"),
+        establishment=establishment,
+    )
+    peer = create_membership(
+        user=create_user(username="list_order_peer"),
+        establishment=establishment,
+    )
+    now = timezone.now()
+    older_dm = _create_dm_conversation(
+        establishment=establishment,
+        membership_a=actor,
+        membership_b=peer,
+    )
+    ChatConversation.objects.filter(id=older_dm.id).update(created_at=now - timedelta(days=2))
+    older_dm.refresh_from_db()
+    _create_message(
+        conversation=older_dm,
+        author_membership=peer,
+        body="old visible",
+        created_at=now - timedelta(days=1),
+    )
+    empty_group = _create_group_conversation(
+        establishment=establishment,
+        memberships=[actor, peer],
+        title="Empty",
+    )
+    ChatConversation.objects.filter(id=empty_group.id).update(created_at=now)
+    empty_group.refresh_from_db()
+
+    ordered_ids = list(
+        list_conversations_for_membership(
+            establishment_id=establishment.id,
+            membership_id=actor.id,
+        ).values_list("id", flat=True)
+    )
+
+    assert ordered_ids == [empty_group.id, older_dm.id]
+
+
+def test_list_conversations_orders_cutoff_empty_by_created_at_fallback():
+    establishment = create_establishment()
+    actor = create_membership(
+        user=create_user(username="cutoff_order_actor"),
+        establishment=establishment,
+    )
+    peer = create_membership(
+        user=create_user(username="cutoff_order_peer"),
+        establishment=establishment,
+    )
+    other = create_membership(
+        user=create_user(username="cutoff_order_other"),
+        establishment=establishment,
+    )
+    now = timezone.now()
+    reopened_dm = _create_dm_conversation(
+        establishment=establishment,
+        membership_a=actor,
+        membership_b=peer,
+    )
+    ChatConversation.objects.filter(id=reopened_dm.id).update(created_at=now)
+    reopened_dm.refresh_from_db()
+    _create_message(
+        conversation=reopened_dm,
+        author_membership=peer,
+        body="hidden by cutoff",
+        created_at=now - timedelta(hours=1),
+    )
+    ChatParticipant.objects.filter(
+        conversation=reopened_dm,
+        membership=actor,
+    ).update(history_cutoff_at=now)
+
+    older_visible_dm = _create_dm_conversation(
+        establishment=establishment,
+        membership_a=actor,
+        membership_b=other,
+    )
+    ChatConversation.objects.filter(id=older_visible_dm.id).update(
+        created_at=now - timedelta(days=3)
+    )
+    older_visible_dm.refresh_from_db()
+    _create_message(
+        conversation=older_visible_dm,
+        author_membership=other,
+        body="older visible",
+        created_at=now - timedelta(days=2),
+    )
+
+    ordered_ids = list(
+        list_conversations_for_membership(
+            establishment_id=establishment.id,
+            membership_id=actor.id,
+        ).values_list("id", flat=True)
+    )
+
+    assert ordered_ids == [reopened_dm.id, older_visible_dm.id]
+
+
+def test_list_conversations_tie_breaks_by_id_desc():
+    establishment = create_establishment()
+    actor = create_membership(
+        user=create_user(username="tie_break_actor"),
+        establishment=establishment,
+    )
+    peer_a = create_membership(
+        user=create_user(username="tie_break_peer_a"),
+        establishment=establishment,
+    )
+    peer_b = create_membership(
+        user=create_user(username="tie_break_peer_b"),
+        establishment=establishment,
+    )
+    shared_created_at = timezone.now()
+    first = _create_dm_conversation(
+        establishment=establishment,
+        membership_a=actor,
+        membership_b=peer_a,
+    )
+    second = _create_dm_conversation(
+        establishment=establishment,
+        membership_a=actor,
+        membership_b=peer_b,
+    )
+    ChatConversation.objects.filter(id__in=[first.id, second.id]).update(
+        created_at=shared_created_at
+    )
+
+    ordered_ids = list(
+        list_conversations_for_membership(
+            establishment_id=establishment.id,
+            membership_id=actor.id,
+        ).values_list("id", flat=True)
+    )
+
+    assert ordered_ids == sorted([first.id, second.id], reverse=True)

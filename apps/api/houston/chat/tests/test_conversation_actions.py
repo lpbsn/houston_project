@@ -74,8 +74,10 @@ def test_pin_unpin_orders_conversation_list(api_client):
     items = listing.json()["items"]
     assert items[0]["id"] == group_id
     assert items[0]["pinned"] is True
+    assert items[0]["created_at"]
     assert items[1]["id"] == dm_id
     assert items[1]["pinned"] is False
+    assert items[1]["created_at"]
 
     unpin_response = api_client.delete(
         chat_url(establishment.id, f"conversations/{group_id}/pin/"),
@@ -277,7 +279,10 @@ def test_reopen_hidden_dm_shows_empty_thread(api_client):
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
     assert len(listing.json()["items"]) == 1
-    assert listing.json()["items"][0]["last_message_preview"] is None
+    item = listing.json()["items"][0]
+    assert item["last_message_preview"] is None
+    assert item["last_message_at"] is None
+    assert item["created_at"]
 
     messages = api_client.get(
         chat_url(establishment.id, f"conversations/{conversation_id}/messages/"),

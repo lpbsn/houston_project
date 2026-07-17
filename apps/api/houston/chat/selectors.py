@@ -157,7 +157,12 @@ def list_conversations_for_membership(
         .select_related("created_by_membership", "created_by_membership__user")
         .prefetch_related("participants__membership__user")
         .distinct()
-        .order_by("-is_pinned", F("visible_last_message_at").desc(nulls_last=True), "-created_at")
+        .order_by(
+            "-is_pinned",
+            F("visible_last_message_at").desc(nulls_last=True),
+            "-created_at",
+            "-id",
+        )
     )
 
 

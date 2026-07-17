@@ -7227,6 +7227,9 @@ components:
           type: string
         title:
           type: string
+        created_at:
+          type: string
+          format: date-time
         unread:
           type: boolean
         unread_count:
@@ -7250,6 +7253,7 @@ components:
           type: boolean
       required:
       - can_delete
+      - created_at
       - id
       - last_message_at
       - last_message_preview
