@@ -173,7 +173,7 @@ Implemented response truths:
 - Membership payloads include `role`, `scopes`, and `scope_summary` (`business_unit_count` only) for UI context (not authoritative for security).
 - Membership-management endpoints reuse bearer-session access context and DRF permission classes backed by `UserSession.selected_establishment`.
 - Membership-management list endpoints are tenant-filtered at selector/queryset level before serialization.
-- Current implemented membership-management authority is `owner` and `director`; `manager` and `staff` are denied.
+- Membership-management HTTP endpoints use session-selected establishment context plus service-layer matrices: owners and directors manage per the invite/manage matrices above; managers may manage in-scope `staff`/`manager` targets (perimeter enforced in services). Staff cannot manage memberships. There is no separate DRF `CanManageMemberships` gate — authority is enforced in services.
 - The current active establishment context must match the path `establishment_id`.
 - Scoped user search reuses bearer-session access context and requires a valid active membership in the current selected establishment.
 - Scoped user search is tenant-filtered at selector/queryset level before serialization and does not expose cross-establishment users.

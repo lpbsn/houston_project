@@ -83,7 +83,6 @@ from houston.establishments.services import (
     ActiveOnboardingProposalExistsError,
     ActiveOnboardingSessionExistsError,
     CannotDeactivateLastActiveOwnerError,
-    CannotDemoteLastActiveOwnerError,
     DirectorInvitationAlreadyExistsError,
     DirectorInvitationDuplicateError,
     DirectorInvitationOwnerNotAllowedError,
@@ -257,11 +256,6 @@ class MembershipDetailView(APIView):
         except InvalidMembershipScopeAssignmentError as exc:
             return Response(
                 {"detail": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except CannotDemoteLastActiveOwnerError:
-            return Response(
-                {"detail": "The last active owner cannot be demoted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except MembershipRoleChangeForbiddenError:
@@ -889,12 +883,26 @@ class MembershipInvitationView(APIView):
         request_serializer = MembershipInvitationRequestSerializer(data=request.data)
         request_serializer.is_valid(raise_exception=True)
 
-        current_membership = get_membership_for_invitation(
-            user=request.user,
-            establishment_id=establishment_id,
-        )
-        if current_membership is None:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        access_context = get_api_access_context(request)
+        current_membership = access_context.active_membership
+        if (
+            current_membership is None
+            or current_membership.establishment_id != establishment_id
+        ):
+            # No matching ACTIVE session selection: allow draft-path invites only.
+            # ACTIVE path without matching selection must switch first —
+            # do not reopen multi-est bypass. Drafts are never session-selectable;
+            # fallback uses the actor's active membership on the path draft.
+            path_membership = get_membership_for_invitation(
+                user=request.user,
+                establishment_id=establishment_id,
+            )
+            if (
+                path_membership is None
+                or path_membership.establishment.status != Establishment.Status.DRAFT
+            ):
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            current_membership = path_membership
         if not can_invite_memberships(current_membership):
             if current_membership.role == EstablishmentMembership.Role.STAFF:
                 return Response(

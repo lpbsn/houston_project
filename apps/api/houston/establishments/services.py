@@ -42,6 +42,7 @@ from houston.establishments.business_unit_identity import (
 from houston.establishments.membership_scope import (
     InvalidMembershipScopeAssignmentError,
     MembershipScopeInput,
+    MembershipScopeType,
     assign_membership_scopes,
     membership_business_unit_scope_ids,
     membership_scope_covers_business_unit,
@@ -79,10 +80,6 @@ class MembershipManagementNotFoundError(Exception):
 
 
 class CannotDeactivateLastActiveOwnerError(Exception):
-    pass
-
-
-class CannotDemoteLastActiveOwnerError(Exception):
     pass
 
 
@@ -1346,61 +1343,6 @@ def invite_director_during_onboarding(
     return _issue_director_invitation_for_membership(membership)
 
 
-@transaction.atomic
-def accept_director_invitation(
-    *,
-    request: HttpRequest,
-    raw_token: str,
-    password: str,
-) -> DirectorInvitationAcceptResult:
-    token_digest = auth_tokens.digest_token(raw_token.strip())
-    now = timezone.now()
-
-    invitation = (
-        EstablishmentInvitation.objects.select_for_update()
-        .select_related(
-            "membership",
-            "membership__user",
-            "membership__establishment",
-            "membership__establishment__organization",
-        )
-        .filter(token_digest=token_digest)
-        .first()
-    )
-
-    if invitation is None:
-        raise InvalidEstablishmentInvitationError
-
-    if invitation.accepted_at is not None:
-        raise EstablishmentInvitationAlreadyAcceptedError
-
-    if invitation.revoked_at is not None:
-        raise InvalidEstablishmentInvitationError
-
-    if invitation.expires_at <= now:
-        raise EstablishmentInvitationExpiredError
-
-    membership = invitation.membership
-    user = membership.user
-
-    if membership.role != EstablishmentMembership.Role.DIRECTOR:
-        raise InvalidEstablishmentInvitationError
-
-    if membership.status != EstablishmentMembership.Status.INVITED:
-        raise InvalidEstablishmentInvitationError
-
-    if user.status != User.Status.PENDING:
-        raise InvalidEstablishmentInvitationError
-
-    return _finalize_establishment_invitation_accept(
-        request=request,
-        invitation=invitation,
-        membership=membership,
-        user=user,
-        password=password,
-    )
-
-
 _INVITATION_ACCEPT_ROLES = frozenset(
     {
         EstablishmentMembership.Role.DIRECTOR,
@@ -2429,11 +2371,13 @@ def update_membership_for_management(
     ):
         raise MembershipManagementForbiddenError
 
-    update_fields: list[str] = []
-    role_changed = False
-    scopes_changed = False
+    role_changing = (
+        update_input.role is not None and membership.role != update_input.role
+    )
+    effective_role = update_input.role if update_input.role is not None else membership.role
+    scopes_provided = update_input.scopes is not None
 
-    if update_input.role is not None and membership.role != update_input.role:
+    if role_changing:
         if _is_forbidden_membership_role_change(
             current_role=membership.role,
             next_role=update_input.role,
@@ -2446,34 +2390,58 @@ def update_membership_for_management(
         ):
             raise MembershipManagementForbiddenError
 
-        if _would_demote_last_active_owner(
-            membership=membership,
-            next_role=update_input.role,
-        ):
-            raise CannotDemoteLastActiveOwnerError
+    if scopes_provided:
+        effective_scope_inputs = list(update_input.scopes)
+    else:
+        effective_scope_inputs = [
+            MembershipScopeInput(
+                scope_type=MembershipScopeType.BUSINESS_UNIT,
+                scope_id=business_unit_id,
+            )
+            for business_unit_id in _membership_business_unit_scope_ids(membership.id)
+        ]
 
-        membership.role = update_input.role
-        update_fields.append("role")
-        role_changed = True
-
-    if update_fields:
-        membership.save(update_fields=[*update_fields, "updated_at"])
-
-    effective_role = update_input.role if update_input.role is not None else membership.role
-
-    if update_input.scopes is not None:
-        if scopes_not_allowed_for_role(effective_role):
+    normalized_scopes: list = []
+    if scopes_not_allowed_for_role(effective_role):
+        if scopes_provided:
             raise InvalidMembershipScopeAssignmentError(
                 "Operational scopes cannot be assigned to owner or director memberships."
             )
-        if not update_input.scopes:
+    else:
+        if not effective_scope_inputs:
             raise InvalidMembershipScopeAssignmentError(
                 "At least one operational scope is required for staff and manager memberships."
             )
+        normalized_scopes = normalize_membership_scope_inputs(
+            establishment=membership.establishment,
+            scope_inputs=effective_scope_inputs,
+        )
+        if not normalized_scopes:
+            raise InvalidMembershipScopeAssignmentError(
+                "At least one operational scope is required for staff and manager memberships."
+            )
+        if (
+            current_membership is not None
+            and current_membership.role == EstablishmentMembership.Role.MANAGER
+        ):
+            _ensure_manager_scope_covers_invited_scopes(
+                manager_membership=current_membership,
+                resolved_invited_scopes=normalized_scopes,
+            )
+
+    role_changed = False
+    scopes_changed = False
+
+    if role_changing:
+        membership.role = update_input.role
+        membership.save(update_fields=["role", "updated_at"])
+        role_changed = True
+
+    if scopes_provided and not scopes_not_allowed_for_role(effective_role):
         previous_scope_ids = _membership_business_unit_scope_ids(membership.id)
         assign_membership_scopes(
             membership=membership,
-            scope_inputs=update_input.scopes,
+            scope_inputs=effective_scope_inputs,
         )
         scopes_changed = previous_scope_ids != _membership_business_unit_scope_ids(membership.id)
 
@@ -3328,32 +3296,6 @@ def _serialize_keyed_runtime_item(item) -> dict:
         "source": item.source,
         "active": item.active,
     }
-
-
-def _is_last_active_owner(membership: EstablishmentMembership) -> bool:
-    return (
-        EstablishmentMembership.objects.filter(
-            establishment=membership.establishment,
-            status=EstablishmentMembership.Status.ACTIVE,
-            role=EstablishmentMembership.Role.OWNER,
-        )
-        .exclude(id=membership.id)
-        .count()
-        == 0
-    )
-
-
-def _would_demote_last_active_owner(
-    *,
-    membership: EstablishmentMembership,
-    next_role: str,
-) -> bool:
-    return (
-        membership.status == EstablishmentMembership.Status.ACTIVE
-        and membership.role == EstablishmentMembership.Role.OWNER
-        and next_role != EstablishmentMembership.Role.OWNER
-        and _is_last_active_owner(membership)
-    )
 
 
 def _clear_selected_establishment_for_membership(

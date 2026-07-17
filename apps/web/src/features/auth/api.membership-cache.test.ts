@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   bootstrapQueryKey,
+  commitMembershipWriteCache,
   invalidateMembershipListAndDetailQueries,
   invalidateMembershipListAndWorkspaceSummaryQueries,
   invalidateMembershipWorkspaceQueries,
@@ -114,5 +115,52 @@ describe('membership cache helpers', () => {
       next,
       membership({ id: 'm-2', role: 'staff' }),
     ])
+  })
+
+  it('commitMembershipWriteCache patches then fans out owner root+bootstrap+summary independently', async () => {
+    const client = createTestQueryClient()
+    const previous = membership({ id: 'm-owner', role: 'owner', status: 'active' })
+    const next = membership({ id: 'm-owner', role: 'owner', status: 'inactive' })
+    client.setQueryData(membershipDetailQueryKey('est-1', 'm-owner'), previous)
+    client.setQueryData(membershipListQueryKey('est-1'), [previous])
+
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockImplementation(async (filters) => {
+      const key = (filters as { queryKey?: unknown[] })?.queryKey
+      if (key?.[0] === 'auth') {
+        throw new Error('bootstrap refresh failed')
+      }
+    })
+
+    commitMembershipWriteCache('est-1', next, client, { includeWorkspaceSummary: true })
+
+    expect(client.getQueryData(membershipDetailQueryKey('est-1', 'm-owner'))).toEqual(next)
+    expect(client.getQueryData(membershipListQueryKey('est-1'))).toEqual([next])
+    await vi.waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipsQueryKeyRoot })
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
+    })
+  })
+
+  it('commitMembershipWriteCache invalidates list+detail for non-owner roles', async () => {
+    const client = createTestQueryClient()
+    const next = membership({ id: 'm-1', role: 'staff', status: 'active' })
+    client.setQueryData(membershipListQueryKey('est-1'), [
+      membership({ id: 'm-1', role: 'manager' }),
+    ])
+
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined)
+
+    commitMembershipWriteCache('est-1', next, client)
+
+    expect(client.getQueryData(membershipListQueryKey('est-1'))).toEqual([next])
+    await vi.waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: membershipDetailQueryKey('est-1', 'm-1'),
+      })
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: membershipsQueryKeyRoot })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
   })
 })

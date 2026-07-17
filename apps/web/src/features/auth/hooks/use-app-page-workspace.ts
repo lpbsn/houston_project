@@ -4,14 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/app/auth-provider'
 import { toErrorMessage } from '@/lib/error-message'
 import {
+  commitMembershipWriteCache,
   deactivateMembership,
   getMembership,
   getWorkspaceSummary,
-  invalidateMembershipListAndWorkspaceSummaryQueries,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
-  patchMembershipCaches,
   switchEstablishment,
   updateMembership,
   workspaceSummaryQueryKey,
@@ -129,14 +128,15 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
         return
       }
 
-      patchMembershipCaches(activeEstablishmentId, membership, queryClient)
+      commitMembershipWriteCache(activeEstablishmentId, membership, queryClient, {
+        includeWorkspaceSummary: true,
+      })
       setEditorState({
         membershipId: membership.id,
         roleDraft: normalizeRole(membership.role),
         selectedScopes: businessUnitScopesFromApiItems(membership.scopes),
       })
       setMembershipMutationError(null)
-      void invalidateMembershipListAndWorkspaceSummaryQueries(activeEstablishmentId, queryClient)
     },
   })
 
@@ -153,7 +153,9 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
         return
       }
 
-      patchMembershipCaches(activeEstablishmentId, membership, queryClient)
+      commitMembershipWriteCache(activeEstablishmentId, membership, queryClient, {
+        includeWorkspaceSummary: true,
+      })
       startTransition(() => {
         setSelectedMembershipId(null)
         setEditorState({
@@ -163,7 +165,6 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
         })
         setMembershipMutationError(null)
       })
-      void invalidateMembershipListAndWorkspaceSummaryQueries(activeEstablishmentId, queryClient)
     },
   })
 
