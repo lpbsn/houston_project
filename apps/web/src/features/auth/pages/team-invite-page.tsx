@@ -59,6 +59,7 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
   const {
     form,
     setForm,
+    setRole,
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
@@ -70,6 +71,7 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
     roleOptions,
     hasRoleOptions,
     selectedRole,
+    requiresScopes,
     isManagerRestrictedToStaff,
     canSubmit,
     handleSubmit,
@@ -133,7 +135,7 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
 
           <section className="space-y-2">
             <TerrainSectionLabel>Role</TerrainSectionLabel>
-            <TerrainCard className="p-3">
+            <TerrainCard className="space-y-3 p-3">
               {roleOptions.length === 1 ? (
                 <Button type="button" className="h-9 rounded-xl capitalize" disabled>
                   {roleOptions[0]}
@@ -146,33 +148,41 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
                       type="button"
                       variant={selectedRole === roleOption ? 'default' : 'outline'}
                       className="h-9 rounded-xl capitalize"
-                      onClick={() => setForm((current) => ({ ...current, role: roleOption }))}
+                      onClick={() => setRole(roleOption)}
                     >
                       {roleOption}
                     </Button>
                   ))}
                 </div>
               )}
+              {selectedRole === 'owner' ? (
+                <p className="text-sm text-[#5f574d]">
+                  L’invitation d’un propriétaire s’applique à tous les établissements brouillon et
+                  actifs de l’organisation.
+                </p>
+              ) : null}
             </TerrainCard>
           </section>
 
-          <section className="space-y-2">
-            <TerrainSectionLabel>Pôles d&apos;activité</TerrainSectionLabel>
-            <BusinessUnitScopeSelector
-              tree={businessUnitQuery.data ?? null}
-              selectedScopes={selectedBusinessUnitScopes}
-              onChange={setSelectedBusinessUnitScopes}
-              isLoading={businessUnitQuery.isPending}
-              errorMessage={
-                businessUnitQuery.error
-                  ? businessUnitQuery.error instanceof Error
-                    ? businessUnitQuery.error.message
-                    : 'Les pôles d’activité sont indisponibles.'
-                  : null
-              }
-              disabled={isSubmitting}
-            />
-          </section>
+          {requiresScopes ? (
+            <section className="space-y-2">
+              <TerrainSectionLabel>Pôles d&apos;activité</TerrainSectionLabel>
+              <BusinessUnitScopeSelector
+                tree={businessUnitQuery.data ?? null}
+                selectedScopes={selectedBusinessUnitScopes}
+                onChange={setSelectedBusinessUnitScopes}
+                isLoading={businessUnitQuery.isPending}
+                errorMessage={
+                  businessUnitQuery.error
+                    ? businessUnitQuery.error instanceof Error
+                      ? businessUnitQuery.error.message
+                      : 'Les pôles d’activité sont indisponibles.'
+                    : null
+                }
+                disabled={isSubmitting}
+              />
+            </section>
+          ) : null}
 
           {errorMessage ? <TerrainFeedback variant="error" message={errorMessage} /> : null}
 

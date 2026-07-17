@@ -5,6 +5,7 @@ import {
   activateMembership,
   deactivateMembership,
   getMembership,
+  invalidateMembershipWorkspaceQueries,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
@@ -12,8 +13,11 @@ import {
   updateUserProfile,
   type UserProfileUpdateRequest,
 } from '@/features/auth/api'
-import { canViewTeamFromBootstrapHints, getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
-import type { MembershipUpdateRequest } from '@/features/auth/types'
+import {
+  canViewTeamFromBootstrapHints,
+  getBootstrapPermissionHints,
+} from '@/features/auth/lib/bootstrap-permission-hints'
+import type { EstablishmentMembershipResponse, MembershipUpdateRequest } from '@/features/auth/types'
 
 export function useTeamMembersQuery() {
   const { activeMembership, bootstrap } = useAuth()
@@ -49,7 +53,15 @@ function useTeamMembershipMutationContext() {
   const { activeMembership } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
 
-  const invalidateMembershipQueries = async (membershipId: string) => {
+  const invalidateMembershipQueries = async (
+    membershipId: string,
+    membership?: EstablishmentMembershipResponse | null,
+  ) => {
+    if (membership?.role === 'owner') {
+      await invalidateMembershipWorkspaceQueries({ includeBootstrap: true })
+      return
+    }
+
     if (!establishmentId) {
       return
     }
@@ -70,8 +82,8 @@ export function useUpdateMembershipMutation(membershipId: string) {
   return useMutation({
     mutationFn: (input: MembershipUpdateRequest) =>
       updateMembership(establishmentId!, membershipId, input),
-    onSuccess: async () => {
-      await invalidateMembershipQueries(membershipId)
+    onSuccess: async (data) => {
+      await invalidateMembershipQueries(membershipId, data)
     },
   })
 }
@@ -81,8 +93,8 @@ export function useActivateMembershipMutation(membershipId: string) {
 
   return useMutation({
     mutationFn: () => activateMembership(establishmentId!, membershipId),
-    onSuccess: async () => {
-      await invalidateMembershipQueries(membershipId)
+    onSuccess: async (data) => {
+      await invalidateMembershipQueries(membershipId, data)
     },
   })
 }
@@ -92,8 +104,8 @@ export function useDeactivateMembershipMutation(membershipId: string) {
 
   return useMutation({
     mutationFn: () => deactivateMembership(establishmentId!, membershipId),
-    onSuccess: async () => {
-      await invalidateMembershipQueries(membershipId)
+    onSuccess: async (data) => {
+      await invalidateMembershipQueries(membershipId, data)
     },
   })
 }

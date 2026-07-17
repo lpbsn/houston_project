@@ -91,21 +91,25 @@ Permission outcomes are:
   - Current implemented helpers allow active members to access the app, view the signal feed, and create observations.
 
 - Owner
-  - Broad Organization-level authority in.
+  - Broad Organization-level authority.
   - Current implemented helpers allow managing establishment settings, memberships, runtime context, action creation, and action validation.
+  - Invite matrix (workspace): may invite `owner`, `director`, `manager`, `staff`. Owner invite fans out across draft/active establishments of the organization.
+  - Manage matrix: may deactivate/reactivate organizational owners and manage directors; `PATCH` cannot assign destination `owner`/`director` and cannot modify an existing owner. Director may be demoted to manager/staff with required scopes.
 
 - Director
   - Broad establishment-level operational authority in MVP.
   - Current implemented helpers match owner authority for most validated helper sets.
-  - Membership management is narrower than owner authority: directors may manage manager and staff memberships only; they cannot manage owner memberships.
+  - Invite matrix (workspace): may invite `director`, `manager`, `staff` on an **active** establishment (multi-director allowed post-activation). Cannot invite `owner`.
+  - Membership management is narrower than owner: directors may manage manager and staff only; they cannot manage owner or peer director memberships.
 
 - Manager
   - Management and action authority, mainly inside assigned BusinessUnit scopes.
-  - Current implemented helpers allow action creation and validation, but not establishment settings or membership management.
+  - Current implemented helpers allow action creation and validation, and inviting **staff** within the manager’s BusinessUnit scope coverage. Not establishment settings management.
   - BusinessUnit scope coverage required for BusinessUnit-scoped visibility/action (or owner/director broad access).
 
 - Staff
   - Reporting and execution role, not management authority.
+  - Cannot invite members.
   - Current implemented helpers allow app access, signal-feed access, and observation creation.
   - **Action Plans (implemented):** Staff may create action plans when permitted by `can_create_action_plan` (establishment helper `can_create_action`). Staff **cannot** create **signal-linked** action plans from a Signal when denied by role rules. Staff execution permissions follow `action_plans/permissions.py`. Staff **cannot validate** action plan executions when validation is required and role excludes validator (`can_validate_action` establishment helper).
   - BusinessUnit scope coverage required for visibility and free-action creation (or owner/director broad access).

@@ -24,20 +24,33 @@ import type {
 } from './types'
 
 export const bootstrapQueryKey = ['auth', 'bootstrap'] as const
+export const membershipsQueryKeyRoot = ['workspace', 'memberships'] as const
 export const membershipListQueryKey = (establishmentId: string) =>
-  ['workspace', 'memberships', establishmentId] as const
+  [...membershipsQueryKeyRoot, establishmentId] as const
 export const membershipDetailQueryKey = (establishmentId: string, membershipId: string) =>
-  ['workspace', 'memberships', establishmentId, membershipId] as const
+  [...membershipsQueryKeyRoot, establishmentId, membershipId] as const
 export const workspaceSummaryQueryKey = (establishmentId: string) =>
   ['workspace', 'summary', establishmentId] as const
 
 class AuthApiError extends Error {
   status: number
+  code: string | null
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code: string | null = null) {
     super(message)
     this.name = 'AuthApiError'
     this.status = status
+    this.code = code
+  }
+}
+
+/** Invalidate all membership list/detail caches (org-owner fan-out safe). */
+export async function invalidateMembershipWorkspaceQueries(options?: {
+  includeBootstrap?: boolean
+}) {
+  await queryClient.invalidateQueries({ queryKey: membershipsQueryKeyRoot })
+  if (options?.includeBootstrap !== false) {
+    await queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
   }
 }
 
@@ -179,7 +192,11 @@ function buildAuthError(
   error: unknown,
   fallbackMessage: string,
 ) {
-  return new AuthApiError(getErrorDetail(error) ?? fallbackMessage, response.status)
+  return new AuthApiError(
+    getErrorDetail(error) ?? fallbackMessage,
+    response.status,
+    getErrorCode(error),
+  )
 }
 
 let refreshPromise: Promise<string | null> | null = null

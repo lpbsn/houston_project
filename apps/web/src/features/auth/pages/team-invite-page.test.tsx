@@ -40,6 +40,7 @@ const { authState, inviteFormState } = vi.hoisted(() => ({
         role: 'staff' as const,
       },
       setForm: vi.fn(),
+      setRole: vi.fn(),
       selectedBusinessUnitScopes: [],
       setSelectedBusinessUnitScopes: vi.fn(),
       invitationLink: null as string | null,
@@ -52,9 +53,15 @@ const { authState, inviteFormState } = vi.hoisted(() => ({
         isPending: false,
         error: null,
       },
-      roleOptions: ['staff', 'manager'] as ('staff' | 'manager')[],
+      roleOptions: ['staff', 'manager'] as (
+        | 'owner'
+        | 'director'
+        | 'manager'
+        | 'staff'
+      )[],
       hasRoleOptions: true,
-      selectedRole: 'staff' as const,
+      selectedRole: 'staff' as 'owner' | 'director' | 'manager' | 'staff',
+      requiresScopes: true,
       isManagerRestrictedToStaff: false,
       canSubmit: false,
       handleSubmit: vi.fn((event: React.FormEvent) => event.preventDefault()),
@@ -100,6 +107,7 @@ afterEach(() => {
       role: 'staff',
     },
     setForm: vi.fn(),
+    setRole: vi.fn(),
     selectedBusinessUnitScopes: [],
     setSelectedBusinessUnitScopes: vi.fn(),
     invitationLink: null,
@@ -115,6 +123,7 @@ afterEach(() => {
     roleOptions: ['staff', 'manager'],
     hasRoleOptions: true,
     selectedRole: 'staff',
+    requiresScopes: true,
     isManagerRestrictedToStaff: false,
     canSubmit: false,
     handleSubmit: vi.fn((event: React.FormEvent) => event.preventDefault()),
@@ -222,5 +231,22 @@ describe('TeamInvitePage', () => {
     render(createElement(TeamInvitePage))
 
     expect(screen.getByText('Invitation could not be created.')).toBeTruthy()
+  })
+
+  it('shows organizational owner coverage note when owner role is selected', () => {
+    inviteFormState.current = {
+      ...inviteFormState.current,
+      roleOptions: ['owner', 'director', 'manager', 'staff'],
+      selectedRole: 'owner',
+      requiresScopes: false,
+    }
+
+    render(createElement(TeamInvitePage))
+
+    expect(
+      screen.getByText(
+        'L’invitation d’un propriétaire s’applique à tous les établissements brouillon et actifs de l’organisation.',
+      ),
+    ).toBeTruthy()
   })
 })

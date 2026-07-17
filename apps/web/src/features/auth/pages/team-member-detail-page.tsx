@@ -23,16 +23,20 @@ import {
   useUpdateProfileMutation,
 } from '@/features/auth/hooks/use-team-members'
 import { businessUnitScopesFromApiItems } from '@/features/auth/lib/business-unit-scope'
+import { resolveMembershipManagementErrorMessage } from '@/features/auth/lib/membership-management-errors'
+import {
+  canChangeMembershipRoleViaPatch,
+  canEditMembershipOperationalScopes,
+  getEditableRoleOptions,
+} from '@/features/auth/lib/membership-rbac'
 import {
   buildMemberDisplayName,
   membershipIsActive,
   membershipIsInvited,
   normalizeTeamRole,
 } from '@/features/auth/lib/team-members'
-import { getEditableRoleOptions } from '@/features/auth/lib/membership-rbac'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { EstablishmentMembershipResponse, RoleEnum } from '@/features/auth/types'
-import { toErrorMessage } from '@/lib/error-message'
 import { terrain, terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -44,6 +48,9 @@ const ROLE_PILL_LABELS: Record<RoleEnum, string> = {
   manager: 'Manager',
   staff: 'Équipe',
 }
+
+const OWNER_DEACTIVATE_CONFIRM_MESSAGE =
+  'Désactiver ce propriétaire le désactivera sur tous les établissements brouillon et actifs de l’organisation. Continuer ?'
 
 type TeamMemberDetailPageProps = {
   membershipId: string
@@ -96,13 +103,26 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
   const deactivateMutation = useDeactivateMembershipMutation(membershipId)
   const updateProfileMutation = useUpdateProfileMutation()
 
+  const currentRole = membership ? normalizeTeamRole(membership.role) : null
+  const draftRole = isEditing && draft ? draft.role : currentRole
+  const needsScopeEditor =
+    Boolean(draftRole && canEditMembershipOperationalScopes(draftRole)) &&
+    (Boolean(membership?.permission_hints?.can_edit_scopes) ||
+      (isEditing && currentRole === 'director'))
+
   const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, {
-    enabled: Boolean(establishmentId && membership?.permission_hints?.can_edit_scopes),
+    enabled: Boolean(establishmentId && needsScopeEditor),
     staleTime: 60_000,
   })
 
   const actorRole = toRoleEnum(activeMembership?.role)
-  const editableRoleOptions = useMemo(() => getEditableRoleOptions(actorRole), [actorRole])
+  const editableRoleOptions = useMemo(
+    () => (actorRole && currentRole ? getEditableRoleOptions(actorRole, currentRole) : []),
+    [actorRole, currentRole],
+  )
+  const roleEditableViaPatch = currentRole
+    ? canChangeMembershipRoleViaPatch(currentRole)
+    : false
 
   const isSaving =
     updateMembershipMutation.isPending ||
@@ -116,7 +136,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
     return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement du membre...</p>
   }
 
-  if (detailQuery.isError || !membership) {
+  if (detailQuery.isError || !membership || !currentRole) {
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
@@ -129,9 +149,8 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
 
   const displayName = buildMemberDisplayName(membership)
   const hints = membership.permission_hints
-  const showRoleSection = true
-  const showScopesSection =
-    membership.role !== 'owner' && membership.role !== 'director'
+  const isOwnerTarget = currentRole === 'owner'
+  const showScopesSection = Boolean(draftRole && canEditMembershipOperationalScopes(draftRole))
   const canEdit = hasEditableFields(membership)
   const invited = membershipIsInvited(membership)
   const isActive = membershipIsActive(membership)
@@ -175,11 +194,21 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
         }
       }
 
-      if (hints?.can_edit_role && draft.role !== normalizeTeamRole(membership.role)) {
-        membershipUpdates.role = draft.role
-      }
+      const roleChanged =
+        hints?.can_edit_role &&
+        roleEditableViaPatch &&
+        draft.role !== normalizeTeamRole(membership.role)
 
-      if (hints?.can_edit_scopes) {
+      if (roleChanged) {
+        if (!canEditMembershipOperationalScopes(draft.role)) {
+          throw new Error('Ce changement de rôle n’est pas autorisé.')
+        }
+        if (draft.scopes.length === 0) {
+          throw new Error('Sélectionnez au moins un pôle d’activité pour ce rôle.')
+        }
+        membershipUpdates.role = draft.role
+        membershipUpdates.scopes = draft.scopes
+      } else if (hints?.can_edit_scopes && canEditMembershipOperationalScopes(draft.role)) {
         const currentScopeIds = membership.scopes.map((scope) => scope.scope_id).sort()
         const nextScopeIds = draft.scopes.map((scope) => scope.scope_id).sort()
         if (currentScopeIds.join(',') !== nextScopeIds.join(',')) {
@@ -198,13 +227,24 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
       setIsEditing(false)
       setDraft(null)
     } catch (error) {
-      setErrorMessage(toErrorMessage(error, 'Les modifications n\'ont pas pu être enregistrées.'))
+      setErrorMessage(
+        resolveMembershipManagementErrorMessage(
+          error,
+          'Les modifications n’ont pas pu être enregistrées.',
+        ),
+      )
     }
   }
 
   const handleStatusToggle = async (checked: boolean) => {
     if (!hints?.can_edit_status || invited) {
       return
+    }
+
+    if (!checked && isOwnerTarget) {
+      if (!window.confirm(OWNER_DEACTIVATE_CONFIRM_MESSAGE)) {
+        return
+      }
     }
 
     setErrorMessage(null)
@@ -216,12 +256,18 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
         await deactivateMutation.mutateAsync()
       }
     } catch (error) {
-      setErrorMessage(toErrorMessage(error, 'Le statut n\'a pas pu être mis à jour.'))
+      setErrorMessage(
+        resolveMembershipManagementErrorMessage(error, 'Le statut n’a pas pu être mis à jour.'),
+      )
     }
   }
 
   const effectiveDraft = isEditing && draft ? draft : buildEditorDraft(membership)
-  const effectiveRole = isEditing && draft ? draft.role : normalizeTeamRole(membership.role)
+  const effectiveRole = isEditing && draft ? draft.role : currentRole
+  const canEditScopesInForm =
+    isEditing &&
+    canEditMembershipOperationalScopes(effectiveRole) &&
+    (Boolean(hints?.can_edit_scopes) || currentRole === 'director')
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -309,48 +355,62 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
           </TerrainCard>
         </section>
 
-        {showRoleSection ? (
-          <section className="space-y-2">
-            <TerrainSectionLabel>Poste</TerrainSectionLabel>
-            <TerrainCard className="p-3">
-              <div className="flex flex-wrap gap-2">
-                {ROLE_PILL_OPTIONS.map((role) => {
-                  const isSelected = effectiveRole === role
-                  const isDisabled =
-                    !isEditing ||
-                    !hints?.can_edit_role ||
-                    !editableRoleOptions.includes(role)
+        <section className="space-y-2">
+          <TerrainSectionLabel>Poste</TerrainSectionLabel>
+          <TerrainCard className="p-3">
+            <div className="flex flex-wrap gap-2">
+              {ROLE_PILL_OPTIONS.map((role) => {
+                const isSelected = effectiveRole === role
+                const canSelectDestination =
+                  roleEditableViaPatch && editableRoleOptions.includes(role)
+                const isDisabled =
+                  !isEditing || !hints?.can_edit_role || (!canSelectDestination && !isSelected)
 
-                  return (
-                    <button
-                      key={role}
-                      type="button"
-                      disabled={isDisabled}
-                      onClick={() =>
-                        setDraft((current) => (current ? { ...current, role } : current))
-                      }
-                      className={cn(
-                        'rounded-full border px-3 py-1.5 text-sm font-medium transition',
-                        isSelected
-                          ? 'border-[#1B4FD8] bg-[#1B4FD8] text-white'
-                          : 'border-[#E8E6DF] bg-[#FAFAF8] text-[#5C5A54]',
-                        isDisabled && 'cursor-default opacity-80',
-                      )}
-                    >
-                      {ROLE_PILL_LABELS[role]}
-                    </button>
-                  )
-                })}
-              </div>
-            </TerrainCard>
-          </section>
-        ) : null}
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    disabled={isDisabled || (isSelected && !canSelectDestination)}
+                    onClick={() =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              role,
+                              scopes: canEditMembershipOperationalScopes(role)
+                                ? current.scopes
+                                : [],
+                            }
+                          : current,
+                      )
+                    }
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-sm font-medium transition',
+                      isSelected
+                        ? 'border-[#1B4FD8] bg-[#1B4FD8] text-white'
+                        : 'border-[#E8E6DF] bg-[#FAFAF8] text-[#5C5A54]',
+                      isDisabled && 'cursor-default opacity-80',
+                    )}
+                  >
+                    {ROLE_PILL_LABELS[role]}
+                  </button>
+                )
+              })}
+            </div>
+            {isOwnerTarget ? (
+              <p className="mt-3 text-sm text-[#5f574d]">
+                Le rôle propriétaire ne peut pas être modifié ici. Utilisez l’invitation pour
+                ajouter un propriétaire, ou l’activation / désactivation pour le cycle de vie.
+              </p>
+            ) : null}
+          </TerrainCard>
+        </section>
 
         {showScopesSection ? (
           <section className="space-y-2">
             <TerrainSectionLabel>Pôle d&apos;activité</TerrainSectionLabel>
             <TerrainCard className="p-3">
-              {isEditing && hints?.can_edit_scopes ? (
+              {canEditScopesInForm ? (
                 <BusinessUnitScopeSelector
                   tree={businessUnitQuery.data ?? null}
                   selectedScopes={effectiveDraft.scopes}
@@ -386,7 +446,14 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
             />
             {invited ? (
               <p className="px-4 pb-3.5 text-xs text-[#7D7B75]">
-                Invitation en attente : le membre devient actif après configuration du mot de passe.
+                {isOwnerTarget
+                  ? 'Invitation propriétaire en attente : la désactivation retire l’invitation sur tous les établissements brouillon et actifs de l’organisation. Le membre devient actif après configuration du mot de passe.'
+                  : 'Invitation en attente : le membre devient actif après configuration du mot de passe.'}
+              </p>
+            ) : isOwnerTarget ? (
+              <p className="px-4 pb-3.5 text-xs text-[#7D7B75]">
+                Désactiver ou réactiver un propriétaire applique le changement à tous les
+                établissements brouillon et actifs de l’organisation.
               </p>
             ) : null}
           </TerrainCard>

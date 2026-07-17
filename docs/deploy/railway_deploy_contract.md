@@ -160,6 +160,19 @@ preDeployCommand = "/bin/sh -c 'cd /app/apps/api && /opt/venv/bin/python manage.
 
 If pre-deploy fails: fix the error, or run migrate manually (Railway shell / one-off) before accepting traffic.
 
+### Organizational owners gate (before enabling multi-owner / org-owner invites)
+
+Run against the target database **before** relying on organizational owner invite / deactivate / reactivate in that environment:
+
+```bash
+make preflight-organizational-owners
+# equivalent: manage.py preflight_organizational_owners --fail-on-issues
+```
+
+* Fails on owner status mixes, non-owner conflicts, and missing-owner gaps.
+* Homogeneous missing-owner gaps only: `make repair-organizational-owners ARGS='--apply'`, then re-run preflight until green.
+* Status mixes / non-owner conflicts: **block deploy / feature activation** until manual data correction. Repair does not align statuses.
+
 ### Post-migrate bootstrap (manual)
 
 After first migrate (or schema change), run **once** manually:
@@ -432,6 +445,8 @@ Local prod-test: `BASE_URL=http://localhost:8080` after `make up-prod-test`. See
 make backend-check
 make web-check
 make backend-deploy-check
+# Before enabling organizational owner workflows on an environment with data:
+make preflight-organizational-owners
 ```
 
 CI also runs `manage.py check --deploy` in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) (mirror of `make backend-deploy-check`). It fails on deploy **errors**, not necessarily on warnings — no `--fail-level WARNING`.
