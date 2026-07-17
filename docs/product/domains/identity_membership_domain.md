@@ -127,7 +127,7 @@ Implemented response truths:
 - Login and refresh currently auto-select the sole active establishment on `UserSession` when exactly one active membership exists.
 - Current bootstrap behavior: `active_membership` resolves from `UserSession.selected_establishment` when valid.
 - If `selected_establishment` is stale, inactive, or outside active memberships, it is cleared safely and `active_membership` becomes `null`.
-- Membership-management endpoints are establishment-scoped and require the path `establishment_id` to match the current active auth-session context.
+- Membership-management endpoints are establishment-scoped and require the path `establishment_id` to match the current active auth-session context for **active** establishments. `POST .../membership-invitations/` additionally allows a **draft** path when the actor has an active membership on that draft, even if another active establishment is selected (drafts are not session-selectable; never falls back to another active establishment).
 - Membership-management list and detail responses are tenant-filtered before serialization.
 - Role updates and operational-domain assignment updates use `PATCH`; activation and deactivation are separate command endpoints.
 - Organizational owners: memberships with `role=owner` are kept coherent across all `draft` and `active` establishments of an organization (fan-out invite / deactivate / reactivate). There is no `OrganizationMembership` model.
@@ -143,7 +143,7 @@ Implemented response truths:
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
 - Establishment invitation acceptance: `POST /api/v1/invitations/{token}/accept/` (password setup, session creation; CSRF required).
 - Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled (draft onboarding; exactly one non-owner director gate).
-- Workspace membership invitations: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` may invite `staff`, `manager`, `director` (active establishment), or organizational `owner` (active path establishment; fan-out to draft+active org establishments). Returns `invitation_token` and schedules a transactional invitation email when enabled.
+- Workspace membership invitations: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` may invite `staff`, `manager`, `director` (active establishment), or organizational `owner` (active path establishment; fan-out to draft+active org establishments). Staff/manager invites are also allowed on a **draft** path via the actor’s active membership on that draft when session selection is on a different active establishment. Returns `invitation_token` and schedules a transactional invitation email when enabled.
 
 Candidate endpoints only:
 

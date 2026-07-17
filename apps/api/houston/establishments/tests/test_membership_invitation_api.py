@@ -1330,3 +1330,79 @@ def test_invitation_rejects_path_establishment_outside_session_context(api_clien
     )
     assert not User.objects.filter(email__iexact=invite_email).exists()
     apply_async.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "invited_role",
+    [
+        EstablishmentMembership.Role.STAFF,
+        EstablishmentMembership.Role.MANAGER,
+    ],
+)
+def test_invitation_allows_draft_path_when_active_establishment_selected(
+    api_client,
+    invited_role,
+):
+    organization = Organization.objects.create(
+        name=f"Draft Fallback Org {uuid.uuid4().hex[:6]}",
+        status=Organization.Status.ACTIVE,
+    )
+    selected = Establishment.objects.create(
+        name="Selected Active Hotel",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    draft = Establishment.objects.create(
+        name="Draft Onboarding Hotel",
+        organization=organization,
+        status=Establishment.Status.DRAFT,
+    )
+    owner = create_user(username=f"draft_fallback_owner_{invited_role}")
+    create_membership(user=owner, establishment=selected, role=ROLE_OWNER)
+    create_membership(user=owner, establishment=draft, role=ROLE_OWNER)
+    draft_business_unit = create_business_unit(establishment=draft, key="housekeeping")
+    invite_email = f"draft-fallback-{invited_role}@example.com"
+
+    access_token = login(api_client, identifier=owner.email)
+    access_token = switch_establishment_if_possible(
+        api_client,
+        access_token=access_token,
+        establishment_id=selected.id,
+    )
+    csrf_token = ensure_csrf(api_client)
+    response = api_client.post(
+        f"/api/v1/establishments/{draft.id}/membership-invitations/",
+        invite_payload(
+            email=invite_email,
+            role=invited_role,
+            scopes=[business_unit_scope_payload(draft_business_unit)],
+        ),
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    assert body["membership"]["role"] == invited_role
+    assert body["membership"]["establishment_id"] == str(draft.id)
+    assert_business_unit_scope_response(
+        body["membership"],
+        business_unit=draft_business_unit,
+    )
+
+    membership = EstablishmentMembership.objects.get(
+        establishment=draft,
+        user__email__iexact=invite_email,
+    )
+    assert membership.role == invited_role
+    assert membership.status == EstablishmentMembership.Status.INVITED
+    assert EstablishmentInvitation.objects.filter(membership=membership).exists()
+    assert MembershipScope.objects.filter(
+        membership=membership,
+        business_unit=draft_business_unit,
+    ).exists()
+    assert not EstablishmentMembership.objects.filter(
+        establishment=selected,
+        user__email__iexact=invite_email,
+    ).exists()

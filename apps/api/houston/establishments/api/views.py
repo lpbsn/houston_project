@@ -885,12 +885,14 @@ class MembershipInvitationView(APIView):
 
         access_context = get_api_access_context(request)
         current_membership = access_context.active_membership
-        if current_membership is not None:
-            if current_membership.establishment_id != establishment_id:
-                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            # No ACTIVE session selection: allow draft-path invites (onboarding) only.
-            # ACTIVE path without selection must switch first — do not reopen multi-est bypass.
+        if (
+            current_membership is None
+            or current_membership.establishment_id != establishment_id
+        ):
+            # No matching ACTIVE session selection: allow draft-path invites only.
+            # ACTIVE path without matching selection must switch first —
+            # do not reopen multi-est bypass. Drafts are never session-selectable;
+            # fallback uses the actor's active membership on the path draft.
             path_membership = get_membership_for_invitation(
                 user=request.user,
                 establishment_id=establishment_id,
