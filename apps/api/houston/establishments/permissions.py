@@ -25,10 +25,6 @@ def can_manage_establishment_settings(membership: EstablishmentMembership | None
     return _has_role(membership, ADMIN_ROLES)
 
 
-def can_manage_memberships(membership: EstablishmentMembership | None) -> bool:
-    return _has_role(membership, ADMIN_ROLES)
-
-
 def can_view_team_memberships(membership: EstablishmentMembership | None) -> bool:
     return is_valid_membership(membership)
 
@@ -116,14 +112,6 @@ class HasActiveMembership(BasePermission):
     def has_permission(self, request, view) -> bool:
         access_context = get_api_access_context(request)
         return bool(access_context.active_memberships)
-
-
-class CanManageMemberships(BasePermission):
-    message = "You do not have permission to manage memberships."
-
-    def has_permission(self, request, view) -> bool:
-        access_context = get_api_access_context(request)
-        return can_manage_memberships(access_context.active_membership)
 
 
 class CanViewTeamMemberships(BasePermission):

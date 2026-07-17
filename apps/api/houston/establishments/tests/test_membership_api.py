@@ -645,12 +645,21 @@ def test_director_can_patch_manager_membership(api_client):
         role=EstablishmentMembership.Role.DIRECTOR,
         name="Nice",
     )
+    housekeeping = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
     manager_user = create_user(username="manager_target")
     manager_membership = EstablishmentMembership.objects.create(
         user=manager_user,
         establishment=actor_membership.establishment,
         role=EstablishmentMembership.Role.MANAGER,
         status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=housekeeping,
     )
 
     access_token = login(api_client, identifier=actor.email)
@@ -666,6 +675,7 @@ def test_director_can_patch_manager_membership(api_client):
 
     assert response.status_code == 200
     assert response.json()["role"] == EstablishmentMembership.Role.STAFF
+    assert MembershipScope.objects.filter(membership=manager_membership).count() == 1
 
 
 def test_staff_cannot_patch_other_membership(api_client):
@@ -874,6 +884,150 @@ def test_manager_cannot_patch_staff_out_of_scope(api_client):
     )
 
     assert response.status_code == 403
+
+
+def test_manager_cannot_expand_staff_scopes_beyond_perimeter(api_client):
+    actor = create_user(username="manager_expand_scopes")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.MANAGER,
+        name="Nice",
+    )
+    housekeeping = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    security = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="security",
+        label="Security",
+    )
+    create_membership_with_business_unit_scope(
+        membership=actor_membership,
+        business_unit=housekeeping,
+    )
+    target_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="staff_expand_scopes"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=target_membership,
+        business_unit=housekeeping,
+    )
+    before_role = target_membership.role
+    before_scope_ids = set(
+        MembershipScope.objects.filter(membership=target_membership).values_list(
+            "business_unit_id",
+            flat=True,
+        )
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{target_membership.id}/"
+        ),
+        {"scopes": [business_unit_scope_payload(security)]},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+    target_membership.refresh_from_db()
+    assert target_membership.role == before_role
+    assert (
+        set(
+            MembershipScope.objects.filter(membership=target_membership).values_list(
+                "business_unit_id",
+                flat=True,
+            )
+        )
+        == before_scope_ids
+    )
+
+
+def test_director_demote_to_manager_requires_scopes(api_client):
+    actor = create_user(username="owner_demote_director")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    director_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="director_demote_target"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    before_role = director_membership.role
+    before_scope_count = MembershipScope.objects.filter(membership=director_membership).count()
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{director_membership.id}/"
+        ),
+        {"role": EstablishmentMembership.Role.MANAGER},
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    director_membership.refresh_from_db()
+    assert director_membership.role == before_role
+    assert (
+        MembershipScope.objects.filter(membership=director_membership).count()
+        == before_scope_count
+    )
+
+
+def test_director_demote_to_manager_with_scopes_succeeds(api_client):
+    actor = create_user(username="owner_demote_director_ok")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    housekeeping = create_business_unit(
+        establishment=actor_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    director_membership = EstablishmentMembership.objects.create(
+        user=create_user(username="director_demote_ok"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/"
+            f"{director_membership.id}/"
+        ),
+        {
+            "role": EstablishmentMembership.Role.MANAGER,
+            "scopes": [business_unit_scope_payload(housekeeping)],
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == EstablishmentMembership.Role.MANAGER
+    director_membership.refresh_from_db()
+    assert director_membership.role == EstablishmentMembership.Role.MANAGER
+    assert MembershipScope.objects.filter(
+        membership=director_membership,
+        business_unit=housekeeping,
+    ).exists()
 
 
 def test_manager_cannot_patch_owner_membership(api_client):

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from django.db import close_old_connections
+from django.test import override_settings
 from rest_framework.test import APIClient
 
 from houston.accounts.models import User
@@ -144,8 +145,31 @@ def invite_payload(*, scopes: list[dict], **overrides):
     return payload
 
 
+def switch_establishment_if_possible(
+    api_client: APIClient,
+    *,
+    access_token: str,
+    establishment_id,
+) -> str:
+    """Select path establishment when switchable (active establishment membership)."""
+    response = api_client.post(
+        "/api/v1/auth/switch_establishment/",
+        {"establishment_id": str(establishment_id)},
+        format="json",
+        **auth_headers(access_token),
+    )
+    if response.status_code != 200:
+        return access_token
+    return response.json().get("access_token", access_token)
+
+
 def post_invitation(api_client, *, establishment_id, owner, payload):
     access_token = login(api_client, identifier=owner.email)
+    access_token = switch_establishment_if_possible(
+        api_client,
+        access_token=access_token,
+        establishment_id=establishment_id,
+    )
     csrf_token = ensure_csrf(api_client)
     return api_client.post(
         f"/api/v1/establishments/{establishment_id}/membership-invitations/",
@@ -158,6 +182,11 @@ def post_invitation(api_client, *, establishment_id, owner, payload):
 
 def post_invitation_as_actor(api_client, *, establishment_id, actor, payload):
     access_token = login(api_client, identifier=actor.email)
+    access_token = switch_establishment_if_possible(
+        api_client,
+        access_token=access_token,
+        establishment_id=establishment_id,
+    )
     csrf_token = ensure_csrf(api_client)
     return api_client.post(
         f"/api/v1/establishments/{establishment_id}/membership-invitations/",
@@ -1237,3 +1266,67 @@ def test_accept_director_invitation_invalid_emits_no_access_event(api_client):
         for call in access_mock.call_args_list
         if call.kwargs.get("reason") == "membership.updated"
     ]
+
+
+@override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)
+def test_invitation_rejects_path_establishment_outside_session_context(api_client):
+    organization = Organization.objects.create(
+        name=f"Session Mismatch Org {uuid.uuid4().hex[:6]}",
+        status=Organization.Status.ACTIVE,
+    )
+    selected = Establishment.objects.create(
+        name="Selected Hotel",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    other = Establishment.objects.create(
+        name="Other Hotel",
+        organization=organization,
+        status=Establishment.Status.ACTIVE,
+    )
+    owner = create_user(username="session_mismatch_owner")
+    create_membership(user=owner, establishment=selected, role=ROLE_OWNER)
+    create_membership(user=owner, establishment=other, role=ROLE_OWNER)
+    business_unit = create_business_unit(establishment=other, key="housekeeping")
+    invite_email = "session-mismatch-staff@example.com"
+    before_membership_count = EstablishmentMembership.objects.filter(
+        establishment=other,
+    ).count()
+    before_invitation_count = EstablishmentInvitation.objects.filter(
+        membership__establishment=other,
+    ).count()
+
+    access_token = login(api_client, identifier=owner.email)
+    access_token = switch_establishment_if_possible(
+        api_client,
+        access_token=access_token,
+        establishment_id=selected.id,
+    )
+    csrf_token = ensure_csrf(api_client)
+    payload = invite_payload(
+        email=invite_email,
+        scopes=[business_unit_scope_payload(business_unit)],
+    )
+
+    with patch(
+        "houston.establishments.tasks.send_establishment_invitation_email_task.apply_async"
+    ) as apply_async:
+        response = api_client.post(
+            f"/api/v1/establishments/{other.id}/membership-invitations/",
+            payload,
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+            **auth_headers(access_token),
+        )
+
+    assert response.status_code == 404
+    assert (
+        EstablishmentMembership.objects.filter(establishment=other).count()
+        == before_membership_count
+    )
+    assert (
+        EstablishmentInvitation.objects.filter(membership__establishment=other).count()
+        == before_invitation_count
+    )
+    assert not User.objects.filter(email__iexact=invite_email).exists()
+    apply_async.assert_not_called()

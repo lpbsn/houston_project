@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import {
   inviteMembership,
@@ -44,6 +45,7 @@ export function useMembershipInviteForm({
   establishmentId,
   allowedTargetRoles,
 }: UseMembershipInviteFormOptions) {
+  const queryClient = useQueryClient()
   const [form, setForm] = useState<MembershipInviteFormState>(emptyForm)
   const [selectedBusinessUnitScopes, setSelectedBusinessUnitScopes] = useState<
     BusinessUnitScopeSelection[]
@@ -150,9 +152,12 @@ export function useMembershipInviteForm({
       setSelectedBusinessUnitScopes([])
 
       if (selectedRole === 'owner') {
-        void invalidateMembershipWorkspaceQueries({ includeBootstrap: true })
+        void invalidateMembershipWorkspaceQueries({
+          includeBootstrap: true,
+          queryClient,
+        })
       } else {
-        void invalidateMembershipListQueries(establishmentId)
+        void invalidateMembershipListQueries(establishmentId, queryClient)
       }
     } catch (error) {
       setErrorMessage(

@@ -135,9 +135,9 @@ Implemented response truths:
 - Owner invitation accept (`POST /api/v1/invitations/{token}/accept/`): requires `User.status == pending`; activates all `owner`/`invited` memberships for that user on draft/active establishments of the same organization.
 - Last-active-owner invariant: deactivation is blocked unless another user is `owner`/`active` with **full coverage** of every draft/active establishment in the organization (not a simple per-establishment count).
 - Owner memberships cannot be changed via `PATCH` (no demotion / no destination `owner`). Directors cannot patch, deactivate, or reassign owner memberships.
-- Directors may manage manager and staff memberships when they hold membership-management authority; owners may manage director, manager, and staff (and organizational owners) subject to invariants.
+- Directors may manage manager and staff memberships; owners may manage director, manager, staff, and organizational owners subject to invariants. Managers may manage in-scope staff/manager targets (service-enforced BU perimeter). Staff cannot manage memberships.
 - Preflight / repair: `preflight_organizational_owners` inventories owner coherence conflicts; `repair_organizational_owners` only creates missing owner memberships when existing owner statuses for that user are homogeneous. Status mixes and non-owner conflicts require manual fix (no auto status alignment).
-- Any active member may read `GET /api/v1/establishments/{establishment_id}/workspace-summary/` for the current active establishment context (summary owner/director fields remain singular).
+- Any active member may read `GET /api/v1/establishments/{establishment_id}/workspace-summary/` for the current active establishment context. Summary `owner`/`director` fields remain singular (deterministic earliest leadership snapshot, not a multi-owner/multi-director roster — use the team memberships list for the full roster).
 - Scoped user search is establishment-scoped and requires the path `establishment_id` to match the current active auth-session context.
 - Scoped user search returns active users with active memberships in the same active establishment only.
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.

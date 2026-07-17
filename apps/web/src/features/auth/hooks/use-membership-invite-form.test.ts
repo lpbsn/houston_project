@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { createTestQueryClient } from '@/test-utils'
 
 import { useMembershipInviteForm } from './use-membership-invite-form'
 
@@ -116,6 +119,21 @@ function createDeferred<T>() {
   return { promise, resolve }
 }
 
+function renderWithQueryClient(ui: ReactNode) {
+  const queryClient = createTestQueryClient()
+  return render(
+    createElement(QueryClientProvider, { client: queryClient }, ui),
+  )
+}
+
+function renderHookWithQueryClient<T>(callback: () => T) {
+  const queryClient = createTestQueryClient()
+  return renderHook(callback, {
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children),
+  })
+}
+
 beforeEach(() => {
   inviteMembership.mockReset()
   invalidateMembershipWorkspaceQueries.mockReset()
@@ -134,7 +152,7 @@ describe('useMembershipInviteForm', () => {
       invitation_accept_path: '/invitations/token-abc',
     })
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
       }),
@@ -153,7 +171,7 @@ describe('useMembershipInviteForm', () => {
     expect(screen.getByTestId('invitation-link').textContent).toBe(
       `${window.location.origin}/invitations/token-abc`,
     )
-    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1')
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
     expect(invalidateMembershipWorkspaceQueries).not.toHaveBeenCalled()
   })
 
@@ -164,7 +182,7 @@ describe('useMembershipInviteForm', () => {
     const deferred = createDeferred<void>()
     invalidateMembershipListQueries.mockReturnValue(deferred.promise)
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
       }),
@@ -189,7 +207,7 @@ describe('useMembershipInviteForm', () => {
     })
     invalidateMembershipWorkspaceQueries.mockRejectedValue(new Error('cache refresh failed'))
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
         allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
@@ -217,6 +235,7 @@ describe('useMembershipInviteForm', () => {
     expect(screen.getByTestId('error-message').textContent).toBe('')
     expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
       includeBootstrap: true,
+      queryClient: expect.anything(),
     })
   })
 
@@ -225,7 +244,7 @@ describe('useMembershipInviteForm', () => {
       invitation_accept_path: '/invitations/token-owner',
     })
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
         allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
@@ -262,6 +281,7 @@ describe('useMembershipInviteForm', () => {
 
     expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
       includeBootstrap: true,
+      queryClient: expect.anything(),
     })
   })
 
@@ -273,7 +293,7 @@ describe('useMembershipInviteForm', () => {
       message: 'A Houston account with this email already exists.',
     })
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
       }),
@@ -296,7 +316,7 @@ describe('useMembershipInviteForm', () => {
       invitation_accept_path: '/invitations/token-abc',
     })
 
-    const { result } = renderHook(() =>
+    const { result } = renderHookWithQueryClient(() =>
       useMembershipInviteForm({ establishmentId: 'est-1' }),
     )
 
@@ -335,7 +355,7 @@ describe('useMembershipInviteForm', () => {
         return deferred.promise
       })
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
       }),
@@ -368,7 +388,7 @@ describe('useMembershipInviteForm', () => {
       })
       .mockRejectedValueOnce(new Error('Invitation could not be created.'))
 
-    render(
+    renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
       }),

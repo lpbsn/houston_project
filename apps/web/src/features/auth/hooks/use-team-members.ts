@@ -3,14 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/app/auth-provider'
 import {
   activateMembership,
+  commitMembershipWriteCache,
   deactivateMembership,
   getMembership,
   invalidateMembershipListAndDetailQueries,
-  invalidateMembershipWorkspaceQueries,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
-  patchMembershipCaches,
   updateMembership,
   updateUserProfile,
   type UserProfileUpdateRequest,
@@ -56,23 +55,11 @@ function useTeamMembershipMutationContext() {
   const establishmentId = activeMembership?.establishment_id ?? null
 
   const applyMembershipWriteSuccess = (membership: EstablishmentMembershipResponse) => {
-    if (establishmentId) {
-      patchMembershipCaches(establishmentId, membership, queryClient)
-    }
-
-    if (membership.role === 'owner') {
-      void invalidateMembershipWorkspaceQueries({
-        includeBootstrap: true,
-        queryClient,
-      })
-      return
-    }
-
     if (!establishmentId) {
       return
     }
 
-    void invalidateMembershipListAndDetailQueries(establishmentId, membership.id, queryClient)
+    commitMembershipWriteCache(establishmentId, membership, queryClient)
   }
 
   return { establishmentId, applyMembershipWriteSuccess }

@@ -120,6 +120,38 @@ export function patchMembershipCaches(
   )
 }
 
+/**
+ * After a successful membership write: patch list+detail, then best-effort invalidations.
+ * Owner path fans out via memberships root + bootstrap; optional workspace summary on any role.
+ */
+export function commitMembershipWriteCache(
+  establishmentId: string,
+  membership: EstablishmentMembershipResponse,
+  client: QueryClient = queryClient,
+  options?: { includeWorkspaceSummary?: boolean },
+) {
+  patchMembershipCaches(establishmentId, membership, client)
+
+  const invalidations: Array<Promise<unknown>> = []
+  if (membership.role === 'owner') {
+    invalidations.push(client.invalidateQueries({ queryKey: membershipsQueryKeyRoot }))
+    invalidations.push(client.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }))
+  } else {
+    invalidations.push(client.invalidateQueries({ queryKey: membershipListQueryKey(establishmentId) }))
+    invalidations.push(
+      client.invalidateQueries({
+        queryKey: membershipDetailQueryKey(establishmentId, membership.id),
+      }),
+    )
+  }
+  if (options?.includeWorkspaceSummary) {
+    invalidations.push(
+      client.invalidateQueries({ queryKey: workspaceSummaryQueryKey(establishmentId) }),
+    )
+  }
+  void settleQueryInvalidations(invalidations)
+}
+
 const REGISTRATION_STEP1_FIELDS = new Set([
   'invite_code',
   'first_name',
@@ -537,9 +569,6 @@ export async function updateMembership(
     throw buildAuthError(result.response, result.error, 'Membership changes were not saved.')
   }
 
-  void settleQueryInvalidations([
-    queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
-  ])
   return result.data as EstablishmentMembershipResponse
 }
 
@@ -569,9 +598,6 @@ export async function deactivateMembership(establishmentId: string, membershipId
     throw buildAuthError(result.response, result.error, 'This membership could not be deactivated.')
   }
 
-  void settleQueryInvalidations([
-    queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
-  ])
   return result.data as EstablishmentMembershipResponse
 }
 
@@ -601,9 +627,6 @@ export async function activateMembership(establishmentId: string, membershipId: 
     throw buildAuthError(result.response, result.error, 'This membership could not be activated.')
   }
 
-  void settleQueryInvalidations([
-    queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
-  ])
   return result.data as EstablishmentMembershipResponse
 }
 

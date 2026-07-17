@@ -124,6 +124,22 @@ def setup_full_coverage_actor(
     return actor
 
 
+def switch_establishment(
+    api_client: APIClient,
+    *,
+    access_token: str,
+    establishment_id,
+) -> str:
+    response = api_client.post(
+        "/api/v1/auth/switch_establishment/",
+        {"establishment_id": str(establishment_id)},
+        format="json",
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 200, response.json()
+    return response.json().get("access_token", access_token)
+
+
 def post_owner_invitation(
     api_client: APIClient,
     *,
@@ -132,6 +148,11 @@ def post_owner_invitation(
     payload: dict | None = None,
 ):
     access_token = login(api_client, identifier=actor.email)
+    access_token = switch_establishment(
+        api_client,
+        access_token=access_token,
+        establishment_id=establishment_id,
+    )
     csrf_token = ensure_csrf(api_client)
     return api_client.post(
         f"/api/v1/establishments/{establishment_id}/membership-invitations/",
@@ -907,6 +928,11 @@ def test_concurrent_owner_invitations_same_email_same_org():
             try:
                 client = APIClient(enforce_csrf_checks=True)
                 access_token = login(client, identifier=actor.email)
+                access_token = switch_establishment(
+                    client,
+                    access_token=access_token,
+                    establishment_id=active_a.id,
+                )
                 csrf_token = ensure_csrf(client)
                 response = client.post(
                     f"/api/v1/establishments/{active_a.id}/membership-invitations/",
