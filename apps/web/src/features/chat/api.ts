@@ -25,6 +25,8 @@ export const chatQueryKeys = {
     query: string,
     conversationId: string | null = null,
   ) => ['chat', 'eligible-memberships', establishmentId, conversationId, query] as const,
+  eligibleMembershipsForConversation: (establishmentId: string, conversationId: string) =>
+    ['chat', 'eligible-memberships', establishmentId, conversationId] as const,
 }
 
 export class ChatApiError extends Error {
