@@ -61,6 +61,10 @@ class ProfileDuplicateEmailError(Exception):
     pass
 
 
+class PendingInviteUserAlreadyExistsError(Exception):
+    """Email already claimed during pending-user create (race or pre-existing)."""
+
+
 @dataclass(frozen=True)
 class RegistrationResult:
     organization: Organization
@@ -660,19 +664,16 @@ def _extract_client_ip(request: HttpRequest) -> str | None:
 _PENDING_USER_USERNAME_SAVE_MAX_ATTEMPTS = 3
 
 
-def resolve_or_create_pending_user_for_invite(
+def create_pending_user_for_invite(
     *,
     email: str,
     first_name: str,
     last_name: str,
-    existing_user: User | None = None,
 ) -> User:
+    """Create a pending invitee user. Never reuses an existing User row."""
     normalized_email = User.normalize_email_value(email)
     if normalized_email is None:
         raise ValueError("A valid email is required.")
-
-    if existing_user is not None:
-        return existing_user
 
     user = User(
         username=_build_registration_username(normalized_email),
@@ -688,9 +689,8 @@ def resolve_or_create_pending_user_for_invite(
         with transaction.atomic():
             user.save()
     except IntegrityError as exc:
-        existing_user_by_email = User.objects.filter(email__iexact=normalized_email).first()
-        if existing_user_by_email is not None:
-            return existing_user_by_email
+        if User.objects.filter(email__iexact=normalized_email).exists():
+            raise PendingInviteUserAlreadyExistsError from exc
 
         last_exc = exc
         for _ in range(_PENDING_USER_USERNAME_SAVE_MAX_ATTEMPTS):
@@ -699,6 +699,8 @@ def resolve_or_create_pending_user_for_invite(
                 with transaction.atomic():
                     user.save()
             except IntegrityError as retry_exc:
+                if User.objects.filter(email__iexact=normalized_email).exists():
+                    raise PendingInviteUserAlreadyExistsError from retry_exc
                 last_exc = retry_exc
                 continue
             return user

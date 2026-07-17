@@ -5,7 +5,9 @@
 	backend-lint backend-migrations-check backend-schema backend-schema-check backend-deploy-check backend-test backend-check backend-rebuild \
 	web-install web-dev web-build web-typecheck web-lint web-test web-api-generate web-api-generate-check web-check \
 	verify local-check docker-verify-security infra-check \
-	import-catalog catalog-check preflight-onboarding-v3 bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data
+	import-catalog catalog-check preflight-onboarding-v3 \
+	preflight-organizational-owners repair-organizational-owners \
+	bootstrap-dev reset-dev-db assert-local-dev-db clean-operational-test-data
 
 # -----------------------------------------------------------------------------
 # Compose / env
@@ -179,6 +181,12 @@ catalog-check:
 
 preflight-onboarding-v3:
 	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py preflight_onboarding_v3 --fail-if-present'
+
+preflight-organizational-owners:
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py preflight_organizational_owners --fail-on-issues'
+
+repair-organizational-owners:
+	$(API_CMD) 'cd $(API_DIR) && uv run python manage.py repair_organizational_owners $(ARGS)'
 
 bootstrap-dev: assert-local-dev-db up-backend migrate import-catalog check catalog-check
 	@echo ""
