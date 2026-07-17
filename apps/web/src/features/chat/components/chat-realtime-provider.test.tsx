@@ -64,6 +64,8 @@ const sampleConversation = (): ChatConversationListItem => ({
   last_message_at: null,
   last_message_preview: null,
   participants: [],
+  pinned: false,
+  can_delete: false,
 })
 
 describe('ChatRealtimeProvider', () => {

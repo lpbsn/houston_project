@@ -64,6 +64,8 @@ const sampleConversation = (): ChatConversationListItem => ({
   last_message_at: '2026-06-01T10:00:00.000Z',
   last_message_preview: null,
   participants: [],
+  pinned: false,
+  can_delete: false,
 })
 
 const incomingMessage = (): ChatMessage => ({

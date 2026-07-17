@@ -35,6 +35,8 @@ const sampleConversation = (
       participant_role: 'member',
     },
   ],
+  pinned: false,
+  can_delete: false,
   ...overrides,
 })
 

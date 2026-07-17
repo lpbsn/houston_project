@@ -36,13 +36,14 @@ from houston.chat.exceptions import (
     ChatPermissionError,
     ChatValidationError,
 )
-from houston.chat.models import ChatConversation
+from houston.chat.models import ChatConversation, ChatParticipant
 from houston.chat.permissions import can_delete_group, can_manage_group
 from houston.chat.selectors import (
     count_unread_messages_for_participant,
     get_conversation_for_participant,
     get_eligible_chat_memberships_queryset,
     get_latest_messages_by_conversation_ids,
+    get_latest_visible_message,
     get_unread_message_counts_by_conversation_ids,
     list_conversations_for_membership,
     list_messages_for_conversation,
@@ -53,12 +54,15 @@ from houston.chat.services import (
     create_group_conversation,
     create_or_get_dm_conversation,
     delete_group_conversation,
+    hide_dm_conversation,
     leave_group_conversation,
     mark_conversation_seen,
+    pin_conversation,
     promote_group_participant,
     remove_group_participant,
     rename_group_conversation,
     touch_conversation_presence,
+    unpin_conversation,
     update_establishment_chat_enabled,
 )
 from houston.chat.ws_ticket import issue_ws_ticket
@@ -174,6 +178,18 @@ def _message_cursor(message) -> str:
     return f"{message.created_at.isoformat()}|{message.id}"
 
 
+def _viewer_participant(
+    conversation: ChatConversation,
+    viewer_membership_id: uuid.UUID,
+) -> ChatParticipant | None:
+    for item in conversation.participants.all():
+        if item.left_at is not None:
+            continue
+        if item.membership_id == viewer_membership_id:
+            return item
+    return None
+
+
 def _serialize_conversation_list_item(
     *,
     conversation: ChatConversation,
@@ -182,10 +198,19 @@ def _serialize_conversation_list_item(
     unread_count: int = 0,
 ) -> dict:
     active_participants = []
+    viewer = None
     for item in conversation.participants.all():
         if item.left_at is not None:
             continue
         active_participants.append(item)
+        if item.membership_id == viewer_membership_id:
+            viewer = item
+    pinned = viewer is not None and viewer.pinned_at is not None
+    can_delete = (
+        conversation.type == ChatConversation.Type.GROUP
+        and viewer is not None
+        and viewer.role == ChatParticipant.Role.ADMIN
+    )
     return {
         "id": conversation.id,
         "type": conversation.type,
@@ -195,9 +220,11 @@ def _serialize_conversation_list_item(
         ),
         "unread": unread_count > 0,
         "unread_count": unread_count,
-        "last_message_at": conversation.last_message_at,
+        "last_message_at": latest_message.created_at if latest_message else None,
         "last_message_preview": serialize_message(latest_message) if latest_message else None,
         "participants": [serialize_participant_summary(item) for item in active_participants],
+        "pinned": pinned,
+        "can_delete": can_delete,
     }
 
 
@@ -290,8 +317,15 @@ class ChatConversationListView(EstablishmentScopedChatMixin, APIView):
                 membership_id=membership.id,
             )
         )
+        history_cutoffs_by_conversation_id = {}
+        for conversation in conversations:
+            viewer = _viewer_participant(conversation, membership.id)
+            history_cutoffs_by_conversation_id[conversation.id] = (
+                viewer.history_cutoff_at if viewer is not None else None
+            )
         latest_messages_by_conversation_id = get_latest_messages_by_conversation_ids(
-            [conversation.id for conversation in conversations]
+            [conversation.id for conversation in conversations],
+            history_cutoffs_by_conversation_id=history_cutoffs_by_conversation_id,
         )
         unread_counts_by_conversation_id = get_unread_message_counts_by_conversation_ids(
             membership_id=membership.id,
@@ -352,12 +386,18 @@ class ChatCreateDmView(EstablishmentScopedChatMixin, APIView):
         participant = next(
             item for item in conversation.participants.all() if item.membership_id == membership.id
         )
+        latest_visible = get_latest_visible_message(
+            conversation.id,
+            history_cutoff_at=participant.history_cutoff_at,
+        )
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
             unread=count_unread_messages_for_participant(participant=participant) > 0,
             can_manage=False,
             can_delete=False,
+            pinned=participant.pinned_at is not None,
+            last_message_at=latest_visible.created_at if latest_visible else None,
         )
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(
@@ -408,12 +448,17 @@ class ChatCreateGroupView(EstablishmentScopedChatMixin, APIView):
             conversation_id=conversation.id,
             membership_id=membership.id,
         )
+        participant = next(
+            item for item in conversation.participants.all() if item.membership_id == membership.id
+        )
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
             unread=False,
             can_manage=can_manage_group(membership, conversation),
             can_delete=can_delete_group(membership, conversation),
+            pinned=participant.pinned_at is not None,
+            last_message_at=None,
         )
         return Response(
             ChatCreateConversationResponseSerializer(
@@ -457,12 +502,18 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         participant = next(
             item for item in conversation.participants.all() if item.membership_id == membership.id
         )
+        latest_visible = get_latest_visible_message(
+            conversation.id,
+            history_cutoff_at=participant.history_cutoff_at,
+        )
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
             unread=count_unread_messages_for_participant(participant=participant) > 0,
             can_manage=can_manage_group(membership, conversation),
             can_delete=can_delete_group(membership, conversation),
+            pinned=participant.pinned_at is not None,
+            last_message_at=latest_visible.created_at if latest_visible else None,
         )
         return Response(ChatConversationDetailSerializer(payload).data)
 
@@ -501,12 +552,18 @@ class ChatConversationDetailView(EstablishmentScopedChatMixin, APIView):
         participant = next(
             item for item in conversation.participants.all() if item.membership_id == membership.id
         )
+        latest_visible = get_latest_visible_message(
+            conversation.id,
+            history_cutoff_at=participant.history_cutoff_at,
+        )
         payload = serialize_conversation_detail(
             conversation=conversation,
             viewer_membership_id=membership.id,
             unread=count_unread_messages_for_participant(participant=participant) > 0,
             can_manage=can_manage_group(membership, conversation),
             can_delete=can_delete_group(membership, conversation),
+            pinned=participant.pinned_at is not None,
+            last_message_at=latest_visible.created_at if latest_visible else None,
         )
         return Response(ChatConversationDetailSerializer(payload).data)
 
@@ -578,11 +635,15 @@ class ChatConversationMessagesView(EstablishmentScopedChatMixin, APIView):
 
         before_created_at = cursor[0] if cursor else None
         before_id = cursor[1] if cursor else None
+        participant = _viewer_participant(conversation, membership.id)
         messages = list_messages_for_conversation(
             conversation_id=conversation.id,
             limit=page_size + 1,
             before_created_at=before_created_at,
             before_id=before_id,
+            history_cutoff_at=(
+                participant.history_cutoff_at if participant is not None else None
+            ),
         )
         has_more = len(messages) > page_size
         page = messages[:page_size]
@@ -843,6 +904,100 @@ class ChatLeaveConversationView(EstablishmentScopedChatMixin, APIView):
 
         try:
             leave_group_conversation(
+                actor_membership=membership,
+                conversation_id=uuid.UUID(str(conversation_id)),
+            )
+        except ChatError as exc:
+            return _chat_error_response(exc)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChatPinConversationView(EstablishmentScopedChatMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanAccessChat,
+    ]
+
+    @extend_schema(
+        tags=["chat"],
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Conversation pinned."),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, conversation_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        try:
+            pin_conversation(
+                actor_membership=membership,
+                conversation_id=uuid.UUID(str(conversation_id)),
+            )
+        except ChatError as exc:
+            return _chat_error_response(exc)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        tags=["chat"],
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Conversation unpinned."),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def delete(self, request, establishment_id, conversation_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        try:
+            unpin_conversation(
+                actor_membership=membership,
+                conversation_id=uuid.UUID(str(conversation_id)),
+            )
+        except ChatError as exc:
+            return _chat_error_response(exc)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChatHideConversationView(EstablishmentScopedChatMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanAccessChat,
+    ]
+
+    @extend_schema(
+        tags=["chat"],
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Direct message hidden."),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def post(self, request, establishment_id, conversation_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        try:
+            hide_dm_conversation(
                 actor_membership=membership,
                 conversation_id=uuid.UUID(str(conversation_id)),
             )

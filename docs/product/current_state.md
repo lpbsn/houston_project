@@ -66,7 +66,9 @@ Contract: [`contracts/operational-realtime-invalidation.json`](../../contracts/o
 
 Implemented: REST structure/history/seen/presence, WS message send, Terrain pages, 7-day purge, membership hooks.
 
-Post-core gaps (non-blocking pilot): group settings UI, some bootstrap hints, no REST message write.
+Lot 1 conversation actions (pin/unpin, hide DM with personal history cutoff, leave/delete group UI): live — see [`domains/chat_domain.md`](domains/chat_domain.md).
+
+Post-core gaps (non-blocking pilot): group member admin UI (Lot 2), some bootstrap hints, no REST message write.
 
 ## Frontend
 

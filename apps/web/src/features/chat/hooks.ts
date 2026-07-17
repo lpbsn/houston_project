@@ -11,12 +11,17 @@ import {
   chatQueryKeys,
   createDmConversation,
   createGroupConversation,
+  deleteGroupConversation,
   fetchChatConversationDetail,
   fetchChatConversations,
   fetchChatMessages,
   fetchChatStatus,
   fetchEligibleChatMemberships,
+  hideDmConversation,
+  leaveGroupConversation,
   markConversationSeen,
+  pinConversation,
+  unpinConversation,
 } from './api'
 import { applyChatAvailabilityFromStatus } from './lib/apply-chat-availability-cache'
 import {
@@ -25,7 +30,11 @@ import {
 } from './lib/chat-availability'
 import { buildMessageCursor } from './lib/chat-display'
 import { appendUniqueServerMessage } from './lib/chat-messages'
-import { patchConversationsOnMessageCreated } from './lib/chat-conversations-cache'
+import {
+  compareConversationsForList,
+  patchConversationsOnMessageCreated,
+} from './lib/chat-conversations-cache'
+import { purgeConversationClientState } from './lib/purge-conversation-client-state'
 import type { ChatConversationListResponse, ChatMessage, ChatMessageListResponse } from './types'
 
 type ChatStatusQueryOptions = {
@@ -243,6 +252,158 @@ export function useMarkConversationSeenMutation(
       }
     },
   })
+}
+
+type ConversationActionOptions = {
+  clearLocalMessages?: (conversationId: string) => void
+  onRemoved?: (conversationId: string) => void
+}
+
+function useConversationRemovalMutation(
+  establishmentId: string | null,
+  mutationFn: (conversationId: string) => Promise<void>,
+  options: ConversationActionOptions = {},
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      await mutationFn(conversationId)
+      return conversationId
+    },
+    onSuccess: (conversationId) => {
+      if (!establishmentId) {
+        return
+      }
+      purgeConversationClientState(queryClient, {
+        establishmentId,
+        conversationId,
+        clearLocalMessages: options.clearLocalMessages,
+      })
+      options.onRemoved?.(conversationId)
+    },
+  })
+}
+
+export function usePinConversationMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      await pinConversation(establishmentId, conversationId)
+      return conversationId
+    },
+    onSuccess: (conversationId) => {
+      if (!establishmentId) {
+        return
+      }
+      queryClient.setQueryData<ChatConversationListResponse>(
+        chatQueryKeys.conversations(establishmentId),
+        (current) => {
+          if (!current) {
+            return current
+          }
+          const items = current.items.map((item) =>
+            item.id === conversationId ? { ...item, pinned: true } : item,
+          )
+          return { items: [...items].sort(compareConversationsForList) }
+        },
+      )
+      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.conversations(establishmentId) })
+      void queryClient.invalidateQueries({
+        queryKey: chatQueryKeys.conversation(establishmentId, conversationId),
+      })
+    },
+  })
+}
+
+export function useUnpinConversationMutation(establishmentId: string | null) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      await unpinConversation(establishmentId, conversationId)
+      return conversationId
+    },
+    onSuccess: (conversationId) => {
+      if (!establishmentId) {
+        return
+      }
+      queryClient.setQueryData<ChatConversationListResponse>(
+        chatQueryKeys.conversations(establishmentId),
+        (current) => {
+          if (!current) {
+            return current
+          }
+          const items = current.items.map((item) =>
+            item.id === conversationId ? { ...item, pinned: false } : item,
+          )
+          return { items: [...items].sort(compareConversationsForList) }
+        },
+      )
+      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.conversations(establishmentId) })
+      void queryClient.invalidateQueries({
+        queryKey: chatQueryKeys.conversation(establishmentId, conversationId),
+      })
+    },
+  })
+}
+
+export function useHideDmMutation(
+  establishmentId: string | null,
+  options: ConversationActionOptions = {},
+) {
+  return useConversationRemovalMutation(
+    establishmentId,
+    async (conversationId) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      await hideDmConversation(establishmentId, conversationId)
+    },
+    options,
+  )
+}
+
+export function useLeaveGroupMutation(
+  establishmentId: string | null,
+  options: ConversationActionOptions = {},
+) {
+  return useConversationRemovalMutation(
+    establishmentId,
+    async (conversationId) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      await leaveGroupConversation(establishmentId, conversationId)
+    },
+    options,
+  )
+}
+
+export function useDeleteGroupMutation(
+  establishmentId: string | null,
+  options: ConversationActionOptions = {},
+) {
+  return useConversationRemovalMutation(
+    establishmentId,
+    async (conversationId) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      await deleteGroupConversation(establishmentId, conversationId)
+    },
+    options,
+  )
 }
 
 type AppendChatMessageToCacheOptions = {

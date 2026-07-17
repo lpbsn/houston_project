@@ -152,6 +152,9 @@ Supported `access.revoked` `reason` values :
   - `membership` FK (`EstablishmentMembership`) — **primary reference**
   - `role` : `member` | `admin`
   - `joined_at`, `left_at` (active when `left_at IS NULL`)
+  - `pinned_at` — personal pin (nullable)
+  - `history_cutoff_at` — personal DM history cutoff ; messages with `created_at <= cutoff` are invisible to this participant
+  - `list_hidden_at` — personal DM list hide ; cleared when a newer message arrives (`list_hidden_at < message.created_at`) or on manual DM reopen via `create_or_get_dm`
   - `last_seen_message_id` (UUID, no FK), `last_seen_message_created_at`
 
 - `ChatMessage`
@@ -179,9 +182,11 @@ Supported `access.revoked` `reason` values :
 | Add/remove/promote participants | Group admin |
 | Rename group | Group admin |
 | Delete group | **Group admin participant only** (product API) |
-| Leave group | Any active member participant |
+| Leave group | Any active member participant ; schedules `conversation.access_revoked` (`participant_left`) ; clears personal pin |
+| Pin / unpin conversation | Any active participant (personal) |
+| Hide DM | Active DM participant only ; marks related unread chat notifications as read ; does not affect peer |
 | Toggle `chat_enabled` | Owner/Director |
-| Mark seen | Current participant only ; no broadcast to others |
+| Mark seen | Current participant only ; advances cursor on last **visible** message (respects `history_cutoff_at`) ; no broadcast to others |
 
 **Group without admin** : promote oldest remaining Owner/Director participant ; else oldest admin-eligible participant per service rule.
 
@@ -214,12 +219,14 @@ All under `/api/v1/establishments/{establishment_id}/chat/` :
 
 - `POST ws-ticket/`
 - `GET status/`
-- `GET conversations/`
-- `POST conversations/dm/`
+- `GET conversations/` (pin-first sort ; excludes `list_hidden_at` rows ; list items expose `pinned`, `can_delete`)
+- `POST conversations/dm/` (reopening a hidden DM clears `list_hidden_at` for the actor)
 - `POST conversations/groups/`
 - `GET/PATCH/DELETE conversations/{id}/` (delete : admin participant only)
-- `GET conversations/{id}/messages/` (read only)
+- `GET conversations/{id}/messages/` (read only ; applies viewer `history_cutoff_at`)
 - `POST conversations/{id}/seen/`
+- `POST conversations/{id}/pin/` / `DELETE conversations/{id}/pin/`
+- `POST conversations/{id}/hide/` (DM only)
 - `GET eligible-memberships/`
 - Participant management endpoints (add, remove, promote, leave)
 - `PATCH settings/` (`chat_enabled` toggle)

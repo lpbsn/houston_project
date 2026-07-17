@@ -18,6 +18,8 @@ const sampleConversation = (
   last_message_at: '2026-06-01T10:00:00.000Z',
   last_message_preview: null,
   participants: [],
+  pinned: false,
+  can_delete: false,
   ...overrides,
 })
 
@@ -277,5 +279,35 @@ describe('chat-conversations-cache', () => {
         'id',
       ].sort(),
     )
+  })
+
+  it('keeps pinned conversations before newer unpinned ones after message patch', () => {
+    const result = patchConversationsOnMessageCreated(
+      {
+        items: [
+          sampleConversation({
+            id: 'pinned',
+            pinned: true,
+            last_message_at: '2026-06-01T10:00:00.000Z',
+          }),
+          sampleConversation({
+            id: 'unpinned',
+            pinned: false,
+            last_message_at: '2026-06-01T09:00:00.000Z',
+          }),
+        ],
+      },
+      {
+        conversationId: 'unpinned',
+        message: sampleMessage({
+          id: 'msg-new',
+          created_at: '2026-06-10T12:00:00.000Z',
+        }),
+        viewerMembershipId: 'mbr-viewer',
+        activeConversationId: null,
+      },
+    )
+
+    expect(result?.items.map((item) => item.id)).toEqual(['pinned', 'unpinned'])
   })
 })

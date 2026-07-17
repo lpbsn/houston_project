@@ -82,6 +82,9 @@ class ChatParticipant(BaseModel):
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.MEMBER)
     joined_at = models.DateTimeField(auto_now_add=True)
     left_at = models.DateTimeField(null=True, blank=True)
+    pinned_at = models.DateTimeField(null=True, blank=True)
+    history_cutoff_at = models.DateTimeField(null=True, blank=True)
+    list_hidden_at = models.DateTimeField(null=True, blank=True)
     last_seen_message_id = models.UUIDField(null=True, blank=True)
     last_seen_message_created_at = models.DateTimeField(null=True, blank=True)
 
@@ -89,6 +92,7 @@ class ChatParticipant(BaseModel):
         indexes = [
             models.Index(fields=["membership", "left_at"]),
             models.Index(fields=["conversation", "left_at"]),
+            models.Index(fields=["membership", "list_hidden_at"]),
         ]
         constraints = [
             models.UniqueConstraint(

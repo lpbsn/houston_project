@@ -10,12 +10,22 @@ import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
 import { ChatApiError } from '../api'
+import { ChatConversationActionsSheet } from '../components/chat-conversation-actions-sheet'
 import { ChatCreateSheet } from '../components/chat-create-sheet'
 import { ChatReconnectBanner } from '../components/chat-reconnect-banner'
 import { ConversationRow } from '../components/conversation-row'
 import { useOptionalChatRealtime } from '../components/chat-realtime-provider'
 import { filterConversationsByQuery } from '../lib/chat-display'
-import { useChatConversationsQuery, useChatStatusQuery } from '../hooks'
+import {
+  useChatConversationsQuery,
+  useChatStatusQuery,
+  useDeleteGroupMutation,
+  useHideDmMutation,
+  useLeaveGroupMutation,
+  usePinConversationMutation,
+  useUnpinConversationMutation,
+} from '../hooks'
+import type { ChatConversationListItem } from '../types'
 
 type ChatPageProps = {
   onOpenConversation: (conversationId: string) => void
@@ -35,6 +45,9 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
   const viewerMembershipId = auth.bootstrap?.active_membership?.id ?? null
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [actionsConversation, setActionsConversation] = useState<ChatConversationListItem | null>(
+    null,
+  )
 
   const statusQuery = useChatStatusQuery(establishmentId)
   const conversationsQuery = useChatConversationsQuery(establishmentId, {
@@ -42,6 +55,59 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
   })
   const realtime = useOptionalChatRealtime()
   const connectionStatus = realtime?.connectionStatus ?? 'idle'
+  const clearLocalMessages = realtime?.clearLocalMessagesForConversation
+
+  const pinMutation = usePinConversationMutation(establishmentId)
+  const unpinMutation = useUnpinConversationMutation(establishmentId)
+  const hideMutation = useHideDmMutation(establishmentId, {
+    clearLocalMessages,
+  })
+  const leaveMutation = useLeaveGroupMutation(establishmentId, {
+    clearLocalMessages,
+  })
+  const deleteMutation = useDeleteGroupMutation(establishmentId, {
+    clearLocalMessages,
+  })
+  const actionsPending =
+    pinMutation.isPending ||
+    unpinMutation.isPending ||
+    hideMutation.isPending ||
+    leaveMutation.isPending ||
+    deleteMutation.isPending
+
+  function closeActions() {
+    setActionsConversation(null)
+    pinMutation.reset()
+    unpinMutation.reset()
+    hideMutation.reset()
+    leaveMutation.reset()
+    deleteMutation.reset()
+  }
+
+  async function handlePin(conversationId: string) {
+    await pinMutation.mutateAsync(conversationId)
+    closeActions()
+  }
+
+  async function handleUnpin(conversationId: string) {
+    await unpinMutation.mutateAsync(conversationId)
+    closeActions()
+  }
+
+  async function handleHideDm(conversationId: string) {
+    await hideMutation.mutateAsync(conversationId)
+    closeActions()
+  }
+
+  async function handleLeaveGroup(conversationId: string) {
+    await leaveMutation.mutateAsync(conversationId)
+    closeActions()
+  }
+
+  async function handleDeleteGroup(conversationId: string) {
+    await deleteMutation.mutateAsync(conversationId)
+    closeActions()
+  }
 
   const allConversations = useMemo(
     () => conversationsQuery.data?.items ?? [],
@@ -181,6 +247,7 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
                 conversation={conversation}
                 viewerMembershipId={viewerMembershipId}
                 onSelect={onOpenConversation}
+                onOpenActions={setActionsConversation}
               />
             ))}
           </div>
@@ -194,6 +261,28 @@ export function ChatPage({ onOpenConversation }: ChatPageProps) {
         canCreateGroup={statusQuery.data.can_create_group}
         onClose={() => setCreateOpen(false)}
         onConversationCreated={onOpenConversation}
+      />
+
+      <ChatConversationActionsSheet
+        conversation={actionsConversation}
+        open={actionsConversation !== null}
+        isPending={actionsPending}
+        onClose={closeActions}
+        onPin={(conversationId) => {
+          void handlePin(conversationId)
+        }}
+        onUnpin={(conversationId) => {
+          void handleUnpin(conversationId)
+        }}
+        onHideDm={(conversationId) => {
+          void handleHideDm(conversationId)
+        }}
+        onLeaveGroup={(conversationId) => {
+          void handleLeaveGroup(conversationId)
+        }}
+        onDeleteGroup={(conversationId) => {
+          void handleDeleteGroup(conversationId)
+        }}
       />
     </ChatPageRoot>
   )

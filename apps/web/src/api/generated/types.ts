@@ -754,6 +754,22 @@ export interface paths {
         patch: operations["v1_establishments_chat_conversations_partial_update"];
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/hide/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_chat_conversations_hide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/leave/": {
         parameters: {
             query?: never;
@@ -829,6 +845,22 @@ export interface paths {
         put?: never;
         post: operations["v1_establishments_chat_conversations_participants_promote_create"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/pin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_establishments_chat_conversations_pin_create"];
+        delete: operations["v1_establishments_chat_conversations_pin_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2278,6 +2310,7 @@ export interface components {
             participants: components["schemas"]["ChatParticipantSummary"][];
             can_manage: boolean;
             can_delete: boolean;
+            pinned: boolean;
         };
         ChatConversationListItem: {
             /** Format: uuid */
@@ -2290,6 +2323,8 @@ export interface components {
             last_message_at: string | null;
             last_message_preview: components["schemas"]["ChatMessagePreview"] | null;
             participants: components["schemas"]["ChatParticipantSummary"][];
+            pinned: boolean;
+            can_delete: boolean;
         };
         ChatConversationListResponse: {
             items: components["schemas"]["ChatConversationListItem"][];
@@ -5736,6 +5771,59 @@ export interface operations {
             };
         };
     };
+    v1_establishments_chat_conversations_hide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Direct message hidden. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     v1_establishments_chat_conversations_leave_create: {
         parameters: {
             query?: never;
@@ -5973,6 +6061,96 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Participant promoted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_conversations_pin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversation pinned. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_chat_conversations_pin_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversation unpinned. */
             204: {
                 headers: {
                     [name: string]: unknown;

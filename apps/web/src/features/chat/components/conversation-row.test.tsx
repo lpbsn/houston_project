@@ -34,17 +34,21 @@ function buildConversation(
         participant_role: 'member',
       },
     ],
+    pinned: false,
+    can_delete: false,
     ...overrides,
   }
 }
 
 function renderRow(conversation: ChatConversationListItem) {
   const onSelect = () => undefined
+  const onOpenActions = () => undefined
   return render(
     createElement(ConversationRow, {
       conversation,
       viewerMembershipId: 'mbr-viewer',
       onSelect,
+      onOpenActions,
     }),
   )
 }

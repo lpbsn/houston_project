@@ -19,6 +19,7 @@ import {
   useChatStatusQuery,
 } from '../hooks'
 import { useChatWebSocket } from '../hooks/use-chat-websocket'
+import { purgeConversationClientState } from '../lib/purge-conversation-client-state'
 import type {
   ChatConnectionStatus,
   ChatWsConversationAccessRevokedEvent,
@@ -38,6 +39,7 @@ type ChatRealtimeContextValue = {
     authorDisplayName: string
   }) => { clientMessageId: string; queued: boolean }
   retryFailedMessage: (clientMessageId: string) => boolean
+  clearLocalMessagesForConversation: (conversationId: string) => void
   showChatNav: boolean
   hasUnread: boolean
 }
@@ -124,6 +126,31 @@ export function ChatRealtimeProvider({
     )
   }, [])
 
+  const clearLocalMessagesForConversation = useCallback((conversationId: string) => {
+    setLocalMessages((current) =>
+      current.filter((message) => message.conversationId !== conversationId),
+    )
+  }, [])
+
+  const handleConversationAccessRevoked = useCallback(
+    (event: ChatWsConversationAccessRevokedEvent) => {
+      if (establishmentId) {
+        purgeConversationClientState(queryClient, {
+          establishmentId,
+          conversationId: event.conversation_id,
+          clearLocalMessages: clearLocalMessagesForConversation,
+        })
+      }
+      onConversationAccessRevoked?.(event)
+    },
+    [
+      clearLocalMessagesForConversation,
+      establishmentId,
+      onConversationAccessRevoked,
+      queryClient,
+    ],
+  )
+
   const handleReconnect = useCallback(() => {
     if (!establishmentId) {
       return
@@ -159,7 +186,7 @@ export function ChatRealtimeProvider({
     onMessageCreated: handleMessageCreated,
     onMessageRejected: handleMessageRejected,
     onGlobalAccessRevoked,
-    onConversationAccessRevoked,
+    onConversationAccessRevoked: handleConversationAccessRevoked,
     onReconnect: handleReconnect,
   })
 
@@ -252,10 +279,19 @@ export function ChatRealtimeProvider({
       localMessages,
       sendChatMessage,
       retryFailedMessage,
+      clearLocalMessagesForConversation,
       showChatNav: chatEnabled,
       hasUnread,
     }),
-    [chatEnabled, connectionStatus, hasUnread, localMessages, retryFailedMessage, sendChatMessage],
+    [
+      chatEnabled,
+      clearLocalMessagesForConversation,
+      connectionStatus,
+      hasUnread,
+      localMessages,
+      retryFailedMessage,
+      sendChatMessage,
+    ],
   )
 
   return (
