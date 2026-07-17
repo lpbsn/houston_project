@@ -2,14 +2,20 @@
 
 import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useMembershipInviteForm } from './use-membership-invite-form'
 
 const inviteMembership = vi.fn()
+const invalidateMembershipWorkspaceQueries = vi.fn()
+const invalidateMembershipListQueries = vi.fn()
 
 vi.mock('@/features/auth/api', () => ({
   inviteMembership: (...args: unknown[]) => inviteMembership(...args),
+  invalidateMembershipWorkspaceQueries: (...args: unknown[]) =>
+    invalidateMembershipWorkspaceQueries(...args),
+  invalidateMembershipListQueries: (...args: unknown[]) =>
+    invalidateMembershipListQueries(...args),
 }))
 
 vi.mock('@/features/auth/hooks', () => ({
@@ -25,15 +31,18 @@ function InviteFormProbe({
   allowedTargetRoles,
 }: {
   establishmentId: string
-  allowedTargetRoles?: ('staff' | 'manager')[]
+  allowedTargetRoles?: ('staff' | 'manager' | 'owner' | 'director')[]
 }) {
   const {
     form,
     setForm,
+    setRole,
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
     invitedEmail,
+    errorMessage,
+    requiresScopes,
     handleSubmit,
   } = useMembershipInviteForm({ establishmentId, allowedTargetRoles })
 
@@ -63,16 +72,25 @@ function InviteFormProbe({
       { 'data-testid': 'scopes-count' },
       String(selectedBusinessUnitScopes.length),
     ),
-    createElement('button', {
-      type: 'button',
-      onClick: () =>
-        setSelectedBusinessUnitScopes([
-          { scope_type: 'business_unit', scope_id: 'bu-1' },
-        ]),
-    }, 'Select scope'),
+    createElement('div', { 'data-testid': 'requires-scopes' }, String(requiresScopes)),
+    createElement(
+      'button',
+      {
+        type: 'button',
+        onClick: () =>
+          setSelectedBusinessUnitScopes([{ scope_type: 'business_unit', scope_id: 'bu-1' }]),
+      },
+      'Select scope',
+    ),
+    createElement(
+      'button',
+      { type: 'button', onClick: () => setRole('owner') },
+      'Select owner',
+    ),
     createElement('button', { type: 'submit' }, 'Submit'),
     createElement('div', { 'data-testid': 'invited-email' }, invitedEmail ?? ''),
     createElement('div', { 'data-testid': 'invitation-link' }, invitationLink ?? ''),
+    createElement('div', { 'data-testid': 'error-message' }, errorMessage ?? ''),
   )
 }
 
@@ -98,9 +116,16 @@ function createDeferred<T>() {
   return { promise, resolve }
 }
 
+beforeEach(() => {
+  inviteMembership.mockReset()
+  invalidateMembershipWorkspaceQueries.mockReset()
+  invalidateMembershipListQueries.mockReset()
+  invalidateMembershipWorkspaceQueries.mockResolvedValue(undefined)
+  invalidateMembershipListQueries.mockResolvedValue(undefined)
+})
+
 afterEach(() => {
   cleanup()
-  inviteMembership.mockReset()
 })
 
 describe('useMembershipInviteForm', () => {
@@ -115,16 +140,7 @@ describe('useMembershipInviteForm', () => {
       }),
     )
 
-    fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'staff@example.com' },
-    })
-    fireEvent.change(screen.getByLabelText('First name'), {
-      target: { value: 'Alex' },
-    })
-    fireEvent.change(screen.getByLabelText('Last name'), {
-      target: { value: 'Martin' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Select scope' }))
+    fillInviteForm('staff@example.com')
 
     await act(async () => {
       fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
@@ -137,6 +153,142 @@ describe('useMembershipInviteForm', () => {
     expect(screen.getByTestId('invitation-link').textContent).toBe(
       `${window.location.origin}/invitations/token-abc`,
     )
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1')
+    expect(invalidateMembershipWorkspaceQueries).not.toHaveBeenCalled()
+  })
+
+  it('shows success UI when list invalidation is still pending', async () => {
+    inviteMembership.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-abc',
+    })
+    const deferred = createDeferred<void>()
+    invalidateMembershipListQueries.mockReturnValue(deferred.promise)
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+      }),
+    )
+
+    fillInviteForm('staff@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('staff@example.com')
+    })
+    expect(screen.getByTestId('error-message').textContent).toBe('')
+    expect(invalidateMembershipListQueries).toHaveBeenCalled()
+  })
+
+  it('keeps invite success when workspace invalidation rejects', async () => {
+    inviteMembership.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-owner',
+    })
+    invalidateMembershipWorkspaceQueries.mockRejectedValue(new Error('cache refresh failed'))
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+      }),
+    )
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'owner@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('First name'), {
+      target: { value: 'Pat' },
+    })
+    fireEvent.change(screen.getByLabelText('Last name'), {
+      target: { value: 'Owner' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('owner@example.com')
+    })
+    expect(screen.getByTestId('error-message').textContent).toBe('')
+    expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
+      includeBootstrap: true,
+    })
+  })
+
+  it('submits owner invites without scopes and invalidates workspace memberships root', async () => {
+    inviteMembership.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-owner',
+    })
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+      }),
+    )
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'owner@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('First name'), {
+      target: { value: 'Pat' },
+    })
+    fireEvent.change(screen.getByLabelText('Last name'), {
+      target: { value: 'Owner' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select scope' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+
+    expect(screen.getByTestId('requires-scopes').textContent).toBe('false')
+    expect(screen.getByTestId('scopes-count').textContent).toBe('0')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(inviteMembership).toHaveBeenCalledWith('est-1', {
+        email: 'owner@example.com',
+        first_name: 'Pat',
+        last_name: 'Owner',
+        role: 'owner',
+      })
+    })
+
+    expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
+      includeBootstrap: true,
+    })
+  })
+
+  it('maps invitation API error codes', async () => {
+    inviteMembership.mockRejectedValue({
+      name: 'AuthApiError',
+      status: 409,
+      code: 'membership_invitation_user_exists',
+      message: 'A Houston account with this email already exists.',
+    })
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+      }),
+    )
+
+    fillInviteForm('dup@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('error-message').textContent).toContain('existe déjà')
+    })
+    expect(screen.getByTestId('error-message').textContent).not.toMatch(/réactiv/i)
   })
 
   it('exposes invitedEmail from hook state', async () => {

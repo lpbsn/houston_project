@@ -21,6 +21,7 @@ export function MembershipInviteCard({
   const {
     form,
     setForm,
+    setRole,
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
@@ -32,6 +33,7 @@ export function MembershipInviteCard({
     roleOptions,
     hasRoleOptions,
     selectedRole,
+    requiresScopes,
     isManagerRestrictedToStaff,
     canSubmit,
     handleSubmit,
@@ -49,8 +51,8 @@ export function MembershipInviteCard({
             Invite a team member
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            Invite a staff or manager member. An email will be sent automatically; copy and share the
-            link manually if needed.
+            Invite an owner, director, manager, or staff member according to your role. An email
+            will be sent automatically; copy and share the link manually if needed.
           </CardDescription>
         </div>
       </CardHeader>
@@ -69,85 +71,97 @@ export function MembershipInviteCard({
         ) : null}
 
         {hasRoleOptions ? (
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="First name"
-              value={form.first_name}
-              onChange={(value) => setForm((current) => ({ ...current, first_name: value }))}
-            />
-            <Field
-              label="Last name"
-              value={form.last_name}
-              onChange={(value) => setForm((current) => ({ ...current, last_name: value }))}
-            />
-          </div>
-
-          <Field
-            label="Email"
-            type="email"
-            value={form.email}
-            onChange={(value) => setForm((current) => ({ ...current, email: value }))}
-          />
-
-          <div className="space-y-2">
-            <div className="text-sm font-semibold">Role</div>
-            {roleOptions.length === 1 ? (
-              <Button type="button" className="h-11 rounded-[1rem] capitalize" disabled>
-                {roleOptions[0]}
-              </Button>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {roleOptions.map((role) => (
-                  <Button
-                    key={role}
-                    type="button"
-                    variant={selectedRole === role ? 'default' : 'outline'}
-                    className="h-11 rounded-[1rem] capitalize"
-                    onClick={() => setForm((current) => ({ ...current, role }))}
-                  >
-                    {role}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <BusinessUnitScopeSelector
-            tree={businessUnitQuery.data ?? null}
-            selectedScopes={selectedBusinessUnitScopes}
-            onChange={setSelectedBusinessUnitScopes}
-            isLoading={businessUnitQuery.isPending}
-            errorMessage={
-              businessUnitQuery.error
-                ? businessUnitQuery.error instanceof Error
-                  ? businessUnitQuery.error.message
-                  : 'Les pôles d’activité sont indisponibles.'
-                : null
-            }
-            disabled={isSubmitting}
-          />
-
-          {errorMessage ? (
-            <div className="rounded-[1rem] border border-[#f4d5d5] bg-[#fff3f2] px-4 py-3 text-sm text-[#9d3b33]">
-              {errorMessage}
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="First name"
+                value={form.first_name}
+                onChange={(value) => setForm((current) => ({ ...current, first_name: value }))}
+              />
+              <Field
+                label="Last name"
+                value={form.last_name}
+                onChange={(value) => setForm((current) => ({ ...current, last_name: value }))}
+              />
             </div>
-          ) : null}
 
-          <Button type="submit" disabled={!canSubmit || isSubmitting} className="h-11 rounded-[1rem]">
-            {isSubmitting ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                Creating invitation...
-              </>
-            ) : (
-              <>
-                <UserPlus className="size-4" />
-                Create invitation
-              </>
-            )}
-          </Button>
-        </form>
+            <Field
+              label="Email"
+              type="email"
+              value={form.email}
+              onChange={(value) => setForm((current) => ({ ...current, email: value }))}
+            />
+
+            <div className="space-y-2">
+              <div className="text-sm font-semibold">Role</div>
+              {roleOptions.length === 1 ? (
+                <Button type="button" className="h-11 rounded-[1rem] capitalize" disabled>
+                  {roleOptions[0]}
+                </Button>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {roleOptions.map((role) => (
+                    <Button
+                      key={role}
+                      type="button"
+                      variant={selectedRole === role ? 'default' : 'outline'}
+                      className="h-11 rounded-[1rem] capitalize"
+                      onClick={() => setRole(role)}
+                    >
+                      {role}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {selectedRole === 'owner' ? (
+                <p className="text-sm text-[#5f574d]">
+                  L’invitation d’un propriétaire s’applique à tous les établissements brouillon et
+                  actifs de l’organisation.
+                </p>
+              ) : null}
+            </div>
+
+            {requiresScopes ? (
+              <BusinessUnitScopeSelector
+                tree={businessUnitQuery.data ?? null}
+                selectedScopes={selectedBusinessUnitScopes}
+                onChange={setSelectedBusinessUnitScopes}
+                isLoading={businessUnitQuery.isPending}
+                errorMessage={
+                  businessUnitQuery.error
+                    ? businessUnitQuery.error instanceof Error
+                      ? businessUnitQuery.error.message
+                      : 'Les pôles d’activité sont indisponibles.'
+                    : null
+                }
+                disabled={isSubmitting}
+              />
+            ) : null}
+
+            {errorMessage ? (
+              <div className="rounded-[1rem] border border-[#f4d5d5] bg-[#fff3f2] px-4 py-3 text-sm text-[#9d3b33]">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            <Button
+              type="submit"
+              disabled={!canSubmit || isSubmitting}
+              className="h-11 rounded-[1rem]"
+            >
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Creating invitation...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="size-4" />
+                  Create invitation
+                </>
+              )}
+            </Button>
+          </form>
         ) : null}
 
         {invitationLink && invitedEmail ? (
@@ -157,7 +171,12 @@ export function MembershipInviteCard({
               {buildInvitationCreatedMessage(invitedEmail ?? '')}
             </div>
             <div className="break-all text-sm text-muted-foreground">{invitationLink}</div>
-            <Button type="button" variant="outline" className="h-10 rounded-[1rem]" onClick={handleCopyLink}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-[1rem]"
+              onClick={handleCopyLink}
+            >
               <Copy className="size-4" />
               Copy invitation link
             </Button>

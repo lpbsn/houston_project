@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getTeamMemberScopeLabels,
+  getTeamSectionLabel,
   groupTeamMembersByRole,
   matchesTeamMemberSearch,
   shouldShowTeamMemberScopeBadges,
@@ -102,5 +103,43 @@ describe('team-members', () => {
     })
 
     expect(matchesTeamMemberSearch(scopedMembership, 'spa')).toBe(true)
+  })
+
+  it('groups multiple owners and directors without uniqueness assumptions', () => {
+    const memberships = [
+      member({ id: 'o1', role: 'owner' }),
+      member({
+        id: 'o2',
+        role: 'owner',
+        user: {
+          id: 'user-o2',
+          display_name: 'Other Owner',
+          username: 'other',
+          email: 'other@example.com',
+          first_name: 'Other',
+          last_name: 'Owner',
+        },
+      }),
+      member({ id: 'd1', role: 'director' }),
+      member({
+        id: 'd2',
+        role: 'director',
+        user: {
+          id: 'user-d2',
+          display_name: 'Second Director',
+          username: 'dir2',
+          email: 'dir2@example.com',
+          first_name: 'Second',
+          last_name: 'Director',
+        },
+      }),
+    ]
+
+    const sections = groupTeamMembersByRole(memberships, '')
+
+    expect(getTeamSectionLabel('owner')).toBe('PROPRIÉTAIRES')
+    expect(getTeamSectionLabel('director')).toBe('DIRECTEURS')
+    expect(sections.find((section) => section.role === 'owner')?.members).toHaveLength(2)
+    expect(sections.find((section) => section.role === 'director')?.members).toHaveLength(2)
   })
 })

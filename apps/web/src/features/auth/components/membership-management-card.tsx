@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { BusinessUnitTreeResponse } from '@/features/auth/api'
 import {
   canActorManageTargetRole,
+  canChangeMembershipRoleViaPatch,
   canEditMembershipOperationalScopes,
   getEditableRoleOptions,
 } from '@/features/auth/lib/membership-rbac'
@@ -57,10 +58,17 @@ export function MembershipManagementCard({
   selectedMembershipId,
   selectedScopes,
 }: MembershipManagementCardProps) {
-  const editableRoleOptions = getEditableRoleOptions(actorRole)
+  const selectedTargetRole = selectedMembership
+    ? normalizeRole(selectedMembership.role)
+    : null
+  const editableRoleOptions = selectedTargetRole
+    ? getEditableRoleOptions(actorRole, selectedTargetRole)
+    : []
   const canEditSelectedMembership = selectedMembership
     ? canActorManageTargetRole(actorRole, normalizeRole(selectedMembership.role))
     : false
+  const canEditSelectedRole =
+    Boolean(selectedTargetRole) && canChangeMembershipRoleViaPatch(selectedTargetRole!)
   const canEditOperationalScopes = canEditMembershipOperationalScopes(roleDraft)
 
   return (
@@ -180,24 +188,30 @@ export function MembershipManagementCard({
 
               <div className="space-y-2">
                 <div className="text-sm font-semibold">Role</div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {editableRoleOptions.map((role) => (
-                    <Button
-                      key={role}
-                      type="button"
-                      variant={roleDraft === role ? 'default' : 'outline'}
-                      className={cn(
-                        'h-11 rounded-[1rem]',
-                        roleDraft === role
-                          ? 'shadow-[0_14px_28px_-20px_rgba(46,72,173,0.45)]'
-                          : 'border-[#e7dfd1] bg-[#fffdf8]',
-                      )}
-                      onClick={() => onRoleChange(role)}
-                    >
-                      {role}
-                    </Button>
-                  ))}
-                </div>
+                {canEditSelectedRole && editableRoleOptions.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {editableRoleOptions.map((role) => (
+                      <Button
+                        key={role}
+                        type="button"
+                        variant={roleDraft === role ? 'default' : 'outline'}
+                        className={cn(
+                          'h-11 rounded-[1rem]',
+                          roleDraft === role
+                            ? 'shadow-[0_14px_28px_-20px_rgba(46,72,173,0.45)]'
+                            : 'border-[#e7dfd1] bg-[#fffdf8]',
+                        )}
+                        onClick={() => onRoleChange(role)}
+                      >
+                        {role}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <Badge className="bg-[color:var(--primary)] text-primary-foreground capitalize">
+                    {roleDraft}
+                  </Badge>
+                )}
               </div>
 
               {canEditOperationalScopes ? (

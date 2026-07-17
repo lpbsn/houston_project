@@ -10,7 +10,7 @@ export type TeamRoleSection = {
 const TEAM_ROLE_ORDER: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
 
 const TEAM_SECTION_LABELS: Record<RoleEnum, string> = {
-  owner: 'PROPRIÉTAIRE',
+  owner: 'PROPRIÉTAIRES',
   director: 'DIRECTEURS',
   manager: 'MANAGERS',
   staff: 'STAFF',

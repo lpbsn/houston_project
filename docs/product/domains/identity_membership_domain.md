@@ -36,7 +36,6 @@ This domain owns global user identity, organization and establishment membership
 - Fine-grained RBAC matrices.
 - Arbitrary admin browsing across tenants.
 - Cross-tenant access.
-- Invitation flows.
 - Password reset flows.
 - Public signup.
 - Old-stack implementation assumptions or terminology.
@@ -130,21 +129,21 @@ Implemented response truths:
 - If `selected_establishment` is stale, inactive, or outside active memberships, it is cleared safely and `active_membership` becomes `null`.
 - Membership-management endpoints are establishment-scoped and require the path `establishment_id` to match the current active auth-session context.
 - Membership-management list and detail responses are tenant-filtered before serialization.
-- Role updates and operational-domain assignment updates use `PATCH`; deactivation is a separate command endpoint.
-- The last active owner cannot be deactivated.
-- The last active owner cannot be demoted to another role.
-- The last-active-owner invariant is enforced in the service layer.
-- If another active owner exists, demotion is allowed.
-- Directors cannot patch, deactivate, or reassign owner memberships.
-- Directors may manage manager and staff memberships when they hold membership-management authority.
-- Owners may manage director, manager, and staff memberships subject to the last-active-owner invariant.
-- Any active member may read `GET /api/v1/establishments/{establishment_id}/workspace-summary/` for the current active establishment context.
+- Role updates and operational-domain assignment updates use `PATCH`; activation and deactivation are separate command endpoints.
+- Organizational owners: memberships with `role=owner` are kept coherent across all `draft` and `active` establishments of an organization (fan-out invite / deactivate / reactivate). There is no `OrganizationMembership` model.
+- Invite vs reactivate: email invitation is only for new emails or controlled `User.pending` resume. An already-active Houston user (`User.active`) who should regain owner access uses organizational **reactivation** (`POST .../memberships/{id}/activate/`), never invite/email.
+- Owner invitation accept (`POST /api/v1/invitations/{token}/accept/`): requires `User.status == pending`; activates all `owner`/`invited` memberships for that user on draft/active establishments of the same organization.
+- Last-active-owner invariant: deactivation is blocked unless another user is `owner`/`active` with **full coverage** of every draft/active establishment in the organization (not a simple per-establishment count).
+- Owner memberships cannot be changed via `PATCH` (no demotion / no destination `owner`). Directors cannot patch, deactivate, or reassign owner memberships.
+- Directors may manage manager and staff memberships when they hold membership-management authority; owners may manage director, manager, and staff (and organizational owners) subject to invariants.
+- Preflight / repair: `preflight_organizational_owners` inventories owner coherence conflicts; `repair_organizational_owners` only creates missing owner memberships when existing owner statuses for that user are homogeneous. Status mixes and non-owner conflicts require manual fix (no auto status alignment).
+- Any active member may read `GET /api/v1/establishments/{establishment_id}/workspace-summary/` for the current active establishment context (summary owner/director fields remain singular).
 - Scoped user search is establishment-scoped and requires the path `establishment_id` to match the current active auth-session context.
 - Scoped user search returns active users with active memberships in the same active establishment only.
 - Scoped user search response fields are limited to `id`, `display_name`, `username`, `email`, `role`, and `membership_id`.
 - Establishment invitation acceptance: `POST /api/v1/invitations/{token}/accept/` (password setup, session creation; CSRF required).
-- Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled.
-- Post-onboarding staff/manager invite with token: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled.
+- Onboarding Director invite with token: `POST /api/v1/onboarding-sessions/{session_id}/director-invitations/` returns `invitation_token` and schedules a transactional invitation email when enabled (draft onboarding; exactly one non-owner director gate).
+- Workspace membership invitations: `POST /api/v1/establishments/{establishment_id}/membership-invitations/` may invite `staff`, `manager`, `director` (active establishment), or organizational `owner` (active path establishment; fan-out to draft+active org establishments). Returns `invitation_token` and schedules a transactional invitation email when enabled.
 
 Candidate endpoints only:
 

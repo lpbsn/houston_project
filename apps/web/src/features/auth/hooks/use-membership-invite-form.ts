@@ -1,15 +1,21 @@
 import { useMemo, useState } from 'react'
 
-import { inviteMembership } from '@/features/auth/api'
+import {
+  inviteMembership,
+  invalidateMembershipListQueries,
+  invalidateMembershipWorkspaceQueries,
+} from '@/features/auth/api'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { type BusinessUnitScopeSelection } from '@/features/auth/lib/business-unit-scope'
+import { resolveInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
+import { requiresInviteScopes } from '@/features/auth/lib/invitation-rbac'
 import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
 
 export type MembershipInviteFormState = {
   email: string
   first_name: string
   last_name: string
-  role: 'staff' | 'manager'
+  role: MembershipInvitationRequestRoleEnum
 }
 
 const emptyForm: MembershipInviteFormState = {
@@ -55,11 +61,9 @@ export function useMembershipInviteForm({
       const seen = new Set<MembershipInvitationRequestRoleEnum>()
       const deduped: MembershipInvitationRequestRoleEnum[] = []
       for (const role of allowedTargetRoles) {
-        if (role === 'staff' || role === 'manager') {
-          if (!seen.has(role)) {
-            deduped.push(role)
-            seen.add(role)
-          }
+        if (!seen.has(role)) {
+          deduped.push(role)
+          seen.add(role)
         }
       }
       return deduped
@@ -76,9 +80,10 @@ export function useMembershipInviteForm({
   const isRoleAllowed = selectedRole ? roleOptions.includes(selectedRole) : false
   const isManagerRestrictedToStaff =
     hasRoleOptions && roleOptions.length === 1 && roleOptions[0] === 'staff'
+  const requiresScopes = requiresInviteScopes(selectedRole)
 
   const canSubmit = useMemo(() => {
-    if (!hasRoleOptions || !isRoleAllowed) {
+    if (!hasRoleOptions || !isRoleAllowed || !selectedRole) {
       return false
     }
 
@@ -86,8 +91,26 @@ export function useMembershipInviteForm({
       return false
     }
 
-    return selectedBusinessUnitScopes.length > 0
-  }, [form, hasRoleOptions, isRoleAllowed, selectedBusinessUnitScopes.length])
+    if (requiresScopes) {
+      return selectedBusinessUnitScopes.length > 0
+    }
+
+    return true
+  }, [
+    form,
+    hasRoleOptions,
+    isRoleAllowed,
+    requiresScopes,
+    selectedBusinessUnitScopes.length,
+    selectedRole,
+  ])
+
+  function setRole(role: MembershipInvitationRequestRoleEnum) {
+    setForm((current) => ({ ...current, role }))
+    if (!requiresInviteScopes(role)) {
+      setSelectedBusinessUnitScopes([])
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -106,26 +129,35 @@ export function useMembershipInviteForm({
         throw new Error('Le rôle sélectionné n’est pas autorisé pour votre profil.')
       }
 
-      if (selectedBusinessUnitScopes.length === 0) {
+      if (requiresInviteScopes(selectedRole) && selectedBusinessUnitScopes.length === 0) {
         throw new Error('Sélectionnez au moins un pôle d’activité.')
       }
 
       const submittedEmail = form.email.trim()
+      const scopes = requiresInviteScopes(selectedRole) ? selectedBusinessUnitScopes : []
 
       const result = await inviteMembership(establishmentId, {
         email: submittedEmail,
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
-        role: selectedRole as MembershipInvitationRequestRoleEnum,
-        scopes: selectedBusinessUnitScopes,
+        role: selectedRole,
+        ...(scopes.length > 0 ? { scopes } : {}),
       })
 
       setInvitedEmail(submittedEmail)
       setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
       setForm(emptyForm)
       setSelectedBusinessUnitScopes([])
+
+      if (selectedRole === 'owner') {
+        void invalidateMembershipWorkspaceQueries({ includeBootstrap: true })
+      } else {
+        void invalidateMembershipListQueries(establishmentId)
+      }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Invitation could not be created.')
+      setErrorMessage(
+        resolveInvitationErrorMessage(error, 'L’invitation n’a pas pu être créée.'),
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -147,6 +179,7 @@ export function useMembershipInviteForm({
   return {
     form,
     setForm,
+    setRole,
     selectedBusinessUnitScopes,
     setSelectedBusinessUnitScopes,
     invitationLink,
@@ -158,6 +191,7 @@ export function useMembershipInviteForm({
     roleOptions,
     hasRoleOptions,
     selectedRole,
+    requiresScopes,
     isManagerRestrictedToStaff,
     canSubmit,
     handleSubmit,

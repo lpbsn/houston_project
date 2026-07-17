@@ -7,9 +7,11 @@ import {
   deactivateMembership,
   getMembership,
   getWorkspaceSummary,
+  invalidateMembershipListAndWorkspaceSummaryQueries,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
+  patchMembershipCaches,
   switchEstablishment,
   updateMembership,
   workspaceSummaryQueryKey,
@@ -122,25 +124,19 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
 
       return updateMembership(activeEstablishmentId, effectiveSelectedMembershipId, input)
     },
-    onSuccess: async (membership) => {
+    onSuccess: (membership) => {
       if (!activeEstablishmentId) {
         return
       }
 
-      queryClient.setQueryData(
-        membershipDetailQueryKey(activeEstablishmentId, membership.id),
-        membership,
-      )
-      await queryClient.invalidateQueries({ queryKey: membershipListQueryKey(activeEstablishmentId) })
-      await queryClient.invalidateQueries({
-        queryKey: workspaceSummaryQueryKey(activeEstablishmentId),
-      })
+      patchMembershipCaches(activeEstablishmentId, membership, queryClient)
       setEditorState({
         membershipId: membership.id,
         roleDraft: normalizeRole(membership.role),
         selectedScopes: businessUnitScopesFromApiItems(membership.scopes),
       })
       setMembershipMutationError(null)
+      void invalidateMembershipListAndWorkspaceSummaryQueries(activeEstablishmentId, queryClient)
     },
   })
 
@@ -152,15 +148,12 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
 
       return deactivateMembership(activeEstablishmentId, effectiveSelectedMembershipId)
     },
-    onSuccess: async () => {
+    onSuccess: (membership) => {
       if (!activeEstablishmentId) {
         return
       }
 
-      await queryClient.invalidateQueries({ queryKey: membershipListQueryKey(activeEstablishmentId) })
-      await queryClient.invalidateQueries({
-        queryKey: workspaceSummaryQueryKey(activeEstablishmentId),
-      })
+      patchMembershipCaches(activeEstablishmentId, membership, queryClient)
       startTransition(() => {
         setSelectedMembershipId(null)
         setEditorState({
@@ -170,6 +163,7 @@ export function useAppPageWorkspace({ membershipManagementEnabled }: UseAppPageW
         })
         setMembershipMutationError(null)
       })
+      void invalidateMembershipListAndWorkspaceSummaryQueries(activeEstablishmentId, queryClient)
     },
   })
 

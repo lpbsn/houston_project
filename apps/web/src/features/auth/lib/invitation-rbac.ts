@@ -1,6 +1,16 @@
 import type { MembershipInvitationRequestRoleEnum, RoleEnum } from '@/features/auth/types'
 
-const OWNER_DIRECTOR_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['staff', 'manager']
+const OWNER_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = [
+  'owner',
+  'director',
+  'manager',
+  'staff',
+]
+const DIRECTOR_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = [
+  'director',
+  'manager',
+  'staff',
+]
 const MANAGER_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['staff']
 const NO_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = []
 
@@ -9,13 +19,17 @@ export function getAllowedInviteTargetRoles(
 ): MembershipInvitationRequestRoleEnum[] {
   switch (actorRole) {
     case 'owner':
-      return OWNER_DIRECTOR_TARGET_ROLES
+      return OWNER_TARGET_ROLES
     case 'director':
-      return OWNER_DIRECTOR_TARGET_ROLES
+      return DIRECTOR_TARGET_ROLES
     case 'manager':
       return MANAGER_TARGET_ROLES
     case 'staff':
     default:
       return NO_TARGET_ROLES
   }
+}
+
+export function requiresInviteScopes(role: MembershipInvitationRequestRoleEnum | null | undefined) {
+  return role === 'staff' || role === 'manager'
 }
