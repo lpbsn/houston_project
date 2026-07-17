@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from django.db import transaction
+from django.utils import timezone
 
 from houston.action_plans.services import (
     create_action_plan_with_execution,
@@ -12,8 +13,6 @@ from houston.action_plans.services import (
 )
 from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
 from houston.ai.observation_pipeline_schema import PipelineCandidateOutput
-from django.utils import timezone
-
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.notifications.models import Notification
 from houston.signals.exceptions import SignalStateError
