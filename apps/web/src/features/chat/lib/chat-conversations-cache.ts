@@ -40,12 +40,15 @@ export function compareConversationsForList(
   if (left.pinned !== right.pinned) {
     return left.pinned ? -1 : 1
   }
-  const leftTime = left.last_message_at ?? ''
-  const rightTime = right.last_message_at ?? ''
-  if (leftTime === rightTime) {
-    return right.id.localeCompare(left.id)
+  const leftTime = left.last_message_at ?? left.created_at
+  const rightTime = right.last_message_at ?? right.created_at
+  if (leftTime !== rightTime) {
+    return rightTime.localeCompare(leftTime)
   }
-  return rightTime.localeCompare(leftTime)
+  if (left.created_at !== right.created_at) {
+    return right.created_at.localeCompare(left.created_at)
+  }
+  return right.id.localeCompare(left.id)
 }
 
 export function patchConversationsOnMessageCreated(

@@ -2317,6 +2317,8 @@ export interface components {
             id: string;
             type: string;
             title: string;
+            /** Format: date-time */
+            created_at: string;
             unread: boolean;
             unread_count: number;
             /** Format: date-time */

@@ -31,6 +31,7 @@ function buildConversation(
     id,
     type,
     title: options.title ?? '',
+    created_at: '2026-06-13T11:00:00Z',
     unread: false,
     unread_count: 0,
     last_message_at: options.last_message_at ?? '2026-06-13T12:00:00Z',

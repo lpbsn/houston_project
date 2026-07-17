@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildLastMessagePreview,
+  compareConversationsForList,
   patchConversationsOnMessageCreated,
   shouldMarkConversationUnread,
 } from './chat-conversations-cache'
@@ -13,6 +14,7 @@ const sampleConversation = (
   id: 'conv-1',
   type: 'dm',
   title: '',
+  created_at: '2026-06-01T09:00:00.000Z',
   unread: false,
   unread_count: 0,
   last_message_at: '2026-06-01T10:00:00.000Z',
@@ -309,5 +311,54 @@ describe('chat-conversations-cache', () => {
     )
 
     expect(result?.items.map((item) => item.id)).toEqual(['pinned', 'unpinned'])
+  })
+
+  it('sorts null last_message_at using created_at fallback within pin tier', () => {
+    const emptyRecent = sampleConversation({
+      id: 'empty-recent',
+      pinned: true,
+      last_message_at: null,
+      created_at: '2026-06-10T12:00:00.000Z',
+    })
+    const withOlderMessage = sampleConversation({
+      id: 'with-older',
+      pinned: true,
+      last_message_at: '2026-06-01T10:00:00.000Z',
+      created_at: '2026-05-01T10:00:00.000Z',
+    })
+
+    expect(
+      [withOlderMessage, emptyRecent].sort(compareConversationsForList).map((item) => item.id),
+    ).toEqual(['empty-recent', 'with-older'])
+  })
+
+  it('tie-breaks equal sort key by created_at then id', () => {
+    const olderCreated = sampleConversation({
+      id: 'b',
+      last_message_at: '2026-06-10T12:00:00.000Z',
+      created_at: '2026-06-01T10:00:00.000Z',
+    })
+    const newerCreated = sampleConversation({
+      id: 'a',
+      last_message_at: '2026-06-10T12:00:00.000Z',
+      created_at: '2026-06-02T10:00:00.000Z',
+    })
+    expect(
+      [olderCreated, newerCreated].sort(compareConversationsForList).map((item) => item.id),
+    ).toEqual(['a', 'b'])
+
+    const lowerId = sampleConversation({
+      id: 'aaa',
+      last_message_at: null,
+      created_at: '2026-06-10T12:00:00.000Z',
+    })
+    const higherId = sampleConversation({
+      id: 'zzz',
+      last_message_at: null,
+      created_at: '2026-06-10T12:00:00.000Z',
+    })
+    expect(
+      [lowerId, higherId].sort(compareConversationsForList).map((item) => item.id),
+    ).toEqual(['zzz', 'aaa'])
   })
 })
