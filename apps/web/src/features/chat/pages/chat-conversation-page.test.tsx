@@ -36,6 +36,7 @@ const conversationDetail: ChatConversationDetail = {
   ],
   can_manage: false,
   can_delete: false,
+  pinned: false,
 }
 
 const serverMessage: ChatMessage = {

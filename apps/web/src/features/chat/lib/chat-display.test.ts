@@ -15,6 +15,7 @@ const sampleConversation = (
   id: 'conv-1',
   type: 'dm',
   title: '',
+  created_at: '2026-06-01T09:00:00.000Z',
   unread: false,
   unread_count: 0,
   last_message_at: null,
@@ -35,6 +36,8 @@ const sampleConversation = (
       participant_role: 'member',
     },
   ],
+  pinned: false,
+  can_delete: false,
   ...overrides,
 })
 

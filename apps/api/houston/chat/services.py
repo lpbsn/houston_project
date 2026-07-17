@@ -25,7 +25,7 @@ from houston.chat.selectors import (
     find_existing_dm_conversation,
     get_active_participant,
     get_conversation_for_participant,
-    get_latest_message,
+    get_latest_visible_message,
 )
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.permissions import is_valid_membership
@@ -227,6 +227,13 @@ def create_or_get_dm_conversation(
         membership_b_id=membership_b.id,
     )
     if existing is not None:
+        participant = get_active_participant(
+            conversation_id=existing.id,
+            membership_id=actor_membership.id,
+        )
+        if participant is not None and participant.list_hidden_at is not None:
+            participant.list_hidden_at = None
+            participant.save(update_fields=["list_hidden_at", "updated_at"])
         return existing, False
 
     conversation = ChatConversation.objects.create(
@@ -490,8 +497,146 @@ def leave_group_conversation(
 
     now = timezone.now()
     participant.left_at = now
-    participant.save(update_fields=["left_at", "updated_at"])
+    participant.pinned_at = None
+    participant.save(update_fields=["left_at", "pinned_at", "updated_at"])
     _ensure_group_has_admin(conversation=conversation)
+    schedule_conversation_access_revoked(
+        establishment_id=conversation.establishment_id,
+        membership_id=actor_membership.id,
+        conversation_id=conversation.id,
+        reason="participant_left",
+    )
+    return participant
+
+
+@transaction.atomic
+def pin_conversation(
+    *,
+    actor_membership: EstablishmentMembership,
+    conversation_id: uuid.UUID,
+) -> ChatParticipant:
+    if not can_access_chat(actor_membership):
+        raise ChatPermissionError()
+
+    conversation = get_conversation_for_participant(
+        establishment_id=actor_membership.establishment_id,
+        conversation_id=conversation_id,
+        membership_id=actor_membership.id,
+    )
+    if conversation is None:
+        raise ChatNotFoundError()
+
+    participant = get_active_participant(
+        conversation_id=conversation.id,
+        membership_id=actor_membership.id,
+    )
+    if participant is None:
+        raise ChatNotFoundError()
+
+    if participant.pinned_at is None:
+        participant.pinned_at = timezone.now()
+        participant.save(update_fields=["pinned_at", "updated_at"])
+    return participant
+
+
+@transaction.atomic
+def unpin_conversation(
+    *,
+    actor_membership: EstablishmentMembership,
+    conversation_id: uuid.UUID,
+) -> ChatParticipant:
+    if not can_access_chat(actor_membership):
+        raise ChatPermissionError()
+
+    conversation = get_conversation_for_participant(
+        establishment_id=actor_membership.establishment_id,
+        conversation_id=conversation_id,
+        membership_id=actor_membership.id,
+    )
+    if conversation is None:
+        raise ChatNotFoundError()
+
+    participant = get_active_participant(
+        conversation_id=conversation.id,
+        membership_id=actor_membership.id,
+    )
+    if participant is None:
+        raise ChatNotFoundError()
+
+    if participant.pinned_at is not None:
+        participant.pinned_at = None
+        participant.save(update_fields=["pinned_at", "updated_at"])
+    return participant
+
+
+@transaction.atomic
+def hide_dm_conversation(
+    *,
+    actor_membership: EstablishmentMembership,
+    conversation_id: uuid.UUID,
+) -> ChatParticipant:
+    if not can_access_chat(actor_membership):
+        raise ChatPermissionError()
+
+    conversation = get_conversation_for_participant(
+        establishment_id=actor_membership.establishment_id,
+        conversation_id=conversation_id,
+        membership_id=actor_membership.id,
+    )
+    if conversation is None:
+        raise ChatNotFoundError()
+    if conversation.type != ChatConversation.Type.DM:
+        raise ChatValidationError("Only direct messages can be hidden.")
+
+    participant = get_active_participant(
+        conversation_id=conversation.id,
+        membership_id=actor_membership.id,
+    )
+    if participant is None:
+        raise ChatNotFoundError()
+
+    now = timezone.now()
+    participant.history_cutoff_at = now
+    participant.list_hidden_at = now
+    participant.pinned_at = None
+
+    latest_visible = get_latest_visible_message(
+        conversation.id,
+        history_cutoff_at=now,
+    )
+    update_fields = [
+        "history_cutoff_at",
+        "list_hidden_at",
+        "pinned_at",
+        "updated_at",
+    ]
+    if latest_visible is not None:
+        participant.last_seen_message_id = latest_visible.id
+        participant.last_seen_message_created_at = latest_visible.created_at
+        update_fields.extend(
+            ["last_seen_message_id", "last_seen_message_created_at"]
+        )
+    else:
+        # No visible messages after cutoff: advance cursor past pre-cutoff history
+        # by pointing at the global latest if any, so unread for hidden history is 0.
+        from houston.chat.selectors import get_latest_message
+
+        latest_any = get_latest_message(conversation.id)
+        if latest_any is not None:
+            participant.last_seen_message_id = latest_any.id
+            participant.last_seen_message_created_at = latest_any.created_at
+            update_fields.extend(
+                ["last_seen_message_id", "last_seen_message_created_at"]
+            )
+
+    participant.save(update_fields=update_fields)
+
+    from houston.notifications.services import mark_chat_conversation_notifications_read
+
+    mark_chat_conversation_notifications_read(
+        membership=actor_membership,
+        conversation_id=conversation.id,
+    )
     return participant
 
 
@@ -516,7 +661,10 @@ def mark_conversation_seen(
     if participant is None:
         raise ChatNotFoundError()
 
-    latest_message = get_latest_message(conversation.id)
+    latest_message = get_latest_visible_message(
+        conversation.id,
+        history_cutoff_at=participant.history_cutoff_at,
+    )
     if latest_message is None:
         return participant
 
@@ -660,6 +808,12 @@ def create_message(
     )
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=["last_message_at", "updated_at"])
+    ChatParticipant.objects.filter(
+        conversation=conversation,
+        left_at__isnull=True,
+        list_hidden_at__isnull=False,
+        list_hidden_at__lt=message.created_at,
+    ).update(list_hidden_at=None, updated_at=timezone.now())
     from houston.notifications.scheduling import schedule_chat_message_received_notification
 
     schedule_chat_message_received_notification(

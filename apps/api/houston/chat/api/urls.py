@@ -9,7 +9,9 @@ from houston.chat.api.views import (
     ChatCreateDmView,
     ChatCreateGroupView,
     ChatEligibleMembershipsView,
+    ChatHideConversationView,
     ChatLeaveConversationView,
+    ChatPinConversationView,
     ChatPromoteParticipantView,
     ChatRemoveParticipantView,
     ChatSettingsView,
@@ -82,6 +84,16 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/leave/",
         ChatLeaveConversationView.as_view(),
         name="chat-conversation-leave",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/pin/",
+        ChatPinConversationView.as_view(),
+        name="chat-conversation-pin",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/chat/conversations/<uuid:conversation_id>/hide/",
+        ChatHideConversationView.as_view(),
+        name="chat-conversation-hide",
     ),
     path(
         "establishments/<uuid:establishment_id>/chat/eligible-memberships/",

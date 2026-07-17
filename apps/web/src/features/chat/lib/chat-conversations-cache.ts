@@ -1,4 +1,4 @@
-import type { ChatConversationListResponse, ChatMessage } from '../types'
+import type { ChatConversationListItem, ChatConversationListResponse, ChatMessage } from '../types'
 
 import { compareChatMessagesAscending } from './chat-messages'
 
@@ -31,6 +31,24 @@ export function buildLastMessagePreview(message: ChatMessage) {
     body: message.body,
     created_at: message.created_at,
   }
+}
+
+export function compareConversationsForList(
+  left: ChatConversationListItem,
+  right: ChatConversationListItem,
+): number {
+  if (left.pinned !== right.pinned) {
+    return left.pinned ? -1 : 1
+  }
+  const leftTime = left.last_message_at ?? left.created_at
+  const rightTime = right.last_message_at ?? right.created_at
+  if (leftTime !== rightTime) {
+    return rightTime.localeCompare(leftTime)
+  }
+  if (left.created_at !== right.created_at) {
+    return right.created_at.localeCompare(left.created_at)
+  }
+  return right.id.localeCompare(left.id)
 }
 
 export function patchConversationsOnMessageCreated(
@@ -80,14 +98,7 @@ export function patchConversationsOnMessageCreated(
     }
   })
 
-  const sorted = [...items].sort((left, right) => {
-    const leftTime = left.last_message_at ?? ''
-    const rightTime = right.last_message_at ?? ''
-    if (leftTime === rightTime) {
-      return right.id.localeCompare(left.id)
-    }
-    return rightTime.localeCompare(leftTime)
-  })
+  const sorted = [...items].sort(compareConversationsForList)
 
   return { items: sorted }
 }

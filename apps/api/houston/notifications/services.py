@@ -316,6 +316,37 @@ def mark_all_notifications_read(
     return updated_count
 
 
+@transaction.atomic
+def mark_chat_conversation_notifications_read(
+    *,
+    membership: EstablishmentMembership,
+    conversation_id: uuid.UUID,
+) -> int:
+    if not is_valid_membership(membership):
+        return 0
+
+    now = timezone.now()
+    updated_count = Notification.objects.filter(
+        establishment_id=membership.establishment_id,
+        recipient_membership_id=membership.id,
+        subject_type=Notification.SubjectType.CHAT_CONVERSATION,
+        subject_id=conversation_id,
+        status=Notification.Status.UNREAD,
+    ).update(
+        status=Notification.Status.READ,
+        read_at=now,
+        updated_at=now,
+    )
+    if updated_count > 0:
+        _schedule_notification_invalidation(
+            establishment_id=membership.establishment_id,
+            membership_id=membership.id,
+            reason=NOTIFICATION_BULK_UPDATED_REASON,
+            entity_id=membership.id,
+        )
+    return updated_count
+
+
 def get_notification_preferences(*, membership: EstablishmentMembership) -> dict:
     return {
         "notifications_enabled": membership.notifications_enabled,

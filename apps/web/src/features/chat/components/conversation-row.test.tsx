@@ -14,6 +14,7 @@ function buildConversation(
     id: 'conv-1',
     type: 'dm',
     title: '',
+    created_at: '2026-06-13T16:00:00Z',
     unread: false,
     unread_count: 0,
     last_message_at: '2026-06-13T17:25:00Z',
@@ -34,17 +35,21 @@ function buildConversation(
         participant_role: 'member',
       },
     ],
+    pinned: false,
+    can_delete: false,
     ...overrides,
   }
 }
 
 function renderRow(conversation: ChatConversationListItem) {
   const onSelect = () => undefined
+  const onOpenActions = () => undefined
   return render(
     createElement(ConversationRow, {
       conversation,
       viewerMembershipId: 'mbr-viewer',
       onSelect,
+      onOpenActions,
     }),
   )
 }

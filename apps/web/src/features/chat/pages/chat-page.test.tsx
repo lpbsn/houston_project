@@ -31,6 +31,7 @@ function buildConversation(
     id,
     type,
     title: options.title ?? '',
+    created_at: '2026-06-13T11:00:00Z',
     unread: false,
     unread_count: 0,
     last_message_at: options.last_message_at ?? '2026-06-13T12:00:00Z',
@@ -69,6 +70,8 @@ function buildConversation(
               participant_role: 'member',
             },
           ],
+    pinned: false,
+    can_delete: false,
   }
 }
 
@@ -111,6 +114,14 @@ vi.mock('@/app/auth-provider', () => ({
   }),
 }))
 
+function idleMutationMock() {
+  return {
+    isPending: false,
+    mutateAsync: vi.fn(),
+    reset: vi.fn(),
+  }
+}
+
 vi.mock('../hooks', () => ({
   useChatStatusQuery: () => statusQueryMock(),
   useChatConversationsQuery: () => conversationsQueryMock(),
@@ -127,11 +138,17 @@ vi.mock('../hooks', () => ({
     mutate: () => undefined,
     isPending: false,
   }),
+  usePinConversationMutation: () => idleMutationMock(),
+  useUnpinConversationMutation: () => idleMutationMock(),
+  useHideDmMutation: () => idleMutationMock(),
+  useLeaveGroupMutation: () => idleMutationMock(),
+  useDeleteGroupMutation: () => idleMutationMock(),
 }))
 
 vi.mock('../components/chat-realtime-provider', () => ({
   useOptionalChatRealtime: () => ({
     connectionStatus: 'reconnecting',
+    clearLocalMessagesForConversation: () => undefined,
   }),
 }))
 

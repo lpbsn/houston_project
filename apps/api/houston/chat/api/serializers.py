@@ -50,11 +50,14 @@ class ChatConversationListItemSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     type = serializers.CharField()
     title = serializers.CharField(allow_blank=True)
+    created_at = serializers.DateTimeField()
     unread = serializers.BooleanField()
     unread_count = serializers.IntegerField(min_value=0)
     last_message_at = serializers.DateTimeField(allow_null=True)
     last_message_preview = ChatMessagePreviewSerializer(allow_null=True)
     participants = ChatParticipantSummarySerializer(many=True)
+    pinned = serializers.BooleanField()
+    can_delete = serializers.BooleanField()
 
 
 class ChatConversationListResponseSerializer(serializers.Serializer):
@@ -71,6 +74,7 @@ class ChatConversationDetailSerializer(serializers.Serializer):
     participants = ChatParticipantSummarySerializer(many=True)
     can_manage = serializers.BooleanField()
     can_delete = serializers.BooleanField()
+    pinned = serializers.BooleanField()
 
 
 class ChatMessageSerializer(serializers.Serializer):
@@ -183,12 +187,17 @@ def serialize_conversation_detail(
     unread: bool,
     can_manage: bool,
     can_delete: bool,
+    pinned: bool = False,
+    last_message_at=...,
 ) -> dict:
     active_participants = [
         participant
         for participant in conversation.participants.all()
         if participant.left_at is None
     ]
+    resolved_last_message_at = (
+        conversation.last_message_at if last_message_at is ... else last_message_at
+    )
     return {
         "id": conversation.id,
         "type": conversation.type,
@@ -197,11 +206,12 @@ def serialize_conversation_detail(
             viewer_membership_id=viewer_membership_id,
         ),
         "created_at": conversation.created_at,
-        "last_message_at": conversation.last_message_at,
+        "last_message_at": resolved_last_message_at,
         "unread": unread,
         "participants": [
             serialize_participant_summary(participant) for participant in active_participants
         ],
         "can_manage": can_manage,
         "can_delete": can_delete,
+        "pinned": pinned,
     }

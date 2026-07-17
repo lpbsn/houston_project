@@ -59,11 +59,14 @@ const sampleConversation = (): ChatConversationListItem => ({
   id: 'conv-1',
   type: 'dm',
   title: '',
+  created_at: '2026-06-01T09:00:00.000Z',
   unread: false,
   unread_count: 0,
   last_message_at: null,
   last_message_preview: null,
   participants: [],
+  pinned: false,
+  can_delete: false,
 })
 
 describe('ChatRealtimeProvider', () => {

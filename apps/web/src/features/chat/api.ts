@@ -229,6 +229,103 @@ export async function markConversationSeen(
   }
 }
 
+async function postConversationAction(
+  establishmentId: string,
+  conversationId: string,
+  path:
+    | '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/pin/'
+    | '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/hide/'
+    | '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/leave/',
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(path, {
+        params: conversationPathParams(establishmentId, conversationId),
+        headers: getAuthHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
+export async function pinConversation(
+  establishmentId: string,
+  conversationId: string,
+): Promise<void> {
+  await postConversationAction(
+    establishmentId,
+    conversationId,
+    '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/pin/',
+  )
+}
+
+export async function unpinConversation(
+  establishmentId: string,
+  conversationId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.DELETE(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/pin/',
+        {
+          params: conversationPathParams(establishmentId, conversationId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
+export async function hideDmConversation(
+  establishmentId: string,
+  conversationId: string,
+): Promise<void> {
+  await postConversationAction(
+    establishmentId,
+    conversationId,
+    '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/hide/',
+  )
+}
+
+export async function leaveGroupConversation(
+  establishmentId: string,
+  conversationId: string,
+): Promise<void> {
+  await postConversationAction(
+    establishmentId,
+    conversationId,
+    '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/leave/',
+  )
+}
+
+export async function deleteGroupConversation(
+  establishmentId: string,
+  conversationId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.DELETE(
+        '/api/v1/establishments/{establishment_id}/chat/conversations/{conversation_id}/',
+        {
+          params: conversationPathParams(establishmentId, conversationId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
 export async function postChatConversationPresence(
   establishmentId: string,
   conversationId: string,

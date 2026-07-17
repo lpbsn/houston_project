@@ -38,6 +38,14 @@ const conversationsQueryMock = vi.fn(() => ({
   data: { items: [] },
 }))
 
+function idleMutationMock() {
+  return {
+    isPending: false,
+    mutateAsync: () => Promise.resolve(),
+    reset: () => undefined,
+  }
+}
+
 vi.mock('../hooks', () => ({
   useChatStatusQuery: () => statusQueryMock(),
   useChatConversationsQuery: () => conversationsQueryMock(),
@@ -54,6 +62,11 @@ vi.mock('../hooks', () => ({
     mutate: () => undefined,
     isPending: false,
   }),
+  usePinConversationMutation: () => idleMutationMock(),
+  useUnpinConversationMutation: () => idleMutationMock(),
+  useHideDmMutation: () => idleMutationMock(),
+  useLeaveGroupMutation: () => idleMutationMock(),
+  useDeleteGroupMutation: () => idleMutationMock(),
 }))
 
 function renderChatPage() {
