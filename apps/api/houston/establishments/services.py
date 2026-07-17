@@ -2048,19 +2048,6 @@ def _lock_organization(*, organization_id) -> Organization:
     return Organization.objects.select_for_update().get(id=organization_id)
 
 
-def org_establishments_draft_active(*, organization_id):
-    """Draft and active establishments for an organization, deterministic id order."""
-    return list(
-        Establishment.objects.filter(
-            organization_id=organization_id,
-            status__in=[
-                Establishment.Status.DRAFT,
-                Establishment.Status.ACTIVE,
-            ],
-        ).order_by("id")
-    )
-
-
 def _lock_memberships_for_owner_workflow(
     *,
     actor_membership_id=None,

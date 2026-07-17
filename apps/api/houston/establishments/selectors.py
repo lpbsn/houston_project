@@ -608,3 +608,16 @@ def get_active_activity_subject_for_establishment(
         .select_related("business_unit", "establishment")
         .first()
     )
+
+
+def org_establishments_draft_active(*, organization_id):
+    """Draft and active establishments for an organization, deterministic id order."""
+    return list(
+        Establishment.objects.filter(
+            organization_id=organization_id,
+            status__in=[
+                Establishment.Status.DRAFT,
+                Establishment.Status.ACTIVE,
+            ],
+        ).order_by("id")
+    )
