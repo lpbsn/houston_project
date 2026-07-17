@@ -1,0 +1,118 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import {
+  bootstrapQueryKey,
+  invalidateMembershipListAndDetailQueries,
+  invalidateMembershipListAndWorkspaceSummaryQueries,
+  invalidateMembershipWorkspaceQueries,
+  membershipDetailQueryKey,
+  membershipListQueryKey,
+  membershipsQueryKeyRoot,
+  patchMembershipCaches,
+  workspaceSummaryQueryKey,
+} from '@/features/auth/api'
+import type { EstablishmentMembershipResponse } from '@/features/auth/types'
+import { createTestQueryClient } from '@/test-utils'
+
+function membership(
+  overrides: Partial<EstablishmentMembershipResponse> & Pick<EstablishmentMembershipResponse, 'id' | 'role'>,
+): EstablishmentMembershipResponse {
+  return {
+    establishment_id: 'est-1',
+    establishment_name: 'Nice',
+    organization_id: 'org-1',
+    organization_name: 'Org',
+    status: 'active',
+    scopes: [],
+    scope_summary: { business_unit_count: 0 },
+    permission_hints: {
+      can_edit_role: false,
+      can_edit_scopes: false,
+      can_edit_status: false,
+      can_edit_personal_info: false,
+    },
+    user: {
+      id: 'user-1',
+      display_name: 'Alice Martin',
+      username: 'alice',
+      email: 'alice@example.com',
+      first_name: 'Alice',
+      last_name: 'Martin',
+    },
+    ...overrides,
+  }
+}
+
+describe('membership cache helpers', () => {
+  it('settles root + bootstrap invalidations even when one rejects', async () => {
+    const client = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockImplementation(async (filters) => {
+      const key = (filters as { queryKey?: unknown[] })?.queryKey
+      if (key?.[0] === 'auth') {
+        throw new Error('bootstrap refresh failed')
+      }
+    })
+
+    await expect(
+      invalidateMembershipWorkspaceQueries({ includeBootstrap: true, queryClient: client }),
+    ).resolves.toBeUndefined()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipsQueryKeyRoot })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
+  })
+
+  it('settles list + detail invalidations even when one rejects', async () => {
+    const client = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockImplementation(async (filters) => {
+      const key = (filters as { queryKey?: unknown[] })?.queryKey
+      if (key?.length === 3) {
+        throw new Error('list refresh failed')
+      }
+    })
+
+    await expect(
+      invalidateMembershipListAndDetailQueries('est-1', 'm-1', client),
+    ).resolves.toBeUndefined()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: membershipDetailQueryKey('est-1', 'm-1'),
+    })
+  })
+
+  it('settles list + workspace summary invalidations even when one rejects', async () => {
+    const client = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockImplementation(async (filters) => {
+      const key = (filters as { queryKey?: unknown[] })?.queryKey
+      if (key?.[0] === 'workspace' && key?.[1] === 'summary') {
+        throw new Error('summary refresh failed')
+      }
+    })
+
+    await expect(
+      invalidateMembershipListAndWorkspaceSummaryQueries('est-1', client),
+    ).resolves.toBeUndefined()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
+  })
+
+  it('patches detail and list caches from the API response', () => {
+    const client = createTestQueryClient()
+    const previous = membership({ id: 'm-1', role: 'manager', status: 'active' })
+    const next = membership({ id: 'm-1', role: 'manager', status: 'inactive' })
+    client.setQueryData(membershipDetailQueryKey('est-1', 'm-1'), previous)
+    client.setQueryData(membershipListQueryKey('est-1'), [
+      previous,
+      membership({ id: 'm-2', role: 'staff' }),
+    ])
+
+    patchMembershipCaches('est-1', next, client)
+
+    expect(client.getQueryData(membershipDetailQueryKey('est-1', 'm-1'))).toEqual(next)
+    expect(client.getQueryData(membershipListQueryKey('est-1'))).toEqual([
+      next,
+      membership({ id: 'm-2', role: 'staff' }),
+    ])
+  })
+})

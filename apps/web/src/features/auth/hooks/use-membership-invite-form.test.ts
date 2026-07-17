@@ -8,20 +8,14 @@ import { useMembershipInviteForm } from './use-membership-invite-form'
 
 const inviteMembership = vi.fn()
 const invalidateMembershipWorkspaceQueries = vi.fn()
-const invalidateQueries = vi.fn()
+const invalidateMembershipListQueries = vi.fn()
 
 vi.mock('@/features/auth/api', () => ({
   inviteMembership: (...args: unknown[]) => inviteMembership(...args),
   invalidateMembershipWorkspaceQueries: (...args: unknown[]) =>
     invalidateMembershipWorkspaceQueries(...args),
-  membershipListQueryKey: (establishmentId: string) =>
-    ['workspace', 'memberships', establishmentId] as const,
-}))
-
-vi.mock('@/lib/query-client', () => ({
-  queryClient: {
-    invalidateQueries: (...args: unknown[]) => invalidateQueries(...args),
-  },
+  invalidateMembershipListQueries: (...args: unknown[]) =>
+    invalidateMembershipListQueries(...args),
 }))
 
 vi.mock('@/features/auth/hooks', () => ({
@@ -125,9 +119,9 @@ function createDeferred<T>() {
 beforeEach(() => {
   inviteMembership.mockReset()
   invalidateMembershipWorkspaceQueries.mockReset()
-  invalidateQueries.mockReset()
+  invalidateMembershipListQueries.mockReset()
   invalidateMembershipWorkspaceQueries.mockResolvedValue(undefined)
-  invalidateQueries.mockResolvedValue(undefined)
+  invalidateMembershipListQueries.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -159,8 +153,71 @@ describe('useMembershipInviteForm', () => {
     expect(screen.getByTestId('invitation-link').textContent).toBe(
       `${window.location.origin}/invitations/token-abc`,
     )
-    expect(invalidateQueries).toHaveBeenCalled()
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1')
     expect(invalidateMembershipWorkspaceQueries).not.toHaveBeenCalled()
+  })
+
+  it('shows success UI when list invalidation is still pending', async () => {
+    inviteMembership.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-abc',
+    })
+    const deferred = createDeferred<void>()
+    invalidateMembershipListQueries.mockReturnValue(deferred.promise)
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+      }),
+    )
+
+    fillInviteForm('staff@example.com')
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('staff@example.com')
+    })
+    expect(screen.getByTestId('error-message').textContent).toBe('')
+    expect(invalidateMembershipListQueries).toHaveBeenCalled()
+  })
+
+  it('keeps invite success when workspace invalidation rejects', async () => {
+    inviteMembership.mockResolvedValue({
+      invitation_accept_path: '/invitations/token-owner',
+    })
+    invalidateMembershipWorkspaceQueries.mockRejectedValue(new Error('cache refresh failed'))
+
+    render(
+      createElement(InviteFormProbe, {
+        establishmentId: 'est-1',
+        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+      }),
+    )
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'owner@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('First name'), {
+      target: { value: 'Pat' },
+    })
+    fireEvent.change(screen.getByLabelText('Last name'), {
+      target: { value: 'Owner' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invited-email').textContent).toBe('owner@example.com')
+    })
+    expect(screen.getByTestId('error-message').textContent).toBe('')
+    expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
+      includeBootstrap: true,
+    })
   })
 
   it('submits owner invites without scopes and invalidates workspace memberships root', async () => {

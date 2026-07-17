@@ -5,10 +5,12 @@ import {
   activateMembership,
   deactivateMembership,
   getMembership,
+  invalidateMembershipListAndDetailQueries,
   invalidateMembershipWorkspaceQueries,
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
+  patchMembershipCaches,
   updateMembership,
   updateUserProfile,
   type UserProfileUpdateRequest,
@@ -53,59 +55,59 @@ function useTeamMembershipMutationContext() {
   const { activeMembership } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
 
-  const invalidateMembershipQueries = async (
-    membershipId: string,
-    membership?: EstablishmentMembershipResponse | null,
-  ) => {
-    if (membership?.role === 'owner') {
-      await invalidateMembershipWorkspaceQueries({ includeBootstrap: true })
+  const applyMembershipWriteSuccess = (membership: EstablishmentMembershipResponse) => {
+    if (establishmentId) {
+      patchMembershipCaches(establishmentId, membership, queryClient)
+    }
+
+    if (membership.role === 'owner') {
+      void invalidateMembershipWorkspaceQueries({
+        includeBootstrap: true,
+        queryClient,
+      })
       return
     }
 
     if (!establishmentId) {
       return
     }
-    await queryClient.invalidateQueries({
-      queryKey: membershipListQueryKey(establishmentId),
-    })
-    await queryClient.invalidateQueries({
-      queryKey: membershipDetailQueryKey(establishmentId, membershipId),
-    })
+
+    void invalidateMembershipListAndDetailQueries(establishmentId, membership.id, queryClient)
   }
 
-  return { establishmentId, invalidateMembershipQueries }
+  return { establishmentId, applyMembershipWriteSuccess }
 }
 
 export function useUpdateMembershipMutation(membershipId: string) {
-  const { establishmentId, invalidateMembershipQueries } = useTeamMembershipMutationContext()
+  const { establishmentId, applyMembershipWriteSuccess } = useTeamMembershipMutationContext()
 
   return useMutation({
     mutationFn: (input: MembershipUpdateRequest) =>
       updateMembership(establishmentId!, membershipId, input),
-    onSuccess: async (data) => {
-      await invalidateMembershipQueries(membershipId, data)
+    onSuccess: (data) => {
+      applyMembershipWriteSuccess(data)
     },
   })
 }
 
 export function useActivateMembershipMutation(membershipId: string) {
-  const { establishmentId, invalidateMembershipQueries } = useTeamMembershipMutationContext()
+  const { establishmentId, applyMembershipWriteSuccess } = useTeamMembershipMutationContext()
 
   return useMutation({
     mutationFn: () => activateMembership(establishmentId!, membershipId),
-    onSuccess: async (data) => {
-      await invalidateMembershipQueries(membershipId, data)
+    onSuccess: (data) => {
+      applyMembershipWriteSuccess(data)
     },
   })
 }
 
 export function useDeactivateMembershipMutation(membershipId: string) {
-  const { establishmentId, invalidateMembershipQueries } = useTeamMembershipMutationContext()
+  const { establishmentId, applyMembershipWriteSuccess } = useTeamMembershipMutationContext()
 
   return useMutation({
     mutationFn: () => deactivateMembership(establishmentId!, membershipId),
-    onSuccess: async (data) => {
-      await invalidateMembershipQueries(membershipId, data)
+    onSuccess: (data) => {
+      applyMembershipWriteSuccess(data)
     },
   })
 }
@@ -117,14 +119,13 @@ export function useUpdateProfileMutation() {
 
   return useMutation({
     mutationFn: (input: UserProfileUpdateRequest) => updateUserProfile(input),
-    onSuccess: async () => {
+    onSuccess: () => {
       if (establishmentId && activeMembership?.id) {
-        await queryClient.invalidateQueries({
-          queryKey: membershipListQueryKey(establishmentId),
-        })
-        await queryClient.invalidateQueries({
-          queryKey: membershipDetailQueryKey(establishmentId, activeMembership.id),
-        })
+        void invalidateMembershipListAndDetailQueries(
+          establishmentId,
+          activeMembership.id,
+          queryClient,
+        )
       }
     },
   })

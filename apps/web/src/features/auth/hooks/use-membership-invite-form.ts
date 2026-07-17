@@ -2,15 +2,14 @@ import { useMemo, useState } from 'react'
 
 import {
   inviteMembership,
+  invalidateMembershipListQueries,
   invalidateMembershipWorkspaceQueries,
-  membershipListQueryKey,
 } from '@/features/auth/api'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { type BusinessUnitScopeSelection } from '@/features/auth/lib/business-unit-scope'
 import { resolveInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
 import { requiresInviteScopes } from '@/features/auth/lib/invitation-rbac'
 import type { MembershipInvitationRequestRoleEnum } from '@/features/auth/types'
-import { queryClient } from '@/lib/query-client'
 
 export type MembershipInviteFormState = {
   email: string
@@ -145,18 +144,16 @@ export function useMembershipInviteForm({
         ...(scopes.length > 0 ? { scopes } : {}),
       })
 
-      if (selectedRole === 'owner') {
-        await invalidateMembershipWorkspaceQueries({ includeBootstrap: true })
-      } else {
-        await queryClient.invalidateQueries({
-          queryKey: membershipListQueryKey(establishmentId),
-        })
-      }
-
       setInvitedEmail(submittedEmail)
       setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
       setForm(emptyForm)
       setSelectedBusinessUnitScopes([])
+
+      if (selectedRole === 'owner') {
+        void invalidateMembershipWorkspaceQueries({ includeBootstrap: true })
+      } else {
+        void invalidateMembershipListQueries(establishmentId)
+      }
     } catch (error) {
       setErrorMessage(
         resolveInvitationErrorMessage(error, 'L’invitation n’a pas pu être créée.'),
