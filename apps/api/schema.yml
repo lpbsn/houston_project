@@ -7780,7 +7780,6 @@ components:
       - first_name
       - last_name
       - role
-      - scopes
     MembershipUserSummary:
       type: object
       properties:
