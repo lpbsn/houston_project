@@ -192,7 +192,13 @@ def test_concurrent_membership_invitation_same_email_returns_409():
     codes = [code for _, code in results]
     assert 201 in statuses
     assert 409 in statuses
-    assert codes.count("membership_invitation_duplicate") == 1
+    assert statuses.count(201) == 1
+    assert statuses.count(409) == 1
+    assert codes.count(None) == 1  # successful 201 has no error code
+    conflict_codes = [code for code in codes if code is not None]
+    assert conflict_codes == ["membership_invitation_duplicate"] or conflict_codes == [
+        "membership_invitation_user_exists"
+    ]
     assert (
         EstablishmentMembership.objects.filter(
             establishment=establishment,
@@ -651,3 +657,222 @@ def test_invitation_persists_membership_scopes(api_client):
     scopes = MembershipScope.objects.filter(membership_id=membership_id)
     assert scopes.count() == 1
     assert scopes.first().business_unit_id == business_unit.id
+
+
+@pytest.mark.parametrize(
+    "user_status",
+    [
+        User.Status.ACTIVE,
+        User.Status.SUSPENDED,
+        User.Status.ANONYMIZED,
+    ],
+)
+def test_membership_invitation_rejects_existing_non_pending_user(api_client, user_status):
+    establishment = create_establishment(name=f"User Exists {user_status}")
+    owner = create_user(username=f"owner_user_exists_{user_status}")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    existing = create_user(
+        username=f"existing_{user_status}",
+        email=f"existing-{user_status}@example.com",
+        status=user_status,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=invite_payload(
+            email=existing.email,
+            scopes=[business_unit_scope_payload(business_unit)],
+        ),
+    )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "membership_invitation_user_exists"
+    assert body["detail"] == "A Houston account with this email already exists."
+    assert "pending" not in body["detail"].lower()
+    assert user_status not in body["detail"].lower()
+    assert "membership" not in body["detail"].lower()
+    assert not EstablishmentMembership.objects.filter(
+        user=existing, establishment=establishment
+    ).exists()
+
+
+def test_membership_invitation_rejects_pending_user_without_membership(api_client):
+    establishment = create_establishment(name="Pending No Membership")
+    owner = create_user(username="owner_pending_no_m")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    pending = create_user(
+        username="pending_elsewhere",
+        email="pending-elsewhere@example.com",
+        status=User.Status.PENDING,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=invite_payload(
+            email=pending.email,
+            scopes=[business_unit_scope_payload(business_unit)],
+        ),
+    )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "membership_invitation_user_exists"
+    assert body["detail"] == "A Houston account with this email already exists."
+    assert not EstablishmentMembership.objects.filter(
+        user=pending, establishment=establishment
+    ).exists()
+
+
+def test_membership_invitation_resume_deactivated_replaces_scopes(api_client):
+    establishment = create_establishment(name="Resume Scope Replace")
+    owner = create_user(username="owner_resume_scopes")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    old_unit = create_business_unit(establishment=establishment, key="old_unit")
+    new_unit = create_business_unit(establishment=establishment, key="new_unit")
+    pending = create_user(
+        username="pending_resume_scopes",
+        email="resume-scopes@example.com",
+        status=User.Status.PENDING,
+    )
+    membership = create_membership(
+        user=pending,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        membership_status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=old_unit,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=invite_payload(
+            email=pending.email,
+            first_name="Resumed",
+            last_name="Staff",
+            scopes=[business_unit_scope_payload(new_unit)],
+        ),
+    )
+
+    assert response.status_code == 201
+    membership.refresh_from_db()
+    assert membership.status == EstablishmentMembership.Status.INVITED
+    assert membership.role == EstablishmentMembership.Role.STAFF
+    scopes = list(MembershipScope.objects.filter(membership=membership))
+    assert len(scopes) == 1
+    assert scopes[0].business_unit_id == new_unit.id
+
+
+def test_membership_invitation_incompatible_role_leaves_scopes_untouched(api_client):
+    establishment = create_establishment(name="Incompatible Role Scopes")
+    owner = create_user(username="owner_incompat_scopes")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    old_unit = create_business_unit(establishment=establishment, key="keep_unit")
+    new_unit = create_business_unit(establishment=establishment, key="attempt_unit")
+    pending = create_user(
+        username="pending_incompat_role",
+        email="incompat-role@example.com",
+        status=User.Status.PENDING,
+    )
+    membership = create_membership(
+        user=pending,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        membership_status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership,
+        business_unit=old_unit,
+    )
+    scope_ids_before = set(
+        MembershipScope.objects.filter(membership=membership).values_list("id", flat=True)
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=invite_payload(
+            email=pending.email,
+            role=EstablishmentMembership.Role.STAFF,
+            scopes=[business_unit_scope_payload(new_unit)],
+        ),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "membership_invitation_duplicate"
+    membership.refresh_from_db()
+    assert membership.status == EstablishmentMembership.Status.DEACTIVATED
+    assert membership.role == EstablishmentMembership.Role.MANAGER
+    assert (
+        set(MembershipScope.objects.filter(membership=membership).values_list("id", flat=True))
+        == scope_ids_before
+    )
+
+
+def test_membership_invitation_pending_active_same_role_is_duplicate(api_client):
+    establishment = create_establishment(name="Pending Active Duplicate")
+    owner = create_user(username="owner_pending_active_dup")
+    create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    pending = create_user(
+        username="pending_active_dup",
+        email="pending-active-dup@example.com",
+        status=User.Status.PENDING,
+    )
+    create_membership(
+        user=pending,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        membership_status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    response = post_invitation(
+        api_client,
+        establishment_id=establishment.id,
+        owner=owner,
+        payload=invite_payload(
+            email=pending.email,
+            scopes=[business_unit_scope_payload(business_unit)],
+        ),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "membership_invitation_duplicate"
+
+
+def test_create_invited_membership_race_returns_duplicate_regardless_of_role():
+    from houston.establishments.services import (
+        DirectorInvitationDuplicateError,
+        _create_invited_membership,
+    )
+
+    establishment = create_establishment(name="Race Membership Hotel")
+    user = create_user(username="race_membership_user", status=User.Status.PENDING)
+    create_membership(
+        user=user,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        membership_status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+
+    with pytest.raises(DirectorInvitationDuplicateError):
+        _create_invited_membership(
+            user=user,
+            establishment=establishment,
+            role=EstablishmentMembership.Role.STAFF,
+        )
+
+    membership = EstablishmentMembership.objects.get(user=user, establishment=establishment)
+    assert membership.role == EstablishmentMembership.Role.MANAGER
+    assert membership.status == EstablishmentMembership.Status.DEACTIVATED

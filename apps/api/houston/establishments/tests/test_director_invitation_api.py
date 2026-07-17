@@ -91,7 +91,8 @@ def test_director_invitation_rejects_duplicate_email(api_client):
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
-    assert second_response.json()["code"] == "director_invitation_duplicate"
+    # Slot guard runs before User/Membership matrix for onboarding.
+    assert second_response.json()["code"] == "director_invitation_already_exists"
 
 
 def test_director_invitation_rejects_owner_email(api_client):
@@ -402,3 +403,164 @@ def test_director_invitation_reactivates_deactivated_director_with_same_email(ap
     assert deactivated_membership.status == EstablishmentMembership.Status.INVITED
     assert former_director.first_name == "Reactivated"
     assert former_director.last_name == "Director"
+
+
+@pytest.mark.parametrize(
+    "user_status",
+    [
+        User.Status.ACTIVE,
+        User.Status.SUSPENDED,
+        User.Status.ANONYMIZED,
+    ],
+)
+def test_director_invitation_rejects_existing_non_pending_user(api_client, user_status):
+    owner = create_user(username=f"dir_invite_user_exists_{user_status}")
+    session = create_onboarding_session(actor=owner)
+    existing = User.objects.create_user(
+        username=f"dir_existing_{user_status}",
+        email=f"dir-existing-{user_status}@example.com",
+        password="secret",
+        status=user_status,
+    )
+    access_token = login(api_client, user=owner)
+
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
+        invite_director_payload(email=existing.email),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "membership_invitation_user_exists"
+    assert body["detail"] == "A Houston account with this email already exists."
+    assert user_status not in body["detail"].lower()
+    assert not EstablishmentMembership.objects.filter(
+        user=existing, establishment=session.establishment
+    ).exists()
+
+
+def test_director_invitation_rejects_pending_user_without_membership(api_client):
+    owner = create_user(username="dir_invite_pending_no_m")
+    session = create_onboarding_session(actor=owner)
+    pending = User.objects.create_user(
+        username="dir_pending_elsewhere",
+        email="dir-pending-elsewhere@example.com",
+        password="unused",
+        status=User.Status.PENDING,
+    )
+    pending.set_unusable_password()
+    pending.save(update_fields=["password"])
+    access_token = login(api_client, user=owner)
+
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
+        invite_director_payload(email=pending.email),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "membership_invitation_user_exists"
+    assert not EstablishmentMembership.objects.filter(
+        user=pending, establishment=session.establishment
+    ).exists()
+
+
+def test_director_invitation_slot_guard_beats_user_exists(api_client):
+    owner = create_user(username="dir_slot_beats_user_exists")
+    session = create_onboarding_session(actor=owner)
+    establishment = session.establishment
+    active_director = User.objects.create_user(
+        username="slot_active_director",
+        email="slot-active-director@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_director,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    other_active = User.objects.create_user(
+        username="slot_other_active",
+        email="slot-other-active@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    access_token = login(api_client, user=owner)
+
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
+        invite_director_payload(email=other_active.email),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "director_invitation_already_exists"
+
+
+def test_director_invitation_owner_email_beats_slot_and_matrix(api_client):
+    owner = create_user(username="dir_owner_beats_all")
+    session = create_onboarding_session(actor=owner)
+    establishment = session.establishment
+    active_director = User.objects.create_user(
+        username="owner_priority_director",
+        email="owner-priority-director@example.com",
+        password="secret",
+        status=User.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=active_director,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    access_token = login(api_client, user=owner)
+
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
+        invite_director_payload(email=owner.email),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "director_invitation_owner_not_allowed"
+
+
+def test_director_invitation_rejects_deactivated_non_director_role(api_client):
+    owner = create_user(username="dir_deactivated_staff_role")
+    session = create_onboarding_session(actor=owner)
+    establishment = session.establishment
+    pending = User.objects.create_user(
+        username="dir_pending_staff_deactivated",
+        email="dir-pending-staff@example.com",
+        password="unused",
+        status=User.Status.PENDING,
+    )
+    pending.set_unusable_password()
+    pending.save(update_fields=["password"])
+    EstablishmentMembership.objects.create(
+        user=pending,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.STAFF,
+        status=EstablishmentMembership.Status.DEACTIVATED,
+    )
+    access_token = login(api_client, user=owner)
+
+    response = api_client.post(
+        f"/api/v1/onboarding-sessions/{session.id}/director-invitations/",
+        invite_director_payload(email=pending.email),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "director_invitation_duplicate"
+    membership = EstablishmentMembership.objects.get(user=pending, establishment=establishment)
+    assert membership.role == EstablishmentMembership.Role.STAFF
+    assert membership.status == EstablishmentMembership.Status.DEACTIVATED

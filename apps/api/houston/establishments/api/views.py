@@ -95,6 +95,7 @@ from houston.establishments.services import (
     InvalidOnboardingSessionScopeError,
     InvitedMembershipActivationError,
     MembershipInvitationRoleNotAllowedError,
+    MembershipInvitationUserExistsError,
     MembershipManagementForbiddenError,
     MembershipManagementNotFoundError,
     MembershipRoleChangeForbiddenError,
@@ -924,6 +925,14 @@ class MembershipInvitationView(APIView):
                 },
                 status=status.HTTP_409_CONFLICT,
             )
+        except MembershipInvitationUserExistsError as exc:
+            return Response(
+                {
+                    "code": "membership_invitation_user_exists",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         except InvalidMembershipInvitationInputError as exc:
             return Response(
                 {"code": "membership_invitation_invalid", "detail": str(exc)},
@@ -1309,6 +1318,14 @@ class OnboardingSessionDirectorInvitationView(APIView):
                 {
                     "code": "director_invitation_duplicate",
                     "detail": "This user is already associated with the establishment.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except MembershipInvitationUserExistsError as exc:
+            return Response(
+                {
+                    "code": "membership_invitation_user_exists",
+                    "detail": str(exc),
                 },
                 status=status.HTTP_409_CONFLICT,
             )

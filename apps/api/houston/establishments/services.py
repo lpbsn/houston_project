@@ -105,6 +105,14 @@ class MembershipInvitationRoleNotAllowedError(Exception):
     pass
 
 
+class MembershipInvitationUserExistsError(Exception):
+    """Invite refused because a Houston account already exists for this email."""
+
+    def __init__(self, detail: str = "A Houston account with this email already exists."):
+        self.detail = detail
+        super().__init__(detail)
+
+
 class ActiveOnboardingSessionExistsError(Exception):
     pass
 
@@ -1230,6 +1238,7 @@ def invite_director_during_onboarding(
     establishment = session.establishment
     owner_user_ids = _active_owner_user_ids(establishment_id=establishment.id)
 
+    # 1) Owner email forbidden first.
     if User.objects.filter(id__in=owner_user_ids, email__iexact=normalized_email).exists():
         raise DirectorInvitationOwnerNotAllowedError
 
@@ -1237,42 +1246,7 @@ def invite_director_during_onboarding(
     if existing_user is not None and existing_user.id in owner_user_ids:
         raise DirectorInvitationOwnerNotAllowedError
 
-    existing_membership = None
-    if existing_user is not None:
-        existing_membership = EstablishmentMembership.objects.filter(
-            user=existing_user,
-            establishment=establishment,
-        ).first()
-
-    if existing_membership is not None:
-        if existing_membership.status in {
-            EstablishmentMembership.Status.INVITED,
-            EstablishmentMembership.Status.ACTIVE,
-        }:
-            raise DirectorInvitationDuplicateError
-
-        if (
-            existing_membership.status == EstablishmentMembership.Status.DEACTIVATED
-            and existing_membership.role == EstablishmentMembership.Role.DIRECTOR
-        ):
-            if (
-                _count_non_owner_directors(
-                    establishment_id=establishment.id,
-                    owner_user_ids=owner_user_ids,
-                )
-                >= 1
-            ):
-                raise DirectorInvitationAlreadyExistsError
-
-            existing_membership.status = EstablishmentMembership.Status.INVITED
-            existing_membership.save(update_fields=["status", "updated_at"])
-            existing_user.first_name = normalized_first_name
-            existing_user.last_name = normalized_last_name
-            existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
-            return _issue_director_invitation_for_membership(existing_membership)
-
-        raise DirectorInvitationDuplicateError
-
+    # 2) Soft director slot occupied next (before User/Membership matrix).
     if (
         _count_non_owner_directors(
             establishment_id=establishment.id,
@@ -1282,14 +1256,52 @@ def invite_director_during_onboarding(
     ):
         raise DirectorInvitationAlreadyExistsError
 
-    from houston.accounts.services import resolve_or_create_pending_user_for_invite
+    existing_membership = None
+    if existing_user is not None:
+        existing_membership = EstablishmentMembership.objects.filter(
+            user=existing_user,
+            establishment=establishment,
+        ).first()
 
-    user = resolve_or_create_pending_user_for_invite(
-        email=normalized_email,
-        first_name=normalized_first_name,
-        last_name=normalized_last_name,
-        existing_user=existing_user,
+    # 3) User/Membership matrix after owner + slot guards.
+    from houston.establishments.invite_eligibility import (
+        InviteTargetDecision,
+        evaluate_invite_target,
     )
+
+    decision = evaluate_invite_target(
+        user=existing_user,
+        membership=existing_membership,
+        invited_role=EstablishmentMembership.Role.DIRECTOR,
+    )
+    if decision == InviteTargetDecision.USER_EXISTS:
+        raise MembershipInvitationUserExistsError
+    if decision == InviteTargetDecision.DUPLICATE:
+        raise DirectorInvitationDuplicateError
+
+    if decision == InviteTargetDecision.RESUME_DEACTIVATED:
+        assert existing_membership is not None
+        assert existing_user is not None
+        existing_membership.status = EstablishmentMembership.Status.INVITED
+        existing_membership.save(update_fields=["status", "updated_at"])
+        existing_user.first_name = normalized_first_name
+        existing_user.last_name = normalized_last_name
+        existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
+        return _issue_director_invitation_for_membership(existing_membership)
+
+    from houston.accounts.services import (
+        PendingInviteUserAlreadyExistsError,
+        create_pending_user_for_invite,
+    )
+
+    try:
+        user = create_pending_user_for_invite(
+            email=normalized_email,
+            first_name=normalized_first_name,
+            last_name=normalized_last_name,
+        )
+    except PendingInviteUserAlreadyExistsError as exc:
+        raise MembershipInvitationUserExistsError from exc
 
     if user.id in owner_user_ids:
         raise DirectorInvitationOwnerNotAllowedError
@@ -1567,37 +1579,49 @@ def invite_membership_for_establishment(
             establishment=establishment,
         ).first()
 
-    if existing_membership is not None:
-        if existing_membership.status in {
-            EstablishmentMembership.Status.INVITED,
-            EstablishmentMembership.Status.ACTIVE,
-        }:
-            raise DirectorInvitationDuplicateError
+    from houston.establishments.invite_eligibility import (
+        InviteTargetDecision,
+        evaluate_invite_target,
+    )
 
-        if existing_membership.status == EstablishmentMembership.Status.DEACTIVATED:
-            existing_membership.role = role
-            existing_membership.status = EstablishmentMembership.Status.INVITED
-            existing_membership.save(update_fields=["role", "status", "updated_at"])
-            existing_user.first_name = normalized_first_name
-            existing_user.last_name = normalized_last_name
-            existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
-            if scope_inputs:
-                assign_membership_scopes(
-                    membership=existing_membership,
-                    scope_inputs=scope_inputs,
-                )
-            return _issue_establishment_invitation_for_membership(existing_membership)
-
+    decision = evaluate_invite_target(
+        user=existing_user,
+        membership=existing_membership,
+        invited_role=role,
+    )
+    if decision == InviteTargetDecision.USER_EXISTS:
+        raise MembershipInvitationUserExistsError
+    if decision == InviteTargetDecision.DUPLICATE:
         raise DirectorInvitationDuplicateError
 
-    from houston.accounts.services import resolve_or_create_pending_user_for_invite
+    if decision == InviteTargetDecision.RESUME_DEACTIVATED:
+        assert existing_membership is not None
+        assert existing_user is not None
+        existing_membership.status = EstablishmentMembership.Status.INVITED
+        existing_membership.save(update_fields=["status", "updated_at"])
+        existing_user.first_name = normalized_first_name
+        existing_user.last_name = normalized_last_name
+        existing_user.save(update_fields=["first_name", "last_name", "updated_at"])
+        if scope_inputs:
+            assign_membership_scopes(
+                membership=existing_membership,
+                scope_inputs=scope_inputs,
+            )
+        return _issue_establishment_invitation_for_membership(existing_membership)
 
-    user = resolve_or_create_pending_user_for_invite(
-        email=normalized_email,
-        first_name=normalized_first_name,
-        last_name=normalized_last_name,
-        existing_user=existing_user,
+    from houston.accounts.services import (
+        PendingInviteUserAlreadyExistsError,
+        create_pending_user_for_invite,
     )
+
+    try:
+        user = create_pending_user_for_invite(
+            email=normalized_email,
+            first_name=normalized_first_name,
+            last_name=normalized_last_name,
+        )
+    except PendingInviteUserAlreadyExistsError as exc:
+        raise MembershipInvitationUserExistsError from exc
 
     membership = _create_invited_membership(
         user=user,
@@ -2416,11 +2440,8 @@ def _create_invited_membership(
             establishment=establishment,
         ).first()
         if existing_membership is not None:
-            if existing_membership.status in {
-                EstablishmentMembership.Status.INVITED,
-                EstablishmentMembership.Status.ACTIVE,
-            }:
-                raise DirectorInvitationDuplicateError from exc
+            # Stable duplicate regardless of role after race on (user, establishment).
+            raise DirectorInvitationDuplicateError from exc
 
         if role == EstablishmentMembership.Role.DIRECTOR:
             if (

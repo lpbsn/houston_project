@@ -12,12 +12,13 @@ from houston.accounts import tokens
 from houston.accounts.models import AccessToken, SessionRefreshToken, User, UserSession
 from houston.accounts.services import (
     InvalidRefreshTokenError,
+    PendingInviteUserAlreadyExistsError,
     RefreshTokenReuseError,
+    create_pending_user_for_invite,
     create_user_session,
     issue_access_token,
     issue_refresh_token,
     refresh_session,
-    resolve_or_create_pending_user_for_invite,
     revoke_session,
     switch_selected_establishment,
     validate_refresh_token,
@@ -176,7 +177,7 @@ def test_revoke_session_revokes_active_access_and_refresh_tokens(user, request_f
     assert refresh_token.record.revoked_at is not None
 
 
-def test_resolve_or_create_pending_user_returns_existing_on_email_race():
+def test_create_pending_user_for_invite_raises_on_email_race():
     existing_user = User.objects.create_user(
         username="pending_staff",
         email="pending-staff@example.com",
@@ -186,17 +187,18 @@ def test_resolve_or_create_pending_user_returns_existing_on_email_race():
     existing_user.set_unusable_password()
     existing_user.save(update_fields=["password"])
 
-    resolved_user = resolve_or_create_pending_user_for_invite(
-        email="pending-staff@example.com",
-        first_name="Updated",
-        last_name="Name",
-    )
+    with pytest.raises(PendingInviteUserAlreadyExistsError):
+        create_pending_user_for_invite(
+            email="pending-staff@example.com",
+            first_name="Updated",
+            last_name="Name",
+        )
 
-    assert resolved_user.id == existing_user.id
     assert User.objects.filter(email__iexact="pending-staff@example.com").count() == 1
+    assert User.objects.get(email__iexact="pending-staff@example.com").id == existing_user.id
 
 
-def test_resolve_or_create_pending_user_succeeds_when_username_taken_by_other_email():
+def test_create_pending_user_for_invite_succeeds_when_username_taken_by_other_email():
     User.objects.create_user(
         username="alice",
         email="alice@other.com",
@@ -204,7 +206,7 @@ def test_resolve_or_create_pending_user_succeeds_when_username_taken_by_other_em
         status=User.Status.ACTIVE,
     )
 
-    resolved_user = resolve_or_create_pending_user_for_invite(
+    resolved_user = create_pending_user_for_invite(
         email="alice@example.com",
         first_name="Alice",
         last_name="Example",
@@ -216,7 +218,7 @@ def test_resolve_or_create_pending_user_succeeds_when_username_taken_by_other_em
     assert User.objects.filter(email__iexact="alice@example.com").count() == 1
 
 
-def test_resolve_or_create_pending_user_retries_after_save_integrity_error_without_email_match(
+def test_create_pending_user_for_invite_retries_after_save_integrity_error_without_email_match(
     monkeypatch,
 ):
     save_calls = {"count": 0}
@@ -230,7 +232,7 @@ def test_resolve_or_create_pending_user_retries_after_save_integrity_error_witho
 
     monkeypatch.setattr(User, "save", patched_save)
 
-    resolved_user = resolve_or_create_pending_user_for_invite(
+    resolved_user = create_pending_user_for_invite(
         email="alice@example.com",
         first_name="Alice",
         last_name="Example",
