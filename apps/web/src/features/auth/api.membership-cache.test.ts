@@ -101,7 +101,7 @@ describe('membership cache helpers', () => {
   it('patches detail and list caches from the API response', () => {
     const client = createTestQueryClient()
     const previous = membership({ id: 'm-1', role: 'manager', status: 'active' })
-    const next = membership({ id: 'm-1', role: 'manager', status: 'inactive' })
+    const next = membership({ id: 'm-1', role: 'manager', status: 'deactivated' })
     client.setQueryData(membershipDetailQueryKey('est-1', 'm-1'), previous)
     client.setQueryData(membershipListQueryKey('est-1'), [
       previous,
@@ -120,7 +120,7 @@ describe('membership cache helpers', () => {
   it('commitMembershipWriteCache patches then fans out owner root+bootstrap+summary independently', async () => {
     const client = createTestQueryClient()
     const previous = membership({ id: 'm-owner', role: 'owner', status: 'active' })
-    const next = membership({ id: 'm-owner', role: 'owner', status: 'inactive' })
+    const next = membership({ id: 'm-owner', role: 'owner', status: 'deactivated' })
     client.setQueryData(membershipDetailQueryKey('est-1', 'm-owner'), previous)
     client.setQueryData(membershipListQueryKey('est-1'), [previous])
 

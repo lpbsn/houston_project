@@ -62,6 +62,10 @@ import { purgeEstablishmentChatOperationalQueries } from '@/features/chat/lib/ap
 import { OperationalRealtimeProvider } from '@/features/realtime/components/operational-realtime-provider'
 import type { ChatWsConversationAccessRevokedEvent, ChatWsGlobalAccessRevokedEvent } from '@/features/chat/types'
 import { getBootstrapPermissionHints } from '@/features/auth/lib/bootstrap-permission-hints'
+import {
+  resetTeamListUiState,
+  shouldPreserveTeamListUiState,
+} from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
@@ -97,6 +101,12 @@ function App() {
       navigate('/login', { replace: true })
     }
   }, [auth.isAuthenticated, auth.isReady, navigate, route])
+
+  useEffect(() => {
+    if (!shouldPreserveTeamListUiState(route)) {
+      resetTeamListUiState()
+    }
+  }, [route])
 
   useEffect(() => {
     if (!auth.isReady || route.kind === 'invitation') {

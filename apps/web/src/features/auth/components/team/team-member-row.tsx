@@ -5,6 +5,7 @@ import type { EstablishmentMembershipResponse } from '@/features/auth/types'
 import {
   buildMemberDisplayName,
   getTeamMemberScopeLabels,
+  getTeamMembershipStatusBadge,
   normalizeTeamRole,
 } from '@/features/auth/lib/team-members'
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
@@ -45,6 +46,7 @@ export function TeamMemberRow({ membership, isSelf, onSelect, index }: TeamMembe
     .filter(Boolean)
     .join(' · ')
   const scopeLabels = getTeamMemberScopeLabels(membership)
+  const statusBadge = getTeamMembershipStatusBadge(membership)
 
   return (
     <button
@@ -63,9 +65,16 @@ export function TeamMemberRow({ membership, isSelf, onSelect, index }: TeamMembe
           {initials}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-[#1a1a1a]">
-            {displayName}
-            {isSelf ? ' (vous)' : ''}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate text-sm font-semibold text-[#1a1a1a]">
+              {displayName}
+              {isSelf ? ' (vous)' : ''}
+            </span>
+            {statusBadge ? (
+              <HoustonBadge variant={statusBadge.variant} className="shrink-0 normal-case">
+                {statusBadge.label}
+              </HoustonBadge>
+            ) : null}
           </span>
           {contactLine ? (
             <span className="mt-0.5 block truncate text-xs text-[#7D7B75]">{contactLine}</span>

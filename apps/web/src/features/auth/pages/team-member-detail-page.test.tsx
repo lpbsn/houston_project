@@ -161,7 +161,7 @@ describe('TeamMemberDetailPage', () => {
     })
   })
 
-  it('disables active toggle for invited members', () => {
+  it('disables active toggle for invited members and shows invited badge', () => {
     detailState.current = {
       ...detailState.current,
       data: {
@@ -180,9 +180,28 @@ describe('TeamMemberDetailPage', () => {
 
     const activeSwitch = screen.getByRole('switch', { name: 'Actif' })
     expect(activeSwitch.hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Invité')).toBeTruthy()
     expect(
       screen.getByText(/Invitation en attente : le membre devient actif après configuration du mot de passe/i),
     ).toBeTruthy()
+  })
+
+  it('shows inactive badge for deactivated members and no badge when active', () => {
+    render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+    expect(screen.queryByText('Inactif')).toBeNull()
+    expect(screen.queryByText('Invité')).toBeNull()
+    cleanup()
+
+    detailState.current = {
+      ...detailState.current,
+      data: {
+        ...detailState.current.data!,
+        status: 'deactivated',
+      },
+    }
+
+    render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+    expect(screen.getByText('Inactif')).toBeTruthy()
   })
 
   it('navigates back to team list', () => {

@@ -139,7 +139,7 @@ describe('use-team-members membership mutations', () => {
   })
 
   it('keeps isSuccess when list+detail invalidation rejects and still attempts both keys', async () => {
-    const next = membership({ id: 'm-1', role: 'manager', status: 'inactive' })
+    const next = membership({ id: 'm-1', role: 'manager', status: 'deactivated' })
     deactivateMembership.mockResolvedValue(next)
 
     const { result, queryClient } = renderMutationHook(() =>
@@ -185,10 +185,10 @@ describe('use-team-members membership mutations', () => {
     queryClient.setQueryData(membershipDetailQueryKey('est-1', 'm-owner'), membership({
       id: 'm-owner',
       role: 'owner',
-      status: 'inactive',
+      status: 'deactivated',
     }))
     queryClient.setQueryData(membershipListQueryKey('est-1'), [
-      membership({ id: 'm-owner', role: 'owner', status: 'inactive' }),
+      membership({ id: 'm-owner', role: 'owner', status: 'deactivated' }),
     ])
 
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries').mockImplementation(async (filters) => {
