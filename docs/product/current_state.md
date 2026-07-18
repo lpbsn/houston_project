@@ -68,7 +68,9 @@ Implemented: REST structure/history/seen/presence, WS message send, Terrain page
 
 Lot 1 conversation actions (pin/unpin, hide DM with personal history cutoff, leave/delete group UI): live — see [`domains/chat_domain.md`](domains/chat_domain.md).
 
-Post-core gaps (non-blocking pilot): group member admin UI (Lot 2), some bootstrap hints, no REST message write.
+Lot 2 group member admin UI (add/remove/promote via detail « Gérer les membres »): live — see [`domains/chat_domain.md`](domains/chat_domain.md).
+
+Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write.
 
 ## Frontend
 

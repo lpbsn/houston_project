@@ -75,6 +75,10 @@ vi.mock('../hooks/use-chat-conversation-presence', () => ({
   useChatConversationPresence: vi.fn(),
 }))
 
+vi.mock('../components/chat-manage-members-sheet', () => ({
+  ChatManageMembersSheet: () => null,
+}))
+
 function buildDetailQueryState() {
   return {
     isLoading: false,
@@ -178,5 +182,41 @@ describe('ChatConversationPage', () => {
       top: 480,
       behavior: 'smooth',
     })
+  })
+
+  it('shows manage members only for group admins', () => {
+    detailQueryMock.mockReturnValue({
+      ...buildDetailQueryState(),
+      data: {
+        ...conversationDetail,
+        type: 'group',
+        title: 'Ops',
+        can_manage: true,
+        can_delete: true,
+      },
+    })
+    messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+
+    renderConversationPage()
+
+    expect(screen.getByRole('button', { name: 'Gérer les membres' })).toBeTruthy()
+  })
+
+  it('hides manage members for standard group members', () => {
+    detailQueryMock.mockReturnValue({
+      ...buildDetailQueryState(),
+      data: {
+        ...conversationDetail,
+        type: 'group',
+        title: 'Ops',
+        can_manage: false,
+        can_delete: false,
+      },
+    })
+    messagesQueryMock.mockReturnValue(buildMessagesQueryState())
+
+    renderConversationPage()
+
+    expect(screen.queryByRole('button', { name: 'Gérer les membres' })).toBeNull()
   })
 })

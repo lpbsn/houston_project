@@ -278,12 +278,19 @@ def test_bulk_create_activity_subject_with_explicit_establishment_derivation(imp
 @pytest.mark.django_db(transaction=True)
 def test_lot2_legacy_columns_dropped_after_0026():
     executor = MigrationExecutor(connection)
-    executor.migrate([("establishments", "0026_drop_bu_legacy_columns")])
+    try:
+        executor.migrate([("establishments", "0026_drop_bu_legacy_columns")])
 
-    field_names = {field.name for field in BusinessUnit._meta.get_fields()}
-    assert "key" not in field_names
-    assert "label" not in field_names
-    assert "description" not in field_names
-    assert "unit_type" not in field_names
-
-    executor.migrate(executor.loader.graph.leaf_nodes())
+        table_name = BusinessUnit._meta.db_table
+        with connection.cursor() as cursor:
+            column_names = {
+                column.name
+                for column in connection.introspection.get_table_description(cursor, table_name)
+            }
+        assert "key" not in column_names
+        assert "label" not in column_names
+        assert "description" not in column_names
+        assert "unit_type" not in column_names
+    finally:
+        restore_executor = MigrationExecutor(connection)
+        restore_executor.migrate(restore_executor.loader.graph.leaf_nodes())

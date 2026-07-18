@@ -8,6 +8,7 @@ from django.db import transaction
 from houston.chat.groups import membership_group_name, session_group_name
 from houston.chat.ws_payloads import (
     build_conversation_access_revoked_payload,
+    build_conversation_updated_payload,
     build_membership_access_revoked_payload,
 )
 
@@ -163,6 +164,61 @@ def schedule_conversation_access_revoked_for_memberships(
             conversation_id=conversation_id,
             membership_ids=captured_membership_ids,
             reason=reason,
+        )
+
+    transaction.on_commit(_notify)
+
+
+def notify_conversation_updated(
+    *,
+    establishment_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+
+    payload = build_conversation_updated_payload(conversation_id=conversation_id)
+    async_to_sync(channel_layer.group_send)(
+        membership_group_name(
+            establishment_id=establishment_id,
+            membership_id=membership_id,
+        ),
+        {
+            "type": "chat.conversation.updated",
+            "payload": payload,
+        },
+    )
+
+
+def notify_conversation_updated_for_memberships(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    membership_ids: list[uuid.UUID],
+) -> None:
+    for membership_id in membership_ids:
+        notify_conversation_updated(
+            establishment_id=establishment_id,
+            membership_id=membership_id,
+            conversation_id=conversation_id,
+        )
+
+
+def schedule_conversation_updated(
+    *,
+    establishment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    membership_ids: list[uuid.UUID],
+) -> None:
+    captured_membership_ids = list(membership_ids)
+
+    def _notify() -> None:
+        notify_conversation_updated_for_memberships(
+            establishment_id=establishment_id,
+            conversation_id=conversation_id,
+            membership_ids=captured_membership_ids,
         )
 
     transaction.on_commit(_notify)

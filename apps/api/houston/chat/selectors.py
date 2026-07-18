@@ -43,6 +43,7 @@ def get_eligible_chat_memberships_queryset(
     *,
     establishment_id: uuid.UUID,
     query: str | None = None,
+    exclude_active_conversation_id: uuid.UUID | None = None,
 ) -> QuerySet[EstablishmentMembership]:
     queryset = (
         EstablishmentMembership.objects.filter(
@@ -55,6 +56,12 @@ def get_eligible_chat_memberships_queryset(
         .select_related("user", "establishment", "establishment__organization")
         .order_by("user__first_name", "user__last_name", "user__username", "id")
     )
+    if exclude_active_conversation_id is not None:
+        active_membership_ids = active_participant_queryset(
+            conversation_id=exclude_active_conversation_id,
+        ).values_list("membership_id", flat=True)
+        queryset = queryset.exclude(id__in=active_membership_ids)
+
     if not query:
         return queryset
 

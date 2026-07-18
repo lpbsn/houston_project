@@ -23,6 +23,7 @@ import { purgeConversationClientState } from '../lib/purge-conversation-client-s
 import type {
   ChatConnectionStatus,
   ChatWsConversationAccessRevokedEvent,
+  ChatWsConversationUpdatedEvent,
   ChatWsGlobalAccessRevokedEvent,
   ChatWsMessageCreatedEvent,
   ChatWsMessageRejectedEvent,
@@ -151,6 +152,19 @@ export function ChatRealtimeProvider({
     ],
   )
 
+  const handleConversationUpdated = useCallback(
+    (event: ChatWsConversationUpdatedEvent) => {
+      if (!establishmentId) {
+        return
+      }
+      void queryClient.invalidateQueries({ queryKey: chatQueryKeys.conversations(establishmentId) })
+      void queryClient.invalidateQueries({
+        queryKey: chatQueryKeys.conversation(establishmentId, event.conversation_id),
+      })
+    },
+    [establishmentId, queryClient],
+  )
+
   const handleReconnect = useCallback(() => {
     if (!establishmentId) {
       return
@@ -187,6 +201,7 @@ export function ChatRealtimeProvider({
     onMessageRejected: handleMessageRejected,
     onGlobalAccessRevoked,
     onConversationAccessRevoked: handleConversationAccessRevoked,
+    onConversationUpdated: handleConversationUpdated,
     onReconnect: handleReconnect,
   })
 

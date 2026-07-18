@@ -3210,6 +3210,13 @@ paths:
     get:
       operationId: v1_establishments_chat_eligible_memberships_retrieve
       parameters:
+      - in: query
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        description: When set, exclude active participants of this group conversation
+          before applying the result limit.
       - in: path
         name: establishment_id
         schema:
@@ -3230,6 +3237,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatEligibleMembershipsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '401':
           content:
