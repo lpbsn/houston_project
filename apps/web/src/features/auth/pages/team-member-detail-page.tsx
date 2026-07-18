@@ -31,6 +31,7 @@ import {
 } from '@/features/auth/lib/membership-rbac'
 import {
   buildMemberDisplayName,
+  getTeamMembershipStatusBadge,
   membershipIsActive,
   membershipIsInvited,
   normalizeTeamRole,
@@ -148,6 +149,7 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
   }
 
   const displayName = buildMemberDisplayName(membership)
+  const statusBadge = getTeamMembershipStatusBadge(membership)
   const hints = membership.permission_hints
   const isOwnerTarget = currentRole === 'owner'
   const showScopesSection = Boolean(draftRole && canEditMembershipOperationalScopes(draftRole))
@@ -283,7 +285,14 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
               <ArrowLeft className="mr-1 h-4 w-4" />
               Retour
             </Button>
-            <h1 className="mt-2 truncate text-xl font-semibold text-[#1a1a1a]">{displayName}</h1>
+            <div className="mt-2 flex min-w-0 items-center gap-2">
+              <h1 className="min-w-0 truncate text-xl font-semibold text-[#1a1a1a]">{displayName}</h1>
+              {statusBadge ? (
+                <HoustonBadge variant={statusBadge.variant} className="shrink-0 normal-case">
+                  {statusBadge.label}
+                </HoustonBadge>
+              ) : null}
+            </div>
           </div>
           {canEdit && !isEditing ? (
             <Button

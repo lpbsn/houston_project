@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Search, UserPlus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   TerrainCard,
@@ -9,12 +10,22 @@ import {
   TerrainErrorState,
 } from '@/components/ui/terrain'
 import { TeamMemberList } from '@/features/auth/components/team/team-member-list'
+import { TeamStatusFilters } from '@/features/auth/components/team/team-status-filters'
 import {
   canInviteFromBootstrapHints,
   canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { groupTeamMembersByRole } from '@/features/auth/lib/team-members'
+import {
+  getTeamListUiState,
+  setTeamListUiState,
+} from '@/features/auth/lib/team-list-ui-state'
+import {
+  countTeamMembersByStatus,
+  groupTeamMembersByRole,
+  toggleTeamMemberStatusFilter,
+  type TeamMembershipStatus,
+} from '@/features/auth/lib/team-members'
 import { useTeamMembersQuery } from '@/features/auth/hooks/use-team-members'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -28,9 +39,33 @@ export function TeamPage({ onNavigate }: TeamPageProps) {
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canInvite = canInviteFromBootstrapHints(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
-  const [searchQuery, setSearchQuery] = useState('')
+  const establishmentId = activeMembership?.establishment_id ?? null
+
+  const initialUiState = getTeamListUiState(establishmentId)
+  const [searchQuery, setSearchQuery] = useState(initialUiState.searchQuery)
+  const [selectedStatuses, setSelectedStatuses] = useState<ReadonlySet<TeamMembershipStatus>>(
+    initialUiState.selectedStatuses,
+  )
+  const previousEstablishmentIdRef = useRef(establishmentId)
 
   const membersQuery = useTeamMembersQuery()
+
+  useEffect(() => {
+    if (previousEstablishmentIdRef.current === establishmentId) {
+      return
+    }
+    previousEstablishmentIdRef.current = establishmentId
+    const next = getTeamListUiState(establishmentId)
+    setSearchQuery(next.searchQuery)
+    setSelectedStatuses(next.selectedStatuses)
+  }, [establishmentId])
+
+  useEffect(() => {
+    if (!establishmentId) {
+      return
+    }
+    setTeamListUiState(establishmentId, { searchQuery, selectedStatuses })
+  }, [establishmentId, searchQuery, selectedStatuses])
 
   if (!isReady || isBootstrapping) {
     return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement...</p>
@@ -47,7 +82,18 @@ export function TeamPage({ onNavigate }: TeamPageProps) {
     )
   }
 
-  const sections = groupTeamMembersByRole(membersQuery.data ?? [], searchQuery)
+  const members = membersQuery.data ?? []
+  const statusCounts = countTeamMembersByStatus(members)
+  const sections = groupTeamMembersByRole(members, searchQuery, selectedStatuses)
+  const hasActiveCriteria = searchQuery.trim().length > 0 || selectedStatuses.size > 0
+  const isEmptyEstablishment = !membersQuery.isPending && !membersQuery.isError && members.length === 0
+  const isFilteredEmpty =
+    !membersQuery.isPending && !membersQuery.isError && members.length > 0 && sections.length === 0
+
+  const resetCriteria = () => {
+    setSearchQuery('')
+    setSelectedStatuses(new Set())
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
@@ -86,6 +132,15 @@ export function TeamPage({ onNavigate }: TeamPageProps) {
         />
       </div>
 
+      <TeamStatusFilters
+        counts={statusCounts}
+        selectedStatuses={selectedStatuses}
+        onSelectTous={() => setSelectedStatuses(new Set())}
+        onToggleStatus={(status) =>
+          setSelectedStatuses((current) => toggleTeamMemberStatusFilter(current, status))
+        }
+      />
+
       {membersQuery.isPending ? (
         <p className={cn('px-1 py-2 text-sm', terrain.muted)}>Chargement des membres...</p>
       ) : membersQuery.isError ? (
@@ -94,15 +149,28 @@ export function TeamPage({ onNavigate }: TeamPageProps) {
           retryLabel="Réessayer"
           onRetry={() => void membersQuery.refetch()}
         />
-      ) : sections.length === 0 ? (
+      ) : isEmptyEstablishment ? (
         <TerrainEmptyState
           title="Aucun membre"
-          description={
-            searchQuery.trim()
-              ? 'Aucun membre ne correspond à votre recherche.'
-              : "Aucun membre n'est disponible pour cet établissement."
-          }
+          description="Aucun membre n'est disponible pour cet établissement."
         />
+      ) : isFilteredEmpty ? (
+        <div className="space-y-3">
+          <TerrainEmptyState
+            title="Aucun membre"
+            description="Aucun membre ne correspond à vos critères."
+          />
+          {hasActiveCriteria ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full rounded-xl border-[#D7D4CB]"
+              onClick={resetCriteria}
+            >
+              Réinitialiser
+            </Button>
+          ) : null}
+        </div>
       ) : (
         <TeamMemberList
           sections={sections}

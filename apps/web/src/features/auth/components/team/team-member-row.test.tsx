@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TeamMemberRow } from './team-member-row'
@@ -84,5 +84,65 @@ describe('TeamMemberRow', () => {
     )
 
     expect(screen.queryByText('Direction')).toBeNull()
+  })
+
+  it('does not show a status badge for active members', () => {
+    render(
+      createElement(TeamMemberRow, {
+        membership: membership({ role: 'staff', status: 'active' }),
+        isSelf: false,
+        onSelect: vi.fn(),
+        index: 0,
+      }),
+    )
+
+    expect(screen.queryByText('Inactif')).toBeNull()
+    expect(screen.queryByText('Invité')).toBeNull()
+    expect(screen.getByText('Équipe')).toBeTruthy()
+  })
+
+  it('shows inactive status badge and keeps role badge', () => {
+    render(
+      createElement(TeamMemberRow, {
+        membership: membership({ role: 'staff', status: 'deactivated' }),
+        isSelf: false,
+        onSelect: vi.fn(),
+        index: 0,
+      }),
+    )
+
+    expect(screen.getByText('Inactif')).toBeTruthy()
+    expect(screen.getByText('Équipe')).toBeTruthy()
+  })
+
+  it('shows invited status badge and remains selectable', () => {
+    const onSelect = vi.fn()
+    render(
+      createElement(TeamMemberRow, {
+        membership: membership({ id: 'member-invited', role: 'manager', status: 'invited' }),
+        isSelf: false,
+        onSelect,
+        index: 0,
+      }),
+    )
+
+    expect(screen.getByText('Invité')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Alice Martin/i }))
+    expect(onSelect).toHaveBeenCalledWith('member-invited')
+  })
+
+  it('keeps deactivated members selectable', () => {
+    const onSelect = vi.fn()
+    render(
+      createElement(TeamMemberRow, {
+        membership: membership({ id: 'member-off', role: 'staff', status: 'deactivated' }),
+        isSelf: false,
+        onSelect,
+        index: 0,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Alice Martin/i }))
+    expect(onSelect).toHaveBeenCalledWith('member-off')
   })
 })

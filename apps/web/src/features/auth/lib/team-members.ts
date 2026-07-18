@@ -1,10 +1,25 @@
 import type { EstablishmentMembershipResponse, RoleEnum } from '@/features/auth/types'
 import { formatMembershipRoleDisplay } from '@/lib/display-names'
+import type { HoustonBadgeVariant } from '@/lib/terrain-styles'
 
 export type TeamRoleSection = {
   role: RoleEnum
   label: string
   members: EstablishmentMembershipResponse[]
+}
+
+export type TeamMembershipStatus = 'active' | 'deactivated' | 'invited'
+
+export type TeamMembershipStatusBadge = {
+  label: string
+  variant: HoustonBadgeVariant
+}
+
+export type TeamMemberStatusCounts = {
+  total: number
+  active: number
+  deactivated: number
+  invited: number
 }
 
 const TEAM_ROLE_ORDER: RoleEnum[] = ['owner', 'director', 'manager', 'staff']
@@ -15,6 +30,12 @@ const TEAM_SECTION_LABELS: Record<RoleEnum, string> = {
   manager: 'MANAGERS',
   staff: 'STAFF',
 }
+
+const TEAM_MEMBERSHIP_STATUSES: readonly TeamMembershipStatus[] = [
+  'active',
+  'deactivated',
+  'invited',
+]
 
 export function normalizeTeamRole(role: string | null | undefined): RoleEnum {
   return TEAM_ROLE_ORDER.find((candidate) => candidate === role) ?? 'staff'
@@ -59,17 +80,10 @@ export function matchesTeamMemberSearch(
   return haystack.includes(normalized)
 }
 
-export function groupTeamMembersByRole(
-  memberships: EstablishmentMembershipResponse[],
-  query: string,
-): TeamRoleSection[] {
-  const filtered = memberships.filter((membership) => matchesTeamMemberSearch(membership, query))
-
-  return TEAM_ROLE_ORDER.map((role) => ({
-    role,
-    label: getTeamSectionLabel(role),
-    members: filtered.filter((membership) => normalizeTeamRole(membership.role) === role),
-  })).filter((section) => section.members.length > 0)
+export function normalizeTeamMembershipStatus(
+  status: string | null | undefined,
+): TeamMembershipStatus | null {
+  return TEAM_MEMBERSHIP_STATUSES.find((candidate) => candidate === status) ?? null
 }
 
 export function membershipIsActive(membership: EstablishmentMembershipResponse): boolean {
@@ -78,6 +92,89 @@ export function membershipIsActive(membership: EstablishmentMembershipResponse):
 
 export function membershipIsInvited(membership: EstablishmentMembershipResponse): boolean {
   return membership.status === 'invited'
+}
+
+export function membershipIsDeactivated(membership: EstablishmentMembershipResponse): boolean {
+  return membership.status === 'deactivated'
+}
+
+export function getTeamMembershipStatusBadge(
+  membership: EstablishmentMembershipResponse,
+): TeamMembershipStatusBadge | null {
+  if (membershipIsDeactivated(membership)) {
+    return { label: 'Inactif', variant: 'gray' }
+  }
+  if (membershipIsInvited(membership)) {
+    return { label: 'Invité', variant: 'amber' }
+  }
+  return null
+}
+
+export function matchesTeamMemberStatusFilter(
+  membership: EstablishmentMembershipResponse,
+  selectedStatuses: ReadonlySet<TeamMembershipStatus>,
+): boolean {
+  if (selectedStatuses.size === 0) {
+    return true
+  }
+  const status = normalizeTeamMembershipStatus(membership.status)
+  return status !== null && selectedStatuses.has(status)
+}
+
+export function countTeamMembersByStatus(
+  memberships: EstablishmentMembershipResponse[],
+): TeamMemberStatusCounts {
+  let active = 0
+  let deactivated = 0
+  let invited = 0
+
+  for (const membership of memberships) {
+    if (membershipIsActive(membership)) {
+      active += 1
+    } else if (membershipIsDeactivated(membership)) {
+      deactivated += 1
+    } else if (membershipIsInvited(membership)) {
+      invited += 1
+    }
+  }
+
+  return {
+    total: memberships.length,
+    active,
+    deactivated,
+    invited,
+  }
+}
+
+export function toggleTeamMemberStatusFilter(
+  selectedStatuses: ReadonlySet<TeamMembershipStatus>,
+  status: TeamMembershipStatus,
+): ReadonlySet<TeamMembershipStatus> {
+  const next = new Set(selectedStatuses)
+  if (next.has(status)) {
+    next.delete(status)
+  } else {
+    next.add(status)
+  }
+  return next
+}
+
+export function groupTeamMembersByRole(
+  memberships: EstablishmentMembershipResponse[],
+  query: string,
+  selectedStatuses: ReadonlySet<TeamMembershipStatus> = new Set(),
+): TeamRoleSection[] {
+  const filtered = memberships.filter(
+    (membership) =>
+      matchesTeamMemberStatusFilter(membership, selectedStatuses) &&
+      matchesTeamMemberSearch(membership, query),
+  )
+
+  return TEAM_ROLE_ORDER.map((role) => ({
+    role,
+    label: getTeamSectionLabel(role),
+    members: filtered.filter((membership) => normalizeTeamRole(membership.role) === role),
+  })).filter((section) => section.members.length > 0)
 }
 
 export function shouldShowTeamMemberScopeBadges(role: string | null | undefined): boolean {

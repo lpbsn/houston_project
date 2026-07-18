@@ -199,7 +199,7 @@ describe('useAppPageWorkspace', () => {
       status: 'active',
     }
     const previous = membership({ id: 'm-owner', role: 'owner', status: 'active' })
-    const next = membership({ id: 'm-owner', role: 'owner', status: 'inactive' })
+    const next = membership({ id: 'm-owner', role: 'owner', status: 'deactivated' })
     listMemberships.mockResolvedValue([previous])
     getMembership.mockResolvedValue(previous)
     deactivateMembership.mockResolvedValue(next)
