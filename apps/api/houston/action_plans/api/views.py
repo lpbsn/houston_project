@@ -94,6 +94,7 @@ from houston.action_plans.services import (
     update_action_plan,
     validate_action_plan_execution,
 )
+from houston.action_plans.upcoming_feed import build_action_plan_execution_upcoming_page
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import HasActiveMembership
 from houston.establishments.timezone_utils import establishment_local_date
@@ -740,9 +741,23 @@ class ActionPlanExecutionDetailView(EstablishmentScopedActionPlanMixin, APIView)
         if isinstance(membership, Response):
             return membership
 
+        execution_uuid = uuid.UUID(str(execution_id))
         execution = get_action_plan_execution_for_detail(
             membership=membership,
-            execution_id=uuid.UUID(str(execution_id)),
+            execution_id=execution_uuid,
+        )
+        if execution is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from houston.action_plans.lifecycle_promotion import ensure_execution_lifecycle_for_read
+
+        ensure_execution_lifecycle_for_read(
+            establishment_id=membership.establishment_id,
+            execution_id=execution_uuid,
+        )
+        execution = get_action_plan_execution_for_detail(
+            membership=membership,
+            execution_id=execution_uuid,
         )
         if execution is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -1366,7 +1381,14 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        executions, has_more, next_cursor, as_of = build_action_plan_execution_feed_page(
+        (
+            executions,
+            has_more,
+            next_cursor,
+            as_of,
+            scheduled_executions,
+            scheduled_count,
+        ) = build_action_plan_execution_feed_page(
             membership=membership,
             view_mode=view_mode,  # type: ignore[arg-type]
             page_size=page_size,
@@ -1387,8 +1409,141 @@ class ActionPlanExecutionFeedView(EstablishmentScopedActionPlanMixin, APIView):
             }
             for execution in executions
         ]
+        serialized_scheduled = [
+            {
+                "item_type": "action_plan_execution",
+                "action_plan_execution": serialize_action_plan_execution_feed_item(
+                    execution=execution,
+                    membership=membership,
+                    is_overdue=False,
+                ),
+            }
+            for execution in scheduled_executions
+        ]
         payload = {
             "items": serialized_items,
+            "scheduled_items": serialized_scheduled,
+            "scheduled_count": scheduled_count,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        }
+        return Response(ActionPlanExecutionFeedResponseSerializer(payload).data)
+
+
+def _encode_upcoming_cursor(*, start_at, execution_id) -> str:
+    import base64
+    import json
+
+    payload = {"start_at": start_at.isoformat(), "id": str(execution_id)}
+    return base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
+
+
+def _parse_upcoming_cursor(raw: str | None):
+    import base64
+    import json
+    from datetime import datetime
+
+    if raw is None or raw == "":
+        return None, None
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8"))
+        start_at = datetime.fromisoformat(payload["start_at"])
+        execution_id = uuid.UUID(payload["id"])
+        return start_at, execution_id
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        raise ActionPlanExecutionFeedCursorError("Invalid cursor.") from None
+
+
+class ActionPlanExecutionUpcomingView(EstablishmentScopedActionPlanMixin, APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+    ]
+
+    @extend_schema(
+        tags=["action-plans"],
+        parameters=[
+            OpenApiParameter(
+                name="view_mode",
+                required=True,
+                type=str,
+                enum=["personal", "general"],
+            ),
+            OpenApiParameter(name="page_size", required=False, type=int),
+            OpenApiParameter(
+                name="cursor",
+                required=False,
+                type=str,
+                description="Opaque pagination cursor from a previous response next_cursor.",
+            ),
+        ],
+        responses={
+            200: ActionPlanExecutionFeedResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def get(self, request, establishment_id):
+        membership = resolve_observation_actor_membership(
+            request,
+            establishment_id=self.establishment_id,
+        )
+        if membership is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        view_mode = request.query_params.get("view_mode", "").strip().lower()
+        if view_mode not in {"personal", "general"}:
+            return Response(
+                {
+                    "code": "validation_error",
+                    "detail": "view_mode must be personal or general.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        page_size = _parse_feed_page_size(request.query_params.get("page_size"))
+        try:
+            cursor_start_at, cursor_id = _parse_upcoming_cursor(
+                request.query_params.get("cursor"),
+            )
+        except ActionPlanExecutionFeedCursorError as exc:
+            return Response(
+                {"code": "validation_error", "detail": exc.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        executions, has_more, next_start_at, next_id = (
+            build_action_plan_execution_upcoming_page(
+                membership=membership,
+                view_mode=view_mode,  # type: ignore[arg-type]
+                page_size=page_size,
+                cursor_start_at=cursor_start_at,
+                cursor_id=cursor_id,
+            )
+        )
+        serialized_items = [
+            {
+                "item_type": "action_plan_execution",
+                "action_plan_execution": serialize_action_plan_execution_feed_item(
+                    execution=execution,
+                    membership=membership,
+                    is_overdue=False,
+                ),
+            }
+            for execution in executions
+        ]
+        next_cursor = None
+        if has_more and next_start_at is not None and next_id is not None:
+            next_cursor = _encode_upcoming_cursor(
+                start_at=next_start_at,
+                execution_id=next_id,
+            )
+        payload = {
+            "items": serialized_items,
+            "scheduled_items": [],
+            "scheduled_count": 0,
             "next_cursor": next_cursor,
             "has_more": has_more,
         }

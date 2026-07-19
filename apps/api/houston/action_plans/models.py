@@ -13,6 +13,7 @@ from houston.action_plans.constants import (
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
     EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_SCHEDULED,
     MAX_TASK_POSITION,
     MIN_TASK_POSITION,
     SCHEDULE_STATUS_ACTIVE,
@@ -258,6 +259,7 @@ class ActionPlanScheduleAssignee(BaseModel):
 
 class ActionPlanExecution(BaseModel):
     class Status(models.TextChoices):
+        SCHEDULED = EXECUTION_STATUS_SCHEDULED, "Scheduled"
         IN_PROGRESS = EXECUTION_STATUS_IN_PROGRESS, "In progress"
         PENDING_VALIDATION = "pending_validation", "Pending validation"
         DONE = "done", "Done"
@@ -345,6 +347,7 @@ class ActionPlanExecution(BaseModel):
     visible_from = models.DateTimeField(null=True, blank=True)
     end_at = models.DateTimeField(null=True, blank=True)
     last_activity_at = models.DateTimeField()
+    availability_notified_at = models.DateTimeField(null=True, blank=True)
     marked_done_at = models.DateTimeField(null=True, blank=True)
     validated_at = models.DateTimeField(null=True, blank=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
@@ -367,6 +370,19 @@ class ActionPlanExecution(BaseModel):
             models.Index(
                 fields=["source_signal", "status"],
                 name="ap_exec_signal_status_idx",
+            ),
+            models.Index(
+                fields=["status", "start_at"],
+                name="ap_exec_scheduled_promote_idx",
+                condition=Q(status=EXECUTION_STATUS_SCHEDULED),
+            ),
+            models.Index(
+                fields=["status", "visible_from"],
+                name="ap_exec_scheduled_avail_idx",
+                condition=Q(
+                    status=EXECUTION_STATUS_SCHEDULED,
+                    availability_notified_at__isnull=True,
+                ),
             ),
         ]
         constraints = [

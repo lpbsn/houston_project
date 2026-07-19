@@ -32,6 +32,8 @@ export function formatActionPlanExecutionStatusLabel(status: string): string {
       return 'En cours'
     case 'pending_validation':
       return 'En attente de validation'
+    case 'scheduled':
+      return 'Planifiée'
     case 'done':
       return 'Terminé'
     case 'canceled':

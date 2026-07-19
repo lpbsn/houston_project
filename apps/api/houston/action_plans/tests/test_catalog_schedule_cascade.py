@@ -10,6 +10,7 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    EXECUTION_STATUS_SCHEDULED,
     SCHEDULE_STATUS_ACTIVE,
     SCHEDULE_STATUS_INACTIVE,
 )
@@ -59,7 +60,9 @@ def test_deactivate_catalog_cascades_all_active_schedules(
         staff_membership,
         business_unit,
     )
-    future_execution = schedule_one.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS).first()
+    future_execution = schedule_one.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
     if future_execution is not None:
         future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
         future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
@@ -93,13 +96,16 @@ def test_deactivate_catalog_with_active_started_execution(
         staff_membership,
         business_unit,
     )
-    active_execution = schedule.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS).first()
+    active_execution = schedule.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
     assert active_execution is not None
+    active_execution.status = EXECUTION_STATUS_IN_PROGRESS
     active_execution.start_at = timezone.now() - timezone.timedelta(minutes=5)
     active_execution.end_at = timezone.now() + timezone.timedelta(hours=1)
     active_execution.visible_from = active_execution.start_at - timezone.timedelta(hours=1)
     active_execution.save(
-        update_fields=["start_at", "end_at", "visible_from", "updated_at"],
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
     )
 
     deactivate_action_plan(action_plan=catalog_action_plan, actor=owner_membership)
@@ -110,6 +116,40 @@ def test_deactivate_catalog_with_active_started_execution(
     assert catalog_action_plan.catalog_status == CATALOG_STATUS_INACTIVE
     assert schedule.status == SCHEDULE_STATUS_INACTIVE
     assert active_execution.status == EXECUTION_STATUS_IN_PROGRESS
+
+
+def test_deactivate_catalog_preserves_overdue_scheduled_execution(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    overdue = schedule.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
+    assert overdue is not None
+    overdue.status = EXECUTION_STATUS_SCHEDULED
+    overdue.start_at = timezone.now() - timezone.timedelta(minutes=5)
+    overdue.end_at = timezone.now() + timezone.timedelta(hours=1)
+    overdue.visible_from = overdue.start_at - timezone.timedelta(hours=1)
+    overdue.save(
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+    )
+
+    deactivate_action_plan(action_plan=catalog_action_plan, actor=owner_membership)
+
+    catalog_action_plan.refresh_from_db()
+    schedule.refresh_from_db()
+    overdue.refresh_from_db()
+    assert catalog_action_plan.catalog_status == CATALOG_STATUS_INACTIVE
+    assert schedule.status == SCHEDULE_STATUS_INACTIVE
+    assert overdue.status == EXECUTION_STATUS_SCHEDULED
 
 
 def test_deactivate_catalog_preserves_terminal_executions(
@@ -124,7 +164,9 @@ def test_deactivate_catalog_preserves_terminal_executions(
         staff_membership,
         business_unit,
     )
-    done_execution = schedule.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS).first()
+    done_execution = schedule.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
     assert done_execution is not None
     done_execution.status = EXECUTION_STATUS_DONE
     done_execution.save(update_fields=["status", "updated_at"])

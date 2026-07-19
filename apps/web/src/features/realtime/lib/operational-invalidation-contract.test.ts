@@ -35,8 +35,8 @@ function buildEvent(
 
 describe('operational invalidation contract', () => {
   it('loads the expected number of operational events', () => {
-    expect(operationalInvalidationEvents).toHaveLength(19)
-    expect(operationalInvalidationEventPairs).toHaveLength(19)
+    expect(operationalInvalidationEvents).toHaveLength(20)
+    expect(operationalInvalidationEventPairs).toHaveLength(20)
   })
 
   it.each(operationalInvalidationEventPairs)(

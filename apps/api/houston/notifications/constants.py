@@ -21,6 +21,7 @@ LOT1_EVENT_KEYS: frozenset[str] = frozenset(
         "action_plan.execution.pending_validation",
         "action_plan.execution.canceled",
         "action_plan.execution.reopened",
+        "action_plan.execution.started",
         "comment.mention.created",
         "comment.signal.created",
         "comment.action_plan_execution.created",
@@ -55,6 +56,10 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
     "action_plan.execution.reopened": (
         "Plan d'action rouvert",
         "Une exécution de plan d'action a été rouverte.",
+    ),
+    "action_plan.execution.started": (
+        "Plan d'action démarré",
+        "Une exécution planifiée commence maintenant.",
     ),
     "comment.mention.created": (
         "Mention",
@@ -115,6 +120,15 @@ def build_default_dedupe_key(
     subject_id: uuid.UUID,
 ) -> str:
     return f"{event_key}:{subject_type}:{subject_id}"
+
+
+def build_action_plan_execution_recipient_idempotency_key(
+    *,
+    event_key: str,
+    execution_id: uuid.UUID,
+    recipient_membership_id: uuid.UUID,
+) -> str:
+    return f"{event_key}:{execution_id}:{recipient_membership_id}"
 
 
 def build_mention_dedupe_key(

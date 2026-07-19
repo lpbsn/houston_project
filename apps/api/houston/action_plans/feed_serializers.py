@@ -59,6 +59,7 @@ class ActionPlanExecutionFeedItemSerializer(serializers.Serializer):
     involved_poles = serializers.ListField(child=serializers.DictField())
     signal_summary = serializers.DictField(allow_null=True)
     assignees = ActionPlanExecutionFeedAssigneeSerializer(many=True)
+    start_at = serializers.DateTimeField(allow_null=True)
     end_at = serializers.DateTimeField(allow_null=True)
     is_overdue = serializers.BooleanField()
     task_count = serializers.IntegerField()
@@ -77,6 +78,8 @@ class ActionPlanExecutionFeedItemWrapperSerializer(serializers.Serializer):
 
 class ActionPlanExecutionFeedResponseSerializer(serializers.Serializer):
     items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
+    scheduled_items = ActionPlanExecutionFeedItemWrapperSerializer(many=True)
+    scheduled_count = serializers.IntegerField()
     next_cursor = serializers.CharField(allow_null=True)
     has_more = serializers.BooleanField()
 
@@ -113,6 +116,7 @@ def serialize_action_plan_execution_feed_item(
         "involved_poles": _serialize_involved_poles(execution),
         "signal_summary": _serialize_signal_summary(execution),
         "assignees": assignees,
+        "start_at": execution.start_at,
         "end_at": execution.end_at,
         "is_overdue": overdue,
         "task_count": task_count,

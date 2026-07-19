@@ -72,7 +72,7 @@ def is_pilot_pole_assignee(
     if prefetched is not None and "assignees" in prefetched:
         return any(
             assignee.membership_id == membership.id and assignee.execution_team.is_pilot
-            for assignee in execution.assignees.select_related("execution_team").all()
+            for assignee in execution.assignees.all()
         )
     return ActionPlanAssignee.objects.filter(
         action_plan_execution_id=execution.id,
@@ -481,6 +481,28 @@ def can_cancel_action_plan_execution(
     if membership is None:
         return False
     if membership.role in ADMIN_ROLES:
+        return True
+    return manages_pilot_pole(membership, execution)
+
+
+def can_cancel_scheduled_action_plan_execution(
+    membership: EstablishmentMembership | None,
+    execution: ActionPlanExecution,
+) -> bool:
+    from houston.action_plans.constants import EXECUTION_STATUS_SCHEDULED
+
+    if execution.status != EXECUTION_STATUS_SCHEDULED:
+        return False
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=execution.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    if membership.role in ADMIN_ROLES:
+        return True
+    if execution.created_by_id == membership.id:
         return True
     return manages_pilot_pole(membership, execution)
 

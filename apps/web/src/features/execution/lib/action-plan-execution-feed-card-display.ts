@@ -97,7 +97,9 @@ export function formatActionPlanFeedMetaParts(
 
 export type ActionPlanFeedSidebarState =
   | { variant: 'countdown'; prefix: 'DANS'; value: string }
+  | { variant: 'start_countdown'; prefix: 'DÉBUT'; value: string }
   | { variant: 'no_deadline' }
+  | { variant: 'no_start' }
   | { variant: 'overdue'; prefix: 'RETARD'; value: string }
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -113,6 +115,39 @@ function formatActionPlanFeedDuration(durationMs: number): string {
   }
 
   return `${Math.max(1, Math.ceil(durationMs / MS_PER_HOUR))}h`
+}
+
+/** Compact start countdown: DÉBUT 3j / DÉBUT 7h / DÉBUT &lt;1h */
+export function formatActionPlanFeedStartCountdownValue(remainingMs: number): string {
+  if (!Number.isFinite(remainingMs) || remainingMs < MS_PER_HOUR) {
+    return '<1h'
+  }
+
+  if (remainingMs >= MS_PER_DAY) {
+    return `${Math.floor(remainingMs / MS_PER_DAY)}j`
+  }
+
+  return `${Math.ceil(remainingMs / MS_PER_HOUR)}h`
+}
+
+export function getActionPlanFeedStartCountdownState(
+  startAt: string | null | undefined,
+  now: number,
+): ActionPlanFeedSidebarState {
+  if (!startAt) {
+    return { variant: 'no_start' }
+  }
+
+  const startMs = Date.parse(startAt)
+  if (Number.isNaN(startMs)) {
+    return { variant: 'no_start' }
+  }
+
+  return {
+    variant: 'start_countdown',
+    prefix: 'DÉBUT',
+    value: formatActionPlanFeedStartCountdownValue(startMs - now),
+  }
 }
 
 export function getActionPlanFeedSidebarState(
@@ -171,6 +206,10 @@ export function getActionPlanFeedProgressState(
 
 export function isActionPlanFeedInProgressCard(item: ActionPlanExecutionFeedItem): boolean {
   return item.status === 'in_progress'
+}
+
+export function isActionPlanFeedScheduledCard(item: ActionPlanExecutionFeedItem): boolean {
+  return item.status === 'scheduled'
 }
 
 export function isActionPlanFeedDoneCard(item: ActionPlanExecutionFeedItem): boolean {

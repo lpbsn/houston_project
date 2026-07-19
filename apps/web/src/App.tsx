@@ -11,6 +11,7 @@ import {
   LazyChatPage,
   LazyChatRealtimeProvider,
   LazyExecutionFeedPage,
+  LazyExecutionUpcomingPage,
   LazyProfilePage,
   LazyProfileSwitchEstablishmentPage,
   LazyInstallAppPage,
@@ -353,6 +354,14 @@ function App() {
         <LazyExecutionFeedPage
           onOpenActionPlanExecution={(id) => navigate(`/action-plans/executions/${id}`)}
           onNavigate={navigate}
+        />
+      )
+    }
+
+    if (route.path === '/execution/upcoming') {
+      return (
+        <LazyExecutionUpcomingPage
+          onOpenActionPlanExecution={(id) => navigate(`/action-plans/executions/${id}`)}
         />
       )
     }

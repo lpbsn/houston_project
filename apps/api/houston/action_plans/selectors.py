@@ -12,7 +12,9 @@ from houston.action_plans.constants import (
     CATALOG_STATUS_ACTIVE,
     CONTRIBUTION_STATUS_DONE,
     CONTRIBUTION_STATUS_IN_PROGRESS,
-    EXECUTION_FEED_STATUSES,
+    EXECUTION_FEED_CURSOR_STATUSES,
+    EXECUTION_STATUS_SCHEDULED,
+    SCHEDULED_FEED_PREVIEW_LIMIT,
     TERMINAL_TASK_STATUSES,
     ExecutionFeedViewMode,
 )
@@ -353,7 +355,6 @@ _EXECUTION_FEED_ASSIGNEE_PREFETCH = Prefetch(
 _EXECUTION_FEED_PREFETCH = (
     _EXECUTION_FEED_ASSIGNEE_PREFETCH,
     _EXECUTION_FEED_TASK_PREFETCH,
-    "execution_teams__business_unit",
 )
 
 
@@ -451,21 +452,72 @@ def action_plan_execution_general_feed_visibility_q(
     return (personal_q | scope_q) & Q(establishment_id=membership.establishment_id)
 
 
+def _execution_feed_visibility_q(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+) -> Q:
+    if view_mode == "personal":
+        return action_plan_execution_personal_feed_q(membership=membership)
+    return action_plan_execution_general_feed_visibility_q(membership=membership)
+
+
+def scheduled_executions_base_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+) -> QuerySet[ActionPlanExecution]:
+    """Shared RBAC socle for À venir count/list and Planifiées preview (materialized only)."""
+    return (
+        ActionPlanExecution.objects.filter(
+            _execution_feed_visibility_q(membership=membership, view_mode=view_mode),
+            status=EXECUTION_STATUS_SCHEDULED,
+        )
+        .select_related(*_EXECUTION_FEED_SELECT_RELATED)
+        .prefetch_related(*_EXECUTION_FEED_PREFETCH)
+        .distinct()
+    )
+
+
+def scheduled_executions_upcoming_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+) -> QuerySet[ActionPlanExecution]:
+    return (
+        scheduled_executions_base_queryset(
+            membership=membership,
+            view_mode=view_mode,
+        )
+        .filter(start_at__isnull=False)
+        .order_by("start_at", "id")
+    )
+
+
+def scheduled_executions_visible_preview_queryset(
+    *,
+    membership: EstablishmentMembership,
+    view_mode: ExecutionFeedViewMode,
+    limit: int = SCHEDULED_FEED_PREVIEW_LIMIT,
+) -> QuerySet[ActionPlanExecution]:
+    now = timezone.now()
+    return (
+        scheduled_executions_base_queryset(membership=membership, view_mode=view_mode)
+        .filter(visible_from__lte=now)
+        .order_by("start_at", "id")[:limit]
+    )
+
+
 def action_plan_execution_feed_queryset(
     *,
     membership: EstablishmentMembership,
     view_mode: ExecutionFeedViewMode,
 ) -> QuerySet[ActionPlanExecution]:
     now = timezone.now()
-    visibility_q = (
-        action_plan_execution_personal_feed_q(membership=membership)
-        if view_mode == "personal"
-        else action_plan_execution_general_feed_visibility_q(membership=membership)
-    )
     return (
         ActionPlanExecution.objects.filter(
-            visibility_q,
-            status__in=EXECUTION_FEED_STATUSES,
+            _execution_feed_visibility_q(membership=membership, view_mode=view_mode),
+            status__in=EXECUTION_FEED_CURSOR_STATUSES,
         )
         .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
         .select_related(*_EXECUTION_FEED_SELECT_RELATED)
@@ -479,6 +531,8 @@ def action_plan_execution_pinnable_by_membership(
     execution: ActionPlanExecution,
 ) -> bool:
     if execution.establishment_id != membership.establishment_id:
+        return False
+    if execution.status == EXECUTION_STATUS_SCHEDULED:
         return False
     for view_mode in ("personal", "general"):
         if action_plan_execution_feed_queryset(

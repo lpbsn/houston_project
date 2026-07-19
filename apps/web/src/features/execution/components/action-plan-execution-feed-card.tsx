@@ -6,6 +6,7 @@ import { feedCardKeyDown } from '@/lib/feed-card-keyboard'
 import { getDisplayNameInitials } from '@/lib/display-names'
 import {
   actionPlanFeedPendingBgClassName,
+  actionPlanFeedScheduledBgClassName,
   actionPlanFeedTealBgClassName,
   terrain,
   terrainActionPlanFeedCardClassName,
@@ -18,6 +19,7 @@ import { canOpenActionPlanExecutionFeedCardActions } from '@/features/action-pla
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
 import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { formatSignalRelativeTime } from '@/features/signals/lib/signal-display'
+import { formatSignalClassification } from '@/lib/signal-classification'
 
 import { ActionPlanFeedSidebar } from './action-plan-feed-sidebar'
 import { ActionPlanFeedTaskProgressBar } from './action-plan-feed-task-progress-bar'
@@ -28,10 +30,12 @@ import {
   formatActionPlanFeedMetaParts,
   getActionPlanFeedProgressState,
   getActionPlanFeedSidebarState,
+  getActionPlanFeedStartCountdownState,
   isActionPlanFeedCanceledCard,
   isActionPlanFeedDoneCard,
   isActionPlanFeedInProgressCard,
   isActionPlanFeedPendingValidationCard,
+  isActionPlanFeedScheduledCard,
 } from '../lib/action-plan-execution-feed-card-display'
 import { useFeedCardNow } from '../lib/use-feed-card-now'
 
@@ -283,6 +287,85 @@ function InProgressActionPlanFeedCard({
   )
 }
 
+function ScheduledActionPlanFeedCardHeader({
+  item,
+  signalInput,
+  showActions,
+  onOpenActions,
+}: ActionPlanFeedCardHeaderProps) {
+  const classification = signalInput ? formatSignalClassification(signalInput) : null
+
+  return (
+    <>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <HoustonBadge variant="gray" className="shrink-0 leading-none">
+            {item.pilot_business_unit.specific_name}
+          </HoustonBadge>
+          {classification?.primaryLine ? (
+            <HoustonBadge variant="gray" className="min-w-0 truncate leading-none">
+              {classification.primaryLine}
+            </HoustonBadge>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="text-[11px] leading-none text-[#888]">
+            {formatSignalRelativeTime(item.last_activity_at)}
+          </span>
+          {showActions && onOpenActions ? (
+            <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+          ) : null}
+        </div>
+      </div>
+      {classification?.affectedLine ? (
+        <p className="mb-1 text-[11px] leading-none text-[#888]">{classification.affectedLine}</p>
+      ) : null}
+    </>
+  )
+}
+
+function ScheduledActionPlanFeedCard({
+  item,
+  onSelect,
+  onOpenActions,
+}: ActionPlanExecutionFeedCardProps) {
+  const signalInput = actionPlanFeedSignalClassificationInput(item.signal_summary)
+  const showActions =
+    onOpenActions && canOpenActionPlanExecutionFeedCardActions(item.permission_hints)
+  const now = useFeedCardNow()
+  const sidebarState = getActionPlanFeedStartCountdownState(item.start_at, now)
+
+  return (
+    <article
+      className={terrainActionPlanFeedCardClassName('hover:border-[#8B6914]/30')}
+      onClick={() => onSelect(item.id)}
+      onKeyDown={(event) => feedCardKeyDown(event, onSelect, item.id)}
+      role="button"
+      tabIndex={0}
+    >
+      <ActionPlanFeedSidebar state={sidebarState} />
+
+      <div className="min-w-0 flex-1 p-4">
+        <ScheduledActionPlanFeedCardHeader
+          item={item}
+          signalInput={signalInput}
+          showActions={Boolean(showActions)}
+          onOpenActions={onOpenActions}
+        />
+
+        <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
+
+        <ActionPlanFeedAssigneeRow
+          item={item}
+          showStatusBadge
+          showPinnedBadge={false}
+          avatarClassName={`${actionPlanFeedScheduledBgClassName} text-white`}
+        />
+      </div>
+    </article>
+  )
+}
+
 function TerminalActionPlanFeedCard({
   item,
   onSelect,
@@ -415,6 +498,12 @@ export function ActionPlanExecutionFeedCard({
   if (isActionPlanFeedInProgressCard(item)) {
     return (
       <InProgressActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
+    )
+  }
+
+  if (isActionPlanFeedScheduledCard(item)) {
+    return (
+      <ScheduledActionPlanFeedCard item={item} onSelect={onSelect} onOpenActions={onOpenActions} />
     )
   }
 

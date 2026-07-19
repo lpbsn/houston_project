@@ -6,6 +6,7 @@ import uuid
 from celery import shared_task
 from django.conf import settings
 
+from houston.action_plans.lifecycle_promotion import run_scheduled_execution_lifecycle_tick
 from houston.action_plans.materialization import materialize_schedules_horizon
 from houston.core.observability import build_celery_task_failure_log_context
 
@@ -35,6 +36,26 @@ def materialize_action_plan_schedules_horizon_task(
                 horizon_days=horizon_days,
                 exception_class=type(exc).__name__,
                 task_name="materialize_action_plan_schedules_horizon_task",
+            ),
+            exc_info=False,
+        )
+        raise
+
+
+@shared_task(
+    max_retries=0,
+    soft_time_limit=settings.HOUSTON_CELERY_BEAT_TASK_SOFT_TIME_LIMIT_SECONDS,
+    time_limit=settings.HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS,
+)
+def promote_scheduled_action_plan_executions_task() -> dict[str, int]:
+    try:
+        return run_scheduled_execution_lifecycle_tick()
+    except Exception as exc:
+        logger.error(
+            "action_plan_execution_lifecycle_tick_failed",
+            extra=build_celery_task_failure_log_context(
+                exception_class=type(exc).__name__,
+                task_name="promote_scheduled_action_plan_executions_task",
             ),
             exc_info=False,
         )

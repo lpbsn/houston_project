@@ -31,10 +31,12 @@ export type ActionPlanBusinessUnit = components['schemas']['ActionPlanBusinessUn
 export type ActionPlanTaskTemplate = components['schemas']['ActionPlanTaskTemplate']
 export type ActionPlanAssigneesByPole = components['schemas']['ActionPlanAssigneesByPole']
 export type ActionPlanInvolvedPole = components['schemas']['ActionPlanInvolvedPole']
-export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanExecutionFeedResponse']
+export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecutionFeedItem']
 export type ActionPlanExecutionFeedItemWrapper =
   components['schemas']['ActionPlanExecutionFeedItemWrapper']
-export type ActionPlanExecutionFeedItem = components['schemas']['ActionPlanExecutionFeedItem']
+export type ActionPlanExecutionFeedResponse = components['schemas']['ActionPlanExecutionFeedResponse']
+/** Upcoming list reuses the feed response envelope (items + cursor pagination). */
+export type ActionPlanExecutionUpcomingResponse = ActionPlanExecutionFeedResponse
 export type ActionPlanExecutionPinState = components['schemas']['ActionPlanExecutionPinState']
 export type ActionPlanExecutionFeedAssignee =
   components['schemas']['ActionPlanExecutionFeedAssignee']

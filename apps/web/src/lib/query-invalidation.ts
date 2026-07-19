@@ -72,6 +72,15 @@ export function invalidateActionPlanExecutionFeedQueries(
   })
 }
 
+export function invalidateActionPlanExecutionUpcomingQueries(
+  queryClient: QueryClient,
+  establishmentId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['action-plans', 'action-plan-execution-upcoming', establishmentId],
+  })
+}
+
 export function invalidateActionPlanExecutionDetailQueries(
   queryClient: QueryClient,
   establishmentId: string,
@@ -94,6 +103,7 @@ export function invalidateActionPlanExecutionSurfaces(
   executionId?: string,
 ) {
   invalidateActionPlanExecutionFeedQueries(queryClient, establishmentId)
+  invalidateActionPlanExecutionUpcomingQueries(queryClient, establishmentId)
   invalidateActionPlanExecutionDetailQueries(queryClient, establishmentId, executionId)
   invalidateEstablishmentSignalQueries(queryClient, establishmentId)
 }

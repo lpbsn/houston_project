@@ -322,7 +322,7 @@ def test_canceled_does_not_block_other_assignee_materialization(
         occurrence_date=occurrence_date,
         schedule_assignee=assignee_b,
     )
-    assert execution_b.status == "in_progress"
+    assert execution_b.status in {"scheduled", "in_progress"}
     assert execution_b.schedule_source_membership_id == staff_b.id
 
 

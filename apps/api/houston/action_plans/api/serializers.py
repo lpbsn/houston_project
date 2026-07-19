@@ -534,17 +534,23 @@ def _serialize_assignees_by_pole(execution: ActionPlanExecution) -> list[dict]:
 
 
 def _serialize_involved_poles(execution: ActionPlanExecution) -> list[dict]:
-    teams_by_bu_id = {
-        team.business_unit_id: team.business_unit for team in execution.execution_teams.all()
-    }
+    business_units_by_id = {}
+    for assignee in execution.assignees.all():
+        business_unit = assignee.execution_team.business_unit
+        business_units_by_id[business_unit.id] = business_unit
+    for task_execution in execution.task_executions.all():
+        business_unit = task_execution.execution_team.business_unit
+        business_units_by_id[business_unit.id] = business_unit
     snapshots = get_involved_poles(execution)
     return [
         {
-            "business_unit": _serialize_business_unit(teams_by_bu_id[snapshot.business_unit_id]),
+            "business_unit": _serialize_business_unit(
+                business_units_by_id[snapshot.business_unit_id]
+            ),
             "contribution_status": snapshot.contribution_status,
         }
         for snapshot in snapshots
-        if snapshot.business_unit_id in teams_by_bu_id
+        if snapshot.business_unit_id in business_units_by_id
     ]
 
 

@@ -127,6 +127,11 @@ describe('parseAppRoute', () => {
       kind: 'action-plan-create',
       origin: 'execution',
     })
+
+    expect(parseAppRoute('/execution/upcoming')).toEqual({
+      kind: 'static',
+      path: '/execution/upcoming',
+    })
     expect(getAppRouteKey({ kind: 'action-plan-create', origin: 'execution' })).toBe(
       'action-plan-create',
     )

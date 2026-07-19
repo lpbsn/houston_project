@@ -198,6 +198,7 @@ def create_in_app_notifications_for_recipients(
     exclude_actor_if_recipient: bool = True,
     skip_subject_visibility_recheck: bool = False,
     pole_name: str | None = None,
+    idempotency_key_for_recipient=None,
 ) -> list[Notification]:
     seen_recipient_ids: set[uuid.UUID] = set()
     created: list[Notification] = []
@@ -206,6 +207,10 @@ def create_in_app_notifications_for_recipients(
         if recipient.id in seen_recipient_ids:
             continue
         seen_recipient_ids.add(recipient.id)
+
+        idempotency_key = None
+        if idempotency_key_for_recipient is not None:
+            idempotency_key = idempotency_key_for_recipient(recipient.id)
 
         notification = create_in_app_notification(
             establishment_id=establishment_id,
@@ -216,6 +221,7 @@ def create_in_app_notifications_for_recipients(
             priority=priority,
             actor_membership=actor_membership,
             dedupe_key=dedupe_key,
+            idempotency_key=idempotency_key,
             exclude_actor_if_recipient=exclude_actor_if_recipient,
             skip_subject_visibility_recheck=skip_subject_visibility_recheck,
             pole_name=pole_name,
