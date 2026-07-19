@@ -14,6 +14,7 @@ from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.notifications.constants import (
     build_action_plan_execution_recipient_idempotency_key,
+    build_action_plan_execution_updated_idempotency_key,
     build_chat_message_dedupe_key,
     build_mention_dedupe_key,
 )
@@ -322,6 +323,58 @@ def schedule_action_plan_execution_reopened_notification(
     _run_notification_after_commit(
         deliver=deliver,
         event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_REOPENED,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_updated_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+    recipient_membership_ids: list[uuid.UUID],
+    save_id: uuid.UUID,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None or not recipient_membership_ids:
+            return
+        recipients = list(
+            EstablishmentMembership.objects.filter(
+                id__in=recipient_membership_ids,
+                establishment_id=execution.establishment_id,
+                status=EstablishmentMembership.Status.ACTIVE,
+            ).select_related("user")
+        )
+        if not recipients:
+            return
+
+        def idempotency_key_for_recipient(recipient_membership_id: uuid.UUID) -> str:
+            return build_action_plan_execution_updated_idempotency_key(
+                execution_id=execution.id,
+                save_id=save_id,
+                recipient_membership_id=recipient_membership_id,
+            )
+
+        create_in_app_notifications_for_recipients(
+            establishment_id=execution.establishment_id,
+            recipient_memberships=recipients,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_UPDATED,
+            subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+            subject_id=execution.id,
+            priority=Notification.Priority.INFO,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            exclude_actor_if_recipient=True,
+            skip_subject_visibility_recheck=True,
+            idempotency_key_for_recipient=idempotency_key_for_recipient,
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_UPDATED,
         subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
         subject_id=execution_id,
     )

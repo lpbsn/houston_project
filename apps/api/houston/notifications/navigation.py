@@ -106,6 +106,33 @@ def _resolve_comment_notification_url(
     return _build_comment_deep_link_path(parent_path, comment_id)
 
 
+def _resolve_action_plan_execution_updated_url(
+    *,
+    notification: Notification,
+    subject_id: uuid.UUID,
+) -> str:
+    from houston.action_plans.models import ActionPlanExecution
+    from houston.action_plans.permissions import action_plan_execution_readable_to_membership
+
+    execution = (
+        ActionPlanExecution.objects.filter(
+            id=subject_id,
+            establishment_id=notification.establishment_id,
+        )
+        .select_related("created_by", "pilot_business_unit")
+        .prefetch_related("assignees", "execution_teams__business_unit", "task_executions")
+        .first()
+    )
+    if execution is None:
+        return "/execution"
+    if action_plan_execution_readable_to_membership(
+        notification.recipient_membership,
+        execution,
+    ):
+        return f"/action-plans/executions/{subject_id}"
+    return "/execution"
+
+
 def resolve_notification_url(notification: Notification) -> str | None:
     subject_type = notification.subject_type
     subject_id = notification.subject_id
@@ -113,6 +140,11 @@ def resolve_notification_url(notification: Notification) -> str | None:
     if subject_type == Notification.SubjectType.ACTION_PLAN_EXECUTION:
         if notification.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_PENDING_VALIDATION:
             return _build_execution_validation_focus_path(subject_id)
+        if notification.event_key == Notification.EventKey.ACTION_PLAN_EXECUTION_UPDATED:
+            return _resolve_action_plan_execution_updated_url(
+                notification=notification,
+                subject_id=subject_id,
+            )
         return f"/action-plans/executions/{subject_id}"
 
     if subject_type == Notification.SubjectType.SIGNAL:

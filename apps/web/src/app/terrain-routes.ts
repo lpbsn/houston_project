@@ -60,6 +60,7 @@ const OPERATIONAL_ROUTE_KINDS = new Set<AppRoute['kind']>([
   'action-plan-template-detail',
   'action-plan-template-edit',
   'action-plan-execution-detail',
+  'action-plan-execution-edit',
   'chat-conversation-detail',
   'team-member-detail',
 ])
@@ -104,6 +105,7 @@ export function requiresActiveMembership(route: AppRoute): boolean {
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
+    route.kind === 'action-plan-execution-edit' ||
     route.kind === 'chat-conversation-detail' ||
     route.kind === 'team-member-detail'
   ) {
@@ -125,6 +127,7 @@ export function usesTerrainShell(route: AppRoute): boolean {
     route.kind === 'action-plan-template-detail' ||
     route.kind === 'action-plan-template-edit' ||
     route.kind === 'action-plan-execution-detail' ||
+    route.kind === 'action-plan-execution-edit' ||
     route.kind === 'chat-conversation-detail' ||
     route.kind === 'team-member-detail'
   ) {
@@ -353,6 +356,17 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
     }
   }
 
+  if (route.kind === 'action-plan-execution-edit') {
+    return {
+      topbarVariant: 'detail',
+      title: 'Modifier le plan',
+      backPath: `/action-plans/executions/${route.executionId}`,
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
+    }
+  }
+
   throw new Error('getTerrainRouteConfig called for a non-terrain route')
 }
 
@@ -395,6 +409,10 @@ export function getTerrainContentKey(route: AppRoute): string {
 
   if (route.kind === 'action-plan-execution-detail') {
     return `action-plan-execution-detail-${route.executionId}`
+  }
+
+  if (route.kind === 'action-plan-execution-edit') {
+    return `action-plan-execution-edit-${route.executionId}`
   }
 
   if (route.kind === 'chat-conversation-detail') {

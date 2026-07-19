@@ -327,4 +327,8 @@ def test_push_v1_event_keys_includes_chat():
         Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED_FROM_SIGNAL
         in push_constants.PUSH_V1_EVENT_KEYS
     )
-    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 15
+    assert (
+        Notification.EventKey.ACTION_PLAN_EXECUTION_UPDATED
+        in push_constants.PUSH_V1_EVENT_KEYS
+    )
+    assert len(push_constants.PUSH_V1_EVENT_KEYS) == 16

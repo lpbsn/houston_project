@@ -398,6 +398,36 @@ def can_create_staff_feed_execution_plan(
     return True
 
 
+def can_update_action_plan_execution(
+    membership: EstablishmentMembership | None,
+    execution: ActionPlanExecution,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=execution.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    if not action_plan_execution_readable_to_membership(membership, execution):
+        return False
+    if membership.role in ADMIN_ROLES:
+        return True
+    if manages_pilot_pole(membership, execution):
+        return True
+    return execution.created_by_id == membership.id
+
+
+def can_update_action_plan_execution_content(
+    membership: EstablishmentMembership | None,
+    execution: ActionPlanExecution,
+) -> bool:
+    """True when the actor may open/save content edit (requires in_progress)."""
+    if execution.status != ActionPlanExecution.Status.IN_PROGRESS:
+        return False
+    return can_update_action_plan_execution(membership, execution)
+
+
 def can_mark_action_plan_execution_done(
     membership: EstablishmentMembership | None,
     execution: ActionPlanExecution,

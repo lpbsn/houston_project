@@ -24,6 +24,7 @@ from houston.action_plans.permissions import (
     can_manage_action_plan_schedule,
     can_mark_action_plan_execution_done,
     can_reopen_action_plan_execution,
+    can_update_action_plan_execution_content,
     can_use_action_plan,
     can_validate_action_plan_execution,
     is_pilot_pole_assignee,
@@ -89,6 +90,7 @@ def build_action_plan_execution_permission_hints(
         "can_validate": can_validate_action_plan_execution(membership, execution),
         "can_reopen": can_reopen_action_plan_execution(membership, execution),
         "can_cancel": can_cancel,
+        "can_update": can_update_action_plan_execution_content(membership, execution),
         "is_pilot_pole_assignee": is_pilot_pole_assignee(membership, execution),
         "can_pin": in_feed and not is_scheduled,
     }

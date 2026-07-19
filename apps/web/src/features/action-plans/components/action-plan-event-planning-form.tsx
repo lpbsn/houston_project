@@ -187,8 +187,13 @@ export function ActionPlanEventPlanningForm({
 
   const showAssignees = !config.hideAssignees
   const showGlobalPlanning = !draft.usePerAssigneeChronology
-  const showAssigneePlanning = draft.usePerAssigneeChronology && config.showAdvancedChronology
+  const showAssigneePlanning =
+    draft.usePerAssigneeChronology &&
+    (config.showAdvancedChronology || config.lockChronologyMode === true)
   const canToggleRepeat = config.canSchedule && showGlobalPlanning
+  const canToggleChronology =
+    config.showAdvancedChronology && config.lockChronologyMode !== true
+  const lockStart = config.lockStart === true
   const assigneeActionsEnabled = config.assigneeActionsEnabled !== false
   const mergedFieldErrors = { ...fieldErrors, ...assigneeActionErrors }
   const chronologyModeLabel = draft.usePerAssigneeChronology
@@ -218,7 +223,7 @@ export function ActionPlanEventPlanningForm({
             />
           ) : null}
 
-          {config.showAdvancedChronology ? (
+          {canToggleChronology ? (
             <TerrainSwitch
               variant="bordered"
               label="Chronologie par assigné"
@@ -256,20 +261,22 @@ export function ActionPlanEventPlanningForm({
                       <p className="text-sm font-medium text-[#1a1a1a]">
                         {assignee.displayName || 'Assigné'}
                       </p>
-                      <button
-                        type="button"
-                        className="rounded-lg p-2 text-[#E24B4A]"
-                        aria-label="Retirer l’assigné"
-                        onClick={() =>
-                          updateDraft({
-                            assignees: draft.assignees.filter(
-                              (candidate) => candidate.id !== assignee.id,
-                            ),
-                          })
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {config.canEditAssignees ? (
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-[#E24B4A]"
+                          aria-label="Retirer l’assigné"
+                          onClick={() =>
+                            updateDraft({
+                              assignees: draft.assignees.filter(
+                                (candidate) => candidate.id !== assignee.id,
+                              ),
+                            })
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
                     </div>
 
                     {config.canSchedule ? (
@@ -391,6 +398,7 @@ export function ActionPlanEventPlanningForm({
                           label="Début"
                           date={startParts.date}
                           time={startParts.time}
+                          disabled={lockStart}
                           openPicker={openPicker}
                           onOpenPickerChange={setOpenPicker}
                           onDateChange={(date) =>
@@ -471,22 +479,24 @@ export function ActionPlanEventPlanningForm({
                   </div>
                 )
               })}
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 w-full rounded-xl border-dashed"
-                onClick={() =>
-                  updateDraft({
-                    assignees: [
-                      ...draft.assignees,
-                      createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
-                    ],
-                  })
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" aria-hidden />
-                Ajouter un créneau assigné
-              </Button>
+              {config.canEditAssignees ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full rounded-xl border-dashed"
+                  onClick={() =>
+                    updateDraft({
+                      assignees: [
+                        ...draft.assignees,
+                        createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
+                      ],
+                    })
+                  }
+                >
+                  <Plus className="mr-2 h-4 w-4" aria-hidden />
+                  Ajouter un créneau assigné
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
@@ -573,6 +583,7 @@ export function ActionPlanEventPlanningForm({
                   label="Début"
                   date={draft.startDate}
                   time={draft.startTime}
+                  disabled={lockStart}
                   openPicker={openPicker}
                   onOpenPickerChange={setOpenPicker}
                   onDateChange={handleStartDateChange}

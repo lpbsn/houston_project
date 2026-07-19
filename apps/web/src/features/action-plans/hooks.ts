@@ -29,6 +29,7 @@ import {
   submitMixedActionPlanCatalog,
   unpinActionPlanExecution,
   updateActionPlan,
+  updateActionPlanExecution,
   validateActionPlanExecution,
 } from './api'
 import type {
@@ -39,6 +40,7 @@ import type {
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskSkipRequest,
   ActionPlanUseRequest,
+  PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
 } from './types'
 import { isActionPlanExecutionDetail } from './lib/action-plan-create-response'
@@ -183,6 +185,20 @@ export function useUpdateActionPlanMutation(establishmentId: string, actionPlanI
       updateActionPlan(establishmentId, actionPlanId, body),
     onSuccess: () => {
       invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
+    },
+  })
+}
+
+export function useUpdateActionPlanExecutionMutation(
+  establishmentId: string,
+  executionId: string,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PatchedActionPlanExecutionUpdateRequest) =>
+      updateActionPlanExecution(establishmentId, executionId, body),
+    onSuccess: () => {
+      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, executionId)
     },
   })
 }

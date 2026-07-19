@@ -21,12 +21,14 @@ from houston.action_plans.api.serializers import (
     ActionPlanDetailSerializer,
     ActionPlanExecutionDetailSerializer,
     ActionPlanExecutionPinStateSerializer,
+    ActionPlanExecutionUpdateRequestSerializer,
     ActionPlanListItemSerializer,
     ActionPlanMixedSubmitRequestSerializer,
     ActionPlanMixedSubmitResponseSerializer,
     ActionPlanScheduleCreateRequestSerializer,
     ActionPlanScheduleDetailSerializer,
     ActionPlanScheduleUpdateRequestSerializer,
+    ActionPlanStaleExecutionConflictSerializer,
     ActionPlanTaskCreateObservationRequestSerializer,
     ActionPlanTaskCreateObservationResponseSerializer,
     ActionPlanTaskExecutionSerializer,
@@ -42,6 +44,7 @@ from houston.action_plans.api.serializers import (
 from houston.action_plans.exceptions import (
     ActionPlanConflictError,
     ActionPlanPermissionError,
+    ActionPlanStaleExecutionError,
     ActionPlanStateError,
     ActionPlanValidationError,
     MixedSubmissionActorConflict,
@@ -49,6 +52,7 @@ from houston.action_plans.exceptions import (
     MixedSubmissionStepError,
 )
 from houston.action_plans.execution_feed import build_action_plan_execution_feed_page
+from houston.action_plans.execution_update import update_action_plan_execution
 from houston.action_plans.feed_cursor import (
     ActionPlanExecutionFeedCursorError,
     parse_action_plan_execution_feed_cursor,
@@ -238,6 +242,16 @@ def _schedule_assignee_payloads(assignees_data: list[dict]) -> list[dict]:
 
 
 def _action_plan_conflict_response(exc: ActionPlanConflictError) -> Response:
+    if isinstance(exc, ActionPlanStaleExecutionError):
+        return Response(
+            ActionPlanStaleExecutionConflictSerializer(
+                {
+                    "code": ActionPlanStaleExecutionError.error_code,
+                    "detail": str(exc) or "This execution was modified by another user.",
+                }
+            ).data,
+            status=status.HTTP_409_CONFLICT,
+        )
     if exc.active_execution_id is not None:
         return Response(
             ActionPlanActiveExecutionConflictSerializer(
@@ -249,7 +263,13 @@ def _action_plan_conflict_response(exc: ActionPlanConflictError) -> Response:
             ).data,
             status=status.HTTP_409_CONFLICT,
         )
-    return _action_plan_error_response(exc)
+    return Response(
+        {
+            "code": getattr(exc, "error_code", "conflict"),
+            "detail": str(exc) or "Conflict.",
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
 
 
 def _is_catalog_create(*, validated_data: dict, membership) -> bool:
@@ -758,6 +778,61 @@ class ActionPlanExecutionDetailView(EstablishmentScopedActionPlanMixin, APIView)
         execution = get_action_plan_execution_for_detail(
             membership=membership,
             execution_id=execution_uuid,
+        )
+        if execution is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        payload = serialize_execution_detail(execution, membership=membership)
+        return Response(ActionPlanExecutionDetailSerializer(payload).data)
+
+    @extend_schema(
+        tags=["action-plans"],
+        request=ActionPlanExecutionUpdateRequestSerializer,
+        responses={
+            200: ActionPlanExecutionDetailSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ActionPlanStaleExecutionConflictSerializer),
+        },
+    )
+    def patch(self, request, establishment_id, execution_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        execution_uuid = uuid.UUID(str(execution_id))
+        execution = get_action_plan_execution_for_detail(
+            membership=membership,
+            execution_id=execution_uuid,
+        )
+        if execution is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ActionPlanExecutionUpdateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        kwargs = {
+            "execution_id": execution.id,
+            "actor": membership,
+            "expected_updated_at": data["expected_updated_at"],
+        }
+        for key in ("title", "description", "requires_validation", "assignees", "pending_tasks"):
+            if key in data:
+                kwargs[key] = data[key]
+        if "end_at" in data:
+            kwargs["end_at"] = data["end_at"]
+
+        try:
+            update_action_plan_execution(**kwargs)
+        except ActionPlanConflictError as exc:
+            return _action_plan_conflict_response(exc)
+        except (ActionPlanPermissionError, ActionPlanValidationError, ActionPlanStateError) as exc:
+            return _action_plan_error_response(exc)
+
+        execution = get_action_plan_execution_for_detail(
+            membership=membership,
+            execution_id=execution.id,
         )
         if execution is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)

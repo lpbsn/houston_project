@@ -23,6 +23,7 @@ type PlanningDateTimeRowProps = {
   time: string
   hideTime?: boolean
   hideDate?: boolean
+  disabled?: boolean
   openPicker: PlanningPickerTarget
   onOpenPickerChange: (target: PlanningPickerTarget) => void
   onDateChange: (date: string) => void
@@ -40,6 +41,7 @@ export function PlanningDateTimeRow({
   time,
   hideTime = false,
   hideDate = false,
+  disabled = false,
   openPicker,
   onOpenPickerChange,
   onDateChange,
@@ -49,10 +51,13 @@ export function PlanningDateTimeRow({
   pickerFooter,
   labelAddon,
 }: PlanningDateTimeRowProps) {
-  const dateActive = openPicker?.rowId === rowId && openPicker.part === 'date'
-  const timeActive = openPicker?.rowId === rowId && openPicker.part === 'time'
+  const dateActive = !disabled && openPicker?.rowId === rowId && openPicker.part === 'date'
+  const timeActive = !disabled && openPicker?.rowId === rowId && openPicker.part === 'time'
 
   function togglePicker(part: 'date' | 'time') {
+    if (disabled) {
+      return
+    }
     if (openPicker?.rowId === rowId && openPicker.part === part) {
       onOpenPickerChange(null)
       return
@@ -68,12 +73,13 @@ export function PlanningDateTimeRow({
       <div className="flex items-center justify-between gap-3 px-3 py-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-sm text-[#1a1a1a]">{label}</span>
-          {labelAddon}
+          {disabled ? null : labelAddon}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!hideDate ? (
             <PlanningPill
               active={dateActive}
+              disabled={disabled}
               aria-label={`${label} — date`}
               onClick={() => togglePicker('date')}
             >
@@ -83,6 +89,7 @@ export function PlanningDateTimeRow({
           {!hideTime ? (
             <PlanningPill
               active={timeActive}
+              disabled={disabled}
               aria-label={`${label} — heure`}
               onClick={() => togglePicker('time')}
             >

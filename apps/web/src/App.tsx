@@ -5,6 +5,7 @@ import { useAppRoute } from '@/app/app-routes'
 import {
   LazyActionPlanCreatePage,
   LazyActionPlanExecutionDetailPage,
+  LazyActionPlanExecutionEditPage,
   LazyActionPlanHubPage,
   LazyActionPlanTemplateDetailPage,
   LazyChatConversationPage,
@@ -71,6 +72,7 @@ import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-ac
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
+import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
 import { ActionPlanTemplateDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-template-detail-topbar-trailing'
 
 function App() {
@@ -188,6 +190,8 @@ function App() {
 
   const templateDetailActionPlanId =
     route.kind === 'action-plan-template-detail' ? route.actionPlanId : null
+  const executionDetailId =
+    route.kind === 'action-plan-execution-detail' ? route.executionId : null
   const staticRoutePath = route.kind === 'static' ? route.path : null
 
   const terrainTopbarTrailing = useMemo(() => {
@@ -210,12 +214,24 @@ function App() {
       )
     }
 
+    if (route.kind === 'action-plan-execution-detail' && executionDetailId) {
+      return (
+        <ActionPlanExecutionDetailTopbarTrailing
+          key={executionDetailId}
+          establishmentId={establishmentId}
+          executionId={executionDetailId}
+          onNavigate={navigate}
+        />
+      )
+    }
+
     return (
       <NotificationCenter establishmentId={establishmentId} onNavigate={navigate} />
     )
   }, [
     auth.hasOperationalAccess,
     establishmentId,
+    executionDetailId,
     navigate,
     route.kind,
     staticRoutePath,
@@ -319,6 +335,10 @@ function App() {
 
     if (route.kind === 'action-plan-execution-detail') {
       return <LazyActionPlanExecutionDetailPage executionId={route.executionId} />
+    }
+
+    if (route.kind === 'action-plan-execution-edit') {
+      return <LazyActionPlanExecutionEditPage executionId={route.executionId} />
     }
 
     if (route.kind === 'team-member-detail') {
