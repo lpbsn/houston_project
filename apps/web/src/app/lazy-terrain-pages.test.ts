@@ -7,6 +7,7 @@ const LAZY_EXPORTS = [
   'LazySignalFeedPage',
   'LazySignalDetailPage',
   'LazyExecutionFeedPage',
+  'LazyExecutionUpcomingPage',
   'LazyChatPage',
   'LazyChatConversationPage',
   'LazyProfilePage',

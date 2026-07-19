@@ -4,6 +4,7 @@ import { Check, X } from 'lucide-react'
 import type { ActionPlanFeedSidebarState } from '@/features/execution/lib/action-plan-execution-feed-card-display'
 import {
   actionPlanFeedOverdueBgClassName,
+  actionPlanFeedScheduledBgClassName,
   actionPlanFeedTealBgClassName,
   terrain,
 } from '@/lib/terrain-styles'
@@ -19,17 +20,25 @@ function getSidebarAriaLabel(state: ActionPlanFeedSidebarState): string {
   switch (state.variant) {
     case 'countdown':
       return `Échéance dans ${state.value}`
+    case 'start_countdown':
+      return `Début dans ${state.value}`
     case 'no_deadline':
       return 'Sans échéance'
+    case 'no_start':
+      return 'Sans date de début'
     case 'overdue':
       return `Échéance dépassée de ${state.value}`
   }
 }
 
 function getSidebarBackgroundClassName(state: ActionPlanFeedSidebarState): string {
-  return state.variant === 'overdue'
-    ? actionPlanFeedOverdueBgClassName
-    : actionPlanFeedTealBgClassName
+  if (state.variant === 'overdue') {
+    return actionPlanFeedOverdueBgClassName
+  }
+  if (state.variant === 'start_countdown' || state.variant === 'no_start') {
+    return actionPlanFeedScheduledBgClassName
+  }
+  return actionPlanFeedTealBgClassName
 }
 
 function SidebarIconCircle({ children }: { children: ReactNode }) {
@@ -85,7 +94,9 @@ export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanF
       )}
       aria-label={getSidebarAriaLabel(state)}
     >
-      {state.variant === 'countdown' || state.variant === 'overdue' ? (
+      {state.variant === 'countdown' ||
+      state.variant === 'overdue' ||
+      state.variant === 'start_countdown' ? (
         <>
           <span className="text-[10px] font-medium uppercase leading-none tracking-wide">
             {state.prefix}
@@ -93,7 +104,7 @@ export function ActionPlanFeedSidebar({ state, variant, className }: ActionPlanF
           <span className="mt-0.5 text-xl font-bold leading-none tabular-nums">{state.value}</span>
         </>
       ) : null}
-      {state.variant === 'no_deadline' ? (
+      {state.variant === 'no_deadline' || state.variant === 'no_start' ? (
         <SidebarIconCircle>
           <span className="text-lg font-bold leading-none">∞</span>
         </SidebarIconCircle>

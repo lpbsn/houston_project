@@ -50,10 +50,14 @@ export const commentThread = {
 /** Action plan execution feed — teal accent (#3A7A96). */
 export const ACTION_PLAN_FEED_TEAL = '#3A7A96'
 export const ACTION_PLAN_FEED_PENDING_BG = '#FCE9B8'
+/** Scheduled action plan execution — brown accent (#8B6914). */
+export const ACTION_PLAN_FEED_SCHEDULED = '#8B6914'
 export const actionPlanFeedTealBgClassName = 'bg-[#3A7A96]'
 export const actionPlanFeedPendingBgClassName = 'bg-[#FCE9B8]'
 export const actionPlanFeedTealTextClassName = 'text-[#3A7A96]'
 export const actionPlanFeedOverdueBgClassName = 'bg-[#E24B4A]'
+export const actionPlanFeedScheduledBgClassName = 'bg-[#8B6914]'
+export const actionPlanFeedScheduledBorderClassName = 'border-l-[#8B6914]'
 
 /** Feed card reporter avatar (signal feed maquette). */
 export const terrainFeedAvatar = 'bg-[#3A7A96] text-white'
@@ -75,7 +79,7 @@ export const actionPlanExecutionDetailTaskDoneClassName = 'text-[#2D9C75]'
 export const actionPlanExecutionDetailLifecycleButtonClassName =
   'inline-flex min-h-11 flex-1 items-center justify-center rounded-full px-3 text-[14px] font-semibold text-white outline-none select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2'
 
-export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue' | 'teal'
+export type HoustonBadgeVariant = 'red' | 'amber' | 'gray' | 'green' | 'blue' | 'teal' | 'brown'
 
 export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   red: 'bg-[#E24B4A] text-white',
@@ -84,6 +88,7 @@ export const houstonBadgeVariants: Record<HoustonBadgeVariant, string> = {
   green: 'bg-[#1D9E75] text-white',
   blue: 'bg-[#1B4FD8] text-white',
   teal: terrainInProgress.badgeSolid,
+  brown: 'bg-[#8B6914] text-white',
 }
 
 export type TerrainSectionDotVariant =
@@ -93,6 +98,7 @@ export type TerrainSectionDotVariant =
   | 'warning'
   | 'success'
   | 'teal'
+  | 'brown'
 
 export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string> = {
   danger: 'bg-[#E24B4A]',
@@ -101,6 +107,7 @@ export const terrainSectionDotVariants: Record<TerrainSectionDotVariant, string>
   warning: 'bg-[#EF9F27]',
   success: 'bg-[#1D9E75]',
   teal: 'bg-[#3A7A96]',
+  brown: 'bg-[#8B6914]',
 }
 
 export function terrainCardClassName(className?: string) {

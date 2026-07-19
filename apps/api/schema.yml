@@ -785,6 +785,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/action-plan-execution-upcoming/:
+    get:
+      operationId: v1_establishments_action_plan_execution_upcoming_retrieve
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque pagination cursor from a previous response next_cursor.
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: view_mode
+        schema:
+          type: string
+          enum:
+          - general
+          - personal
+        required: true
+      tags:
+      - action-plans
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionFeedResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/:
     get:
       operationId: v1_establishments_action_plan_executions_retrieve
@@ -6195,6 +6251,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActionPlanExecutionFeedAssignee'
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
         end_at:
           type: string
           format: date-time
@@ -6233,6 +6293,7 @@ components:
       - pilot_business_unit
       - requires_validation
       - signal_summary
+      - start_at
       - status
       - task_count
       - task_executions
@@ -6255,6 +6316,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActionPlanExecutionFeedItemWrapper'
+        scheduled_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionFeedItemWrapper'
+        scheduled_count:
+          type: integer
         next_cursor:
           type: string
           nullable: true
@@ -6264,6 +6331,8 @@ components:
       - has_more
       - items
       - next_cursor
+      - scheduled_count
+      - scheduled_items
     ActionPlanExecutionFeedTaskPreview:
       type: object
       properties:

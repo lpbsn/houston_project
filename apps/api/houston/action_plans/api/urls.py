@@ -15,6 +15,7 @@ from houston.action_plans.api.views import (
     ActionPlanExecutionTaskMarkPendingView,
     ActionPlanExecutionTaskSkipView,
     ActionPlanExecutionUnpinView,
+    ActionPlanExecutionUpcomingView,
     ActionPlanExecutionValidateView,
     ActionPlanListCreateView,
     ActionPlanMixedSubmitView,
@@ -77,6 +78,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/action-plan-execution-feed/",
         ActionPlanExecutionFeedView.as_view(),
         name="action-plan-execution-feed",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/action-plan-execution-upcoming/",
+        ActionPlanExecutionUpcomingView.as_view(),
+        name="action-plan-execution-upcoming",
     ),
     path(
         "establishments/<uuid:establishment_id>/action-plan-executions/<uuid:execution_id>/",

@@ -78,6 +78,11 @@
     },
     {
       "subject_type": "action_plan_execution",
+      "reason": "action_plan_execution.started",
+      "dispatch": "by_subject_type"
+    },
+    {
+      "subject_type": "action_plan_execution",
       "reason": "action_plan_execution.done",
       "dispatch": "by_subject_type"
     },

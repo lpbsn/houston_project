@@ -25,6 +25,9 @@ function getBadgeVariant(status: string) {
   if (status === 'in_progress') {
     return 'teal'
   }
+  if (status === 'scheduled') {
+    return 'brown'
+  }
   return 'blue'
 }
 

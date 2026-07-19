@@ -12,6 +12,7 @@ from houston.action_plans.constants import (
     CATALOG_STATUS_ACTIVE,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_SCHEDULED,
     RECURRENCE_DAY_FRIDAY,
     RECURRENCE_DAY_MONDAY,
     RECURRENCE_DAY_SATURDAY,
@@ -195,7 +196,9 @@ def _existing_execution(
             use_shared_chronology=False,
         )
     if active_only:
-        queryset = queryset.filter(status=EXECUTION_STATUS_IN_PROGRESS)
+        queryset = queryset.filter(
+            status__in=(EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS),
+        )
     return queryset.first()
 
 

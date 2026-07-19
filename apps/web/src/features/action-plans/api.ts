@@ -16,6 +16,7 @@ import type {
   ActionPlanExecutionFeedItem,
   ActionPlanExecutionFeedItemWrapper,
   ActionPlanExecutionFeedResponse,
+  ActionPlanExecutionUpcomingResponse,
   ActionPlanExecutionPinState,
   ActionPlanListItem,
   ActionPlanMixedSubmitRequest,
@@ -45,6 +46,8 @@ export const actionPlansQueryKeys = {
     ['action-plans', 'detail', establishmentId, actionPlanId] as const,
   executionFeed: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
     ['action-plans', 'action-plan-execution-feed', establishmentId, viewMode] as const,
+  executionUpcoming: (establishmentId: string, viewMode: ActionPlanExecutionFeedViewMode) =>
+    ['action-plans', 'action-plan-execution-upcoming', establishmentId, viewMode] as const,
   executionDetail: (establishmentId: string, executionId: string) =>
     ['action-plans', 'execution-detail', establishmentId, executionId] as const,
 }
@@ -159,6 +162,32 @@ export async function fetchActionPlanExecutionFeed(
     { refreshable: true },
   )
   return assertActionPlanData<ActionPlanExecutionFeedResponse>(result)
+}
+
+export async function fetchActionPlanExecutionUpcoming(
+  establishmentId: string,
+  viewMode: ActionPlanExecutionFeedViewMode,
+  options: { cursor?: string; pageSize?: number } = {},
+): Promise<ActionPlanExecutionUpcomingResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/action-plan-execution-upcoming/',
+        {
+          params: {
+            ...establishmentPath(establishmentId),
+            query: {
+              view_mode: viewMode,
+              ...(options.cursor ? { cursor: options.cursor } : {}),
+              ...(options.pageSize ? { page_size: options.pageSize } : {}),
+            },
+          },
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionUpcomingResponse>(result)
 }
 
 export async function fetchActionPlanCatalog(

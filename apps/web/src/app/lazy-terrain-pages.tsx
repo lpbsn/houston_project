@@ -24,6 +24,12 @@ export const LazyExecutionFeedPage = lazy(() =>
   })),
 )
 
+export const LazyExecutionUpcomingPage = lazy(() =>
+  import('@/features/execution/pages/execution-upcoming-page').then((module) => ({
+    default: module.ExecutionUpcomingPage,
+  })),
+)
+
 export const LazyChatPage = lazy(() =>
   import('@/features/chat/pages/chat-page').then((module) => ({
     default: module.ChatPage,

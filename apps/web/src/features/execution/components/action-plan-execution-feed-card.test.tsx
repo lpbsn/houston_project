@@ -27,6 +27,7 @@ function buildFeedItem(
     ],
     signal_summary: null,
     assignees: [{ membership_id: 'member-1', display_name: 'Alice Martin' }],
+    start_at: null,
     end_at: '2026-07-10T16:00:00Z',
     is_overdue: false,
     task_count: 4,
@@ -176,6 +177,67 @@ describe('ActionPlanExecutionFeedCard', () => {
 
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(screen.queryByText(/\d+\/\d+/)).toBeNull()
+  })
+
+  it('shows scheduled layout with DÉBUT countdown and Planifiée status', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({
+          status: 'scheduled',
+          start_at: '2026-07-13T12:00:00Z',
+          end_at: null,
+          pilot_business_unit: {
+            id: 'bu-maint',
+            specific_name: 'Maintenance',
+            instance_description: '',
+            active: true,
+            generic: {
+              key: 'maintenance',
+              label: 'Maintenance',
+              description: '',
+              unit_type: 'dedicated',
+            },
+          },
+          signal_summary: {
+            affected_business_unit_key: 'restaurant',
+            affected_business_unit_label: 'Restaurant',
+            responsible_business_unit_key: 'maintenance',
+            responsible_business_unit_label: 'Maintenance',
+            activity_subject_normalized_name: 'equipements',
+            activity_subject_label: 'Équipements d’exploitation',
+          },
+          permission_hints: {
+            can_mark_done: false,
+            can_validate: false,
+            can_reopen: false,
+            can_cancel: true,
+            is_pilot_pole_assignee: false,
+            can_pin: false,
+          },
+        })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expect(screen.getByText('DÉBUT')).toBeTruthy()
+    expect(screen.getByText('3j')).toBeTruthy()
+    expect(screen.getByText('Planifiée')).toBeTruthy()
+    expect(screen.getByLabelText('Début dans 3j')).toBeTruthy()
+    expect(document.querySelector('.bg-\\[\\#8B6914\\]')).toBeTruthy()
+    expect(screen.queryByRole('progressbar')).toBeNull()
+
+    const pilotBadge = screen.getByText('Maintenance', { exact: true })
+    const classificationBadge = screen.getByText('Maintenance · Équipements d’exploitation')
+    const affectedLine = screen.getByText('Concerné : Restaurant')
+    const badgesRow = pilotBadge.parentElement
+    const headerRow = badgesRow?.parentElement
+
+    expect(badgesRow?.className).toContain('items-center')
+    expect(badgesRow?.contains(classificationBadge)).toBe(true)
+    expect(badgesRow?.contains(affectedLine)).toBe(false)
+    expect(headerRow?.className).toContain('justify-between')
+    expect(headerRow?.contains(affectedLine)).toBe(false)
+    expect(affectedLine.parentElement?.contains(headerRow as Node)).toBe(true)
   })
 
   it('highlights overdue deadline on pending validation cards', () => {

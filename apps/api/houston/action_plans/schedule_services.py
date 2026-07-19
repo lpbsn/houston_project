@@ -13,6 +13,7 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    EXECUTION_STATUS_SCHEDULED,
     RECURRENCE_DAYS,
     SCHEDULE_STATUS_ACTIVE,
     SCHEDULE_STATUS_INACTIVE,
@@ -118,6 +119,10 @@ def classify_schedule_linked_execution(
         return "active_started"
     if execution.status in _TERMINAL_EXECUTION_STATUSES:
         return "terminal"
+    if execution.status == EXECUTION_STATUS_SCHEDULED:
+        if resolved_now >= execution.start_at:
+            return "active_started"
+        return "future_not_started"
     if execution.status != EXECUTION_STATUS_IN_PROGRESS:
         return "terminal"
     if resolved_now >= execution.start_at:
@@ -133,7 +138,7 @@ def get_active_started_execution_for_schedule(
     resolved_now = now or timezone.now()
     return (
         schedule.executions.filter(
-            status=EXECUTION_STATUS_IN_PROGRESS,
+            status__in=(EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS),
             start_at__lte=resolved_now,
         )
         .only("id", "status", "start_at", "action_plan_schedule_id")
@@ -234,7 +239,9 @@ def reactivate_schedule_future_execution(
         schedule_assignee=schedule_assignee,
     )
     now = timezone.now()
-    execution.status = EXECUTION_STATUS_IN_PROGRESS
+    from houston.action_plans.services import initial_execution_status
+
+    execution.status = initial_execution_status(start_at=occurrence_start, now=now)
     execution.canceled_at = None
     execution.cancel_origin = None
     execution.start_at = occurrence_start
@@ -671,16 +678,21 @@ def _deactivate_schedule_core(
     schedule: ActionPlanSchedule,
     allow_active_started: bool = False,
 ) -> ActionPlanSchedule:
+    now = timezone.now()
     if not allow_active_started:
-        active_execution = get_active_started_execution_for_schedule(schedule=schedule)
+        active_execution = get_active_started_execution_for_schedule(
+            schedule=schedule,
+            now=now,
+        )
         if active_execution is not None:
             raise ActionPlanConflictError(
                 "Cannot deactivate schedule while an execution is in progress.",
                 active_execution_id=active_execution.id,
             )
 
-    now = timezone.now()
-    for execution in schedule.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS):
+    for execution in schedule.executions.filter(
+        status__in=(EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS),
+    ):
         if classify_schedule_linked_execution(execution=execution, now=now) == (
             "future_not_started"
         ):

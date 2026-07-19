@@ -30,6 +30,7 @@ function buildPlanFeedWrapper(
       involved_poles: [],
       signal_summary: null,
       assignees: [{ membership_id: 'member-1', display_name: 'Alice' }],
+      start_at: null,
       end_at: null,
       is_overdue: false,
       task_count: 0,
@@ -97,7 +98,7 @@ vi.mock('@/features/action-plans/hooks/use-action-plan-execution-feed-quick-acti
   }),
 }))
 
-function renderExecutionFeedPage() {
+function renderExecutionFeedPage(props: { onNavigate?: (pathname: string) => void } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -106,7 +107,7 @@ function renderExecutionFeedPage() {
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(ExecutionFeedPage, {}),
+      createElement(ExecutionFeedPage, props),
     ),
   )
 }
@@ -335,5 +336,76 @@ describe('ExecutionFeedPage plan feed', () => {
     renderExecutionFeedPage()
 
     expect(screen.getByRole('button', { name: 'Chargement…' })).toBeTruthy()
+  })
+
+  it('renders Planifiées from scheduled_items and À venir nav with scheduled_count', () => {
+    const onNavigate = vi.fn()
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [buildPlanFeedWrapper('plan-active', 'Plan actif')],
+              scheduled_items: [
+                buildPlanFeedWrapper('plan-scheduled', 'Plan programmé', {
+                  status: 'scheduled',
+                  start_at: '2026-07-20T09:00:00Z',
+                  permission_hints: {
+                    can_mark_done: false,
+                    can_validate: false,
+                    can_reopen: false,
+                    can_cancel: true,
+                    is_pilot_pole_assignee: false,
+                    can_pin: false,
+                  },
+                }),
+              ],
+              scheduled_count: 4,
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ onNavigate })
+
+    expect(screen.getByRole('button', { name: 'À venir, 4' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Replier la section Planifiées' })).toBeTruthy()
+    expect(screen.getByText('Plan programmé')).toBeTruthy()
+    expect(screen.getByText('Planifiée')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'À venir, 4' }))
+    expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
+  })
+
+  it('keeps À venir nav with count 0 when feed and scheduled preview are empty', () => {
+    const onNavigate = vi.fn()
+    planFeedQueryMock.mockReturnValue(
+      buildPlanFeedQueryState({
+        data: {
+          pages: [
+            {
+              items: [],
+              scheduled_items: [],
+              scheduled_count: 0,
+              next_cursor: null,
+              has_more: false,
+            },
+          ],
+        },
+      }),
+    )
+
+    renderExecutionFeedPage({ onNavigate })
+
+    expect(screen.getByText('Aucune exécution')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'À venir, 0' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Replier la section Planifiées' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Déplier la section Planifiées' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'À venir, 0' }))
+    expect(onNavigate).toHaveBeenCalledWith('/execution/upcoming')
   })
 })

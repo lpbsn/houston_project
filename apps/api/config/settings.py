@@ -212,6 +212,10 @@ CELERY_BEAT_SCHEDULE = {
             minute="*/1",
         ),
     },
+    "promote-scheduled-action-plan-executions": {
+        "task": "houston.action_plans.tasks.promote_scheduled_action_plan_executions_task",
+        "schedule": crontab(minute="*/1"),
+    },
 }
 
 # Auth rate-limit scopes (DRF ScopedRateThrottle); see DEFAULT_THROTTLE_RATES below.

@@ -11,6 +11,7 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_SCHEDULED,
 )
 from houston.action_plans.exceptions import (
     ActionPlanConflictError,
@@ -121,7 +122,7 @@ def test_update_cancels_future_execution_outside_recurrence(
         staff_membership,
         business_unit,
     )
-    future_execution = schedule.executions.filter(status="in_progress").first()
+    future_execution = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     assert future_execution is not None
     future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
     future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
@@ -152,7 +153,11 @@ def test_update_cancels_future_execution_outside_recurrence(
         recurrence_days=recurrence_days_for_visible_today(),
     )
     future_execution.refresh_from_db()
-    assert future_execution.status == EXECUTION_STATUS_IN_PROGRESS
+    from houston.action_plans.services import initial_execution_status
+
+    assert future_execution.status == initial_execution_status(
+        start_at=future_execution.start_at,
+    )
     assert future_execution.canceled_at is None
     assert future_execution.cancel_origin is None
     assert future_execution.occurrence_date == occurrence_date
@@ -171,7 +176,7 @@ def test_manual_cancel_future_stays_canceled_on_schedule_patch(
         staff_membership,
         business_unit,
     )
-    future_execution = schedule.executions.filter(status="in_progress").first()
+    future_execution = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     assert future_execution is not None
     future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
     future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
@@ -212,7 +217,7 @@ def test_manual_cancel_future_stays_canceled_on_materialize(
         staff_membership,
         business_unit,
     )
-    future_execution = schedule.executions.filter(status="in_progress").first()
+    future_execution = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     assert future_execution is not None
     future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
     future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
@@ -248,17 +253,23 @@ def test_update_syncs_future_window_without_changing_occurrence_date(
         business_unit,
     )
     future_execution = (
-        schedule.executions.filter(status="in_progress", start_at__gt=timezone.now())
+        schedule.executions.filter(
+            status=EXECUTION_STATUS_SCHEDULED,
+            start_at__gt=timezone.now(),
+        )
         .order_by("occurrence_date")
         .first()
     )
     if future_execution is None:
-        future_execution = schedule.executions.filter(status="in_progress").first()
+        future_execution = schedule.executions.filter(
+            status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+        ).first()
         future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
         future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
         future_execution.visible_from = future_execution.start_at - timezone.timedelta(hours=1)
+        future_execution.status = EXECUTION_STATUS_SCHEDULED
         future_execution.save(
-            update_fields=["start_at", "end_at", "visible_from", "updated_at"],
+            update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
         )
 
     original_occurrence_date = future_execution.occurrence_date
@@ -308,7 +319,7 @@ def test_deactivate_blocks_active_started_execution(
         staff_membership,
         business_unit,
     )
-    active = schedule.executions.filter(status="in_progress").first()
+    active = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     active.start_at = timezone.now() - timezone.timedelta(minutes=5)
     active.end_at = timezone.now() + timezone.timedelta(hours=1)
     active.visible_from = active.start_at - timezone.timedelta(hours=1)
@@ -317,6 +328,37 @@ def test_deactivate_blocks_active_started_execution(
     with pytest.raises(ActionPlanConflictError) as exc_info:
         deactivate_action_plan_schedule(schedule=schedule, actor=owner_membership)
     assert exc_info.value.active_execution_id == active.id
+
+
+def test_deactivate_blocks_overdue_scheduled_execution(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    overdue = schedule.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
+    assert overdue is not None
+    overdue.status = EXECUTION_STATUS_SCHEDULED
+    overdue.start_at = timezone.now() - timezone.timedelta(minutes=5)
+    overdue.end_at = timezone.now() + timezone.timedelta(hours=1)
+    overdue.visible_from = overdue.start_at - timezone.timedelta(hours=1)
+    overdue.save(
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+    )
+
+    with pytest.raises(ActionPlanConflictError) as exc_info:
+        deactivate_action_plan_schedule(schedule=schedule, actor=owner_membership)
+    assert exc_info.value.active_execution_id == overdue.id
+    overdue.refresh_from_db()
+    assert overdue.status == EXECUTION_STATUS_SCHEDULED
 
 
 def test_deactivate_cancels_future_preserves_terminal(
@@ -331,16 +373,25 @@ def test_deactivate_cancels_future_preserves_terminal(
         staff_membership,
         business_unit,
     )
-    done = schedule.executions.filter(status="in_progress").first()
+    done = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     done.status = EXECUTION_STATUS_DONE
     done.save(update_fields=["status", "updated_at"])
 
-    future = schedule.executions.filter(status="in_progress").exclude(id=done.id).first()
+    future = (
+        schedule.executions.filter(
+            status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+        )
+        .exclude(id=done.id)
+        .first()
+    )
     if future is not None:
         future.start_at = timezone.now() + timezone.timedelta(days=2)
         future.end_at = future.start_at + timezone.timedelta(hours=1)
         future.visible_from = future.start_at - timezone.timedelta(hours=1)
-        future.save(update_fields=["start_at", "end_at", "visible_from", "updated_at"])
+        future.status = EXECUTION_STATUS_SCHEDULED
+        future.save(
+            update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+        )
 
     deactivate_action_plan_schedule(schedule=schedule, actor=owner_membership)
 
@@ -426,7 +477,7 @@ def test_update_materializes_missing_individual_assignee_occurrences(
     assert schedule.executions.filter(
         schedule_source_membership_id=staff_b.id,
         occurrence_date=occurrence_date,
-        status=EXECUTION_STATUS_IN_PROGRESS,
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
     ).exists()
 
 
@@ -463,7 +514,7 @@ def test_update_syncs_individual_assignee_time_override(
             }
         ],
     )
-    future_execution = schedule.executions.filter(status="in_progress").first()
+    future_execution = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     assert future_execution is not None
     future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
     future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)

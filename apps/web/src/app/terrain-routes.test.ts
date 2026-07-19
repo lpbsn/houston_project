@@ -41,6 +41,7 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'static', path: '/general/switch-establishment' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/action-plans' })).toBe(true)
     expect(usesTerrainShell({ kind: 'static', path: '/notifications-center' })).toBe(true)
+    expect(usesTerrainShell({ kind: 'static', path: '/execution/upcoming' })).toBe(true)
   })
 
   it('returns false for non-terrain routes', () => {
@@ -77,6 +78,16 @@ describe('getTerrainRouteConfig', () => {
       showBottomNav: true,
       activeNavPath: '/execution',
       mainScroll: 'hidden',
+    })
+
+    expect(getTerrainRouteConfig({ kind: 'static', path: '/execution/upcoming' })).toEqual({
+      topbarVariant: 'detail',
+      title: 'À venir',
+      backPath: '/execution',
+      showBottomNav: false,
+      activeNavPath: '/execution',
+      mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
     })
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/chat' })).toEqual({
@@ -258,6 +269,11 @@ describe('resolveTerrainTopbarShowBottomBorder', () => {
     const route = { kind: 'signal-action-create' as const, signalId: 'abc' }
     expect(resolveTerrainTopbarShowBottomBorder(route, getTerrainRouteConfig(route))).toBe(false)
   })
+
+  it('returns false for execution upcoming (no separator between topbar and pills)', () => {
+    const route = { kind: 'static' as const, path: '/execution/upcoming' as const }
+    expect(resolveTerrainTopbarShowBottomBorder(route, getTerrainRouteConfig(route))).toBe(false)
+  })
 })
 
 describe('getTerrainContentKey', () => {
@@ -265,6 +281,9 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'static', path: '/reporting' })).toBe('reporting')
     expect(getTerrainContentKey({ kind: 'static', path: '/signals' })).toBe('signals')
     expect(getTerrainContentKey({ kind: 'static', path: '/execution' })).toBe('execution')
+    expect(getTerrainContentKey({ kind: 'static', path: '/execution/upcoming' })).toBe(
+      'execution-upcoming',
+    )
     expect(getTerrainContentKey({ kind: 'static', path: '/chat' })).toBe('chat')
     expect(getTerrainContentKey({ kind: 'static', path: '/general' })).toBe('general')
     expect(getTerrainContentKey({ kind: 'static', path: '/general/switch-establishment' })).toBe(
@@ -363,6 +382,7 @@ describe('requiresActiveMembership', () => {
       '/reporting',
       '/signals',
       '/execution',
+      '/execution/upcoming',
       '/chat',
       '/general',
       '/general/switch-establishment',

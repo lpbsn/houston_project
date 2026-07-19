@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatActionPlanFeedMetaParts,
+  formatActionPlanFeedStartCountdownValue,
   formatActionPlanFeedTaskProgressLabel,
   getActionPlanFeedProgressState,
   getActionPlanFeedSidebarState,
+  getActionPlanFeedStartCountdownState,
 } from './action-plan-execution-feed-card-display'
 
 const NOW = Date.parse('2026-07-10T12:00:00Z')
@@ -77,6 +79,44 @@ describe('getActionPlanFeedSidebarState', () => {
       prefix: 'DANS',
       value: '1h',
     })
+  })
+})
+
+describe('formatActionPlanFeedStartCountdownValue', () => {
+  it.each([
+    ['days', 3 * 24 * 60 * 60 * 1000, '3j'],
+    ['hours', 7 * 60 * 60 * 1000, '7h'],
+    ['under one hour', 30 * 60 * 1000, '<1h'],
+    ['zero or past', 0, '<1h'],
+    ['negative', -60_000, '<1h'],
+  ])('formats %s remaining as %s', (_case, remainingMs, value) => {
+    expect(formatActionPlanFeedStartCountdownValue(remainingMs)).toBe(value)
+  })
+})
+
+describe('getActionPlanFeedStartCountdownState', () => {
+  it('returns DÉBUT countdown from start_at', () => {
+    expect(getActionPlanFeedStartCountdownState('2026-07-13T12:00:00Z', NOW)).toEqual({
+      variant: 'start_countdown',
+      prefix: 'DÉBUT',
+      value: '3j',
+    })
+    expect(getActionPlanFeedStartCountdownState('2026-07-10T19:00:00Z', NOW)).toEqual({
+      variant: 'start_countdown',
+      prefix: 'DÉBUT',
+      value: '7h',
+    })
+    expect(getActionPlanFeedStartCountdownState('2026-07-10T12:30:00Z', NOW)).toEqual({
+      variant: 'start_countdown',
+      prefix: 'DÉBUT',
+      value: '<1h',
+    })
+  })
+
+  it('returns no_start when start_at is absent or invalid', () => {
+    expect(getActionPlanFeedStartCountdownState(null, NOW)).toEqual({ variant: 'no_start' })
+    expect(getActionPlanFeedStartCountdownState(undefined, NOW)).toEqual({ variant: 'no_start' })
+    expect(getActionPlanFeedStartCountdownState('not-a-date', NOW)).toEqual({ variant: 'no_start' })
   })
 })
 

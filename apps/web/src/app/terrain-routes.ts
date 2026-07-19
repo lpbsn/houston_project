@@ -34,6 +34,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/reporting',
   '/signals',
   '/execution',
+  '/execution/upcoming',
   '/chat',
   '/general',
   '/general/switch-establishment',
@@ -132,6 +133,9 @@ export function usesTerrainShell(route: AppRoute): boolean {
   if (route.kind === 'static' && TERRAIN_HUB_PATHS.has(route.path)) {
     return true
   }
+  if (route.kind === 'static' && route.path === '/execution/upcoming') {
+    return true
+  }
   if (route.kind === 'static' && ACTION_PLAN_TERRAIN_PATHS.has(route.path)) {
     return true
   }
@@ -224,6 +228,18 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
       showBottomNav: true,
       activeNavPath: '/execution',
       mainScroll: 'hidden',
+    }
+  }
+
+  if (route.kind === 'static' && route.path === '/execution/upcoming') {
+    return {
+      topbarVariant: 'detail',
+      title: 'À venir',
+      backPath: '/execution',
+      showBottomNav: false,
+      activeNavPath: '/execution',
+      mainScroll: 'hidden',
+      showTopbarBottomBorder: false,
     }
   }
 
@@ -397,6 +413,8 @@ export function getTerrainContentKey(route: AppRoute): string {
         return 'signals'
       case '/execution':
         return 'execution'
+      case '/execution/upcoming':
+        return 'execution-upcoming'
       case '/chat':
         return 'chat'
       case '/general':

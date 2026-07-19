@@ -15,6 +15,7 @@ API_ROOT = Path(__file__).resolve().parents[3]
 EMITTER_SCAN_FILES: tuple[Path, ...] = (
     API_ROOT / "houston/signals/services.py",
     API_ROOT / "houston/action_plans/services.py",
+    API_ROOT / "houston/action_plans/lifecycle_promotion.py",
     API_ROOT / "houston/action_plans/materialization.py",
     API_ROOT / "houston/action_plans/schedule_services.py",
     API_ROOT / "houston/action_plans/realtime.py",

@@ -11,6 +11,7 @@ from houston.action_plans.permissions import (
     action_plan_visible_to_membership,
     can_assign_to_execution_business_unit,
     can_cancel_action_plan_execution,
+    can_cancel_scheduled_action_plan_execution,
     can_create_action_plan,
     can_create_action_plan_schedule,
     can_create_linked_action_plan,
@@ -828,3 +829,32 @@ def test_staff_catalog_list_excludes_cross_pole_catalog(
     )
     assert catalog_action_plan.id in listed_ids
     assert cross_pole_catalog_action_plan.id not in listed_ids
+
+
+def test_creator_can_cancel_scheduled_assignee_cannot(
+    owner_membership,
+    staff_membership,
+    business_unit,
+):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    start_at = timezone.now() + timedelta(hours=4)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Scheduled cancel rights",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=staff_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+    )
+    assert execution.status == ActionPlanExecution.Status.SCHEDULED
+    assert can_cancel_scheduled_action_plan_execution(owner_membership, execution) is True
+    assert can_cancel_scheduled_action_plan_execution(staff_membership, execution) is False
+    assert can_cancel_action_plan_execution(owner_membership, execution) is False

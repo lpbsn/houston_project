@@ -107,6 +107,7 @@ describe('query-invalidation factory parity', () => {
     expect(prefixes()).toEqual(
       expect.arrayContaining([
         actionPlansQueryKeys.executionFeed(EST, 'personal').slice(0, 3),
+        actionPlansQueryKeys.executionUpcoming(EST, 'personal').slice(0, 3),
         actionPlansQueryKeys.executionDetail(EST, ENTITY),
         signalsQueryKeys.feed(EST, 'general', EMPTY_SIGNAL_FEED_FILTERS).slice(0, 3),
         signalsQueryKeys.detail(EST, ENTITY).slice(0, 3),

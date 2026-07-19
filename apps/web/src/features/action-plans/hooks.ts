@@ -18,6 +18,7 @@ import {
   fetchActionPlanDetail,
   fetchActionPlanExecutionDetail,
   fetchActionPlanExecutionFeed,
+  fetchActionPlanExecutionUpcoming,
   launchActionPlanExecution,
   markActionPlanExecutionDone,
   markActionPlanTaskDone,
@@ -102,6 +103,33 @@ export function useActionPlanExecutionFeedQuery(
         throw new Error('Établissement non sélectionné.')
       }
       return fetchActionPlanExecutionFeed(establishmentId, viewMode, {
+        cursor: pageParam,
+      })
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_more || !lastPage.next_cursor) {
+        return undefined
+      }
+      return lastPage.next_cursor
+    },
+    enabled: Boolean(establishmentId),
+  })
+}
+
+export function useActionPlanExecutionUpcomingQuery(
+  establishmentId: string | null,
+  viewMode: ActionPlanExecutionFeedViewMode,
+) {
+  return useInfiniteQuery({
+    queryKey: establishmentId
+      ? actionPlansQueryKeys.executionUpcoming(establishmentId, viewMode)
+      : ['action-plans', 'action-plan-execution-upcoming', 'none'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
+      if (!establishmentId) {
+        throw new Error('Établissement non sélectionné.')
+      }
+      return fetchActionPlanExecutionUpcoming(establishmentId, viewMode, {
         cursor: pageParam,
       })
     },

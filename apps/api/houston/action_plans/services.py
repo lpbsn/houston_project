@@ -15,15 +15,18 @@ from houston.action_plans.constants import (
     ACTION_PLAN_TITLE_MAX_LENGTH,
     ACTIVE_EXECUTION_STATUSES,
     CANCEL_ORIGIN_MANUAL,
+    CANCELABLE_EXECUTION_STATUSES,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    EXECUTION_STATUS_SCHEDULED,
     MAX_TASK_POSITION,
     MAX_TASKS_PER_PLAN,
     MIN_TASK_POSITION,
+    SIGNAL_BLOCKING_EXECUTION_STATUSES,
     TASK_STATUS_DONE,
     TASK_STATUS_OBSERVATION_CREATED,
     TASK_STATUS_PENDING,
@@ -46,6 +49,7 @@ from houston.action_plans.models import (
 from houston.action_plans.permissions import (
     can_assign_to_execution_business_unit,
     can_cancel_action_plan_execution,
+    can_cancel_scheduled_action_plan_execution,
     can_create_action_plan,
     can_create_linked_action_plan,
     can_create_staff_feed_execution_plan,
@@ -134,14 +138,14 @@ def touch_execution_activity(*, execution: ActionPlanExecution, at=None) -> None
 def _linked_active_executions_block_signal_sync(*, signal: Signal) -> bool:
     return ActionPlanExecution.objects.filter(
         source_signal_id=signal.id,
-        status__in=ACTIVE_EXECUTION_STATUSES,
+        status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
     ).exists()
 
 
 @transaction.atomic
 def sync_signal_after_execution_change(*, signal: Signal) -> Signal:
     linked = ActionPlanExecution.objects.filter(source_signal_id=signal.id)
-    if linked.filter(status__in=ACTIVE_EXECUTION_STATUSES).exists():
+    if linked.filter(status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES).exists():
         return signal
 
     if (
@@ -198,7 +202,7 @@ def _cancel_linked_active_executions_for_signal_resolve(
     now = timezone.now()
     active_executions = ActionPlanExecution.objects.filter(
         source_signal_id=signal.id,
-        status__in=ACTIVE_EXECUTION_STATUSES,
+        status__in=SIGNAL_BLOCKING_EXECUTION_STATUSES,
     ).select_for_update()
     for execution in active_executions:
         execution.status = EXECUTION_STATUS_CANCELED
@@ -868,6 +872,26 @@ def _materialize_execution_structure(
         )
 
 
+def initial_execution_status(
+    *,
+    start_at: datetime | None,
+    now: datetime | None = None,
+) -> str:
+    resolved_now = now or timezone.now()
+    if start_at is not None and start_at > resolved_now:
+        return EXECUTION_STATUS_SCHEDULED
+    return EXECUTION_STATUS_IN_PROGRESS
+
+
+def execution_visibility_is_due(
+    *,
+    execution: ActionPlanExecution,
+    now: datetime | None = None,
+) -> bool:
+    resolved_now = now or timezone.now()
+    return execution.visible_from is None or execution.visible_from <= resolved_now
+
+
 def _create_execution_record(
     *,
     action_plan: ActionPlan | None,
@@ -905,7 +929,7 @@ def _create_execution_record(
         activity_subject=activity_subject,
         requires_validation=requires_validation,
         use_shared_chronology=use_shared_chronology,
-        status=EXECUTION_STATUS_IN_PROGRESS,
+        status=initial_execution_status(start_at=start_at, now=now),
         occurrence_date=occurrence_date,
         start_at=start_at,
         visible_from=visible_from,
@@ -1531,9 +1555,12 @@ def cancel_action_plan_execution(
     actor: EstablishmentMembership,
 ) -> ActionPlanExecution:
     execution = _lock_execution_for_transition(execution_id=execution_id)
-    if execution.status not in ACTIVE_EXECUTION_STATUSES:
+    if execution.status not in CANCELABLE_EXECUTION_STATUSES:
         raise ActionPlanStateError("Execution cannot be canceled in its current state.")
-    if not can_cancel_action_plan_execution(actor, execution):
+    if execution.status == EXECUTION_STATUS_SCHEDULED:
+        if not can_cancel_scheduled_action_plan_execution(actor, execution):
+            raise ActionPlanPermissionError("Not allowed to cancel this execution.")
+    elif not can_cancel_action_plan_execution(actor, execution):
         raise ActionPlanPermissionError("Not allowed to cancel this execution.")
 
     now = timezone.now()

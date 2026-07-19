@@ -31,6 +31,11 @@ def action_plan_execution_feed_url(establishment_id, query: str = "") -> str:
     return base + query
 
 
+def action_plan_execution_upcoming_url(establishment_id, query: str = "") -> str:
+    base = f"/api/v1/establishments/{establishment_id}/action-plan-execution-upcoming/"
+    return base + query
+
+
 def action_plan_task_url(establishment_id, task_execution_id, suffix: str = "") -> str:
     base = (
         f"/api/v1/establishments/{establishment_id}/action-plan-execution-tasks/"

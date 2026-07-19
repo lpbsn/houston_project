@@ -17,9 +17,11 @@ SIGNAL_FEED_MAX_QUERIES_TWO_ITEMS = 8
 SIGNAL_FEED_MAX_QUERY_DELTA_ONE_TO_THREE_ITEMS = 0
 
 # GET .../action-plan-execution-feed/?view_mode=general — owner, empty feed
-ACTION_PLAN_EXECUTION_FEED_EMPTY_MAX_QUERIES = 12
+# +1 vs prior 12: scheduled_count (scheduled_items skipped when count=0)
+ACTION_PLAN_EXECUTION_FEED_EMPTY_MAX_QUERIES = 13
 # GET .../action-plan-execution-feed/?view_mode=general — owner, 1 active execution
-ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 14
+# +1 vs prior 14: scheduled_count; item path keeps assignees+tasks prefetches only
+ACTION_PLAN_EXECUTION_FEED_ONE_ITEM_MAX_QUERIES = 15
 
 # GET .../chat/conversations/ — 3 DMs with one message each
 # Phase L: 12 queries; Phase S1: 10 (batched latest messages + single participant pass)

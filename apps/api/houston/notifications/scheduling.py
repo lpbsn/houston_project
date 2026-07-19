@@ -6,12 +6,14 @@ from collections.abc import Callable
 
 from django.db import transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 
 from houston.action_plans.models import ActionPlanExecution
 from houston.chat.models import ChatMessage
 from houston.comments.models import Comment, CommentMention
 from houston.establishments.models import BusinessUnit, EstablishmentMembership
 from houston.notifications.constants import (
+    build_action_plan_execution_recipient_idempotency_key,
     build_chat_message_dedupe_key,
     build_mention_dedupe_key,
 )
@@ -105,9 +107,18 @@ def _deliver_action_plan_execution_notifications(
     recipients: list[EstablishmentMembership],
     actor_membership: EstablishmentMembership | None,
     exclude_actor_if_recipient: bool = True,
+    use_recipient_idempotency: bool = False,
 ) -> None:
     if not recipients:
         return
+
+    def idempotency_key_for_recipient(recipient_membership_id: uuid.UUID) -> str:
+        return build_action_plan_execution_recipient_idempotency_key(
+            event_key=event_key,
+            execution_id=execution.id,
+            recipient_membership_id=recipient_membership_id,
+        )
+
     create_in_app_notifications_for_recipients(
         establishment_id=execution.establishment_id,
         recipient_memberships=recipients,
@@ -117,7 +128,55 @@ def _deliver_action_plan_execution_notifications(
         priority=priority,
         actor_membership=actor_membership,
         exclude_actor_if_recipient=exclude_actor_if_recipient,
+        idempotency_key_for_recipient=(
+            idempotency_key_for_recipient if use_recipient_idempotency else None
+        ),
     )
+
+
+@transaction.atomic
+def emit_action_plan_execution_availability_if_due(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> bool:
+    """
+    Create availability (created) notifications transactionally and set
+    availability_notified_at. Returns True when the event was generated (or already was).
+    """
+    from houston.action_plans.services import execution_visibility_is_due
+
+    execution = (
+        ActionPlanExecution.objects.select_for_update()
+        .filter(pk=execution_id)
+        .select_related("created_by")
+        .prefetch_related("assignees__membership")
+        .first()
+    )
+    if execution is None:
+        return False
+    if execution.availability_notified_at is not None:
+        return True
+    if not execution_visibility_is_due(execution=execution):
+        return False
+
+    event_key = _resolve_execution_created_event_key(execution=execution)
+    recipients = resolve_action_plan_execution_created_recipients(execution=execution)
+    _deliver_action_plan_execution_notifications(
+        execution=execution,
+        event_key=event_key,
+        priority=Notification.Priority.ACTION_REQUIRED,
+        recipients=recipients,
+        actor_membership=_load_actor(
+            establishment_id=execution.establishment_id,
+            actor_membership_id=actor_membership_id,
+        ),
+        use_recipient_idempotency=True,
+    )
+    now = timezone.now()
+    execution.availability_notified_at = now
+    execution.save(update_fields=["availability_notified_at", "updated_at"])
+    return True
 
 
 def schedule_action_plan_execution_created_notification(
@@ -125,21 +184,12 @@ def schedule_action_plan_execution_created_notification(
     execution_id: uuid.UUID,
     actor_membership_id: uuid.UUID | None,
 ) -> None:
+    """Schedule availability notification only when visible_from is already due."""
+
     def deliver() -> None:
-        execution = _load_action_plan_execution(execution_id=execution_id)
-        if execution is None:
-            return
-        event_key = _resolve_execution_created_event_key(execution=execution)
-        recipients = resolve_action_plan_execution_created_recipients(execution=execution)
-        _deliver_action_plan_execution_notifications(
-            execution=execution,
-            event_key=event_key,
-            priority=Notification.Priority.ACTION_REQUIRED,
-            recipients=recipients,
-            actor_membership=_load_actor(
-                establishment_id=execution.establishment_id,
-                actor_membership_id=actor_membership_id,
-            ),
+        emit_action_plan_execution_availability_if_due(
+            execution_id=execution_id,
+            actor_membership_id=actor_membership_id,
         )
 
     log_event_key = (
@@ -153,6 +203,36 @@ def schedule_action_plan_execution_created_notification(
     _run_notification_after_commit(
         deliver=deliver,
         event_key=log_event_key,
+        subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
+        subject_id=execution_id,
+    )
+
+
+def schedule_action_plan_execution_started_notification(
+    *,
+    execution_id: uuid.UUID,
+    actor_membership_id: uuid.UUID | None,
+) -> None:
+    def deliver() -> None:
+        execution = _load_action_plan_execution(execution_id=execution_id)
+        if execution is None:
+            return
+        recipients = resolve_action_plan_execution_created_recipients(execution=execution)
+        _deliver_action_plan_execution_notifications(
+            execution=execution,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
+            priority=Notification.Priority.ACTION_REQUIRED,
+            recipients=recipients,
+            actor_membership=_load_actor(
+                establishment_id=execution.establishment_id,
+                actor_membership_id=actor_membership_id,
+            ),
+            use_recipient_idempotency=True,
+        )
+
+    _run_notification_after_commit(
+        deliver=deliver,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
         subject_type=Notification.SubjectType.ACTION_PLAN_EXECUTION,
         subject_id=execution_id,
     )

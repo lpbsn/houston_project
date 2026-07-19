@@ -13,15 +13,18 @@ import { terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 import { ActionPlansApiError, unwrapActionPlanExecutionFeedItems } from '@/features/action-plans/api'
 import { useActionPlanExecutionFeedQuery } from '@/features/action-plans/hooks'
+import type { ActionPlanExecutionFeedResponse } from '@/features/action-plans/types'
 import type { ExecutionViewMode } from '@/features/execution/lib/types'
 
 import { ActionPlanExecutionFeedCard } from '../components/action-plan-execution-feed-card'
 import { ExecutionCreateMenuSheet } from '../components/execution-create-menu-sheet'
 import { ExecutionFeedTabs } from '../components/execution-feed-tabs'
+import { ExecutionUpcomingNavRow } from '../components/execution-upcoming-nav-row'
 import { ActionPlanExecutionFeedCardActionsSheet } from '@/features/action-plans/components/action-plan-execution-feed-card-actions-sheet'
 import { useActionPlanExecutionFeedQuickActions } from '@/features/action-plans/hooks/use-action-plan-execution-feed-quick-actions'
 import {
   groupActionPlanExecutionsBySection,
+  mergeScheduledItemsIntoFeedSections,
   partitionActionPlanExecutionFeedPinnedItems,
 } from '../lib/action-plan-execution-feed-sections'
 import { canOpenExecutionCreateMenu } from '../lib/execution-create-menu'
@@ -32,6 +35,27 @@ const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 type ExecutionFeedPageProps = {
   onOpenActionPlanExecution?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
+}
+
+function readScheduledPreviewFromFeedPages(
+  pages: ActionPlanExecutionFeedResponse[] | undefined,
+): {
+  scheduledItems: ReturnType<typeof unwrapActionPlanExecutionFeedItems>
+  scheduledCount: number
+} {
+  if (!pages?.length) {
+    return { scheduledItems: [], scheduledCount: 0 }
+  }
+
+  const pageWithScheduled =
+    pages.find(
+      (page) => page.scheduled_items != null || typeof page.scheduled_count === 'number',
+    ) ?? pages[0]
+
+  return {
+    scheduledItems: unwrapActionPlanExecutionFeedItems(pageWithScheduled?.scheduled_items ?? []),
+    scheduledCount: pageWithScheduled?.scheduled_count ?? 0,
+  }
 }
 
 export function ExecutionFeedPage({
@@ -52,8 +76,14 @@ export function ExecutionFeedPage({
   const planItems = planFeedQuery.isSuccess
     ? unwrapActionPlanExecutionFeedItems(planFeedQuery.data.pages.flatMap((page) => page.items))
     : []
+  const { scheduledItems, scheduledCount } = planFeedQuery.isSuccess
+    ? readScheduledPreviewFromFeedPages(planFeedQuery.data.pages)
+    : { scheduledItems: [], scheduledCount: 0 }
   const { pinnedItems, unpinnedItems } = partitionActionPlanExecutionFeedPinnedItems(planItems)
-  const planGroups = groupActionPlanExecutionsBySection(unpinnedItems)
+  const planGroups = mergeScheduledItemsIntoFeedSections(
+    groupActionPlanExecutionsBySection(unpinnedItems),
+    scheduledItems,
+  )
   const sectionKeys = planGroups.map((group) => group.section)
   const { isExpanded, toggle } = useCollapsibleFeedSections(sectionKeys, {
     defaultCollapsedKeys: EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS,
@@ -70,7 +100,11 @@ export function ExecutionFeedPage({
 
   const isInitialLoading = planFeedQuery.isLoading
   const showGlobalEmpty =
-    planItems.length === 0 && planFeedQuery.isSuccess && !planFeedQuery.isLoading
+    planItems.length === 0 &&
+    scheduledItems.length === 0 &&
+    scheduledCount === 0 &&
+    planFeedQuery.isSuccess &&
+    !planFeedQuery.isLoading
   const hasVisibleItems = pinnedItems.length > 0 || planGroups.length > 0
   const hasMore = planFeedQuery.hasNextPage
   const isFetchingMore = planFeedQuery.isFetchingNextPage
@@ -128,6 +162,13 @@ export function ExecutionFeedPage({
                   'Impossible de charger les plans d’action.',
                 )}
                 onRetry={() => void planFeedQuery.refetch()}
+              />
+            ) : null}
+
+            {planFeedQuery.isSuccess && onNavigate ? (
+              <ExecutionUpcomingNavRow
+                count={scheduledCount}
+                onNavigate={() => onNavigate('/execution/upcoming')}
               />
             ) : null}
 

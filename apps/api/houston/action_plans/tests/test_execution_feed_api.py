@@ -10,6 +10,7 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
     EXECUTION_STATUS_PENDING_VALIDATION,
+    EXECUTION_STATUS_SCHEDULED,
     SCHEDULE_STATUS_ACTIVE,
     SCHEDULE_STATUS_INACTIVE,
     TASK_STATUS_DONE,
@@ -22,9 +23,13 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.schedule_services import create_action_plan_schedule
 from houston.action_plans.selectors import action_plan_execution_overdue
-from houston.action_plans.services import deactivate_action_plan
+from houston.action_plans.services import (
+    create_action_plan_with_execution,
+    deactivate_action_plan,
+)
 from houston.action_plans.tests.helpers import (
     action_plan_execution_feed_url,
+    action_plan_execution_upcoming_url,
     action_plan_task_url,
     build_assignee_payload,
     build_schedule_assignee_payload,
@@ -90,7 +95,12 @@ def test_action_plan_execution_feed_item_contract(
         **auth_headers(token),
     )
     assert response.status_code == 200
-    item = response.json()["items"][0]
+    body = response.json()
+    assert "scheduled_items" in body
+    assert "scheduled_count" in body
+    assert body["scheduled_count"] == 0
+    assert body["scheduled_items"] == []
+    item = body["items"][0]
     assert item["item_type"] == "action_plan_execution"
     payload = item["action_plan_execution"]
     assert payload["id"] == str(execution.id)
@@ -103,6 +113,7 @@ def test_action_plan_execution_feed_item_contract(
     assert payload["is_pinned"] is False
     assert payload["task_count"] == 1
     assert payload["treated_task_count"] == 0
+    assert "start_at" in payload
 
 
 def test_action_plan_execution_feed_item_task_counts(
@@ -986,6 +997,39 @@ def test_feed_materializes_visible_schedule_execution(
     assert len(response.json()["items"]) >= 1
 
 
+def test_upcoming_materializes_schedule_executions(
+    api_client,
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
+            build_schedule_assignee_payload(
+                membership=staff_membership,
+                business_unit=business_unit,
+            )
+        ],
+        use_shared_chronology=True,
+        **visible_schedule_window(),
+    )
+    ActionPlanExecution.objects.filter(action_plan_schedule=schedule).delete()
+    assert not ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+    token = login(api_client, user=staff_membership.user)
+    response = api_client.get(
+        action_plan_execution_upcoming_url(staff_membership.establishment_id)
+        + feed_query("personal"),
+        **auth_headers(token),
+    )
+    assert response.status_code == 200
+    assert ActionPlanExecution.objects.filter(action_plan_schedule=schedule).exists()
+
+
 def test_feed_survives_invalid_visible_schedule(
     api_client,
     owner_membership,
@@ -1478,3 +1522,187 @@ def test_director_personal_feed_includes_all_establishment_executions(
     assert response.status_code == 200
     ids = {item["action_plan_execution"]["id"] for item in response.json()["items"]}
     assert ids == {str(restaurant_execution.id), str(maintenance_execution.id)}
+
+
+def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    start_soon = timezone.now() + timezone.timedelta(hours=2)
+    start_later = timezone.now() + timezone.timedelta(days=2)
+    _, visible_scheduled = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Visible scheduled",
+        requires_validation=False,
+        tasks=[build_task_payload(task="s1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_soon,
+        visible_from=timezone.now() - timezone.timedelta(minutes=1),
+        end_at=start_soon + timezone.timedelta(hours=1),
+    )
+    _, hidden_scheduled = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Hidden scheduled",
+        requires_validation=False,
+        tasks=[build_task_payload(task="s2", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_later,
+        visible_from=start_later - timezone.timedelta(hours=1),
+        end_at=start_later + timezone.timedelta(hours=1),
+    )
+    start_null_visible = timezone.now() + timezone.timedelta(days=3)
+    _, null_visible_scheduled = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Null visible_from scheduled",
+        requires_validation=False,
+        tasks=[build_task_payload(task="s3", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_null_visible,
+        visible_from=None,
+        end_at=start_null_visible + timezone.timedelta(hours=1),
+    )
+    assert visible_scheduled.status == EXECUTION_STATUS_SCHEDULED
+    assert hidden_scheduled.status == EXECUTION_STATUS_SCHEDULED
+    assert null_visible_scheduled.status == EXECUTION_STATUS_SCHEDULED
+    assert null_visible_scheduled.visible_from is None
+
+    for index in range(3):
+        create_execution(
+            owner_membership,
+            business_unit=business_unit,
+            title=f"Active {index}",
+        )
+
+    token = login(api_client, user=owner_membership.user)
+    feed = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + feed_query("general")
+        + "&page_size=2",
+        **auth_headers(token),
+    )
+    assert feed.status_code == 200
+    feed_body = feed.json()
+    feed_ids = {item["action_plan_execution"]["id"] for item in feed_body["items"]}
+    assert str(visible_scheduled.id) not in feed_ids
+    assert str(hidden_scheduled.id) not in feed_ids
+    assert str(null_visible_scheduled.id) not in feed_ids
+    assert feed_body["scheduled_count"] == 3
+    scheduled_preview_ids = [
+        item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]
+    ]
+    assert scheduled_preview_ids == [str(visible_scheduled.id)]
+    assert feed_body["scheduled_items"][0]["action_plan_execution"]["permission_hints"][
+        "can_pin"
+    ] is False
+
+    upcoming = api_client.get(
+        action_plan_execution_upcoming_url(owner_membership.establishment_id)
+        + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert upcoming.status_code == 200
+    upcoming_ids = [
+        item["action_plan_execution"]["id"] for item in upcoming.json()["items"]
+    ]
+    assert upcoming_ids == [
+        str(visible_scheduled.id),
+        str(hidden_scheduled.id),
+        str(null_visible_scheduled.id),
+    ]
+
+
+def test_scheduled_visible_from_gates_feed_and_upcoming(
+    api_client,
+    owner_membership,
+    business_unit,
+):
+    start_soon = timezone.now() + timezone.timedelta(hours=4)
+    start_later = timezone.now() + timezone.timedelta(days=2)
+    start_null = timezone.now() + timezone.timedelta(days=3)
+
+    _, reached = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Visible reached",
+        requires_validation=False,
+        tasks=[build_task_payload(task="v1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_soon,
+        visible_from=timezone.now() - timezone.timedelta(minutes=1),
+        end_at=start_soon + timezone.timedelta(hours=1),
+    )
+    _, future_visible = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Visible future",
+        requires_validation=False,
+        tasks=[build_task_payload(task="v2", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_later,
+        visible_from=start_later - timezone.timedelta(hours=1),
+        end_at=start_later + timezone.timedelta(hours=1),
+    )
+    _, null_visible = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Visible null",
+        requires_validation=False,
+        tasks=[build_task_payload(task="v3", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_null,
+        visible_from=None,
+        end_at=start_null + timezone.timedelta(hours=1),
+    )
+
+    token = login(api_client, user=owner_membership.user)
+    feed = api_client.get(
+        action_plan_execution_feed_url(owner_membership.establishment_id)
+        + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert feed.status_code == 200
+    feed_body = feed.json()
+    feed_item_ids = {item["action_plan_execution"]["id"] for item in feed_body["items"]}
+    scheduled_preview_ids = {
+        item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]
+    }
+    assert str(null_visible.id) not in feed_item_ids
+    assert str(null_visible.id) not in scheduled_preview_ids
+    assert str(future_visible.id) not in feed_item_ids
+    assert str(future_visible.id) not in scheduled_preview_ids
+    assert str(reached.id) in scheduled_preview_ids
+
+    upcoming = api_client.get(
+        action_plan_execution_upcoming_url(owner_membership.establishment_id)
+        + feed_query("general"),
+        **auth_headers(token),
+    )
+    assert upcoming.status_code == 200
+    upcoming_ids = {
+        item["action_plan_execution"]["id"] for item in upcoming.json()["items"]
+    }
+    assert str(null_visible.id) in upcoming_ids
+    assert str(future_visible.id) in upcoming_ids
+    assert str(reached.id) in upcoming_ids

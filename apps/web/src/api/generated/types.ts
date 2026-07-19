@@ -293,6 +293,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/action-plan-execution-upcoming/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_establishments_action_plan_execution_upcoming_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/": {
         parameters: {
             query?: never;
@@ -1914,6 +1930,8 @@ export interface components {
             } | null;
             assignees: components["schemas"]["ActionPlanExecutionFeedAssignee"][];
             /** Format: date-time */
+            start_at: string | null;
+            /** Format: date-time */
             end_at: string | null;
             is_overdue: boolean;
             task_count: number;
@@ -1932,6 +1950,8 @@ export interface components {
         };
         ActionPlanExecutionFeedResponse: {
             items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            scheduled_items: components["schemas"]["ActionPlanExecutionFeedItemWrapper"][];
+            scheduled_count: number;
             next_cursor: string | null;
             has_more: boolean;
         };
@@ -3918,6 +3938,56 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_execution_upcoming_retrieve: {
+        parameters: {
+            query: {
+                /** @description Opaque pagination cursor from a previous response next_cursor. */
+                cursor?: string;
+                page_size?: number;
+                view_mode: "general" | "personal";
+            };
+            header?: never;
+            path: {
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionFeedResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

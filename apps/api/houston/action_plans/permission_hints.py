@@ -4,6 +4,7 @@ from houston.action_plans.constants import (
     ACTIVE_EXECUTION_STATUSES,
     CATALOG_STATUS_ACTIVE,
     CATALOG_STATUS_INACTIVE,
+    EXECUTION_STATUS_SCHEDULED,
     SCHEDULE_STATUS_ACTIVE,
     TASK_STATUS_DONE,
     TASK_STATUS_PENDING,
@@ -16,6 +17,7 @@ from houston.action_plans.models import (
 )
 from houston.action_plans.permissions import (
     can_cancel_action_plan_execution,
+    can_cancel_scheduled_action_plan_execution,
     can_create_action_plan_schedule,
     can_execute_action_plan_task,
     can_manage_action_plan,
@@ -77,13 +79,18 @@ def build_action_plan_execution_permission_hints(
     in_feed: bool = False,
 ) -> dict[str, bool]:
     is_active = execution.status in ACTIVE_EXECUTION_STATUSES
+    is_scheduled = execution.status == EXECUTION_STATUS_SCHEDULED
+    if is_scheduled:
+        can_cancel = can_cancel_scheduled_action_plan_execution(membership, execution)
+    else:
+        can_cancel = is_active and can_cancel_action_plan_execution(membership, execution)
     return {
         "can_mark_done": is_active and can_mark_action_plan_execution_done(membership, execution),
         "can_validate": can_validate_action_plan_execution(membership, execution),
         "can_reopen": can_reopen_action_plan_execution(membership, execution),
-        "can_cancel": is_active and can_cancel_action_plan_execution(membership, execution),
+        "can_cancel": can_cancel,
         "is_pilot_pole_assignee": is_pilot_pole_assignee(membership, execution),
-        "can_pin": in_feed,
+        "can_pin": in_feed and not is_scheduled,
     }
 
 

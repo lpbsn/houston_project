@@ -1,0 +1,218 @@
+from datetime import timedelta
+
+import pytest
+from django.utils import timezone
+
+from houston.action_plans.constants import (
+    EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_SCHEDULED,
+)
+from houston.action_plans.lifecycle_promotion import (
+    ensure_execution_lifecycle_for_read,
+    promote_due_scheduled_executions,
+    run_scheduled_execution_lifecycle_tick,
+)
+from houston.action_plans.models import ActionPlanExecution
+from houston.action_plans.services import create_action_plan_with_execution
+from houston.action_plans.tests.helpers import build_assignee_payload, build_task_payload
+from houston.establishments.models import EstablishmentMembership
+from houston.notifications.models import Notification
+from houston.testing.auth import build_api_membership as build_foreign_membership
+
+pytestmark = pytest.mark.django_db(transaction=True)
+
+
+def test_create_future_start_sets_scheduled(owner_membership, business_unit):
+    start_at = timezone.now() + timedelta(hours=3)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Future plan",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        visible_from=start_at - timedelta(hours=1),
+        end_at=start_at + timedelta(hours=1),
+    )
+    assert execution.status == EXECUTION_STATUS_SCHEDULED
+    assert execution.availability_notified_at is None
+
+
+def test_create_past_start_sets_in_progress(owner_membership, business_unit):
+    start_at = timezone.now() - timedelta(minutes=5)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Started plan",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+    )
+    assert execution.status == EXECUTION_STATUS_IN_PROGRESS
+
+
+def test_promote_due_scheduled_to_in_progress(owner_membership, business_unit):
+    start_at = timezone.now() + timedelta(hours=2)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Promote me",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        visible_from=timezone.now() - timedelta(minutes=1),
+        end_at=start_at + timedelta(hours=1),
+    )
+    assert execution.status == EXECUTION_STATUS_SCHEDULED
+
+    ActionPlanExecution.objects.filter(pk=execution.id).update(
+        start_at=timezone.now() - timedelta(minutes=1),
+    )
+    promoted = promote_due_scheduled_executions(
+        establishment_id=owner_membership.establishment_id,
+    )
+    assert promoted == 1
+    execution.refresh_from_db()
+    assert execution.status == EXECUTION_STATUS_IN_PROGRESS
+
+    started = Notification.objects.filter(
+        subject_id=execution.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
+    )
+    assert started.exists()
+
+
+def test_availability_emitted_once_when_visible(owner_membership, business_unit):
+    start_at = timezone.now() + timedelta(hours=5)
+    visible_from = timezone.now() + timedelta(minutes=30)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Deferred visibility",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        visible_from=visible_from,
+        end_at=start_at + timedelta(hours=1),
+    )
+    assert execution.availability_notified_at is None
+    assert not Notification.objects.filter(
+        subject_id=execution.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+    ).exists()
+
+    ActionPlanExecution.objects.filter(pk=execution.id).update(
+        visible_from=timezone.now() - timedelta(minutes=1),
+    )
+    result = run_scheduled_execution_lifecycle_tick(
+        establishment_id=owner_membership.establishment_id,
+    )
+    assert result["availability_emitted"] == 1
+    execution.refresh_from_db()
+    assert execution.availability_notified_at is not None
+
+    result_again = run_scheduled_execution_lifecycle_tick(
+        establishment_id=owner_membership.establishment_id,
+    )
+    assert result_again["availability_emitted"] == 0
+    assert (
+        Notification.objects.filter(
+            subject_id=execution.id,
+            event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_CREATED,
+        ).count()
+        == 1
+    )
+
+
+def test_lazy_promote_scoped_to_execution_id(owner_membership, business_unit):
+    start_at = timezone.now() + timedelta(hours=1)
+    assignee = build_assignee_payload(
+        membership=owner_membership,
+        business_unit=business_unit,
+    )
+    _, due = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Due",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[assignee],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+    )
+    _, other = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Other",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t2", business_unit=business_unit)],
+        assignees=[assignee],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+    )
+    ActionPlanExecution.objects.filter(pk__in=[due.id, other.id]).update(
+        start_at=timezone.now() - timedelta(minutes=1),
+    )
+    promoted = promote_due_scheduled_executions(
+        establishment_id=owner_membership.establishment_id,
+        execution_id=due.id,
+    )
+    assert promoted == 1
+    due.refresh_from_db()
+    other.refresh_from_db()
+    assert due.status == EXECUTION_STATUS_IN_PROGRESS
+    assert other.status == EXECUTION_STATUS_SCHEDULED
+
+
+def test_ensure_lifecycle_for_read_requires_matching_establishment(
+    owner_membership,
+    business_unit,
+):
+    start_at = timezone.now() + timedelta(hours=2)
+    _, execution = create_action_plan_with_execution(
+        establishment_id=owner_membership.establishment_id,
+        created_by=owner_membership,
+        pilot_business_unit_id=business_unit.id,
+        title="Cross-tenant due",
+        requires_validation=False,
+        tasks=[build_task_payload(task="t1", business_unit=business_unit)],
+        assignees=[
+            build_assignee_payload(membership=owner_membership, business_unit=business_unit),
+        ],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=1),
+    )
+    ActionPlanExecution.objects.filter(pk=execution.id).update(
+        start_at=timezone.now() - timedelta(minutes=1),
+    )
+    foreign = build_foreign_membership(role=EstablishmentMembership.Role.OWNER)
+
+    ensure_execution_lifecycle_for_read(
+        establishment_id=foreign.establishment_id,
+        execution_id=execution.id,
+    )
+    execution.refresh_from_db()
+    assert execution.status == EXECUTION_STATUS_SCHEDULED
+    assert not Notification.objects.filter(
+        subject_id=execution.id,
+        event_key=Notification.EventKey.ACTION_PLAN_EXECUTION_STARTED,
+    ).exists()
