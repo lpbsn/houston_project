@@ -102,6 +102,12 @@ export const LazyActionPlanExecutionDetailPage = lazy(() =>
   })),
 )
 
+export const LazyActionPlanExecutionEditPage = lazy(() =>
+  import('@/features/action-plans/pages/action-plan-execution-edit-page').then((module) => ({
+    default: module.ActionPlanExecutionEditPage,
+  })),
+)
+
 export const LazyChatRealtimeProvider = lazy(() =>
   import('@/features/chat/components/chat-realtime-provider').then((module) => ({
     default: module.ChatRealtimeProvider,

@@ -116,6 +116,10 @@ describe('parseAppRoute', () => {
       kind: 'action-plan-execution-detail',
       executionId: 'exec-1',
     })
+    expect(parseAppRoute('/action-plans/executions/exec-1/edit')).toEqual({
+      kind: 'action-plan-execution-edit',
+      executionId: 'exec-1',
+    })
     expect(parseAppRoute('/action-plans/executions')).toEqual({
       kind: 'unknown',
       pathname: '/action-plans/executions',

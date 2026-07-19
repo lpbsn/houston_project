@@ -2,22 +2,64 @@ import { describe, expect, it } from 'vitest'
 
 import {
   canShowActionPlanExecutionCancel,
+  canShowActionPlanExecutionUpdate,
   canShowActionPlanTaskMarkDone,
   canShowActionPlanTaskUnmarkDone,
 } from '@/features/action-plans/lib/action-plan-permission-hints'
 import type { ActionPlanTaskExecution } from '@/features/action-plans/types'
 
 describe('action-plan permission hints', () => {
+  it('shows execution update only when can_update is true', () => {
+    expect(
+      canShowActionPlanExecutionUpdate({
+        can_mark_done: false,
+        can_validate: false,
+        can_reopen: false,
+        can_cancel: false,
+        can_update: true,
+        is_pilot_pole_assignee: false,
+        can_pin: false,
+      }),
+    ).toBe(true)
+    expect(
+      canShowActionPlanExecutionUpdate({
+        can_mark_done: false,
+        can_validate: false,
+        can_reopen: false,
+        can_cancel: false,
+        can_update: false,
+        is_pilot_pole_assignee: false,
+        can_pin: false,
+      }),
+    ).toBe(false)
+  })
+
   it('shows cancel only when allowed and not terminal', () => {
     expect(
       canShowActionPlanExecutionCancel(
-        { can_mark_done: false, can_validate: false, can_reopen: false, can_cancel: true, is_pilot_pole_assignee: false, can_pin: false },
+        {
+          can_mark_done: false,
+          can_validate: false,
+          can_reopen: false,
+          can_cancel: true,
+          can_update: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
         { isTerminal: false },
       ),
     ).toBe(true)
     expect(
       canShowActionPlanExecutionCancel(
-        { can_mark_done: false, can_validate: false, can_reopen: false, can_cancel: true, is_pilot_pole_assignee: false, can_pin: false },
+        {
+          can_mark_done: false,
+          can_validate: false,
+          can_reopen: false,
+          can_cancel: true,
+          can_update: false,
+          is_pilot_pole_assignee: false,
+          can_pin: false,
+        },
         { isTerminal: true },
       ),
     ).toBe(false)

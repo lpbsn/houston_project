@@ -1,0 +1,285 @@
+import { startTransition, useEffect, useMemo, useState } from 'react'
+import { LoaderCircle } from 'lucide-react'
+
+import { useAppRoute } from '@/app/app-routes'
+import { useAuth } from '@/app/auth-provider'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
+import {
+  TerrainCard,
+  TerrainErrorState,
+  TerrainFieldLabel,
+  TerrainSectionLabel,
+  TerrainStickyFooter,
+  TerrainSwitch,
+} from '@/components/ui/terrain'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
+
+import { ActionPlanEventPlanningForm } from '../components/action-plan-event-planning-form'
+import { ActionPlanTaskDraftEditor } from '../components/action-plan-task-draft-editor'
+import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-only-row'
+import { PlanningOptionRow } from '../components/planning/planning-option-row'
+import { useActionPlanExecutionDetailQuery } from '../hooks'
+import { useActionPlanExecutionEditSubmit } from '../hooks/use-action-plan-execution-edit-submit'
+import { formatActionPlanTaskStatusLabel } from '../lib/action-plan-display'
+import {
+  hydrateActionPlanExecutionEditForm,
+  type ActionPlanExecutionEditFormValues,
+} from '../lib/action-plan-execution-edit-form'
+import type { ActionPlanEventPlanningDraft } from '../lib/action-plan-event-planning-form'
+import { canDefineCrossPoleTasks } from '../lib/action-plan-management-access'
+import { canShowActionPlanExecutionUpdate } from '../lib/action-plan-permission-hints'
+import type { ActionPlanTaskDraft } from '../lib/action-plan-form-validation'
+import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
+
+type ActionPlanExecutionEditPageProps = {
+  executionId: string
+}
+
+export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecutionEditPageProps) {
+  const { navigate } = useAppRoute()
+  const auth = useAuth()
+  const establishmentId = auth.activeMembership?.establishment_id ?? null
+  const role = auth.activeMembership?.role ?? null
+  const membershipId = auth.activeMembership?.id
+  const staffMode = role === 'staff'
+  const canCrossPole = canDefineCrossPoleTasks(role)
+  const detailBackPath = `/action-plans/executions/${executionId}`
+
+  const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
+  const [form, setForm] = useState<ActionPlanExecutionEditFormValues | null>(null)
+
+  // Hydrate once on first load. Realtime refetch must not wipe local edits.
+  // Conflict reload rehydrates explicitly via onConflictReload.
+  useEffect(() => {
+    if (!detailQuery.data || form !== null) {
+      return
+    }
+    startTransition(() => {
+      setForm(hydrateActionPlanExecutionEditForm(detailQuery.data))
+    })
+  }, [detailQuery.data, form])
+
+  const businessUnitQuery = useBusinessUnitTreeQuery(establishmentId, { staleTime: 60_000 })
+  const businessUnits = useMemo(
+    () =>
+      (businessUnitQuery.data?.business_units ?? []).map((unit) => ({
+        id: unit.id,
+        label: unit.specific_name,
+      })),
+    [businessUnitQuery.data?.business_units],
+  )
+  const visibleBusinessUnits = useMemo(
+    () =>
+      resolveVisibleBusinessUnits({
+        role,
+        scopes: auth.activeMembership?.scopes,
+        businessUnits,
+        filterByScope: role === 'manager' || role === 'staff',
+      }),
+    [auth.activeMembership?.scopes, businessUnits, role],
+  )
+
+  const { submit, fieldErrors, submitError, isSubmitting } = useActionPlanExecutionEditSubmit({
+    establishmentId: establishmentId ?? '',
+    executionId,
+    canDefineCrossPoleTasks: canCrossPole,
+    staffMode,
+    membershipId,
+    onNavigate: navigate,
+    onConflictReload: async () => {
+      const result = await detailQuery.refetch()
+      if (result.data) {
+        setForm(hydrateActionPlanExecutionEditForm(result.data))
+      }
+    },
+  })
+
+  if (!establishmentId) {
+    return null
+  }
+
+  if (detailQuery.isLoading || (!form && !detailQuery.isError)) {
+    return (
+      <div className="flex items-center justify-center py-16 text-[#7D7B75]">
+        <LoaderCircle className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (detailQuery.isError || !detailQuery.data || !form) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Ce plan est introuvable ou inaccessible."
+        onRetry={() => void detailQuery.refetch()}
+      />
+    )
+  }
+
+  if (!canShowActionPlanExecutionUpdate(detailQuery.data.permission_hints)) {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Vous n’avez pas la permission de modifier ce plan."
+        onRetry={() => navigate(detailBackPath)}
+      />
+    )
+  }
+
+  if (detailQuery.data.status !== 'in_progress') {
+    return (
+      <TerrainErrorState
+        className="mx-3 mt-3"
+        message="Ce plan ne peut plus être modifié dans son état actuel."
+        onRetry={() => navigate(detailBackPath)}
+      />
+    )
+  }
+
+  function patchForm(patch: Partial<ActionPlanExecutionEditFormValues>) {
+    setForm((current) => (current ? { ...current, ...patch } : current))
+  }
+
+  function setPendingTasks(pendingTasks: ActionPlanTaskDraft[]) {
+    patchForm({ pendingTasks })
+  }
+
+  function setPlanningDraft(planningDraft: ActionPlanEventPlanningDraft) {
+    patchForm({ planningDraft })
+  }
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <div className="space-y-3 px-3 pb-28 pt-2">
+        <TerrainCard className="space-y-3">
+          <div>
+            <TerrainFieldLabel>Titre</TerrainFieldLabel>
+            <Input
+              value={form.title}
+              onChange={(event) => patchForm({ title: event.target.value })}
+              className="h-11 border-[#E8E6DF]"
+            />
+            {fieldErrors.title ? (
+              <p className="mt-1 text-xs text-destructive">{fieldErrors.title}</p>
+            ) : null}
+          </div>
+          <div>
+            <TerrainFieldLabel>Description</TerrainFieldLabel>
+            <Textarea
+              value={form.description}
+              onChange={(event) => patchForm({ description: event.target.value })}
+              className="min-h-20 border-[#E8E6DF]"
+            />
+          </div>
+          <PlanningOptionRow
+            rowId="pilot-business-unit"
+            label="Pôle d'activité pilote"
+            value={form.pilotBusinessUnitId}
+            displayValue={form.pilotBusinessUnitLabel}
+            options={[]}
+            disabled
+            openPicker={null}
+            onOpenPickerChange={() => undefined}
+            onChange={() => undefined}
+          />
+        </TerrainCard>
+
+        {!staffMode ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Options</TerrainSectionLabel>
+            <TerrainCard className="divide-y divide-[#E8E6DF] p-0">
+              <TerrainSwitch
+                label="Validation requise"
+                checked={form.requiresValidation}
+                onCheckedChange={(requiresValidation) => patchForm({ requiresValidation })}
+              />
+            </TerrainCard>
+          </section>
+        ) : null}
+
+        {form.treatedTasks.length > 0 ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Tâches traitées</TerrainSectionLabel>
+            <div className="space-y-2">
+              {form.treatedTasks.map((task) => (
+                <ActionPlanTaskReadOnlyRow
+                  key={task.id}
+                  task={task}
+                  statusLabel={formatActionPlanTaskStatusLabel(task.status)}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <ActionPlanTaskDraftEditor
+          tasks={form.pendingTasks}
+          establishmentId={establishmentId}
+          pilotBusinessUnitId={form.pilotBusinessUnitId}
+          canDefineCrossPoleTasks={canCrossPole}
+          staffMode={staffMode}
+          businessUnits={visibleBusinessUnits}
+          onTasksChange={setPendingTasks}
+        />
+        {fieldErrors.tasks ? (
+          <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
+        ) : null}
+
+        <ActionPlanEventPlanningForm
+          draft={form.planningDraft}
+          config={{
+            canEditAssignees: !staffMode,
+            canSchedule: false,
+            staffMode,
+            showAdvancedChronology: false,
+            lockChronologyMode: true,
+            lockStart: true,
+            hideAssignees: false,
+            staffDisplayName: auth.bootstrap?.user?.username ?? 'Moi',
+            assigneeActionsEnabled: false,
+          }}
+          establishmentId={establishmentId}
+          pilotBusinessUnitId={form.pilotBusinessUnitId}
+          fieldErrors={{
+            ...(fieldErrors.assignees ? { assignees: fieldErrors.assignees } : {}),
+            ...(fieldErrors.endAt ? { endAt: fieldErrors.endAt } : {}),
+          }}
+          onDraftChange={setPlanningDraft}
+        />
+
+        {submitError ? <TerrainFeedback variant="error" message={submitError} /> : null}
+      </div>
+
+      <TerrainStickyFooter>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 flex-1 rounded-xl"
+            disabled={isSubmitting}
+            onClick={() => navigate(detailBackPath)}
+          >
+            Retour
+          </Button>
+          <Button
+            type="button"
+            className={cn(
+              'h-11 flex-1 rounded-xl text-white',
+              terrainBrandAction.bg,
+              terrainBrandAction.hover,
+            )}
+            disabled={isSubmitting}
+            onClick={() => void submit(form)}
+          >
+            Enregistrer les modifications
+          </Button>
+        </div>
+      </TerrainStickyFooter>
+    </div>
+  )
+}

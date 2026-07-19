@@ -36,6 +36,12 @@ export function canShowActionPlanSchedule(
   return hints?.can_schedule === true
 }
 
+export function canShowActionPlanExecutionUpdate(
+  hints: ActionPlanExecutionPermissionHints | null | undefined,
+): boolean {
+  return hints?.can_update === true
+}
+
 export function canShowActionPlanExecutionMarkDone(
   hints: ActionPlanExecutionPermissionHints | null | undefined,
 ): boolean {

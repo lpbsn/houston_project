@@ -880,6 +880,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
+    patch:
+      operationId: v1_establishments_action_plan_executions_partial_update
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: execution_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - action-plans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanExecutionUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanExecutionUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActionPlanExecutionUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanExecutionDetail'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanStaleExecutionConflict'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/cancel/:
     post:
       operationId: v1_establishments_action_plan_executions_cancel_create
@@ -5934,9 +6001,24 @@ components:
           format: uuid
         display_name:
           type: string
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
       required:
       - display_name
+      - end_at
       - membership_id
+      - start_at
+      - visible_from
     ActionPlanAssigneesByPole:
       type: object
       properties:
@@ -6088,6 +6170,22 @@ components:
       - tasks
       - title
       - updated_at
+    ActionPlanExecutionAssigneeUpdate:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        business_unit_id:
+          type: string
+          format: uuid
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - business_unit_id
+      - membership_id
     ActionPlanExecutionDetail:
       type: object
       properties:
@@ -6349,6 +6447,37 @@ components:
       - position
       - status
       - task
+    ActionPlanExecutionPendingTaskUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          default: ''
+          maxLength: 2000
+        business_unit_id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          maximum: 10
+          minimum: 1
+        deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+        assigned_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - business_unit_id
+      - task
     ActionPlanExecutionPermissionHints:
       type: object
       properties:
@@ -6360,6 +6489,8 @@ components:
           type: boolean
         can_cancel:
           type: boolean
+        can_update:
+          type: boolean
         is_pilot_pole_assignee:
           type: boolean
         can_pin:
@@ -6369,6 +6500,7 @@ components:
       - can_mark_done
       - can_pin
       - can_reopen
+      - can_update
       - can_validate
       - is_pilot_pole_assignee
     ActionPlanExecutionPinState:
@@ -6628,6 +6760,16 @@ components:
       required:
       - can_deactivate
       - can_update
+    ActionPlanStaleExecutionConflict:
+      type: object
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+      required:
+      - code
+      - detail
     ActionPlanTaskCreateObservationRequest:
       type: object
       properties:
@@ -8583,6 +8725,32 @@ components:
       description: |-
         * `signal` - signal
         * `action_plan_execution` - action_plan_execution
+    PatchedActionPlanExecutionUpdateRequest:
+      type: object
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        requires_validation:
+          type: boolean
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionAssigneeUpdate'
+        pending_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanExecutionPendingTaskUpdate'
     PatchedActionPlanScheduleUpdateRequest:
       type: object
       properties:

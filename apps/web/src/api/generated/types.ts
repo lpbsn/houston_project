@@ -322,7 +322,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: operations["v1_establishments_action_plan_executions_partial_update"];
         trace?: never;
     };
     "/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/cancel/": {
@@ -1804,6 +1804,12 @@ export interface components {
             /** Format: uuid */
             membership_id: string;
             display_name: string;
+            /** Format: date-time */
+            start_at: string | null;
+            /** Format: date-time */
+            visible_from: string | null;
+            /** Format: date-time */
+            end_at: string | null;
         };
         ActionPlanAssigneesByPole: {
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
@@ -1865,6 +1871,14 @@ export interface components {
             tasks: components["schemas"]["ActionPlanTaskTemplate"][];
             requires_validation: boolean;
             is_reusable: boolean;
+        };
+        ActionPlanExecutionAssigneeUpdate: {
+            /** Format: uuid */
+            membership_id: string;
+            /** Format: uuid */
+            business_unit_id: string;
+            /** Format: date-time */
+            end_at?: string | null;
         };
         ActionPlanExecutionDetail: {
             /** Format: uuid */
@@ -1961,11 +1975,26 @@ export interface components {
             status: string;
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
         };
+        ActionPlanExecutionPendingTaskUpdate: {
+            /** Format: uuid */
+            id?: string;
+            task: string;
+            /** @default  */
+            description: string;
+            /** Format: uuid */
+            business_unit_id: string;
+            position?: number;
+            /** Format: date-time */
+            deadline_at?: string | null;
+            /** Format: uuid */
+            assigned_membership_id?: string | null;
+        };
         ActionPlanExecutionPermissionHints: {
             can_mark_done: boolean;
             can_validate: boolean;
             can_reopen: boolean;
             can_cancel: boolean;
+            can_update: boolean;
             is_pilot_pole_assignee: boolean;
             can_pin: boolean;
         };
@@ -2075,6 +2104,10 @@ export interface components {
         ActionPlanSchedulePermissionHints: {
             can_update: boolean;
             can_deactivate: boolean;
+        };
+        ActionPlanStaleExecutionConflict: {
+            code: string;
+            detail: string;
         };
         ActionPlanTaskCreateObservationRequest: {
             text: string;
@@ -2854,6 +2887,17 @@ export interface components {
          * @enum {string}
          */
         OriginEnum: "signal" | "action_plan_execution";
+        PatchedActionPlanExecutionUpdateRequest: {
+            /** Format: date-time */
+            expected_updated_at?: string;
+            title?: string;
+            description?: string;
+            requires_validation?: boolean;
+            /** Format: date-time */
+            end_at?: string | null;
+            assignees?: components["schemas"]["ActionPlanExecutionAssigneeUpdate"][];
+            pending_tasks?: components["schemas"]["ActionPlanExecutionPendingTaskUpdate"][];
+        };
         PatchedActionPlanScheduleUpdateRequest: {
             /** Format: date */
             start_date?: string;
@@ -4039,6 +4083,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plan_executions_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedActionPlanExecutionUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedActionPlanExecutionUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedActionPlanExecutionUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanExecutionDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanStaleExecutionConflict"];
                 };
             };
         };

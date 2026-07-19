@@ -7,7 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTestQueryClient } from '@/test-utils'
 
-import { useCreateActionPlanMutation, useCreateActionPlanScheduleMutation } from './hooks'
+import {
+  useCreateActionPlanMutation,
+  useCreateActionPlanScheduleMutation,
+  useUpdateActionPlanExecutionMutation,
+} from './hooks'
 
 const createActionPlan = vi.fn(async () => ({
   id: 'exec-1',
@@ -20,12 +24,19 @@ const createActionPlanSchedule = vi.fn(async () => ({
   action_plan_id: 'plan-1',
 }))
 
+const updateActionPlanExecution = vi.fn(async () => ({
+  id: 'exec-1',
+  status: 'in_progress',
+  action_plan_id: 'plan-1',
+}))
+
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return {
     ...actual,
     createActionPlan: (...args: unknown[]) => createActionPlan(...args),
     createActionPlanSchedule: (...args: unknown[]) => createActionPlanSchedule(...args),
+    updateActionPlanExecution: (...args: unknown[]) => updateActionPlanExecution(...args),
   }
 })
 
@@ -33,6 +44,7 @@ describe('useCreateActionPlanMutation', () => {
   beforeEach(() => {
     createActionPlan.mockClear()
     createActionPlanSchedule.mockClear()
+    updateActionPlanExecution.mockClear()
   })
 
   it('invalidates execution and signal queries when create returns an execution', async () => {
@@ -97,6 +109,41 @@ describe('useCreateActionPlanScheduleMutation', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['action-plans', 'detail', 'est-1', 'plan-1'],
+    })
+  })
+})
+
+describe('useUpdateActionPlanExecutionMutation', () => {
+  beforeEach(() => {
+    updateActionPlanExecution.mockClear()
+  })
+
+  it('invalidates execution detail and feeds after update', async () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(
+      () => useUpdateActionPlanExecutionMutation('est-1', 'exec-1'),
+      {
+        wrapper: ({ children }) =>
+          createElement(QueryClientProvider, { client: queryClient }, children),
+      },
+    )
+
+    result.current.mutate({
+      expected_updated_at: '2026-07-01T09:00:00.000Z',
+      title: 'Updated',
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'execution-detail', 'est-1', 'exec-1'],
     })
   })
 })

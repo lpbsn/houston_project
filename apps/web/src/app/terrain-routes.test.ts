@@ -33,6 +33,9 @@ describe('usesTerrainShell', () => {
     expect(usesTerrainShell({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       true,
     )
+    expect(usesTerrainShell({ kind: 'action-plan-execution-edit', executionId: 'exec-1' })).toBe(
+      true,
+    )
   })
 
   it('returns true for team and action plan hub routes', () => {
@@ -199,6 +202,16 @@ describe('getTerrainRouteConfig', () => {
       mainScroll: 'auto',
       hideTopbar: true,
     })
+    expect(
+      getTerrainRouteConfig({ kind: 'action-plan-execution-edit', executionId: 'exec-1' }),
+    ).toEqual({
+      topbarVariant: 'detail',
+      title: 'Modifier le plan',
+      backPath: '/action-plans/executions/exec-1',
+      showBottomNav: false,
+      mainScroll: 'auto',
+      hideTopbar: true,
+    })
   })
 
   it('configures signal detail without bottom nav', () => {
@@ -317,6 +330,9 @@ describe('getTerrainContentKey', () => {
     expect(getTerrainContentKey({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       'action-plan-execution-detail-exec-1',
     )
+    expect(getTerrainContentKey({ kind: 'action-plan-execution-edit', executionId: 'exec-1' })).toBe(
+      'action-plan-execution-edit-exec-1',
+    )
   })
 
   it('includes chat conversation id for detail routes', () => {
@@ -363,6 +379,9 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute({ kind: 'action-plan-execution-detail', executionId: 'exec-1' })).toBe(
       true,
     )
+    expect(isProtectedRoute({ kind: 'action-plan-execution-edit', executionId: 'exec-1' })).toBe(
+      true,
+    )
   })
 
   it('returns false for public routes', () => {
@@ -404,6 +423,9 @@ describe('requiresActiveMembership', () => {
     ).toBe(true)
     expect(
       requiresActiveMembership({ kind: 'action-plan-execution-detail', executionId: 'exec-1' }),
+    ).toBe(true)
+    expect(
+      requiresActiveMembership({ kind: 'action-plan-execution-edit', executionId: 'exec-1' }),
     ).toBe(true)
   })
 

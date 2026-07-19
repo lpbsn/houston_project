@@ -322,11 +322,17 @@ class ActionPlanActiveExecutionConflictSerializer(serializers.Serializer):
     active_execution_id = serializers.UUIDField()
 
 
+class ActionPlanStaleExecutionConflictSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    detail = serializers.CharField()
+
+
 class ActionPlanExecutionPermissionHintsSerializer(serializers.Serializer):
     can_mark_done = serializers.BooleanField()
     can_validate = serializers.BooleanField()
     can_reopen = serializers.BooleanField()
     can_cancel = serializers.BooleanField()
+    can_update = serializers.BooleanField()
     is_pilot_pole_assignee = serializers.BooleanField()
     can_pin = serializers.BooleanField()
 
@@ -345,6 +351,50 @@ class ActionPlanTaskExecutionPermissionHintsSerializer(serializers.Serializer):
 class ActionPlanAssigneeRefSerializer(serializers.Serializer):
     membership_id = serializers.UUIDField()
     display_name = serializers.CharField()
+    start_at = serializers.DateTimeField(allow_null=True)
+    visible_from = serializers.DateTimeField(allow_null=True)
+    end_at = serializers.DateTimeField(allow_null=True)
+
+
+class ActionPlanExecutionAssigneeUpdateSerializer(serializers.Serializer):
+    membership_id = serializers.UUIDField()
+    business_unit_id = serializers.UUIDField()
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class ActionPlanExecutionPendingTaskUpdateSerializer(serializers.Serializer):
+    id = serializers.UUIDField(required=False)
+    task = serializers.CharField(max_length=ACTION_PLAN_TASK_MAX_LENGTH)
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    )
+    business_unit_id = serializers.UUIDField()
+    position = serializers.IntegerField(required=False, min_value=1, max_value=10)
+    deadline_at = serializers.DateTimeField(required=False, allow_null=True)
+    assigned_membership_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class ActionPlanExecutionUpdateRequestSerializer(serializers.Serializer):
+    expected_updated_at = serializers.DateTimeField()
+    title = serializers.CharField(
+        required=False,
+        max_length=ACTION_PLAN_TITLE_MAX_LENGTH,
+    )
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=ACTION_PLAN_DESCRIPTION_MAX_LENGTH,
+    )
+    requires_validation = serializers.BooleanField(required=False)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+    assignees = ActionPlanExecutionAssigneeUpdateSerializer(many=True, required=False)
+    pending_tasks = ActionPlanExecutionPendingTaskUpdateSerializer(
+        many=True,
+        required=False,
+    )
 
 
 class ActionPlanAssigneesByPoleSerializer(serializers.Serializer):
@@ -522,6 +572,9 @@ def _serialize_assignees_by_pole(execution: ActionPlanExecution) -> list[dict]:
             {
                 "membership_id": assignee.membership_id,
                 "display_name": _membership_display_name(assignee.membership),
+                "start_at": assignee.start_at,
+                "visible_from": assignee.visible_from,
+                "end_at": assignee.end_at,
             }
         )
     return [

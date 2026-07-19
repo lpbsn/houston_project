@@ -32,6 +32,13 @@ class ActionPlanConflictError(ActionPlanServiceError):
         self.active_execution_id = active_execution_id
 
 
+class ActionPlanStaleExecutionError(ActionPlanConflictError):
+    error_code = "stale_execution"
+
+    def __init__(self, message: str = "This execution was modified by another user.") -> None:
+        super().__init__(message)
+
+
 class MixedSubmissionActorConflict(ActionPlanPermissionError):
     error_code = "mixed_submission_actor_conflict"
 

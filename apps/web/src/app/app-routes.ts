@@ -41,6 +41,7 @@ export type AppRoute =
   | { kind: 'action-plan-template-detail'; actionPlanId: string }
   | { kind: 'action-plan-template-edit'; actionPlanId: string }
   | { kind: 'action-plan-execution-detail'; executionId: string }
+  | { kind: 'action-plan-execution-edit'; executionId: string }
   | { kind: 'chat-conversation-detail'; conversationId: string }
   | { kind: 'team-member-detail'; membershipId: string }
   | { kind: 'invitation'; token: string }
@@ -68,6 +69,8 @@ export function getAppRouteKey(route: AppRoute): string {
       return `action-plan-template-edit:${route.actionPlanId}`
     case 'action-plan-execution-detail':
       return `action-plan-execution-detail:${route.executionId}`
+    case 'action-plan-execution-edit':
+      return `action-plan-execution-edit:${route.executionId}`
     case 'chat-conversation-detail':
       return `chat-conversation-detail:${route.conversationId}`
     case 'team-member-detail':
@@ -117,6 +120,14 @@ function parseActionPlanCreateOrigin(input: string): ActionPlanCreateOrigin {
 }
 
 function parseActionPlanRoute(pathname: string, input: string): AppRoute | null {
+  const executionEditMatch = pathname.match(/^\/action-plans\/executions\/([^/]+)\/edit$/)
+  if (executionEditMatch?.[1]) {
+    return {
+      kind: 'action-plan-execution-edit',
+      executionId: executionEditMatch[1],
+    }
+  }
+
   const executionDetailMatch = pathname.match(/^\/action-plans\/executions\/([^/]+)$/)
   if (executionDetailMatch?.[1]) {
     return {

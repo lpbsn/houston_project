@@ -11,6 +11,7 @@ function hints(overrides: Partial<{ can_pin: boolean }> = {}) {
     can_validate: false,
     can_reopen: false,
     can_cancel: false,
+    can_update: false,
     is_pilot_pole_assignee: true,
     can_pin: false,
     ...overrides,

@@ -28,6 +28,7 @@ import type {
   ActionPlanTaskExecution,
   ActionPlanTaskSkipRequest,
   ActionPlanUseRequest,
+  PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
 } from './types'
 
@@ -366,6 +367,26 @@ export async function fetchActionPlanExecutionDetail(
         '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/',
         {
           params: executionPath(establishmentId, executionId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  return assertActionPlanData<ActionPlanExecutionDetail>(result)
+}
+
+export async function updateActionPlanExecution(
+  establishmentId: string,
+  executionId: string,
+  body: PatchedActionPlanExecutionUpdateRequest,
+): Promise<ActionPlanExecutionDetail> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH(
+        '/api/v1/establishments/{establishment_id}/action-plan-executions/{execution_id}/',
+        {
+          params: executionPath(establishmentId, executionId),
+          body,
           headers: getAuthHeaders(accessToken),
         },
       ),

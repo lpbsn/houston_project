@@ -31,6 +31,10 @@ export type ActionPlanEventPlanningConfig = {
   planningPersisted?: boolean
   assigneeActionsEnabled?: boolean
   assigneeActionPending?: Record<string, ActionPlanAssigneeActionKind>
+  /** Hide chronology toggle; keep draft mode (execution edit). */
+  lockChronologyMode?: boolean
+  /** Disable start date/time pickers (execution edit). */
+  lockStart?: boolean
 }
 
 export function hasGlobalRepeat(draft: ActionPlanEventPlanningDraft): boolean {
