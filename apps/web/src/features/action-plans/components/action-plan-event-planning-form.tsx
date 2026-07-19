@@ -16,6 +16,7 @@ import {
   combineDateAndTimeToIso,
   formatAssigneeSummary,
   hasGlobalRepeat,
+  resolveNowStartForPlanning,
   snapTimeToFiveMinutes,
   splitIsoToDateAndTime,
   validateAssigneePlanningAction,
@@ -106,6 +107,7 @@ export function ActionPlanEventPlanningForm({
   onAssigneeSchedule,
   onAssigneeLaunch,
 }: ActionPlanEventPlanningFormProps) {
+  const showNowAction = config.planningPersisted !== false
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
   const [assigneeActionErrors, setAssigneeActionErrors] = useState<Record<string, string>>({})
@@ -120,6 +122,23 @@ export function ActionPlanEventPlanningForm({
         assignee.id === id ? { ...assignee, ...patch } : assignee,
       ),
     })
+  }
+
+  function renderNowButton(apply: (parts: { date: string; time: string }) => void) {
+    if (!showNowAction) {
+      return undefined
+    }
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        className="h-7 rounded-full border-[#E8E6DF] bg-white px-2.5 text-xs font-medium text-[#114660]"
+        onClick={() => apply(resolveNowStartForPlanning())}
+      >
+        Maintenant
+      </Button>
+    )
   }
 
   function handleGlobalRepeatToggle(repeatEnabled: boolean) {
@@ -284,6 +303,11 @@ export function ActionPlanEventPlanningForm({
                             })
                           }
                           onTimeChange={() => undefined}
+                          labelAddon={renderNowButton((parts) =>
+                            updateAssignee(assignee.id, {
+                              startAt: combineDateAndTimeToIso(parts.date, parts.time, 'start'),
+                            }),
+                          )}
                           error={assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate')}
                         />
                         <PlanningDateRow
@@ -387,6 +411,11 @@ export function ActionPlanEventPlanningForm({
                               ),
                             })
                           }
+                          labelAddon={renderNowButton((parts) =>
+                            updateAssignee(assignee.id, {
+                              startAt: combineDateAndTimeToIso(parts.date, parts.time, 'start'),
+                            }),
+                          )}
                           error={
                             assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate') ??
                             assigneeFieldError(mergedFieldErrors, assignee.id, 'startTime')
@@ -474,6 +503,9 @@ export function ActionPlanEventPlanningForm({
                   onOpenPickerChange={setOpenPicker}
                   onDateChange={handleStartDateChange}
                   onTimeChange={() => undefined}
+                  labelAddon={renderNowButton((parts) =>
+                    updateDraft({ startDate: parts.date, startTime: parts.time }),
+                  )}
                   error={mergedFieldErrors.startDate}
                 />
                 <PlanningDateRow
@@ -547,6 +579,9 @@ export function ActionPlanEventPlanningForm({
                   onTimeChange={(startTime) =>
                     updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
                   }
+                  labelAddon={renderNowButton((parts) =>
+                    updateDraft({ startDate: parts.date, startTime: parts.time }),
+                  )}
                   error={
                     mergedFieldErrors.startAt ??
                     mergedFieldErrors.startTime ??

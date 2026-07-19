@@ -2,7 +2,7 @@
 
 import { createElement } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ActionPlanEventPlanningForm } from './action-plan-event-planning-form'
 import { createActionPlanAssigneeDraft } from '../lib/action-plan-form-validation'
@@ -42,8 +42,13 @@ function renderForm(
 }
 
 describe('ActionPlanEventPlanningForm', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
   })
 
   it('renders core global planning rows', () => {
@@ -315,5 +320,80 @@ describe('ActionPlanEventPlanningForm', () => {
     expect(
       screen.getByText("La planification n'est pas enregistrée avec le template."),
     ).toBeTruthy()
+  })
+
+  it('hides Maintenant when planning is not persisted', () => {
+    renderForm(createActionPlanEventPlanningDraft(), {
+      ...baseConfig,
+      planningPersisted: false,
+    })
+    expect(screen.queryByRole('button', { name: 'Maintenant' })).toBeNull()
+  })
+
+  it('fills shared start from Maintenant without changing end', () => {
+    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    const onDraftChange = vi.fn()
+    renderForm(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        startDate: '2026-07-01',
+        startTime: '09:00',
+        endDate: '2026-07-02',
+        endTime: '18:00',
+      },
+      baseConfig,
+      onDraftChange,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Maintenant' }))
+
+    expect(onDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startDate: '2026-07-19',
+        startTime: '10:00',
+        endDate: '2026-07-02',
+        endTime: '18:00',
+      }),
+    )
+  })
+
+  it('updates only the targeted assignee start with Maintenant', () => {
+    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    const onDraftChange = vi.fn()
+    const first = createActionPlanAssigneeDraft({
+      membershipId: 'm1',
+      businessUnitId: 'bu1',
+      displayName: 'Alice',
+      startAt: combineDateAndTimeToIso('2026-07-01', '09:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-01', '10:00', 'end'),
+    })
+    const second = createActionPlanAssigneeDraft({
+      membershipId: 'm2',
+      businessUnitId: 'bu1',
+      displayName: 'Bob',
+      startAt: combineDateAndTimeToIso('2026-07-02', '11:00', 'start'),
+      endAt: combineDateAndTimeToIso('2026-07-02', '12:00', 'end'),
+    })
+    renderForm(
+      {
+        ...createActionPlanEventPlanningDraft(),
+        usePerAssigneeChronology: true,
+        assignees: [first, second],
+      },
+      baseConfig,
+      onDraftChange,
+    )
+
+    const nowButtons = screen.getAllByRole('button', { name: 'Maintenant' })
+    expect(nowButtons).toHaveLength(2)
+    fireEvent.click(nowButtons[0])
+
+    expect(onDraftChange).toHaveBeenCalledTimes(1)
+    const nextDraft = onDraftChange.mock.calls[0][0] as ActionPlanEventPlanningDraft
+    expect(nextDraft.assignees[0].startAt).toBe(
+      combineDateAndTimeToIso('2026-07-19', '10:00', 'start'),
+    )
+    expect(nextDraft.assignees[0].endAt).toBe(first.endAt)
+    expect(nextDraft.assignees[1]).toEqual(second)
   })
 })

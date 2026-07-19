@@ -30,6 +30,7 @@ type PlanningDateTimeRowProps = {
   error?: string
   className?: string
   pickerFooter?: ReactNode
+  labelAddon?: ReactNode
 }
 
 export function PlanningDateTimeRow({
@@ -46,6 +47,7 @@ export function PlanningDateTimeRow({
   error,
   className,
   pickerFooter,
+  labelAddon,
 }: PlanningDateTimeRowProps) {
   const dateActive = openPicker?.rowId === rowId && openPicker.part === 'date'
   const timeActive = openPicker?.rowId === rowId && openPicker.part === 'time'
@@ -64,7 +66,10 @@ export function PlanningDateTimeRow({
   return (
     <div className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}>
       <div className="flex items-center justify-between gap-3 px-3 py-3">
-        <span className="text-sm text-[#1a1a1a]">{label}</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="text-sm text-[#1a1a1a]">{label}</span>
+          {labelAddon}
+        </div>
         <div className="flex shrink-0 items-center gap-2">
           {!hideDate ? (
             <PlanningPill

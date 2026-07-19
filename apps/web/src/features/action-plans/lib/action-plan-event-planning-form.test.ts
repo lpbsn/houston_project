@@ -15,6 +15,7 @@ import {
   getDefaultPlanningTime,
   hasGlobalRepeat,
   hasPerAssigneeRepeat,
+  resolveNowStartForPlanning,
   shouldHidePrimaryPlanningActions,
   snapTimeToFiveMinutes,
   splitIsoToDateAndTime,
@@ -134,6 +135,26 @@ describe('action-plan-event-planning-form', () => {
     expect(snapTimeToFiveMinutes('09:02')).toBe('09:00')
     expect(snapTimeToFiveMinutes('09:03')).toBe('09:05')
     expect(snapTimeToFiveMinutes('23:58')).toBe('00:00')
+  })
+
+  it('resolves now start with five-minute snap and day rollover', () => {
+    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    expect(resolveNowStartForPlanning()).toEqual({
+      date: '2026-07-19',
+      time: '10:00',
+    })
+
+    vi.setSystemTime(new Date(2026, 6, 19, 10, 3, 0))
+    expect(resolveNowStartForPlanning()).toEqual({
+      date: '2026-07-19',
+      time: '10:05',
+    })
+
+    vi.setSystemTime(new Date(2026, 6, 19, 23, 58, 0))
+    expect(resolveNowStartForPlanning()).toEqual({
+      date: '2026-07-20',
+      time: '00:00',
+    })
   })
 
   it('defaults planning time to the current local time snapped to five minutes', () => {

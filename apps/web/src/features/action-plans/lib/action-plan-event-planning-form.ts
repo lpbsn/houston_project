@@ -90,6 +90,60 @@ export function combineDateTimeToIso(
   return new Date(parsed).toISOString()
 }
 
+function addOneCalendarDay(date: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim())
+  if (!match) {
+    return date
+  }
+  const year = Number.parseInt(match[1], 10)
+  const month = Number.parseInt(match[2], 10)
+  const day = Number.parseInt(match[3], 10)
+  const next = new Date(Date.UTC(year, month - 1, day))
+  next.setUTCDate(next.getUTCDate() + 1)
+  return next.toISOString().slice(0, 10)
+}
+
+export function snapDateAndTimeToFiveMinutes(parts: {
+  date: string
+  time: string
+}): { date: string; time: string } {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(parts.time.trim())
+  if (!match || !parts.date.trim()) {
+    return parts
+  }
+  let hours = Number.parseInt(match[1], 10)
+  const minutes = Number.parseInt(match[2], 10)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return parts
+  }
+  let snapped = Math.round(minutes / 5) * 5
+  let date = parts.date.trim()
+  if (snapped === 60) {
+    snapped = 0
+    hours += 1
+    if (hours >= 24) {
+      hours = 0
+      date = addOneCalendarDay(date)
+    }
+  }
+  return {
+    date,
+    time: `${String(hours).padStart(2, '0')}:${String(snapped).padStart(2, '0')}`,
+  }
+}
+
+export function resolveNowStartForPlanning(now: Date = new Date()): { date: string; time: string } {
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return snapDateAndTimeToFiveMinutes({
+    date: `${year}-${month}-${day}`,
+    time: `${hours}:${minutes}`,
+  })
+}
+
 export function toSharedChronologyFields(draft: ActionPlanEventPlanningDraft): {
   sharedStartAt: string
   sharedEndAt: string
