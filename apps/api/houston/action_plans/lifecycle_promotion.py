@@ -12,6 +12,9 @@ from houston.action_plans.models import ActionPlanExecution
 
 logger = logging.getLogger(__name__)
 
+# Beat / lazy establishment tick only — never reused for schedule-scoped reconciliation.
+_BEAT_PROMOTION_BATCH_LIMIT = 200
+
 
 def _apply_lifecycle_scope(
     queryset,
@@ -61,26 +64,6 @@ def _due_availability_queryset(
     )
 
 
-@transaction.atomic
-def promote_due_scheduled_executions(
-    *,
-    establishment_id: uuid.UUID | None = None,
-    execution_id: uuid.UUID | None = None,
-) -> int:
-    """Promote scheduled → in_progress. Beat: global. Lazy: establishment and/or id."""
-    candidate_ids = list(
-        _due_scheduled_queryset(
-            establishment_id=establishment_id,
-            execution_id=execution_id,
-        ).values_list("id", flat=True)[:200]
-    )
-    promoted = 0
-    for candidate_id in candidate_ids:
-        if _promote_one_execution(execution_id=candidate_id):
-            promoted += 1
-    return promoted
-
-
 def _promote_one_execution(*, execution_id: uuid.UUID) -> bool:
     now = timezone.now()
     from houston.action_plans.realtime import schedule_action_plan_execution_invalidation
@@ -121,6 +104,44 @@ def _promote_one_execution(*, execution_id: uuid.UUID) -> bool:
     return True
 
 
+def _promote_candidate_ids(candidate_ids: list[uuid.UUID]) -> int:
+    promoted = 0
+    for candidate_id in candidate_ids:
+        if _promote_one_execution(execution_id=candidate_id):
+            promoted += 1
+    return promoted
+
+
+@transaction.atomic
+def promote_due_scheduled_executions(
+    *,
+    establishment_id: uuid.UUID | None = None,
+    execution_id: uuid.UUID | None = None,
+) -> int:
+    """Promote scheduled → in_progress. Beat: global. Lazy: establishment and/or id."""
+    candidate_ids = list(
+        _due_scheduled_queryset(
+            establishment_id=establishment_id,
+            execution_id=execution_id,
+        ).values_list("id", flat=True)[:_BEAT_PROMOTION_BATCH_LIMIT]
+    )
+    return _promote_candidate_ids(candidate_ids)
+
+
+@transaction.atomic
+def promote_due_scheduled_executions_for_schedule(*, schedule_id: uuid.UUID) -> int:
+    """Promote all due scheduled executions for one schedule. Exhaustive; no Beat batch cap."""
+    now = timezone.now()
+    candidate_ids = list(
+        ActionPlanExecution.objects.filter(
+            action_plan_schedule_id=schedule_id,
+            status=EXECUTION_STATUS_SCHEDULED,
+            start_at__lte=now,
+        ).values_list("id", flat=True)
+    )
+    return _promote_candidate_ids(candidate_ids)
+
+
 @transaction.atomic
 def emit_due_availability_notifications(
     *,
@@ -134,7 +155,7 @@ def emit_due_availability_notifications(
         _due_availability_queryset(
             establishment_id=establishment_id,
             execution_id=execution_id,
-        ).values_list("id", flat=True)[:200]
+        ).values_list("id", flat=True)[:_BEAT_PROMOTION_BATCH_LIMIT]
     )
     emitted = 0
     for candidate_id in candidate_ids:

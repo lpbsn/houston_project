@@ -11,6 +11,7 @@ from houston.action_plans.constants import (
     EXECUTION_STATUS_CANCELED,
     EXECUTION_STATUS_DONE,
     EXECUTION_STATUS_IN_PROGRESS,
+    EXECUTION_STATUS_PENDING_VALIDATION,
     EXECUTION_STATUS_SCHEDULED,
 )
 from houston.action_plans.exceptions import (
@@ -18,7 +19,12 @@ from houston.action_plans.exceptions import (
     ActionPlanPermissionError,
     ActionPlanValidationError,
 )
+from houston.action_plans.lifecycle_promotion import (
+    promote_due_scheduled_executions_for_schedule,
+)
+from houston.action_plans.models import ActionPlanExecution
 from houston.action_plans.schedule_services import (
+    classify_schedule_linked_execution,
     create_action_plan_schedule,
     deactivate_action_plan_schedule,
     update_action_plan_schedule,
@@ -124,11 +130,12 @@ def test_update_cancels_future_execution_outside_recurrence(
     )
     future_execution = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     assert future_execution is not None
+    future_execution.status = EXECUTION_STATUS_SCHEDULED
     future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
     future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
     future_execution.visible_from = future_execution.start_at - timezone.timedelta(hours=1)
     future_execution.save(
-        update_fields=["start_at", "end_at", "visible_from", "updated_at"],
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
     )
     occurrence_date = future_execution.occurrence_date
     excluded_day = next(
@@ -579,3 +586,271 @@ def test_schedule_assignee_times_rejected(
             use_shared_chronology=False,
             **window,
         )
+
+
+def test_classify_pending_validation_is_active_not_terminal(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    execution = schedule.executions.first()
+    assert execution is not None
+    execution.status = EXECUTION_STATUS_PENDING_VALIDATION
+    execution.save(update_fields=["status", "updated_at"])
+
+    assert (
+        classify_schedule_linked_execution(execution=execution)
+        == "active_pending_validation"
+    )
+    assert classify_schedule_linked_execution(execution=execution) != "terminal"
+
+    execution.status = EXECUTION_STATUS_DONE
+    execution.save(update_fields=["status", "updated_at"])
+    assert classify_schedule_linked_execution(execution=execution) == "terminal"
+
+
+def test_update_promotes_overdue_scheduled_before_sync(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    overdue = schedule.executions.filter(
+        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
+    ).first()
+    assert overdue is not None
+    overdue.status = EXECUTION_STATUS_SCHEDULED
+    overdue.start_at = timezone.now() - timezone.timedelta(minutes=5)
+    overdue.end_at = timezone.now() + timezone.timedelta(hours=1)
+    overdue.visible_from = overdue.start_at - timezone.timedelta(hours=1)
+    overdue.save(
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+    )
+
+    update_action_plan_schedule(
+        schedule=schedule,
+        actor=owner_membership,
+        start_at=time(10, 0),
+        end_at=time(11, 0),
+    )
+
+    overdue.refresh_from_db()
+    assert overdue.status == EXECUTION_STATUS_IN_PROGRESS
+
+
+def test_update_window_into_past_promotes_future_scheduled(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    today = timezone.now().date()
+    target = schedule.executions.filter(occurrence_date=today).first()
+    if target is None:
+        target = schedule.executions.first()
+        assert target is not None
+        target.occurrence_date = today
+    # Keep scheduled with a future window, then sync schedule times into the past.
+    future_start = timezone.now() + timezone.timedelta(hours=3)
+    target.status = EXECUTION_STATUS_SCHEDULED
+    target.start_at = future_start
+    target.end_at = future_start + timezone.timedelta(hours=1)
+    target.visible_from = future_start - timezone.timedelta(hours=1)
+    target.save(
+        update_fields=[
+            "status",
+            "occurrence_date",
+            "start_at",
+            "end_at",
+            "visible_from",
+            "updated_at",
+        ],
+    )
+
+    update_action_plan_schedule(
+        schedule=schedule,
+        actor=owner_membership,
+        start_at=time(0, 30),
+        end_at=time(1, 30),
+    )
+
+    target.refresh_from_db()
+    assert target.start_at <= timezone.now()
+    assert target.status == EXECUTION_STATUS_IN_PROGRESS
+
+
+def test_update_does_not_regress_in_progress_when_start_pushed_future(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    active = schedule.executions.first()
+    assert active is not None
+    active.status = EXECUTION_STATUS_IN_PROGRESS
+    active.start_at = timezone.now() - timezone.timedelta(minutes=5)
+    active.end_at = timezone.now() + timezone.timedelta(hours=1)
+    active.visible_from = active.start_at - timezone.timedelta(hours=1)
+    active.save(
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+    )
+
+    update_action_plan_schedule(
+        schedule=schedule,
+        actor=owner_membership,
+        start_at=time(22, 0),
+        end_at=time(23, 0),
+    )
+
+    active.refresh_from_db()
+    assert active.status == EXECUTION_STATUS_IN_PROGRESS
+
+
+def test_schedule_scoped_promotion_is_exhaustive_beyond_beat_cap(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    now = timezone.now()
+    base_date = now.date() + timezone.timedelta(days=30)
+    # Clear materialised rows so unique (schedule, occurrence_date) is free.
+    schedule.executions.all().delete()
+
+    rows = []
+    for index in range(201):
+        occurrence_date = base_date + timezone.timedelta(days=index)
+        start_at = now - timezone.timedelta(minutes=1)
+        rows.append(
+            ActionPlanExecution(
+                action_plan=catalog_action_plan,
+                action_plan_schedule=schedule,
+                establishment_id=owner_membership.establishment_id,
+                created_by=owner_membership,
+                pilot_business_unit=business_unit,
+                title=f"Due {index}",
+                description="",
+                requires_validation=False,
+                use_shared_chronology=True,
+                status=EXECUTION_STATUS_SCHEDULED,
+                occurrence_date=occurrence_date,
+                start_at=start_at,
+                visible_from=start_at - timezone.timedelta(hours=1),
+                end_at=start_at + timezone.timedelta(hours=1),
+                last_activity_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    ActionPlanExecution.objects.bulk_create(rows)
+
+    promoted = promote_due_scheduled_executions_for_schedule(schedule_id=schedule.id)
+    assert promoted == 201
+    assert (
+        schedule.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS).count() == 201
+    )
+
+
+def test_schedule_scoped_promotion_does_not_touch_other_schedule(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule_a = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    schedule_b = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    due_a = schedule_a.executions.first()
+    due_b = schedule_b.executions.first()
+    assert due_a is not None and due_b is not None
+    past = timezone.now() - timezone.timedelta(minutes=2)
+    for execution in (due_a, due_b):
+        execution.status = EXECUTION_STATUS_SCHEDULED
+        execution.start_at = past
+        execution.end_at = past + timezone.timedelta(hours=1)
+        execution.visible_from = past - timezone.timedelta(hours=1)
+        execution.save(
+            update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+        )
+
+    promote_due_scheduled_executions_for_schedule(schedule_id=schedule_a.id)
+
+    due_a.refresh_from_db()
+    due_b.refresh_from_db()
+    assert due_a.status == EXECUTION_STATUS_IN_PROGRESS
+    assert due_b.status == EXECUTION_STATUS_SCHEDULED
+
+
+def test_update_preserves_pending_validation_window(
+    owner_membership,
+    catalog_action_plan,
+    staff_membership,
+    business_unit,
+):
+    schedule = _create_schedule(
+        owner_membership,
+        catalog_action_plan,
+        staff_membership,
+        business_unit,
+    )
+    pending = schedule.executions.first()
+    assert pending is not None
+    pending.status = EXECUTION_STATUS_PENDING_VALIDATION
+    pending.start_at = timezone.now() - timezone.timedelta(hours=2)
+    pending.end_at = timezone.now() + timezone.timedelta(hours=1)
+    pending.visible_from = pending.start_at - timezone.timedelta(hours=1)
+    pending.save(
+        update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
+    )
+    window = (pending.start_at, pending.end_at, pending.visible_from)
+
+    update_action_plan_schedule(
+        schedule=schedule,
+        actor=owner_membership,
+        start_at=time(14, 0),
+        end_at=time(15, 0),
+    )
+
+    pending.refresh_from_db()
+    assert pending.status == EXECUTION_STATUS_PENDING_VALIDATION
+    assert (pending.start_at, pending.end_at, pending.visible_from) == window

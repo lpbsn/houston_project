@@ -56,8 +56,15 @@ from houston.establishments.models import EstablishmentMembership
 _TERMINAL_EXECUTION_STATUSES = frozenset(
     {
         EXECUTION_STATUS_DONE,
-        EXECUTION_STATUS_PENDING_VALIDATION,
         EXECUTION_STATUS_CANCELED,
+    }
+)
+
+_SCHEDULE_SYNC_PRESERVED_CLASSIFICATIONS = frozenset(
+    {
+        "terminal",
+        "active_started",
+        "active_pending_validation",
     }
 )
 
@@ -114,20 +121,24 @@ def classify_schedule_linked_execution(
     execution: ActionPlanExecution,
     now: datetime | None = None,
 ) -> str:
+    """Classify schedule-linked execution for sync/deactivate mutability.
+
+    Callers that mutate schedules must promote due ``scheduled`` executions first.
+    ``pending_validation`` is started/active and preserved (not a terminal status).
+    """
     resolved_now = now or timezone.now()
-    if execution.action_plan_schedule_id is None or execution.start_at is None:
-        return "active_started"
     if execution.status in _TERMINAL_EXECUTION_STATUSES:
         return "terminal"
+    if execution.status == EXECUTION_STATUS_PENDING_VALIDATION:
+        return "active_pending_validation"
+    if execution.status == EXECUTION_STATUS_IN_PROGRESS:
+        return "active_started"
     if execution.status == EXECUTION_STATUS_SCHEDULED:
-        if resolved_now >= execution.start_at:
+        if execution.start_at is None or resolved_now >= execution.start_at:
+            # Safety net if promotion-first was skipped; protect from cancel/rewrite.
             return "active_started"
         return "future_not_started"
-    if execution.status != EXECUTION_STATUS_IN_PROGRESS:
-        return "terminal"
-    if resolved_now >= execution.start_at:
-        return "active_started"
-    return "future_not_started"
+    return "active_started"
 
 
 def get_active_started_execution_for_schedule(
@@ -577,7 +588,12 @@ def _sync_schedule_executions_after_update(
     schedule: ActionPlanSchedule,
     now: datetime | None = None,
 ) -> None:
+    from houston.action_plans.lifecycle_promotion import (
+        promote_due_scheduled_executions_for_schedule,
+    )
+
     resolved_now = now or timezone.now()
+    promote_due_scheduled_executions_for_schedule(schedule_id=schedule.id)
     valid_dates = set(
         iter_occurrence_dates(
             schedule=schedule,
@@ -590,6 +606,7 @@ def _sync_schedule_executions_after_update(
     )
 
     for execution in schedule.executions.all():
+        execution.refresh_from_db()
         if execution.status == EXECUTION_STATUS_CANCELED:
             if _can_reactivate_canceled_schedule_execution(
                 execution=execution,
@@ -605,7 +622,7 @@ def _sync_schedule_executions_after_update(
             execution=execution,
             now=resolved_now,
         )
-        if classification == "terminal" or classification == "active_started":
+        if classification in _SCHEDULE_SYNC_PRESERVED_CLASSIFICATIONS:
             continue
         if (
             not schedule.use_shared_chronology
@@ -623,6 +640,9 @@ def _sync_schedule_executions_after_update(
                 current_membership_ids=current_membership_ids,
             )
         _sync_future_execution_window(execution=execution, schedule=schedule)
+
+    # Window sync may move start_at into the past — promote forward-only, exhaustive.
+    promote_due_scheduled_executions_for_schedule(schedule_id=schedule.id)
 
 
 @transaction.atomic
@@ -717,7 +737,12 @@ def _deactivate_schedule_core(
     schedule: ActionPlanSchedule,
     allow_active_started: bool = False,
 ) -> ActionPlanSchedule:
+    from houston.action_plans.lifecycle_promotion import (
+        promote_due_scheduled_executions_for_schedule,
+    )
+
     now = timezone.now()
+    promote_due_scheduled_executions_for_schedule(schedule_id=schedule.id)
     if not allow_active_started:
         active_execution = get_active_started_execution_for_schedule(
             schedule=schedule,
@@ -732,6 +757,7 @@ def _deactivate_schedule_core(
     for execution in schedule.executions.filter(
         status__in=(EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS),
     ):
+        execution.refresh_from_db()
         if classify_schedule_linked_execution(execution=execution, now=now) == (
             "future_not_started"
         ):

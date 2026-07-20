@@ -1603,7 +1603,10 @@ def test_scheduled_preview_and_upcoming_ignore_cursor_saturation(
     scheduled_preview_ids = [
         item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]
     ]
-    assert scheduled_preview_ids == [str(visible_scheduled.id)]
+    assert scheduled_preview_ids == [
+        str(visible_scheduled.id),
+        str(null_visible_scheduled.id),
+    ]
     assert feed_body["scheduled_items"][0]["action_plan_execution"]["permission_hints"][
         "can_pin"
     ] is False
@@ -1689,7 +1692,7 @@ def test_scheduled_visible_from_gates_feed_and_upcoming(
         item["action_plan_execution"]["id"] for item in feed_body["scheduled_items"]
     }
     assert str(null_visible.id) not in feed_item_ids
-    assert str(null_visible.id) not in scheduled_preview_ids
+    assert str(null_visible.id) in scheduled_preview_ids
     assert str(future_visible.id) not in feed_item_ids
     assert str(future_visible.id) not in scheduled_preview_ids
     assert str(reached.id) in scheduled_preview_ids

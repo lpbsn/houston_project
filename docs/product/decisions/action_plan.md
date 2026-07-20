@@ -1,7 +1,7 @@
 # Decision log — Action Plan (§26)
 
-Status: `authoritative`  
-Last updated: 2026-07-13  
+Status: `authoritative`
+Last updated: 2026-07-20
 Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 2B (2026-06-29)
 
 ## Procédure sign-off
@@ -242,7 +242,21 @@ Source canonique unique = `ActionPlanSchedule.start_at` / `end_at`. Pas d’over
 
 Restrictions : `/use/` individual ≤ 1 assigné ; `/schedule/` individual exactement 1 assignee. Signal → shared only. Staff → self one-shot only.
 
-**Visible_from (ponctuel)** : fourni → conserver ; null/absent → visibilité immédiate ; pas d’offset −1h (distinct des occurrences récurrentes `occurrence_start − 1h`).
+**Visible_from (ponctuel)** : fourni → conserver ; null/absent → visibilité immédiate ; pas d’offset −1h (distinct des occurrences récurrentes `occurrence_start − 1h`). `visible_from` pilote uniquement la visibilité (feed preview Planifiées, upcoming, notifs de mise à disposition) — jamais le statut.
+
+**Statut d’exécution (lifecycle)**
+
+```txt
+création : start_at > now → scheduled ; start_at <= now ou absent → in_progress
+promotion auto (Beat, lazy read, sync schedule) : scheduled → in_progress si start_at <= now
+aucune transition automatique ne régresse un statut
+pending_validation = commencée et active (pas terminale)
+done / canceled = terminaux
+reopen explicite : pending_validation | done → in_progress
+end_at ne termine jamais automatiquement une exécution
+sync schedule : promouvoir les scheduled dues du schedule (exhaustif) avant classify ;
+  pending_validation préservée / non réécrite ; distinct de done/canceled
+```
 
 **Frontend** : après toute réussite, redirect vers le feed opérationnel + feedback « X planifications et Y exécutions ont été créées. »
 

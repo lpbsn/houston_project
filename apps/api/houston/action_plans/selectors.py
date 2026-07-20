@@ -503,7 +503,7 @@ def scheduled_executions_visible_preview_queryset(
     now = timezone.now()
     return (
         scheduled_executions_base_queryset(membership=membership, view_mode=view_mode)
-        .filter(visible_from__lte=now)
+        .filter(Q(visible_from__isnull=True) | Q(visible_from__lte=now))
         .order_by("start_at", "id")[:limit]
     )
 
