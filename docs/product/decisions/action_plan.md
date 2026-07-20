@@ -34,6 +34,7 @@ Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 
 | [26.14](#decision-26-14) | Manager — utilisation catalogue | Voir détail ci-dessous | 2B, 3 |
 | [26.15](#decision-26-15) | Cross-pôle — création directe vs catalogue | Voir détail ci-dessous | 2B, 3 |
 | [26.16](#decision-26-16) | Catalogue actif sans tâche | Voir détail ci-dessous | 1, 2B |
+| [26.17](#decision-26-17) | Sort des exécutions à la suppression définitive du template | Voir détail ci-dessous | — |
 
 ---
 
@@ -332,6 +333,31 @@ Un modèle catalogue **actif** peut avoir **0 tâche** (alignement besoin §14 :
 Création catalogue active avec tasks=[] : autorisée
 Activation catalogue sans tâche modèle : autorisée
 Statut de contribution : inchangé — calculé uniquement pour les pôles ayant au moins une tâche (§15)
+```
+
+### Decision 26.17 — Sort des exécutions à la suppression définitive du template {#decision-26-17}
+
+Politique **statut-only** pour le sort des exécutions liées à un template réutilisable lors de sa suppression définitive (primitives internes ; pas d’API publique de hard-delete d’exécution).
+
+| Statut persistant | Décision |
+| ----------------- | -------- |
+| `scheduled` | hard-delete |
+| `in_progress` | conserver et détacher |
+| `pending_validation` | conserver et détacher |
+| `done` | conserver et détacher |
+| `canceled` (toute origine) | conserver et détacher |
+
+```txt
+Classification : statut persistant uniquement
+Ignoré : start_at, visible_from, cancel_origin, présence de commentaires
+Pas de promote-first pour décider le sort
+Commentaires d’une exécution scheduled : supprimés avec l’exécution (+ purge notifications)
+Observations : garde PROTECT technique — échec explicite si présentes sur un scheduled
+Détachement keep_detach : action_plan=null, action_plan_schedule=null, action_plan_task=null
+Arrêt matérialisation : phase interne (lock template, catalog inactive, schedules inactive)
+  — ne modifie aucun statut d'exécution (ne passe pas par la cascade deactivate qui annule les scheduled)
+  — pas une précondition UX
+Template actif ou inactif : suppression future autorisée sans désactivation manuelle préalable
 ```
 
 ---
