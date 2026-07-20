@@ -885,7 +885,7 @@ def _create_execution_record(
     requires_validation: bool,
     source_signal_id: uuid.UUID | None = None,
     action_plan_schedule: ActionPlanSchedule | None = None,
-    schedule_source_membership: EstablishmentMembership | None = None,
+    chronology_owner_membership: EstablishmentMembership | None = None,
     use_shared_chronology: bool = False,
     start_at: datetime | None = None,
     end_at: datetime | None = None,
@@ -896,10 +896,16 @@ def _create_execution_record(
     activity_subject=None,
 ) -> ActionPlanExecution:
     now = timezone.now()
+    if use_shared_chronology:
+        chronology_owner_membership = None
+    elif chronology_owner_membership is None:
+        raise ActionPlanValidationError(
+            "Individual chronology requires a chronology owner membership.",
+        )
     return ActionPlanExecution.objects.create(
         action_plan=action_plan,
         action_plan_schedule=action_plan_schedule,
-        schedule_source_membership=schedule_source_membership,
+        chronology_owner_membership=chronology_owner_membership,
         establishment_id=establishment_id,
         source_signal_id=source_signal_id,
         created_by=created_by,
@@ -1151,26 +1157,58 @@ def create_action_plan_with_execution(
         pilot_business_unit=pilot_business_unit,
         actor=created_by,
     )
+    if source_signal_id is not None:
+        use_shared_chronology = True
+
+    requested_assignees = assignees or []
+    if not requested_assignees:
+        use_shared_chronology = True
+    elif not use_shared_chronology and len(requested_assignees) > 1:
+        raise ActionPlanValidationError(
+            "Individual chronology with multiple assignees requires planning-submit.",
+        )
+
+    chronology_owner = None
+    resolved_start_at = start_at
+    resolved_end_at = end_at
+    resolved_visible_from = visible_from
+
     if created_by.role == EstablishmentMembership.Role.STAFF:
         validated_assignees = _validate_assignee_payloads(
             establishment_id=establishment_id,
-            assignees=assignees or [],
+            assignees=requested_assignees,
         )
+        if not use_shared_chronology and validated_assignees:
+            owner = validated_assignees[0]
+            chronology_owner = owner.membership
+            resolved_start_at = owner.start_at if owner.start_at is not None else start_at
+            resolved_end_at = owner.end_at if owner.end_at is not None else end_at
+            resolved_visible_from = (
+                owner.visible_from if owner.visible_from is not None else visible_from
+            )
     else:
         initial_assignees = _validate_assignee_payloads(
             establishment_id=establishment_id,
-            assignees=assignees or [],
+            assignees=requested_assignees,
         )
+        if not use_shared_chronology and initial_assignees:
+            owner = initial_assignees[0]
+            chronology_owner = owner.membership
+            resolved_start_at = owner.start_at if owner.start_at is not None else start_at
+            resolved_end_at = owner.end_at if owner.end_at is not None else end_at
+            resolved_visible_from = (
+                owner.visible_from if owner.visible_from is not None else visible_from
+            )
         chronology = _resolve_merge_chronology(
             use_shared_chronology=use_shared_chronology,
-            start_at=start_at,
-            end_at=end_at,
-            visible_from=visible_from,
+            start_at=resolved_start_at,
+            end_at=resolved_end_at,
+            visible_from=resolved_visible_from,
             validated_assignees=initial_assignees,
         )
         merged_assignee_payloads = _merge_validated_task_assignees_into_assignee_payloads(
             validated_tasks=validated_tasks,
-            assignee_payloads=assignees or [],
+            assignee_payloads=requested_assignees,
             chronology=chronology,
         )
         validated_assignees = _validate_assignee_payloads(
@@ -1275,10 +1313,11 @@ def create_action_plan_with_execution(
         description=normalized_description,
         requires_validation=requires_validation,
         source_signal_id=signal.id if signal is not None else None,
+        chronology_owner_membership=chronology_owner,
         use_shared_chronology=use_shared_chronology,
-        start_at=start_at,
-        end_at=end_at,
-        visible_from=visible_from,
+        start_at=resolved_start_at,
+        end_at=resolved_end_at,
+        visible_from=resolved_visible_from,
         occurrence_date=occurrence_date,
         affected_business_unit=affected_business_unit,
         responsible_business_unit=responsible_business_unit,
@@ -1357,6 +1396,19 @@ def create_execution_from_action_plan(
 
     plan_tasks = list(action_plan.tasks.order_by("position", "created_at"))
 
+    requested_assignees = assignees or []
+    if not requested_assignees:
+        use_shared_chronology = True
+    elif not use_shared_chronology and len(requested_assignees) > 1:
+        raise ActionPlanValidationError(
+            "Individual chronology with multiple assignees requires planning-submit.",
+        )
+
+    chronology_owner = None
+    resolved_start_at = start_at
+    resolved_end_at = end_at
+    resolved_visible_from = visible_from
+
     if actor.role == EstablishmentMembership.Role.STAFF:
         if not staff_catalog_action_plan_in_scope(actor, action_plan):
             raise ActionPlanPermissionError("Not allowed to use this action plan.")
@@ -1366,21 +1418,37 @@ def create_execution_from_action_plan(
             establishment_id=action_plan.establishment_id,
             assignees=assignees,
         )
+        if not use_shared_chronology and validated_assignees:
+            chronology_owner = validated_assignees[0].membership
+            owner = validated_assignees[0]
+            resolved_start_at = owner.start_at if owner.start_at is not None else start_at
+            resolved_end_at = owner.end_at if owner.end_at is not None else end_at
+            resolved_visible_from = (
+                owner.visible_from if owner.visible_from is not None else visible_from
+            )
     else:
         initial_assignees = _validate_assignee_payloads(
             establishment_id=action_plan.establishment_id,
-            assignees=assignees or [],
+            assignees=requested_assignees,
         )
+        if not use_shared_chronology and initial_assignees:
+            chronology_owner = initial_assignees[0].membership
+            owner = initial_assignees[0]
+            resolved_start_at = owner.start_at if owner.start_at is not None else start_at
+            resolved_end_at = owner.end_at if owner.end_at is not None else end_at
+            resolved_visible_from = (
+                owner.visible_from if owner.visible_from is not None else visible_from
+            )
         chronology = _resolve_merge_chronology(
             use_shared_chronology=use_shared_chronology,
-            start_at=start_at,
-            end_at=end_at,
-            visible_from=visible_from,
+            start_at=resolved_start_at,
+            end_at=resolved_end_at,
+            visible_from=resolved_visible_from,
             validated_assignees=initial_assignees,
         )
         merged_assignee_payloads = _merge_plan_task_assignees_into_assignee_payloads(
             plan_tasks=plan_tasks,
-            assignee_payloads=assignees or [],
+            assignee_payloads=requested_assignees,
             chronology=chronology,
         )
         validated_assignees = _validate_assignee_payloads(
@@ -1405,10 +1473,11 @@ def create_execution_from_action_plan(
         title=action_plan.title,
         description=action_plan.description,
         requires_validation=action_plan.requires_validation,
+        chronology_owner_membership=chronology_owner,
         use_shared_chronology=use_shared_chronology,
-        start_at=start_at,
-        end_at=end_at,
-        visible_from=visible_from,
+        start_at=resolved_start_at,
+        end_at=resolved_end_at,
+        visible_from=resolved_visible_from,
         occurrence_date=occurrence_date,
         affected_business_unit=action_plan.affected_business_unit,
         responsible_business_unit=action_plan.responsible_business_unit,
@@ -1844,8 +1913,6 @@ def create_action_plan_with_optional_schedule(
         {
             "membership_id": item["membership_id"],
             "business_unit_id": item["business_unit_id"],
-            "start_at": item.get("start_at"),
-            "end_at": item.get("end_at"),
         }
         for item in (schedule.get("assignees") or [])
     ]
@@ -1859,7 +1926,7 @@ def create_action_plan_with_optional_schedule(
         end_at=schedule["end_at"],
         recurrence_days=schedule["recurrence_days"],
         assignees=schedule_assignees,
-        use_shared_chronology=schedule.get("use_shared_chronology", False),
+        use_shared_chronology=schedule.get("use_shared_chronology", True),
     )
 
     one_shot_assignees = _assignee_payloads_from_dicts(assignees or [])

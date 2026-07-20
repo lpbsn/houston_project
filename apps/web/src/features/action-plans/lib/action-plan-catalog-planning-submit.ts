@@ -1,9 +1,5 @@
-import type { ActionPlanAssigneeDraft } from './action-plan-form-validation'
-import type { ActionPlanScheduleDraft } from './action-plan-schedule-form'
-import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
-import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
-import type { ActionPlanScheduleCreateRequest, ActionPlanUseRequest } from '../types'
 import { ActionPlansApiError } from '../api'
+import type { ActionPlanPlanningSubmitRequest } from '../types'
 import {
   buildOneShotAssigneesFromDraft,
   buildScheduleRequestsFromDraft,
@@ -16,24 +12,25 @@ import {
   validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from './action-plan-event-planning-form'
+import { isActionPlanScheduleConfigured } from './action-plan-schedule-form'
 
-export type CatalogPlanningSubmit =
-  | { kind: 'use'; useBody: ActionPlanUseRequest }
-  | { kind: 'schedule'; scheduleBody: ActionPlanScheduleCreateRequest }
-  | {
-      kind: 'mixed'
-      scheduleBody: ActionPlanScheduleCreateRequest
-      useBody: ActionPlanUseRequest
-    }
+export type CatalogPlanningSubmit = {
+  kind: 'planning'
+  body: ActionPlanPlanningSubmitRequest
+}
 
 export type CatalogPlanningOptions = {
   canSchedule: boolean
   staffMode?: boolean
 }
 
-export type CatalogPlanningPrimaryKind = 'schedule' | 'use' | 'mixed'
+export type CatalogPlanningPrimaryKind = 'planning'
 
 export const CATALOG_LAUNCH_EXECUTION_LABEL = "Lancer l'exécution"
+
+function newItemId(): string {
+  return crypto.randomUUID()
+}
 
 export function validateCatalogPlanningDraft(
   draft: ActionPlanEventPlanningDraft,
@@ -42,7 +39,7 @@ export function validateCatalogPlanningDraft(
   if (draft.usePerAssigneeChronology) {
     return validatePerAssigneePlanningDraft(draft, {
       allowRepeat: options.canSchedule,
-      requireCompatibleRepeats: true,
+      requireCompatibleRepeats: false,
     })
   }
 
@@ -52,128 +49,115 @@ export function validateCatalogPlanningDraft(
   })
 }
 
-export function buildPerAssigneeScheduleFromAssignees(
-  assignees: ActionPlanAssigneeDraft[],
-  options: { staffMode?: boolean } = {},
-): ActionPlanScheduleCreateRequest | undefined {
-  const recurringAssignees = assignees.filter(
-    (assignee) => assignee.repeatEnabled && assignee.membershipId && assignee.businessUnitId,
-  )
-  const firstAssignee = recurringAssignees[0]
-  if (!firstAssignee) {
-    return undefined
+function buildSharedPlanningItems(
+  draft: ActionPlanEventPlanningDraft,
+  options: { staffMode?: boolean },
+): ActionPlanPlanningSubmitRequest['items'] {
+  if (hasGlobalRepeat(draft)) {
+    const scheduleBodies = buildScheduleRequestsFromDraft(draft, options)
+    const scheduleBody = scheduleBodies[0]
+    if (!scheduleBody) {
+      return []
+    }
+    return [
+      {
+        item_id: newItemId(),
+        kind: 'schedule',
+        assignees: scheduleBody.assignees,
+        start_date: scheduleBody.start_date ?? null,
+        end_date: scheduleBody.end_date,
+        start_at: scheduleBody.start_at,
+        end_at: scheduleBody.end_at,
+        recurrence_days: scheduleBody.recurrence_days,
+      },
+    ]
   }
 
-  const startParts = splitIsoToDateAndTime(firstAssignee.startAt)
-  const endParts = splitIsoToDateAndTime(firstAssignee.endAt)
-  const schedule: ActionPlanScheduleDraft = {
-    enabled: true,
-    recurrenceDays: [...firstAssignee.recurrenceDays],
-    startDate: startParts.date.trim(),
-    endDate: firstAssignee.recurrenceEndDate.trim(),
-    startAt: startParts.time,
-    endAt: endParts.time,
-  }
-
-  return buildActionPlanScheduleCreateRequest({
-    schedule,
-    assignees: options.staffMode ? [] : recurringAssignees,
-    useSharedChronology: false,
-  })
+  const useBody = buildUseRequestFromDraft(draft, options)
+  return [
+    {
+      item_id: newItemId(),
+      kind: 'execution',
+      assignees: useBody.assignees,
+      start_at: useBody.start_at ?? null,
+      end_at: useBody.end_at ?? null,
+      visible_from: useBody.visible_from ?? null,
+    },
+  ]
 }
 
-export function buildPerAssigneeScheduleFromDraft(
+function buildIndividualPlanningItems(
   draft: ActionPlanEventPlanningDraft,
-  options: { staffMode?: boolean } = {},
-): ActionPlanScheduleCreateRequest | undefined {
-  return buildPerAssigneeScheduleFromAssignees(draft.assignees, options)
-}
+  options: { staffMode?: boolean },
+): ActionPlanPlanningSubmitRequest['items'] {
+  const items: ActionPlanPlanningSubmitRequest['items'] = []
 
-function hasOneShotAssignees(
-  draft: ActionPlanEventPlanningDraft,
-  options: { staffMode?: boolean } = {},
-): boolean {
-  const assignees = options.staffMode
-    ? draft.assignees.filter((assignee) => assignee.membershipId)
-    : buildOneShotAssigneesFromDraft(draft)
-  return assignees.length > 0
-}
+  for (const assignee of draft.assignees) {
+    if (!assignee.membershipId || !assignee.businessUnitId) {
+      continue
+    }
+    if (assignee.repeatEnabled) {
+      const startParts = splitIsoToDateAndTime(assignee.startAt)
+      const endParts = splitIsoToDateAndTime(assignee.endAt)
+      items.push({
+        item_id: newItemId(),
+        kind: 'schedule',
+        primary_membership_id: assignee.membershipId,
+        business_unit_id: assignee.businessUnitId,
+        start_date: startParts.date.trim() || null,
+        end_date: assignee.recurrenceEndDate.trim(),
+        start_at: startParts.time,
+        end_at: endParts.time,
+        recurrence_days: [...assignee.recurrenceDays],
+      })
+      continue
+    }
 
-function resolveCatalogPlanningSubmitKind(
-  draft: ActionPlanEventPlanningDraft,
-  options: CatalogPlanningOptions,
-): CatalogPlanningPrimaryKind | null {
-  if (hasGlobalRepeat(draft) && options.canSchedule) {
-    const scheduleBody = buildScheduleRequestsFromDraft(draft, {
-      staffMode: options.staffMode,
-    })[0]
-    return scheduleBody ? 'schedule' : null
-  }
-
-  if (draft.usePerAssigneeChronology) {
-    const scheduleBody = buildPerAssigneeScheduleFromDraft(draft, {
-      staffMode: options.staffMode,
+    items.push({
+      item_id: newItemId(),
+      kind: 'execution',
+      primary_membership_id: assignee.membershipId,
+      business_unit_id: assignee.businessUnitId,
+      start_at: assignee.startAt.trim() || null,
+      end_at: assignee.endAt.trim() || null,
+      visible_from: assignee.visibleFrom.trim() || null,
     })
-    const hasOneShot = hasOneShotAssignees(draft, { staffMode: options.staffMode })
-
-    if (scheduleBody && hasOneShot) {
-      return 'mixed'
-    }
-    if (scheduleBody) {
-      return 'schedule'
-    }
-    if (hasOneShot) {
-      return 'use'
-    }
-    return null
   }
 
-  return 'use'
+  if (options.staffMode && items.length === 0) {
+    const useBody = buildUseRequestFromDraft(draft, options)
+    items.push({
+      item_id: newItemId(),
+      kind: 'execution',
+      assignees: useBody.assignees,
+      start_at: useBody.start_at ?? null,
+      end_at: useBody.end_at ?? null,
+      visible_from: useBody.visible_from ?? null,
+    })
+  }
+
+  return items
 }
 
 export function resolveCatalogPlanningSubmit(
   draft: ActionPlanEventPlanningDraft,
   options: CatalogPlanningOptions,
 ): CatalogPlanningSubmit | undefined {
-  const kind = resolveCatalogPlanningSubmitKind(draft, options)
-  if (kind === null) {
+  const items = draft.usePerAssigneeChronology
+    ? buildIndividualPlanningItems(draft, { staffMode: options.staffMode })
+    : buildSharedPlanningItems(draft, { staffMode: options.staffMode })
+
+  if (items.length === 0) {
     return undefined
   }
 
-  if (kind === 'schedule') {
-    if (hasGlobalRepeat(draft) && options.canSchedule) {
-      const scheduleBody = buildScheduleRequestsFromDraft(draft, {
-        staffMode: options.staffMode,
-      })[0]
-      if (!scheduleBody) {
-        return undefined
-      }
-      return { kind: 'schedule', scheduleBody }
-    }
-
-    const scheduleBody = buildPerAssigneeScheduleFromDraft(draft, {
-      staffMode: options.staffMode,
-    })
-    if (!scheduleBody) {
-      return undefined
-    }
-    return { kind: 'schedule', scheduleBody }
-  }
-
-  if (kind === 'mixed') {
-    const scheduleBody = buildPerAssigneeScheduleFromDraft(draft, {
-      staffMode: options.staffMode,
-    })
-    const useBody = buildUseRequestFromDraft(draft, { staffMode: options.staffMode })
-    if (!scheduleBody) {
-      return undefined
-    }
-    return { kind: 'mixed', scheduleBody, useBody }
-  }
-
   return {
-    kind: 'use',
-    useBody: buildUseRequestFromDraft(draft, { staffMode: options.staffMode }),
+    kind: 'planning',
+    body: {
+      submission_id: crypto.randomUUID(),
+      use_shared_chronology: !draft.usePerAssigneeChronology,
+      items,
+    },
   }
 }
 
@@ -193,33 +177,27 @@ export function isCatalogPlanningPrimaryDisabled(
     draft.usePerAssigneeChronology &&
     hasPerAssigneeRepeat(draft) &&
     options.canSchedule &&
-    !hasOneShotAssignees(draft, { staffMode: options.staffMode })
+    buildOneShotAssigneesFromDraft(draft).length === 0
   ) {
-    return !buildPerAssigneeScheduleFromDraft(draft, { staffMode: options.staffMode })
+    return buildScheduleRequestsFromDraft(draft, { staffMode: options.staffMode }).length === 0
   }
 
   return false
 }
 
+export function formatPlanningSubmitFeedback(summary: {
+  executions_created: number
+  schedules_created: number
+}): string {
+  return `${summary.schedules_created} planifications et ${summary.executions_created} exécutions ont été créées.`
+}
+
 export function resolveCatalogPlanningSubmitFallbackMessage(
-  submit: CatalogPlanningSubmit,
+  _submit: CatalogPlanningSubmit,
   error?: unknown,
 ): string {
   if (error instanceof ActionPlansApiError) {
-    if (error.failedStep === 'schedule') {
-      return 'Le plan n’a pas pu être planifié.'
-    }
-    if (error.failedStep === 'use') {
-      return 'Le plan n’a pas pu être lancé.'
-    }
+    return error.message || 'Le plan n’a pas pu être utilisé.'
   }
-
-  if (submit.kind === 'schedule') {
-    return 'Le plan n’a pas pu être planifié.'
-  }
-  if (submit.kind === 'mixed' || submit.kind === 'use') {
-    return 'Le plan n’a pas pu être lancé.'
-  }
-
   return 'Le plan n’a pas pu être utilisé.'
 }

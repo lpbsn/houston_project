@@ -172,7 +172,13 @@ describe('ActionPlanUseSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
     expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'use',
+        kind: 'planning',
+        body: expect.objectContaining({
+          use_shared_chronology: true,
+          items: expect.arrayContaining([
+            expect.objectContaining({ kind: 'execution' }),
+          ]),
+        }),
       }),
     )
   })
@@ -198,10 +204,15 @@ describe('ActionPlanUseSheet', () => {
 
     expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'schedule',
-        scheduleBody: expect.objectContaining({
-          recurrence_days: ['monday'],
+        kind: 'planning',
+        body: expect.objectContaining({
           use_shared_chronology: true,
+          items: [
+            expect.objectContaining({
+              kind: 'schedule',
+              recurrence_days: ['monday'],
+            }),
+          ],
         }),
       }),
     )
@@ -224,18 +235,21 @@ describe('ActionPlanUseSheet', () => {
     expect(screen.getByRole('button', { name: "Lancer l'exécution" })).toBeTruthy()
     expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'use',
-        useBody: expect.objectContaining({
+        kind: 'planning',
+        body: expect.objectContaining({
           use_shared_chronology: false,
-          assignees: expect.arrayContaining([
-            expect.objectContaining({ membership_id: 'm1' }),
-          ]),
+          items: [
+            expect.objectContaining({
+              kind: 'execution',
+              primary_membership_id: 'm1',
+            }),
+          ],
         }),
       }),
     )
   })
 
-  it('keeps static launch label for schedule and mixed actions', () => {
+  it('keeps static launch label for schedule and planning actions', () => {
     render(
       createElement(ActionPlanUseSheet, {
         ...defaultProps,
@@ -284,16 +298,18 @@ describe('ActionPlanUseSheet', () => {
 
     expect(onPlanningSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'mixed',
-        scheduleBody: expect.objectContaining({
+        kind: 'planning',
+        body: expect.objectContaining({
           use_shared_chronology: false,
-          assignees: expect.arrayContaining([
-            expect.objectContaining({ membership_id: 'm1' }),
-          ]),
-        }),
-        useBody: expect.objectContaining({
-          assignees: expect.arrayContaining([
-            expect.objectContaining({ membership_id: 'm2' }),
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'schedule',
+              primary_membership_id: 'm1',
+            }),
+            expect.objectContaining({
+              kind: 'execution',
+              primary_membership_id: 'm2',
+            }),
           ]),
         }),
       }),

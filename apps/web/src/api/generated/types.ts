@@ -514,7 +514,7 @@ export interface paths {
         };
         get: operations["v1_establishments_action_plans_list"];
         put?: never;
-        /** @description Creates an action plan. Reusable catalog entries may omit tasks; execution or schedule flows require at least one task or assignee. */
+        /** @description Creates an action plan. Reusable catalog entries may omit tasks; execution or schedule flows require at least one task or assignee. With submission_id + items, creates a non-reusable plan and planning resources atomically. */
         post: operations["v1_establishments_action_plans_create"];
         delete?: never;
         options?: never;
@@ -570,7 +570,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/": {
+    "/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/planning-submit/": {
         parameters: {
             query?: never;
             header?: never;
@@ -579,7 +579,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["v1_establishments_action_plans_mixed_submit_create"];
+        post: operations["v1_establishments_action_plans_planning_submit_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1823,7 +1823,7 @@ export interface components {
             active: boolean;
             generic: components["schemas"]["BusinessUnitGeneric"];
         };
-        ActionPlanCreate201Response: components["schemas"]["ActionPlanDetail"] | components["schemas"]["ActionPlanExecutionDetail"];
+        ActionPlanCreate201Response: components["schemas"]["ActionPlanDetail"] | components["schemas"]["ActionPlanExecutionDetail"] | components["schemas"]["ActionPlanPlanningSubmitResponse"];
         ActionPlanCreateRequest: {
             title: string;
             /** @default  */
@@ -1850,6 +1850,9 @@ export interface components {
             /** Format: date */
             occurrence_date?: string | null;
             schedule?: components["schemas"]["ActionPlanScheduleCreateRequest"] | null;
+            /** Format: uuid */
+            submission_id?: string;
+            items?: components["schemas"]["ActionPlanPlanningItem"][];
         };
         ActionPlanDetail: {
             /** Format: uuid */
@@ -2020,18 +2023,6 @@ export interface components {
             updated_at: string;
             permission_hints: components["schemas"]["ActionPlanPermissionHints"];
         };
-        ActionPlanMixedSubmitRequest: {
-            /** Format: uuid */
-            submission_id: string;
-            schedule_body: components["schemas"]["ActionPlanScheduleCreateRequest"];
-            use_body: components["schemas"]["ActionPlanUseRequest"];
-        };
-        ActionPlanMixedSubmitResponse: {
-            execution: components["schemas"]["ActionPlanExecutionDetail"];
-            /** Format: uuid */
-            schedule_id: string;
-            replayed: boolean;
-        };
         ActionPlanPermissionHints: {
             can_update: boolean;
             can_activate: boolean;
@@ -2039,25 +2030,66 @@ export interface components {
             can_use: boolean;
             can_schedule: boolean;
         };
+        ActionPlanPlanningItem: {
+            /** Format: uuid */
+            item_id: string;
+            kind: components["schemas"]["KindEnum"];
+            /** Format: uuid */
+            primary_membership_id?: string | null;
+            /** Format: uuid */
+            business_unit_id?: string | null;
+            assignees?: components["schemas"]["ActionPlanAssigneeInput"][];
+            start_at?: string | null;
+            end_at?: string | null;
+            /** Format: date-time */
+            visible_from?: string | null;
+            /** Format: date */
+            occurrence_date?: string | null;
+            /** Format: date */
+            start_date?: string | null;
+            /** Format: date */
+            end_date?: string | null;
+            recurrence_days?: string[];
+        };
+        ActionPlanPlanningResourceResult: {
+            /** Format: uuid */
+            item_id: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            primary_membership_id: string | null;
+            status: string;
+        };
+        ActionPlanPlanningSubmitRequest: {
+            /** Format: uuid */
+            submission_id: string;
+            /** @default false */
+            use_shared_chronology: boolean;
+            items: components["schemas"]["ActionPlanPlanningItem"][];
+        };
+        ActionPlanPlanningSubmitResponse: {
+            replayed: boolean;
+            /** Format: uuid */
+            action_plan_id?: string | null;
+            summary: components["schemas"]["ActionPlanPlanningSubmitSummary"];
+            executions: components["schemas"]["ActionPlanPlanningResourceResult"][];
+            schedules: components["schemas"]["ActionPlanPlanningResourceResult"][];
+        };
+        ActionPlanPlanningSubmitSummary: {
+            executions_created: number;
+            schedules_created: number;
+        };
         ActionPlanScheduleAssignee: {
             /** Format: uuid */
             membership_id: string;
             display_name: string;
             business_unit: components["schemas"]["ActionPlanBusinessUnit"];
-            /** Format: time */
-            start_at: string | null;
-            /** Format: time */
-            end_at: string | null;
         };
         ActionPlanScheduleAssigneeInput: {
             /** Format: uuid */
             membership_id: string;
             /** Format: uuid */
             business_unit_id: string;
-            /** Format: time */
-            start_at?: string | null;
-            /** Format: time */
-            end_at?: string | null;
         };
         ActionPlanScheduleCreateRequest: {
             /** Format: date */
@@ -2621,6 +2653,12 @@ export interface components {
             source: string;
             active: boolean;
         };
+        /**
+         * @description * `execution` - execution
+         *     * `schedule` - schedule
+         * @enum {string}
+         */
+        KindEnum: "execution" | "schedule";
         LoginRequest: {
             identifier: string;
             password: string;
@@ -4848,6 +4886,14 @@ export interface operations {
             };
         };
         responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionPlanPlanningSubmitResponse"];
+                };
+            };
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -4881,6 +4927,14 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5096,7 +5150,7 @@ export interface operations {
             };
         };
     };
-    v1_establishments_action_plans_mixed_submit_create: {
+    v1_establishments_action_plans_planning_submit_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -5108,9 +5162,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ActionPlanMixedSubmitRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanMixedSubmitRequest"];
-                "multipart/form-data": components["schemas"]["ActionPlanMixedSubmitRequest"];
+                "application/json": components["schemas"]["ActionPlanPlanningSubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActionPlanPlanningSubmitRequest"];
+                "multipart/form-data": components["schemas"]["ActionPlanPlanningSubmitRequest"];
             };
         };
         responses: {
@@ -5119,7 +5173,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActionPlanMixedSubmitResponse"];
+                    "application/json": components["schemas"]["ActionPlanPlanningSubmitResponse"];
                 };
             };
             201: {
@@ -5127,7 +5181,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActionPlanMixedSubmitResponse"];
+                    "application/json": components["schemas"]["ActionPlanPlanningSubmitResponse"];
                 };
             };
             400: {

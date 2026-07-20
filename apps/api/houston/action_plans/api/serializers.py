@@ -191,8 +191,6 @@ class ActionPlanAssigneeInputSerializer(serializers.Serializer):
 class ActionPlanScheduleAssigneeInputSerializer(serializers.Serializer):
     membership_id = serializers.UUIDField()
     business_unit_id = serializers.UUIDField()
-    start_at = serializers.TimeField(required=False, allow_null=True)
-    end_at = serializers.TimeField(required=False, allow_null=True)
 
 
 class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
@@ -210,6 +208,50 @@ class ActionPlanScheduleCreateRequestSerializer(serializers.Serializer):
         default=list,
     )
     use_shared_chronology = serializers.BooleanField(required=False, default=False)
+
+
+class ActionPlanPlanningItemSerializer(serializers.Serializer):
+    item_id = serializers.UUIDField()
+    kind = serializers.ChoiceField(choices=["execution", "schedule"])
+    primary_membership_id = serializers.UUIDField(required=False, allow_null=True)
+    business_unit_id = serializers.UUIDField(required=False, allow_null=True)
+    assignees = ActionPlanAssigneeInputSerializer(many=True, required=False, default=list)
+    # execution: ISO datetime; schedule: HH:MM:SS — parsed in the view by kind
+    start_at = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    end_at = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    visible_from = serializers.DateTimeField(required=False, allow_null=True)
+    occurrence_date = serializers.DateField(required=False, allow_null=True)
+    start_date = serializers.DateField(required=False, allow_null=True)
+    end_date = serializers.DateField(required=False, allow_null=True)
+    recurrence_days = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+    )
+
+    def validate(self, attrs):
+        kind = attrs.get("kind")
+        if kind != "schedule":
+            return attrs
+
+        errors: dict[str, str] = {}
+        end_date = attrs.get("end_date")
+        start_at = attrs.get("start_at")
+        end_at = attrs.get("end_at")
+        recurrence_days = attrs.get("recurrence_days") or []
+
+        if end_date is None:
+            errors["end_date"] = "This field is required for schedule items."
+        if start_at is None or (isinstance(start_at, str) and not start_at.strip()):
+            errors["start_at"] = "This field is required for schedule items."
+        if end_at is None or (isinstance(end_at, str) and not end_at.strip()):
+            errors["end_at"] = "This field is required for schedule items."
+        if not recurrence_days:
+            errors["recurrence_days"] = "This field is required for schedule items."
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
 
 class ActionPlanCreateRequestSerializer(serializers.Serializer):
@@ -240,6 +282,36 @@ class ActionPlanCreateRequestSerializer(serializers.Serializer):
     visible_from = serializers.DateTimeField(required=False, allow_null=True)
     occurrence_date = serializers.DateField(required=False, allow_null=True)
     schedule = ActionPlanScheduleCreateRequestSerializer(required=False, allow_null=True)
+    # Direct atomic planning create (mutually exclusive with schedule / catalog / signal)
+    submission_id = serializers.UUIDField(required=False)
+    items = ActionPlanPlanningItemSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        items = attrs.get("items")
+        submission_id = attrs.get("submission_id")
+        has_planning = bool(items) or submission_id is not None
+        if has_planning:
+            if not items or submission_id is None:
+                raise serializers.ValidationError(
+                    "submission_id and items are both required for planning create."
+                )
+            if attrs.get("schedule") is not None:
+                raise serializers.ValidationError(
+                    "schedule cannot be combined with planning items."
+                )
+            if attrs.get("source_signal_id") is not None:
+                raise serializers.ValidationError(
+                    "source_signal_id cannot be combined with planning items."
+                )
+            if attrs.get("is_reusable") is True:
+                raise serializers.ValidationError(
+                    "Planning create must not set is_reusable=true."
+                )
+            if attrs.get("assignees"):
+                raise serializers.ValidationError(
+                    "assignees must be empty when using planning items."
+                )
+        return attrs
 
 
 class ActionPlanUpdateRequestSerializer(serializers.Serializer):
@@ -262,10 +334,30 @@ class ActionPlanUseRequestSerializer(serializers.Serializer):
     occurrence_date = serializers.DateField(required=False, allow_null=True)
 
 
-class ActionPlanMixedSubmitRequestSerializer(serializers.Serializer):
+class ActionPlanPlanningSubmitRequestSerializer(serializers.Serializer):
     submission_id = serializers.UUIDField()
-    schedule_body = ActionPlanScheduleCreateRequestSerializer()
-    use_body = ActionPlanUseRequestSerializer()
+    use_shared_chronology = serializers.BooleanField(required=False, default=False)
+    items = ActionPlanPlanningItemSerializer(many=True)
+
+
+class ActionPlanPlanningResourceResultSerializer(serializers.Serializer):
+    item_id = serializers.UUIDField()
+    id = serializers.UUIDField()
+    primary_membership_id = serializers.UUIDField(allow_null=True)
+    status = serializers.CharField()
+
+
+class ActionPlanPlanningSubmitSummarySerializer(serializers.Serializer):
+    executions_created = serializers.IntegerField()
+    schedules_created = serializers.IntegerField()
+
+
+class ActionPlanPlanningSubmitResponseSerializer(serializers.Serializer):
+    replayed = serializers.BooleanField()
+    action_plan_id = serializers.UUIDField(allow_null=True, required=False)
+    summary = ActionPlanPlanningSubmitSummarySerializer()
+    executions = ActionPlanPlanningResourceResultSerializer(many=True)
+    schedules = ActionPlanPlanningResourceResultSerializer(many=True)
 
 
 class ActionPlanScheduleUpdateRequestSerializer(serializers.Serializer):
@@ -293,8 +385,6 @@ class ActionPlanScheduleAssigneeSerializer(serializers.Serializer):
     membership_id = serializers.UUIDField()
     display_name = serializers.CharField()
     business_unit = ActionPlanBusinessUnitSerializer()
-    start_at = serializers.TimeField(allow_null=True)
-    end_at = serializers.TimeField(allow_null=True)
 
 
 class ActionPlanScheduleDetailSerializer(serializers.Serializer):
@@ -454,12 +544,6 @@ class ActionPlanExecutionDetailSerializer(serializers.Serializer):
     involved_poles = ActionPlanInvolvedPoleSerializer(many=True)
     task_executions = ActionPlanTaskExecutionSerializer(many=True)
     permission_hints = ActionPlanExecutionPermissionHintsSerializer()
-
-
-class ActionPlanMixedSubmitResponseSerializer(serializers.Serializer):
-    execution = ActionPlanExecutionDetailSerializer()
-    schedule_id = serializers.UUIDField()
-    replayed = serializers.BooleanField()
 
 
 class ActionPlanTaskSkipRequestSerializer(serializers.Serializer):
@@ -716,8 +800,6 @@ def serialize_schedule_detail(
                 "membership_id": assignee.membership_id,
                 "display_name": _membership_display_name(assignee.membership),
                 "business_unit": _serialize_business_unit(assignee.business_unit),
-                "start_at": assignee.start_at,
-                "end_at": assignee.end_at,
             }
             for assignee in schedule.schedule_assignees.all()
         ],

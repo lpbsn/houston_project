@@ -799,6 +799,7 @@ def test_contributor_assignee_mark_done_denied(
         created_by=owner_membership,
         pilot_business_unit_id=business_unit.id,
         title="Multi-pole plan",
+        use_shared_chronology=True,
         assignees=[
             build_assignee_payload(membership=owner_membership, business_unit=business_unit),
             build_assignee_payload(
@@ -835,6 +836,7 @@ def test_contributor_manager_validate_denied(
         created_by=owner_membership,
         pilot_business_unit_id=business_unit.id,
         title="Validate RBAC plan",
+        use_shared_chronology=True,
         assignees=[
             build_assignee_payload(membership=owner_membership, business_unit=business_unit),
             build_assignee_payload(

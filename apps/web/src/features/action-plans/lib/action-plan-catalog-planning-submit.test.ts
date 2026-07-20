@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createActionPlanAssigneeDraft } from './action-plan-form-validation'
 import {
-  buildPerAssigneeScheduleFromDraft,
   CATALOG_LAUNCH_EXECUTION_LABEL,
+  formatPlanningSubmitFeedback,
   isCatalogPlanningPrimaryDisabled,
   resolveCatalogPlanningSubmit,
   resolveCatalogPlanningSubmitFallbackMessage,
@@ -13,13 +13,14 @@ import {
   combineDateAndTimeToIso,
   createActionPlanEventPlanningDraft,
 } from './action-plan-event-planning-form'
+import { ActionPlansApiError } from '../api'
 
 describe('action-plan-catalog-planning-submit', () => {
   it('exposes static launch execution label for catalog UI', () => {
     expect(CATALOG_LAUNCH_EXECUTION_LABEL).toBe("Lancer l'exécution")
   })
 
-  it('resolves global repeat as schedule-only submit', () => {
+  it('resolves global repeat as planning schedule item', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),
       repeatEnabled: true,
@@ -37,14 +38,18 @@ describe('action-plan-catalog-planning-submit', () => {
     }
 
     const submit = resolveCatalogPlanningSubmit(draft, { canSchedule: true })
-    expect(submit?.kind).toBe('schedule')
-    if (submit?.kind === 'schedule') {
-      expect(submit.scheduleBody.recurrence_days).toEqual(['monday'])
-      expect(submit.scheduleBody.use_shared_chronology).toBe(true)
-    }
+    expect(submit?.kind).toBe('planning')
+    expect(submit?.body.use_shared_chronology).toBe(true)
+    expect(submit?.body.items).toHaveLength(1)
+    expect(submit?.body.items[0]).toEqual(
+      expect.objectContaining({
+        kind: 'schedule',
+        recurrence_days: ['monday'],
+      }),
+    )
   })
 
-  it('resolves per-assignee all one-shot as use-only submit', () => {
+  it('resolves per-assignee all one-shot as N planning execution items', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),
       usePerAssigneeChronology: true,
@@ -65,45 +70,31 @@ describe('action-plan-catalog-planning-submit', () => {
     }
 
     const submit = resolveCatalogPlanningSubmit(draft, { canSchedule: true })
-    expect(submit?.kind).toBe('use')
-    if (submit?.kind === 'use') {
-      expect(submit.useBody.use_shared_chronology).toBe(false)
-      expect(submit.useBody.assignees).toHaveLength(2)
-    }
+    expect(submit?.kind).toBe('planning')
+    expect(submit?.body.use_shared_chronology).toBe(false)
+    expect(submit?.body.items).toHaveLength(2)
+    expect(submit?.body.items.map((item) => item.kind)).toEqual(['execution', 'execution'])
+    expect(submit?.body.items[0]).toEqual(
+      expect.objectContaining({
+        primary_membership_id: 'm1',
+        kind: 'execution',
+      }),
+    )
+    expect(submit?.body.items[1]).toEqual(
+      expect.objectContaining({
+        primary_membership_id: 'm2',
+        kind: 'execution',
+      }),
+    )
   })
 
-  it('resolves per-assignee all repeat as schedule-only submit', () => {
-    const draft = {
-      ...createActionPlanEventPlanningDraft(),
-      usePerAssigneeChronology: true,
-      assignees: [
-        createActionPlanAssigneeDraft({
-          membershipId: 'm1',
-          businessUnitId: 'bu1',
-          repeatEnabled: true,
-          startAt: combineDateAndTimeToIso('2026-07-12', '05:00', 'start'),
-          endAt: combineDateAndTimeToIso('2026-07-12', '16:05', 'end'),
-          recurrenceDays: ['tuesday', 'thursday'],
-          recurrenceEndDate: '2026-07-25',
-        }),
-      ],
-    }
-
-    const submit = resolveCatalogPlanningSubmit(draft, { canSchedule: true })
-    expect(submit?.kind).toBe('schedule')
-    if (submit?.kind === 'schedule') {
-      expect(submit.scheduleBody.use_shared_chronology).toBe(false)
-      expect(submit.scheduleBody.assignees).toHaveLength(1)
-    }
-  })
-
-  it('resolves per-assignee mixed assignees as mixed submit', () => {
+  it('resolves per-assignee mixed assignees as planning schedule + execution items', () => {
     const recurringAssignee = createActionPlanAssigneeDraft({
       membershipId: 'm1',
       businessUnitId: 'bu1',
       repeatEnabled: true,
-      startAt: combineDateAndTimeToIso('2026-07-12', '05:00', 'start'),
-      endAt: combineDateAndTimeToIso('2026-07-12', '16:05', 'end'),
+      startAt: composeDateTime('2026-07-12', '05:00'),
+      endAt: composeDateTime('2026-07-12', '16:05'),
       recurrenceDays: ['tuesday', 'thursday', 'saturday'],
       recurrenceEndDate: '2026-07-25',
     })
@@ -111,8 +102,8 @@ describe('action-plan-catalog-planning-submit', () => {
       membershipId: 'm2',
       businessUnitId: 'bu1',
       repeatEnabled: false,
-      startAt: combineDateAndTimeToIso('2026-07-11', '05:00', 'start'),
-      endAt: combineDateAndTimeToIso('2026-07-25', '08:00', 'end'),
+      startAt: composeDateTime('2026-07-11', '05:00'),
+      endAt: composeDateTime('2026-07-25', '08:00'),
     })
     const draft = {
       ...createActionPlanEventPlanningDraft(),
@@ -121,46 +112,16 @@ describe('action-plan-catalog-planning-submit', () => {
     }
 
     const submit = resolveCatalogPlanningSubmit(draft, { canSchedule: true })
-    expect(submit?.kind).toBe('mixed')
-    if (submit?.kind === 'mixed') {
-      expect(submit.scheduleBody.assignees).toHaveLength(1)
-      expect(submit.useBody.assignees).toHaveLength(1)
-      expect(submit.useBody.assignees?.[0]?.membership_id).toBe('m2')
-    }
+    expect(submit?.kind).toBe('planning')
+    expect(submit?.body.use_shared_chronology).toBe(false)
+    expect(submit?.body.items).toHaveLength(2)
+    expect(submit?.body.items.map((item) => item.kind).sort()).toEqual([
+      'execution',
+      'schedule',
+    ])
   })
 
-  it('builds grouped per-assignee schedule from draft', () => {
-    const draft = {
-      ...createActionPlanEventPlanningDraft(),
-      usePerAssigneeChronology: true,
-      assignees: [
-        createActionPlanAssigneeDraft({
-          membershipId: 'm1',
-          businessUnitId: 'bu1',
-          repeatEnabled: true,
-          startAt: combineDateAndTimeToIso('2026-07-12', '05:00', 'start'),
-          endAt: combineDateAndTimeToIso('2026-07-12', '16:05', 'end'),
-          recurrenceDays: ['tuesday'],
-          recurrenceEndDate: '2026-07-25',
-        }),
-        createActionPlanAssigneeDraft({
-          membershipId: 'm2',
-          businessUnitId: 'bu1',
-          repeatEnabled: true,
-          startAt: combineDateAndTimeToIso('2026-07-12', '06:00', 'start'),
-          endAt: combineDateAndTimeToIso('2026-07-12', '17:00', 'end'),
-          recurrenceDays: ['tuesday'],
-          recurrenceEndDate: '2026-07-25',
-        }),
-      ],
-    }
-
-    const schedule = buildPerAssigneeScheduleFromDraft(draft)
-    expect(schedule?.assignees).toHaveLength(2)
-    expect(schedule?.recurrence_days).toEqual(['tuesday'])
-  })
-
-  it('validates per-assignee draft with compatible repeats requirement', () => {
+  it('allows distinct per-assignee recurrence patterns', () => {
     const draft = {
       ...createActionPlanEventPlanningDraft(),
       usePerAssigneeChronology: true,
@@ -187,9 +148,10 @@ describe('action-plan-catalog-planning-submit', () => {
     }
 
     const errors = validateCatalogPlanningDraft(draft, { canSchedule: true })
-    expect(errors.assignees).toBe(
-      'Les récurrences doivent partager les mêmes dates et jours pour être créées ensemble.',
-    )
+    expect(errors.assignees).toBeUndefined()
+    const submit = resolveCatalogPlanningSubmit(draft, { canSchedule: true })
+    expect(submit?.body.items).toHaveLength(2)
+    expect(submit?.body.items.every((item) => item.kind === 'schedule')).toBe(true)
   })
 
   it('disables primary action for incomplete global repeat schedule', () => {
@@ -207,43 +169,38 @@ describe('action-plan-catalog-planning-submit', () => {
     ).toBe(true)
   })
 
-  it('disables primary action for incomplete per-assignee all-recurring schedule', () => {
-    const draft = {
-      ...createActionPlanEventPlanningDraft(),
-      usePerAssigneeChronology: true,
-      assignees: [
-        createActionPlanAssigneeDraft({
-          membershipId: 'm1',
-          businessUnitId: 'bu1',
-          repeatEnabled: true,
-          recurrenceDays: ['monday'],
-        }),
-      ],
-    }
-
+  it('formats planning submit feedback as X planifications et Y exécutions', () => {
     expect(
-      isCatalogPlanningPrimaryDisabled(draft, { canSchedule: true, isPending: false }),
-    ).toBe(true)
+      formatPlanningSubmitFeedback({ schedules_created: 2, executions_created: 3 }),
+    ).toBe('2 planifications et 3 exécutions ont été créées.')
   })
 
-  it('maps mixed fallback messages without partial schedule success wording', () => {
-    const mixedSubmit = {
-      kind: 'mixed' as const,
-      scheduleBody: { end_date: '2026-12-31', start_at: '09:00', end_at: '10:00', recurrence_days: ['monday'], assignees: [] },
-      useBody: { use_shared_chronology: false, assignees: [] },
+  it('maps planning fallback messages', () => {
+    const submit = {
+      kind: 'planning' as const,
+      body: {
+        submission_id: 'sub-1',
+        use_shared_chronology: true,
+        items: [],
+      },
     }
 
-    expect(resolveCatalogPlanningSubmitFallbackMessage(mixedSubmit)).toBe(
-      'Le plan n’a pas pu être lancé.',
+    expect(resolveCatalogPlanningSubmitFallbackMessage(submit)).toBe(
+      'Le plan n’a pas pu être utilisé.',
     )
     expect(
-      resolveCatalogPlanningSubmitFallbackMessage(mixedSubmit, {
-        name: 'ActionPlansApiError',
-        status: 400,
-        detail: 'Use failed.',
-        code: 'validation_error',
-        failedStep: 'use',
-      } as import('../api').ActionPlansApiError),
-    ).toBe('Le plan n’a pas pu être lancé.')
+      resolveCatalogPlanningSubmitFallbackMessage(
+        submit,
+        new ActionPlansApiError({
+          status: 400,
+          detail: 'Use failed.',
+          code: 'validation_error',
+        }),
+      ),
+    ).toBe('Use failed.')
   })
 })
+
+function composeDateTime(date: string, time: string): string {
+  return combineDateAndTimeToIso(date, time, 'start')
+}

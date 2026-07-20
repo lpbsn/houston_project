@@ -13,9 +13,7 @@ const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
 const activateMutationMock = vi.fn()
 const deactivateMutationMock = vi.fn()
-const useMutationMock = vi.fn()
-const scheduleMutationMock = vi.fn()
-const mixedMutationMock = vi.fn()
+const planningMutationMock = vi.fn()
 
 function buildPlan(overrides: Partial<ActionPlanDetail> = {}): ActionPlanDetail {
   return {
@@ -75,13 +73,27 @@ vi.mock('@/app/auth-provider', () => ({
   }),
 }))
 
+vi.mock('../lib/action-plan-planning-submission-intent', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../lib/action-plan-planning-submission-intent')>()
+  return {
+    ...actual,
+    resolvePlanningSubmissionIntent: vi.fn(
+      async (options: { body: { items: unknown[] } }) => ({
+        submissionId: 'sub-fixed',
+        requestHash: 'hash',
+        itemIds: options.body.items.map((_, index) => `item-fixed-${index}`),
+      }),
+    ),
+    clearPlanningSubmissionIntent: vi.fn(),
+  }
+})
+
 vi.mock('../hooks', () => ({
   useActionPlanDetailQuery: () => detailQueryMock(),
   useActivateActionPlanMutation: () => activateMutationMock(),
   useDeactivateActionPlanMutation: () => deactivateMutationMock(),
-  useUseActionPlanMutation: () => useMutationMock(),
-  useCreateActionPlanScheduleMutation: () => scheduleMutationMock(),
-  useSubmitMixedActionPlanFromCatalogMutation: () => mixedMutationMock(),
+  useSubmitActionPlanPlanningMutation: () => planningMutationMock(),
 }))
 
 describe('ActionPlanTemplateDetailPage', () => {
@@ -100,15 +112,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       mutateAsync: vi.fn(),
       isPending: false,
     })
-    useMutationMock.mockReturnValue({
-      mutateAsync: vi.fn(),
-      isPending: false,
-    })
-    scheduleMutationMock.mockReturnValue({
-      mutateAsync: vi.fn(),
-      isPending: false,
-    })
-    mixedMutationMock.mockReturnValue({
+    planningMutationMock.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
     })
@@ -330,22 +334,34 @@ describe('ActionPlanTemplateDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Lancer pour cet assigné' })).toBeNull()
   })
 
-  it('shows execution feed link after schedule success', async () => {
-    const scheduleMutateAsync = vi.fn().mockResolvedValue(undefined)
-    scheduleMutationMock.mockReturnValue({
-      mutateAsync: scheduleMutateAsync,
+  it('navigates to operational feed after planning success', async () => {
+    const planningMutateAsync = vi.fn().mockResolvedValue({
+      replayed: false,
+      summary: { executions_created: 0, schedules_created: 1 },
+      executions: [],
+      schedules: [{ item_id: 'i1', id: 's1', primary_membership_id: null, status: 'active' }],
+    })
+    planningMutationMock.mockReturnValue({
+      mutateAsync: planningMutateAsync,
       isPending: false,
     })
     vi.spyOn(catalogPlanningSubmit, 'validateCatalogPlanningDraft').mockReturnValue({})
     vi.spyOn(catalogPlanningSubmit, 'resolveCatalogPlanningSubmit').mockReturnValue({
-      kind: 'schedule',
-      scheduleBody: {
-        end_date: '2026-12-31',
-        start_at: '09:00:00',
-        end_at: '10:00:00',
-        recurrence_days: ['monday'],
-        assignees: [],
+      kind: 'planning',
+      body: {
+        submission_id: 'sub-1',
         use_shared_chronology: true,
+        items: [
+          {
+            item_id: 'i1',
+            kind: 'schedule',
+            end_date: '2026-12-31',
+            start_at: '09:00:00',
+            end_at: '10:00:00',
+            recurrence_days: ['monday'],
+            assignees: [],
+          },
+        ],
       },
     })
 
@@ -355,12 +371,14 @@ describe('ActionPlanTemplateDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))
 
     await vi.waitFor(() => {
-      expect(scheduleMutateAsync).toHaveBeenCalled()
+      expect(planningMutateAsync).toHaveBeenCalled()
     })
 
     await vi.waitFor(() => {
-      expect(screen.getByText('Récurrence planifiée.')).toBeTruthy()
+      expect(navigateMock).toHaveBeenCalledWith('/execution')
     })
-    expect(screen.queryByRole('button', { name: "Voir le feed d'exécution" })).toBeNull()
+    expect(sessionStorage.getItem('houston:planning-feedback')).toBe(
+      '1 planifications et 0 exécutions ont été créées.',
+    )
   })
 })

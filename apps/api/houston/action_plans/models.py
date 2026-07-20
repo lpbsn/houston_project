@@ -231,22 +231,11 @@ class ActionPlanScheduleAssignee(BaseModel):
         on_delete=models.PROTECT,
         related_name="action_plan_schedule_assignees",
     )
-    start_at = models.TimeField(null=True, blank=True)
-    end_at = models.TimeField(null=True, blank=True)
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["action_plan_schedule", "membership"],
                 name="uniq_action_plan_schedule_assignee",
-            ),
-            models.CheckConstraint(
-                condition=(
-                    Q(start_at__isnull=True)
-                    | Q(end_at__isnull=True)
-                    | Q(end_at__gt=models.F("start_at"))
-                ),
-                name="action_plan_schedule_assignee_end_after_start",
             ),
         ]
 
@@ -279,10 +268,10 @@ class ActionPlanExecution(BaseModel):
         null=True,
         blank=True,
     )
-    schedule_source_membership = models.ForeignKey(
+    chronology_owner_membership = models.ForeignKey(
         "establishments.EstablishmentMembership",
         on_delete=models.PROTECT,
-        related_name="action_plan_schedule_sourced_executions",
+        related_name="action_plan_chronology_owned_executions",
         null=True,
         blank=True,
     )
@@ -390,6 +379,16 @@ class ActionPlanExecution(BaseModel):
                 condition=Q(pilot_business_unit__isnull=False),
                 name="action_plan_execution_pilot_business_unit_required",
             ),
+            models.CheckConstraint(
+                condition=(
+                    Q(use_shared_chronology=True, chronology_owner_membership__isnull=True)
+                    | Q(
+                        use_shared_chronology=False,
+                        chronology_owner_membership__isnull=False,
+                    )
+                ),
+                name="ap_exec_chronology_owner_matches_mode",
+            ),
             models.UniqueConstraint(
                 fields=["action_plan_schedule", "occurrence_date"],
                 condition=Q(
@@ -402,12 +401,12 @@ class ActionPlanExecution(BaseModel):
                 fields=[
                     "action_plan_schedule",
                     "occurrence_date",
-                    "schedule_source_membership",
+                    "chronology_owner_membership",
                 ],
                 condition=Q(
                     action_plan_schedule__isnull=False,
                     use_shared_chronology=False,
-                    schedule_source_membership__isnull=False,
+                    chronology_owner_membership__isnull=False,
                 ),
                 name="uniq_ap_exec_schedule_occurrence_individual",
             ),
@@ -606,62 +605,44 @@ class ActionPlanExecutionTask(BaseModel):
         )
 
 
-class ActionPlanMixedSubmission(BaseModel):
+class ActionPlanPlanningSubmission(BaseModel):
     establishment = models.ForeignKey(
         "establishments.Establishment",
         on_delete=models.CASCADE,
-        related_name="action_plan_mixed_submissions",
-    )
-    action_plan = models.ForeignKey(
-        ActionPlan,
-        on_delete=models.CASCADE,
-        related_name="mixed_submissions",
+        related_name="action_plan_planning_submissions",
     )
     created_by = models.ForeignKey(
         "establishments.EstablishmentMembership",
         on_delete=models.PROTECT,
-        related_name="action_plan_mixed_submissions_created",
+        related_name="action_plan_planning_submissions_created",
+    )
+    action_plan = models.ForeignKey(
+        ActionPlan,
+        on_delete=models.CASCADE,
+        related_name="planning_submissions",
+        null=True,
+        blank=True,
     )
     submission_id = models.UUIDField()
     request_hash = models.CharField(max_length=64)
-    schedule = models.ForeignKey(
-        "ActionPlanSchedule",
-        on_delete=models.PROTECT,
-        related_name="mixed_submissions",
-        null=True,
-        blank=True,
-    )
-    execution = models.ForeignKey(
-        ActionPlanExecution,
-        on_delete=models.PROTECT,
-        related_name="mixed_submissions",
-        null=True,
-        blank=True,
-    )
+    result_snapshot = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["establishment", "action_plan", "submission_id"],
-                name="uniq_action_plan_mixed_submission",
-            ),
-            models.CheckConstraint(
-                condition=(
-                    Q(schedule__isnull=True, execution__isnull=True)
-                    | Q(schedule__isnull=False, execution__isnull=False)
-                ),
-                name="ap_mixed_submission_schedule_execution_pair",
+                fields=["establishment", "created_by", "submission_id"],
+                name="uniq_action_plan_planning_submission",
             ),
         ]
 
     def __str__(self) -> str:
         return (
-            f"ActionPlanMixedSubmission plan={self.action_plan_id} "
+            f"ActionPlanPlanningSubmission actor={self.created_by_id} "
             f"submission={self.submission_id}"
         )
 
 
-class ActionPlanMixedOutboxEntry(BaseModel):
+class ActionPlanPlanningOutboxEntry(BaseModel):
     class EffectType(models.TextChoices):
         NOTIFICATION = "notification", "Notification"
         REALTIME_INVALIDATION = "realtime_invalidation", "Realtime invalidation"
@@ -672,8 +653,8 @@ class ActionPlanMixedOutboxEntry(BaseModel):
         PROCESSED = "processed", "Processed"
         FAILED = "failed", "Failed"
 
-    mixed_submission = models.ForeignKey(
-        ActionPlanMixedSubmission,
+    planning_submission = models.ForeignKey(
+        ActionPlanPlanningSubmission,
         on_delete=models.CASCADE,
         related_name="outbox_entries",
     )
@@ -694,17 +675,20 @@ class ActionPlanMixedOutboxEntry(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["mixed_submission", "effect_key"],
-                name="uniq_action_plan_mixed_outbox_effect",
+                fields=["planning_submission", "effect_key"],
+                name="uniq_action_plan_planning_outbox_effect",
             ),
         ]
         indexes = [
-            models.Index(fields=["status", "available_at"], name="ap_mixed_outbox_claim_idx"),
+            models.Index(
+                fields=["status", "available_at"],
+                name="ap_plan_outbox_claim_idx",
+            ),
             models.Index(
                 fields=["status", "lease_expires_at"],
-                name="ap_mixed_outbox_lease_idx",
+                name="ap_plan_outbox_lease_idx",
             ),
         ]
 
     def __str__(self) -> str:
-        return f"ActionPlanMixedOutboxEntry {self.effect_key} [{self.status}]"
+        return f"ActionPlanPlanningOutboxEntry {self.effect_key} [{self.status}]"

@@ -77,6 +77,58 @@ describe('useCreateActionPlanMutation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'feed', 'est-1'] })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['signals', 'detail', 'est-1'] })
   })
+
+  it('invalidates execution feed surfaces when create returns atomic planning response', async () => {
+    createActionPlan.mockResolvedValueOnce({
+      replayed: false,
+      action_plan_id: 'plan-direct-1',
+      summary: { executions_created: 2, schedules_created: 1 },
+      executions: [
+        {
+          item_id: 'i1',
+          id: 'exec-a',
+          primary_membership_id: 'm1',
+          status: 'scheduled',
+        },
+      ],
+      schedules: [],
+    })
+
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useCreateActionPlanMutation('est-1'), {
+      wrapper: ({ children }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    })
+
+    result.current.mutate({
+      title: 'Direct planning',
+      pilot_business_unit_id: 'bu-1',
+      submission_id: 'sub-1',
+      use_shared_chronology: false,
+      items: [],
+      tasks: [],
+      assignees: [],
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-feed', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'action-plan-execution-upcoming', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'catalog', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'detail', 'est-1', 'plan-direct-1'],
+    })
+  })
 })
 
 describe('useCreateActionPlanScheduleMutation', () => {

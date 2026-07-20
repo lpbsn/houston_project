@@ -417,12 +417,11 @@ def _create_individual_schedule(
     )
 
 
-def test_update_materializes_missing_individual_assignee_occurrences(
+def test_individual_schedule_rejects_multiple_assignees(
     owner_membership,
     catalog_action_plan,
     business_unit,
 ):
-    from houston.action_plans.materialization import materialize_execution_from_schedule
     from houston.establishments.models import EstablishmentMembership
     from houston.testing.factories import create_membership
     from houston.testing.taxonomy import create_membership_with_business_unit_scope
@@ -440,48 +439,18 @@ def test_update_materializes_missing_individual_assignee_occurrences(
         )
         return membership
 
-    staff_a = _staff()
-    staff_b = _staff()
-    schedule = _create_individual_schedule(
-        owner_membership,
-        catalog_action_plan,
-        [
-            build_schedule_assignee_payload(membership=staff_a, business_unit=business_unit),
-            build_schedule_assignee_payload(membership=staff_b, business_unit=business_unit),
-        ],
-    )
-    schedule.executions.all().delete()
-
-    assignee_a = schedule.schedule_assignees.get(membership_id=staff_a.id)
-    occurrence_date = schedule.start_date
-    while occurrence_date.weekday() not in {0, 2, 4}:
-        occurrence_date += timezone.timedelta(days=1)
-
-    materialize_execution_from_schedule(
-        schedule=schedule,
-        occurrence_date=occurrence_date,
-        schedule_assignee=assignee_a,
-    )
-    assert not schedule.executions.filter(
-        schedule_source_membership_id=staff_b.id,
-        occurrence_date=occurrence_date,
-    ).exists()
-
-    update_action_plan_schedule(
-        schedule=schedule,
-        actor=owner_membership,
-        start_at=schedule.start_at,
-        end_at=schedule.end_at,
-    )
-
-    assert schedule.executions.filter(
-        schedule_source_membership_id=staff_b.id,
-        occurrence_date=occurrence_date,
-        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
-    ).exists()
+    with pytest.raises(ActionPlanValidationError, match="exactly one assignee"):
+        _create_individual_schedule(
+            owner_membership,
+            catalog_action_plan,
+            [
+                build_schedule_assignee_payload(membership=_staff(), business_unit=business_unit),
+                build_schedule_assignee_payload(membership=_staff(), business_unit=business_unit),
+            ],
+        )
 
 
-def test_update_syncs_individual_assignee_time_override(
+def test_update_syncs_future_execution_window_from_schedule_times(
     owner_membership,
     catalog_action_plan,
     staff_membership,
@@ -500,27 +469,14 @@ def test_update_syncs_individual_assignee_time_override(
         use_shared_chronology=False,
         **visible_schedule_window(period_days=21),
     )
-    update_action_plan_schedule(
-        schedule=schedule,
-        actor=owner_membership,
-        assignees=[
-            {
-                **build_schedule_assignee_payload(
-                    membership=staff_membership,
-                    business_unit=business_unit,
-                ),
-                "start_at": time(10, 0),
-                "end_at": time(11, 0),
-            }
-        ],
-    )
     future_execution = schedule.executions.filter(status__in=["scheduled", "in_progress"]).first()
     assert future_execution is not None
     future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
     future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
     future_execution.visible_from = future_execution.start_at - timezone.timedelta(hours=1)
+    future_execution.status = "scheduled"
     future_execution.save(
-        update_fields=["start_at", "end_at", "visible_from", "updated_at"],
+        update_fields=["start_at", "end_at", "visible_from", "status", "updated_at"],
     )
 
     update_action_plan_schedule(
@@ -531,11 +487,11 @@ def test_update_syncs_individual_assignee_time_override(
     )
 
     future_execution.refresh_from_db()
-    assert future_execution.start_at.hour == 10
-    assert future_execution.end_at.hour == 11
+    assert future_execution.start_at.hour == 8
+    assert future_execution.end_at.hour == 9
 
 
-def test_update_assignees_cancels_removed_member_future_executions(
+def test_update_shared_assignees_cancels_removed_member_future_executions(
     owner_membership,
     catalog_action_plan,
     business_unit,
@@ -559,31 +515,26 @@ def test_update_assignees_cancels_removed_member_future_executions(
 
     staff_a = _staff()
     staff_b = _staff()
-    schedule = _create_individual_schedule(
-        owner_membership,
-        catalog_action_plan,
-        [
+    schedule = create_action_plan_schedule(
+        action_plan=catalog_action_plan,
+        actor=owner_membership,
+        recurrence_days=recurrence_days_for_visible_today(),
+        assignees=[
             build_schedule_assignee_payload(membership=staff_a, business_unit=business_unit),
             build_schedule_assignee_payload(membership=staff_b, business_unit=business_unit),
         ],
+        use_shared_chronology=True,
+        **visible_schedule_window(period_days=21),
     )
-    removed_execution = schedule.executions.filter(
-        schedule_source_membership_id=staff_b.id,
-        status=EXECUTION_STATUS_IN_PROGRESS,
-    ).first()
-    assert removed_execution is not None
-    removed_execution.start_at = timezone.now() + timezone.timedelta(days=2)
-    removed_execution.end_at = removed_execution.start_at + timezone.timedelta(hours=1)
-    removed_execution.visible_from = removed_execution.start_at - timezone.timedelta(hours=1)
-    removed_execution.save(
-        update_fields=["start_at", "end_at", "visible_from", "updated_at"],
+    execution = schedule.executions.filter(status=EXECUTION_STATUS_IN_PROGRESS).first()
+    assert execution is not None
+    execution.start_at = timezone.now() + timezone.timedelta(days=2)
+    execution.end_at = execution.start_at + timezone.timedelta(hours=1)
+    execution.visible_from = execution.start_at - timezone.timedelta(hours=1)
+    execution.status = EXECUTION_STATUS_SCHEDULED
+    execution.save(
+        update_fields=["start_at", "end_at", "visible_from", "status", "updated_at"],
     )
-
-    kept_execution = schedule.executions.filter(
-        schedule_source_membership_id=staff_a.id,
-        status=EXECUTION_STATUS_IN_PROGRESS,
-    ).first()
-    assert kept_execution is not None
 
     update_action_plan_schedule(
         schedule=schedule,
@@ -593,13 +544,13 @@ def test_update_assignees_cancels_removed_member_future_executions(
         ],
     )
 
-    removed_execution.refresh_from_db()
-    kept_execution.refresh_from_db()
-    assert removed_execution.status == EXECUTION_STATUS_CANCELED
-    assert kept_execution.status == EXECUTION_STATUS_IN_PROGRESS
+    execution.refresh_from_db()
+    assert execution.assignees.filter(membership_id=staff_b.id).exists() is False or (
+        execution.status == EXECUTION_STATUS_CANCELED
+    )
 
 
-def test_partial_assignee_time_validated_against_schedule_defaults(
+def test_schedule_assignee_times_rejected(
     owner_membership,
     catalog_action_plan,
     staff_membership,
@@ -608,7 +559,10 @@ def test_partial_assignee_time_validated_against_schedule_defaults(
     now = timezone.now().replace(hour=9, minute=0, second=0, microsecond=0)
     window = schedule_window_from_datetime(now)
 
-    with pytest.raises(ActionPlanValidationError, match="end_at must be after start_at"):
+    with pytest.raises(
+        ActionPlanValidationError,
+        match="Schedule assignee times are not supported",
+    ):
         create_action_plan_schedule(
             action_plan=catalog_action_plan,
             actor=owner_membership,

@@ -1636,7 +1636,8 @@ paths:
     post:
       operationId: v1_establishments_action_plans_create
       description: Creates an action plan. Reusable catalog entries may omit tasks;
-        execution or schedule flows require at least one task or assignee.
+        execution or schedule flows require at least one task or assignee. With submission_id
+        + items, creates a non-reusable plan and planning resources atomically.
       parameters:
       - in: path
         name: establishment_id
@@ -1667,6 +1668,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActionPlanCreate201Response'
           description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionPlanPlanningSubmitResponse'
+          description: ''
         '400':
           content:
             application/json:
@@ -1686,6 +1693,12 @@ paths:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -1893,9 +1906,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/:
+  /api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/planning-submit/:
     post:
-      operationId: v1_establishments_action_plans_mixed_submit_create
+      operationId: v1_establishments_action_plans_planning_submit_create
       parameters:
       - in: path
         name: action_plan_id
@@ -1915,13 +1928,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActionPlanMixedSubmitRequest'
+              $ref: '#/components/schemas/ActionPlanPlanningSubmitRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ActionPlanMixedSubmitRequest'
+              $ref: '#/components/schemas/ActionPlanPlanningSubmitRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ActionPlanMixedSubmitRequest'
+              $ref: '#/components/schemas/ActionPlanPlanningSubmitRequest'
         required: true
       security:
       - BearerAccessToken: []
@@ -1930,13 +1943,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionPlanMixedSubmitResponse'
+                $ref: '#/components/schemas/ActionPlanPlanningSubmitResponse'
           description: ''
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionPlanMixedSubmitResponse'
+                $ref: '#/components/schemas/ActionPlanPlanningSubmitResponse'
           description: ''
         '400':
           content:
@@ -6055,6 +6068,7 @@ components:
       oneOf:
       - $ref: '#/components/schemas/ActionPlanDetail'
       - $ref: '#/components/schemas/ActionPlanExecutionDetail'
+      - $ref: '#/components/schemas/ActionPlanPlanningSubmitResponse'
     ActionPlanCreateRequest:
       type: object
       properties:
@@ -6111,6 +6125,13 @@ components:
           allOf:
           - $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
           nullable: true
+        submission_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanPlanningItem'
       required:
       - pilot_business_unit_id
       - title
@@ -6559,34 +6580,6 @@ components:
       - task_count
       - title
       - updated_at
-    ActionPlanMixedSubmitRequest:
-      type: object
-      properties:
-        submission_id:
-          type: string
-          format: uuid
-        schedule_body:
-          $ref: '#/components/schemas/ActionPlanScheduleCreateRequest'
-        use_body:
-          $ref: '#/components/schemas/ActionPlanUseRequest'
-      required:
-      - schedule_body
-      - submission_id
-      - use_body
-    ActionPlanMixedSubmitResponse:
-      type: object
-      properties:
-        execution:
-          $ref: '#/components/schemas/ActionPlanExecutionDetail'
-        schedule_id:
-          type: string
-          format: uuid
-        replayed:
-          type: boolean
-      required:
-      - execution
-      - replayed
-      - schedule_id
     ActionPlanPermissionHints:
       type: object
       properties:
@@ -6606,6 +6599,125 @@ components:
       - can_schedule
       - can_update
       - can_use
+    ActionPlanPlanningItem:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        primary_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        business_unit_id:
+          type: string
+          format: uuid
+          nullable: true
+        assignees:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanAssigneeInput'
+        start_at:
+          type: string
+          nullable: true
+        end_at:
+          type: string
+          nullable: true
+        visible_from:
+          type: string
+          format: date-time
+          nullable: true
+        occurrence_date:
+          type: string
+          format: date
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        recurrence_days:
+          type: array
+          items:
+            type: string
+      required:
+      - item_id
+      - kind
+    ActionPlanPlanningResourceResult:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        primary_membership_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+      required:
+      - id
+      - item_id
+      - primary_membership_id
+      - status
+    ActionPlanPlanningSubmitRequest:
+      type: object
+      properties:
+        submission_id:
+          type: string
+          format: uuid
+        use_shared_chronology:
+          type: boolean
+          default: false
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanPlanningItem'
+      required:
+      - items
+      - submission_id
+    ActionPlanPlanningSubmitResponse:
+      type: object
+      properties:
+        replayed:
+          type: boolean
+        action_plan_id:
+          type: string
+          format: uuid
+          nullable: true
+        summary:
+          $ref: '#/components/schemas/ActionPlanPlanningSubmitSummary'
+        executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanPlanningResourceResult'
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionPlanPlanningResourceResult'
+      required:
+      - executions
+      - replayed
+      - schedules
+      - summary
+    ActionPlanPlanningSubmitSummary:
+      type: object
+      properties:
+        executions_created:
+          type: integer
+        schedules_created:
+          type: integer
+      required:
+      - executions_created
+      - schedules_created
     ActionPlanScheduleAssignee:
       type: object
       properties:
@@ -6616,20 +6728,10 @@ components:
           type: string
         business_unit:
           $ref: '#/components/schemas/ActionPlanBusinessUnit'
-        start_at:
-          type: string
-          format: time
-          nullable: true
-        end_at:
-          type: string
-          format: time
-          nullable: true
       required:
       - business_unit
       - display_name
-      - end_at
       - membership_id
-      - start_at
     ActionPlanScheduleAssigneeInput:
       type: object
       properties:
@@ -6639,14 +6741,6 @@ components:
         business_unit_id:
           type: string
           format: uuid
-        start_at:
-          type: string
-          format: time
-          nullable: true
-        end_at:
-          type: string
-          format: time
-          nullable: true
       required:
       - business_unit_id
       - membership_id
@@ -8085,6 +8179,14 @@ components:
       - key
       - label
       - source
+    KindEnum:
+      enum:
+      - execution
+      - schedule
+      type: string
+      description: |-
+        * `execution` - execution
+        * `schedule` - schedule
     LoginRequest:
       type: object
       properties:
