@@ -18,9 +18,7 @@ import { ActionPlanHubFilters } from '../components/action-plan-hub-filters'
 import { ActionPlanUseSheet } from '../components/action-plan-use-sheet'
 import {
   useActionPlanCatalogQuery,
-  useScheduleActionPlanFromCatalogMutation,
-  useSubmitMixedActionPlanFromCatalogMutation,
-  useUseActionPlanFromCatalogMutation,
+  useSubmitActionPlanPlanningMutation,
 } from '../hooks'
 import { filterActionPlansByTitle } from '../lib/action-plan-catalog-filters'
 import {
@@ -31,11 +29,15 @@ import { groupActionPlansByPilotBusinessUnit } from '../lib/action-plan-display'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { canShowActionPlanSchedule } from '../lib/action-plan-permission-hints'
 import type { CatalogPlanningSubmit } from '../lib/action-plan-catalog-planning-submit'
-import { resolveCatalogPlanningSubmitFallbackMessage } from '../lib/action-plan-catalog-planning-submit'
 import {
-  clearMixedSubmissionIntent,
-  resolveMixedSubmissionIntent,
-} from '../lib/action-plan-mixed-submission-intent'
+  formatPlanningSubmitFeedback,
+  resolveCatalogPlanningSubmitFallbackMessage,
+} from '../lib/action-plan-catalog-planning-submit'
+import {
+  applyPlanningSubmissionIntent,
+  clearPlanningSubmissionIntent,
+  resolvePlanningSubmissionIntent,
+} from '../lib/action-plan-planning-submission-intent'
 import type { ActionPlanCatalogListFilters } from '../types'
 
 type ActionPlanHubPageProps = {
@@ -81,9 +83,7 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
     canAccessLibrary ? establishmentId : null,
     filters,
   )
-  const useMutation = useUseActionPlanFromCatalogMutation(establishmentId ?? '')
-  const scheduleMutation = useScheduleActionPlanFromCatalogMutation(establishmentId ?? '')
-  const mixedMutation = useSubmitMixedActionPlanFromCatalogMutation(establishmentId ?? '')
+  const planningMutation = useSubmitActionPlanPlanningMutation(establishmentId ?? '')
 
   const filteredItems = useMemo(() => {
     const items = catalogQuery.data ?? []
@@ -135,41 +135,31 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
 
     setUseError(null)
     try {
-      if (result.kind === 'schedule') {
-        await scheduleMutation.mutateAsync({ actionPlanId: usePlanId, body: result.scheduleBody })
-        clearMixedSubmissionIntent(establishmentId, usePlanId)
-        setUsePlanId(null)
-        return
-      }
-
-      if (result.kind === 'mixed') {
-        const intent = await resolveMixedSubmissionIntent({
-          establishmentId,
-          actionPlanId: usePlanId,
-          scheduleBody: result.scheduleBody,
-          useBody: result.useBody,
-        })
-        const response = await mixedMutation.mutateAsync({
-          actionPlanId: usePlanId,
-          body: {
-            submission_id: intent.submissionId,
-            schedule_body: result.scheduleBody,
-            use_body: result.useBody,
-          },
-        })
-        clearMixedSubmissionIntent(establishmentId, usePlanId)
-        setUsePlanId(null)
-        navigateTo(`/action-plans/executions/${response.execution.id}`)
-        return
-      }
-
-      const execution = await useMutation.mutateAsync({
+      const intent = await resolvePlanningSubmissionIntent({
+        establishmentId,
         actionPlanId: usePlanId,
-        body: result.useBody,
+        body: {
+          use_shared_chronology: result.body.use_shared_chronology,
+          items: result.body.items,
+        },
       })
-      clearMixedSubmissionIntent(establishmentId, usePlanId)
+      const response = await planningMutation.mutateAsync({
+        actionPlanId: usePlanId,
+        body: applyPlanningSubmissionIntent(
+          {
+            use_shared_chronology: result.body.use_shared_chronology,
+            items: result.body.items,
+          },
+          intent,
+        ),
+      })
+      clearPlanningSubmissionIntent(establishmentId, usePlanId)
       setUsePlanId(null)
-      navigateTo(`/action-plans/executions/${execution.id}`)
+      sessionStorage.setItem(
+        'houston:planning-feedback',
+        formatPlanningSubmitFeedback(response.summary),
+      )
+      navigateTo('/execution')
     } catch (error) {
       const message = resolveCatalogPlanningSubmitFallbackMessage(result, error)
       setUseError(resolveActionPlanErrorMessage(error, message))
@@ -244,12 +234,12 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
           open={usePlanId != null}
           establishmentId={establishmentId ?? ''}
           pilotBusinessUnitId={usePlan.pilot_business_unit.id}
-          isPending={useMutation.isPending || scheduleMutation.isPending || mixedMutation.isPending}
+          isPending={planningMutation.isPending}
           staffUseMode={staffUseMode}
           canSchedule={canShowActionPlanSchedule(usePlan.permission_hints)}
           onClose={() => {
             if (establishmentId && usePlanId) {
-              clearMixedSubmissionIntent(establishmentId, usePlanId)
+              clearPlanningSubmissionIntent(establishmentId, usePlanId)
             }
             setUsePlanId(null)
           }}

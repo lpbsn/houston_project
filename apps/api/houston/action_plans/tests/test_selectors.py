@@ -53,6 +53,7 @@ def _multi_pole_execution(
                 business_unit=maintenance_business_unit,
             ),
         ],
+        use_shared_chronology=True,
     )
     return execution
 
@@ -157,6 +158,7 @@ def test_pole_with_assignee_but_no_tasks_has_no_contribution_status(
                 business_unit=maintenance_business_unit,
             ),
         ],
+        use_shared_chronology=True,
     )
 
     loaded = execution_with_contribution_context(execution_id=execution.id)

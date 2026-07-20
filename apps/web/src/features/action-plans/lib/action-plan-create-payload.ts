@@ -1,5 +1,6 @@
 import type {
   ActionPlanCreateRequest,
+  ActionPlanPlanningSubmitRequest,
   ActionPlanUseRequest,
   PatchedActionPlanUpdateRequest,
 } from '../types'
@@ -8,7 +9,6 @@ import type {
   ActionPlanCreateFormValues,
   ActionPlanTaskDraft,
 } from './action-plan-form-validation'
-import { buildPerAssigneeScheduleFromAssignees } from './action-plan-catalog-planning-submit'
 import { buildActionPlanScheduleCreateRequest } from './action-plan-schedule-payload'
 
 function toIsoDateTime(value: string): string | undefined {
@@ -92,28 +92,33 @@ export function buildActionPlanUpdateRequest(
   }
 }
 
-export function buildActionPlanShellCreateRequest(
-  values: Pick<
-    ActionPlanCreateFormValues,
-    'title' | 'description' | 'pilotBusinessUnitId' | 'requiresValidation' | 'tasks'
-  >,
-  options: { reusableForScheduling?: boolean } = {},
+/** Atomic direct create with planning intent (non-reusable plan + resources). */
+export function buildDirectPlanningCreateRequest(
+  values: ActionPlanCreateFormValues,
+  planning: {
+    submissionId: string
+    useSharedChronology: boolean
+    items: ActionPlanPlanningSubmitRequest['items']
+  },
 ): ActionPlanCreateRequest {
   return {
     title: values.title.trim(),
     description: values.description.trim(),
     pilot_business_unit_id: values.pilotBusinessUnitId,
     requires_validation: values.requiresValidation,
-    is_reusable: options.reusableForScheduling === true,
+    is_reusable: false,
     tasks: buildTaskPayloads(values.tasks, values.pilotBusinessUnitId),
     assignees: [],
-    use_shared_chronology: false,
+    use_shared_chronology: planning.useSharedChronology,
     start_at: null,
     end_at: null,
     visible_from: null,
+    submission_id: planning.submissionId,
+    items: planning.items,
   }
 }
 
+/** Shared one-shot / shared schedule create (≤1 individual assignee). Library + staff self. */
 export function buildActionPlanCreateRequest(
   values: ActionPlanCreateFormValues,
 ): ActionPlanCreateRequest {
@@ -134,26 +139,20 @@ export function buildActionPlanCreateRequest(
     }
   }
 
-  const perAssigneeSchedule = values.useSharedChronology
-    ? undefined
-    : buildPerAssigneeScheduleFromAssignees(values.assignees)
-  const oneShotAssignees = perAssigneeSchedule
-    ? values.assignees.filter((assignee) => !assignee.repeatEnabled)
-    : values.assignees
-  const assignees = buildAssigneePayloads(oneShotAssignees, {
+  const assignees = buildAssigneePayloads(values.assignees, {
     useSharedChronology: values.useSharedChronology,
     sharedStartAt: values.sharedStartAt,
     sharedEndAt: values.sharedEndAt,
     sharedVisibleFrom: values.sharedVisibleFrom,
   })
 
-  const schedule =
-    perAssigneeSchedule ??
-    buildActionPlanScheduleCreateRequest({
-      schedule: values.schedule,
-      assignees: values.assignees,
-      useSharedChronology: values.useSharedChronology,
-    })
+  const schedule = values.useSharedChronology
+    ? buildActionPlanScheduleCreateRequest({
+        schedule: values.schedule,
+        assignees: values.assignees,
+        useSharedChronology: true,
+      })
+    : undefined
 
   return {
     title: values.title.trim(),

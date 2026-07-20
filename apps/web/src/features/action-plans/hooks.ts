@@ -26,7 +26,7 @@ import {
   pinActionPlanExecution,
   reopenActionPlanExecution,
   skipActionPlanTask,
-  submitMixedActionPlanCatalog,
+  submitActionPlanPlanning,
   unpinActionPlanExecution,
   updateActionPlan,
   updateActionPlanExecution,
@@ -36,14 +36,17 @@ import type {
   ActionPlanCatalogListFilters,
   ActionPlanCreateRequest,
   ActionPlanScheduleCreateRequest,
-  ActionPlanMixedSubmitRequest,
+  ActionPlanPlanningSubmitRequest,
   ActionPlanTaskCreateObservationRequest,
   ActionPlanTaskSkipRequest,
   ActionPlanUseRequest,
   PatchedActionPlanExecutionUpdateRequest,
   PatchedActionPlanUpdateRequest,
 } from './types'
-import { isActionPlanExecutionDetail } from './lib/action-plan-create-response'
+import {
+  isActionPlanExecutionDetail,
+  isActionPlanPlanningSubmitResponse,
+} from './lib/action-plan-create-response'
 import { applyActionPlanExecutionPinSuccess } from './lib/action-plan-execution-feed-cache'
 
 function invalidateCatalogSurfaces(
@@ -173,6 +176,16 @@ export function useCreateActionPlanMutation(establishmentId: string) {
         invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.id)
         return
       }
+      if (isActionPlanPlanningSubmitResponse(data)) {
+        const actionPlanId =
+          typeof data.action_plan_id === 'string' ? data.action_plan_id : undefined
+        invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
+        invalidateActionPlanExecutionSurfaces(queryClient, establishmentId)
+        void queryClient.invalidateQueries({
+          queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
+        })
+        return
+      }
       invalidateCatalogSurfaces(queryClient, establishmentId)
     },
   })
@@ -288,7 +301,7 @@ export function useScheduleActionPlanFromCatalogMutation(establishmentId: string
   })
 }
 
-export function useSubmitMixedActionPlanFromCatalogMutation(establishmentId: string) {
+export function useSubmitActionPlanPlanningMutation(establishmentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({
@@ -296,11 +309,11 @@ export function useSubmitMixedActionPlanFromCatalogMutation(establishmentId: str
       body,
     }: {
       actionPlanId: string
-      body: ActionPlanMixedSubmitRequest
-    }) => submitMixedActionPlanCatalog(establishmentId, actionPlanId, body),
-    onSuccess: (data, variables) => {
+      body: ActionPlanPlanningSubmitRequest
+    }) => submitActionPlanPlanning(establishmentId, actionPlanId, body),
+    onSuccess: (_data, variables) => {
       invalidateCatalogSurfaces(queryClient, establishmentId, variables.actionPlanId)
-      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId, data.execution.id)
+      invalidateActionPlanExecutionSurfaces(queryClient, establishmentId)
       void queryClient.invalidateQueries({
         queryKey: ['action-plans', 'action-plan-execution-feed', establishmentId],
       })

@@ -57,6 +57,7 @@ def _execution_with_tasks(
         requires_validation=False,
         tasks=tasks,
         assignees=assignees,
+        use_shared_chronology=len(assignees) != 1,
     )
     return execution
 

@@ -10,7 +10,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from houston.action_plans.models import ActionPlanExecution, ActionPlanMixedOutboxEntry
+from houston.action_plans.models import ActionPlanExecution, ActionPlanPlanningOutboxEntry
 from houston.core.observability import build_celery_task_failure_log_context
 from houston.establishments.models import EstablishmentMembership
 from houston.notifications.models import Notification
@@ -30,23 +30,23 @@ def _compute_backoff_seconds(*, attempts: int) -> int:
     return min(2 ** max(attempts - 1, 0), MAX_BACKOFF_SECONDS)
 
 
-def _claim_outbox_entries(*, batch_size: int = BATCH_SIZE) -> list[ActionPlanMixedOutboxEntry]:
+def _claim_outbox_entries(*, batch_size: int = BATCH_SIZE) -> list[ActionPlanPlanningOutboxEntry]:
     now = timezone.now()
-    claimed: list[ActionPlanMixedOutboxEntry] = []
+    claimed: list[ActionPlanPlanningOutboxEntry] = []
 
     with transaction.atomic():
         eligible = (
-            ActionPlanMixedOutboxEntry.objects.filter(
+            ActionPlanPlanningOutboxEntry.objects.filter(
                 Q(
-                    status=ActionPlanMixedOutboxEntry.Status.PENDING,
+                    status=ActionPlanPlanningOutboxEntry.Status.PENDING,
                     available_at__lte=now,
                 )
                 | Q(
-                    status=ActionPlanMixedOutboxEntry.Status.PROCESSING,
+                    status=ActionPlanPlanningOutboxEntry.Status.PROCESSING,
                     lease_expires_at__lt=now,
                 )
                 | Q(
-                    status=ActionPlanMixedOutboxEntry.Status.FAILED,
+                    status=ActionPlanPlanningOutboxEntry.Status.FAILED,
                     available_at__lte=now,
                     attempts__lt=MAX_ATTEMPTS,
                 )
@@ -56,7 +56,7 @@ def _claim_outbox_entries(*, batch_size: int = BATCH_SIZE) -> list[ActionPlanMix
         )
 
         for entry in eligible:
-            entry.status = ActionPlanMixedOutboxEntry.Status.PROCESSING
+            entry.status = ActionPlanPlanningOutboxEntry.Status.PROCESSING
             entry.attempts += 1
             entry.lease_expires_at = now + timedelta(seconds=LEASE_TTL_SECONDS)
             entry.save(
@@ -67,7 +67,7 @@ def _claim_outbox_entries(*, batch_size: int = BATCH_SIZE) -> list[ActionPlanMix
     return claimed
 
 
-def _process_notification_entry(*, entry: ActionPlanMixedOutboxEntry) -> None:
+def _process_notification_entry(*, entry: ActionPlanPlanningOutboxEntry) -> None:
     payload = entry.payload
     execution = (
         ActionPlanExecution.objects.filter(id=payload["execution_id"])
@@ -111,7 +111,7 @@ def _process_notification_entry(*, entry: ActionPlanMixedOutboxEntry) -> None:
         return
 
 
-def _process_realtime_entry(*, entry: ActionPlanMixedOutboxEntry) -> None:
+def _process_realtime_entry(*, entry: ActionPlanPlanningOutboxEntry) -> None:
     payload = entry.payload
     notify_establishment_invalidation(
         establishment_id=uuid.UUID(str(payload["establishment_id"])),
@@ -121,11 +121,11 @@ def _process_realtime_entry(*, entry: ActionPlanMixedOutboxEntry) -> None:
     )
 
 
-def _process_outbox_entry(*, entry: ActionPlanMixedOutboxEntry) -> None:
-    if entry.effect_type == ActionPlanMixedOutboxEntry.EffectType.REALTIME_INVALIDATION:
+def _process_outbox_entry(*, entry: ActionPlanPlanningOutboxEntry) -> None:
+    if entry.effect_type == ActionPlanPlanningOutboxEntry.EffectType.REALTIME_INVALIDATION:
         _process_realtime_entry(entry=entry)
         return
-    if entry.effect_type == ActionPlanMixedOutboxEntry.EffectType.NOTIFICATION:
+    if entry.effect_type == ActionPlanPlanningOutboxEntry.EffectType.NOTIFICATION:
         _process_notification_entry(entry=entry)
         return
     raise ValueError(f"Unsupported outbox effect type: {entry.effect_type}")
@@ -133,13 +133,13 @@ def _process_outbox_entry(*, entry: ActionPlanMixedOutboxEntry) -> None:
 
 def _finalize_outbox_entry(
     *,
-    entry: ActionPlanMixedOutboxEntry,
+    entry: ActionPlanPlanningOutboxEntry,
     success: bool,
     error_message: str = "",
 ) -> None:
     now = timezone.now()
     if success:
-        entry.status = ActionPlanMixedOutboxEntry.Status.PROCESSED
+        entry.status = ActionPlanPlanningOutboxEntry.Status.PROCESSED
         entry.processed_at = now
         entry.lease_expires_at = None
         entry.last_error = ""
@@ -154,7 +154,7 @@ def _finalize_outbox_entry(
         )
         return
 
-    entry.status = ActionPlanMixedOutboxEntry.Status.FAILED
+    entry.status = ActionPlanPlanningOutboxEntry.Status.FAILED
     entry.lease_expires_at = None
     entry.last_error = error_message[:2000]
     if entry.attempts >= MAX_ATTEMPTS:
@@ -174,7 +174,7 @@ def _finalize_outbox_entry(
     )
 
 
-def process_action_plan_mixed_outbox_batch(*, batch_size: int = BATCH_SIZE) -> int:
+def process_action_plan_planning_outbox_batch(*, batch_size: int = BATCH_SIZE) -> int:
     claimed = _claim_outbox_entries(batch_size=batch_size)
     processed_count = 0
 
@@ -183,7 +183,7 @@ def process_action_plan_mixed_outbox_batch(*, batch_size: int = BATCH_SIZE) -> i
             _process_outbox_entry(entry=entry)
         except Exception as exc:
             logger.exception(
-                "action_plan_mixed_outbox_entry_failed",
+                "action_plan_planning_outbox_entry_failed",
                 extra={
                     "outbox_entry_id": str(entry.id),
                     "effect_key": entry.effect_key,
@@ -208,18 +208,18 @@ def process_action_plan_mixed_outbox_batch(*, batch_size: int = BATCH_SIZE) -> i
     soft_time_limit=settings.HOUSTON_CELERY_BEAT_TASK_SOFT_TIME_LIMIT_SECONDS,
     time_limit=settings.HOUSTON_CELERY_BEAT_TASK_TIME_LIMIT_SECONDS,
 )
-def process_action_plan_mixed_outbox_batch_task(
+def process_action_plan_planning_outbox_batch_task(
     batch_size: int = BATCH_SIZE,
 ) -> int:
     try:
-        return process_action_plan_mixed_outbox_batch(batch_size=batch_size)
+        return process_action_plan_planning_outbox_batch(batch_size=batch_size)
     except Exception as exc:
         logger.error(
-            "action_plan_mixed_outbox_batch_failed",
+            "action_plan_planning_outbox_batch_failed",
             extra=build_celery_task_failure_log_context(
                 batch_size=batch_size,
                 exception_class=type(exc).__name__,
-                task_name="process_action_plan_mixed_outbox_batch_task",
+                task_name="process_action_plan_planning_outbox_batch_task",
             ),
             exc_info=False,
         )

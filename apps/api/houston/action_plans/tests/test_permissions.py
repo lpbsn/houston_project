@@ -91,6 +91,7 @@ def _execution_for_permissions(
         requires_validation=requires_validation,
         tasks=tasks,
         assignees=assignees,
+        use_shared_chronology=len(assignees) != 1,
     )
 
     if status == ActionPlanExecution.Status.PENDING_VALIDATION:

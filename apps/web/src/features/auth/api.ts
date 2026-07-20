@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { apiClient, withAuthRetry } from '@/api/client'
-import { clearAllMixedSubmissionIntents } from '@/features/action-plans/lib/action-plan-mixed-submission-intent'
+import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
 import { queryClient } from '@/lib/query-client'
 import {
   clearAuthenticatedQueryCache,
@@ -302,7 +302,7 @@ let restorePromise: Promise<string | null> | null = null
 
 export function clearAuthState() {
   clearAccessToken()
-  clearAllMixedSubmissionIntents()
+  clearAllPlanningSubmissionIntents()
   clearAuthenticatedQueryCache(queryClient)
 }
 
@@ -380,7 +380,7 @@ export async function login(input: LoginRequest) {
   }
 
   purgeNonAuthQueries(queryClient)
-  clearAllMixedSubmissionIntents()
+  clearAllPlanningSubmissionIntents()
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -427,7 +427,7 @@ export async function registerOnboarding(input: RegistrationRequest) {
   }
 
   purgeNonAuthQueries(queryClient)
-  clearAllMixedSubmissionIntents()
+  clearAllPlanningSubmissionIntents()
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -487,7 +487,7 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
   }
 
   purgeNonAuthQueries(queryClient)
-  clearAllMixedSubmissionIntents()
+  clearAllPlanningSubmissionIntents()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }

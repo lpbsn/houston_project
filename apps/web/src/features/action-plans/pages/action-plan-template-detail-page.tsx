@@ -15,12 +15,11 @@ import { ActionPlanTemplateDetailStickyFooter } from '../components/action-plan-
 import {
   useActivateActionPlanMutation,
   useActionPlanDetailQuery,
-  useCreateActionPlanScheduleMutation,
   useDeactivateActionPlanMutation,
-  useSubmitMixedActionPlanFromCatalogMutation,
-  useUseActionPlanMutation,
+  useSubmitActionPlanPlanningMutation,
 } from '../hooks'
 import {
+  formatPlanningSubmitFeedback,
   isCatalogPlanningPrimaryDisabled,
   resolveCatalogPlanningSubmit,
   resolveCatalogPlanningSubmitFallbackMessage,
@@ -28,9 +27,10 @@ import {
 } from '../lib/action-plan-catalog-planning-submit'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
-  clearMixedSubmissionIntent,
-  resolveMixedSubmissionIntent,
-} from '../lib/action-plan-mixed-submission-intent'
+  applyPlanningSubmissionIntent,
+  clearPlanningSubmissionIntent,
+  resolvePlanningSubmissionIntent,
+} from '../lib/action-plan-planning-submission-intent'
 import {
   createActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
@@ -57,9 +57,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const detailQuery = useActionPlanDetailQuery(establishmentId, actionPlanId)
   const activateMutation = useActivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const deactivateMutation = useDeactivateActionPlanMutation(establishmentId ?? '', actionPlanId)
-  const useMutation = useUseActionPlanMutation(establishmentId ?? '', actionPlanId)
-  const scheduleMutation = useCreateActionPlanScheduleMutation(establishmentId ?? '', actionPlanId)
-  const mixedMutation = useSubmitMixedActionPlanFromCatalogMutation(establishmentId ?? '')
+  const planningMutation = useSubmitActionPlanPlanningMutation(establishmentId ?? '')
 
   const [executionPanelOpen, setExecutionPanelOpen] = useState(false)
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
@@ -101,7 +99,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const canUse = canShowActionPlanUse(hints)
   const canSchedule = canShowActionPlanSchedule(hints)
   const planningOptions = { canSchedule, staffMode: staffUseMode }
-  const isPrimaryPending = useMutation.isPending || scheduleMutation.isPending
+  const isPrimaryPending = planningMutation.isPending
   const primaryActionDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
     ...planningOptions,
     isPending: isPrimaryPending,
@@ -109,14 +107,12 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const isBusy =
     activateMutation.isPending ||
     deactivateMutation.isPending ||
-    useMutation.isPending ||
-    scheduleMutation.isPending ||
-    mixedMutation.isPending
+    planningMutation.isPending
 
   const showStickyFooter = executionPanelOpen || canUse
 
   function resetExecutionPanel() {
-    clearMixedSubmissionIntent(establishmentId, actionPlanId)
+    clearPlanningSubmissionIntent(establishmentId, actionPlanId)
     setExecutionPanelOpen(false)
     setPlanningDraft(createActionPlanEventPlanningDraft())
     setPlanningFieldErrors({})
@@ -162,36 +158,31 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
 
     setFeedback(null)
     try {
-      if (submit.kind === 'schedule') {
-        await scheduleMutation.mutateAsync(submit.scheduleBody)
-        resetExecutionPanel()
-        setFeedback({ variant: 'success', message: 'Récurrence planifiée.' })
-        return
-      }
-
-      if (submit.kind === 'mixed') {
-        const intent = await resolveMixedSubmissionIntent({
-          establishmentId,
-          actionPlanId,
-          scheduleBody: submit.scheduleBody,
-          useBody: submit.useBody,
-        })
-        const response = await mixedMutation.mutateAsync({
-          actionPlanId,
-          body: {
-            submission_id: intent.submissionId,
-            schedule_body: submit.scheduleBody,
-            use_body: submit.useBody,
+      const intent = await resolvePlanningSubmissionIntent({
+        establishmentId,
+        actionPlanId,
+        body: {
+          use_shared_chronology: submit.body.use_shared_chronology,
+          items: submit.body.items,
+        },
+      })
+      const response = await planningMutation.mutateAsync({
+        actionPlanId,
+        body: applyPlanningSubmissionIntent(
+          {
+            use_shared_chronology: submit.body.use_shared_chronology,
+            items: submit.body.items,
           },
-        })
-        resetExecutionPanel()
-        navigate(`/action-plans/executions/${response.execution.id}`)
-        return
-      }
-
-      const execution = await useMutation.mutateAsync(submit.useBody)
+          intent,
+        ),
+      })
+      clearPlanningSubmissionIntent(establishmentId, actionPlanId)
       resetExecutionPanel()
-      navigate(`/action-plans/executions/${execution.id}`)
+      sessionStorage.setItem(
+        'houston:planning-feedback',
+        formatPlanningSubmitFeedback(response.summary),
+      )
+      navigate('/execution')
     } catch (error) {
       setFeedback({
         variant: 'error',

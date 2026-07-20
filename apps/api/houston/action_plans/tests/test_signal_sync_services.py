@@ -45,6 +45,7 @@ def _create_linked_execution(
                 business_unit=responsible_business_unit,
             )
         ],
+        use_shared_chronology=True,
     )
     return execution
 

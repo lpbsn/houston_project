@@ -182,23 +182,11 @@ def _schedule_assignee_for_execution(
     execution: ActionPlanExecution,
     schedule: ActionPlanSchedule,
 ) -> ActionPlanScheduleAssignee | None:
-    if schedule.use_shared_chronology or execution.schedule_source_membership_id is None:
+    if schedule.use_shared_chronology or execution.chronology_owner_membership_id is None:
         return None
     return schedule.schedule_assignees.filter(
-        membership_id=execution.schedule_source_membership_id,
+        membership_id=execution.chronology_owner_membership_id,
     ).first()
-
-
-def _effective_assignee_times(
-    *,
-    schedule_start_at: time,
-    schedule_end_at: time,
-    assignee_start_at: time | None,
-    assignee_end_at: time | None,
-) -> tuple[time, time]:
-    effective_start = assignee_start_at if assignee_start_at is not None else schedule_start_at
-    effective_end = assignee_end_at if assignee_end_at is not None else schedule_end_at
-    return effective_start, effective_end
 
 
 def _can_reactivate_canceled_schedule_execution(
@@ -218,9 +206,9 @@ def _can_reactivate_canceled_schedule_execution(
     if execution.start_at is None or now >= execution.start_at:
         return False
     if not schedule.use_shared_chronology:
-        if execution.schedule_source_membership_id is None:
+        if execution.chronology_owner_membership_id is None:
             return False
-        if execution.schedule_source_membership_id not in current_membership_ids:
+        if execution.chronology_owner_membership_id not in current_membership_ids:
             return False
     return True
 
@@ -269,6 +257,15 @@ def reactivate_schedule_future_execution(
     return execution
 
 
+def _prune_shared_execution_assignees(
+    *,
+    execution: ActionPlanExecution,
+    current_membership_ids: set[uuid.UUID],
+) -> None:
+    """Drop assignees removed from a shared schedule on future executions."""
+    execution.assignees.exclude(membership_id__in=current_membership_ids).delete()
+
+
 def _sync_future_execution_window(
     *,
     execution: ActionPlanExecution,
@@ -308,8 +305,6 @@ def _validate_schedule_assignee_payloads(
     *,
     establishment_id: uuid.UUID,
     assignees: list[dict],
-    schedule_start_at: time,
-    schedule_end_at: time,
 ) -> list[dict]:
     if not assignees:
         return []
@@ -325,6 +320,10 @@ def _validate_schedule_assignee_payloads(
         if membership_id is None or business_unit_id is None:
             raise ActionPlanValidationError(
                 "Schedule assignee membership and business unit are required.",
+            )
+        if assignee_item.get("start_at") is not None or assignee_item.get("end_at") is not None:
+            raise ActionPlanValidationError(
+                "Schedule assignee times are not supported; use schedule start_at/end_at.",
             )
 
         membership = _validate_membership_in_establishment(
@@ -344,25 +343,10 @@ def _validate_schedule_assignee_payloads(
             business_unit=business_unit,
         )
 
-        start_at = assignee_item.get("start_at")
-        end_at = assignee_item.get("end_at")
-        effective_start, effective_end = _effective_assignee_times(
-            schedule_start_at=schedule_start_at,
-            schedule_end_at=schedule_end_at,
-            assignee_start_at=start_at,
-            assignee_end_at=end_at,
-        )
-        if effective_end <= effective_start:
-            raise ActionPlanValidationError(
-                "Schedule assignee end_at must be after start_at.",
-            )
-
         validated.append(
             {
                 "membership": membership,
                 "business_unit": business_unit,
-                "start_at": start_at,
-                "end_at": end_at,
             }
         )
     return validated
@@ -375,8 +359,6 @@ def _schedule_assignees_as_validated_payloads(
         ValidatedAssigneePayload(
             membership=item["membership"],
             business_unit=item["business_unit"],
-            start_at=item.get("start_at"),
-            end_at=item.get("end_at"),
         )
         for item in validated_assignees
     ]
@@ -388,8 +370,6 @@ def _resolve_staff_catalog_schedule_assignees(
     pilot_business_unit,
     establishment_id: uuid.UUID,
     assignees: list[dict] | None,
-    schedule_start_at: time,
-    schedule_end_at: time,
 ) -> list[dict]:
     _assert_staff_self_assignee_payload(
         actor=actor,
@@ -404,8 +384,6 @@ def _resolve_staff_catalog_schedule_assignees(
                 "business_unit_id": pilot_business_unit.id,
             }
         ],
-        schedule_start_at=schedule_start_at,
-        schedule_end_at=schedule_end_at,
     )
 
 
@@ -422,8 +400,6 @@ def _create_schedule_assignees(
                 action_plan_schedule=schedule,
                 membership=item["membership"],
                 business_unit=item["business_unit"],
-                start_at=item.get("start_at"),
-                end_at=item.get("end_at"),
             )
             for item in validated_assignees
         ]
@@ -446,8 +422,7 @@ def _assert_action_plan_ready_for_schedule(*, action_plan: ActionPlan) -> None:
         raise ActionPlanValidationError("Action plan catalog entry is not active.")
 
 
-@transaction.atomic
-def create_action_plan_schedule(
+def _create_action_plan_schedule_core(
     *,
     action_plan: ActionPlan,
     actor: EstablishmentMembership,
@@ -460,12 +435,7 @@ def create_action_plan_schedule(
     use_shared_chronology: bool = False,
     emit_side_effects: bool = True,
 ) -> ActionPlanSchedule:
-    if not can_create_action_plan_schedule(actor, action_plan):
-        raise ActionPlanPermissionError("Not allowed to create a schedule for this action plan.")
-    if not can_use_action_plan(actor, action_plan):
-        raise ActionPlanPermissionError("Not allowed to use this action plan.")
-
-    _assert_action_plan_ready_for_schedule(action_plan=action_plan)
+    """Schedule write path without catalog/use gates (caller already authorized)."""
     _validate_schedule_window(
         start_date=start_date,
         end_date=end_date,
@@ -483,20 +453,20 @@ def create_action_plan_schedule(
             pilot_business_unit=action_plan.pilot_business_unit,
             establishment_id=action_plan.establishment_id,
             assignees=assignees,
-            schedule_start_at=start_at,
-            schedule_end_at=end_at,
         )
     else:
         validated_assignees = _validate_schedule_assignee_payloads(
             establishment_id=action_plan.establishment_id,
             assignees=assignees or [],
-            schedule_start_at=start_at,
-            schedule_end_at=end_at,
         )
         _validate_actor_can_assign_poles(
             actor=actor,
             pilot_business_unit=action_plan.pilot_business_unit,
             validated_assignees=_schedule_assignees_as_validated_payloads(validated_assignees),
+        )
+    if not use_shared_chronology and len(validated_assignees) != 1:
+        raise ActionPlanValidationError(
+            "Individual chronology schedules require exactly one assignee.",
         )
     task_count = ActionPlanTask.objects.filter(action_plan=action_plan).count()
     _validate_execution_has_content(
@@ -525,6 +495,68 @@ def create_action_plan_schedule(
         emit_side_effects=emit_side_effects,
     )
     return schedule
+
+
+@transaction.atomic
+def create_action_plan_schedule(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+    start_date: date,
+    end_date: date,
+    start_at: time,
+    end_at: time,
+    recurrence_days: list[str],
+    assignees: list[dict] | None = None,
+    use_shared_chronology: bool = False,
+    emit_side_effects: bool = True,
+) -> ActionPlanSchedule:
+    if not can_create_action_plan_schedule(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to create a schedule for this action plan.")
+    if not can_use_action_plan(actor, action_plan):
+        raise ActionPlanPermissionError("Not allowed to use this action plan.")
+
+    _assert_action_plan_ready_for_schedule(action_plan=action_plan)
+    return _create_action_plan_schedule_core(
+        action_plan=action_plan,
+        actor=actor,
+        start_date=start_date,
+        end_date=end_date,
+        start_at=start_at,
+        end_at=end_at,
+        recurrence_days=recurrence_days,
+        assignees=assignees,
+        use_shared_chronology=use_shared_chronology,
+        emit_side_effects=emit_side_effects,
+    )
+
+
+def create_action_plan_schedule_for_planning_engine(
+    *,
+    action_plan: ActionPlan,
+    actor: EstablishmentMembership,
+    start_date: date,
+    end_date: date,
+    start_at: time,
+    end_at: time,
+    recurrence_days: list[str],
+    assignees: list[dict] | None = None,
+    use_shared_chronology: bool = False,
+    emit_side_effects: bool = False,
+) -> ActionPlanSchedule:
+    """Internal planning-engine schedule create (catalog readiness already decided by caller)."""
+    return _create_action_plan_schedule_core(
+        action_plan=action_plan,
+        actor=actor,
+        start_date=start_date,
+        end_date=end_date,
+        start_at=start_at,
+        end_at=end_at,
+        recurrence_days=recurrence_days,
+        assignees=assignees,
+        use_shared_chronology=use_shared_chronology,
+        emit_side_effects=emit_side_effects,
+    )
 
 
 def _materialize_new_schedule_occurrences(
@@ -577,14 +609,19 @@ def _sync_schedule_executions_after_update(
             continue
         if (
             not schedule.use_shared_chronology
-            and execution.schedule_source_membership_id is not None
-            and execution.schedule_source_membership_id not in current_membership_ids
+            and execution.chronology_owner_membership_id is not None
+            and execution.chronology_owner_membership_id not in current_membership_ids
         ):
             _cancel_schedule_future_execution(execution=execution)
             continue
         if execution.occurrence_date not in valid_dates:
             _cancel_schedule_future_execution(execution=execution)
             continue
+        if schedule.use_shared_chronology:
+            _prune_shared_execution_assignees(
+                execution=execution,
+                current_membership_ids=current_membership_ids,
+            )
         _sync_future_execution_window(execution=execution, schedule=schedule)
 
 
@@ -648,9 +685,11 @@ def update_action_plan_schedule(
         validated_assignees = _validate_schedule_assignee_payloads(
             establishment_id=schedule.establishment_id,
             assignees=assignees,
-            schedule_start_at=next_start_at,
-            schedule_end_at=next_end_at,
         )
+        if not schedule.use_shared_chronology and len(validated_assignees) != 1:
+            raise ActionPlanValidationError(
+                "Individual chronology schedules require exactly one assignee.",
+            )
         action_plan = schedule.action_plan
         _validate_actor_can_assign_poles(
             actor=actor,

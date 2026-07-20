@@ -138,6 +138,7 @@ def test_action_plan_execution_defaults_in_progress(
         title=action_plan.title,
         pilot_business_unit=business_unit,
         last_activity_at=timezone.now(),
+        use_shared_chronology=True,
     )
     assert execution.status == ActionPlanExecution.Status.IN_PROGRESS
 
@@ -204,19 +205,18 @@ def test_schedule_assignee_unique_per_schedule(
         )
 
 
-def test_schedule_assignee_time_constraints(
+def test_schedule_assignee_has_no_time_fields(
     action_plan_schedule,
     staff_membership,
     business_unit,
 ):
-    with pytest.raises(IntegrityError):
-        ActionPlanScheduleAssignee.objects.create(
-            action_plan_schedule=action_plan_schedule,
-            membership=staff_membership,
-            business_unit=business_unit,
-            start_at=time(10, 0),
-            end_at=time(9, 0),
-        )
+    assignee = ActionPlanScheduleAssignee.objects.create(
+        action_plan_schedule=action_plan_schedule,
+        membership=staff_membership,
+        business_unit=business_unit,
+    )
+    assert not hasattr(assignee, "start_at")
+    assert not hasattr(ActionPlanScheduleAssignee, "start_at")
 
 
 def test_execution_task_snapshot_fields(

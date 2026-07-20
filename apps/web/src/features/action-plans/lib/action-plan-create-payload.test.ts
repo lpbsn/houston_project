@@ -4,6 +4,7 @@ import {
   buildActionPlanCreateRequest,
   buildActionPlanTaskInputPayloads,
   buildActionPlanUpdateRequest,
+  buildDirectPlanningCreateRequest,
 } from '@/features/action-plans/lib/action-plan-create-payload'
 import {
   createActionPlanAssigneeDraft,
@@ -139,67 +140,76 @@ describe('buildActionPlanCreateRequest', () => {
     expect(request).not.toHaveProperty('schedule')
   })
 
-  it('builds per-assignee mixed create payload with schedule and one-shot assignees', () => {
-    const recurringAssignee = createActionPlanAssigneeDraft({
-      id: 'a-recurring',
-      membershipId: 'member-1',
-      businessUnitId: 'bu-pilot',
-      displayName: 'Luffy',
-      repeatEnabled: true,
-      startAt: '2026-07-12T03:00:00.000Z',
-      endAt: '2026-07-12T14:05:00.000Z',
-      recurrenceDays: ['tuesday', 'thursday', 'saturday'],
-      recurrenceEndDate: '2026-07-25',
-    })
-    const oneShotAssignee = createActionPlanAssigneeDraft({
-      id: 'a-one-shot',
-      membershipId: 'member-2',
-      businessUnitId: 'bu-pilot',
-      displayName: 'Nami',
-      repeatEnabled: false,
-      startAt: '2026-07-11T03:00:00.000Z',
-      endAt: '2026-07-25T06:00:00.000Z',
-    })
-
+  it('builds shared create payload without packing individual schedules', () => {
     const request = buildActionPlanCreateRequest({
-      title: 'Plan per-assigné',
+      title: 'Plan shared',
       description: 'Desc',
       pilotBusinessUnitId: 'bu-pilot',
       requiresValidation: false,
       saveToLibrary: false,
-      useSharedChronology: false,
-      sharedStartAt: '',
-      sharedEndAt: '',
+      useSharedChronology: true,
+      sharedStartAt: '2026-07-11T03:00:00.000Z',
+      sharedEndAt: '2026-07-11T06:00:00.000Z',
       sharedVisibleFrom: '',
       tasks: [{ ...createActionPlanTaskDraft('bu-pilot'), task: 'Task 1' }],
-      assignees: [recurringAssignee, oneShotAssignee],
+      assignees: [
+        createActionPlanAssigneeDraft({
+          membershipId: 'member-1',
+          businessUnitId: 'bu-pilot',
+        }),
+      ],
       schedule: createActionPlanScheduleDraft(),
     })
 
-    expect(request.use_shared_chronology).toBe(false)
-    expect(request.is_reusable).toBe(true)
-    expect(request.schedule).toEqual(
-      expect.objectContaining({
-        recurrence_days: ['tuesday', 'thursday', 'saturday'],
-        end_date: '2026-07-25',
-        use_shared_chronology: false,
-        assignees: [
-          expect.objectContaining({
-            membership_id: 'member-1',
-            business_unit_id: 'bu-pilot',
-          }),
-        ],
-      }),
-    )
-    expect(request.assignees).toEqual([
-      expect.objectContaining({
-        membership_id: 'member-2',
-        business_unit_id: 'bu-pilot',
-        start_at: '2026-07-11T03:00:00.000Z',
-        end_at: '2026-07-25T06:00:00.000Z',
-      }),
-    ])
+    expect(request.use_shared_chronology).toBe(true)
+    expect(request.is_reusable).toBe(false)
+    expect(request).not.toHaveProperty('schedule')
     expect(request.assignees).toHaveLength(1)
+  })
+})
+
+describe('buildDirectPlanningCreateRequest', () => {
+  it('builds atomic non-reusable create with planning intent', () => {
+    const request = buildDirectPlanningCreateRequest(
+      {
+        title: ' Direct plan ',
+        description: 'Desc',
+        pilotBusinessUnitId: 'bu-pilot',
+        requiresValidation: true,
+        saveToLibrary: false,
+        useSharedChronology: false,
+        sharedStartAt: '',
+        sharedEndAt: '',
+        sharedVisibleFrom: '',
+        tasks: [{ ...createActionPlanTaskDraft('bu-pilot'), task: 'Task 1' }],
+        assignees: [],
+        schedule: createActionPlanScheduleDraft(),
+      },
+      {
+        submissionId: 'sub-1',
+        useSharedChronology: false,
+        items: [
+          {
+            item_id: 'item-1',
+            kind: 'execution',
+            primary_membership_id: 'member-1',
+            business_unit_id: 'bu-pilot',
+            start_at: '2026-07-11T03:00:00.000Z',
+            end_at: '2026-07-11T06:00:00.000Z',
+          },
+        ],
+      },
+    )
+
+    expect(request).toMatchObject({
+      title: 'Direct plan',
+      is_reusable: false,
+      submission_id: 'sub-1',
+      use_shared_chronology: false,
+      assignees: [],
+    })
+    expect(request.items).toHaveLength(1)
+    expect(request).not.toHaveProperty('schedule')
   })
 })
 

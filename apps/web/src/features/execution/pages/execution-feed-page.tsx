@@ -7,6 +7,7 @@ import { TerrainHubSubheader } from '@/components/layout/terrain-hub-subheader'
 import { TerrainHubViewToolbar } from '@/components/layout/terrain-hub-view-toolbar'
 import { Button } from '@/components/ui/button'
 import { TerrainEmptyState, TerrainErrorState, TerrainCollapsibleFeedSection } from '@/components/ui/terrain'
+import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { useCollapsibleFeedSections } from '@/lib/use-collapsible-feed-sections'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrainBrandAction } from '@/lib/terrain-styles'
@@ -35,6 +36,24 @@ const EXECUTION_FEED_DEFAULT_COLLAPSED_SECTIONS = ['done', 'canceled'] as const
 type ExecutionFeedPageProps = {
   onOpenActionPlanExecution?: (executionId: string) => void
   onNavigate?: (pathname: string) => void
+}
+
+const PLANNING_FEEDBACK_STORAGE_KEY = 'houston:planning-feedback'
+
+function consumePlanningFeedbackMessage(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const message = sessionStorage.getItem(PLANNING_FEEDBACK_STORAGE_KEY)
+    if (!message) {
+      return null
+    }
+    sessionStorage.removeItem(PLANNING_FEEDBACK_STORAGE_KEY)
+    return message
+  } catch {
+    return null
+  }
 }
 
 function readScheduledPreviewFromFeedPages(
@@ -66,6 +85,7 @@ export function ExecutionFeedPage({
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
+  const [planningFeedback] = useState(consumePlanningFeedbackMessage)
 
   const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode)
   const quickActions = useActionPlanExecutionFeedQuickActions({
@@ -146,6 +166,11 @@ export function ExecutionFeedPage({
         </TerrainHubViewToolbar>
       </TerrainHubSubheader>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pb-4">
+        {planningFeedback ? (
+          <div className="pt-3">
+            <TerrainFeedback variant="success" message={planningFeedback} />
+          </div>
+        ) : null}
         {isInitialLoading ? (
           <div className="flex items-center justify-center py-16 text-[#7D7B75]">
             <LoaderCircle className="h-6 w-6 animate-spin" />

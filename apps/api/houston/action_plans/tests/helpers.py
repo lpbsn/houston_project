@@ -48,9 +48,10 @@ def action_plan_schedule_url(establishment_id, action_plan_id) -> str:
     return f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/schedule/"
 
 
-def action_plan_mixed_submit_url(establishment_id, action_plan_id) -> str:
+def action_plan_planning_submit_url(establishment_id, action_plan_id) -> str:
     return (
-        f"/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/"
+        f"/api/v1/establishments/{establishment_id}/action-plans/"
+        f"{action_plan_id}/planning-submit/"
     )
 
 
@@ -217,14 +218,23 @@ def api_task_payload(
     return payload
 
 
-def api_mixed_submit_payload(
+def api_planning_submit_payload(
     *,
     submission_id: uuid.UUID | None = None,
-    recurring_membership,
-    one_shot_membership,
-    business_unit,
+    use_shared_chronology: bool = False,
+    items: list[dict] | None = None,
+    recurring_membership=None,
+    one_shot_membership=None,
+    business_unit=None,
     recurrence_days=None,
 ) -> dict:
+    if items is not None:
+        return {
+            "submission_id": str(submission_id or uuid.uuid4()),
+            "use_shared_chronology": use_shared_chronology,
+            "items": items,
+        }
+
     window = visible_schedule_window(period_days=14)
     if recurrence_days is None:
         recurrence_days = recurrence_days_for_visible_today()
@@ -232,33 +242,28 @@ def api_mixed_submit_payload(
     end_at = start_at + timezone.timedelta(hours=2)
     return {
         "submission_id": str(submission_id or uuid.uuid4()),
-        "schedule_body": {
-            "start_date": window["start_date"].isoformat(),
-            "end_date": window["end_date"].isoformat(),
-            "start_at": window["start_at"].isoformat(),
-            "end_at": window["end_at"].isoformat(),
-            "recurrence_days": recurrence_days,
-            "use_shared_chronology": False,
-            "assignees": [
-                api_schedule_assignee_payload(
-                    membership=recurring_membership,
-                    business_unit=business_unit,
-                )
-            ],
-        },
-        "use_body": {
-            "use_shared_chronology": False,
-            "assignees": [
-                {
-                    **api_assignee_payload(
-                        membership=one_shot_membership,
-                        business_unit=business_unit,
-                    ),
-                    "start_at": start_at.isoformat().replace("+00:00", "Z"),
-                    "end_at": end_at.isoformat().replace("+00:00", "Z"),
-                }
-            ],
-        },
+        "use_shared_chronology": False,
+        "items": [
+            {
+                "item_id": str(uuid.uuid4()),
+                "kind": "execution",
+                "primary_membership_id": str(one_shot_membership.id),
+                "business_unit_id": str(business_unit.id),
+                "start_at": start_at.isoformat().replace("+00:00", "Z"),
+                "end_at": end_at.isoformat().replace("+00:00", "Z"),
+            },
+            {
+                "item_id": str(uuid.uuid4()),
+                "kind": "schedule",
+                "primary_membership_id": str(recurring_membership.id),
+                "business_unit_id": str(business_unit.id),
+                "start_date": window["start_date"].isoformat(),
+                "end_date": window["end_date"].isoformat(),
+                "start_at": window["start_at"].isoformat(),
+                "end_at": window["end_at"].isoformat(),
+                "recurrence_days": recurrence_days,
+            },
+        ],
     }
 
 
@@ -320,6 +325,7 @@ def create_execution(
 ):
     from houston.action_plans.services import create_action_plan_with_execution
 
+    resolved_assignees = assignees or []
     _, execution = create_action_plan_with_execution(
         establishment_id=owner_membership.establishment_id,
         created_by=owner_membership,
@@ -327,8 +333,9 @@ def create_execution(
         title=title,
         requires_validation=requires_validation,
         tasks=tasks or [build_task_payload(task=f"{title} task", business_unit=business_unit)],
-        assignees=assignees or [],
+        assignees=resolved_assignees,
         visible_from=visible_from,
+        use_shared_chronology=len(resolved_assignees) != 1,
     )
     update_fields = ["status"]
     execution.status = status

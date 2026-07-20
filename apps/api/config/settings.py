@@ -203,10 +203,10 @@ CELERY_BEAT_SCHEDULE = {
             minute=env_int("HOUSTON_OBSERVATION_STUCK_RECOVERY_BEAT_MINUTE_UTC", 15),
         ),
     },
-    "process-action-plan-mixed-outbox": {
+    "process-action-plan-planning-outbox": {
         "task": (
-            "houston.action_plans.mixed_outbox_tasks."
-            "process_action_plan_mixed_outbox_batch_task"
+            "houston.action_plans.planning_outbox_tasks."
+            "process_action_plan_planning_outbox_batch_task"
         ),
         "schedule": crontab(
             minute="*/1",

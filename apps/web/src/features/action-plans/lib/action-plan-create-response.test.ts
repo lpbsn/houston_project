@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { isActionPlanExecutionDetail } from '@/features/action-plans/lib/action-plan-create-response'
+import {
+  isActionPlanExecutionDetail,
+  isActionPlanPlanningSubmitResponse,
+} from '@/features/action-plans/lib/action-plan-create-response'
 import type {
   ActionPlanCreate201Response,
   ActionPlanDetail,
@@ -28,5 +31,41 @@ describe('isActionPlanExecutionDetail', () => {
     } as ActionPlanDetail
 
     expect(isActionPlanExecutionDetail(template as ActionPlanCreate201Response)).toBe(false)
+  })
+
+  it('returns false for atomic planning create response', () => {
+    expect(
+      isActionPlanExecutionDetail({
+        replayed: false,
+        action_plan_id: 'plan-1',
+        summary: { executions_created: 1, schedules_created: 0 },
+        executions: [],
+        schedules: [],
+      } as ActionPlanCreate201Response),
+    ).toBe(false)
+  })
+})
+
+describe('isActionPlanPlanningSubmitResponse', () => {
+  it('returns true for planning submit / atomic create shape', () => {
+    expect(
+      isActionPlanPlanningSubmitResponse({
+        replayed: false,
+        action_plan_id: 'plan-1',
+        summary: { executions_created: 1, schedules_created: 1 },
+        executions: [{ item_id: 'i1', id: 'e1', primary_membership_id: null, status: 'scheduled' }],
+        schedules: [],
+      }),
+    ).toBe(true)
+  })
+
+  it('returns false for execution detail', () => {
+    expect(
+      isActionPlanPlanningSubmitResponse({
+        id: 'exec-1',
+        action_plan_id: 'plan-1',
+        status: 'in_progress',
+      }),
+    ).toBe(false)
   })
 })

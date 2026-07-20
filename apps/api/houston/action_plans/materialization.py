@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -103,17 +103,10 @@ def occurrence_datetimes_for_schedule(
     occurrence_date: date,
     schedule_assignee: ActionPlanScheduleAssignee | None = None,
 ) -> tuple[datetime, datetime, datetime]:
+    del schedule_assignee  # Identity only; schedule times are canonical.
     tz = establishment_timezone(schedule.establishment)
-    start_time: time = schedule.start_at
-    end_time: time = schedule.end_at
-    if schedule_assignee is not None:
-        if schedule_assignee.start_at is not None:
-            start_time = schedule_assignee.start_at
-        if schedule_assignee.end_at is not None:
-            end_time = schedule_assignee.end_at
-
-    occurrence_start = datetime.combine(occurrence_date, start_time, tzinfo=tz)
-    occurrence_end = datetime.combine(occurrence_date, end_time, tzinfo=tz)
+    occurrence_start = datetime.combine(occurrence_date, schedule.start_at, tzinfo=tz)
+    occurrence_end = datetime.combine(occurrence_date, schedule.end_at, tzinfo=tz)
     visible_from = occurrence_start - VISIBLE_FROM_OFFSET
     return occurrence_start, occurrence_end, visible_from
 
@@ -192,7 +185,7 @@ def _existing_execution(
         queryset = ActionPlanExecution.objects.filter(
             action_plan_schedule_id=schedule.id,
             occurrence_date=occurrence_date,
-            schedule_source_membership_id=schedule_assignee.membership_id,
+            chronology_owner_membership_id=schedule_assignee.membership_id,
             use_shared_chronology=False,
         )
     if active_only:
@@ -460,7 +453,7 @@ def materialize_execution_from_schedule(
             execution = _create_execution_record(
                 action_plan=action_plan,
                 action_plan_schedule=schedule,
-                schedule_source_membership=source_membership,
+                chronology_owner_membership=source_membership,
                 establishment_id=schedule.establishment_id,
                 created_by=schedule.created_by,
                 pilot_business_unit=action_plan.pilot_business_unit,

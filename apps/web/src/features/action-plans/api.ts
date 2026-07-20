@@ -19,8 +19,8 @@ import type {
   ActionPlanExecutionUpcomingResponse,
   ActionPlanExecutionPinState,
   ActionPlanListItem,
-  ActionPlanMixedSubmitRequest,
-  ActionPlanMixedSubmitResponse,
+  ActionPlanPlanningSubmitRequest,
+  ActionPlanPlanningSubmitResponse,
   ActionPlanScheduleCreateRequest,
   ActionPlanScheduleDetail,
   ActionPlanTaskCreateObservationRequest,
@@ -234,7 +234,7 @@ function toActionPlanCreateApiBody(
 export async function createActionPlan(
   establishmentId: string,
   body: ActionPlanCreateRequest,
-): Promise<ActionPlanCreate201Response> {
+): Promise<ActionPlanCreate201Response | ActionPlanPlanningSubmitResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.POST('/api/v1/establishments/{establishment_id}/action-plans/', {
@@ -244,7 +244,9 @@ export async function createActionPlan(
       }),
     { refreshable: true },
   )
-  return assertActionPlanData<ActionPlanCreate201Response>(result)
+  return assertActionPlanData<ActionPlanCreate201Response | ActionPlanPlanningSubmitResponse>(
+    result,
+  )
 }
 
 export async function updateActionPlan(
@@ -337,15 +339,15 @@ export async function createActionPlanSchedule(
   return assertActionPlanData<ActionPlanScheduleDetail>(result)
 }
 
-export async function submitMixedActionPlanCatalog(
+export async function submitActionPlanPlanning(
   establishmentId: string,
   actionPlanId: string,
-  body: ActionPlanMixedSubmitRequest,
-): Promise<ActionPlanMixedSubmitResponse> {
+  body: ActionPlanPlanningSubmitRequest,
+): Promise<ActionPlanPlanningSubmitResponse> {
   const result = await withAuthRetry(
     (accessToken) =>
       apiClient.POST(
-        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/mixed-submit/',
+        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/planning-submit/',
         {
           params: actionPlanPath(establishmentId, actionPlanId),
           body,
@@ -354,7 +356,7 @@ export async function submitMixedActionPlanCatalog(
       ),
     { refreshable: true },
   )
-  return assertActionPlanData<ActionPlanMixedSubmitResponse>(result)
+  return assertActionPlanData<ActionPlanPlanningSubmitResponse>(result)
 }
 
 export async function fetchActionPlanExecutionDetail(

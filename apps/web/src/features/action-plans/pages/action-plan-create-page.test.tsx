@@ -11,6 +11,7 @@ const navigate = vi.fn()
 const createMutateAsync = vi.fn()
 const scheduleMutateAsync = vi.fn()
 const useMutateAsync = vi.fn()
+const planningMutateAsync = vi.fn()
 const signalDetailQueryMock = vi.fn()
 const detailQueryMock = vi.fn()
 
@@ -128,9 +129,29 @@ vi.mock('@/features/auth/hooks', () => ({
   }),
 }))
 
+vi.mock('../lib/action-plan-planning-submission-intent', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../lib/action-plan-planning-submission-intent')>()
+  return {
+    ...actual,
+    resolvePlanningSubmissionIntent: vi.fn(
+      async (options: { body: { items: unknown[] } }) => ({
+        submissionId: 'sub-create',
+        requestHash: 'hash',
+        itemIds: options.body.items.map((_, index) => `item-create-${index}`),
+      }),
+    ),
+    clearPlanningSubmissionIntent: vi.fn(),
+  }
+})
+
 vi.mock('../hooks', () => ({
   useCreateActionPlanMutation: () => ({
     mutateAsync: createMutateAsync,
+    isPending: false,
+  }),
+  useSubmitActionPlanPlanningMutation: () => ({
+    mutateAsync: planningMutateAsync,
     isPending: false,
   }),
   useUpdateActionPlanMutation: () => ({
@@ -663,7 +684,7 @@ describe('ActionPlanCreatePage', () => {
         }),
       )
     })
-    expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-1')
+    expect(navigate).toHaveBeenCalledWith('/execution')
   })
 
   it('resolves locked pilot from responsible_business_unit_id without matching generic.key', async () => {
@@ -778,12 +799,14 @@ describe('ActionPlanCreatePage', () => {
     expect(createMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('creates per-assignee plan with one atomic create call and hides secondary assignee buttons', async () => {
+  it('creates per-assignee plan via single atomic create with planning intent', async () => {
     perAssigneeTestMode.enabled = true
     createMutateAsync.mockResolvedValue({
-      id: 'exec-2',
-      status: 'in_progress',
+      replayed: false,
       action_plan_id: 'plan-per-assignee-1',
+      summary: { executions_created: 1, schedules_created: 1 },
+      executions: [],
+      schedules: [],
     })
 
     renderPage({ mode: 'catalog' })
@@ -800,10 +823,20 @@ describe('ActionPlanCreatePage', () => {
 
     await waitFor(() => {
       expect(createMutateAsync).toHaveBeenCalledTimes(1)
+      expect(planningMutateAsync).not.toHaveBeenCalled()
       expect(scheduleMutateAsync).not.toHaveBeenCalled()
       expect(useMutateAsync).not.toHaveBeenCalled()
-      expect(navigate).toHaveBeenCalledWith('/action-plans/executions/exec-2')
+      expect(navigate).toHaveBeenCalledWith('/execution')
     })
+
+    const createBody = createMutateAsync.mock.calls[0][0]
+    expect(createBody.is_reusable).toBe(false)
+    expect(createBody.submission_id).toBe('sub-create')
+    expect(createBody.use_shared_chronology).toBe(false)
+    expect(createBody.items).toHaveLength(2)
+    expect(sessionStorage.getItem('houston:planning-feedback')).toBe(
+      '1 planifications et 1 exécutions ont été créées.',
+    )
   })
 
   it('blocks per-assignee create when assignee cards are incomplete', async () => {

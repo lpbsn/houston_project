@@ -29,7 +29,7 @@ Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 
 | [26.9](#decision-26-9) | Retrait pôle impliqué | Voir détail ci-dessous | 2C, 8 |
 | [26.10](#decision-26-10) | Contribution `observation_created` | Voir détail ci-dessous | 2C |
 | [26.11](#decision-26-11) | Assigné sans tâche | Voir détail ci-dessous | 1, 8 |
-| [26.12](#decision-26-12) | Récurrence et contributeurs | Voir détail ci-dessous | 1, 4, 5 |
+| [26.12](#decision-26-12) | Récurrence, chronologie et planification | Voir détail ci-dessous | 1, 4, 5 |
 | [26.13](#decision-26-13) | Création staff (feed execution) | Voir détail ci-dessous | 2B, 3 |
 | [26.14](#decision-26-14) | Manager — utilisation catalogue | Voir détail ci-dessous | 2B, 3 |
 | [26.15](#decision-26-15) | Cross-pôle — création directe vs catalogue | Voir détail ci-dessous | 2B, 3 |
@@ -224,49 +224,39 @@ Un utilisateur peut être assigné à une exécution sans tâche dans son scope
 Son pôle apparaît comme impliqué, sans statut de contribution
 ```
 
-### Decision 26.12 — Récurrence et contributeurs {#decision-26-12}
+### Decision 26.12 — Récurrence, chronologie et planification {#decision-26-12}
 
-La récurrence est portée uniquement par le schedule global du plan d'action (`ActionPlanSchedule`).
+**Cardinalité**
 
-Les contributeurs ne définissent jamais de récurrence spécifique. Il n'existe pas de `recurrence_rule` par pôle contributeur.
+- Chronologie **partagée** : 1 exécution ponctuelle multi-assignés **ou** 1 schedule multi-assignés ; `chronology_owner_membership = null` ; statut et chronologie communs.
+- Chronologie **individuelle** : 1 exécution ponctuelle par principal ; 1 schedule par principal récurrent (exactement 1 `ActionPlanScheduleAssignee`) ; `chronology_owner_membership` = principal ; contributeurs secondaires via tâches OK.
+- **Tasks-only** (aucun assigné) : normalisation en shared (`use_shared_chronology=true`, owner null) avant persistance.
 
-À chaque occurrence générée, les contributeurs participent à l'exécution en cours s'ils ont :
+**Horaires de schedule**
 
-```txt
-au moins un assigné dans leur pôle
-OU
-au moins une tâche rattachée à leur pôle
-```
+Source canonique unique = `ActionPlanSchedule.start_at` / `end_at`. Pas d’overrides horaires sur `ActionPlanScheduleAssignee` (identité seule).
 
-Ils ne créent pas d'occurrence autonome.
+**Soumission**
 
-Une exécution reste l'unité métier globale pour :
+`POST …/planning-submit/` avec `submission_id`, `item_id` par item, hash canonique, snapshot JSON. Unicité `(establishment, created_by, submission_id)`. Outbox créée dans la même transaction atomique ; dispatch après commit.
 
-```txt
-le feed
-le statut global
-la validation finale
-le signal lié
-les commentaires
-les tâches snapshotées
-les contributions calculées
-```
+Restrictions : `/use/` individual ≤ 1 assigné ; `/schedule/` individual exactement 1 assignee. Signal → shared only. Staff → self one-shot only.
 
-Les pôles contributeurs peuvent avoir des tâches, assignés ou deadlines dans l'exécution, mais pas de fréquence propre.
+**Visible_from (ponctuel)** : fourni → conserver ; null/absent → visibilité immédiate ; pas d’offset −1h (distinct des occurrences récurrentes `occurrence_start − 1h`).
 
-Si un pôle doit intervenir selon une fréquence différente, il faut créer un autre plan d'action.
+**Frontend** : après toute réussite, redirect vers le feed opérationnel + feedback « X planifications et Y exécutions ont été créées. »
+
+Les pôles contributeurs participent via tâches / assignés secondaires, sans récurrence propre. Si un pôle doit intervenir à une fréquence différente, créer un autre plan (ou un autre item individuel).
 
 **Cohérence besoin :**
 
 ```txt
-§9 chronologie commune / individuelle → horaires et regroupement d'assignés par occurrence, pas une récurrence par pôle
-§9 exécution individuelle ou partagée → occurrences générées par le schedule global
+§9 chronologie commune / individuelle → ressources autonomes en individuel
+§9 exécution individuelle ou partagée → owner de chronologie explicite
 §11 pôles impliqués → déduits des assignés et tâches par exécution
-§15 contribution → calculée par pôle à partir des tâches snapshotées sur l'exécution
-§8 validation finale → une seule par exécution, pôle pilote / Director / Owner
+§15 contribution → calculée par pôle à partir des tâches snapshotées
+§8 validation finale → une seule par exécution
 ```
-
-La chronologie individuelle (décision [26.1](#decision-26-1), §9) définit des horaires par assigné dans le cadre d'une occurrence ; ce n'est pas une récurrence contributeur.
 
 ### Decision 26.13 — Création staff (feed execution) {#decision-26-13}
 
@@ -385,7 +375,7 @@ Legacy `execution-feed/` and `houston/actions` / `houston/checklists` apps were 
 ### Chronologie partagée vs individuelle
 
 - **`use_shared_chronology=True`:** une exécution par `occurrence_date`, tous les assignés du schedule sur la même exécution.
-- **`use_shared_chronology=False`:** une exécution par `(occurrence_date, assigné)` ; clé `schedule_source_membership` sur l'exécution.
+- **`use_shared_chronology=False`:** une exécution par `(occurrence_date, assigné)` ; clé `chronology_owner_membership` sur l'exécution.
 
 ### Idempotence
 
@@ -413,5 +403,6 @@ Interdit si le schedule a déjà ≥1 exécution matérialisée (`400`).
 
 ### API
 
-- **Récurrent:** `POST /action-plans/{id}/schedule/` (`recurrence_days` non vide requis).
-- **Ponctuel:** `POST /action-plans/{id}/use/`.
+- **Récurrent:** `POST /action-plans/{id}/schedule/` (`recurrence_days` non vide requis ; individual = exactement 1 assignee).
+- **Ponctuel:** `POST /action-plans/{id}/use/` (individual ≤ 1 assigné).
+- **Planification unifiée:** `POST /action-plans/{id}/planning-submit/` (`submission_id` + `item_id`, fan-out individuel).

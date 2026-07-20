@@ -207,6 +207,7 @@ def action_plan_schedule(action_plan, owner_membership):
         end_date=today,
         start_at=time(8, 0),
         end_at=time(10, 0),
+        use_shared_chronology=True,
     )
 
 
@@ -222,6 +223,7 @@ def action_plan_execution(action_plan, owner_membership, business_unit):
         pilot_business_unit=business_unit,
         requires_validation=action_plan.requires_validation,
         last_activity_at=now,
+        use_shared_chronology=True,
     )
 
 

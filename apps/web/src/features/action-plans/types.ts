@@ -15,8 +15,10 @@ export type PatchedActionPlanUpdateRequest = components['schemas']['PatchedActio
 export type PatchedActionPlanExecutionUpdateRequest =
   components['schemas']['PatchedActionPlanExecutionUpdateRequest']
 export type ActionPlanUseRequest = components['schemas']['ActionPlanUseRequest']
-export type ActionPlanMixedSubmitRequest = components['schemas']['ActionPlanMixedSubmitRequest']
-export type ActionPlanMixedSubmitResponse = components['schemas']['ActionPlanMixedSubmitResponse']
+export type ActionPlanPlanningSubmitRequest =
+  components['schemas']['ActionPlanPlanningSubmitRequest']
+export type ActionPlanPlanningSubmitResponse =
+  components['schemas']['ActionPlanPlanningSubmitResponse']
 export type ActionPlanExecutionDetail = components['schemas']['ActionPlanExecutionDetail']
 export type ActionPlanTaskExecution = components['schemas']['ActionPlanTaskExecution']
 export type ActionPlanTaskSkipRequest = components['schemas']['ActionPlanTaskSkipRequest']

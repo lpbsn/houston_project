@@ -39,22 +39,20 @@ class ActionPlanStaleExecutionError(ActionPlanConflictError):
         super().__init__(message)
 
 
-class MixedSubmissionActorConflict(ActionPlanPermissionError):
-    error_code = "mixed_submission_actor_conflict"
+class PlanningSubmissionPayloadConflict(ActionPlanConflictError):
+    error_code = "planning_submission_conflict"
 
 
-class MixedSubmissionPayloadConflict(ActionPlanConflictError):
-    error_code = "mixed_submission_conflict"
-
-
-class MixedSubmissionStepError(ActionPlanValidationError):
+class PlanningSubmissionItemError(ActionPlanValidationError):
     error_code = "validation_error"
 
     def __init__(
         self,
         message: str = "",
         *,
-        failed_step: str,
+        item_id: uuid.UUID | None = None,
+        item_index: int | None = None,
     ) -> None:
         super().__init__(message)
-        self.failed_step = failed_step
+        self.item_id = item_id
+        self.item_index = item_index

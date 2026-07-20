@@ -23,8 +23,8 @@ from houston.action_plans.api.serializers import (
     ActionPlanExecutionPinStateSerializer,
     ActionPlanExecutionUpdateRequestSerializer,
     ActionPlanListItemSerializer,
-    ActionPlanMixedSubmitRequestSerializer,
-    ActionPlanMixedSubmitResponseSerializer,
+    ActionPlanPlanningSubmitRequestSerializer,
+    ActionPlanPlanningSubmitResponseSerializer,
     ActionPlanScheduleCreateRequestSerializer,
     ActionPlanScheduleDetailSerializer,
     ActionPlanScheduleUpdateRequestSerializer,
@@ -44,12 +44,12 @@ from houston.action_plans.api.serializers import (
 from houston.action_plans.exceptions import (
     ActionPlanConflictError,
     ActionPlanPermissionError,
+    ActionPlanServiceError,
     ActionPlanStaleExecutionError,
     ActionPlanStateError,
     ActionPlanValidationError,
-    MixedSubmissionActorConflict,
-    MixedSubmissionPayloadConflict,
-    MixedSubmissionStepError,
+    PlanningSubmissionItemError,
+    PlanningSubmissionPayloadConflict,
 )
 from houston.action_plans.execution_feed import build_action_plan_execution_feed_page
 from houston.action_plans.execution_update import update_action_plan_execution
@@ -65,9 +65,14 @@ from houston.action_plans.feed_serializers import (
     ActionPlanExecutionFeedResponseSerializer,
     serialize_action_plan_execution_feed_item,
 )
-from houston.action_plans.mixed_outbox_tasks import process_action_plan_mixed_outbox_batch_task
-from houston.action_plans.mixed_submission_services import submit_mixed_action_plan_catalog
 from houston.action_plans.permissions import can_view_action_plan_catalog
+from houston.action_plans.planning_outbox_tasks import (
+    process_action_plan_planning_outbox_batch_task,
+)
+from houston.action_plans.planning_services import (
+    create_action_plan_with_planning,
+    submit_action_plan_planning,
+)
 from houston.action_plans.schedule_services import (
     create_action_plan_schedule,
     deactivate_action_plan_schedule,
@@ -150,32 +155,25 @@ def _action_plan_error_response(exc: Exception) -> Response:
     )
 
 
-def _mixed_submission_error_response(exc: Exception) -> Response:
-    if isinstance(exc, MixedSubmissionActorConflict):
+def _planning_submission_error_response(exc: Exception) -> Response:
+    if isinstance(exc, PlanningSubmissionPayloadConflict):
         return Response(
             {
-                "code": MixedSubmissionActorConflict.error_code,
-                "detail": str(exc) or "Mixed submission actor conflict.",
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    if isinstance(exc, MixedSubmissionPayloadConflict):
-        return Response(
-            {
-                "code": MixedSubmissionPayloadConflict.error_code,
-                "detail": str(exc) or "Mixed submission payload conflict.",
+                "code": PlanningSubmissionPayloadConflict.error_code,
+                "detail": str(exc) or "Planning submission payload conflict.",
             },
             status=status.HTTP_409_CONFLICT,
         )
-    if isinstance(exc, MixedSubmissionStepError):
-        return Response(
-            {
-                "code": MixedSubmissionStepError.error_code,
-                "detail": str(exc) or "Validation failed.",
-                "failed_step": exc.failed_step,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    if isinstance(exc, PlanningSubmissionItemError):
+        payload = {
+            "code": PlanningSubmissionItemError.error_code,
+            "detail": str(exc) or "Validation failed.",
+        }
+        if exc.item_id is not None:
+            payload["item_id"] = str(exc.item_id)
+        if exc.item_index is not None:
+            payload["item_index"] = exc.item_index
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
     if isinstance(exc, ActionPlanPermissionError):
         return Response(
             {"code": "permission_denied", "detail": str(exc) or "Permission denied."},
@@ -185,6 +183,14 @@ def _mixed_submission_error_response(exc: Exception) -> Response:
         return Response(
             {"code": "validation_error", "detail": str(exc) or "Validation failed."},
             status=status.HTTP_400_BAD_REQUEST,
+        )
+    if isinstance(exc, ActionPlanServiceError):
+        return Response(
+            {
+                "code": ActionPlanServiceError.error_code,
+                "detail": str(exc) or "Planning submission failed.",
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
     return Response(
         {"code": "api_error", "detail": "Request failed."},
@@ -234,8 +240,6 @@ def _schedule_assignee_payloads(assignees_data: list[dict]) -> list[dict]:
         {
             "membership_id": item["membership_id"],
             "business_unit_id": item["business_unit_id"],
-            "start_at": item.get("start_at"),
-            "end_at": item.get("end_at"),
         }
         for item in assignees_data
     ]
@@ -287,9 +291,103 @@ _ACTION_PLAN_CREATE_201_RESPONSE = PolymorphicProxySerializer(
     serializers=[
         ActionPlanDetailSerializer,
         ActionPlanExecutionDetailSerializer,
+        ActionPlanPlanningSubmitResponseSerializer,
     ],
     resource_type_field_name=None,
 )
+
+
+def _parse_planning_items(raw_items: list[dict]) -> tuple[list[dict] | None, Response | None]:
+    from datetime import datetime, time
+
+    from django.utils.dateparse import parse_datetime, parse_time
+
+    items: list[dict] = []
+    for raw in raw_items:
+        item = dict(raw)
+        kind = item["kind"]
+        if kind == "execution":
+            item["assignees"] = _assignee_payloads(item.get("assignees") or [])
+            for key in ("start_at", "end_at"):
+                value = item.get(key)
+                if value in (None, ""):
+                    item[key] = None
+                elif isinstance(value, str):
+                    parsed = parse_datetime(value)
+                    if parsed is None:
+                        return None, Response(
+                            {
+                                "code": "validation_error",
+                                "detail": f"Invalid {key} datetime.",
+                                "item_id": str(item["item_id"]),
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    item[key] = parsed
+        else:
+            item["assignees"] = _schedule_assignee_payloads(item.get("assignees") or [])
+            for key in ("start_at", "end_at"):
+                value = item.get(key)
+                if value in (None, ""):
+                    return None, Response(
+                        {
+                            "code": "validation_error",
+                            "detail": f"Schedule {key} is required.",
+                            "item_id": str(item["item_id"]),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if isinstance(value, str):
+                    parsed = parse_time(value)
+                    if parsed is None:
+                        return None, Response(
+                            {
+                                "code": "validation_error",
+                                "detail": f"Invalid schedule {key}.",
+                                "item_id": str(item["item_id"]),
+                            },
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    item[key] = parsed
+                elif isinstance(value, datetime):
+                    item[key] = value.time()
+                elif not isinstance(value, time):
+                    return None, Response(
+                        {
+                            "code": "validation_error",
+                            "detail": f"Invalid schedule {key}.",
+                            "item_id": str(item["item_id"]),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+        items.append(item)
+    return items, None
+
+
+def _planning_result_payload(result) -> dict:
+    return {
+        "replayed": result.replayed,
+        "action_plan_id": result.action_plan_id,
+        "summary": result.summary,
+        "executions": [
+            {
+                "item_id": item.item_id,
+                "id": item.resource_id,
+                "primary_membership_id": item.primary_membership_id,
+                "status": item.status,
+            }
+            for item in result.executions
+        ],
+        "schedules": [
+            {
+                "item_id": item.item_id,
+                "id": item.resource_id,
+                "primary_membership_id": item.primary_membership_id,
+                "status": item.status,
+            }
+            for item in result.schedules
+        ],
+    }
 
 
 class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
@@ -357,14 +455,18 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
         request=ActionPlanCreateRequestSerializer,
         responses={
             201: _ACTION_PLAN_CREATE_201_RESPONSE,
+            200: ActionPlanPlanningSubmitResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
         },
         description=(
             "Creates an action plan. Reusable catalog entries may omit tasks; "
-            "execution or schedule flows require at least one task or assignee."
+            "execution or schedule flows require at least one task or assignee. "
+            "With submission_id + items, creates a non-reusable plan and planning "
+            "resources atomically."
         ),
     )
     def post(self, request, establishment_id):
@@ -376,6 +478,44 @@ class ActionPlanListCreateView(EstablishmentScopedActionPlanMixin, APIView):
         body.is_valid(raise_exception=True)
         data = body.validated_data
         schedule_data = data.get("schedule")
+        planning_items = data.get("items")
+
+        if planning_items:
+            items, parse_error = _parse_planning_items(planning_items)
+            if parse_error is not None:
+                return parse_error
+            try:
+                result = create_action_plan_with_planning(
+                    establishment_id=self.establishment_id,
+                    created_by=membership,
+                    pilot_business_unit_id=data["pilot_business_unit_id"],
+                    title=data["title"],
+                    description=data.get("description", ""),
+                    requires_validation=data.get("requires_validation", True),
+                    tasks=_task_payloads(data.get("tasks") or []),
+                    submission_id=data["submission_id"],
+                    use_shared_chronology=data.get("use_shared_chronology", False),
+                    items=items or [],
+                )
+            except (
+                PlanningSubmissionPayloadConflict,
+                PlanningSubmissionItemError,
+                ActionPlanPermissionError,
+                ActionPlanValidationError,
+                ActionPlanServiceError,
+            ) as exc:
+                return _planning_submission_error_response(exc)
+
+            process_action_plan_planning_outbox_batch_task.delay()
+            response_status = (
+                status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED
+            )
+            return Response(
+                ActionPlanPlanningSubmitResponseSerializer(
+                    _planning_result_payload(result)
+                ).data,
+                status=response_status,
+            )
 
         try:
             if schedule_data is not None:
@@ -671,16 +811,16 @@ class ActionPlanUseView(EstablishmentScopedActionPlanMixin, APIView):
         )
 
 
-class ActionPlanMixedSubmitView(EstablishmentScopedActionPlanMixin, APIView):
+class ActionPlanPlanningSubmitView(EstablishmentScopedActionPlanMixin, APIView):
     authentication_classes = [BearerAccessTokenAuthentication]
     permission_classes = [permissions.IsAuthenticated, HasActiveMembership]
 
     @extend_schema(
         tags=["action-plans"],
-        request=ActionPlanMixedSubmitRequestSerializer,
+        request=ActionPlanPlanningSubmitRequestSerializer,
         responses={
-            201: ActionPlanMixedSubmitResponseSerializer,
-            200: ActionPlanMixedSubmitResponseSerializer,
+            201: ActionPlanPlanningSubmitResponseSerializer,
+            200: ActionPlanPlanningSubmitResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -700,46 +840,38 @@ class ActionPlanMixedSubmitView(EstablishmentScopedActionPlanMixin, APIView):
         if action_plan is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        body = ActionPlanMixedSubmitRequestSerializer(data=request.data)
+        body = ActionPlanPlanningSubmitRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         data = body.validated_data
-        schedule_data = dict(data["schedule_body"])
-        use_data = dict(data["use_body"])
-        schedule_data["assignees"] = _schedule_assignee_payloads(
-            schedule_data.get("assignees") or [],
-        )
-        use_data["assignees"] = _assignee_payloads(use_data.get("assignees") or [])
+
+        items, parse_error = _parse_planning_items(data["items"])
+        if parse_error is not None:
+            return parse_error
 
         try:
-            result = submit_mixed_action_plan_catalog(
-                action_plan=action_plan,
+            result = submit_action_plan_planning(
                 actor=membership,
+                establishment_id=self.establishment_id,
                 submission_id=data["submission_id"],
-                schedule_body=schedule_data,
-                use_body=use_data,
+                use_shared_chronology=data.get("use_shared_chronology", False),
+                items=items or [],
+                action_plan=action_plan,
             )
         except (
-            MixedSubmissionActorConflict,
-            MixedSubmissionPayloadConflict,
-            MixedSubmissionStepError,
+            PlanningSubmissionPayloadConflict,
+            PlanningSubmissionItemError,
             ActionPlanPermissionError,
             ActionPlanValidationError,
+            ActionPlanServiceError,
         ) as exc:
-            return _mixed_submission_error_response(exc)
+            return _planning_submission_error_response(exc)
 
-        execution = get_action_plan_execution_for_detail(
-            membership=membership,
-            execution_id=result.execution.id,
-        )
-        payload = {
-            "execution": serialize_execution_detail(execution, membership=membership),
-            "schedule_id": result.schedule_id,
-            "replayed": result.replayed,
-        }
         response_status = status.HTTP_200_OK if result.replayed else status.HTTP_201_CREATED
-        process_action_plan_mixed_outbox_batch_task.delay()
+        process_action_plan_planning_outbox_batch_task.delay()
         return Response(
-            ActionPlanMixedSubmitResponseSerializer(payload).data,
+            ActionPlanPlanningSubmitResponseSerializer(
+                _planning_result_payload(result)
+            ).data,
             status=response_status,
         )
 
