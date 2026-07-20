@@ -120,7 +120,8 @@ export function buildPlanningBusinessFingerprint(body: {
   submission_id?: string
 }): string {
   const items = (body.items ?? []).map((item) => {
-    const { item_id: _itemId, ...rest } = item
+    const rest = { ...item }
+    delete rest.item_id
     return rest
   })
   return JSON.stringify({

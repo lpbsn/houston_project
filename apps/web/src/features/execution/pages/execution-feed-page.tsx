@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { LoaderCircle, Plus } from 'lucide-react'
 
 import { useAuth } from '@/app/auth-provider'
@@ -40,6 +40,22 @@ type ExecutionFeedPageProps = {
 
 const PLANNING_FEEDBACK_STORAGE_KEY = 'houston:planning-feedback'
 
+function consumePlanningFeedbackMessage(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    const message = sessionStorage.getItem(PLANNING_FEEDBACK_STORAGE_KEY)
+    if (!message) {
+      return null
+    }
+    sessionStorage.removeItem(PLANNING_FEEDBACK_STORAGE_KEY)
+    return message
+  } catch {
+    return null
+  }
+}
+
 function readScheduledPreviewFromFeedPages(
   pages: ActionPlanExecutionFeedResponse[] | undefined,
 ): {
@@ -69,16 +85,7 @@ export function ExecutionFeedPage({
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
   const [viewMode, setViewMode] = useState<ExecutionViewMode>('personal')
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
-  const [planningFeedback, setPlanningFeedback] = useState<string | null>(null)
-
-  useEffect(() => {
-    const message = sessionStorage.getItem(PLANNING_FEEDBACK_STORAGE_KEY)
-    if (!message) {
-      return
-    }
-    sessionStorage.removeItem(PLANNING_FEEDBACK_STORAGE_KEY)
-    setPlanningFeedback(message)
-  }, [])
+  const [planningFeedback] = useState(consumePlanningFeedbackMessage)
 
   const planFeedQuery = useActionPlanExecutionFeedQuery(establishmentId, viewMode)
   const quickActions = useActionPlanExecutionFeedQuickActions({
