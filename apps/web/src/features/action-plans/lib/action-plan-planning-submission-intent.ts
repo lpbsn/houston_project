@@ -6,6 +6,17 @@ export type PlanningSubmissionIntent = {
   itemIds: string[]
 }
 
+function getPlanningSubmissionSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  try {
+    return window.sessionStorage ?? null
+  } catch {
+    return null
+  }
+}
+
 export function buildPlanningSubmissionStorageKey(
   establishmentId: string,
   actionPlanId: string,
@@ -32,10 +43,12 @@ export function readPlanningSubmissionIntent(
   establishmentId: string,
   actionPlanId: string,
 ): PlanningSubmissionIntent | null {
+  const storage = getPlanningSubmissionSessionStorage()
+  if (!storage) {
+    return null
+  }
   try {
-    const raw = sessionStorage.getItem(
-      buildPlanningSubmissionStorageKey(establishmentId, actionPlanId),
-    )
+    const raw = storage.getItem(buildPlanningSubmissionStorageKey(establishmentId, actionPlanId))
     if (!raw) {
       return null
     }
@@ -54,7 +67,11 @@ export function writePlanningSubmissionIntent(
   actionPlanId: string,
   intent: PlanningSubmissionIntent,
 ): void {
-  sessionStorage.setItem(
+  const storage = getPlanningSubmissionSessionStorage()
+  if (!storage) {
+    return
+  }
+  storage.setItem(
     buildPlanningSubmissionStorageKey(establishmentId, actionPlanId),
     JSON.stringify(intent),
   )
@@ -64,19 +81,27 @@ export function clearPlanningSubmissionIntent(
   establishmentId: string,
   actionPlanId: string,
 ): void {
-  sessionStorage.removeItem(buildPlanningSubmissionStorageKey(establishmentId, actionPlanId))
+  const storage = getPlanningSubmissionSessionStorage()
+  if (!storage) {
+    return
+  }
+  storage.removeItem(buildPlanningSubmissionStorageKey(establishmentId, actionPlanId))
 }
 
 export function clearAllPlanningSubmissionIntents(): void {
+  const storage = getPlanningSubmissionSessionStorage()
+  if (!storage) {
+    return
+  }
   const keys: string[] = []
-  for (let index = 0; index < sessionStorage.length; index += 1) {
-    const key = sessionStorage.key(index)
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
     if (key?.startsWith(STORAGE_PREFIX)) {
       keys.push(key)
     }
   }
   for (const key of keys) {
-    sessionStorage.removeItem(key)
+    storage.removeItem(key)
   }
 }
 

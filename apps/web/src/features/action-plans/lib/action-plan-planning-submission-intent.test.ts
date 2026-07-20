@@ -167,4 +167,19 @@ describe('action-plan-planning-submission-intent', () => {
     clearAllPlanningSubmissionIntents()
     expect(sessionStorage.length).toBe(0)
   })
+
+  it('clearAllPlanningSubmissionIntents does not throw without sessionStorage', () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, 'sessionStorage')
+    try {
+      Object.defineProperty(window, 'sessionStorage', {
+        configurable: true,
+        value: undefined,
+      })
+      expect(() => clearAllPlanningSubmissionIntents()).not.toThrow()
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(window, 'sessionStorage', originalDescriptor)
+      }
+    }
+  })
 })
