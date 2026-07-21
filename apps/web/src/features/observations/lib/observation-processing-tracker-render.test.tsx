@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createElement, useRef } from 'react'
+import { createElement } from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -11,11 +11,9 @@ import {
   trackObservation,
 } from '@/features/observations/lib/observation-processing-tracker-store'
 
-function Probe({ onRender }: { onRender: (count: number) => void }) {
+function Probe({ onRender }: { onRender: () => void }) {
   const track = useTrackObservation()
-  const countRef = useRef(0)
-  countRef.current += 1
-  onRender(countRef.current)
+  onRender()
   // Ensure the stable action is used (no subscription to banner state).
   void track
   return createElement('div', { 'data-testid': 'probe' })
@@ -28,9 +26,9 @@ describe('useTrackObservation render isolation', () => {
   })
 
   it('does not re-render origin pages when pipeline status updates', () => {
-    const renders: number[] = []
-    render(createElement(Probe, { onRender: (count) => renders.push(count) }))
-    const initial = renders[renders.length - 1]!
+    let renderCount = 0
+    render(createElement(Probe, { onRender: () => { renderCount += 1 } }))
+    const initial = renderCount
 
     trackObservation({
       observationId: 'obs-1',
@@ -58,6 +56,6 @@ describe('useTrackObservation render isolation', () => {
       signalIds: ['sig-1'],
     })
 
-    expect(renders[renders.length - 1]).toBe(initial)
+    expect(renderCount).toBe(initial)
   })
 })

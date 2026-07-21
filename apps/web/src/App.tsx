@@ -362,7 +362,7 @@ function App() {
     }
 
     if (route.path === '/app/report' || route.path === '/reporting') {
-      return <LazyReportPage onNavigate={navigate} />
+      return <LazyReportPage />
     }
 
     if (route.path === '/signals') {

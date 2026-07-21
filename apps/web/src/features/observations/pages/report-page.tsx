@@ -27,11 +27,7 @@ import { resolveApiErrorMessage } from '@/lib/error-message'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
-type ReportPageProps = {
-  onNavigate?: (pathname: string) => void
-}
-
-export function ReportPage({ onNavigate: _onNavigate }: ReportPageProps) {
+export function ReportPage() {
   const shouldReduceMotion = useReducedMotion()
   const auth = useAuth()
   const establishmentId = auth.bootstrap?.active_membership?.establishment_id ?? null
