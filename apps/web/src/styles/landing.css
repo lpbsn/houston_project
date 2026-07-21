@@ -1,0 +1,118 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+:root {
+  color-scheme: light;
+  --spore-forest: #103b2a;
+  --spore-moss: #1f6f50;
+  --spore-neon: #52ff9a;
+  --spore-cream: #f7faf8;
+  --spore-ink: #0a1f16;
+  --spore-muted: #5a7a6c;
+  --spore-card: #ffffff;
+  --spore-danger: #e07a5f;
+  --font-sans: "Geist Variable", sans-serif;
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", sans-serif;
+  --color-spore-forest: var(--spore-forest);
+  --color-spore-moss: var(--spore-moss);
+  --color-spore-neon: var(--spore-neon);
+  --color-spore-cream: var(--spore-cream);
+  --color-spore-ink: var(--spore-ink);
+  --color-spore-muted: var(--spore-muted);
+  --color-spore-card: var(--spore-card);
+  --color-spore-danger: var(--spore-danger);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: var(--font-sans);
+  color: var(--spore-forest);
+  background: #ffffff;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--spore-neon);
+  outline-offset: 3px;
+}
+
+.landing-grid-bg {
+  background-image:
+    linear-gradient(rgba(82, 255, 154, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(82, 255, 154, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.landing-halo {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(82, 255, 154, 0.28) 0%,
+    rgba(82, 255, 154, 0.08) 35%,
+    transparent 70%
+  );
+}
+
+.landing-cta-glow {
+  box-shadow:
+    0 0 0 1px rgba(82, 255, 154, 0.2),
+    0 8px 32px rgba(82, 255, 154, 0.45),
+    0 0 48px rgba(82, 255, 154, 0.25);
+}
+
+.landing-cta-glow-dark {
+  box-shadow:
+    0 8px 28px rgba(16, 59, 42, 0.35),
+    0 0 0 1px rgba(16, 59, 42, 0.08);
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.landing-float {
+  animation: landing-float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-float {
+    animation: none;
+  }
+}

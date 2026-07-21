@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://spore-os.com/sitemap.xml
