@@ -196,7 +196,7 @@ describe('CommentSection', () => {
 
     expect(screen.getByText('note signal héritée')).toBeTruthy()
     expect(screen.getByText('note execution')).toBeTruthy()
-    expect(screen.getAllByText('Signal')).toHaveLength(1)
+    expect(screen.getAllByText('Observation')).toHaveLength(1)
     expect(screen.queryByText('Plan')).toBeNull()
     expect(screen.getAllByLabelText('Répondre au commentaire')).toHaveLength(1)
     expect(screen.getByLabelText('Marquer le commentaire comme non résolu')).toBeTruthy()

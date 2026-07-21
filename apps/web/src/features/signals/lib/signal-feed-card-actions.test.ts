@@ -74,7 +74,7 @@ describe('getSignalFeedCardActionOptions', () => {
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_resolve: true }) }),
       ),
-    ).toEqual([{ id: 'resolve', label: 'Marquer résolu', tone: 'success' }])
+    ).toEqual([{ id: 'resolve', label: 'Marquer comme résolue', tone: 'success' }])
   })
 
   it('returns cancel action when can_cancel', () => {
@@ -82,7 +82,7 @@ describe('getSignalFeedCardActionOptions', () => {
       getSignalFeedCardActionOptions(
         feedItem({ permission_hints: hints({ can_cancel: true }) }),
       ),
-    ).toEqual([{ id: 'cancel', label: 'Annuler ce signal', tone: 'danger' }])
+    ).toEqual([{ id: 'cancel', label: 'Annuler cette observation', tone: 'danger' }])
   })
 
   it('returns all actions in order when all permissions are granted', () => {
@@ -99,8 +99,8 @@ describe('getSignalFeedCardActionOptions', () => {
       ),
     ).toEqual([
       { id: 'pin', label: 'Désépingler', tone: 'neutral' },
-      { id: 'resolve', label: 'Marquer résolu', tone: 'success' },
-      { id: 'cancel', label: 'Annuler ce signal', tone: 'danger' },
+      { id: 'resolve', label: 'Marquer comme résolue', tone: 'success' },
+      { id: 'cancel', label: 'Annuler cette observation', tone: 'danger' },
     ])
   })
 })

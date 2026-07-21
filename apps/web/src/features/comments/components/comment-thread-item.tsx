@@ -62,7 +62,7 @@ function CommentOriginBadge({ origin }: { origin: ExecutionCommentListItem['orig
 
   return (
     <HoustonBadge variant="gray" className="text-[9px]">
-      Signal
+      Observation
     </HoustonBadge>
   )
 }

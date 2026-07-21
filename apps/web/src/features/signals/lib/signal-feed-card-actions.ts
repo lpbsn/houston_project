@@ -1,7 +1,7 @@
 import type { PermissionHints, SignalFeedItem } from '../types'
 
 export const SIGNAL_CANCEL_CONFIRM_MESSAGE =
-  'Confirmer l’annulation de ce signal ? Cette action est définitive.'
+  'Confirmer l’annulation de cette observation ? Cette action est définitive.'
 
 export type SignalFeedCardActionId = 'pin' | 'resolve' | 'cancel'
 
@@ -34,7 +34,7 @@ export function getSignalFeedCardActionOptions(
   if (hints.can_resolve) {
     options.push({
       id: 'resolve',
-      label: 'Marquer résolu',
+      label: 'Marquer comme résolue',
       tone: 'success',
     })
   }
@@ -42,7 +42,7 @@ export function getSignalFeedCardActionOptions(
   if (hints.can_cancel) {
     options.push({
       id: 'cancel',
-      label: 'Annuler ce signal',
+      label: 'Annuler cette observation',
       tone: 'danger',
     })
   }

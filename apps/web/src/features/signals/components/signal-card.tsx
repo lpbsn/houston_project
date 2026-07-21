@@ -42,7 +42,7 @@ type SignalCardActionsButtonProps = {
 function SignalCardActionsButton({ item, onOpenActions }: SignalCardActionsButtonProps) {
   return (
     <FeedCardActionsButton
-      ariaLabel="Actions du signal"
+      ariaLabel="Actions de l'observation"
       onClick={(event) => {
         stopCardNavigation(event)
         onOpenActions(item)

@@ -23,7 +23,7 @@ export default defineConfig({
         id: '/',
         name: 'Spore',
         short_name: 'Spore',
-        description: 'App terrain pour signaler, structurer et suivre les problèmes opérationnels.',
+        description: 'App terrain pour rapporter, structurer et suivre les problèmes opérationnels.',
         lang: 'fr',
         start_url: '/',
         scope: '/',

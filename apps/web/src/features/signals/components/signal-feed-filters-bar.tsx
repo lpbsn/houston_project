@@ -49,7 +49,7 @@ export function SignalFeedFiltersBar({
     <>
       <div
         className="flex shrink-0 gap-2 border-t border-[#E8E6DF] bg-white px-3 py-2 pb-3"
-        aria-label="Filtres des signaux"
+        aria-label="Filtres des observations"
       >
         <div className="flex flex-1" data-filter-kind="status">
           <TerrainFilterSlot

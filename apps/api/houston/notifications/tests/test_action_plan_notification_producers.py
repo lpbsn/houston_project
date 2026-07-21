@@ -221,10 +221,10 @@ def test_execution_created_from_signal_copy_safe(
     notifications = _creation_notifications(execution_id=execution.id)
     assert len(notifications) == 1
     _assert_generic_copy(notifications[0])
-    assert notifications[0].title == "Plan d'action lié à un signal"
+    assert notifications[0].title == "Plan d'action lié à une observation"
     assert (
         notifications[0].body
-        == "Une exécution de plan d'action a été créée à partir d'un signal."
+        == "Une exécution de plan d'action a été créée à partir d'une observation."
     )
 
 

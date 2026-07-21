@@ -43,8 +43,8 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
         "Une exécution de plan d'action vous a été assignée.",
     ),
     "action_plan.execution.created_from_signal": (
-        "Plan d'action lié à un signal",
-        "Une exécution de plan d'action a été créée à partir d'un signal.",
+        "Plan d'action lié à une observation",
+        "Une exécution de plan d'action a été créée à partir d'une observation.",
     ),
     "action_plan.execution.pending_validation": (
         "Plan d'action à valider",
@@ -71,8 +71,8 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
         "Vous avez été mentionné dans un commentaire.",
     ),
     "comment.signal.created": (
-        "Commentaire sur un signal",
-        "Un nouveau commentaire a été ajouté sur un signal.",
+        "Commentaire sur une observation",
+        "Un nouveau commentaire a été ajouté sur une observation.",
     ),
     "comment.action_plan_execution.created": (
         "Commentaire sur un plan d'action",
@@ -83,25 +83,25 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
         "Quelqu'un a répondu dans une discussion de commentaires.",
     ),
     "signal.created": (
-        "Signal {pole_name} créé",
-        "Un signal a été créé sur votre pôle.",
+        "Nouvelle observation — {pole_name}",
+        "Une observation a été créée sur votre pôle.",
     ),
     "signal.created.unassigned_global": (
-        "Signal sans pôle",
-        "Un signal nécessite une attention globale.",
+        "Observation sans pôle couvert",
+        "Une observation nécessite une attention globale.",
     ),
 
     "signal.pinned": (
-        "Signal épinglé",
-        "Un signal a été épinglé.",
+        "Observation épinglée",
+        "Une observation a été épinglée.",
     ),
     "signal.resolved": (
-        "Signal résolu",
-        "Un signal a été résolu.",
+        "Observation résolue",
+        "Une observation a été résolue.",
     ),
     "signal.canceled": (
-        "Signal annulé",
-        "Un signal a été annulé.",
+        "Observation annulée",
+        "Une observation a été annulée.",
     ),
     "chat.message.received": (
         "Message reçu de {actor_display_name}",
@@ -110,7 +110,7 @@ NOTIFICATION_COPY: dict[str, tuple[str, str]] = {
 }
 
 DEFAULT_ACTOR_DISPLAY_NAME = "Quelqu'un"
-SIGNAL_CREATED_FALLBACK_TITLE = "Nouveau signal"
+SIGNAL_CREATED_FALLBACK_TITLE = "Nouvelle observation"
 
 INVALID_STATUS_FILTER_ERROR_DETAIL = "Filtre de statut invalide."
 INVALID_PAGE_SIZE_ERROR_DETAIL = "page_size must be between 1 and 50."

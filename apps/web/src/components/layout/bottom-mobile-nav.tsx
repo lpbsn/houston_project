@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react'
 import {
   CirclePlay,
+  Eye,
   MessageCircle,
   Plus,
   Settings,
-  Signal,
 } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 
@@ -29,7 +29,7 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/signals', label: 'Signaux', icon: Signal },
+  { path: '/signals', label: 'Observations', icon: Eye },
   { path: '/execution', label: 'Exécution', icon: CirclePlay },
   { path: '/reporting', label: '', icon: Plus, isPrimary: true },
   { path: '/chat', label: 'Chat', icon: MessageCircle },

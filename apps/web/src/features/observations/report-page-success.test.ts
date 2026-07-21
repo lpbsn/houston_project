@@ -21,13 +21,13 @@ describe('report-page success state', () => {
 
   it('does not show feed CTA copy for no_signal_created or analysis_failed', () => {
     expect(getProcessingUxLabel('no_signal_created')).not.toContain(
-      'liste des signaux a été mise à jour',
+      'liste des observations a été mise à jour',
     )
   })
 
   it('formats popup headline from signal count without detail paths', () => {
     expect(formatProcessingSuccessHeadline(2, 'signal_created')).toBe(
-      '2 signaux créés ou mis à jour',
+      '2 observations créées ou mises à jour',
     )
   })
 })

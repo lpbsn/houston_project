@@ -105,7 +105,7 @@ export function SignalDetailPage({ signalId, onNavigate }: SignalDetailPageProps
             {(reporterName || signal.aggregation_count > 0) ? (
               <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[#aaa]">
                 <span className="min-w-0 truncate">
-                  {reporterName ? `Signalé par ${reporterName}` : '\u00a0'}
+                  {reporterName ? `Rapportée par ${reporterName}` : '\u00a0'}
                 </span>
                 {signal.aggregation_count > 0 ? (
                   <span className="shrink-0">

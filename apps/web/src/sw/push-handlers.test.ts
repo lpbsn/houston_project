@@ -11,8 +11,8 @@ describe('push-handlers', () => {
   it('parses push payload json into notification fields', () => {
     const payload = parsePushPayload({
       json: () => ({
-        title: 'Nouveau signal',
-        body: 'Un signal urgent a été créé.',
+        title: 'Nouvelle observation',
+        body: 'Une observation urgente a été créée.',
         data: { url: '/signals/abc', notification_id: 'n-1' },
       }),
       text: () => '',
@@ -20,8 +20,8 @@ describe('push-handlers', () => {
 
     const { title, options } = buildPushNotificationOptions(payload)
 
-    expect(title).toBe('Nouveau signal')
-    expect(options.body).toBe('Un signal urgent a été créé.')
+    expect(title).toBe('Nouvelle observation')
+    expect(options.body).toBe('Une observation urgente a été créée.')
     expect(options.data).toEqual({ url: '/signals/abc', notification_id: 'n-1' })
     expect(options.icon).toBe('/spore-icon-v2-192.png')
   })

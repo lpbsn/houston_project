@@ -13,9 +13,9 @@ type SignalStatusBadgeProps = {
 const LABELS: Record<string, string> = {
   open: 'En attente',
   in_progress: 'En cours',
-  resolved: 'Résolu',
+  resolved: 'Résolue',
   canceled: 'Annulée',
-  archived: 'Archivé',
+  archived: 'Archivée',
 }
 
 const ARCHIVED_BADGE_CLASS = 'bg-[#555] text-white'

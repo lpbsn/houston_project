@@ -104,7 +104,7 @@ describe('formatStatusFilterSummary', () => {
         ...EMPTY_SIGNAL_FEED_FILTERS,
         statuses: ['canceled'],
       }),
-    ).toBe('Annulé ▾')
+    ).toBe('Annulée ▾')
   })
 })
 

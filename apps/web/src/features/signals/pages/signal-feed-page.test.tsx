@@ -139,8 +139,8 @@ describe('SignalFeedPage collapsible sections', () => {
 
     renderSignalFeedPage()
 
-    expect(screen.getByRole('button', { name: 'Déplier la section Résolus' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Déplier la section Annulés' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Déplier la section Résolues' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Déplier la section Annulées' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 3, name: 'Signal ouvert' })).toBeTruthy()
     expect(screen.queryByRole('heading', { level: 3, name: 'Signal résolu' })).toBeNull()
     expect(screen.queryByRole('heading', { level: 3, name: 'Signal annulé' })).toBeNull()

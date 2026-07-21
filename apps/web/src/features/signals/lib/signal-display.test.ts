@@ -69,7 +69,7 @@ describe('groupFeedItemsByStatus', () => {
     expect(groups?.[1].dotVariant).toBe('teal')
     expect(groups?.[2].dotVariant).toBe('success')
     expect(groups?.[3].dotVariant).toBe('muted')
-    expect(groups?.[3].label).toBe('Annulés')
+    expect(groups?.[3].label).toBe('Annulées')
     expect(groups?.[3].items.map((entry) => entry.id)).toEqual(['4'])
   })
 

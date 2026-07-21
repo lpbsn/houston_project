@@ -53,7 +53,7 @@ describe('TerrainTopbar', () => {
 
   it('renders detail back button without visible border classes', () => {
     render(
-      <TerrainTopbar variant="detail" title="Signal" onBack={() => undefined} />,
+      <TerrainTopbar variant="detail" title="Observation" onBack={() => undefined} />,
     )
 
     const backButton = screen.getByRole('button', { name: 'Retour' })

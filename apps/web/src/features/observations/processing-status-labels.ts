@@ -13,9 +13,9 @@ const UX_STATUS_LABELS: Record<ObservationUxStatus, string> = {
   analysis_queued: 'Analyse en attente',
   analysis_processing: 'Analyse en cours',
   analysis_retrying: 'Nouvelle tentative d’analyse',
-  signal_created: 'Signal créé. La liste des signaux a été mise à jour.',
-  signal_updated: 'Signal mis à jour. La liste des signaux a été mise à jour.',
-  no_signal_created: 'Observation enregistrée, aucun signal actionnable détecté',
+  signal_created: 'Observation créée. La liste des observations a été mise à jour.',
+  signal_updated: 'Observation mise à jour. La liste des observations a été mise à jour.',
+  no_signal_created: 'Observation enregistrée, aucune observation actionnable détectée',
   analysis_failed: 'Analyse temporairement indisponible',
 }
 

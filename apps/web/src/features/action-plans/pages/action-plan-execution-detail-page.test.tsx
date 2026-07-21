@@ -533,10 +533,10 @@ describe('ActionPlanExecutionDetailPage tabs', () => {
 
     renderPage()
 
-    expect(screen.getByText('Signal lié')).toBeTruthy()
+    expect(screen.getByText('Observation liée')).toBeTruthy()
     expect(screen.getByText(/Fuite terrasse/)).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Voir le signal lié' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Voir l’observation liée' }))
 
     expect(navigateMock).toHaveBeenCalledWith('/signals/signal-42')
   })

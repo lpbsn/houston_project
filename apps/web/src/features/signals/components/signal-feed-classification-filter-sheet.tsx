@@ -96,7 +96,7 @@ export function SignalFeedClassificationFilterSheet({
     body = (
       <div className="space-y-3">
         <p className="text-xs leading-relaxed text-[#6b5f52]">
-          Sélectionner un <strong>pôle</strong> filtre les signaux liés à ce pôle (impact ou
+          Sélectionner un <strong>pôle</strong> filtre les observations liées à ce pôle (impact ou
           responsabilité). Sélectionner un <strong>sujet</strong> filtre ce sujet précis. Pôle et
           sujet se combinent lorsqu&apos;ils sont tous deux sélectionnés.
         </p>

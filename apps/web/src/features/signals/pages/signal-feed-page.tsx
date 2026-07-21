@@ -142,7 +142,7 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
           <div className="mx-3 mt-3 space-y-2">
             <TerrainEmptyState
               title="Aucun résultat"
-              description="Aucun signal ne correspond à ces filtres."
+              description="Aucune observation ne correspond à ces filtres."
             />
             <button
               type="button"
@@ -159,11 +159,11 @@ export function SignalFeedPage({ onOpenSignal }: SignalFeedPageProps) {
         !filtersActive ? (
           <TerrainEmptyState
             className="mx-3 mt-3"
-            title="Aucun signal actif"
+            title="Aucune observation active"
             description={
               viewMode === 'personal'
-                ? 'Aucun signal ne correspond à votre zone pour le moment.'
-                : 'Aucun signal actif dans cet établissement.'
+                ? 'Aucune observation ne correspond à votre zone pour le moment.'
+                : 'Aucune observation active dans cet établissement.'
             }
           />
         ) : null}

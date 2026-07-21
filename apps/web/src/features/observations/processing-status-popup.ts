@@ -42,11 +42,10 @@ export function formatProcessingSuccessHeadline(
   if (!shouldShowSignalFeedNavigation(uxStatus) || signalCount <= 0) {
     return null
   }
-  const noun = signalCount === 1 ? 'signal' : 'signaux'
-  if (uxStatus === 'signal_updated') {
-    return `${signalCount} ${noun} mis à jour`
+  if (signalCount === 1) {
+    return '1 observation créée ou mise à jour'
   }
-  return `${signalCount} ${noun} créés ou mis à jour`
+  return `${signalCount} observations créées ou mises à jour`
 }
 
 export function formatSignalSummaryLine(signal: ObservationProcessingSignalSummary): string {

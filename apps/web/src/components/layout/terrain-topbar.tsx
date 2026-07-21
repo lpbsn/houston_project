@@ -120,7 +120,7 @@ export function TerrainTopbar({
         ) : (
           <span className="w-16" aria-hidden />
         )}
-        <span className="text-sm font-medium text-[#1a1a1a]">{title ?? 'Signal'}</span>
+        <span className="text-sm font-medium text-[#1a1a1a]">{title ?? 'Observation'}</span>
         <DetailTrailingSlot trailing={trailing} />
       </div>
     </header>

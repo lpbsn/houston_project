@@ -320,21 +320,21 @@ def test_scheduling_failure_logs_without_message_body(caplog: pytest.LogCaptureF
 
 def test_render_notification_copy_keeps_existing_events_unchanged():
     title, body = render_notification_copy(Notification.EventKey.SIGNAL_CREATED)
-    assert title == "Nouveau signal"
-    assert body == "Un signal a été créé sur votre pôle."
+    assert title == "Nouvelle observation"
+    assert body == "Une observation a été créée sur votre pôle."
 
     title, body = render_notification_copy(
         Notification.EventKey.SIGNAL_CREATED,
         pole_name="Maintenance",
     )
-    assert title == "Signal Maintenance créé"
-    assert body == "Un signal a été créé sur votre pôle."
+    assert title == "Nouvelle observation — Maintenance"
+    assert body == "Une observation a été créée sur votre pôle."
 
     title, body = render_notification_copy(
         Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL,
     )
-    assert title == "Signal sans pôle"
-    assert body == "Un signal nécessite une attention globale."
+    assert title == "Observation sans pôle couvert"
+    assert body == "Une observation nécessite une attention globale."
 
     title, body = render_notification_copy(
         Notification.EventKey.COMMENT_MENTION_CREATED,

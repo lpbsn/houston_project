@@ -16,7 +16,7 @@ export function SignalDetailTabs({ activeTab, onChange }: SignalDetailTabsProps)
   return (
     <div
       role="tablist"
-      aria-label="Sections du signal"
+      aria-label="Sections de l'observation"
       className="grid w-full grid-cols-2 gap-1 rounded-xl bg-[#F5F4F0] p-1"
     >
       {tabOptions.map(({ value, label }) => {

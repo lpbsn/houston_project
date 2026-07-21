@@ -34,8 +34,8 @@ def test_build_push_payload_has_strict_shape():
     recipient = build_api_membership()
     notification = create_test_notification(
         recipient=recipient,
-        title="Nouveau signal",
-        body="Un signal a été créé sur votre pôle.",
+        title="Nouvelle observation",
+        body="Une observation a été créée sur votre pôle.",
         event_key=Notification.EventKey.SIGNAL_CREATED,
         subject_type=Notification.SubjectType.SIGNAL,
     )

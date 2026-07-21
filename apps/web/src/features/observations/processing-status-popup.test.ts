@@ -9,12 +9,12 @@ import {
 describe('processing-status-popup', () => {
   it('formats success headline for two signals created', () => {
     expect(formatProcessingSuccessHeadline(2, 'signal_created')).toBe(
-      '2 signaux créés ou mis à jour',
+      '2 observations créées ou mises à jour',
     )
   })
 
   it('formats success headline for one signal updated', () => {
-    expect(formatProcessingSuccessHeadline(1, 'signal_updated')).toBe('1 signal mis à jour')
+    expect(formatProcessingSuccessHeadline(1, 'signal_updated')).toBe('1 observation créée ou mise à jour')
   })
 
   it('returns null headline when no feed navigation', () => {

@@ -35,7 +35,7 @@ export function ActionLinkedSignalCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#5B7FD6]">
-            Signal lié
+            Observation liée
           </p>
           <p className="mt-0.5 truncate text-[12px] font-semibold leading-snug text-[#1a1a1a]">
             {subtitle}
@@ -54,7 +54,7 @@ export function ActionLinkedSignalCard({
           'rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1B4FD8]/40',
         )}
         onClick={onPress}
-        aria-label="Voir le signal lié"
+        aria-label="Voir l’observation liée"
       >
         {card}
       </button>

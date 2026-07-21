@@ -124,7 +124,7 @@ describe('SignalDetailPage aggregation count', () => {
     renderPage()
 
     expect(screen.queryByText(/agrégation/i)).toBeNull()
-    expect(screen.getByText(/Signalé par Marie R\./)).toBeTruthy()
+    expect(screen.getByText(/Rapportée par Marie R\./)).toBeTruthy()
   })
 
   it('shows singular aggregation label on reporter line', () => {
@@ -138,7 +138,7 @@ describe('SignalDetailPage aggregation count', () => {
     renderPage()
 
     expect(screen.getByText('1 agrégation')).toBeTruthy()
-    expect(screen.getByText(/Signalé par Marie R\./)).toBeTruthy()
+    expect(screen.getByText(/Rapportée par Marie R\./)).toBeTruthy()
   })
 
   it('shows plural aggregation label on reporter line', () => {
@@ -152,7 +152,7 @@ describe('SignalDetailPage aggregation count', () => {
     renderPage()
 
     expect(screen.getByText('3 agrégations')).toBeTruthy()
-    expect(screen.getByText(/Signalé par Marie R\./)).toBeTruthy()
+    expect(screen.getByText(/Rapportée par Marie R\./)).toBeTruthy()
   })
 })
 
@@ -248,8 +248,8 @@ describe('SignalDetailPage lifecycle actions', () => {
 
     expect(screen.queryByRole('button', { name: 'Résolu' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Marquer résolu' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Annuler ce signal' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Marquer comme résolue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler cette observation' })).toBeNull()
   })
 })
 

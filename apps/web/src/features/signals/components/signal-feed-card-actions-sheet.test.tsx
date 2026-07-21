@@ -56,8 +56,8 @@ describe('SignalFeedCardActionsSheet', () => {
       />,
     )
 
-    const resolveButton = screen.getByRole('button', { name: 'Marquer résolu' })
-    const cancelButton = screen.getByRole('button', { name: 'Annuler ce signal' })
+    const resolveButton = screen.getByRole('button', { name: 'Marquer comme résolue' })
+    const cancelButton = screen.getByRole('button', { name: 'Annuler cette observation' })
 
     expect(resolveButton.className).toContain('bg-[#f4fbf4]')
     expect(resolveButton.className).toContain('text-[#1D9E75]')
@@ -99,7 +99,7 @@ describe('SignalFeedCardActionsSheet', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler ce signal' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler cette observation' }))
 
     expect(onSelectAction).toHaveBeenCalledWith('cancel')
     expect(onClose).not.toHaveBeenCalled()
@@ -119,7 +119,7 @@ describe('SignalFeedCardActionsSheet', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Marquer résolu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Marquer comme résolue' }))
 
     expect(onSelectAction).toHaveBeenCalledWith('resolve')
     expect(onClose).not.toHaveBeenCalled()
@@ -131,13 +131,13 @@ describe('SignalFeedCardActionsSheet', () => {
         item={buildFeedItem()}
         open
         isPending={false}
-        errorMessage="Impossible de résoudre ce signal."
+        errorMessage="Impossible de résoudre cette observation."
         onClose={vi.fn()}
         onSelectAction={vi.fn((): SignalFeedQuickActionResult => 'stay-open')}
       />,
     )
 
     const alert = screen.getByRole('alert')
-    expect(alert.textContent).toBe('Impossible de résoudre ce signal.')
+    expect(alert.textContent).toBe('Impossible de résoudre cette observation.')
   })
 })

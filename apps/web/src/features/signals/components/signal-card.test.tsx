@@ -67,7 +67,7 @@ describe('SignalCard feed variant', () => {
     )
 
     const title = screen.getByRole('heading', { level: 3, name: 'Fuite d eau' })
-    const actionsButton = screen.getByRole('button', { name: 'Actions du signal' })
+    const actionsButton = screen.getByRole('button', { name: "Actions de l'observation" })
     const metaRow = actionsButton.parentElement?.parentElement
 
     expect(metaRow?.contains(actionsButton)).toBe(true)
@@ -183,7 +183,7 @@ describe('SignalCard pinned variant', () => {
       />,
     )
 
-    expect(screen.getByText('Épinglé')).toBeTruthy()
+    expect(screen.getByText('Épinglée')).toBeTruthy()
     expect(screen.getByText('Voir le détail →')).toBeTruthy()
     expect(screen.getByText('Plonge — Cuisine')).toBeTruthy()
     expect(container.querySelector('.lucide-map-pin')).toBeTruthy()
@@ -201,7 +201,7 @@ describe('SignalCard actions menu', () => {
       />,
     )
 
-    expect(screen.queryByRole('button', { name: 'Actions du signal' })).toBeNull()
+    expect(screen.queryByRole('button', { name: "Actions de l'observation" })).toBeNull()
   })
 
   it('does not show actions menu when onOpenActions is not provided', () => {
@@ -220,7 +220,7 @@ describe('SignalCard actions menu', () => {
       />,
     )
 
-    expect(screen.queryByRole('button', { name: 'Actions du signal' })).toBeNull()
+    expect(screen.queryByRole('button', { name: "Actions de l'observation" })).toBeNull()
   })
 
   it('shows actions menu when can_pin is true', () => {
@@ -240,7 +240,7 @@ describe('SignalCard actions menu', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Actions de l'observation" })).toBeTruthy()
   })
 
   it('shows actions menu when can_resolve is true', () => {
@@ -260,7 +260,7 @@ describe('SignalCard actions menu', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Actions de l'observation" })).toBeTruthy()
   })
 
   it('shows actions menu when can_cancel is true', () => {
@@ -280,7 +280,7 @@ describe('SignalCard actions menu', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Actions du signal' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Actions de l'observation" })).toBeTruthy()
   })
 
   it('calls onOpenActions without navigating to detail', () => {
@@ -302,7 +302,7 @@ describe('SignalCard actions menu', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Actions du signal' }))
+    fireEvent.click(screen.getByRole('button', { name: "Actions de l'observation" }))
 
     expect(onOpenActions).toHaveBeenCalledWith(item)
     expect(onSelect).not.toHaveBeenCalled()

@@ -40,8 +40,8 @@ const STATUS_GROUP_META: Record<
 > = {
   open: { label: 'En attente', dotVariant: 'warning' },
   in_progress: { label: 'En cours', dotVariant: 'teal' },
-  resolved: { label: 'Résolus', dotVariant: 'success' },
-  canceled: { label: 'Annulés', dotVariant: 'muted' },
+  resolved: { label: 'Résolues', dotVariant: 'success' },
+  canceled: { label: 'Annulées', dotVariant: 'muted' },
 }
 
 /**
@@ -148,7 +148,7 @@ export const PINNED_SIGNAL_CARD_CLASS =
 
 export const PINNED_SIGNAL_CARD_SEPARATOR_CLASS = 'border-t border-[#E8E6DF]'
 
-export const PINNED_SIGNAL_CARD_BANNER_LABEL = 'Épinglé'
+export const PINNED_SIGNAL_CARD_BANNER_LABEL = 'Épinglée'
 
 export const PINNED_SIGNAL_CARD_DETAIL_CTA = 'Voir le détail →'
 

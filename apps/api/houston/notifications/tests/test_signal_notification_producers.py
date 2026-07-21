@@ -133,7 +133,7 @@ def test_signal_created_notifies_responsible_pole_scope_only():
     assert notifications[0].recipient_membership_id == staff.id
     assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED
     assert notifications[0].actor_membership_id is None
-    assert notifications[0].title == f"Signal {maintenance.specific_name} créé"
+    assert notifications[0].title == f"Nouvelle observation — {maintenance.specific_name}"
     _assert_generic_copy(notifications[0])
 
 
@@ -226,7 +226,7 @@ def test_signal_assigned_without_scoped_staff_notifies_admins_with_pole_title():
     assert len(notifications) == 2
     assert _recipient_ids(notifications) == {owner.id, director.id}
     assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
-    assert all(item.title == f"Signal {pole_name} créé" for item in notifications)
+    assert all(item.title == f"Nouvelle observation — {pole_name}" for item in notifications)
     _assert_mutual_exclusivity(notifications)
     for notification in notifications:
         _assert_generic_copy(notification)
@@ -253,7 +253,7 @@ def test_signal_out_of_scope_notifies_admins_with_assigned_pole_title():
     assert _recipient_ids(notifications) == {owner.id, director.id}
     assert staff.id not in _recipient_ids(notifications)
     assert all(item.event_key == Notification.EventKey.SIGNAL_CREATED for item in notifications)
-    assert all(item.title == f"Signal {pole_name} créé" for item in notifications)
+    assert all(item.title == f"Nouvelle observation — {pole_name}" for item in notifications)
     _assert_mutual_exclusivity(notifications)
 
 
@@ -363,7 +363,7 @@ def test_signal_truly_unassigned_notifies_admins_unassigned_global():
         item.event_key == Notification.EventKey.SIGNAL_CREATED_UNASSIGNED_GLOBAL
         for item in notifications
     )
-    assert all(item.title == "Signal sans pôle" for item in notifications)
+    assert all(item.title == "Observation sans pôle couvert" for item in notifications)
     _assert_mutual_exclusivity(notifications)
     for notification in notifications:
         _assert_generic_copy(notification)
@@ -388,8 +388,9 @@ def test_signal_created_uses_catalog_label_when_specific_name_blank():
     notifications = _notifications_for_signal(signal_id=signal.id)
     assert len(notifications) == 1
     assert notifications[0].event_key == Notification.EventKey.SIGNAL_CREATED
-    assert notifications[0].title == f"Signal {catalog_label} créé"
-    assert "Signal  créé" not in notifications[0].title
+    assert notifications[0].title == f"Nouvelle observation — {catalog_label}"
+    assert notifications[0].title != "Nouvelle observation"
+    assert notifications[0].title != "Nouvelle observation — "
     _assert_generic_copy(notifications[0])
 
 

@@ -58,7 +58,7 @@ describe('BottomMobileNav', () => {
       <BottomMobileNav activePath="/signals" navigate={vi.fn()} />,
     )
 
-    const signalsLink = screen.getByRole('link', { name: 'Signaux' })
+    const signalsLink = screen.getByRole('link', { name: 'Observations' })
     expect(signalsLink.className).toContain('min-h-11')
     expect(signalsLink.className).toContain('min-w-11')
   })

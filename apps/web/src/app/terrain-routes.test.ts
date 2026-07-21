@@ -69,7 +69,7 @@ describe('getTerrainRouteConfig', () => {
 
     expect(getTerrainRouteConfig({ kind: 'static', path: '/signals' })).toEqual({
       topbarVariant: 'hub',
-      pageTitle: 'Signaux',
+      pageTitle: 'Observations',
       showBottomNav: true,
       activeNavPath: '/signals',
       mainScroll: 'hidden',
@@ -217,7 +217,7 @@ describe('getTerrainRouteConfig', () => {
   it('configures signal detail without bottom nav', () => {
     expect(getTerrainRouteConfig({ kind: 'signal-detail', signalId: 'x' })).toEqual({
       topbarVariant: 'detail',
-      title: 'Signal',
+      title: 'Observation',
       backPath: '/signals',
       showBottomNav: false,
       mainScroll: 'auto',

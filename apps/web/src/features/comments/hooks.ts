@@ -23,7 +23,7 @@ export function useSignalCommentsQuery(establishmentId: string | null, signalId:
         : ['comments', 'signal', 'none'],
     queryFn: () => {
       if (!establishmentId || !signalId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return fetchSignalComments(establishmentId, signalId)
     },
@@ -77,7 +77,7 @@ export function useCreateSignalCommentMutation(
   return useMutation({
     mutationFn: (payload: CommentCreateRequest) => {
       if (!establishmentId || !signalId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return createSignalComment(establishmentId, signalId, payload)
     },

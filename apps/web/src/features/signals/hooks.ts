@@ -55,7 +55,7 @@ export function useSignalDetailQuery(establishmentId: string | null, signalId: s
         : ['signals', 'detail', 'none'],
     queryFn: () => {
       if (!establishmentId || !signalId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return fetchSignalDetail(establishmentId, signalId)
     },
@@ -71,7 +71,7 @@ export function usePinSignalMutation(
   return useMutation({
     mutationFn: async (signalId: string) => {
       if (!establishmentId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return pinSignal(establishmentId, signalId)
     },
@@ -99,7 +99,7 @@ export function useUnpinSignalMutation(
   return useMutation({
     mutationFn: async (signalId: string) => {
       if (!establishmentId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return unpinSignal(establishmentId, signalId)
     },
@@ -124,7 +124,7 @@ export function useCancelSignalMutation(establishmentId: string | null) {
   return useMutation({
     mutationFn: async (signalId: string) => {
       if (!establishmentId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return cancelSignal(establishmentId, signalId)
     },
@@ -146,7 +146,7 @@ export function useResolveSignalMutation(establishmentId: string | null) {
   return useMutation({
     mutationFn: async (signalId: string) => {
       if (!establishmentId) {
-        throw new Error('Signal introuvable.')
+        throw new Error('Observation introuvable.')
       }
       return resolveSignal(establishmentId, signalId)
     },

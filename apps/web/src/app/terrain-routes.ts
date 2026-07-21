@@ -158,7 +158,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'signal-detail') {
     return {
       topbarVariant: 'detail',
-      title: 'Signal',
+      title: 'Observation',
       backPath: '/signals',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -217,7 +217,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/signals') {
     return {
       topbarVariant: 'hub',
-      pageTitle: 'Signaux',
+      pageTitle: 'Observations',
       showBottomNav: true,
       activeNavPath: '/signals',
       mainScroll: 'hidden',

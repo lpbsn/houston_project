@@ -289,7 +289,7 @@ export function ActionPlanCreatePage({
     return (
       <TerrainErrorState
         className="mx-3 mt-3"
-        message="Signal introuvable."
+        message="Observation introuvable."
         onRetry={() => navigate('/signals')}
       />
     )
@@ -413,7 +413,7 @@ export function ActionPlanCreatePage({
       <div className="space-y-3 px-3 pb-28 pt-2">
         {signalDetail ? (
           <section className="flex flex-col gap-1.5">
-            <TerrainSectionLabel>Classification héritée du signal</TerrainSectionLabel>
+            <TerrainSectionLabel>Classification héritée de l’observation</TerrainSectionLabel>
             <TerrainCard className="px-3 py-2.5">
               <SignalClassificationBadges signal={signalDetail} />
             </TerrainCard>

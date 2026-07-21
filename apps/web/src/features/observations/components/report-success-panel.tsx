@@ -36,7 +36,7 @@ export function ReportSuccessPanel({
 }: ReportSuccessPanelProps) {
   return (
     <TerrainCard className={terrain.successSurface}>
-      <h2 className={cn('text-lg font-semibold', terrain.foreground)}>Signalement envoyé</h2>
+      <h2 className={cn('text-lg font-semibold', terrain.foreground)}>Observation envoyée</h2>
       <div className={cn('mt-2 flex items-center gap-2 text-sm', terrain.muted)}>
         {isProcessingLoading ? (
           <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />
@@ -66,7 +66,7 @@ export function ReportSuccessPanel({
           className="mt-4 h-11 w-full rounded-2xl border-[#E8E6DF]"
           onClick={onGoToSignalFeed}
         >
-          Voir les signaux
+          Voir les observations
         </Button>
       ) : null}
       <Button
@@ -77,7 +77,7 @@ export function ReportSuccessPanel({
         )}
         onClick={onNewObservation}
       >
-        Nouveau signal
+        Nouvelle observation
       </Button>
     </TerrainCard>
   )
