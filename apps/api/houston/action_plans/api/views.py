@@ -103,6 +103,7 @@ from houston.action_plans.services import (
     update_action_plan,
     validate_action_plan_execution,
 )
+from houston.action_plans.template_deletion_services import delete_reusable_action_plan
 from houston.action_plans.upcoming_feed import build_action_plan_execution_upcoming_page
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.permissions import HasActiveMembership
@@ -680,6 +681,42 @@ class ActionPlanDetailView(EstablishmentScopedActionPlanMixin, APIView):
         )
         payload = serialize_action_plan_detail(action_plan, membership=membership)
         return Response(ActionPlanDetailSerializer(payload).data)
+
+    @extend_schema(
+        tags=["action-plans"],
+        responses={
+            204: OpenApiResponse(description="Template deleted."),
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+    )
+    def delete(self, request, establishment_id, action_plan_id):
+        membership = _resolve_membership(request, self.establishment_id)
+        if isinstance(membership, Response):
+            return membership
+
+        action_plan = get_action_plan_for_detail(
+            membership=membership,
+            action_plan_id=uuid.UUID(str(action_plan_id)),
+        )
+        if action_plan is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            delete_reusable_action_plan(
+                establishment_id=self.establishment_id,
+                action_plan_id=action_plan.id,
+                actor_membership_id=membership.id,
+            )
+        except ActionPlanConflictError as exc:
+            return _action_plan_conflict_response(exc)
+        except (ActionPlanPermissionError, ActionPlanValidationError, ActionPlanStateError) as exc:
+            return _action_plan_error_response(exc)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 def _action_plan_command_response(*, request, establishment_id, action_plan_id, service_fn):

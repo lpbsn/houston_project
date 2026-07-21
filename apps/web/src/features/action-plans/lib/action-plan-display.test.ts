@@ -32,6 +32,7 @@ function buildListItem(partial: Partial<ActionPlanListItem> & Pick<ActionPlanLis
       can_update: false,
       can_activate: false,
       can_deactivate: false,
+      can_delete: false,
       can_use: true,
     },
     ...partial,

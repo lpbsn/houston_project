@@ -46,6 +46,7 @@ function buildTemplatePlan(overrides: Record<string, unknown> = {}) {
       can_update: true,
       can_activate: false,
       can_deactivate: true,
+      can_delete: false,
       can_use: true,
       can_schedule: true,
     },

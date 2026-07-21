@@ -19,6 +19,7 @@ from houston.action_plans.permissions import (
     can_cancel_action_plan_execution,
     can_cancel_scheduled_action_plan_execution,
     can_create_action_plan_schedule,
+    can_delete_action_plan_template,
     can_execute_action_plan_task,
     can_manage_action_plan,
     can_manage_action_plan_schedule,
@@ -46,6 +47,7 @@ def _build_action_plan_permission_hints_core(
         "can_update": can_manage,
         "can_activate": can_manage and is_inactive and action_plan.is_reusable,
         "can_deactivate": can_manage and is_active and action_plan.is_reusable,
+        "can_delete": can_delete_action_plan_template(membership, action_plan),
         "can_use": can_use_action_plan(membership, action_plan),
         "can_schedule": can_create_action_plan_schedule(membership, action_plan),
     }

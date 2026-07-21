@@ -56,3 +56,21 @@ class PlanningSubmissionItemError(ActionPlanValidationError):
         super().__init__(message)
         self.item_id = item_id
         self.item_index = item_index
+
+
+class ActionPlanExecutionObservationIntegrityError(ActionPlanConflictError):
+    """Scheduled execution unexpectedly linked to an Observation (PROTECT)."""
+
+    error_code = "execution_observation_integrity"
+
+    def __init__(
+        self,
+        message: str = (
+            "Cannot hard-delete scheduled execution while an Observation still "
+            "references it or one of its tasks."
+        ),
+        *,
+        execution_id: uuid.UUID | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.execution_id = execution_id

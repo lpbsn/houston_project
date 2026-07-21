@@ -10,6 +10,7 @@ import { createTestQueryClient } from '@/test-utils'
 import {
   useCreateActionPlanMutation,
   useCreateActionPlanScheduleMutation,
+  useDeleteActionPlanMutation,
   useUpdateActionPlanExecutionMutation,
 } from './hooks'
 
@@ -30,6 +31,8 @@ const updateActionPlanExecution = vi.fn(async () => ({
   action_plan_id: 'plan-1',
 }))
 
+const deleteActionPlan = vi.fn(async () => undefined)
+
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return {
@@ -37,6 +40,7 @@ vi.mock('./api', async (importOriginal) => {
     createActionPlan: (...args: unknown[]) => createActionPlan(...args),
     createActionPlanSchedule: (...args: unknown[]) => createActionPlanSchedule(...args),
     updateActionPlanExecution: (...args: unknown[]) => updateActionPlanExecution(...args),
+    deleteActionPlan: (...args: unknown[]) => deleteActionPlan(...args),
   }
 })
 
@@ -156,6 +160,36 @@ describe('useCreateActionPlanScheduleMutation', () => {
       expect(result.current.isSuccess).toBe(true)
     })
 
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'catalog', 'est-1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['action-plans', 'detail', 'est-1', 'plan-1'],
+    })
+  })
+})
+
+describe('useDeleteActionPlanMutation', () => {
+  beforeEach(() => {
+    deleteActionPlan.mockClear()
+  })
+
+  it('invalidates catalog and detail queries after delete', async () => {
+    const queryClient = createTestQueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useDeleteActionPlanMutation('est-1', 'plan-1'), {
+      wrapper: ({ children }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children),
+    })
+
+    result.current.mutate()
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(deleteActionPlan).toHaveBeenCalledWith('est-1', 'plan-1')
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['action-plans', 'catalog', 'est-1'],
     })

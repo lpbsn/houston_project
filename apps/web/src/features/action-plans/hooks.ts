@@ -14,6 +14,7 @@ import {
   createActionPlanSchedule,
   createObservationFromActionPlanTask,
   deactivateActionPlan,
+  deleteActionPlan,
   fetchActionPlanCatalog,
   fetchActionPlanDetail,
   fetchActionPlanExecutionDetail,
@@ -230,6 +231,21 @@ export function useDeactivateActionPlanMutation(establishmentId: string, actionP
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => deactivateActionPlan(establishmentId, actionPlanId),
+    onSuccess: () => {
+      invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
+    },
+  })
+}
+
+export function deleteActionPlanMutationKey(establishmentId: string, actionPlanId: string) {
+  return ['action-plans', 'delete', establishmentId, actionPlanId] as const
+}
+
+export function useDeleteActionPlanMutation(establishmentId: string, actionPlanId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: deleteActionPlanMutationKey(establishmentId, actionPlanId),
+    mutationFn: () => deleteActionPlan(establishmentId, actionPlanId),
     onSuccess: () => {
       invalidateCatalogSurfaces(queryClient, establishmentId, actionPlanId)
     },

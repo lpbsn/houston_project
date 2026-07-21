@@ -64,11 +64,12 @@ def test_deactivate_catalog_cascades_all_active_schedules(
         status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
     ).first()
     if future_execution is not None:
+        future_execution.status = EXECUTION_STATUS_SCHEDULED
         future_execution.start_at = timezone.now() + timezone.timedelta(days=2)
         future_execution.end_at = future_execution.start_at + timezone.timedelta(hours=1)
         future_execution.visible_from = future_execution.start_at - timezone.timedelta(hours=1)
         future_execution.save(
-            update_fields=["start_at", "end_at", "visible_from", "updated_at"],
+            update_fields=["status", "start_at", "end_at", "visible_from", "updated_at"],
         )
 
     deactivate_action_plan(action_plan=catalog_action_plan, actor=owner_membership)
@@ -118,7 +119,7 @@ def test_deactivate_catalog_with_active_started_execution(
     assert active_execution.status == EXECUTION_STATUS_IN_PROGRESS
 
 
-def test_deactivate_catalog_preserves_overdue_scheduled_execution(
+def test_deactivate_catalog_promotes_overdue_scheduled_execution(
     owner_membership,
     catalog_action_plan,
     staff_membership,
@@ -149,48 +150,57 @@ def test_deactivate_catalog_preserves_overdue_scheduled_execution(
     overdue.refresh_from_db()
     assert catalog_action_plan.catalog_status == CATALOG_STATUS_INACTIVE
     assert schedule.status == SCHEDULE_STATUS_INACTIVE
-    assert overdue.status == EXECUTION_STATUS_SCHEDULED
+    assert overdue.status == EXECUTION_STATUS_IN_PROGRESS
 
 
-def test_deactivate_catalog_preserves_terminal_executions(
+def test_deactivate_catalog_preserves_terminal_and_pending_validation_executions(
     owner_membership,
     catalog_action_plan,
     staff_membership,
     business_unit,
 ):
+    from houston.action_plans.materialization import (
+        MATERIALIZATION_HORIZON_DAYS,
+        materialize_schedule_occurrences_in_horizon,
+    )
+
     schedule = _create_schedule(
         owner_membership,
         catalog_action_plan,
         staff_membership,
         business_unit,
     )
-    done_execution = schedule.executions.filter(
-        status__in=[EXECUTION_STATUS_SCHEDULED, EXECUTION_STATUS_IN_PROGRESS],
-    ).first()
-    assert done_execution is not None
+    materialize_schedule_occurrences_in_horizon(
+        schedule=schedule,
+        horizon_days=MATERIALIZATION_HORIZON_DAYS,
+        visible_only=False,
+    )
+    executions = list(schedule.executions.order_by("occurrence_date", "id"))
+    assert len(executions) >= 2
+    done_execution = executions[0]
+    pending_validation_execution = executions[1]
+    done_window = (done_execution.start_at, done_execution.end_at)
+    pending_window = (
+        pending_validation_execution.start_at,
+        pending_validation_execution.end_at,
+    )
+
     done_execution.status = EXECUTION_STATUS_DONE
     done_execution.save(update_fields=["status", "updated_at"])
-
-    pending_validation_execution = schedule.executions.filter(
-        status=EXECUTION_STATUS_IN_PROGRESS,
-    ).first()
-    if (
-        pending_validation_execution is not None
-        and pending_validation_execution.id != done_execution.id
-    ):
-        pending_validation_execution.status = EXECUTION_STATUS_PENDING_VALIDATION
-        pending_validation_execution.save(update_fields=["status", "updated_at"])
+    pending_validation_execution.status = EXECUTION_STATUS_PENDING_VALIDATION
+    pending_validation_execution.save(update_fields=["status", "updated_at"])
 
     deactivate_action_plan(action_plan=catalog_action_plan, actor=owner_membership)
 
     done_execution.refresh_from_db()
+    pending_validation_execution.refresh_from_db()
     assert done_execution.status == EXECUTION_STATUS_DONE
-    if (
-        pending_validation_execution is not None
-        and pending_validation_execution.id != done_execution.id
-    ):
-        pending_validation_execution.refresh_from_db()
-        assert pending_validation_execution.status == EXECUTION_STATUS_PENDING_VALIDATION
+    assert (done_execution.start_at, done_execution.end_at) == done_window
+    assert pending_validation_execution.status == EXECUTION_STATUS_PENDING_VALIDATION
+    assert (
+        pending_validation_execution.start_at,
+        pending_validation_execution.end_at,
+    ) == pending_window
 
 
 def test_activate_catalog_does_not_reactivate_schedules(

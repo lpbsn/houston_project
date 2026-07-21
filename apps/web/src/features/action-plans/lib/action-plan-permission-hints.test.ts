@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canShowActionPlanDelete,
   canShowActionPlanExecutionCancel,
   canShowActionPlanExecutionUpdate,
   canShowActionPlanTaskMarkDone,
@@ -9,6 +10,29 @@ import {
 import type { ActionPlanTaskExecution } from '@/features/action-plans/types'
 
 describe('action-plan permission hints', () => {
+  it('shows template delete only when can_delete is true', () => {
+    expect(
+      canShowActionPlanDelete({
+        can_update: true,
+        can_activate: false,
+        can_deactivate: false,
+        can_delete: true,
+        can_use: true,
+        can_schedule: true,
+      }),
+    ).toBe(true)
+    expect(
+      canShowActionPlanDelete({
+        can_update: true,
+        can_activate: false,
+        can_deactivate: false,
+        can_delete: false,
+        can_use: true,
+        can_schedule: true,
+      }),
+    ).toBe(false)
+  })
+
   it('shows execution update only when can_update is true', () => {
     expect(
       canShowActionPlanExecutionUpdate({

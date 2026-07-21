@@ -142,8 +142,8 @@ Frontend display states may include:
 | **Action Plan Execution Feed** | Executions where user is **assignee**, plus Manager scope via execution teams, plus **mention on execution comment** (`action_plan_execution_personal_feed_q`). Owner/Director Ma vue is not all establishment executions (unlike Signal Feed general). | **Owner/Director:** all feed-visible establishment executions. **Manager:** scoped BUs + own assignments. **Staff:** own assignments only. |
 
 **Action Plan Execution Feed — inclusion rules (implemented):**
-- `status IN (pending_validation, in_progress, done, canceled)` (`EXECUTION_FEED_STATUSES`).
-- `(visible_from IS NULL OR now >= visible_from)`.
+- Cursor items: `status IN (pending_validation, in_progress, done, canceled)` (`EXECUTION_FEED_CURSOR_STATUSES`; `scheduled` is preview-only via `scheduled_items`).
+- `(visible_from IS NULL OR now >= visible_from)` for cursor items and Planifiées preview (`scheduled_items`).
 - Terminal `done` / `canceled` included in feed; detail remains accessible for all statuses.
 - `end_at` overdue does not remove items (`is_overdue` indicator only for active statuses).
 - **Sorting (implemented):** backend-owned. Personal feed pins (`ActionPlanExecutionFeedPin`, per membership) sort first: pinned items at the top of the feed regardless of status (`-is_feed_pinned`, `pinned_at ASC` among pins), then global status order: `pending_validation` → `in_progress` → `done` → `canceled`. Within active statuses: overdue (`end_at < as_of`) → upcoming → no `end_at` (nulls last), nearest `end_at` ascending, then `-last_activity_at`, `-created_at`, `-id`. Within terminal statuses: `-last_activity_at`, `-created_at`, `-id`. Frontend renders pinned items in a flat block at the top (no section label), then groups unpinned items by status without re-sorting. Sections **Terminés** and **Annulés** are collapsed by default in the UI. Pagination cursor freezes `as_of` for stable overdue buckets and `is_overdue` across pages.

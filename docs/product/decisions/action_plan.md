@@ -1,7 +1,7 @@
 # Decision log — Action Plan (§26)
 
-Status: `authoritative`  
-Last updated: 2026-07-13  
+Status: `authoritative`
+Last updated: 2026-07-20
 Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 2B (2026-06-29)
 
 ## Procédure sign-off
@@ -34,6 +34,7 @@ Sign-off: 2026-06-28 (produit + tech) ; compléments 26.13–26.15 validés Lot 
 | [26.14](#decision-26-14) | Manager — utilisation catalogue | Voir détail ci-dessous | 2B, 3 |
 | [26.15](#decision-26-15) | Cross-pôle — création directe vs catalogue | Voir détail ci-dessous | 2B, 3 |
 | [26.16](#decision-26-16) | Catalogue actif sans tâche | Voir détail ci-dessous | 1, 2B |
+| [26.17](#decision-26-17) | Sort des exécutions à la suppression définitive du template | Voir détail ci-dessous | — |
 
 ---
 
@@ -242,7 +243,21 @@ Source canonique unique = `ActionPlanSchedule.start_at` / `end_at`. Pas d’over
 
 Restrictions : `/use/` individual ≤ 1 assigné ; `/schedule/` individual exactement 1 assignee. Signal → shared only. Staff → self one-shot only.
 
-**Visible_from (ponctuel)** : fourni → conserver ; null/absent → visibilité immédiate ; pas d’offset −1h (distinct des occurrences récurrentes `occurrence_start − 1h`).
+**Visible_from (ponctuel)** : fourni → conserver ; null/absent → visibilité immédiate ; pas d’offset −1h (distinct des occurrences récurrentes `occurrence_start − 1h`). `visible_from` pilote uniquement la visibilité (feed preview Planifiées, upcoming, notifs de mise à disposition) — jamais le statut.
+
+**Statut d’exécution (lifecycle)**
+
+```txt
+création : start_at > now → scheduled ; start_at <= now ou absent → in_progress
+promotion auto (Beat, lazy read, sync schedule) : scheduled → in_progress si start_at <= now
+aucune transition automatique ne régresse un statut
+pending_validation = commencée et active (pas terminale)
+done / canceled = terminaux
+reopen explicite : pending_validation | done → in_progress
+end_at ne termine jamais automatiquement une exécution
+sync schedule : promouvoir les scheduled dues du schedule (exhaustif) avant classify ;
+  pending_validation préservée / non réécrite ; distinct de done/canceled
+```
 
 **Frontend** : après toute réussite, redirect vers le feed opérationnel + feedback « X planifications et Y exécutions ont été créées. »
 
@@ -318,6 +333,31 @@ Un modèle catalogue **actif** peut avoir **0 tâche** (alignement besoin §14 :
 Création catalogue active avec tasks=[] : autorisée
 Activation catalogue sans tâche modèle : autorisée
 Statut de contribution : inchangé — calculé uniquement pour les pôles ayant au moins une tâche (§15)
+```
+
+### Decision 26.17 — Sort des exécutions à la suppression définitive du template {#decision-26-17}
+
+Politique **statut-only** pour le sort des exécutions liées à un template réutilisable lors de sa suppression définitive (primitives internes ; pas d’API publique de hard-delete d’exécution).
+
+| Statut persistant | Décision |
+| ----------------- | -------- |
+| `scheduled` | hard-delete |
+| `in_progress` | conserver et détacher |
+| `pending_validation` | conserver et détacher |
+| `done` | conserver et détacher |
+| `canceled` (toute origine) | conserver et détacher |
+
+```txt
+Classification : statut persistant uniquement
+Ignoré : start_at, visible_from, cancel_origin, présence de commentaires
+Pas de promote-first pour décider le sort
+Commentaires d’une exécution scheduled : supprimés avec l’exécution (+ purge notifications)
+Observations : garde PROTECT technique — échec explicite si présentes sur un scheduled
+Détachement keep_detach : action_plan=null, action_plan_schedule=null, action_plan_task=null
+Arrêt matérialisation : phase interne (lock template, catalog inactive, schedules inactive)
+  — ne modifie aucun statut d'exécution (ne passe pas par la cascade deactivate qui annule les scheduled)
+  — pas une précondition UX
+Template actif ou inactif : suppression future autorisée sans désactivation manuelle préalable
 ```
 
 ---
