@@ -141,6 +141,7 @@ class ActionPlanPermissionHintsSerializer(serializers.Serializer):
     can_update = serializers.BooleanField()
     can_activate = serializers.BooleanField()
     can_deactivate = serializers.BooleanField()
+    can_delete = serializers.BooleanField()
     can_use = serializers.BooleanField()
     can_schedule = serializers.BooleanField()
 

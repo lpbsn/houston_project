@@ -24,6 +24,12 @@ export function canShowActionPlanDeactivate(
   return hints?.can_deactivate === true
 }
 
+export function canShowActionPlanDelete(
+  hints: ActionPlanPermissionHints | null | undefined,
+): boolean {
+  return hints?.can_delete === true
+}
+
 export function canShowActionPlanUse(
   hints: ActionPlanPermissionHints | null | undefined,
 ): boolean {

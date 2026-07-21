@@ -29,7 +29,7 @@ function DetailTrailingSlot({ trailing }: { trailing?: ReactNode }) {
     return <span className="w-16" aria-hidden />
   }
 
-  return <div className="flex w-16 justify-end">{trailing}</div>
+  return <div className="flex min-w-16 justify-end">{trailing}</div>
 }
 
 export function TerrainTopbar({

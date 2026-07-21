@@ -1,3 +1,4 @@
+import { useMutationState } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 
@@ -13,6 +14,7 @@ import { ActionPlanTaskReadOnlyRow } from '../components/action-plan-task-read-o
 import { ActionPlanTemplateDetailHeader } from '../components/action-plan-template-detail-header'
 import { ActionPlanTemplateDetailStickyFooter } from '../components/action-plan-template-detail-sticky-footer'
 import {
+  deleteActionPlanMutationKey,
   useActivateActionPlanMutation,
   useActionPlanDetailQuery,
   useDeactivateActionPlanMutation,
@@ -58,6 +60,14 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const activateMutation = useActivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const deactivateMutation = useDeactivateActionPlanMutation(establishmentId ?? '', actionPlanId)
   const planningMutation = useSubmitActionPlanPlanningMutation(establishmentId ?? '')
+  const deleteMutationErrors = useMutationState({
+    filters: {
+      mutationKey: deleteActionPlanMutationKey(establishmentId ?? '', actionPlanId),
+      status: 'error',
+    },
+    select: (mutation) => mutation.state.error,
+  })
+  const latestDeleteError = deleteMutationErrors.at(-1) ?? null
 
   const [executionPanelOpen, setExecutionPanelOpen] = useState(false)
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
@@ -67,6 +77,17 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
+  const displayedFeedback =
+    feedback ??
+    (latestDeleteError
+      ? {
+          variant: 'error' as const,
+          message: resolveActionPlanErrorMessage(
+            latestDeleteError,
+            'Le modèle n’a pas pu être supprimé.',
+          ),
+        }
+      : null)
 
   if (!establishmentId) {
     return null
@@ -204,8 +225,11 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
           showStickyFooter ? 'pb-40' : 'pb-4',
         )}
       >
-        {feedback ? (
-          <TerrainFeedback variant={feedback.variant} message={feedback.message} />
+        {displayedFeedback ? (
+          <TerrainFeedback
+            variant={displayedFeedback.variant}
+            message={displayedFeedback.message}
+          />
         ) : null}
 
         <ActionPlanTemplateDetailHeader

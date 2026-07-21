@@ -194,6 +194,22 @@ def can_manage_action_plan(
     return manages_business_unit(membership, action_plan.pilot_business_unit)
 
 
+def can_delete_action_plan_template(
+    membership: EstablishmentMembership | None,
+    action_plan: ActionPlan,
+) -> bool:
+    if not _is_active_membership_in_establishment(
+        membership,
+        establishment_id=action_plan.establishment_id,
+    ):
+        return False
+    if membership is None:
+        return False
+    if not action_plan.is_reusable:
+        return False
+    return membership.role in ADMIN_ROLES
+
+
 def task_business_units_include_cross_pole_task(
     *,
     pilot_business_unit_id,

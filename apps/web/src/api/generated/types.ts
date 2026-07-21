@@ -532,7 +532,7 @@ export interface paths {
         get: operations["v1_establishments_action_plans_retrieve"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["v1_establishments_action_plans_destroy"];
         options?: never;
         head?: never;
         patch: operations["v1_establishments_action_plans_partial_update"];
@@ -2027,6 +2027,7 @@ export interface components {
             can_update: boolean;
             can_activate: boolean;
             can_deactivate: boolean;
+            can_delete: boolean;
             can_use: boolean;
             can_schedule: boolean;
         };
@@ -4973,6 +4974,67 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_action_plans_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_plan_id: string;
+                establishment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Template deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

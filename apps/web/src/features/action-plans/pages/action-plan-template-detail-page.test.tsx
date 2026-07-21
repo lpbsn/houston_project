@@ -1,13 +1,21 @@
 // @vitest-environment jsdom
 
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
 import { ActionPlanTemplateDetailPage } from './action-plan-template-detail-page'
 import * as catalogPlanningSubmit from '../lib/action-plan-catalog-planning-submit'
+
+function renderPage(ui: ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(createElement(QueryClientProvider, { client: queryClient }, ui))
+}
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
@@ -46,6 +54,7 @@ function buildPlan(overrides: Partial<ActionPlanDetail> = {}): ActionPlanDetail 
       can_update: true,
       can_activate: false,
       can_deactivate: true,
+      can_delete: false,
       can_use: true,
       can_schedule: true,
     },
@@ -94,6 +103,8 @@ vi.mock('../hooks', () => ({
   useActivateActionPlanMutation: () => activateMutationMock(),
   useDeactivateActionPlanMutation: () => deactivateMutationMock(),
   useSubmitActionPlanPlanningMutation: () => planningMutationMock(),
+  deleteActionPlanMutationKey: (establishmentId: string, actionPlanId: string) =>
+    ['action-plans', 'delete', establishmentId, actionPlanId] as const,
 }))
 
 describe('ActionPlanTemplateDetailPage', () => {
@@ -125,7 +136,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('renders read-only template detail with execution action', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     expect(screen.getByRole('heading', { name: 'Plan catalogue' })).toBeTruthy()
     expect(screen.getByText('Contrôler la température')).toBeTruthy()
@@ -135,7 +146,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('renders deactivate in header card and execution in sticky footer', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
     const deactivateButton = screen.getByRole('button', { name: 'Désactiver' })
@@ -160,6 +171,7 @@ describe('ActionPlanTemplateDetailPage', () => {
           can_update: true,
           can_activate: true,
           can_deactivate: false,
+          can_delete: false,
           can_use: true,
           can_schedule: true,
         },
@@ -167,7 +179,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     const headerCard = screen.getByRole('heading', { name: 'Plan catalogue' }).parentElement
     const activateButton = screen.getByRole('button', { name: 'Activer' })
@@ -192,6 +204,7 @@ describe('ActionPlanTemplateDetailPage', () => {
           can_update: true,
           can_activate: true,
           can_deactivate: false,
+          can_delete: false,
           can_use: false,
           can_schedule: false,
         },
@@ -199,7 +212,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     expect(screen.getByRole('button', { name: 'Activer' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Exécution' })).toBeNull()
@@ -221,6 +234,7 @@ describe('ActionPlanTemplateDetailPage', () => {
           can_update: true,
           can_activate: true,
           can_deactivate: false,
+          can_delete: false,
           can_use: false,
           can_schedule: false,
         },
@@ -228,7 +242,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Activer' }))
 
@@ -251,6 +265,7 @@ describe('ActionPlanTemplateDetailPage', () => {
           can_update: true,
           can_activate: true,
           can_deactivate: false,
+          can_delete: false,
           can_use: false,
           can_schedule: false,
         },
@@ -258,13 +273,13 @@ describe('ActionPlanTemplateDetailPage', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     expect(screen.getByRole('button', { name: 'Activer' })).toHaveProperty('disabled', true)
   })
 
   it('opens planning panel and sticky launch actions', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
 
@@ -283,6 +298,7 @@ describe('ActionPlanTemplateDetailPage', () => {
           can_update: true,
           can_activate: false,
           can_deactivate: true,
+          can_delete: false,
           can_use: true,
           can_schedule: false,
         },
@@ -290,7 +306,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       refetch: vi.fn(),
     })
 
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
 
@@ -298,7 +314,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('shows launch actions in sticky footer when execution panel is open', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
 
@@ -313,7 +329,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('shows static launch label when execution panel is open', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
 
@@ -324,7 +340,7 @@ describe('ActionPlanTemplateDetailPage', () => {
   })
 
   it('shows primary launch action when per-assignee chronology is enabled', () => {
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Chronologie par assigné' }))
@@ -365,7 +381,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       },
     })
 
-    render(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
+    renderPage(createElement(ActionPlanTemplateDetailPage, { actionPlanId: 'plan-1' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Exécution' }))
     fireEvent.click(screen.getByRole('button', { name: "Lancer l'exécution" }))

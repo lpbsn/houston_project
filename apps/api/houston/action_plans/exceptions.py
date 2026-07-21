@@ -58,7 +58,7 @@ class PlanningSubmissionItemError(ActionPlanValidationError):
         self.item_index = item_index
 
 
-class ActionPlanExecutionObservationIntegrityError(ActionPlanStateError):
+class ActionPlanExecutionObservationIntegrityError(ActionPlanConflictError):
     """Scheduled execution unexpectedly linked to an Observation (PROTECT)."""
 
     error_code = "execution_observation_integrity"

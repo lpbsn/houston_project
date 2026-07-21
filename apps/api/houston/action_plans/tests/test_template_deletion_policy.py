@@ -467,7 +467,6 @@ def test_stop_keeps_scheduled_for_hard_delete(
 
     stop_template_materialization_for_deletion(
         action_plan=catalog_action_plan,
-        actor=owner_membership,
     )
 
     schedule.refresh_from_db()
@@ -509,7 +508,6 @@ def test_stop_preserves_existing_canceled(
 
     stop_template_materialization_for_deletion(
         action_plan=catalog_action_plan,
-        actor=owner_membership,
     )
 
     execution.refresh_from_db()
@@ -562,11 +560,9 @@ def test_stop_template_materialization_idempotent_when_already_inactive(
 
     stop_template_materialization_for_deletion(
         action_plan=inactive_catalog_action_plan,
-        actor=owner_membership,
     )
     stop_template_materialization_for_deletion(
         action_plan=inactive_catalog_action_plan,
-        actor=owner_membership,
     )
 
     inactive_catalog_action_plan.refresh_from_db()
@@ -619,7 +615,6 @@ def test_stop_deactivates_all_schedules_without_mutating_execution_statuses(
 
     stop_template_materialization_for_deletion(
         action_plan=catalog_action_plan,
-        actor=owner_membership,
     )
 
     schedule_one.refresh_from_db()

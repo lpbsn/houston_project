@@ -302,6 +302,26 @@ export async function deactivateActionPlan(
   return assertActionPlanData<ActionPlanDetail>(result)
 }
 
+export async function deleteActionPlan(
+  establishmentId: string,
+  actionPlanId: string,
+): Promise<void> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.DELETE(
+        '/api/v1/establishments/{establishment_id}/action-plans/{action_plan_id}/',
+        {
+          params: actionPlanPath(establishmentId, actionPlanId),
+          headers: getAuthHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+  if (!result.response.ok) {
+    throw parseError(result.response, result.error)
+  }
+}
+
 export async function launchActionPlanExecution(
   establishmentId: string,
   actionPlanId: string,
