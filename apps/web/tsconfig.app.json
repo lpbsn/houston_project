@@ -26,6 +26,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": ["src", "landing/**/*.tsx"],
   "exclude": ["src/**/*.test.ts"]
 }
