@@ -150,6 +150,8 @@ def test_processing_status_returns_queued_without_raw_text(api_client):
     assert body["ux_status"] == "analysis_queued"
     assert body["signal_ids"] == []
     assert body["signals"] == []
+    assert body["created_count"] == 0
+    assert body["updated_count"] == 0
     assert "raw_text" not in body
     assert "text" not in body
     assert "validated_text" not in body
@@ -291,6 +293,8 @@ def test_processing_status_after_pipeline_includes_signal_ids(api_client):
     assert body["status"] == ObservationProcessing.Status.PROCESSED
     assert body["outcome"] == ObservationProcessing.Outcome.SIGNALS_CREATED
     assert body["ux_status"] == "signal_created"
+    assert body["created_count"] == 1
+    assert body["updated_count"] == 0
     assert len(body["signal_ids"]) == 1
     signal_id = uuid.UUID(body["signal_ids"][0])
     assert Signal.objects.filter(id=signal_id).exists()
@@ -318,6 +322,13 @@ def test_processing_status_lists_two_linked_signals_with_taxonomy(api_client):
         observation=observation,
         output=golden_two_candidate_pipeline_output(taxonomy=taxonomy),
     )
+    processing = observation.processing
+    processing.status = ObservationProcessing.Status.PROCESSED
+    processing.outcome = ObservationProcessing.Outcome.SIGNALS_CREATED
+    processing.processed_at = processing.updated_at
+    processing.save(
+        update_fields=["status", "outcome", "processed_at", "updated_at"]
+    )
 
     token = login(api_client, user=membership.user)
     response = api_client.get(
@@ -329,6 +340,8 @@ def test_processing_status_lists_two_linked_signals_with_taxonomy(api_client):
     body = response.json()
     assert len(body["signal_ids"]) == 2
     assert len(body["signals"]) == 2
+    assert body["created_count"] == 2
+    assert body["updated_count"] == 0
     assert body["signals"][0]["responsible_business_unit_label"]
     assert body["signals"][0]["activity_subject_label"]
     location_texts = {entry["location_text"] for entry in body["signals"]}
@@ -359,6 +372,10 @@ def test_processing_status_failed(api_client):
     assert body["status"] == ObservationProcessing.Status.FAILED
     assert body["ux_status"] == "analysis_failed"
     assert body["last_error_code"] == "provider_timeout"
+    assert body["created_count"] == 0
+    assert body["updated_count"] == 0
+    assert body["signal_ids"] == []
+    assert body["signals"] == []
 
 
 def test_processing_status_invalid_issue_focus(api_client):

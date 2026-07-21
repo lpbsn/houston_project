@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { AppRouteProvider } from '@/app/app-routes'
 import { AuthProvider } from '@/app/auth-provider'
+import { ObservationProcessingTrackerProvider } from '@/features/observations/components/observation-processing-tracker-provider'
 import { notifyPwaUpdateAvailable } from '@/lib/pwa-update'
 import { queryClient } from '@/lib/query-client'
 import './styles/globals.css'
@@ -24,9 +25,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AppRouteProvider>
-          <App />
-        </AppRouteProvider>
+        <ObservationProcessingTrackerProvider>
+          <AppRouteProvider>
+            <App />
+          </AppRouteProvider>
+        </ObservationProcessingTrackerProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

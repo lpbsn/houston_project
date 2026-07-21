@@ -1,33 +1,129 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  getProcessingUxLabel,
-  shouldShowSignalFeedNavigation,
-} from './processing-status-labels'
-import { formatProcessingSuccessHeadline } from './processing-status-popup'
+  formatProgressBannerLabel,
+  formatTerminalBannerLabel,
+  resolveTerminalBannerNavigation,
+} from './lib/observation-processing-banner-copy'
 
-describe('report-page success state', () => {
-  it('shows feed navigation only for signal_created ux status', () => {
-    expect(shouldShowSignalFeedNavigation('signal_created')).toBe(true)
-    expect(shouldShowSignalFeedNavigation('no_signal_created')).toBe(false)
-    expect(shouldShowSignalFeedNavigation('analysis_failed')).toBe(false)
+describe('observation processing banner outcomes', () => {
+  it('formats create / update / mixed / empty / failed', () => {
+    expect(
+      formatTerminalBannerLabel({
+        status: 'processed',
+        uxStatus: 'signal_created',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 1,
+        updatedCount: 0,
+        signalIds: ['s1'],
+      }),
+    ).toBe('1 observation créée')
+
+    expect(
+      formatTerminalBannerLabel({
+        status: 'processed',
+        uxStatus: 'signal_updated',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 2,
+        signalIds: ['s1', 's2'],
+      }),
+    ).toBe('2 observations existantes mises à jour')
+
+    expect(
+      formatTerminalBannerLabel({
+        status: 'processed',
+        uxStatus: 'signal_created',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 2,
+        updatedCount: 1,
+        signalIds: ['a', 'b', 'c'],
+      }),
+    ).toBe('2 observations créées · 1 observation existante mise à jour')
+
+    expect(
+      formatTerminalBannerLabel({
+        status: 'processed',
+        uxStatus: 'no_signal_created',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 0,
+        signalIds: [],
+      }),
+    ).toBe('Observation enregistrée — aucun élément opérationnel détecté')
+
+    expect(
+      formatTerminalBannerLabel({
+        status: 'failed',
+        uxStatus: 'analysis_failed',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 0,
+        signalIds: [],
+      }),
+    ).toBe('Observation enregistrée, mais son analyse a échoué')
   })
 
-  it('uses feed-only path for optional CTA', () => {
-    const allowedPath = '/signals'
-    expect(allowedPath).toBe('/signals')
-    expect(allowedPath).not.toMatch(/\/signals\/[0-9a-f-]{36}$/i)
+  it('resolves navigation targets', () => {
+    expect(
+      resolveTerminalBannerNavigation({
+        status: 'processed',
+        uxStatus: 'signal_created',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 1,
+        updatedCount: 0,
+        signalIds: ['sig-1'],
+      }),
+    ).toBe('/signals/sig-1')
+
+    expect(
+      resolveTerminalBannerNavigation({
+        status: 'processed',
+        uxStatus: 'signal_created',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 2,
+        updatedCount: 0,
+        signalIds: ['a', 'b'],
+      }),
+    ).toBe('/signals')
+
+    expect(
+      resolveTerminalBannerNavigation({
+        status: 'processed',
+        uxStatus: 'no_signal_created',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 0,
+        signalIds: [],
+      }),
+    ).toBeNull()
+
+    expect(
+      resolveTerminalBannerNavigation({
+        status: 'failed',
+        uxStatus: 'analysis_failed',
+        processedAt: null,
+        sortAt: 'a',
+        createdCount: 0,
+        updatedCount: 0,
+        signalIds: [],
+      }),
+    ).toBe('/reporting')
   })
 
-  it('does not show feed CTA copy for no_signal_created or analysis_failed', () => {
-    expect(getProcessingUxLabel('no_signal_created')).not.toContain(
-      'liste des observations a été mise à jour',
+  it('formats multi progress label', () => {
+    expect(formatProgressBannerLabel('processing', 3)).toBe(
+      '3 observations en cours d’analyse',
     )
-  })
-
-  it('formats popup headline from signal count without detail paths', () => {
-    expect(formatProcessingSuccessHeadline(2, 'signal_created')).toBe(
-      '2 observations créées ou mises à jour',
-    )
+    expect(formatProgressBannerLabel('queued', 1)).toBe('Analyse en attente')
+    expect(formatProgressBannerLabel('retrying', 1)).toBe('Nouvelle tentative d’analyse')
   })
 })

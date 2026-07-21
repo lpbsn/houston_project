@@ -17,6 +17,7 @@ import {
   useLocationSearch,
 } from '@/features/comments/lib/detail-deep-link'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
+import { trackObservation } from '@/features/observations/components/observation-processing-tracker-provider'
 import { resolveApiErrorMessage } from '@/lib/error-message'
 import { cn } from '@/lib/utils'
 
@@ -275,11 +276,25 @@ function ActionPlanExecutionDetailPageContent({
     if (!observationTaskId) {
       return
     }
+    if (!activeMembership?.id) {
+      setFeedback({
+        variant: 'error',
+        message: 'Établissement non sélectionné.',
+      })
+      return
+    }
     setFeedback(null)
     try {
-      await observationMutation.mutateAsync({
+      const response = await observationMutation.mutateAsync({
         taskExecutionId: observationTaskId,
         body: { text: observationText.trim() },
+      })
+      trackObservation({
+        observationId: response.observation_id,
+        establishmentId,
+        authorMembershipId: activeMembership.id,
+        origin: 'action_plan_task',
+        submittedAt: new Date().toISOString(),
       })
       setObservationTaskId(null)
       setObservationText('')

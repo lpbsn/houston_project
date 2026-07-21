@@ -2784,6 +2784,8 @@ export interface components {
             outcome: string;
             signal_ids: string[];
             signals: components["schemas"]["ObservationProcessingSignalSummary"][];
+            created_count: number;
+            updated_count: number;
             last_error_code: string;
             ux_status: string;
             /** Format: date-time */

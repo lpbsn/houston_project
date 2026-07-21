@@ -150,6 +150,8 @@ class ObservationProcessingStatusView(EstablishmentScopedObservationMixin, APIVi
                     }
                     for summary in projection.signals
                 ],
+                "created_count": projection.created_count,
+                "updated_count": projection.updated_count,
                 "last_error_code": projection.last_error_code,
                 "ux_status": projection.ux_status,
                 "created_at": projection.created_at,

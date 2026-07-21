@@ -38,6 +38,8 @@ class ObservationProcessingStatusResponseSerializer(serializers.Serializer):
     outcome = serializers.CharField(allow_blank=True)
     signal_ids = serializers.ListField(child=serializers.UUIDField())
     signals = ObservationProcessingSignalSummarySerializer(many=True)
+    created_count = serializers.IntegerField()
+    updated_count = serializers.IntegerField()
     last_error_code = serializers.CharField(allow_blank=True)
     ux_status = serializers.CharField()
     created_at = serializers.DateTimeField()

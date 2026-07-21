@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import pytest
+from django.utils import timezone
 from houston.ai.observation_pipeline import FakeObservationPipelineProvider
+from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
 from houston.establishments.models import EstablishmentMembership
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
@@ -13,9 +15,15 @@ from houston.observations.selectors import (
     get_observation_processing_status,
     signal_ids_for_observation,
 )
+from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal
-from houston.signals.services import run_observation_pipeline
+from houston.signals.services import apply_pipeline_output, run_observation_pipeline
 from houston.signals.tests.conftest import create_observation
+from houston.signals.tests.pipeline_helpers import (
+    legacy_signal,
+    mojito_candidate,
+    setup_bar_taxonomy,
+)
 from houston.testing.factories import build_membership, create_membership
 
 
@@ -60,13 +68,30 @@ def test_get_observation_processing_status_collects_signal_ids():
     assert projection is not None
     assert projection.status == ObservationProcessing.Status.PROCESSED
     assert len(projection.signal_ids) == 1
+    assert projection.created_count == 1
+    assert projection.updated_count == 0
     assert Signal.objects.filter(id=projection.signal_ids[0]).exists()
     assert CandidateSignal.objects.filter(result_signal_id=projection.signal_ids[0]).exists()
 
 
-def test_processing_status_does_not_return_unrelated_signal():
-    from django.utils import timezone
+def test_get_observation_processing_status_queued_skips_signal_queries():
+    membership = build_membership()
+    observation = create_observation(membership=membership)
 
+    projection = get_observation_processing_status(
+        membership=membership,
+        observation_id=observation.id,
+    )
+
+    assert projection is not None
+    assert projection.status == ObservationProcessing.Status.QUEUED
+    assert projection.signal_ids == []
+    assert projection.signals == []
+    assert projection.created_count == 0
+    assert projection.updated_count == 0
+
+
+def test_processing_status_does_not_return_unrelated_signal():
     membership = build_membership()
     _setup_pipeline_taxonomy(membership.establishment)
     observation_a = create_observation(membership=membership, text="Observation A text here.")
@@ -99,6 +124,123 @@ def test_processing_status_does_not_return_unrelated_signal():
     assert projection_a is not None
     assert signal_b.id not in projection_a.signal_ids
     assert signal_ids_a[0] in projection_a.signal_ids
+
+
+def test_processing_status_updated_count_for_aggregation():
+    membership = build_membership()
+    bar = setup_bar_taxonomy(membership.establishment)
+    subject = bar.activity_subjects.get()
+    legacy = legacy_signal(
+        establishment=membership.establishment,
+        bar=bar,
+        subject=subject,
+    )
+    observation = create_observation(membership=membership)
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[mojito_candidate(bar=bar, subject=subject)],
+        ),
+    )
+    processing = observation.processing
+    processing.status = ObservationProcessing.Status.PROCESSED
+    processing.outcome = ObservationProcessing.Outcome.SIGNAL_AGGREGATED
+    processing.processed_at = timezone.now()
+    processing.save(update_fields=["status", "outcome", "processed_at", "updated_at"])
+
+    projection = get_observation_processing_status(
+        membership=membership,
+        observation_id=observation.id,
+    )
+
+    assert projection is not None
+    assert projection.created_count == 0
+    assert projection.updated_count == 1
+    assert projection.signal_ids == [legacy.id]
+    assert projection.ux_status == "signal_updated"
+
+
+def test_processing_status_mixed_created_and_updated_counts():
+    membership = build_membership()
+    _setup_pipeline_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
+    created_signal_id = signal_ids_for_observation(observation_id=observation.id)[0]
+
+    bar = setup_bar_taxonomy(membership.establishment)
+    subject = bar.activity_subjects.get()
+    legacy = legacy_signal(
+        establishment=membership.establishment,
+        bar=bar,
+        subject=subject,
+    )
+    CandidateSignal.objects.create(
+        observation=observation,
+        establishment=membership.establishment,
+        title="Aggregated peer",
+        structured_summary="Aggregated into legacy.",
+        outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+        result_signal=legacy,
+    )
+
+    projection = get_observation_processing_status(
+        membership=membership,
+        observation_id=observation.id,
+    )
+
+    assert projection is not None
+    assert projection.created_count == 1
+    assert projection.updated_count == 1
+    assert set(projection.signal_ids) == {created_signal_id, legacy.id}
+
+
+def test_processing_status_counts_distinct_result_signal_ids():
+    membership = build_membership()
+    _setup_pipeline_taxonomy(membership.establishment)
+    observation = create_observation(membership=membership)
+    run_observation_pipeline(observation.id, provider=FakeObservationPipelineProvider())
+    signal_id = signal_ids_for_observation(observation_id=observation.id)[0]
+    CandidateSignal.objects.create(
+        observation=observation,
+        establishment=membership.establishment,
+        title="Duplicate created link",
+        structured_summary="Same result signal twice.",
+        outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
+        result_signal_id=signal_id,
+    )
+
+    projection = get_observation_processing_status(
+        membership=membership,
+        observation_id=observation.id,
+    )
+
+    assert projection is not None
+    assert projection.created_count == 1
+    assert projection.updated_count == 0
+    assert projection.signal_ids == [signal_id]
+
+
+def test_processing_status_no_signal_created_counts_zero():
+    membership = build_membership()
+    observation = create_observation(membership=membership)
+    processing = observation.processing
+    processing.status = ObservationProcessing.Status.PROCESSED
+    processing.outcome = ObservationProcessing.Outcome.NO_SIGNAL_CREATED
+    processing.processed_at = timezone.now()
+    processing.save(update_fields=["status", "outcome", "processed_at", "updated_at"])
+
+    projection = get_observation_processing_status(
+        membership=membership,
+        observation_id=observation.id,
+    )
+
+    assert projection is not None
+    assert projection.created_count == 0
+    assert projection.updated_count == 0
+    assert projection.signal_ids == []
+    assert projection.signals == []
+    assert projection.ux_status == "no_signal_created"
 
 
 def test_processing_status_does_not_return_cross_establishment_signal():

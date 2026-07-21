@@ -8548,6 +8548,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ObservationProcessingSignalSummary'
+        created_count:
+          type: integer
+        updated_count:
+          type: integer
         last_error_code:
           type: string
         ux_status:
@@ -8564,6 +8568,7 @@ components:
           nullable: true
       required:
       - created_at
+      - created_count
       - last_error_code
       - observation_id
       - outcome
@@ -8572,6 +8577,7 @@ components:
       - signals
       - status
       - updated_at
+      - updated_count
       - ux_status
     ObservationSubmitRequest:
       type: object
