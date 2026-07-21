@@ -31,10 +31,15 @@ vi.mock('@/app/auth-provider', () => ({
   useAuth: () => ({
     bootstrap: {
       active_membership: {
+        id: 'mem-1',
         establishment_id: 'est-1',
       },
     },
   }),
+}))
+
+vi.mock('@/features/observations/components/observation-processing-tracker-provider', () => ({
+  trackObservation: vi.fn(),
 }))
 
 vi.mock('@/features/observations/hooks', () => ({
@@ -56,12 +61,6 @@ vi.mock('@/features/observations/hooks', () => ({
     get isPending() {
       return mockSubmitPending.current
     },
-  }),
-  useObservationProcessingStatusQuery: () => ({
-    isLoading: false,
-    isFetching: false,
-    isError: false,
-    data: undefined,
   }),
 }))
 

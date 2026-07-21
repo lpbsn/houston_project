@@ -18,7 +18,7 @@ import {
 } from './processing-status-labels'
 import type { ObservationSubmitRequest } from './types'
 
-const PROCESSING_POLL_INTERVAL_MS = 2000
+const PROCESSING_POLL_INTERVAL_MS = 1000
 
 export function useUploadTemporaryPhotoMutation(establishmentId: string | null) {
   useAuth()

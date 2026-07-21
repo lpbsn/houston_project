@@ -28,6 +28,13 @@ UxStatus = Literal[
     "analysis_failed",
 ]
 
+_TERMINAL_PROCESSING_STATUSES = frozenset(
+    {
+        ObservationProcessing.Status.PROCESSED,
+        ObservationProcessing.Status.FAILED,
+    }
+)
+
 
 @dataclass(frozen=True)
 class ObservationProcessingSignalSummary:
@@ -49,6 +56,8 @@ class ObservationProcessingStatusProjection:
     outcome: str
     signal_ids: list[uuid.UUID]
     signals: list[ObservationProcessingSignalSummary]
+    created_count: int
+    updated_count: int
     last_error_code: str
     ux_status: UxStatus
     created_at: object
@@ -87,11 +96,10 @@ def signal_ids_for_observation(*, observation_id: uuid.UUID) -> list[uuid.UUID]:
     return list(ids)
 
 
-def signal_summaries_for_observation(
+def _signal_summaries_for_ids(
     *,
-    observation_id: uuid.UUID,
+    signal_ids: list[uuid.UUID],
 ) -> list[ObservationProcessingSignalSummary]:
-    signal_ids = signal_ids_for_observation(observation_id=observation_id)
     if not signal_ids:
         return []
 
@@ -148,6 +156,52 @@ def signal_summaries_for_observation(
     return summaries
 
 
+def signal_summaries_for_observation(
+    *,
+    observation_id: uuid.UUID,
+) -> list[ObservationProcessingSignalSummary]:
+    return _signal_summaries_for_ids(
+        signal_ids=signal_ids_for_observation(observation_id=observation_id)
+    )
+
+
+def _terminal_signal_projection(
+    *,
+    observation_id: uuid.UUID,
+) -> tuple[list[uuid.UUID], list[ObservationProcessingSignalSummary], int, int]:
+    """Single CandidateSignal pass for terminal processed status."""
+    rows = list(
+        CandidateSignal.objects.filter(
+            observation_id=observation_id,
+            result_signal_id__isnull=False,
+            result_signal__establishment_id=F("observation__establishment_id"),
+            outcome__in=(
+                CandidateSignal.Outcome.CREATED_SIGNAL,
+                CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+            ),
+        ).values_list("result_signal_id", "outcome")
+    )
+
+    created_ids: set[uuid.UUID] = set()
+    updated_ids: set[uuid.UUID] = set()
+    linked_ids: set[uuid.UUID] = set()
+
+    for signal_id, outcome in rows:
+        linked_ids.add(signal_id)
+        if outcome == CandidateSignal.Outcome.CREATED_SIGNAL:
+            created_ids.add(signal_id)
+        elif outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL:
+            updated_ids.add(signal_id)
+
+    summaries = _signal_summaries_for_ids(signal_ids=list(linked_ids))
+    return (
+        [summary.id for summary in summaries],
+        summaries,
+        len(created_ids),
+        len(updated_ids),
+    )
+
+
 def get_observation_for_establishment(
     *,
     establishment_id: uuid.UUID,
@@ -183,12 +237,28 @@ def get_observation_processing_status(
         return None
 
     outcome = processing.outcome or ""
+    signal_ids: list[uuid.UUID] = []
+    signals: list[ObservationProcessingSignalSummary] = []
+    created_count = 0
+    updated_count = 0
+
+    if processing.status == ObservationProcessing.Status.PROCESSED:
+        signal_ids, signals, created_count, updated_count = _terminal_signal_projection(
+            observation_id=observation.id
+        )
+    elif processing.status not in _TERMINAL_PROCESSING_STATUSES:
+        # Non-terminal: skip CandidateSignal / Signal queries entirely.
+        pass
+    # failed: empty lists and zero counts (no CandidateSignal / Signal queries)
+
     return ObservationProcessingStatusProjection(
         observation_id=observation.id,
         status=processing.status,
         outcome=outcome,
-        signal_ids=signal_ids_for_observation(observation_id=observation.id),
-        signals=signal_summaries_for_observation(observation_id=observation.id),
+        signal_ids=signal_ids,
+        signals=signals,
+        created_count=created_count,
+        updated_count=updated_count,
         last_error_code=processing.last_error_code or "",
         ux_status=resolve_ux_status(status=processing.status, outcome=outcome),
         created_at=processing.created_at,

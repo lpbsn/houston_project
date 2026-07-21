@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { apiClient, withAuthRetry } from '@/api/client'
 import { clearAllPlanningSubmissionIntents } from '@/features/action-plans/lib/action-plan-planning-submission-intent'
+import { clearObservationProcessingTrackerOnLogout } from '@/features/observations/lib/observation-processing-tracker-store'
 import { queryClient } from '@/lib/query-client'
 import {
   clearAuthenticatedQueryCache,
@@ -303,6 +304,7 @@ let restorePromise: Promise<string | null> | null = null
 export function clearAuthState() {
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
+  clearObservationProcessingTrackerOnLogout()
   clearAuthenticatedQueryCache(queryClient)
 }
 
