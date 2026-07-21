@@ -29,28 +29,43 @@ export type FloatingObservation = {
   id: string
   label: string
   tone: 'neon' | 'moss' | 'soft' | 'white'
-  /** Desktop position as % of the swarm container */
+  /** Desktop position as % of the swarm container (md+) */
   x: number
   y: number
+  /** Optional lg+ overrides to avoid collisions with the wider card */
+  xLg?: number
+  yLg?: number
+  /** Optional xl+ overrides */
+  xXl?: number
+  yXl?: number
   delay: number
   mobile?: boolean
 }
 
 export const floatingObservations: FloatingObservation[] = [
   { id: 'o1', label: 'Climatisation HS salle B', tone: 'neon', x: 8, y: 12, delay: 0, mobile: true },
-  { id: 'o2', label: 'Enfant perdu -> retrouvé ✅', tone: 'soft', x: 72, y: 8, delay: 0.4, mobile: true },
-  { id: 'o3', label: 'La caisse 2 bloque', tone: 'neon', x: 78, y: 28, delay: 0.8, mobile: true },
+  { id: 'o2', label: 'Enfant perdu -> retrouvé ✅', tone: 'soft', x: 72, y: 8, xLg: 78, delay: 0.4, mobile: true },
+  { id: 'o3', label: 'La caisse 2 bloque', tone: 'neon', x: 78, y: 28, xLg: 84, delay: 0.8, mobile: true },
   { id: 'o4', label: "Besoin d'aide en cuisine !", tone: 'moss', x: 4, y: 38, delay: 1.1, mobile: true },
-  { id: 'o5', label: 'Livraison arrivée 👍', tone: 'soft', x: 82, y: 48, delay: 0.2 },
-  { id: 'o6', label: 'La porte ne ferme plus', tone: 'white', x: 12, y: 58, delay: 1.5 },
-  { id: 'o7', label: 'Machine à café en panne ☕', tone: 'white', x: 70, y: 62, delay: 0.6 },
-  { id: 'o8', label: 'Table 8 attend depuis 20min', tone: 'moss', x: 18, y: 78, delay: 1.0, mobile: true },
-  { id: 'o9', label: 'Bruit anormal cuisine', tone: 'soft', x: 58, y: 18, delay: 1.3 },
+  { id: 'o5', label: 'Livraison arrivée 👍', tone: 'soft', x: 82, y: 48, xLg: 86, delay: 0.2 },
+  { id: 'o6', label: 'La porte ne ferme plus', tone: 'white', x: 12, y: 58, xLg: 4, yLg: 64, delay: 1.5 },
+  {
+    id: 'o7',
+    label: 'Machine à café en panne ☕',
+    tone: 'white',
+    x: 70,
+    y: 62,
+    xLg: 78,
+    yLg: 70,
+    delay: 0.6,
+  },
+  { id: 'o8', label: 'Table 8 attend depuis 20min', tone: 'moss', x: 18, y: 78, xLg: 10, yLg: 84, delay: 1.0, mobile: true },
+  { id: 'o9', label: 'Bruit anormal cuisine', tone: 'soft', x: 58, y: 18, xLg: 68, yLg: 10, delay: 1.3 },
   { id: 'o10', label: 'Stock serviettes bas', tone: 'white', x: 48, y: 5, delay: 0.9 },
   { id: 'o11', label: 'Client VIP arrive', tone: 'neon', x: 88, y: 72, delay: 0.5, mobile: true },
   { id: 'o12', label: 'Fuite sanitaires R+1', tone: 'moss', x: 2, y: 22, delay: 1.6 },
-  { id: 'o13', label: 'Wi-Fi salon HS', tone: 'white', x: 55, y: 80, delay: 0.3, mobile: true },
-  { id: 'o14', label: 'Lit cassé chambre 214', tone: 'soft', x: 30, y: 8, delay: 1.2 },
+  { id: 'o13', label: 'Wi-Fi salon HS', tone: 'white', x: 55, y: 80, xLg: 62, yLg: 88, delay: 0.3, mobile: true },
+  { id: 'o14', label: 'Lit cassé chambre 214', tone: 'soft', x: 30, y: 8, xLg: 22, yLg: 4, delay: 1.2 },
 ]
 
 export const problemContent = {

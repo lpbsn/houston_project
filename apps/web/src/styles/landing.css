@@ -1,5 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "@fontsource-variable/geist";
+
+@source "../features/landing";
+@source "../../landing";
 
 :root {
   color-scheme: light;

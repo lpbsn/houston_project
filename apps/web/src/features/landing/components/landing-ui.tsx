@@ -47,7 +47,7 @@ export function NeonCtaButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-semibold transition hover:brightness-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3',
+        'inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-semibold transition hover:brightness-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 lg:px-8',
         variant === 'neon' &&
           'landing-cta-glow bg-spore-neon text-spore-forest focus-visible:outline-spore-forest',
         variant === 'forest' &&

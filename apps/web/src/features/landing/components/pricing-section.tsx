@@ -11,17 +11,17 @@ type PricingSectionProps = {
 
 export function PricingSection({ onCta }: PricingSectionProps) {
   return (
-    <section className="relative overflow-hidden bg-white px-5 py-16 sm:px-8 sm:py-24">
+    <section className="relative overflow-hidden bg-white px-5 py-16 sm:px-8 sm:py-24 lg:px-8 lg:py-24 xl:px-12 xl:py-28">
       <div
         aria-hidden="true"
         className="landing-halo pointer-events-none absolute left-1/2 top-16 h-72 w-[min(90vw,560px)] -translate-x-1/2"
       />
-      <div className="relative mx-auto max-w-xl">
+      <div className="relative mx-auto max-w-xl lg:max-w-3xl">
         <Reveal className="text-center">
-          <h2 className="text-balance text-[clamp(1.5rem,3.5vw,2.25rem)] font-semibold leading-tight text-spore-forest">
+          <h2 className="text-balance text-[clamp(1.5rem,3.5vw,2.25rem)] font-semibold leading-tight text-spore-forest lg:text-[clamp(2.25rem,2.5vw,3.25rem)]">
             {pricingContent.title}
           </h2>
-          <p className="mt-3 text-pretty text-[15px] text-spore-moss sm:text-base">
+          <p className="mt-3 text-pretty text-[15px] text-spore-moss sm:text-base lg:text-lg">
             {pricingContent.subtitle}
           </p>
         </Reveal>
@@ -32,14 +32,14 @@ export function PricingSection({ onCta }: PricingSectionProps) {
               {pricingContent.badge}
             </span>
           </div>
-          <article className="rounded-3xl bg-white px-6 pb-8 pt-10 text-center shadow-[0_20px_60px_rgba(16,59,42,0.1)] ring-1 ring-black/5 sm:px-10">
+          <article className="rounded-3xl bg-white px-6 pb-8 pt-10 text-center shadow-[0_20px_60px_rgba(16,59,42,0.1)] ring-1 ring-black/5 sm:px-10 lg:px-12 lg:pb-10">
             <p className="flex flex-wrap items-baseline justify-center gap-2">
-              <span className="text-[clamp(2.75rem,8vw,3.75rem)] font-semibold leading-none text-spore-forest">
+              <span className="text-[clamp(2.75rem,8vw,3.75rem)] font-semibold leading-none text-spore-forest lg:text-[clamp(3.25rem,4vw,4.25rem)]">
                 {pricingContent.price}
               </span>
               <span className="text-base text-spore-muted">{pricingContent.priceSuffix}</span>
             </p>
-            <ul className="mx-auto mt-6 max-w-xs space-y-2.5 text-left text-[15px] text-spore-forest">
+            <ul className="mx-auto mt-6 max-w-xs space-y-2.5 text-left text-[15px] text-spore-forest lg:max-w-sm lg:text-base">
               {pricingContent.features.map((feature) => (
                 <li key={feature} className="flex items-start gap-2.5">
                   <Check
@@ -65,13 +65,13 @@ export function PricingSection({ onCta }: PricingSectionProps) {
         </Reveal>
 
         <Reveal className="mt-5">
-          <div className="flex gap-4 rounded-2xl bg-[#f2f7f4] p-4 sm:p-5">
+          <div className="flex gap-4 rounded-2xl bg-[#f2f7f4] p-4 sm:p-5 lg:p-6">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-spore-neon/35 text-spore-forest">
               <Plus className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
               <h3 className="font-semibold text-spore-forest">{pricingContent.poleExtension.title}</h3>
-              <p className="mt-1 text-sm leading-relaxed text-spore-moss">
+              <p className="mt-1 text-sm leading-relaxed text-spore-moss lg:text-base">
                 {pricingContent.poleExtension.body}
               </p>
             </div>
@@ -79,17 +79,17 @@ export function PricingSection({ onCta }: PricingSectionProps) {
         </Reveal>
 
         <Reveal className="mt-5">
-          <article className="rounded-2xl bg-white p-5 shadow-[0_12px_40px_rgba(16,59,42,0.08)] ring-1 ring-black/5 sm:p-6">
+          <article className="rounded-2xl bg-white p-5 shadow-[0_12px_40px_rgba(16,59,42,0.08)] ring-1 ring-black/5 sm:p-6 lg:p-8">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-spore-neon/30 text-spore-forest">
                 <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
               </div>
               <ComingSoonBadge />
             </div>
-            <h3 className="mt-4 text-lg font-semibold text-spore-forest">
+            <h3 className="mt-4 text-lg font-semibold text-spore-forest lg:text-xl">
               {pricingContent.multiSite.title}
             </h3>
-            <p className="mt-2 text-[15px] leading-relaxed text-spore-moss">
+            <p className="mt-2 text-[15px] leading-relaxed text-spore-moss lg:text-base">
               {pricingContent.multiSite.body}
             </p>
             <button
