@@ -94,6 +94,8 @@ const { authState } = vi.hoisted(() => ({
         establishment_id: string
         establishment_name: string
         establishment_status: string
+        organization_id: string
+        organization_name: string
         role: string
         onboarding_session_id: string | null
         can_continue_onboarding: boolean
@@ -170,6 +172,8 @@ describe('ProfileSwitchEstablishmentPage', () => {
         establishment_id: 'draft-1',
         establishment_name: 'Hôtel Draft',
         establishment_status: 'draft',
+        organization_id: 'org-1',
+        organization_name: 'Org',
         role: 'owner',
         onboarding_session_id: 'session-1',
         can_continue_onboarding: true,

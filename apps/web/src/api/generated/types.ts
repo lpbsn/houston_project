@@ -1768,6 +1768,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Organization admin overview for Owners. Independent of session selected establishment. */
+        get: operations["v1_organizations_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/establishments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists ACTIVE and DRAFT establishments for organization admin. Does not mutate selected establishment. */
+        get: operations["v1_organizations_establishments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/members/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Deduplicated organization members across ACTIVE and DRAFT establishments. Membership statuses include invited, active, and deactivated. */
+        get: operations["v1_organizations_members_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/members/filter-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Filter options for organization admin members. Not session-scoped; do not use team endpoints. */
+        get: operations["v1_organizations_members_filter_options_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/owner-invitations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Invites or reissues an organizational Owner invitation. Works for DRAFT-only organizations. Body: email, first_name, last_name only. */
+        post: operations["v1_organizations_owner_invitations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/owners/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists organizational Owners (active and invited), deduplicated by user. */
+        get: operations["v1_organizations_owners_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/push/vapid-public-key/": {
         parameters: {
             query?: never;
@@ -2954,6 +3056,106 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        OrganizationAdminDirector: {
+            /** Format: uuid */
+            membership_id: string;
+            display_name: string;
+            /** Format: email */
+            email: string;
+            status: string;
+        };
+        OrganizationAdminEstablishment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            status: string;
+            directors: components["schemas"]["OrganizationAdminDirector"][];
+            active_member_count: number;
+            business_unit_count: number;
+            /** Format: uuid */
+            onboarding_session_id: string | null;
+            onboarding_current_step: string;
+            can_continue_onboarding: boolean;
+        };
+        OrganizationAdminEstablishmentList: {
+            results: components["schemas"]["OrganizationAdminEstablishment"][];
+        };
+        OrganizationAdminFilterBusinessUnit: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            /** Format: uuid */
+            establishment_id: string;
+        };
+        OrganizationAdminFilterEstablishment: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            status: string;
+        };
+        OrganizationAdminMember: {
+            /** Format: uuid */
+            user_id: string;
+            first_name: string;
+            last_name: string;
+            /** Format: email */
+            email: string;
+            memberships: components["schemas"]["OrganizationAdminMemberMembership"][];
+        };
+        OrganizationAdminMemberBusinessUnit: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+        };
+        OrganizationAdminMemberFilterOptions: {
+            establishments: components["schemas"]["OrganizationAdminFilterEstablishment"][];
+            business_units: components["schemas"]["OrganizationAdminFilterBusinessUnit"][];
+            roles: string[];
+            statuses: string[];
+        };
+        OrganizationAdminMemberList: {
+            results: components["schemas"]["OrganizationAdminMember"][];
+        };
+        OrganizationAdminMemberMembership: {
+            /** Format: uuid */
+            membership_id: string;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string;
+            establishment_status: string;
+            role: string;
+            status: string;
+            business_units: components["schemas"]["OrganizationAdminMemberBusinessUnit"][];
+        };
+        OrganizationAdminOverview: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            status: string;
+            active_establishment_count: number;
+            draft_establishment_count: number;
+        };
+        OrganizationAdminOwner: {
+            /** Format: uuid */
+            user_id: string;
+            first_name: string;
+            last_name: string;
+            /** Format: email */
+            email: string;
+            status: string;
+            /** Format: date-time */
+            invited_at: string | null;
+            can_resend_invitation: boolean;
+        };
+        OrganizationAdminOwnerInvitationRequest: {
+            /** Format: email */
+            email: string;
+            first_name: string;
+            last_name: string;
+        };
+        OrganizationAdminOwnerList: {
+            results: components["schemas"]["OrganizationAdminOwner"][];
+        };
         /**
          * @description * `signal` - signal
          *     * `action_plan_execution` - action_plan_execution
@@ -3027,6 +3229,9 @@ export interface components {
             establishment_id: string;
             establishment_name: string;
             establishment_status: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
             role: string;
             /** Format: uuid */
             onboarding_session_id: string | null;
@@ -9443,6 +9648,272 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+        };
+    };
+    v1_organizations_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationAdminOverview"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_organizations_establishments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationAdminEstablishmentList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_organizations_members_retrieve: {
+        parameters: {
+            query?: {
+                business_unit_id?: string;
+                establishment_id?: string;
+                q?: string;
+                role?: string;
+                status?: string;
+            };
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationAdminMemberList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_organizations_members_filter_options_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationAdminMemberFilterOptions"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_organizations_owner_invitations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationAdminOwnerInvitationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OrganizationAdminOwnerInvitationRequest"];
+                "multipart/form-data": components["schemas"]["OrganizationAdminOwnerInvitationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_organizations_owners_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationAdminOwnerList"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

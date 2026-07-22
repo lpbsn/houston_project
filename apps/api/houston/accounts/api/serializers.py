@@ -85,6 +85,8 @@ class PendingOnboardingMembershipSerializer(serializers.Serializer):
     establishment_id = serializers.UUIDField()
     establishment_name = serializers.CharField()
     establishment_status = serializers.CharField()
+    organization_id = serializers.UUIDField()
+    organization_name = serializers.CharField()
     role = serializers.CharField()
     onboarding_session_id = serializers.UUIDField(allow_null=True)
     can_continue_onboarding = serializers.BooleanField()

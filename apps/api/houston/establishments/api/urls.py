@@ -1,6 +1,14 @@
 from django.urls import path
 
 from houston.accounts.api.views import DirectorInvitationAcceptView
+from houston.establishments.api.organization_admin_views import (
+    OrganizationAdminEstablishmentListView,
+    OrganizationAdminMemberFilterOptionsView,
+    OrganizationAdminMemberListView,
+    OrganizationAdminOverviewView,
+    OrganizationAdminOwnerInvitationView,
+    OrganizationAdminOwnerListView,
+)
 from houston.establishments.api.views import (
     CatalogActivitySubjectSuggestView,
     CatalogBusinessUnitSuggestView,
@@ -35,6 +43,36 @@ from houston.establishments.api.views import (
 )
 
 urlpatterns = [
+    path(
+        "organizations/<uuid:organization_id>/",
+        OrganizationAdminOverviewView.as_view(),
+        name="organization-admin-overview",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/establishments/",
+        OrganizationAdminEstablishmentListView.as_view(),
+        name="organization-admin-establishments",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/members/filter-options/",
+        OrganizationAdminMemberFilterOptionsView.as_view(),
+        name="organization-admin-member-filter-options",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/members/",
+        OrganizationAdminMemberListView.as_view(),
+        name="organization-admin-members",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/owners/",
+        OrganizationAdminOwnerListView.as_view(),
+        name="organization-admin-owners",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/owner-invitations/",
+        OrganizationAdminOwnerInvitationView.as_view(),
+        name="organization-admin-owner-invitations",
+    ),
     path(
         "invitations/<str:token>/accept/",
         DirectorInvitationAcceptView.as_view(),

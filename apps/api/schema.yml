@@ -6026,6 +6026,272 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
+  /api/v1/organizations/{organization_id}/:
+    get:
+      operationId: v1_organizations_retrieve
+      description: Organization admin overview for Owners. Independent of session
+        selected establishment.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminOverview'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/establishments/:
+    get:
+      operationId: v1_organizations_establishments_retrieve
+      description: Lists ACTIVE and DRAFT establishments for organization admin. Does
+        not mutate selected establishment.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminEstablishmentList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/members/:
+    get:
+      operationId: v1_organizations_members_retrieve
+      description: Deduplicated organization members across ACTIVE and DRAFT establishments.
+        Membership statuses include invited, active, and deactivated.
+      parameters:
+      - in: query
+        name: business_unit_id
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: role
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminMemberList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/members/filter-options/:
+    get:
+      operationId: v1_organizations_members_filter_options_retrieve
+      description: Filter options for organization admin members. Not session-scoped;
+        do not use team endpoints.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminMemberFilterOptions'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/owner-invitations/:
+    post:
+      operationId: v1_organizations_owner_invitations_create
+      description: 'Invites or reissues an organizational Owner invitation. Works
+        for DRAFT-only organizations. Body: email, first_name, last_name only.'
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationAdminOwnerInvitationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrganizationAdminOwnerInvitationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrganizationAdminOwnerInvitationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/owners/:
+    get:
+      operationId: v1_organizations_owners_retrieve
+      description: Lists organizational Owners (active and invited), deduplicated
+        by user.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminOwnerList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/push/vapid-public-key/:
     get:
       operationId: v1_push_vapid_public_key_retrieve
@@ -8970,6 +9236,266 @@ components:
       - started_by_id
       - status
       - updated_at
+    OrganizationAdminDirector:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+      required:
+      - display_name
+      - email
+      - membership_id
+      - status
+    OrganizationAdminEstablishment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        directors:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminDirector'
+        active_member_count:
+          type: integer
+        business_unit_count:
+          type: integer
+        onboarding_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        onboarding_current_step:
+          type: string
+        can_continue_onboarding:
+          type: boolean
+      required:
+      - active_member_count
+      - business_unit_count
+      - can_continue_onboarding
+      - directors
+      - id
+      - name
+      - onboarding_current_step
+      - onboarding_session_id
+      - status
+    OrganizationAdminEstablishmentList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminEstablishment'
+      required:
+      - results
+    OrganizationAdminFilterBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        establishment_id:
+          type: string
+          format: uuid
+      required:
+      - establishment_id
+      - id
+      - label
+    OrganizationAdminFilterEstablishment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - name
+      - status
+    OrganizationAdminMember:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminMemberMembership'
+      required:
+      - email
+      - first_name
+      - last_name
+      - memberships
+      - user_id
+    OrganizationAdminMemberBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+      required:
+      - id
+      - label
+    OrganizationAdminMemberFilterOptions:
+      type: object
+      properties:
+        establishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminFilterEstablishment'
+        business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminFilterBusinessUnit'
+        roles:
+          type: array
+          items:
+            type: string
+        statuses:
+          type: array
+          items:
+            type: string
+      required:
+      - business_units
+      - establishments
+      - roles
+      - statuses
+    OrganizationAdminMemberList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminMember'
+      required:
+      - results
+    OrganizationAdminMemberMembership:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+        establishment_status:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminMemberBusinessUnit'
+      required:
+      - business_units
+      - establishment_id
+      - establishment_name
+      - establishment_status
+      - membership_id
+      - role
+      - status
+    OrganizationAdminOverview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        active_establishment_count:
+          type: integer
+        draft_establishment_count:
+          type: integer
+      required:
+      - active_establishment_count
+      - draft_establishment_count
+      - id
+      - name
+      - status
+    OrganizationAdminOwner:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+        invited_at:
+          type: string
+          format: date-time
+          nullable: true
+        can_resend_invitation:
+          type: boolean
+      required:
+      - can_resend_invitation
+      - email
+      - first_name
+      - invited_at
+      - last_name
+      - status
+      - user_id
+    OrganizationAdminOwnerInvitationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - email
+      - first_name
+      - last_name
+    OrganizationAdminOwnerList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminOwner'
+      required:
+      - results
     OriginEnum:
       enum:
       - signal
@@ -9114,6 +9640,11 @@ components:
           type: string
         establishment_status:
           type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
         role:
           type: string
         onboarding_session_id:
@@ -9129,6 +9660,8 @@ components:
       - establishment_status
       - id
       - onboarding_session_id
+      - organization_id
+      - organization_name
       - role
     PermissionHints:
       type: object

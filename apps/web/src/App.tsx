@@ -603,7 +603,7 @@ function App() {
             }
       : route.kind === 'static' && route.path === '/organization'
           ? {
-              title: 'Organisation',
+              title: 'Gestion de l’organisation',
               description: 'Pilotez les établissements, membres et propriétaires.',
               actions: signOutAction,
             }

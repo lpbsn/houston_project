@@ -12,6 +12,8 @@ function pending(overrides: Partial<PendingOnboardingMembership>): PendingOnboar
     establishment_id: '22222222-2222-2222-2222-222222222222',
     establishment_name: 'Demo Hotel',
     establishment_status: 'draft',
+    organization_id: '44444444-4444-4444-4444-444444444444',
+    organization_name: 'Demo Org',
     role: 'owner',
     onboarding_session_id: '33333333-3333-3333-3333-333333333333',
     can_continue_onboarding: true,
