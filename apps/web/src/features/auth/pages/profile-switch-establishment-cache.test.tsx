@@ -152,7 +152,7 @@ describe('ProfileSwitchEstablishmentPage cache isolation', () => {
     fireEvent.click(screen.getByRole('button', { name: /Brasserie Metz/i }))
 
     await waitFor(() => {
-      expect(onNavigate).toHaveBeenCalledWith('/app/operational-config', { replace: true })
+      expect(onNavigate).toHaveBeenCalledWith('/reporting', { replace: true })
     })
 
     expect(queryClient.getQueryData(['signals', 'feed', 'est-a', 'general', {}])).toBeUndefined()

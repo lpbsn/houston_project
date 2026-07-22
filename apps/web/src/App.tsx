@@ -41,13 +41,13 @@ import { TerrainTopbar } from '@/components/layout/terrain-topbar'
 import { Button } from '@/components/ui/button'
 import { clearAuthState } from '@/features/auth/api'
 import { AuthRoutingLoading } from '@/features/auth/components/auth-routing-loading'
-import { AppPage } from '@/features/auth/pages/app-page'
 import { PendingOnboardingPage } from '@/features/auth/pages/pending-onboarding-page'
 import { TeamInvitePage } from '@/features/auth/pages/team-invite-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
+  resolveAppHubRedirectPath,
   routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
   shouldRedirectUnauthenticatedPublicRoute,
@@ -70,6 +70,8 @@ import {
 } from '@/features/auth/lib/team-list-ui-state'
 import { InvitationAcceptPage } from '@/features/invitations/pages/invitation-accept-page'
 import { OperationalConfigPage } from '@/features/establishment-config/pages/operational-config-page'
+import { OrganizationEstablishmentPage } from '@/features/organization/pages/organization-establishment-page'
+import { OrganizationPage } from '@/features/organization/pages/organization-page'
 import { OnboardingPage } from '@/features/onboarding/pages/onboarding-page'
 import { NotificationCenter } from '@/features/notifications/components/notification-center'
 import { ActionPlanExecutionDetailTopbarTrailing } from '@/features/action-plans/components/action-plan-execution-detail-topbar-trailing'
@@ -143,6 +145,10 @@ function App() {
       return
     }
 
+    if (route.kind === 'organization-establishment-detail') {
+      return
+    }
+
     if (route.kind === 'static' && routeAllowsMissingActiveMembership(route.path)) {
       return
     }
@@ -165,6 +171,16 @@ function App() {
       navigate('/reporting', { replace: true })
     }
   }, [navigate, route])
+
+  useEffect(() => {
+    if (!auth.isReady || !auth.isAuthenticated || !auth.bootstrap) {
+      return
+    }
+
+    if (route.kind === 'static' && route.path === '/app') {
+      navigate(resolveAppHubRedirectPath(auth.bootstrap), { replace: true })
+    }
+  }, [auth.bootstrap, auth.isAuthenticated, auth.isReady, navigate, route])
 
   const handleSignOut = useCallback(() => {
     void auth.logout().then(() => {
@@ -345,6 +361,15 @@ function App() {
       return <LazyTeamMemberDetailPage membershipId={route.membershipId} />
     }
 
+    if (route.kind === 'organization-establishment-detail') {
+      return (
+        <OrganizationEstablishmentPage
+          establishmentId={route.establishmentId}
+          onNavigate={navigate}
+        />
+      )
+    }
+
     if (route.kind === 'chat-conversation-detail') {
       return <LazyChatConversationPage conversationId={route.conversationId} />
     }
@@ -354,7 +379,15 @@ function App() {
     }
 
     if (route.path === '/app') {
-      return <AppPage onNavigate={navigate} />
+      return (
+        <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
+          Redirection…
+        </div>
+      )
+    }
+
+    if (route.path === '/organization') {
+      return <OrganizationPage onNavigate={navigate} />
     }
 
     if (route.path === '/app/operational-config') {
@@ -562,10 +595,22 @@ function App() {
           description: 'Create your password to join this establishment in Houston.',
           actions: signInAction,
         }
+      : route.kind === 'organization-establishment-detail'
+          ? {
+              title: 'Établissement',
+              description: 'Consultez et administrez cet établissement.',
+              actions: signOutAction,
+            }
+      : route.kind === 'static' && route.path === '/organization'
+          ? {
+              title: 'Organisation',
+              description: 'Pilotez les établissements, membres et propriétaires.',
+              actions: signOutAction,
+            }
       : route.kind === 'static' && route.path === '/app'
           ? {
-              title: "Gérer l'établissement",
-              description: 'Manage your establishment, team memberships, and invitations.',
+              title: 'Redirection',
+              description: 'Redirection vers votre espace de gestion.',
               actions: signOutAction,
             }
           : route.kind === 'static' && route.path === '/app/operational-config'

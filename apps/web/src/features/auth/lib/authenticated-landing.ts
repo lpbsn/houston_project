@@ -1,14 +1,17 @@
 import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse } from '@/features/auth/types'
 
+import { canManageOrganizationFromBootstrapHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import {
   buildOnboardingUrl,
   resolvePendingLanding,
 } from '@/features/auth/lib/pending-onboarding'
+import { toRoleEnum } from '@/features/auth/lib/role'
 
 export type AuthenticatedLanding =
   | { kind: 'operational'; path: '/reporting' }
   | { kind: 'establishment-selection'; path: '/select-establishment' }
+  | { kind: 'organization'; path: '/organization' }
   | { kind: 'pending'; path: string }
   | { kind: 'empty'; path: '/no-establishment' }
 
@@ -24,7 +27,21 @@ export function resolveAuthenticatedLanding(
     return { kind: 'establishment-selection', path: '/select-establishment' }
   }
 
+  if (activeMembershipCount === 1) {
+    return { kind: 'operational', path: '/reporting' }
+  }
+
+  const canManageOrganization = canManageOrganizationFromBootstrapHints(
+    bootstrap.permission_hints,
+  )
   const pendingLanding = resolvePendingLanding(bootstrap.pending_onboarding_memberships)
+
+  if (canManageOrganization) {
+    if (pendingLanding.kind === 'onboarding') {
+      return { kind: 'pending', path: buildOnboardingUrl(pendingLanding.pending) }
+    }
+    return { kind: 'organization', path: '/organization' }
+  }
 
   if (pendingLanding.kind === 'onboarding') {
     return { kind: 'pending', path: buildOnboardingUrl(pendingLanding.pending) }
@@ -32,10 +49,6 @@ export function resolveAuthenticatedLanding(
 
   if (pendingLanding.kind === 'waiting' || pendingLanding.kind === 'selection') {
     return { kind: 'pending', path: '/pending-onboarding' }
-  }
-
-  if (activeMembershipCount === 1) {
-    return { kind: 'operational', path: '/reporting' }
   }
 
   return { kind: 'empty', path: '/no-establishment' }
@@ -51,11 +64,32 @@ export function getAuthenticatedLandingPath(
   return resolveAuthenticatedLanding(bootstrap).path
 }
 
+export function resolveAppHubRedirectPath(
+  bootstrap: BootstrapResponse | null | undefined,
+): string {
+  if (!bootstrap) {
+    return '/login'
+  }
+
+  if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
+    return '/organization'
+  }
+
+  const activeMembership = bootstrap.active_membership
+  const activeRole = toRoleEnum(activeMembership?.role)
+  if (activeMembership && activeRole === 'director') {
+    return `/organization/establishments/${activeMembership.establishment_id}`
+  }
+
+  return getAuthenticatedLandingPath(bootstrap) ?? '/no-establishment'
+}
+
 export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/reporting',
   '/select-establishment',
   '/pending-onboarding',
   '/onboarding',
+  '/organization',
   '/no-establishment',
 ])
 
@@ -65,7 +99,10 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
     path === '/pending-onboarding' ||
     path === '/select-establishment' ||
     path === '/no-establishment' ||
-    path === '/install-app'
+    path === '/install-app' ||
+    path === '/organization' ||
+    path === '/app' ||
+    path.startsWith('/organization/')
   )
 }
 

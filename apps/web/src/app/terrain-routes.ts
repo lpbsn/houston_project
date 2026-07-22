@@ -28,7 +28,6 @@ export type TerrainRouteConfig = {
 }
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
-  '/app',
   '/app/operational-config',
   '/app/report',
   '/reporting',
@@ -47,6 +46,8 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
 
 const PROTECTED_STATIC_PATHS = new Set<string>([
   ...OPERATIONAL_STATIC_PATHS,
+  '/app',
+  '/organization',
   '/pending-onboarding',
   '/onboarding',
   '/select-establishment',
@@ -90,11 +91,19 @@ export function isProtectedRoute(route: AppRoute): boolean {
     return PROTECTED_STATIC_PATHS.has(route.path)
   }
 
+  if (route.kind === 'organization-establishment-detail') {
+    return true
+  }
+
   return OPERATIONAL_ROUTE_KINDS.has(route.kind)
 }
 
 export function requiresActiveMembership(route: AppRoute): boolean {
   if (route.kind === 'unknown' || route.kind === 'invitation') {
+    return false
+  }
+
+  if (route.kind === 'organization-establishment-detail') {
     return false
   }
 
@@ -299,7 +308,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/general/switch-establishment') {
     return {
       topbarVariant: 'detail',
-      title: 'Établissements',
+      title: "Changer d'établissement",
       backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',

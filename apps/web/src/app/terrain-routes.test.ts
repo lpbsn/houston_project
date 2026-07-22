@@ -145,7 +145,7 @@ describe('getTerrainRouteConfig', () => {
       getTerrainRouteConfig({ kind: 'static', path: '/general/switch-establishment' }),
     ).toEqual({
       topbarVariant: 'detail',
-      title: 'Établissements',
+      title: "Changer d'établissement",
       backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',
@@ -367,9 +367,17 @@ describe('isProtectedRoute', () => {
       '/onboarding',
       '/select-establishment',
       '/no-establishment',
+      '/app',
+      '/organization',
     ] as const) {
       expect(isProtectedRoute({ kind: 'static', path })).toBe(true)
     }
+    expect(
+      isProtectedRoute({
+        kind: 'organization-establishment-detail',
+        establishmentId: 'est-1',
+      }),
+    ).toBe(true)
   })
 
   it('returns true for operational detail routes', () => {
@@ -395,7 +403,6 @@ describe('isProtectedRoute', () => {
 describe('requiresActiveMembership', () => {
   it('returns true for operational static routes', () => {
     for (const path of [
-      '/app',
       '/app/operational-config',
       '/app/report',
       '/reporting',
@@ -429,12 +436,20 @@ describe('requiresActiveMembership', () => {
     ).toBe(true)
   })
 
-  it('returns false for onboarding and auth routes', () => {
+  it('returns false for onboarding, auth, and organization routes', () => {
     expect(requiresActiveMembership({ kind: 'static', path: '/login' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/onboarding' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/pending-onboarding' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/select-establishment' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/no-establishment' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/app' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/organization' })).toBe(false)
+    expect(
+      requiresActiveMembership({
+        kind: 'organization-establishment-detail',
+        establishmentId: 'est-1',
+      }),
+    ).toBe(false)
   })
 })
 

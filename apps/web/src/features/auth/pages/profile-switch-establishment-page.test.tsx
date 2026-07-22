@@ -9,8 +9,6 @@ import { ProfileSwitchEstablishmentPage } from './profile-switch-establishment-p
 
 const onNavigate = vi.fn()
 const switchEstablishment = vi.fn()
-const createEstablishment = vi.fn()
-const fetchBootstrap = vi.fn()
 
 function renderPage(queryClient?: QueryClient) {
   const client =
@@ -111,16 +109,12 @@ vi.mock('@/app/auth-provider', () => ({
 vi.mock('@/features/auth/api', () => ({
   bootstrapQueryKey: ['auth', 'bootstrap'],
   switchEstablishment: (...args: unknown[]) => switchEstablishment(...args),
-  createEstablishment: (...args: unknown[]) => createEstablishment(...args),
-  fetchBootstrap: (...args: unknown[]) => fetchBootstrap(...args),
 }))
 
 afterEach(() => {
   cleanup()
   onNavigate.mockReset()
   switchEstablishment.mockReset()
-  createEstablishment.mockReset()
-  fetchBootstrap.mockReset()
   authState.current.pendingOnboardingMemberships = []
   authState.current.bootstrap.permission_hints.can_create_establishment = false
   authState.current.memberships = [
@@ -169,6 +163,27 @@ describe('ProfileSwitchEstablishmentPage', () => {
     expect(screen.getByText('Actif')).toBeTruthy()
   })
 
+  it('does not show draft or create controls', () => {
+    authState.current.pendingOnboardingMemberships = [
+      {
+        id: 'pending-1',
+        establishment_id: 'draft-1',
+        establishment_name: 'Hôtel Draft',
+        establishment_status: 'draft',
+        role: 'owner',
+        onboarding_session_id: 'session-1',
+        can_continue_onboarding: true,
+      },
+    ]
+    authState.current.bootstrap.permission_hints.can_create_establishment = true
+
+    renderPage()
+
+    expect(screen.queryByText('En configuration')).toBeNull()
+    expect(screen.queryByText('Hôtel Draft')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Ajouter un établissement/i })).toBeNull()
+  })
+
   it('does not switch the active establishment', () => {
     renderPage()
 
@@ -177,7 +192,7 @@ describe('ProfileSwitchEstablishmentPage', () => {
     expect(switchEstablishment).not.toHaveBeenCalled()
   })
 
-  it('switches establishment and navigates to operational-config on success', async () => {
+  it('switches establishment and navigates to reporting on success', async () => {
     switchEstablishment.mockResolvedValueOnce({})
 
     renderPage()
@@ -191,7 +206,7 @@ describe('ProfileSwitchEstablishmentPage', () => {
       )
     })
 
-    expect(onNavigate).toHaveBeenCalledWith('/app/operational-config', { replace: true })
+    expect(onNavigate).toHaveBeenCalledWith('/reporting', { replace: true })
   })
 
   it('shows an error when switching fails', async () => {
@@ -238,141 +253,7 @@ describe('ProfileSwitchEstablishmentPage', () => {
 
     resolveSwitch({})
     await waitFor(() => {
-      expect(onNavigate).toHaveBeenCalledWith('/app/operational-config', { replace: true })
+      expect(onNavigate).toHaveBeenCalledWith('/reporting', { replace: true })
     })
-  })
-
-  it('shows ACTIVE and En configuration sections together', () => {
-    authState.current.pendingOnboardingMemberships = [
-      {
-        id: 'pending-1',
-        establishment_id: 'draft-1',
-        establishment_name: 'Hôtel Draft',
-        establishment_status: 'draft',
-        role: 'owner',
-        onboarding_session_id: 'session-1',
-        can_continue_onboarding: true,
-      },
-    ]
-
-    renderPage()
-
-    expect(screen.getByText('Actifs')).toBeTruthy()
-    expect(screen.getByText('En configuration')).toBeTruthy()
-    expect(screen.getByText('Hôtel Draft')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Reprendre la configuration/i })).toBeTruthy()
-  })
-
-  it('shows draft without resume when can_continue_onboarding is false', () => {
-    authState.current.pendingOnboardingMemberships = [
-      {
-        id: 'pending-1',
-        establishment_id: 'draft-1',
-        establishment_name: 'Hôtel Draft',
-        establishment_status: 'draft',
-        role: 'director',
-        onboarding_session_id: 'session-1',
-        can_continue_onboarding: false,
-      },
-    ]
-
-    renderPage()
-
-    expect(screen.getByText('Hôtel Draft')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Reprendre la configuration/i })).toBeNull()
-  })
-
-  it('resumes draft via onboarding URL without calling switch', () => {
-    authState.current.pendingOnboardingMemberships = [
-      {
-        id: 'pending-1',
-        establishment_id: 'draft-1',
-        establishment_name: 'Hôtel Draft',
-        establishment_status: 'draft',
-        role: 'owner',
-        onboarding_session_id: 'session-1',
-        can_continue_onboarding: true,
-      },
-    ]
-
-    renderPage()
-
-    fireEvent.click(screen.getByRole('button', { name: /Reprendre la configuration/i }))
-
-    expect(switchEstablishment).not.toHaveBeenCalled()
-    expect(onNavigate).toHaveBeenCalledWith(
-      '/onboarding?establishmentId=draft-1&sessionId=session-1',
-      { replace: true },
-    )
-  })
-
-  it('creates a draft and navigates to onboarding without switch', async () => {
-    authState.current.bootstrap.permission_hints.can_create_establishment = true
-    authState.current.memberships = [
-      {
-        id: 'member-1',
-        establishment_id: 'est-1',
-        establishment_name: 'Le Palais Nancy',
-        organization_id: 'org-1',
-        organization_name: 'Groupe Demo',
-        role: 'owner',
-        status: 'active',
-        scopes: [],
-        scope_summary: { business_unit_count: 0 },
-      },
-    ]
-    authState.current.activeMembership = {
-      id: 'member-1',
-      establishment_id: 'est-1',
-      establishment_name: 'Le Palais Nancy',
-      role: 'owner',
-      status: 'active',
-    }
-
-    createEstablishment.mockResolvedValueOnce({
-      establishment_id: 'draft-new',
-      organization_id: 'org-1',
-      name: 'Nouveau Site',
-      status: 'draft',
-      onboarding_session_id: 'session-new',
-    })
-    fetchBootstrap.mockResolvedValueOnce({
-      authenticated: true,
-      memberships: authState.current.memberships,
-      active_membership: authState.current.activeMembership,
-      pending_onboarding_memberships: [],
-      permission_hints: authState.current.bootstrap.permission_hints,
-    })
-
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    renderPage(queryClient)
-
-    fireEvent.click(screen.getByRole('button', { name: /Ajouter un établissement/i }))
-    fireEvent.change(screen.getByLabelText(/Nom de l'établissement/i), {
-      target: { value: 'Nouveau Site' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^Créer$/i }))
-
-    await waitFor(() => {
-      expect(createEstablishment).toHaveBeenCalledWith(
-        { name: 'Nouveau Site' },
-        expect.anything(),
-      )
-    })
-
-    expect(switchEstablishment).not.toHaveBeenCalled()
-    expect(invalidateSpy).toHaveBeenCalled()
-    expect(fetchBootstrap).toHaveBeenCalled()
-    expect(onNavigate).toHaveBeenCalledWith(
-      '/onboarding?establishmentId=draft-new&sessionId=session-new',
-      { replace: true },
-    )
   })
 })

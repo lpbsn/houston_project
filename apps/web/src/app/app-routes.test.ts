@@ -141,6 +141,17 @@ describe('parseAppRoute', () => {
     )
   })
 
+  it('parses organization management routes', () => {
+    expect(parseAppRoute('/organization')).toEqual({
+      kind: 'static',
+      path: '/organization',
+    })
+    expect(parseAppRoute('/organization/establishments/est-123')).toEqual({
+      kind: 'organization-establishment-detail',
+      establishmentId: 'est-123',
+    })
+  })
+
   it('returns unknown for unrecognized paths', () => {
     expect(parseAppRoute('/foo/bar')).toEqual({
       kind: 'unknown',
@@ -179,6 +190,12 @@ describe('getAppRouteKey', () => {
     expect(getAppRouteKey({ kind: 'team-member-detail', membershipId: 'member-1' })).toBe(
       'team-member-detail:member-1',
     )
+    expect(
+      getAppRouteKey({
+        kind: 'organization-establishment-detail',
+        establishmentId: 'est-1',
+      }),
+    ).toBe('organization-establishment-detail:est-1')
     expect(getAppRouteKey({ kind: 'unknown', pathname: '/foo/bar' })).toBe('unknown:/foo/bar')
   })
 
