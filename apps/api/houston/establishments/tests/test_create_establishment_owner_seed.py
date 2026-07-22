@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 from houston.accounts.models import User
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.services import (
+    DuplicateEstablishmentNameError,
     InvalidEstablishmentCreationError,
     OrganizationalOwnerInvariantConflictError,
     create_establishment_for_organization,
@@ -460,6 +461,75 @@ def test_create_establishment_rejects_active_initial_status():
         organization=organization,
         name="RA Active",
     ).exists()
+
+
+def test_create_establishment_strips_name_and_rejects_duplicate_case_insensitive():
+    organization = create_organization(name="Name Uniq Org")
+    create_establishment(name="Hotel Alpha", organization=organization)
+
+    created = create_establishment_for_organization(
+        organization_id=organization.id,
+        name="  Hotel Beta  ",
+    )
+    assert created.name == "Hotel Beta"
+
+    with pytest.raises(DuplicateEstablishmentNameError):
+        create_establishment_for_organization(
+            organization_id=organization.id,
+            name="  hotel alpha ",
+        )
+
+    deactivated = create_establishment(
+        name="Hotel Gamma",
+        organization=organization,
+        status=Establishment.Status.DEACTIVATED,
+    )
+    assert deactivated.status == Establishment.Status.DEACTIVATED
+    with pytest.raises(DuplicateEstablishmentNameError):
+        create_establishment_for_organization(
+            organization_id=organization.id,
+            name="HOTEL GAMMA",
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_create_establishment_concurrent_duplicate_name_no_partial_rows():
+    organization = create_organization(name="Concurrent Name Org")
+    create_establishment(name="Seed A", organization=organization)
+    barrier = threading.Barrier(2)
+    outcomes: dict[str, object] = {}
+
+    def worker(label: str) -> None:
+        close_old_connections()
+        try:
+            barrier.wait(timeout=5)
+            outcomes[label] = create_establishment_for_organization(
+                organization_id=organization.id,
+                name="Concurrent Hotel",
+            )
+        except Exception as exc:  # noqa: BLE001 — capture for assertion
+            outcomes[label] = exc
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(worker, "a"), executor.submit(worker, "b")]
+        for future in futures:
+            future.result(timeout=10)
+
+    successes = [value for value in outcomes.values() if isinstance(value, Establishment)]
+    failures = [
+        value for value in outcomes.values() if isinstance(value, DuplicateEstablishmentNameError)
+    ]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert (
+        Establishment.objects.filter(
+            organization=organization,
+            name="Concurrent Hotel",
+        ).count()
+        == 1
+    )
 
 
 def test_accept_owner_heals_missing_coverage_on_raw_orm_establishment(api_client):

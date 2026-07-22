@@ -668,6 +668,23 @@ class ProposalCommandResponseSerializer(serializers.Serializer):
     proposal = OnboardingProposalResponseSerializer()
 
 
+class EstablishmentCreateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(trim_whitespace=False, max_length=255)
+
+    def validate_name(self, value: str) -> str:
+        if not value.strip():
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+
+class EstablishmentCreateResponseSerializer(serializers.Serializer):
+    establishment_id = serializers.UUIDField()
+    organization_id = serializers.UUIDField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    onboarding_session_id = serializers.UUIDField()
+
+
 class OnboardingProposalErrorResponseSerializer(serializers.Serializer):
     code = serializers.CharField()
     detail = serializers.CharField()

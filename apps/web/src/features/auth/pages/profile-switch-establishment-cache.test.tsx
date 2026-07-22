@@ -63,9 +63,23 @@ const { authState, bootstrapPayloadB } = vi.hoisted(() => {
           role: 'director',
           status: 'active',
         },
+        bootstrap: {
+          permission_hints: {
+            chat_available: false,
+            can_create_action_plan: false,
+            can_create_catalog_action_plan: false,
+            can_view_action_plan_catalog: false,
+            can_invite: false,
+            can_manage_runtime_config: false,
+            can_view_team: false,
+            can_manage_organization: false,
+            can_create_establishment: false,
+          },
+        },
         isBootstrapping: false,
         isReady: true,
         memberships,
+        pendingOnboardingMemberships: [],
       },
     },
   }
@@ -138,7 +152,7 @@ describe('ProfileSwitchEstablishmentPage cache isolation', () => {
     fireEvent.click(screen.getByRole('button', { name: /Brasserie Metz/i }))
 
     await waitFor(() => {
-      expect(onNavigate).toHaveBeenCalledWith('/reporting', { replace: true })
+      expect(onNavigate).toHaveBeenCalledWith('/app/operational-config', { replace: true })
     })
 
     expect(queryClient.getQueryData(['signals', 'feed', 'est-a', 'general', {}])).toBeUndefined()

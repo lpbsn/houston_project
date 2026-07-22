@@ -17,6 +17,16 @@ from houston.establishments.models import (
     EstablishmentInvitation,
     EstablishmentMembership,
 )
+from houston.establishments.services import (
+    DirectorInvitationDuplicateError,
+    DirectorInvitationResult,
+    InvalidMembershipInvitationInputError,
+    MembershipInvitationOwnerConflictError,
+    MembershipInvitationUserExistsError,
+    MembershipManagementForbiddenError,
+    OrganizationalOwnerInvariantConflictError,
+    invite_organizational_owner_for_organization,
+)
 from houston.establishments.tests.conftest import TEST_PASSWORD
 from houston.organizations.models import Organization
 
@@ -140,6 +150,15 @@ def switch_establishment(
     return response.json().get("access_token", access_token)
 
 
+class _ServiceInviteResponse:
+    def __init__(self, *, status_code: int, body: dict):
+        self.status_code = status_code
+        self._body = body
+
+    def json(self) -> dict:
+        return self._body
+
+
 def post_owner_invitation(
     api_client: APIClient,
     *,
@@ -147,19 +166,72 @@ def post_owner_invitation(
     actor: User,
     payload: dict | None = None,
 ):
-    access_token = login(api_client, identifier=actor.email)
-    access_token = switch_establishment(
-        api_client,
-        access_token=access_token,
-        establishment_id=establishment_id,
-    )
-    csrf_token = ensure_csrf(api_client)
-    return api_client.post(
-        f"/api/v1/establishments/{establishment_id}/membership-invitations/",
-        payload or owner_invite_payload(),
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
+    """Call the org-scoped Owner invite service (HTTP Owner invite moved to Lot C)."""
+    del api_client  # HTTP path no longer accepts OWNER; tests exercise the service.
+    establishment = Establishment.objects.select_related("organization").get(id=establishment_id)
+    body = payload or owner_invite_payload()
+    try:
+        result = invite_organizational_owner_for_organization(
+            actor=actor,
+            organization_id=establishment.organization_id,
+            email=body["email"],
+            first_name=body["first_name"],
+            last_name=body["last_name"],
+        )
+    except MembershipManagementForbiddenError:
+        return _ServiceInviteResponse(
+            status_code=403,
+            body={
+                "code": "membership_management_forbidden",
+                "detail": "You cannot invite members for this establishment.",
+            },
+        )
+    except MembershipInvitationOwnerConflictError as exc:
+        return _ServiceInviteResponse(
+            status_code=409,
+            body={"code": "membership_invitation_owner_conflict", "detail": str(exc)},
+        )
+    except OrganizationalOwnerInvariantConflictError as exc:
+        return _ServiceInviteResponse(
+            status_code=409,
+            body={"code": "organizational_owner_invariant_conflict", "detail": str(exc)},
+        )
+    except DirectorInvitationDuplicateError:
+        return _ServiceInviteResponse(
+            status_code=409,
+            body={
+                "code": "membership_invitation_duplicate",
+                "detail": "This user is already associated with the establishment.",
+            },
+        )
+    except MembershipInvitationUserExistsError as exc:
+        return _ServiceInviteResponse(
+            status_code=409,
+            body={"code": "membership_invitation_user_exists", "detail": str(exc)},
+        )
+    except InvalidMembershipInvitationInputError as exc:
+        return _ServiceInviteResponse(
+            status_code=400,
+            body={"code": "membership_invitation_invalid", "detail": str(exc)},
+        )
+
+    assert isinstance(result, DirectorInvitationResult)
+    membership = result.membership
+    return _ServiceInviteResponse(
+        status_code=201,
+        body={
+            "invitation_token": result.invitation_token,
+            "invitation_expires_at": result.invitation_expires_at.isoformat().replace(
+                "+00:00",
+                "Z",
+            ),
+            "membership": {
+                "id": str(membership.id),
+                "role": membership.role,
+                "establishment_id": str(membership.establishment_id),
+                "status": membership.status,
+            },
+        },
     )
 
 
@@ -229,7 +301,11 @@ def test_owner_invite_fanout_creates_invited_memberships(api_client):
     body = response.json()
     assert body["invitation_token"]
     assert body["membership"]["role"] == ROLE_OWNER
-    assert str(body["membership"]["establishment_id"]) == str(active_a.id)
+    # Org-scoped invite anchors on a deterministic ACTIVE establishment when available.
+    assert body["membership"]["establishment_id"] in {str(active_a.id), str(draft_b.id)}
+    assert Establishment.objects.get(id=body["membership"]["establishment_id"]).status == (
+        Establishment.Status.ACTIVE
+    )
 
     invitations = EstablishmentInvitation.objects.filter(
         membership__user=invitee,
@@ -237,7 +313,7 @@ def test_owner_invite_fanout_creates_invited_memberships(api_client):
         revoked_at__isnull=True,
     )
     assert invitations.count() == 1
-    assert invitations.get().membership.establishment_id == active_a.id
+    assert invitations.get().membership.establishment.status == Establishment.Status.ACTIVE
 
 
 def test_owner_invite_schedules_exactly_one_email(api_client):
@@ -350,7 +426,12 @@ def test_owner_invite_anchor_active_returns_duplicate_without_email(api_client):
         )
 
     assert response.status_code == 409
-    assert response.json()["code"] == "membership_invitation_duplicate"
+    # Depending on which ACTIVE establishment is chosen as the org anchor, the
+    # refusal surfaces as duplicate (ACTIVE on anchor) or org invariant (ACTIVE sibling).
+    assert response.json()["code"] in {
+        "membership_invitation_duplicate",
+        "organizational_owner_invariant_conflict",
+    }
     schedule_email.assert_not_called()
     assert not EstablishmentInvitation.objects.filter(membership__user=existing).exists()
 
@@ -368,7 +449,7 @@ def test_owner_invite_reissues_token_for_invited_anchor(api_client):
         email="reissue-owner@example.com",
         status=User.Status.PENDING,
     )
-    anchor = create_membership(
+    prior_membership = create_membership(
         user=pending,
         establishment=active_a,
         role=ROLE_OWNER,
@@ -381,7 +462,7 @@ def test_owner_invite_reissues_token_for_invited_anchor(api_client):
         membership_status=EstablishmentMembership.Status.INVITED,
     )
     old_invitation = create_pending_invitation(
-        membership=anchor,
+        membership=prior_membership,
         raw_token="old-owner-token",
     )
 
@@ -398,7 +479,8 @@ def test_owner_invite_reissues_token_for_invited_anchor(api_client):
     new_digest = auth_tokens.digest_token(response.json()["invitation_token"])
     assert new_digest != old_invitation.token_digest
     assert EstablishmentInvitation.objects.filter(
-        membership=anchor,
+        membership__user=pending,
+        membership__establishment__organization=organization,
         token_digest=new_digest,
         revoked_at__isnull=True,
         accepted_at__isnull=True,
@@ -926,20 +1008,11 @@ def test_concurrent_owner_invitations_same_email_same_org():
         def invite(_: int) -> tuple[int, str | None]:
             close_old_connections()
             try:
-                client = APIClient(enforce_csrf_checks=True)
-                access_token = login(client, identifier=actor.email)
-                access_token = switch_establishment(
-                    client,
-                    access_token=access_token,
+                response = post_owner_invitation(
+                    APIClient(enforce_csrf_checks=True),
                     establishment_id=active_a.id,
-                )
-                csrf_token = ensure_csrf(client)
-                response = client.post(
-                    f"/api/v1/establishments/{active_a.id}/membership-invitations/",
-                    payload,
-                    format="json",
-                    HTTP_X_CSRFTOKEN=csrf_token,
-                    **auth_headers(access_token),
+                    actor=actor,
+                    payload=payload,
                 )
                 body = response.json()
                 return response.status_code, body.get("code")

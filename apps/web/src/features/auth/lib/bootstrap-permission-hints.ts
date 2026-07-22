@@ -10,6 +10,8 @@ const EMPTY_BOOTSTRAP_PERMISSION_HINTS: BootstrapPermissionHints = {
   can_invite: false,
   can_manage_runtime_config: false,
   can_view_team: false,
+  can_manage_organization: false,
+  can_create_establishment: false,
 }
 
 export function getBootstrapPermissionHints(
@@ -48,6 +50,18 @@ export function canManageRuntimeConfigFromBootstrapHints(hints: BootstrapPermiss
 
 export function canViewTeamFromBootstrapHints(hints: BootstrapPermissionHints): boolean {
   return hints.can_view_team
+}
+
+export function canCreateEstablishmentFromBootstrapHints(
+  hints: BootstrapPermissionHints,
+): boolean {
+  return hints.can_create_establishment === true
+}
+
+export function canManageOrganizationFromBootstrapHints(
+  hints: BootstrapPermissionHints,
+): boolean {
+  return hints.can_manage_organization === true
 }
 
 export function canAccessManagementSpace(hints: BootstrapPermissionHints): boolean {

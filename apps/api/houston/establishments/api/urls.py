@@ -11,6 +11,7 @@ from houston.establishments.api.views import (
     EstablishmentBusinessUnitDetailView,
     EstablishmentBusinessUnitReactivateView,
     EstablishmentBusinessUnitTreeView,
+    EstablishmentCreateView,
     MembershipActivateView,
     MembershipDeactivateView,
     MembershipDetailView,
@@ -38,6 +39,11 @@ urlpatterns = [
         "invitations/<str:token>/accept/",
         DirectorInvitationAcceptView.as_view(),
         name="director-invitation-accept",
+    ),
+    path(
+        "establishments/",
+        EstablishmentCreateView.as_view(),
+        name="establishment-create",
     ),
     path(
         "onboarding-sessions/",

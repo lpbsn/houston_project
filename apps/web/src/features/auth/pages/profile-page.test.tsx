@@ -30,6 +30,8 @@ const { authState } = vi.hoisted(() => ({
           can_invite: true,
           can_manage_runtime_config: true,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
       memberships: [
@@ -45,6 +47,7 @@ const { authState } = vi.hoisted(() => ({
           scope_summary: { business_unit_count: 0 },
         },
       ],
+      pendingOnboardingMemberships: [],
       user: {
         first_name: 'Marie',
         last_name: 'Renaud',
@@ -260,6 +263,8 @@ describe('ProfilePage', () => {
           can_invite: false,
           can_manage_runtime_config: false,
           can_view_team: false,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -287,6 +292,8 @@ describe('ProfilePage', () => {
           can_invite: true,
           can_manage_runtime_config: true,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -320,6 +327,8 @@ describe('ProfilePage', () => {
           can_invite: true,
           can_manage_runtime_config: false,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -347,6 +356,8 @@ describe('ProfilePage', () => {
           can_invite: true,
           can_manage_runtime_config: true,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -378,6 +389,8 @@ describe('ProfilePage', () => {
           can_invite: false,
           can_manage_runtime_config: false,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -409,7 +422,7 @@ describe('ProfilePage', () => {
     expect(onSignOut).toHaveBeenCalledTimes(1)
   })
 
-  it('hides establishment switch when only one membership is available', () => {
+  it('hides establishments hub when only one membership is available', () => {
     render(
       createElement(ProfilePage, {
         onNavigate,
@@ -417,10 +430,43 @@ describe('ProfilePage', () => {
       }),
     )
 
-    expect(screen.queryByRole('button', { name: /Changer d'établissement/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Établissements/i })).toBeNull()
   })
 
-  it('shows establishment switch and navigates when multiple memberships exist', () => {
+  it('shows establishments hub for owner with one ACTIVE when create is allowed', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'owner',
+      },
+      memberships: [
+        {
+          ...authState.current.memberships[0]!,
+          role: 'owner',
+        },
+      ],
+      pendingOnboardingMemberships: [],
+      bootstrap: {
+        permission_hints: {
+          ...authState.current.bootstrap.permission_hints,
+          can_create_establishment: true,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Établissements/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/general/switch-establishment')
+  })
+
+  it('shows establishments hub and navigates when multiple memberships exist', () => {
     authState.current = {
       ...authState.current,
       memberships: [
@@ -437,6 +483,7 @@ describe('ProfilePage', () => {
           scope_summary: { business_unit_count: 0 },
         },
       ],
+      pendingOnboardingMemberships: [],
     }
 
     render(
@@ -446,7 +493,7 @@ describe('ProfilePage', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Changer d'établissement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Établissements/i }))
     expect(onNavigate).toHaveBeenCalledWith('/general/switch-establishment')
   })
 

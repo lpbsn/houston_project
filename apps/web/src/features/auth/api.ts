@@ -14,6 +14,8 @@ import { clearAccessToken, getAccessToken, setAccessToken } from './session'
 import type {
   AuthResponse,
   BootstrapResponse,
+  EstablishmentCreateRequest,
+  EstablishmentCreateResponse,
   EstablishmentMembershipResponse,
   LoginRequest,
   MembershipUpdateRequest,
@@ -491,6 +493,33 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
   purgeNonAuthQueries(queryClient)
   clearAllPlanningSubmissionIntents()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
+  return result.data
+}
+
+export async function createEstablishment(
+  input: EstablishmentCreateRequest,
+): Promise<EstablishmentCreateResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST('/api/v1/establishments/', {
+        body: input,
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(
+      result.response,
+      result.error,
+      'We could not create this establishment.',
+    )
+  }
+
   return result.data
 }
 

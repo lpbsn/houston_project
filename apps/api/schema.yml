@@ -502,6 +502,61 @@ paths:
                 items:
                   $ref: '#/components/schemas/CatalogBusinessUnitSuggestion'
           description: ''
+  /api/v1/establishments/:
+    post:
+      operationId: v1_establishments_create
+      description: Creates a DRAFT establishment in a manageable organization (Owner
+        on ACTIVE or DRAFT). Uses the session-selected establishment's organization
+        when present and authorized; otherwise the actor's unique manageable organization.
+        Seeds organizational owners and starts onboarding atomically. Body accepts
+        only the establishment name.
+      tags:
+      - establishments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstablishmentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EstablishmentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EstablishmentCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentCreateResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-execution-feed/:
     get:
       operationId: v1_establishments_action_plan_execution_feed_retrieve
@@ -3581,11 +3636,10 @@ paths:
   /api/v1/establishments/{establishment_id}/membership-invitations/:
     post:
       operationId: v1_establishments_membership_invitations_create
-      description: Invites a staff, manager, director, or organizational owner to
-        the establishment. Director and owner invitations require an active path establishment;
-        owner invitations fan out to all draft and active establishments in the organization.
-        Returns a copyable invitation link; an invitation email is sent asynchronously
-        when enabled.
+      description: Invites a staff, manager, or director to the establishment. Director
+        invitations require an active path establishment. Organizational owner invitations
+        are not accepted on this endpoint. Returns a copyable invitation link; an
+        invitation email is sent asynchronously when enabled.
       parameters:
       - in: path
         name: establishment_id
@@ -7420,10 +7474,16 @@ components:
           type: boolean
         can_view_team:
           type: boolean
+        can_manage_organization:
+          type: boolean
+        can_create_establishment:
+          type: boolean
       required:
       - can_create_action_plan
       - can_create_catalog_action_plan
+      - can_create_establishment
       - can_invite
+      - can_manage_organization
       - can_manage_runtime_config
       - can_view_action_plan_catalog
       - can_view_team
@@ -8004,6 +8064,36 @@ components:
       - invitation_expires_at
       - invitation_token
       - membership
+    EstablishmentCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+      required:
+      - name
+    EstablishmentCreateResponse:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        onboarding_session_id:
+          type: string
+          format: uuid
+      required:
+      - establishment_id
+      - name
+      - onboarding_session_id
+      - organization_id
+      - status
     EstablishmentMembershipPermissionHints:
       type: object
       properties:

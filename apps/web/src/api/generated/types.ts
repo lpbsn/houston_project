@@ -213,6 +213,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates a DRAFT establishment in a manageable organization (Owner on ACTIVE or DRAFT). Uses the session-selected establishment's organization when present and authorized; otherwise the actor's unique manageable organization. Seeds organizational owners and starts onboarding atomically. Body accepts only the establishment name. */
+        post: operations["v1_establishments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/action-plan-execution-feed/": {
         parameters: {
             query?: never;
@@ -1019,7 +1036,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Invites a staff, manager, director, or organizational owner to the establishment. Director and owner invitations require an active path establishment; owner invitations fan out to all draft and active establishments in the organization. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
+        /** @description Invites a staff, manager, or director to the establishment. Director invitations require an active path establishment. Organizational owner invitations are not accepted on this endpoint. Returns a copyable invitation link; an invitation email is sent asynchronously when enabled. */
         post: operations["v1_establishments_membership_invitations_create"];
         delete?: never;
         options?: never;
@@ -2338,6 +2355,8 @@ export interface components {
             can_invite: boolean;
             can_manage_runtime_config: boolean;
             can_view_team: boolean;
+            can_manage_organization: boolean;
+            can_create_establishment: boolean;
         };
         BootstrapResponse: {
             authenticated: boolean;
@@ -2561,6 +2580,19 @@ export interface components {
             /** Format: date-time */
             invitation_expires_at: string;
             invitation_accept_path: string;
+        };
+        EstablishmentCreateRequest: {
+            name: string;
+        };
+        EstablishmentCreateResponse: {
+            /** Format: uuid */
+            establishment_id: string;
+            /** Format: uuid */
+            organization_id: string;
+            name: string;
+            status: string;
+            /** Format: uuid */
+            onboarding_session_id: string;
         };
         EstablishmentMembershipPermissionHints: {
             can_edit_role: boolean;
@@ -3758,6 +3790,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogBusinessUnitSuggestion"][];
+                };
+            };
+        };
+    };
+    v1_establishments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EstablishmentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EstablishmentCreateRequest"];
+                "multipart/form-data": components["schemas"]["EstablishmentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstablishmentCreateResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

@@ -145,7 +145,7 @@ describe('getTerrainRouteConfig', () => {
       getTerrainRouteConfig({ kind: 'static', path: '/general/switch-establishment' }),
     ).toEqual({
       topbarVariant: 'detail',
-      title: "Changer d'établissement",
+      title: 'Établissements',
       backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',

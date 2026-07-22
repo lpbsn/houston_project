@@ -98,6 +98,8 @@ class BootstrapPermissionHintsSerializer(serializers.Serializer):
     can_invite = serializers.BooleanField()
     can_manage_runtime_config = serializers.BooleanField()
     can_view_team = serializers.BooleanField()
+    can_manage_organization = serializers.BooleanField()
+    can_create_establishment = serializers.BooleanField()
 
 
 class BootstrapResponseSerializer(serializers.Serializer):

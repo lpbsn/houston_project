@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from houston.accounts.models import User
 from houston.establishments.models import EstablishmentMembership
 
 
 def build_bootstrap_permission_hints(
     active_membership: EstablishmentMembership | None,
+    *,
+    user: User | None = None,
 ) -> dict:
     from houston.action_plans.permissions import (
         can_create_action_plan,
@@ -16,10 +19,16 @@ def build_bootstrap_permission_hints(
         can_create_action as establishment_can_create_action,
     )
     from houston.establishments.permissions import (
+        can_create_establishment,
         can_invite_memberships,
+        can_manage_organization,
         can_manage_runtime_context,
         can_view_team_memberships,
     )
+
+    hint_user = user
+    if hint_user is None and active_membership is not None:
+        hint_user = getattr(active_membership, "user", None)
 
     can_create_action_plan_hint = False
     if active_membership is not None:
@@ -41,4 +50,6 @@ def build_bootstrap_permission_hints(
         "can_invite": can_invite_memberships(active_membership),
         "can_manage_runtime_config": can_manage_runtime_context(active_membership),
         "can_view_team": can_view_team_memberships(active_membership),
+        "can_manage_organization": can_manage_organization(hint_user),
+        "can_create_establishment": can_create_establishment(hint_user),
     }

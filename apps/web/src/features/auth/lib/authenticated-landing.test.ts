@@ -34,8 +34,12 @@ function bootstrap(
       chat_available: false,
       can_create_action_plan: false,
       can_create_catalog_action_plan: false,
+      can_view_action_plan_catalog: false,
       can_invite: false,
       can_manage_runtime_config: false,
+      can_view_team: false,
+      can_manage_organization: false,
+      can_create_establishment: false,
     },
     ...overrides,
   }

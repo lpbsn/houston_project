@@ -11,16 +11,23 @@ export type PendingLandingResolution =
   | { kind: 'waiting'; pending: PendingOnboardingMembership }
   | { kind: 'selection'; pendingMemberships: PendingOnboardingMembership[] }
 
-export function buildOnboardingUrl(pending: PendingOnboardingMembership) {
+export function buildOnboardingUrlFromIds(
+  establishmentId: string,
+  onboardingSessionId: string | null | undefined,
+) {
   const params = new URLSearchParams({
-    establishmentId: pending.establishment_id,
+    establishmentId,
   })
 
-  if (pending.onboarding_session_id) {
-    params.set('sessionId', pending.onboarding_session_id)
+  if (onboardingSessionId) {
+    params.set('sessionId', onboardingSessionId)
   }
 
   return `/onboarding?${params.toString()}`
+}
+
+export function buildOnboardingUrl(pending: PendingOnboardingMembership) {
+  return buildOnboardingUrlFromIds(pending.establishment_id, pending.onboarding_session_id)
 }
 
 export function resolvePendingLanding(

@@ -299,7 +299,7 @@ export function getTerrainRouteConfig(route: AppRoute): TerrainRouteConfig {
   if (route.kind === 'static' && route.path === '/general/switch-establishment') {
     return {
       topbarVariant: 'detail',
-      title: "Changer d'établissement",
+      title: 'Établissements',
       backPath: '/general',
       showBottomNav: false,
       mainScroll: 'auto',

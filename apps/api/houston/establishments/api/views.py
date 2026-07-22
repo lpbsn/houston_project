@@ -24,6 +24,8 @@ from houston.establishments.api.serializers import (
     DirectorInvitationErrorResponseSerializer,
     DirectorInvitationRequestSerializer,
     DirectorInvitationResponseSerializer,
+    EstablishmentCreateRequestSerializer,
+    EstablishmentCreateResponseSerializer,
     EstablishmentMembershipResponseSerializer,
     MarkReadyResponseSerializer,
     MembershipInvitationRequestSerializer,
@@ -58,11 +60,13 @@ from houston.establishments.models import (
     OnboardingSession,
 )
 from houston.establishments.permissions import (
+    CanCreateEstablishment,
     CanManageRuntimeContext,
     CanViewTeamMemberships,
     HasActiveMembership,
     can_invite_memberships,
     can_manage_runtime_context,
+    resolve_manageable_organization,
 )
 from houston.establishments.selectors import (
     get_active_onboarding_session_for_establishment,
@@ -83,11 +87,15 @@ from houston.establishments.services import (
     ActiveOnboardingProposalExistsError,
     ActiveOnboardingSessionExistsError,
     CannotDeactivateLastActiveOwnerError,
+    DirectorCoverageInvariantError,
     DirectorInvitationAlreadyExistsError,
     DirectorInvitationDuplicateError,
     DirectorInvitationOwnerNotAllowedError,
+    DuplicateEstablishmentNameError,
+    EstablishmentCreationForbiddenError,
     InvalidActivityDescriptionError,
     InvalidDirectorInvitationInputError,
+    InvalidEstablishmentCreationError,
     InvalidMembershipInvitationInputError,
     InvalidMembershipScopeAssignmentError,
     InvalidOnboardingActivationStateError,
@@ -122,6 +130,7 @@ from houston.establishments.services import (
     invite_director_during_onboarding,
     invite_membership_for_establishment,
     mark_onboarding_ready_for_activation,
+    provision_establishment_onboarding,
     reactivate_runtime_activity_subject,
     reactivate_runtime_business_unit,
     reject_onboarding_proposal,
@@ -141,6 +150,106 @@ def _membership_response(membership, *, actor_membership) -> Response:
         context={"actor_membership": actor_membership},
     )
     return Response(serializer.data)
+
+
+class EstablishmentCreateView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        CanCreateEstablishment,
+    ]
+
+    @extend_schema(
+        tags=["establishments"],
+        request=EstablishmentCreateRequestSerializer,
+        responses={
+            201: EstablishmentCreateResponseSerializer,
+            400: OpenApiResponse(response=ApiErrorResponseSerializer),
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Creates a DRAFT establishment in a manageable organization (Owner on "
+            "ACTIVE or DRAFT). Uses the session-selected establishment's organization "
+            "when present and authorized; otherwise the actor's unique manageable "
+            "organization. Seeds organizational owners and starts onboarding atomically. "
+            "Body accepts only the establishment name."
+        ),
+    )
+    def post(self, request):
+        serializer = EstablishmentCreateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        access_context = get_api_access_context(request)
+        preferred_organization_id = None
+        if access_context.selected_establishment is not None:
+            preferred_organization_id = (
+                access_context.selected_establishment.organization_id
+            )
+
+        organization = resolve_manageable_organization(
+            request.user,
+            preferred_organization_id=preferred_organization_id,
+        )
+        if organization is None:
+            return Response(
+                {
+                    "code": "establishment_creation_forbidden",
+                    "detail": "You cannot create an establishment.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            provision = provision_establishment_onboarding(
+                actor=request.user,
+                organization=organization,
+                name=serializer.validated_data["name"],
+            )
+        except EstablishmentCreationForbiddenError:
+            return Response(
+                {
+                    "code": "establishment_creation_forbidden",
+                    "detail": "You cannot create an establishment.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except DuplicateEstablishmentNameError as exc:
+            return Response(
+                {
+                    "code": "duplicate_establishment_name",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidEstablishmentCreationError as exc:
+            return Response(
+                {
+                    "code": "invalid_establishment_creation",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OrganizationalOwnerInvariantConflictError as exc:
+            return Response(
+                {
+                    "code": "organizational_owner_invariant_conflict",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        response_serializer = EstablishmentCreateResponseSerializer(
+            {
+                "establishment_id": provision.establishment.id,
+                "organization_id": provision.establishment.organization_id,
+                "name": provision.establishment.name,
+                "status": provision.establishment.status,
+                "onboarding_session_id": provision.onboarding_session.id,
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class MembershipListView(APIView):
@@ -266,6 +375,14 @@ class MembershipDetailView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+        except DirectorCoverageInvariantError as exc:
+            return Response(
+                {
+                    "code": "director_coverage_invariant",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         except MembershipManagementForbiddenError:
             return Response(
                 {
@@ -322,6 +439,14 @@ class MembershipDeactivateView(APIView):
             return Response(
                 {"detail": "The last active owner cannot be deactivated."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DirectorCoverageInvariantError as exc:
+            return Response(
+                {
+                    "code": "director_coverage_invariant",
+                    "detail": str(exc),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
         except OrganizationalOwnerInvariantConflictError as exc:
             return Response(
@@ -872,11 +997,10 @@ class MembershipInvitationView(APIView):
             409: OpenApiResponse(response=DirectorInvitationErrorResponseSerializer),
         },
         description=(
-            "Invites a staff, manager, director, or organizational owner to the "
-            "establishment. Director and owner invitations require an active path "
-            "establishment; owner invitations fan out to all draft and active "
-            "establishments in the organization. Returns a copyable invitation link; "
-            "an invitation email is sent asynchronously when enabled."
+            "Invites a staff, manager, or director to the establishment. Director "
+            "invitations require an active path establishment. Organizational owner "
+            "invitations are not accepted on this endpoint. Returns a copyable "
+            "invitation link; an invitation email is sent asynchronously when enabled."
         ),
     )
     def post(self, request, establishment_id):

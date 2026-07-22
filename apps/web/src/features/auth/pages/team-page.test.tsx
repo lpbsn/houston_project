@@ -49,6 +49,8 @@ const { authState, teamMembersState, sampleMembership } = vi.hoisted(() => {
             can_invite: true,
             can_manage_runtime_config: false,
             can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
           },
         },
         activeMembership: {
@@ -95,6 +97,8 @@ afterEach(() => {
         can_invite: true,
         can_manage_runtime_config: false,
         can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
       },
     },
     activeMembership: {
@@ -169,6 +173,8 @@ describe('TeamPage', () => {
           can_invite: false,
           can_manage_runtime_config: false,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -191,6 +197,8 @@ describe('TeamPage', () => {
           can_invite: false,
           can_manage_runtime_config: false,
           can_view_team: false,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }

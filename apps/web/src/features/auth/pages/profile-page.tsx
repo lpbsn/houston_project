@@ -11,12 +11,13 @@ import {
 import {
   canAccessManagementSpace,
   canCreateCatalogActionPlanFromBootstrapHints,
+  canCreateEstablishmentFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   canViewActionPlanCatalogFromBootstrapHints,
   canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import { canSwitchEstablishment } from '@/features/auth/lib/establishment-switch'
+import { canOpenEstablishmentsHub } from '@/features/auth/lib/establishment-switch'
 import { toRoleEnum } from '@/features/auth/lib/role'
 import type { RoleEnum } from '@/features/auth/types'
 import {
@@ -140,7 +141,15 @@ function ProfileManagementNavCard({
 }
 
 export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: ProfilePageProps) {
-  const { activeMembership, bootstrap, memberships, user, isBootstrapping, isReady } = useAuth()
+  const {
+    activeMembership,
+    bootstrap,
+    isBootstrapping,
+    isReady,
+    memberships,
+    pendingOnboardingMemberships,
+    user,
+  } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
 
   const firstName = readOptionalUserName(user, 'first_name')
@@ -150,6 +159,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
   const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
+  const canCreateEstablishment = canCreateEstablishmentFromBootstrapHints(permissionHints)
   const canShowActionPlansNav =
     canViewActionPlanCatalogFromBootstrapHints(permissionHints) ||
     canCreateCatalogActionPlanFromBootstrapHints(permissionHints)
@@ -161,7 +171,12 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     activeMembership?.establishment_name,
   )
   const establishmentId = activeMembership?.establishment_id ?? null
-  const showEstablishmentSwitch = canSwitchEstablishment(memberships, establishmentId)
+  const showEstablishmentsHub = canOpenEstablishmentsHub({
+    memberships,
+    activeEstablishmentId: establishmentId,
+    pendingOnboardingMemberships,
+    canCreateEstablishment,
+  })
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
   const updateNotificationPreferencesMutation =
     useUpdateNotificationPreferencesMutation(establishmentId)
@@ -202,15 +217,15 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
 
       <div className="space-y-2">
         <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
-        {showEstablishmentSwitch ? (
+        {showEstablishmentsHub ? (
           <ProfileManagementNavCard
             icon={ArrowLeftRight}
             iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
-            title="Changer d'établissement"
+            title="Établissements"
             subtitle={
               activeMembership?.establishment_name
                 ? `Actuellement : ${activeMembership.establishment_name}`
-                : 'Basculer vers un autre site'
+                : 'Gérer et basculer entre vos sites'
             }
             onClick={() => onNavigate?.('/general/switch-establishment')}
           />
