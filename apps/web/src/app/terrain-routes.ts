@@ -28,9 +28,7 @@ export type TerrainRouteConfig = {
 }
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
-  '/app',
   '/app/operational-config',
-  '/app/report',
   '/reporting',
   '/signals',
   '/execution',
@@ -47,6 +45,7 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
 
 const PROTECTED_STATIC_PATHS = new Set<string>([
   ...OPERATIONAL_STATIC_PATHS,
+  '/organization',
   '/pending-onboarding',
   '/onboarding',
   '/select-establishment',
@@ -90,11 +89,19 @@ export function isProtectedRoute(route: AppRoute): boolean {
     return PROTECTED_STATIC_PATHS.has(route.path)
   }
 
+  if (route.kind === 'organization-establishment-detail') {
+    return true
+  }
+
   return OPERATIONAL_ROUTE_KINDS.has(route.kind)
 }
 
 export function requiresActiveMembership(route: AppRoute): boolean {
   if (route.kind === 'unknown' || route.kind === 'invitation') {
+    return false
+  }
+
+  if (route.kind === 'organization-establishment-detail') {
     return false
   }
 

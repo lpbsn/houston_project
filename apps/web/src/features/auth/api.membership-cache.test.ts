@@ -4,13 +4,11 @@ import {
   bootstrapQueryKey,
   commitMembershipWriteCache,
   invalidateMembershipListAndDetailQueries,
-  invalidateMembershipListAndWorkspaceSummaryQueries,
   invalidateMembershipWorkspaceQueries,
   membershipDetailQueryKey,
   membershipListQueryKey,
   membershipsQueryKeyRoot,
   patchMembershipCaches,
-  workspaceSummaryQueryKey,
 } from '@/features/auth/api'
 import type { EstablishmentMembershipResponse } from '@/features/auth/types'
 import { createTestQueryClient } from '@/test-utils'
@@ -81,23 +79,6 @@ describe('membership cache helpers', () => {
     })
   })
 
-  it('settles list + workspace summary invalidations even when one rejects', async () => {
-    const client = createTestQueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries').mockImplementation(async (filters) => {
-      const key = (filters as { queryKey?: unknown[] })?.queryKey
-      if (key?.[0] === 'workspace' && key?.[1] === 'summary') {
-        throw new Error('summary refresh failed')
-      }
-    })
-
-    await expect(
-      invalidateMembershipListAndWorkspaceSummaryQueries('est-1', client),
-    ).resolves.toBeUndefined()
-
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
-  })
-
   it('patches detail and list caches from the API response', () => {
     const client = createTestQueryClient()
     const previous = membership({ id: 'm-1', role: 'manager', status: 'active' })
@@ -117,7 +98,7 @@ describe('membership cache helpers', () => {
     ])
   })
 
-  it('commitMembershipWriteCache patches then fans out owner root+bootstrap+summary independently', async () => {
+  it('commitMembershipWriteCache patches then fans out owner root+bootstrap independently', async () => {
     const client = createTestQueryClient()
     const previous = membership({ id: 'm-owner', role: 'owner', status: 'active' })
     const next = membership({ id: 'm-owner', role: 'owner', status: 'deactivated' })
@@ -131,14 +112,13 @@ describe('membership cache helpers', () => {
       }
     })
 
-    commitMembershipWriteCache('est-1', next, client, { includeWorkspaceSummary: true })
+    commitMembershipWriteCache('est-1', next, client)
 
     expect(client.getQueryData(membershipDetailQueryKey('est-1', 'm-owner'))).toEqual(next)
     expect(client.getQueryData(membershipListQueryKey('est-1'))).toEqual([next])
     await vi.waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipsQueryKeyRoot })
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
     })
   })
 

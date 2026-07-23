@@ -502,6 +502,61 @@ paths:
                 items:
                   $ref: '#/components/schemas/CatalogBusinessUnitSuggestion'
           description: ''
+  /api/v1/establishments/:
+    post:
+      operationId: v1_establishments_create
+      description: Creates a DRAFT establishment in a manageable organization (Owner
+        on ACTIVE or DRAFT). Uses the session-selected establishment's organization
+        when present and authorized; otherwise the actor's unique manageable organization.
+        Seeds organizational owners and starts onboarding atomically. Body accepts
+        only the establishment name.
+      tags:
+      - establishments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstablishmentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EstablishmentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EstablishmentCreateRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentCreateResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/action-plan-execution-feed/:
     get:
       operationId: v1_establishments_action_plan_execution_feed_retrieve
@@ -2262,6 +2317,434 @@ paths:
               schema:
                 $ref: '#/components/schemas/RuntimeConfigErrorResponse'
           description: ''
+  /api/v1/establishments/{establishment_id}/admin/membership-invitations/:
+    post:
+      operationId: v1_establishments_admin_membership_invitations_create
+      description: Invites a membership on an ACTIVE establishment (no Owner role).
+        Path-scoped.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstablishmentAdminMembershipInvitationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EstablishmentAdminMembershipInvitationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EstablishmentAdminMembershipInvitationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/admin/memberships/:
+    get:
+      operationId: v1_establishments_admin_memberships_list
+      description: Lists non-Owner memberships for ACTIVE establishment admin. Supports
+        q/role/status/business_unit_id filters. Path-scoped.
+      parameters:
+      - in: query
+        name: business_unit_id
+        schema:
+          type: string
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: role
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - establishment-admin
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminMembershipList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/:
+    get:
+      operationId: v1_establishments_admin_memberships_retrieve
+      description: Returns one non-Owner membership for ACTIVE establishment admin.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminMembership'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+    patch:
+      operationId: v1_establishments_admin_memberships_partial_update
+      description: Updates role/scopes for a non-Owner membership (path-scoped admin).
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEstablishmentAdminMembershipUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEstablishmentAdminMembershipUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEstablishmentAdminMembershipUpdateRequest'
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminMembership'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/activate/:
+    post:
+      operationId: v1_establishments_admin_memberships_activate_create
+      description: Reactivates a non-Owner membership (path-scoped admin).
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminMembership'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/deactivate/:
+    post:
+      operationId: v1_establishments_admin_memberships_deactivate_create
+      description: Deactivates a non-Owner membership (path-scoped admin).
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminMembership'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/admin/memberships/filter-options/:
+    get:
+      operationId: v1_establishments_admin_memberships_filter_options_retrieve
+      description: Filter options for establishment admin memberships. Path-scoped
+        poles only.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminMemberFilterOptions'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/admin/overview/:
+    get:
+      operationId: v1_establishments_admin_overview_retrieve
+      description: ACTIVE establishment admin overview with metrics and derived operational
+        config status. Path-scoped; does not mutate selected establishment.
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - establishment-admin
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstablishmentAdminOverview'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
   /api/v1/establishments/{establishment_id}/business-units/:
     get:
       operationId: v1_establishments_business_units_retrieve
@@ -3581,11 +4064,10 @@ paths:
   /api/v1/establishments/{establishment_id}/membership-invitations/:
     post:
       operationId: v1_establishments_membership_invitations_create
-      description: Invites a staff, manager, director, or organizational owner to
-        the establishment. Director and owner invitations require an active path establishment;
-        owner invitations fan out to all draft and active establishments in the organization.
-        Returns a copyable invitation link; an invitation email is sent asynchronously
-        when enabled.
+      description: Invites a staff, manager, or director to the establishment. Director
+        invitations require an active path establishment. Organizational owner invitations
+        are not accepted on this endpoint. Returns a copyable invitation link; an
+        invitation email is sent asynchronously when enabled.
       parameters:
       - in: path
         name: establishment_id
@@ -4972,47 +5454,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
           description: ''
-  /api/v1/establishments/{establishment_id}/workspace-summary/:
-    get:
-      operationId: v1_establishments_workspace_summary_retrieve
-      description: Returns a read-only establishment workspace summary for the current
-        active establishment context. Any active member may read this summary.
-      parameters:
-      - in: path
-        name: establishment_id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - establishments
-      security:
-      - BearerAccessToken: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkspaceSummaryResponse'
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DetailResponse'
-          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -5971,6 +6412,272 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/:
+    get:
+      operationId: v1_organizations_retrieve
+      description: Organization admin overview for Owners. Independent of session
+        selected establishment.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminOverview'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/establishments/:
+    get:
+      operationId: v1_organizations_establishments_retrieve
+      description: Lists ACTIVE and DRAFT establishments for organization admin. Does
+        not mutate selected establishment.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminEstablishmentList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/members/:
+    get:
+      operationId: v1_organizations_members_retrieve
+      description: Deduplicated organization members across ACTIVE and DRAFT establishments.
+        Membership statuses include invited, active, and deactivated.
+      parameters:
+      - in: query
+        name: business_unit_id
+        schema:
+          type: string
+      - in: query
+        name: establishment_id
+        schema:
+          type: string
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: role
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminMemberList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/members/filter-options/:
+    get:
+      operationId: v1_organizations_members_filter_options_retrieve
+      description: Filter options for organization admin members. Not session-scoped;
+        do not use team endpoints.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminMemberFilterOptions'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/owner-invitations/:
+    post:
+      operationId: v1_organizations_owner_invitations_create
+      description: 'Invites or reissues an organizational Owner invitation. Works
+        for DRAFT-only organizations. Body: email, first_name, last_name only.'
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationAdminOwnerInvitationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrganizationAdminOwnerInvitationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrganizationAdminOwnerInvitationRequest'
+        required: true
+      security:
+      - BearerAccessToken: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/organizations/{organization_id}/owners/:
+    get:
+      operationId: v1_organizations_owners_retrieve
+      description: Lists organizational Owners (active and invited), deduplicated
+        by user.
+      parameters:
+      - in: path
+        name: organization_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - organizations
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationAdminOwnerList'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/push/vapid-public-key/:
     get:
@@ -7420,10 +8127,16 @@ components:
           type: boolean
         can_view_team:
           type: boolean
+        can_manage_organization:
+          type: boolean
+        can_create_establishment:
+          type: boolean
       required:
       - can_create_action_plan
       - can_create_catalog_action_plan
+      - can_create_establishment
       - can_invite
+      - can_manage_organization
       - can_manage_runtime_config
       - can_view_action_plan_catalog
       - can_view_team
@@ -8004,6 +8717,257 @@ components:
       - invitation_expires_at
       - invitation_token
       - membership
+    EstablishmentAdminDirector:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+      required:
+      - display_name
+      - email
+      - membership_id
+      - status
+    EstablishmentAdminFilterBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+      required:
+      - id
+      - label
+    EstablishmentAdminMemberBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+      required:
+      - id
+      - label
+    EstablishmentAdminMemberFilterOptions:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            type: string
+        statuses:
+          type: array
+          items:
+            type: string
+        business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentAdminFilterBusinessUnit'
+      required:
+      - business_units
+      - roles
+      - statuses
+    EstablishmentAdminMembership:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        status:
+          type: string
+        business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentAdminMemberBusinessUnit'
+        invited_at:
+          type: string
+          format: date-time
+          nullable: true
+        activated_at:
+          type: string
+          format: date-time
+          nullable: true
+        permission_hints:
+          $ref: '#/components/schemas/EstablishmentAdminMembershipPermissionHints'
+      required:
+      - activated_at
+      - business_units
+      - email
+      - first_name
+      - id
+      - invited_at
+      - last_name
+      - permission_hints
+      - role
+      - status
+    EstablishmentAdminMembershipInvitationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/EstablishmentNonOwnerMembershipRoleEnum'
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentMembershipScopeWriteItem'
+      required:
+      - email
+      - first_name
+      - last_name
+      - role
+    EstablishmentAdminMembershipList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentAdminMembership'
+      required:
+      - results
+    EstablishmentAdminMembershipPermissionHints:
+      type: object
+      properties:
+        can_edit_role:
+          type: boolean
+        can_edit_scopes:
+          type: boolean
+        can_edit_status:
+          type: boolean
+        can_edit_personal_info:
+          type: boolean
+      required:
+      - can_edit_personal_info
+      - can_edit_role
+      - can_edit_scopes
+      - can_edit_status
+    EstablishmentAdminMetrics:
+      type: object
+      properties:
+        signals_open:
+          type: integer
+        signals_in_progress:
+          type: integer
+        action_plans_in_progress:
+          type: integer
+        action_plans_scheduled:
+          type: integer
+        observations_weekly_average:
+          type: number
+          format: double
+      required:
+      - action_plans_in_progress
+      - action_plans_scheduled
+      - observations_weekly_average
+      - signals_in_progress
+      - signals_open
+    EstablishmentAdminOperationalConfig:
+      type: object
+      properties:
+        status:
+          type: string
+        active_business_unit_count:
+          type: integer
+        active_activity_subject_count:
+          type: integer
+        active_business_units_without_subjects_count:
+          type: integer
+      required:
+      - active_activity_subject_count
+      - active_business_unit_count
+      - active_business_units_without_subjects_count
+      - status
+    EstablishmentAdminOverview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        directors:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentAdminDirector'
+        active_member_count:
+          type: integer
+        business_unit_count:
+          type: integer
+        metrics:
+          $ref: '#/components/schemas/EstablishmentAdminMetrics'
+        operational_config:
+          $ref: '#/components/schemas/EstablishmentAdminOperationalConfig'
+      required:
+      - active_member_count
+      - business_unit_count
+      - directors
+      - id
+      - metrics
+      - name
+      - operational_config
+      - organization_id
+      - organization_name
+      - status
+    EstablishmentCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+      required:
+      - name
+    EstablishmentCreateResponse:
+      type: object
+      properties:
+        establishment_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        onboarding_session_id:
+          type: string
+          format: uuid
+      required:
+      - establishment_id
+      - name
+      - onboarding_session_id
+      - organization_id
+      - status
     EstablishmentMembershipPermissionHints:
       type: object
       properties:
@@ -8067,6 +9031,18 @@ components:
       - scopes
       - status
       - user
+    EstablishmentMembershipRoleEnum:
+      enum:
+      - owner
+      - director
+      - manager
+      - staff
+      type: string
+      description: |-
+        * `owner` - Owner
+        * `director` - Director
+        * `manager` - Manager
+        * `staff` - Staff
     EstablishmentMembershipScopeItem:
       type: object
       properties:
@@ -8099,6 +9075,16 @@ components:
       required:
       - scope_id
       - scope_type
+    EstablishmentNonOwnerMembershipRoleEnum:
+      enum:
+      - director
+      - manager
+      - staff
+      type: string
+      description: |-
+        * `director` - Director
+        * `manager` - Manager
+        * `staff` - Staff
     ExecutionCommentListItem:
       type: object
       properties:
@@ -8307,6 +9293,8 @@ components:
       - status
     MembershipInvitationRequest:
       type: object
+      description: Session Team invite body. Owner invites use organization-admin
+        endpoints.
       properties:
         email:
           type: string
@@ -8316,7 +9304,7 @@ components:
         last_name:
           type: string
         role:
-          $ref: '#/components/schemas/RoleEnum'
+          $ref: '#/components/schemas/EstablishmentNonOwnerMembershipRoleEnum'
         scopes:
           type: array
           items:
@@ -8880,6 +9868,266 @@ components:
       - started_by_id
       - status
       - updated_at
+    OrganizationAdminDirector:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+      required:
+      - display_name
+      - email
+      - membership_id
+      - status
+    OrganizationAdminEstablishment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        directors:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminDirector'
+        active_member_count:
+          type: integer
+        business_unit_count:
+          type: integer
+        onboarding_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        onboarding_current_step:
+          type: string
+        can_continue_onboarding:
+          type: boolean
+      required:
+      - active_member_count
+      - business_unit_count
+      - can_continue_onboarding
+      - directors
+      - id
+      - name
+      - onboarding_current_step
+      - onboarding_session_id
+      - status
+    OrganizationAdminEstablishmentList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminEstablishment'
+      required:
+      - results
+    OrganizationAdminFilterBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        establishment_id:
+          type: string
+          format: uuid
+      required:
+      - establishment_id
+      - id
+      - label
+    OrganizationAdminFilterEstablishment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - name
+      - status
+    OrganizationAdminMember:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminMemberMembership'
+      required:
+      - email
+      - first_name
+      - last_name
+      - memberships
+      - user_id
+    OrganizationAdminMemberBusinessUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+      required:
+      - id
+      - label
+    OrganizationAdminMemberFilterOptions:
+      type: object
+      properties:
+        establishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminFilterEstablishment'
+        business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminFilterBusinessUnit'
+        roles:
+          type: array
+          items:
+            type: string
+        statuses:
+          type: array
+          items:
+            type: string
+      required:
+      - business_units
+      - establishments
+      - roles
+      - statuses
+    OrganizationAdminMemberList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminMember'
+      required:
+      - results
+    OrganizationAdminMemberMembership:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+        establishment_status:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        business_units:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminMemberBusinessUnit'
+      required:
+      - business_units
+      - establishment_id
+      - establishment_name
+      - establishment_status
+      - membership_id
+      - role
+      - status
+    OrganizationAdminOverview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+        active_establishment_count:
+          type: integer
+        draft_establishment_count:
+          type: integer
+      required:
+      - active_establishment_count
+      - draft_establishment_count
+      - id
+      - name
+      - status
+    OrganizationAdminOwner:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+        invited_at:
+          type: string
+          format: date-time
+          nullable: true
+        can_resend_invitation:
+          type: boolean
+      required:
+      - can_resend_invitation
+      - email
+      - first_name
+      - invited_at
+      - last_name
+      - status
+      - user_id
+    OrganizationAdminOwnerInvitationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - email
+      - first_name
+      - last_name
+    OrganizationAdminOwnerList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationAdminOwner'
+      required:
+      - results
     OriginEnum:
       enum:
       - signal
@@ -8971,11 +10219,20 @@ components:
       properties:
         chat_enabled:
           type: boolean
+    PatchedEstablishmentAdminMembershipUpdateRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/EstablishmentNonOwnerMembershipRoleEnum'
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentMembershipScopeWriteItem'
     PatchedMembershipUpdateRequest:
       type: object
       properties:
         role:
-          $ref: '#/components/schemas/RoleEnum'
+          $ref: '#/components/schemas/EstablishmentMembershipRoleEnum'
         scopes:
           type: array
           items:
@@ -9024,6 +10281,11 @@ components:
           type: string
         establishment_status:
           type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
         role:
           type: string
         onboarding_session_id:
@@ -9039,6 +10301,8 @@ components:
       - establishment_status
       - id
       - onboarding_session_id
+      - organization_id
+      - organization_name
       - role
     PermissionHints:
       type: object
@@ -9269,18 +10533,6 @@ components:
       - pending_onboarding_memberships
       - permission_hints
       - user
-    RoleEnum:
-      enum:
-      - owner
-      - director
-      - manager
-      - staff
-      type: string
-      description: |-
-        * `owner` - Owner
-        * `director` - Director
-        * `manager` - Manager
-        * `staff` - Staff
     RuntimeActivitySubjectCreateRequest:
       type: object
       properties:
@@ -9756,62 +11008,6 @@ components:
       - auth
       - endpoint
       - p256dh
-    WorkspaceSummaryDirector:
-      type: object
-      properties:
-        display_name:
-          type: string
-        status:
-          $ref: '#/components/schemas/WorkspaceSummaryDirectorStatusEnum'
-      required:
-      - display_name
-      - status
-    WorkspaceSummaryDirectorStatusEnum:
-      enum:
-      - active
-      - invited
-      type: string
-      description: |-
-        * `active` - active
-        * `invited` - invited
-    WorkspaceSummaryEstablishment:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-      required:
-      - id
-      - name
-    WorkspaceSummaryPerson:
-      type: object
-      properties:
-        display_name:
-          type: string
-      required:
-      - display_name
-    WorkspaceSummaryResponse:
-      type: object
-      properties:
-        establishment:
-          $ref: '#/components/schemas/WorkspaceSummaryEstablishment'
-        owner:
-          allOf:
-          - $ref: '#/components/schemas/WorkspaceSummaryPerson'
-          nullable: true
-        director:
-          allOf:
-          - $ref: '#/components/schemas/WorkspaceSummaryDirector'
-          nullable: true
-        active_membership_count:
-          type: integer
-      required:
-      - active_membership_count
-      - director
-      - establishment
-      - owner
   securitySchemes:
     BearerAccessToken:
       type: http

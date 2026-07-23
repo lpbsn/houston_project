@@ -261,54 +261,34 @@ class ScopedUserSearchRequestSerializer(serializers.Serializer):
         return attrs
 
 
-class WorkspaceSummaryEstablishmentSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    name = serializers.CharField()
-
-
-class WorkspaceSummaryPersonSerializer(serializers.Serializer):
-    display_name = serializers.CharField()
-
-
-class WorkspaceSummaryDirectorSerializer(serializers.Serializer):
-    display_name = serializers.CharField()
-    status = serializers.ChoiceField(
-        choices=[
-            EstablishmentMembership.Status.ACTIVE,
-            EstablishmentMembership.Status.INVITED,
-        ],
-    )
-
-
-class WorkspaceSummaryResponseSerializer(serializers.Serializer):
-    establishment = WorkspaceSummaryEstablishmentSerializer()
-    owner = WorkspaceSummaryPersonSerializer(allow_null=True)
-    director = WorkspaceSummaryDirectorSerializer(allow_null=True)
-    active_membership_count = serializers.IntegerField()
+        attrs["business_unit"] = business_unit
+        return attrs
 
 
 class MembershipInvitationRequestSerializer(serializers.Serializer):
+    """Session Team invite body. Owner invites use organization-admin endpoints."""
+
     email = serializers.EmailField()
     first_name = serializers.CharField(trim_whitespace=True)
     last_name = serializers.CharField(trim_whitespace=True)
     role = serializers.ChoiceField(
-        choices=EstablishmentMembership.Role.choices,
+        choices=[
+            (EstablishmentMembership.Role.DIRECTOR, "Director"),
+            (EstablishmentMembership.Role.MANAGER, "Manager"),
+            (EstablishmentMembership.Role.STAFF, "Staff"),
+        ],
     )
     scopes = MembershipScopeWriteItemSerializer(many=True, required=False, default=list)
 
     def validate(self, attrs):
         role = attrs.get("role")
         scopes = attrs.get("scopes") or []
-        if role in {
-            EstablishmentMembership.Role.OWNER,
-            EstablishmentMembership.Role.DIRECTOR,
-        }:
+        if role == EstablishmentMembership.Role.DIRECTOR:
             if scopes:
                 raise serializers.ValidationError(
                     {
                         "scopes": (
-                            "Operational scopes are not allowed for owner or "
-                            "director invitations."
+                            "Operational scopes are not allowed for director invitations."
                         )
                     }
                 )
@@ -666,6 +646,23 @@ class OnboardingProposalResponseSerializer(serializers.Serializer):
 class ProposalCommandResponseSerializer(serializers.Serializer):
     session = OnboardingSessionResponseSerializer()
     proposal = OnboardingProposalResponseSerializer()
+
+
+class EstablishmentCreateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(trim_whitespace=False, max_length=255)
+
+    def validate_name(self, value: str) -> str:
+        if not value.strip():
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+
+class EstablishmentCreateResponseSerializer(serializers.Serializer):
+    establishment_id = serializers.UUIDField()
+    organization_id = serializers.UUIDField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    onboarding_session_id = serializers.UUIDField()
 
 
 class OnboardingProposalErrorResponseSerializer(serializers.Serializer):

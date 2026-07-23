@@ -1,10 +1,11 @@
 import { ArrowLeft, LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  canManageOrganizationFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
@@ -14,6 +15,8 @@ import {
   useOperationalConfigTree,
 } from '@/features/establishment-config/hooks'
 import { resolveRuntimeConfigErrorMessage } from '@/features/establishment-config/lib/runtime-config-errors'
+import { canAccessEstablishmentAdminPage } from '@/features/organization/lib/can-access-establishment-admin'
+import { resolveOperationalConfigReturnPath } from '@/features/organization/lib/operational-config-navigation'
 import { BusinessUnitAutocomplete } from '@/features/onboarding/components/business-unit-autocomplete'
 import type { CatalogBusinessUnitSuggestion } from '@/features/onboarding/types'
 
@@ -21,13 +24,39 @@ type OperationalConfigPageProps = {
   onNavigate?: (path: string) => void
 }
 
+function useOperationalConfigReturnPath() {
+  const { activeMembership, bootstrap } = useAuth()
+  const permissionHints = getBootstrapPermissionHints(bootstrap)
+  const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
+  const activeEstablishmentId = activeMembership?.establishment_id ?? null
+
+  return useMemo(() => {
+    const returnTo = new URLSearchParams(window.location.search).get('returnTo')
+    const canAccessActiveEstablishmentAdmin = canAccessEstablishmentAdminPage({
+      canManageOrganization,
+      memberships: bootstrap?.memberships,
+      establishmentId: activeEstablishmentId ?? '',
+    })
+
+    return resolveOperationalConfigReturnPath({
+      returnTo,
+      activeEstablishmentId,
+      canAccessActiveEstablishmentAdmin: Boolean(
+        activeEstablishmentId && canAccessActiveEstablishmentAdmin,
+      ),
+    })
+  }, [activeEstablishmentId, bootstrap?.memberships, canManageOrganization])
+}
+
 function OperationalConfigContent({
   establishmentId,
   establishmentName,
+  returnPath,
   onNavigate,
 }: {
   establishmentId: string
   establishmentName: string
+  returnPath: string
   onNavigate?: (path: string) => void
 }) {
   const treeQuery = useOperationalConfigTree(establishmentId)
@@ -116,10 +145,10 @@ function OperationalConfigContent({
           type="button"
           variant="outline"
           className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-          onClick={() => onNavigate?.('/app')}
+          onClick={() => onNavigate?.(returnPath)}
         >
           <ArrowLeft className="size-4" />
-          Retour à la gestion
+          Retour
         </Button>
       </div>
 
@@ -168,8 +197,10 @@ function OperationalConfigContent({
 }
 
 function OperationalConfigAccessDenied({
+  returnPath,
   onNavigate,
 }: {
+  returnPath: string
   onNavigate?: (path: string) => void
 }) {
   return (
@@ -185,10 +216,10 @@ function OperationalConfigAccessDenied({
           type="button"
           variant="outline"
           className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
-          onClick={() => onNavigate?.('/app')}
+          onClick={() => onNavigate?.(returnPath)}
         >
           <ArrowLeft className="size-4" />
-          Retour à la gestion
+          Retour
         </Button>
       </CardContent>
     </Card>
@@ -199,6 +230,7 @@ export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps
   const { activeMembership, bootstrap } = useAuth()
   const establishmentId = activeMembership?.establishment_id
   const permissionHints = getBootstrapPermissionHints(bootstrap)
+  const returnPath = useOperationalConfigReturnPath()
 
   if (!establishmentId) {
     return (
@@ -209,18 +241,30 @@ export function OperationalConfigPage({ onNavigate }: OperationalConfigPageProps
             Sélectionnez un établissement actif pour modifier la configuration opérationnelle.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-[1rem] border-[#e7dfd1] bg-[#fffaf2]"
+            onClick={() => onNavigate?.(returnPath)}
+          >
+            <ArrowLeft className="size-4" />
+            Retour
+          </Button>
+        </CardContent>
       </Card>
     )
   }
 
   if (!canManageRuntimeConfigFromBootstrapHints(permissionHints)) {
-    return <OperationalConfigAccessDenied onNavigate={onNavigate} />
+    return <OperationalConfigAccessDenied returnPath={returnPath} onNavigate={onNavigate} />
   }
 
   return (
     <OperationalConfigContent
       establishmentId={establishmentId}
       establishmentName={activeMembership.establishment_name}
+      returnPath={returnPath}
       onNavigate={onNavigate}
     />
   )

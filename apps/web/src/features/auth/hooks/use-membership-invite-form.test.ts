@@ -10,13 +10,10 @@ import { createTestQueryClient } from '@/test-utils'
 import { useMembershipInviteForm } from './use-membership-invite-form'
 
 const inviteMembership = vi.fn()
-const invalidateMembershipWorkspaceQueries = vi.fn()
 const invalidateMembershipListQueries = vi.fn()
 
 vi.mock('@/features/auth/api', () => ({
   inviteMembership: (...args: unknown[]) => inviteMembership(...args),
-  invalidateMembershipWorkspaceQueries: (...args: unknown[]) =>
-    invalidateMembershipWorkspaceQueries(...args),
   invalidateMembershipListQueries: (...args: unknown[]) =>
     invalidateMembershipListQueries(...args),
 }))
@@ -34,7 +31,7 @@ function InviteFormProbe({
   allowedTargetRoles,
 }: {
   establishmentId: string
-  allowedTargetRoles?: ('staff' | 'manager' | 'owner' | 'director')[]
+  allowedTargetRoles?: ('staff' | 'manager' | 'director')[]
 }) {
   const {
     form,
@@ -87,8 +84,8 @@ function InviteFormProbe({
     ),
     createElement(
       'button',
-      { type: 'button', onClick: () => setRole('owner') },
-      'Select owner',
+      { type: 'button', onClick: () => setRole('director') },
+      'Select director',
     ),
     createElement('button', { type: 'submit' }, 'Submit'),
     createElement('div', { 'data-testid': 'invited-email' }, invitedEmail ?? ''),
@@ -136,9 +133,7 @@ function renderHookWithQueryClient<T>(callback: () => T) {
 
 beforeEach(() => {
   inviteMembership.mockReset()
-  invalidateMembershipWorkspaceQueries.mockReset()
   invalidateMembershipListQueries.mockReset()
-  invalidateMembershipWorkspaceQueries.mockResolvedValue(undefined)
   invalidateMembershipListQueries.mockResolvedValue(undefined)
 })
 
@@ -172,7 +167,6 @@ describe('useMembershipInviteForm', () => {
       `${window.location.origin}/invitations/token-abc`,
     )
     expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
-    expect(invalidateMembershipWorkspaceQueries).not.toHaveBeenCalled()
   })
 
   it('shows success UI when list invalidation is still pending', async () => {
@@ -201,67 +195,64 @@ describe('useMembershipInviteForm', () => {
     expect(invalidateMembershipListQueries).toHaveBeenCalled()
   })
 
-  it('keeps invite success when workspace invalidation rejects', async () => {
+  it('keeps invite success when list invalidation rejects', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-owner',
+      invitation_accept_path: '/invitations/token-director',
     })
-    invalidateMembershipWorkspaceQueries.mockRejectedValue(new Error('cache refresh failed'))
+    invalidateMembershipListQueries.mockRejectedValue(new Error('cache refresh failed'))
 
     renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
-        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+        allowedTargetRoles: ['director', 'manager', 'staff'],
       }),
     )
 
     fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'owner@example.com' },
+      target: { value: 'director@example.com' },
     })
     fireEvent.change(screen.getByLabelText('First name'), {
       target: { value: 'Pat' },
     })
     fireEvent.change(screen.getByLabelText('Last name'), {
-      target: { value: 'Owner' },
+      target: { value: 'Director' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select director' }))
 
     await act(async () => {
       fireEvent.submit(screen.getByRole('button', { name: 'Submit' }))
     })
 
     await waitFor(() => {
-      expect(screen.getByTestId('invited-email').textContent).toBe('owner@example.com')
+      expect(screen.getByTestId('invited-email').textContent).toBe('director@example.com')
     })
     expect(screen.getByTestId('error-message').textContent).toBe('')
-    expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
-      includeBootstrap: true,
-      queryClient: expect.anything(),
-    })
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
   })
 
-  it('submits owner invites without scopes and invalidates workspace memberships root', async () => {
+  it('submits director invites without scopes and invalidates membership list', async () => {
     inviteMembership.mockResolvedValue({
-      invitation_accept_path: '/invitations/token-owner',
+      invitation_accept_path: '/invitations/token-director',
     })
 
     renderWithQueryClient(
       createElement(InviteFormProbe, {
         establishmentId: 'est-1',
-        allowedTargetRoles: ['owner', 'director', 'manager', 'staff'],
+        allowedTargetRoles: ['director', 'manager', 'staff'],
       }),
     )
 
     fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'owner@example.com' },
+      target: { value: 'director@example.com' },
     })
     fireEvent.change(screen.getByLabelText('First name'), {
       target: { value: 'Pat' },
     })
     fireEvent.change(screen.getByLabelText('Last name'), {
-      target: { value: 'Owner' },
+      target: { value: 'Director' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Select scope' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Select owner' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select director' }))
 
     expect(screen.getByTestId('requires-scopes').textContent).toBe('false')
     expect(screen.getByTestId('scopes-count').textContent).toBe('0')
@@ -272,17 +263,14 @@ describe('useMembershipInviteForm', () => {
 
     await waitFor(() => {
       expect(inviteMembership).toHaveBeenCalledWith('est-1', {
-        email: 'owner@example.com',
+        email: 'director@example.com',
         first_name: 'Pat',
-        last_name: 'Owner',
-        role: 'owner',
+        last_name: 'Director',
+        role: 'director',
       })
     })
 
-    expect(invalidateMembershipWorkspaceQueries).toHaveBeenCalledWith({
-      includeBootstrap: true,
-      queryClient: expect.anything(),
-    })
+    expect(invalidateMembershipListQueries).toHaveBeenCalledWith('est-1', expect.anything())
   })
 
   it('maps invitation API error codes', async () => {

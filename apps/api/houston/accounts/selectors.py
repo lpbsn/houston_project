@@ -51,7 +51,10 @@ def build_bootstrap_payload(
             None if active_membership is None else _serialize_membership(active_membership)
         ),
         "pending_onboarding_memberships": pending_onboarding_memberships,
-        "permission_hints": build_bootstrap_permission_hints(active_membership),
+        "permission_hints": build_bootstrap_permission_hints(
+            active_membership,
+            user=user,
+        ),
     }
 
 
@@ -149,6 +152,8 @@ def _serialize_pending_onboarding_membership(
         "establishment_id": str(membership.establishment_id),
         "establishment_name": establishment.name,
         "establishment_status": establishment.status,
+        "organization_id": str(establishment.organization_id),
+        "organization_name": establishment.organization.name,
         "role": membership.role,
         "onboarding_session_id": (
             None if onboarding_session is None else str(onboarding_session.id)

@@ -7,7 +7,6 @@ import {
   fetchBootstrap,
   membershipDetailQueryKey,
   membershipListQueryKey,
-  workspaceSummaryQueryKey,
 } from '@/features/auth/api'
 import type { BootstrapResponse } from '@/features/auth/types'
 import {
@@ -89,9 +88,6 @@ export function applyRealtimeAccessEvent(
       return
     case 'membership.updated':
       void queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true })
-      void queryClient.invalidateQueries({
-        queryKey: workspaceSummaryQueryKey(establishmentId),
-      })
       void queryClient.invalidateQueries({
         queryKey: membershipListQueryKey(establishmentId),
       })

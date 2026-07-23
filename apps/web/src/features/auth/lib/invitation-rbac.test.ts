@@ -4,13 +4,8 @@ import { getAllowedInviteTargetRoles, requiresInviteScopes } from '@/features/au
 
 describe('invitation-rbac', () => {
   it('returns allowed invite target roles for actor roles', () => {
-    expect(getAllowedInviteTargetRoles('owner')).toEqual([
-      'owner',
-      'director',
-      'manager',
-      'staff',
-    ])
-    expect(getAllowedInviteTargetRoles('director')).toEqual(['director', 'manager', 'staff'])
+    expect(getAllowedInviteTargetRoles('owner')).toEqual(['director', 'manager', 'staff'])
+    expect(getAllowedInviteTargetRoles('director')).toEqual(['manager', 'staff'])
     expect(getAllowedInviteTargetRoles('manager')).toEqual(['staff'])
     expect(getAllowedInviteTargetRoles('staff')).toEqual([])
     expect(getAllowedInviteTargetRoles(null)).toEqual([])
@@ -20,7 +15,6 @@ describe('invitation-rbac', () => {
   it('requires scopes only for manager and staff invites', () => {
     expect(requiresInviteScopes('staff')).toBe(true)
     expect(requiresInviteScopes('manager')).toBe(true)
-    expect(requiresInviteScopes('owner')).toBe(false)
     expect(requiresInviteScopes('director')).toBe(false)
     expect(requiresInviteScopes(null)).toBe(false)
   })

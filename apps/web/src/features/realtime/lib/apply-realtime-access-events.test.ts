@@ -7,7 +7,6 @@ import {
   fetchBootstrap,
   membershipDetailQueryKey,
   membershipListQueryKey,
-  workspaceSummaryQueryKey,
 } from '@/features/auth/api'
 import { queryClient } from '@/lib/query-client'
 import { applyRealtimeAccessEvent } from '@/features/realtime/lib/apply-realtime-access-events'
@@ -249,7 +248,6 @@ describe('applyRealtimeAccessEvent', () => {
     )
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: bootstrapQueryKey, exact: true })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: workspaceSummaryQueryKey('est-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: membershipListQueryKey('est-1') })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: membershipDetailQueryKey('est-1', 'mbr-1'),

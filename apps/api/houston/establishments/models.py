@@ -6,10 +6,13 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower, Trim
 from django.utils import timezone
 
 from houston.core.models import BaseModel
 from houston.organizations.models import Organization
+
+ESTABLISHMENT_ORG_NAME_CI_UNIQ = "establishment_org_name_ci_uniq"
 
 DEFAULT_ESTABLISHMENT_TIMEZONE = "Europe/Paris"
 ESTABLISHMENT_TIMEZONE_MAX_LENGTH = 63
@@ -63,6 +66,15 @@ class Establishment(BaseModel):
         default=DEFAULT_ESTABLISHMENT_TIMEZONE,
     )
     chat_enabled = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower(Trim("name")),
+                "organization",
+                name=ESTABLISHMENT_ORG_NAME_CI_UNIQ,
+            ),
+        ]
 
     def clean(self) -> None:
         super().clean()

@@ -30,6 +30,8 @@ const { authState } = vi.hoisted(() => ({
           can_invite: true,
           can_manage_runtime_config: true,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
       memberships: [
@@ -45,6 +47,7 @@ const { authState } = vi.hoisted(() => ({
           scope_summary: { business_unit_count: 0 },
         },
       ],
+      pendingOnboardingMemberships: [],
       user: {
         first_name: 'Marie',
         last_name: 'Renaud',
@@ -251,6 +254,10 @@ describe('ProfilePage', () => {
   it('hides management section when permission hints deny access', () => {
     authState.current = {
       ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'staff',
+      },
       bootstrap: {
         permission_hints: {
           chat_available: false,
@@ -260,6 +267,8 @@ describe('ProfilePage', () => {
           can_invite: false,
           can_manage_runtime_config: false,
           can_view_team: false,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -271,8 +280,9 @@ describe('ProfilePage', () => {
       }),
     )
 
+    expect(screen.queryByText('Administration')).toBeNull()
     expect(screen.queryByText("Gestion de l'établissement")).toBeNull()
-    expect(screen.queryByText('Établissement')).toBeNull()
+    expect(screen.queryByText("Gestion de l'organisation")).toBeNull()
   })
 
   it('shows management cards and navigates on click', () => {
@@ -287,6 +297,8 @@ describe('ProfilePage', () => {
           can_invite: true,
           can_manage_runtime_config: true,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -298,8 +310,8 @@ describe('ProfilePage', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Établissement/i }))
-    expect(onNavigate).toHaveBeenCalledWith('/app/operational-config')
+    fireEvent.click(screen.getByRole('button', { name: /Gestion de l'établissement/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/organization/establishments/est-1')
 
     fireEvent.click(screen.getByRole('button', { name: /Bibliothèque/i }))
     expect(onNavigate).toHaveBeenCalledWith('/action-plans')
@@ -308,9 +320,75 @@ describe('ProfilePage', () => {
     expect(onNavigate).toHaveBeenCalledWith('/team')
   })
 
-  it('hides establishment card when runtime config hint is false', () => {
+  it('does not show ops-config CTA on general profile', () => {
     authState.current = {
       ...authState.current,
+      bootstrap: {
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: true,
+          can_view_action_plan_catalog: true,
+          can_invite: true,
+          can_manage_runtime_config: true,
+          can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /^Établissement$/i })).toBeNull()
+    expect(onNavigate).not.toHaveBeenCalledWith('/app/operational-config')
+  })
+
+  it('shows organization admin link for owners', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'owner',
+      },
+      bootstrap: {
+        permission_hints: {
+          chat_available: false,
+          can_create_action_plan: false,
+          can_create_catalog_action_plan: false,
+          can_view_action_plan_catalog: false,
+          can_invite: true,
+          can_manage_runtime_config: true,
+          can_view_team: true,
+          can_manage_organization: true,
+          can_create_establishment: true,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Gestion de l'organisation/i }))
+    expect(onNavigate).toHaveBeenCalledWith('/organization')
+  })
+
+  it('hides establishment card when runtime config hint is false and role is not admin', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'manager',
+      },
       bootstrap: {
         permission_hints: {
           chat_available: false,
@@ -320,6 +398,8 @@ describe('ProfilePage', () => {
           can_invite: true,
           can_manage_runtime_config: false,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -331,7 +411,7 @@ describe('ProfilePage', () => {
       }),
     )
 
-    expect(screen.queryByRole('button', { name: /Établissement/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Gestion de l'établissement/i })).toBeNull()
     expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
   })
 
@@ -347,6 +427,8 @@ describe('ProfilePage', () => {
           can_invite: true,
           can_manage_runtime_config: true,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -378,6 +460,8 @@ describe('ProfilePage', () => {
           can_invite: false,
           can_manage_runtime_config: false,
           can_view_team: true,
+          can_manage_organization: false,
+          can_create_establishment: false,
         },
       },
     }
@@ -389,8 +473,8 @@ describe('ProfilePage', () => {
       }),
     )
 
-    expect(screen.queryByText("Gestion de l'établissement")).toBeNull()
-    expect(screen.queryByRole('button', { name: /Établissement/i })).toBeNull()
+    expect(screen.queryByText('Administration')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Gestion de l'établissement/i })).toBeNull()
     expect(screen.getByRole('button', { name: /Équipe/i })).toBeTruthy()
     expect(screen.getByText("Voir l'équipe")).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Bibliothèque/i }))
@@ -409,7 +493,7 @@ describe('ProfilePage', () => {
     expect(onSignOut).toHaveBeenCalledTimes(1)
   })
 
-  it('hides establishment switch when only one membership is available', () => {
+  it('hides switch establishment when only one membership is available', () => {
     render(
       createElement(ProfilePage, {
         onNavigate,
@@ -420,7 +504,40 @@ describe('ProfilePage', () => {
     expect(screen.queryByRole('button', { name: /Changer d'établissement/i })).toBeNull()
   })
 
-  it('shows establishment switch and navigates when multiple memberships exist', () => {
+  it('does not show switch establishment for owner with one ACTIVE even when create is allowed', () => {
+    authState.current = {
+      ...authState.current,
+      activeMembership: {
+        ...authState.current.activeMembership,
+        role: 'owner',
+      },
+      memberships: [
+        {
+          ...authState.current.memberships[0]!,
+          role: 'owner',
+        },
+      ],
+      pendingOnboardingMemberships: [],
+      bootstrap: {
+        permission_hints: {
+          ...authState.current.bootstrap.permission_hints,
+          can_create_establishment: true,
+          can_manage_organization: true,
+        },
+      },
+    }
+
+    render(
+      createElement(ProfilePage, {
+        onNavigate,
+        onSignOut,
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: /Changer d'établissement/i })).toBeNull()
+  })
+
+  it('shows switch establishment and navigates when multiple memberships exist', () => {
     authState.current = {
       ...authState.current,
       memberships: [
@@ -437,6 +554,7 @@ describe('ProfilePage', () => {
           scope_summary: { business_unit_count: 0 },
         },
       ],
+      pendingOnboardingMemberships: [],
     }
 
     render(

@@ -12,6 +12,7 @@ from rest_framework.test import APIClient
 from houston.accounts.models import User
 from houston.establishments.models import Establishment, EstablishmentMembership
 from houston.establishments.services import (
+    DuplicateEstablishmentNameError,
     InvalidEstablishmentCreationError,
     OrganizationalOwnerInvariantConflictError,
     create_establishment_for_organization,
@@ -108,7 +109,6 @@ def owner_invite_payload(*, email: str = "new-owner@example.com") -> dict:
         "email": email,
         "first_name": "Nora",
         "last_name": "Owner",
-        "role": ROLE_OWNER,
     }
 
 
@@ -126,14 +126,14 @@ def setup_full_coverage_actor(
 def post_owner_invitation(
     api_client: APIClient,
     *,
-    establishment_id,
+    organization_id,
     actor: User,
     payload: dict | None = None,
 ):
     access_token = login(api_client, identifier=actor.email)
     csrf_token = ensure_csrf(api_client)
     return api_client.post(
-        f"/api/v1/establishments/{establishment_id}/membership-invitations/",
+        f"/api/v1/organizations/{organization_id}/owner-invitations/",
         payload or owner_invite_payload(),
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
@@ -169,7 +169,7 @@ def test_create_establishment_for_organization_seeds_then_accept(api_client):
 
     response = post_owner_invitation(
         api_client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="cta-owner@example.com"),
     )
@@ -205,7 +205,7 @@ def test_accept_then_create_establishment_seeds_active_owner(api_client):
 
     response = post_owner_invitation(
         api_client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="atc-owner@example.com"),
     )
@@ -232,7 +232,7 @@ def test_concurrent_accept_and_create_establishment_preserve_coverage():
     client = APIClient(enforce_csrf_checks=True)
     response = post_owner_invitation(
         client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="cca-owner@example.com"),
     )
@@ -462,6 +462,75 @@ def test_create_establishment_rejects_active_initial_status():
     ).exists()
 
 
+def test_create_establishment_strips_name_and_rejects_duplicate_case_insensitive():
+    organization = create_organization(name="Name Uniq Org")
+    create_establishment(name="Hotel Alpha", organization=organization)
+
+    created = create_establishment_for_organization(
+        organization_id=organization.id,
+        name="  Hotel Beta  ",
+    )
+    assert created.name == "Hotel Beta"
+
+    with pytest.raises(DuplicateEstablishmentNameError):
+        create_establishment_for_organization(
+            organization_id=organization.id,
+            name="  hotel alpha ",
+        )
+
+    deactivated = create_establishment(
+        name="Hotel Gamma",
+        organization=organization,
+        status=Establishment.Status.DEACTIVATED,
+    )
+    assert deactivated.status == Establishment.Status.DEACTIVATED
+    with pytest.raises(DuplicateEstablishmentNameError):
+        create_establishment_for_organization(
+            organization_id=organization.id,
+            name="HOTEL GAMMA",
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_create_establishment_concurrent_duplicate_name_no_partial_rows():
+    organization = create_organization(name="Concurrent Name Org")
+    create_establishment(name="Seed A", organization=organization)
+    barrier = threading.Barrier(2)
+    outcomes: dict[str, object] = {}
+
+    def worker(label: str) -> None:
+        close_old_connections()
+        try:
+            barrier.wait(timeout=5)
+            outcomes[label] = create_establishment_for_organization(
+                organization_id=organization.id,
+                name="Concurrent Hotel",
+            )
+        except Exception as exc:  # noqa: BLE001 — capture for assertion
+            outcomes[label] = exc
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(worker, "a"), executor.submit(worker, "b")]
+        for future in futures:
+            future.result(timeout=10)
+
+    successes = [value for value in outcomes.values() if isinstance(value, Establishment)]
+    failures = [
+        value for value in outcomes.values() if isinstance(value, DuplicateEstablishmentNameError)
+    ]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert (
+        Establishment.objects.filter(
+            organization=organization,
+            name="Concurrent Hotel",
+        ).count()
+        == 1
+    )
+
+
 def test_accept_owner_heals_missing_coverage_on_raw_orm_establishment(api_client):
     """Defense path: ORM create without seed must still heal on accept."""
     organization = create_organization(name="Heal ORM Org")
@@ -472,7 +541,7 @@ def test_accept_owner_heals_missing_coverage_on_raw_orm_establishment(api_client
     )
     response = post_owner_invitation(
         api_client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="heal-orm-owner@example.com"),
     )

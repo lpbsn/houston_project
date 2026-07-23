@@ -1,6 +1,23 @@
 from django.urls import path
 
 from houston.accounts.api.views import DirectorInvitationAcceptView
+from houston.establishments.api.establishment_admin_views import (
+    EstablishmentAdminMemberFilterOptionsView,
+    EstablishmentAdminMembershipActivateView,
+    EstablishmentAdminMembershipDeactivateView,
+    EstablishmentAdminMembershipDetailView,
+    EstablishmentAdminMembershipInvitationView,
+    EstablishmentAdminMembershipListView,
+    EstablishmentAdminOverviewView,
+)
+from houston.establishments.api.organization_admin_views import (
+    OrganizationAdminEstablishmentListView,
+    OrganizationAdminMemberFilterOptionsView,
+    OrganizationAdminMemberListView,
+    OrganizationAdminOverviewView,
+    OrganizationAdminOwnerInvitationView,
+    OrganizationAdminOwnerListView,
+)
 from houston.establishments.api.views import (
     CatalogActivitySubjectSuggestView,
     CatalogBusinessUnitSuggestView,
@@ -11,6 +28,7 @@ from houston.establishments.api.views import (
     EstablishmentBusinessUnitDetailView,
     EstablishmentBusinessUnitReactivateView,
     EstablishmentBusinessUnitTreeView,
+    EstablishmentCreateView,
     MembershipActivateView,
     MembershipDeactivateView,
     MembershipDetailView,
@@ -30,14 +48,48 @@ from houston.establishments.api.views import (
     OnboardingSessionProposalSubmitView,
     OnboardingSessionRuntimeConfigView,
     ScopedUserSearchView,
-    WorkspaceSummaryView,
 )
 
 urlpatterns = [
     path(
+        "organizations/<uuid:organization_id>/",
+        OrganizationAdminOverviewView.as_view(),
+        name="organization-admin-overview",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/establishments/",
+        OrganizationAdminEstablishmentListView.as_view(),
+        name="organization-admin-establishments",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/members/filter-options/",
+        OrganizationAdminMemberFilterOptionsView.as_view(),
+        name="organization-admin-member-filter-options",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/members/",
+        OrganizationAdminMemberListView.as_view(),
+        name="organization-admin-members",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/owners/",
+        OrganizationAdminOwnerListView.as_view(),
+        name="organization-admin-owners",
+    ),
+    path(
+        "organizations/<uuid:organization_id>/owner-invitations/",
+        OrganizationAdminOwnerInvitationView.as_view(),
+        name="organization-admin-owner-invitations",
+    ),
+    path(
         "invitations/<str:token>/accept/",
         DirectorInvitationAcceptView.as_view(),
         name="director-invitation-accept",
+    ),
+    path(
+        "establishments/",
+        EstablishmentCreateView.as_view(),
+        name="establishment-create",
     ),
     path(
         "onboarding-sessions/",
@@ -150,9 +202,39 @@ urlpatterns = [
         name="catalog-activity-subjects-suggest",
     ),
     path(
-        "establishments/<uuid:establishment_id>/workspace-summary/",
-        WorkspaceSummaryView.as_view(),
-        name="establishment-workspace-summary",
+        "establishments/<uuid:establishment_id>/admin/overview/",
+        EstablishmentAdminOverviewView.as_view(),
+        name="establishment-admin-overview",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/admin/memberships/filter-options/",
+        EstablishmentAdminMemberFilterOptionsView.as_view(),
+        name="establishment-admin-membership-filter-options",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/admin/memberships/",
+        EstablishmentAdminMembershipListView.as_view(),
+        name="establishment-admin-membership-list",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/admin/membership-invitations/",
+        EstablishmentAdminMembershipInvitationView.as_view(),
+        name="establishment-admin-membership-invitation",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/admin/memberships/<uuid:membership_id>/",
+        EstablishmentAdminMembershipDetailView.as_view(),
+        name="establishment-admin-membership-detail",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/admin/memberships/<uuid:membership_id>/deactivate/",
+        EstablishmentAdminMembershipDeactivateView.as_view(),
+        name="establishment-admin-membership-deactivate",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/admin/memberships/<uuid:membership_id>/activate/",
+        EstablishmentAdminMembershipActivateView.as_view(),
+        name="establishment-admin-membership-activate",
     ),
     path(
         "establishments/<uuid:establishment_id>/membership-invitations/",

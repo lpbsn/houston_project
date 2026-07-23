@@ -332,6 +332,15 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "0.1.0",
     "ENUM_NAME_OVERRIDES": {
         "NotificationSubjectTypeEnum": "houston.notifications.models.Notification.SubjectType",
+        "NotificationItemStatusEnum": "houston.notifications.models.Notification.Status",
+        "EstablishmentMembershipRoleEnum": (
+            "houston.establishments.models.EstablishmentMembership.Role"
+        ),
+        "EstablishmentNonOwnerMembershipRoleEnum": [
+            ("director", "Director"),
+            ("manager", "Manager"),
+            ("staff", "Staff"),
+        ],
     },
 }
 

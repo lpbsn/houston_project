@@ -48,7 +48,7 @@ describe('usesTerrainShell', () => {
   })
 
   it('returns false for non-terrain routes', () => {
-    expect(usesTerrainShell({ kind: 'static', path: '/app' })).toBe(false)
+    expect(usesTerrainShell({ kind: 'static', path: '/app/operational-config' })).toBe(false)
     expect(usesTerrainShell({ kind: 'static', path: '/login' })).toBe(false)
     expect(usesTerrainShell({ kind: 'invitation', token: 't' })).toBe(false)
   })
@@ -249,7 +249,7 @@ describe('getTerrainRouteConfig', () => {
   })
 
   it('throws for non-terrain routes', () => {
-    expect(() => getTerrainRouteConfig({ kind: 'static', path: '/app' })).toThrow(
+    expect(() => getTerrainRouteConfig({ kind: 'static', path: '/organization' })).toThrow(
       'getTerrainRouteConfig called for a non-terrain route',
     )
   })
@@ -348,7 +348,7 @@ describe('getTerrainContentKey', () => {
   })
 
   it('throws for non-terrain routes', () => {
-    expect(() => getTerrainContentKey({ kind: 'static', path: '/app' })).toThrow(
+    expect(() => getTerrainContentKey({ kind: 'static', path: '/organization' })).toThrow(
       'getTerrainContentKey called for a non-terrain route',
     )
   })
@@ -367,9 +367,16 @@ describe('isProtectedRoute', () => {
       '/onboarding',
       '/select-establishment',
       '/no-establishment',
+      '/organization',
     ] as const) {
       expect(isProtectedRoute({ kind: 'static', path })).toBe(true)
     }
+    expect(
+      isProtectedRoute({
+        kind: 'organization-establishment-detail',
+        establishmentId: 'est-1',
+      }),
+    ).toBe(true)
   })
 
   it('returns true for operational detail routes', () => {
@@ -395,9 +402,7 @@ describe('isProtectedRoute', () => {
 describe('requiresActiveMembership', () => {
   it('returns true for operational static routes', () => {
     for (const path of [
-      '/app',
       '/app/operational-config',
-      '/app/report',
       '/reporting',
       '/signals',
       '/execution',
@@ -429,12 +434,19 @@ describe('requiresActiveMembership', () => {
     ).toBe(true)
   })
 
-  it('returns false for onboarding and auth routes', () => {
+  it('returns false for onboarding, auth, and organization routes', () => {
     expect(requiresActiveMembership({ kind: 'static', path: '/login' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/onboarding' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/pending-onboarding' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/select-establishment' })).toBe(false)
     expect(requiresActiveMembership({ kind: 'static', path: '/no-establishment' })).toBe(false)
+    expect(requiresActiveMembership({ kind: 'static', path: '/organization' })).toBe(false)
+    expect(
+      requiresActiveMembership({
+        kind: 'organization-establishment-detail',
+        establishmentId: 'est-1',
+      }),
+    ).toBe(false)
   })
 })
 

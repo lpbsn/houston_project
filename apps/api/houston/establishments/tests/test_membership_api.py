@@ -638,6 +638,140 @@ def test_director_cannot_patch_another_director(api_client):
     assert peer.role == EstablishmentMembership.Role.DIRECTOR
 
 
+def test_owner_cannot_deactivate_last_active_director(api_client):
+    owner = create_user(username="owner_last_director_deactivate")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Last Director Active",
+    )
+    sole_director = EstablishmentMembership.objects.create(
+        user=create_user(username="sole_active_director"),
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=owner.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{owner_membership.establishment_id}/memberships/"
+            f"{sole_director.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "director_coverage_invariant"
+    sole_director.refresh_from_db()
+    assert sole_director.status == EstablishmentMembership.Status.ACTIVE
+
+
+def test_owner_cannot_deactivate_last_invited_director(api_client):
+    owner = create_user(username="owner_last_director_invited")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Last Director Invited",
+    )
+    sole_invited = EstablishmentMembership.objects.create(
+        user=create_user(username="sole_invited_director"),
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.INVITED,
+    )
+
+    access_token = login(api_client, identifier=owner.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{owner_membership.establishment_id}/memberships/"
+            f"{sole_invited.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "director_coverage_invariant"
+    sole_invited.refresh_from_db()
+    assert sole_invited.status == EstablishmentMembership.Status.INVITED
+
+
+def test_owner_can_deactivate_director_when_another_covers(api_client):
+    owner = create_user(username="owner_two_directors")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Two Directors",
+    )
+    first = EstablishmentMembership.objects.create(
+        user=create_user(username="director_one_coverage"),
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    EstablishmentMembership.objects.create(
+        user=create_user(username="director_two_coverage"),
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.INVITED,
+    )
+
+    access_token = login(api_client, identifier=owner.email)
+    response = api_client.post(
+        (
+            f"/api/v1/establishments/{owner_membership.establishment_id}/memberships/"
+            f"{first.id}/deactivate/"
+        ),
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200, response.json()
+    first.refresh_from_db()
+    assert first.status == EstablishmentMembership.Status.DEACTIVATED
+
+
+def test_owner_cannot_demote_last_director(api_client):
+    owner = create_user(username="owner_demote_last_director")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Demote Last Director",
+    )
+    housekeeping = create_business_unit(
+        establishment=owner_membership.establishment,
+        key="housekeeping",
+        label="Housekeeping",
+    )
+    sole_director = EstablishmentMembership.objects.create(
+        user=create_user(username="demote_sole_director"),
+        establishment=owner_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=owner.email)
+    response = api_client.patch(
+        (
+            f"/api/v1/establishments/{owner_membership.establishment_id}/memberships/"
+            f"{sole_director.id}/"
+        ),
+        {
+            "role": EstablishmentMembership.Role.MANAGER,
+            "scopes": [business_unit_scope_payload(housekeeping)],
+        },
+        format="json",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "director_coverage_invariant"
+    sole_director.refresh_from_db()
+    assert sole_director.role == EstablishmentMembership.Role.DIRECTOR
+
+
 def test_director_can_patch_manager_membership(api_client):
     actor = create_user(username="director_patch_manager")
     actor_membership = create_membership(
@@ -958,6 +1092,13 @@ def test_director_demote_to_manager_requires_scopes(api_client):
         role=EstablishmentMembership.Role.OWNER,
         name="Nice",
     )
+    # Keep director coverage so the demotion reaches scope validation.
+    EstablishmentMembership.objects.create(
+        user=create_user(username="director_demote_coverage"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
     director_membership = EstablishmentMembership.objects.create(
         user=create_user(username="director_demote_target"),
         establishment=actor_membership.establishment,
@@ -998,6 +1139,12 @@ def test_director_demote_to_manager_with_scopes_succeeds(api_client):
         establishment=actor_membership.establishment,
         key="housekeeping",
         label="Housekeeping",
+    )
+    EstablishmentMembership.objects.create(
+        user=create_user(username="director_demote_ok_coverage"),
+        establishment=actor_membership.establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.INVITED,
     )
     director_membership = EstablishmentMembership.objects.create(
         user=create_user(username="director_demote_ok"),

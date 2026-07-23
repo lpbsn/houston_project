@@ -1,6 +1,7 @@
 import type { AppRoute } from '@/app/app-routes'
 import type { BootstrapResponse } from '@/features/auth/types'
 
+import { canManageOrganizationFromBootstrapHints } from '@/features/auth/lib/bootstrap-permission-hints'
 import {
   buildOnboardingUrl,
   resolvePendingLanding,
@@ -9,12 +10,17 @@ import {
 export type AuthenticatedLanding =
   | { kind: 'operational'; path: '/reporting' }
   | { kind: 'establishment-selection'; path: '/select-establishment' }
+  | { kind: 'organization'; path: '/organization' }
   | { kind: 'pending'; path: string }
   | { kind: 'empty'; path: '/no-establishment' }
 
 export function resolveAuthenticatedLanding(
   bootstrap: BootstrapResponse,
 ): AuthenticatedLanding {
+  if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
+    return { kind: 'organization', path: '/organization' }
+  }
+
   if (bootstrap.active_membership) {
     return { kind: 'operational', path: '/reporting' }
   }
@@ -22,6 +28,10 @@ export function resolveAuthenticatedLanding(
   const activeMembershipCount = bootstrap.memberships.length
   if (activeMembershipCount > 1) {
     return { kind: 'establishment-selection', path: '/select-establishment' }
+  }
+
+  if (activeMembershipCount === 1) {
+    return { kind: 'operational', path: '/reporting' }
   }
 
   const pendingLanding = resolvePendingLanding(bootstrap.pending_onboarding_memberships)
@@ -32,10 +42,6 @@ export function resolveAuthenticatedLanding(
 
   if (pendingLanding.kind === 'waiting' || pendingLanding.kind === 'selection') {
     return { kind: 'pending', path: '/pending-onboarding' }
-  }
-
-  if (activeMembershipCount === 1) {
-    return { kind: 'operational', path: '/reporting' }
   }
 
   return { kind: 'empty', path: '/no-establishment' }
@@ -56,6 +62,7 @@ export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/select-establishment',
   '/pending-onboarding',
   '/onboarding',
+  '/organization',
   '/no-establishment',
 ])
 
@@ -65,7 +72,9 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
     path === '/pending-onboarding' ||
     path === '/select-establishment' ||
     path === '/no-establishment' ||
-    path === '/install-app'
+    path === '/install-app' ||
+    path === '/organization' ||
+    path.startsWith('/organization/')
   )
 }
 

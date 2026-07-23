@@ -412,29 +412,22 @@ def test_invitation_normalizes_duplicate_business_unit_scope(api_client):
     )
 
 
-@pytest.mark.parametrize(
-    "actor_role",
-    [ROLE_OWNER, ROLE_DIRECTOR],
-)
-def test_owner_and_director_can_invite_multiple_directors_on_active_establishment(
-    api_client,
-    actor_role,
-):
-    establishment = create_establishment(name=f"Multi Director {actor_role}")
-    actor = create_user(username=f"multi_director_actor_{actor_role}")
-    create_membership(user=actor, establishment=establishment, role=actor_role)
+def test_owner_can_invite_multiple_directors_on_active_establishment(api_client):
+    establishment = create_establishment(name="Multi Director Owner")
+    actor = create_user(username="multi_director_actor_owner")
+    create_membership(user=actor, establishment=establishment, role=ROLE_OWNER)
 
     first = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=director_invite_payload(email=f"director-one-{actor_role}@example.com"),
+        payload=director_invite_payload(email="director-one-owner@example.com"),
     )
     second = post_invitation_as_actor(
         api_client,
         establishment_id=establishment.id,
         actor=actor,
-        payload=director_invite_payload(email=f"director-two-{actor_role}@example.com"),
+        payload=director_invite_payload(email="director-two-owner@example.com"),
     )
 
     assert first.status_code == 201, first.json()
@@ -450,6 +443,45 @@ def test_owner_and_director_can_invite_multiple_directors_on_active_establishmen
         ).count()
         == 2
     )
+
+
+def test_director_cannot_invite_director_on_active_establishment(api_client):
+    establishment = create_establishment(name="Director Invite Director Guard")
+    actor = create_user(username="director_invite_director_actor")
+    create_membership(user=actor, establishment=establishment, role=ROLE_DIRECTOR)
+
+    response = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=actor,
+        payload=director_invite_payload(email="peer-director@example.com"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_invitation_role_not_allowed"
+
+
+def test_establishment_invite_rejects_owner_role(api_client):
+    establishment = create_establishment(name="Owner Invite Path Guard")
+    actor = create_user(username="owner_invite_path_actor")
+    create_membership(user=actor, establishment=establishment, role=ROLE_OWNER)
+
+    response = post_invitation_as_actor(
+        api_client,
+        establishment_id=establishment.id,
+        actor=actor,
+        payload={
+            "email": "org-owner@example.com",
+            "first_name": "Org",
+            "last_name": "Owner",
+            "role": ROLE_OWNER,
+        },
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert "role" in body["errors"]
 
 
 @pytest.mark.parametrize(
@@ -531,7 +563,7 @@ def test_director_invite_rejects_deactivated_establishment(api_client):
     assert response.json()["detail"] == "Not found."
 
 
-def test_owner_or_director_invitation_rejects_non_empty_scopes(api_client):
+def test_director_invitation_rejects_non_empty_scopes(api_client):
     establishment = create_establishment(name="Scope Guard Hotel")
     owner = create_user(username="scope_guard_owner")
     create_membership(user=owner, establishment=establishment, role=ROLE_OWNER)
@@ -540,25 +572,21 @@ def test_owner_or_director_invitation_rejects_non_empty_scopes(api_client):
     access_token = login(api_client, identifier=owner.email)
     csrf_token = ensure_csrf(api_client)
 
-    for role in (
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    ):
-        response = api_client.post(
-            f"/api/v1/establishments/{establishment.id}/membership-invitations/",
-            invite_payload(
-                email=f"{role}-scoped@example.com",
-                role=role,
-                scopes=[business_unit_scope_payload(business_unit)],
-            ),
-            format="json",
-            HTTP_X_CSRFTOKEN=csrf_token,
-            **auth_headers(access_token),
-        )
-        assert response.status_code == 400
-        body = response.json()
-        assert body["code"] == "validation_error"
-        assert "scopes" in body["errors"]
+    response = api_client.post(
+        f"/api/v1/establishments/{establishment.id}/membership-invitations/",
+        invite_payload(
+            email="director-scoped@example.com",
+            role=EstablishmentMembership.Role.DIRECTOR,
+            scopes=[business_unit_scope_payload(business_unit)],
+        ),
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert "scopes" in body["errors"]
 
 
 def test_staff_cannot_invite_members(api_client):
@@ -614,10 +642,10 @@ def test_manager_can_invite_staff_with_business_unit_scope(api_client):
     [
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.OWNER,
     ],
 )
 def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
+    # Owner → 400 via serializer; see test_establishment_invite_rejects_owner_role.
     establishment = create_establishment(name="Manager Role Guard Hotel")
     actor = create_user(username=f"manager_role_guard_{target_role}")
     manager_membership = create_membership(
@@ -631,10 +659,7 @@ def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
         business_unit=business_unit,
     )
 
-    if target_role in {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }:
+    if target_role == EstablishmentMembership.Role.DIRECTOR:
         payload = {
             "email": f"{target_role}@example.com",
             "first_name": "New",

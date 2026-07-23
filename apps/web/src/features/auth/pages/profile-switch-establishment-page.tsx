@@ -5,7 +5,7 @@ import { Building2, LoaderCircle } from 'lucide-react'
 import { useAuth } from '@/app/auth-provider'
 import { switchEstablishment } from '@/features/auth/api'
 import { toRoleEnum } from '@/features/auth/lib/role'
-import { HoustonBadge, TerrainCard } from '@/components/ui/terrain'
+import { HoustonBadge, TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { toErrorMessage } from '@/lib/error-message'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
@@ -62,65 +62,70 @@ export function ProfileSwitchEstablishmentPage({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-4 pt-3">
-      <p className={cn('px-0.5 text-sm', terrain.muted)}>
-        Sélectionnez l&apos;établissement avec lequel vous souhaitez travailler.
-      </p>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-3 pb-4 pt-3">
+      {memberships.length > 0 ? (
+        <section className="space-y-2">
+          <TerrainSectionLabel>Actifs</TerrainSectionLabel>
+          <p className={cn('px-0.5 text-sm', terrain.muted)}>
+            Sélectionnez l&apos;établissement avec lequel vous souhaitez travailler.
+          </p>
+          <div className="space-y-2">
+            {memberships.map((membership) => {
+              const isActive = membership.establishment_id === activeEstablishmentId
+              const isPending = pendingEstablishmentId === membership.establishment_id
+              const role = toRoleEnum(membership.role)
+              const roleLabel = role ? ROLE_DISPLAY_LABELS[role] : membership.role
 
-      <div className="space-y-2">
-        {memberships.map((membership) => {
-          const isActive = membership.establishment_id === activeEstablishmentId
-          const isPending = pendingEstablishmentId === membership.establishment_id
-          const role = toRoleEnum(membership.role)
-          const roleLabel = role ? ROLE_DISPLAY_LABELS[role] : membership.role
-
-          return (
-            <button
-              key={membership.id}
-              type="button"
-              className={cn(
-                'w-full text-left active:opacity-90',
-                isActive && 'cursor-default',
-              )}
-              disabled={isActive || isSwitching}
-              onClick={() => {
-                void handleSelectEstablishment(membership.establishment_id)
-              }}
-            >
-              <TerrainCard
-                className={cn(
-                  'flex min-h-11 items-center gap-3 p-4',
-                  isActive && 'border-[#1D9E75]/30 bg-[#F7FCFA]',
-                )}
-              >
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#1B4FD8]"
-                  aria-hidden
+              return (
+                <button
+                  key={membership.id}
+                  type="button"
+                  className={cn(
+                    'w-full text-left active:opacity-90',
+                    isActive && 'cursor-default',
+                  )}
+                  disabled={isActive || isSwitching}
+                  onClick={() => {
+                    void handleSelectEstablishment(membership.establishment_id)
+                  }}
                 >
-                  <Building2 className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-[#1a1a1a]">
-                    {membership.establishment_name}
-                  </span>
-                  <span className={cn('mt-0.5 block truncate text-xs', terrain.muted)}>
-                    {membership.organization_name} · {roleLabel}
-                  </span>
-                </span>
-                {isPending ? (
-                  <LoaderCircle className="h-4 w-4 shrink-0 animate-spin text-[#1B4FD8]" aria-hidden />
-                ) : isActive ? (
-                  <HoustonBadge variant="green">Actif</HoustonBadge>
-                ) : null}
-              </TerrainCard>
-            </button>
-          )
-        })}
-      </div>
-
-      {selectorError ? (
-        <p className="px-0.5 text-xs text-[#E24B4A]">{selectorError}</p>
+                  <TerrainCard
+                    className={cn(
+                      'flex min-h-11 items-center gap-3 p-4',
+                      isActive && 'border-[#1D9E75]/30 bg-[#F7FCFA]',
+                    )}
+                  >
+                    <span
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#1B4FD8]"
+                      aria-hidden
+                    >
+                      <Building2 className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-[#1a1a1a]">
+                        {membership.establishment_name}
+                      </span>
+                      <span className={cn('mt-0.5 block truncate text-xs', terrain.muted)}>
+                        {membership.organization_name} · {roleLabel}
+                      </span>
+                    </span>
+                    {isPending ? (
+                      <LoaderCircle
+                        className="h-4 w-4 shrink-0 animate-spin text-[#1B4FD8]"
+                        aria-hidden
+                      />
+                    ) : isActive ? (
+                      <HoustonBadge variant="green">Actif</HoustonBadge>
+                    ) : null}
+                  </TerrainCard>
+                </button>
+              )
+            })}
+          </div>
+        </section>
       ) : null}
+
+      {selectorError ? <p className="text-sm text-[#E24B4A]">{selectorError}</p> : null}
     </div>
   )
 }

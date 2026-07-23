@@ -202,6 +202,32 @@ def post_accept(api_client: APIClient, *, token: str, password: str = REGISTRATI
     )
 
 
+def owner_invite_payload(*, email: str = "new-owner@example.com") -> dict:
+    return {
+        "email": email,
+        "first_name": "Nora",
+        "last_name": "Owner",
+    }
+
+
+def post_owner_invitation(
+    api_client: APIClient,
+    *,
+    organization_id,
+    actor: User,
+    payload: dict | None = None,
+):
+    access_token = login(api_client, identifier=actor.email)
+    csrf_token = ensure_csrf(api_client)
+    return api_client.post(
+        f"/api/v1/organizations/{organization_id}/owner-invitations/",
+        payload or owner_invite_payload(),
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+
+
 def test_owner_deactivate_fanout_across_draft_and_active(api_client):
     organization = create_organization(name="Deactivate Fanout Org")
     active_a = create_establishment(name="Deactivate A", organization=organization)
@@ -589,24 +615,11 @@ def test_owner_deactivate_withdraws_pending_invite(api_client):
         username="withdraw_actor",
     )
 
-    access_token = login(api_client, identifier=actor.email)
-    access_token = switch_establishment(
+    invite_response = post_owner_invitation(
         api_client,
-        access_token=access_token,
-        establishment_id=active_a.id,
-    )
-    csrf_token = ensure_csrf(api_client)
-    invite_response = api_client.post(
-        f"/api/v1/establishments/{active_a.id}/membership-invitations/",
-        {
-            "email": "withdraw-owner@example.com",
-            "first_name": "Withdraw",
-            "last_name": "Owner",
-            "role": ROLE_OWNER,
-        },
-        format="json",
-        HTTP_X_CSRFTOKEN=csrf_token,
-        **auth_headers(access_token),
+        organization_id=organization.id,
+        actor=actor,
+        payload=owner_invite_payload(email="withdraw-owner@example.com"),
     )
     assert invite_response.status_code == 201, invite_response.json()
     token = invite_response.json()["invitation_token"]

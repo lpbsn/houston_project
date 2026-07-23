@@ -11,6 +11,7 @@ import {
 import {
   canAccessManagementSpace,
   canCreateCatalogActionPlanFromBootstrapHints,
+  canManageOrganizationFromBootstrapHints,
   canManageRuntimeConfigFromBootstrapHints,
   canViewActionPlanCatalogFromBootstrapHints,
   canViewTeamFromBootstrapHints,
@@ -140,7 +141,14 @@ function ProfileManagementNavCard({
 }
 
 export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: ProfilePageProps) {
-  const { activeMembership, bootstrap, memberships, user, isBootstrapping, isReady } = useAuth()
+  const {
+    activeMembership,
+    bootstrap,
+    isBootstrapping,
+    isReady,
+    memberships,
+    user,
+  } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
 
   const firstName = readOptionalUserName(user, 'first_name')
@@ -149,6 +157,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
   const role = toRoleEnum(activeMembership?.role)
   const canAccessManagement = canAccessManagementSpace(permissionHints)
   const canViewTeam = canViewTeamFromBootstrapHints(permissionHints)
+  const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
   const canManageRuntimeConfig = canManageRuntimeConfigFromBootstrapHints(permissionHints)
   const canShowActionPlansNav =
     canViewActionPlanCatalogFromBootstrapHints(permissionHints) ||
@@ -161,7 +170,10 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
     activeMembership?.establishment_name,
   )
   const establishmentId = activeMembership?.establishment_id ?? null
-  const showEstablishmentSwitch = canSwitchEstablishment(memberships, establishmentId)
+  const showSwitchEstablishment = canSwitchEstablishment(memberships, establishmentId)
+  const showEstablishmentAdmin =
+    Boolean(establishmentId) &&
+    (canManageOrganization || role === 'owner' || role === 'director' || canManageRuntimeConfig)
   const notificationPreferencesQuery = useNotificationPreferencesQuery(establishmentId)
   const updateNotificationPreferencesMutation =
     useUpdateNotificationPreferencesMutation(establishmentId)
@@ -202,7 +214,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
 
       <div className="space-y-2">
         <TerrainSectionLabel>Mon compte</TerrainSectionLabel>
-        {showEstablishmentSwitch ? (
+        {showSwitchEstablishment ? (
           <ProfileManagementNavCard
             icon={ArrowLeftRight}
             iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
@@ -210,7 +222,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
             subtitle={
               activeMembership?.establishment_name
                 ? `Actuellement : ${activeMembership.establishment_name}`
-                : 'Basculer vers un autre site'
+                : 'Basculer entre vos sites actifs'
             }
             onClick={() => onNavigate?.('/general/switch-establishment')}
           />
@@ -263,6 +275,32 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         </TerrainCard>
       </div>
 
+      {canManageOrganization || showEstablishmentAdmin ? (
+        <div className="space-y-2">
+          <TerrainSectionLabel dotVariant="primary" className="py-0">
+            Administration
+          </TerrainSectionLabel>
+          {canManageOrganization ? (
+            <ProfileManagementNavCard
+              icon={Building2}
+              iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
+              title="Gestion de l'organisation"
+              subtitle="Établissements, membres et propriétaires"
+              onClick={() => onNavigate?.('/organization')}
+            />
+          ) : null}
+          {showEstablishmentAdmin && establishmentId ? (
+            <ProfileManagementNavCard
+              icon={Building2}
+              iconClassName="bg-[#F3F0FF] text-[#6B4FD8]"
+              title="Gestion de l'établissement"
+              subtitle="Vue d'ensemble et membres de l'établissement actif"
+              onClick={() => onNavigate?.(`/organization/establishments/${establishmentId}`)}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
       {canViewTeam && !canAccessManagement ? (
         <ProfileManagementNavCard
           icon={Users}
@@ -287,7 +325,7 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2 px-0.5">
             <TerrainSectionLabel dotVariant="primary" className="py-0">
-              Gestion de l&apos;établissement
+              Opérations
             </TerrainSectionLabel>
             {role ? (
               <HoustonBadge variant="blue">{formatRoleDisplay(role).toUpperCase()}</HoustonBadge>
@@ -295,16 +333,6 @@ export function ProfilePage({ onNavigate, onSignOut, isLoggingOut = false }: Pro
           </div>
 
           <div className="space-y-2">
-            {canManageRuntimeConfig ? (
-              <ProfileManagementNavCard
-                icon={Building2}
-                iconClassName="bg-[#EEF2FF] text-[#1B4FD8]"
-                title="Établissement"
-                subtitle="Pôles d'activités et sujets"
-                onClick={() => onNavigate?.('/app/operational-config')}
-              />
-            ) : null}
-
             {canShowActionPlansNav ? (
               <ProfileManagementNavCard
                 icon={Library}

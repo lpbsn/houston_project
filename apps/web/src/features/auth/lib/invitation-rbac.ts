@@ -1,16 +1,12 @@
 import type { MembershipInvitationRequestRoleEnum, RoleEnum } from '@/features/auth/types'
 
+/** Session `/team` invite matrix — Owner invites go via `/organization` only. */
 const OWNER_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = [
-  'owner',
   'director',
   'manager',
   'staff',
 ]
-const DIRECTOR_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = [
-  'director',
-  'manager',
-  'staff',
-]
+const DIRECTOR_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['manager', 'staff']
 const MANAGER_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = ['staff']
 const NO_TARGET_ROLES: MembershipInvitationRequestRoleEnum[] = []
 
