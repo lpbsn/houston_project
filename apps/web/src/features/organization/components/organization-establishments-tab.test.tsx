@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { OrganizationEstablishmentsTab } from '../components/organization-establishments-tab'
@@ -27,21 +27,30 @@ function establishment(
   }
 }
 
+const baseProps = {
+  canCreate: false,
+  onManage: vi.fn(),
+  onAccessApp: vi.fn(),
+  pendingAccessEstablishmentId: null as string | null,
+  accessError: null as string | null,
+  accessErrorEstablishmentId: null as string | null,
+  onResume: vi.fn(),
+  onCreate: vi.fn(),
+}
+
 describe('OrganizationEstablishmentsTab resume CTA', () => {
   it('shows resume only when can continue and session exists', () => {
     const onResume = vi.fn()
     render(
       <OrganizationEstablishmentsTab
+        {...baseProps}
         establishments={[
           establishment({
             can_continue_onboarding: true,
             onboarding_session_id: 'session-1',
           }),
         ]}
-        canCreate={false}
-        onManage={vi.fn()}
         onResume={onResume}
-        onCreate={vi.fn()}
       />,
     )
     expect(screen.getByRole('button', { name: /Reprendre la configuration/i })).toBeTruthy()
@@ -50,18 +59,54 @@ describe('OrganizationEstablishmentsTab resume CTA', () => {
   it('hides resume when session is missing', () => {
     render(
       <OrganizationEstablishmentsTab
+        {...baseProps}
         establishments={[
           establishment({
             can_continue_onboarding: true,
             onboarding_session_id: null,
           }),
         ]}
-        canCreate={false}
-        onManage={vi.fn()}
-        onResume={vi.fn()}
-        onCreate={vi.fn()}
       />,
     )
     expect(screen.queryByRole('button', { name: /Reprendre la configuration/i })).toBeNull()
+  })
+})
+
+describe('OrganizationEstablishmentsTab access app CTA', () => {
+  it('shows access app for active establishments and calls onAccessApp', () => {
+    const onAccessApp = vi.fn()
+    render(
+      <OrganizationEstablishmentsTab
+        {...baseProps}
+        establishments={[
+          establishment({
+            id: 'est-active',
+            name: 'Active Hotel',
+            status: 'active',
+          }),
+        ]}
+        onAccessApp={onAccessApp}
+      />,
+    )
+
+    const button = screen.getByRole('button', { name: /Accéder à l'application/i })
+    fireEvent.click(button)
+    expect(onAccessApp).toHaveBeenCalledWith('est-active')
+  })
+
+  it('hides access app for draft establishments', () => {
+    render(
+      <OrganizationEstablishmentsTab
+        {...baseProps}
+        establishments={[
+          establishment({
+            status: 'draft',
+            can_continue_onboarding: true,
+            onboarding_session_id: 'session-1',
+          }),
+        ]}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /Accéder à l'application/i })).toBeNull()
   })
 })

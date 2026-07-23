@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useAuth } from '@/app/auth-provider'
+import { switchEstablishment } from '@/features/auth/api'
 import {
   canCreateEstablishmentFromBootstrapHints,
   canManageOrganizationFromBootstrapHints,
@@ -20,6 +21,7 @@ import {
   useOrganizationOverviewQuery,
   useOrganizationOwnersQuery,
 } from '../hooks'
+import { planOpenEstablishmentApp } from '../lib/open-establishment-app-navigation'
 import { resolveUniqueOrganizationId } from '../lib/resolve-unique-organization-id'
 import type {
   OrganizationAdminOwner,
@@ -37,7 +39,7 @@ type OrganizationPageProps = {
 }
 
 export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
-  const { bootstrap, isBootstrapping, isReady } = useAuth()
+  const { activeMembership, bootstrap, isBootstrapping, isReady } = useAuth()
   const permissionHints = getBootstrapPermissionHints(bootstrap)
   const canManageOrganization = canManageOrganizationFromBootstrapHints(permissionHints)
   const canCreateEstablishment = canCreateEstablishmentFromBootstrapHints(permissionHints)
@@ -52,6 +54,11 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
   const [createError, setCreateError] = useState<string | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [resendingUserId, setResendingUserId] = useState<string | null>(null)
+  const [accessPendingId, setAccessPendingId] = useState<string | null>(null)
+  const [accessError, setAccessError] = useState<string | null>(null)
+  const [accessErrorEstablishmentId, setAccessErrorEstablishmentId] = useState<string | null>(
+    null,
+  )
 
   const overviewQuery = useOrganizationOverviewQuery(organizationId)
   const establishmentsQuery = useOrganizationEstablishmentsQuery(organizationId)
@@ -71,6 +78,31 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
       onNavigate(getAuthenticatedLandingPath(bootstrap) ?? '/reporting', { replace: true })
     }
   }, [bootstrap, canManageOrganization, isBootstrapping, isReady, onNavigate])
+
+  async function handleAccessApp(establishmentId: string) {
+    setAccessError(null)
+    setAccessErrorEstablishmentId(null)
+    const plan = planOpenEstablishmentApp({
+      targetEstablishmentId: establishmentId,
+      activeEstablishmentId: activeMembership?.establishment_id,
+    })
+
+    if (plan.kind === 'already_selected') {
+      onNavigate(plan.path)
+      return
+    }
+
+    setAccessPendingId(establishmentId)
+    try {
+      await switchEstablishment({ establishment_id: plan.establishmentId })
+      onNavigate(plan.path)
+    } catch {
+      setAccessError('Impossible de basculer vers cet établissement.')
+      setAccessErrorEstablishmentId(establishmentId)
+    } finally {
+      setAccessPendingId(null)
+    }
+  }
 
   if (!isReady || isBootstrapping) {
     return <p className={cn('text-sm', terrain.muted)}>Chargement...</p>
@@ -124,6 +156,12 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
             onManage={(establishmentId) =>
               onNavigate(`/organization/establishments/${establishmentId}`)
             }
+            onAccessApp={(establishmentId) => {
+              void handleAccessApp(establishmentId)
+            }}
+            pendingAccessEstablishmentId={accessPendingId}
+            accessError={accessError}
+            accessErrorEstablishmentId={accessErrorEstablishmentId}
             onResume={(establishmentId, sessionId) =>
               onNavigate(buildOnboardingUrlFromIds(establishmentId, sessionId))
             }

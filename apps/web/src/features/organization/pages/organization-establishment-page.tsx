@@ -30,6 +30,7 @@ import {
   resolveEstablishmentAdminActorRole,
 } from '../lib/can-access-establishment-admin'
 import { getEstablishmentAdminInviteTargetRoles } from '../lib/establishment-admin-invite-roles'
+import { planOpenEstablishmentApp } from '../lib/open-establishment-app-navigation'
 import { planOpenOperationalConfig } from '../lib/operational-config-navigation'
 import type {
   EstablishmentAdminMemberListFilters,
@@ -70,6 +71,8 @@ export function OrganizationEstablishmentPage({
   const [actionError, setActionError] = useState<string | null>(null)
   const [opsError, setOpsError] = useState<string | null>(null)
   const [opsPending, setOpsPending] = useState(false)
+  const [appAccessError, setAppAccessError] = useState<string | null>(null)
+  const [appAccessPending, setAppAccessPending] = useState(false)
   const [pendingMembershipId, setPendingMembershipId] = useState<string | null>(null)
 
   const overviewQuery = useEstablishmentAdminOverviewQuery(canAccess ? establishmentId : null)
@@ -141,6 +144,29 @@ export function OrganizationEstablishmentPage({
     }
   }
 
+  async function handleAccessApp() {
+    setAppAccessError(null)
+    const plan = planOpenEstablishmentApp({
+      targetEstablishmentId: establishmentId,
+      activeEstablishmentId: activeMembership?.establishment_id,
+    })
+
+    if (plan.kind === 'already_selected') {
+      onNavigate(plan.path)
+      return
+    }
+
+    setAppAccessPending(true)
+    try {
+      await switchEstablishment({ establishment_id: plan.establishmentId })
+      onNavigate(plan.path)
+    } catch {
+      setAppAccessError('Impossible de basculer vers cet établissement.')
+    } finally {
+      setAppAccessPending(false)
+    }
+  }
+
   if (!isReady || isBootstrapping) {
     return <p className={cn('text-sm', terrain.muted)}>Chargement...</p>
   }
@@ -171,16 +197,30 @@ export function OrganizationEstablishmentPage({
           ) : null}
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:items-end">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={opsPending}
-            onClick={() => {
-              void handleOpenOperationalConfig()
-            }}
-          >
-            Configuration opérationnelle
-          </Button>
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+            {overview?.status === 'active' ? (
+              <Button
+                type="button"
+                disabled={appAccessPending}
+                onClick={() => {
+                  void handleAccessApp()
+                }}
+              >
+                Accéder à l&apos;application
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={opsPending}
+              onClick={() => {
+                void handleOpenOperationalConfig()
+              }}
+            >
+              Configuration opérationnelle
+            </Button>
+          </div>
+          {appAccessError ? <p className="text-sm text-red-600">{appAccessError}</p> : null}
           {opsError ? <p className="text-sm text-red-600">{opsError}</p> : null}
         </div>
       </header>

@@ -11,6 +11,10 @@ type OrganizationEstablishmentsTabProps = {
   establishments: OrganizationAdminEstablishment[]
   canCreate: boolean
   onManage: (establishmentId: string) => void
+  onAccessApp: (establishmentId: string) => void
+  pendingAccessEstablishmentId: string | null
+  accessError: string | null
+  accessErrorEstablishmentId: string | null
   onResume: (establishmentId: string, sessionId: string) => void
   onCreate: () => void
 }
@@ -28,6 +32,10 @@ export function OrganizationEstablishmentsTab({
   establishments,
   canCreate,
   onManage,
+  onAccessApp,
+  pendingAccessEstablishmentId,
+  accessError,
+  accessErrorEstablishmentId,
   onResume,
   onCreate,
 }: OrganizationEstablishmentsTabProps) {
@@ -65,13 +73,25 @@ export function OrganizationEstablishmentsTab({
                 </div>
                 <HoustonBadge variant="green">Actif</HoustonBadge>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onManage(establishment.id)}
-              >
-                Gérer l&apos;établissement
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onManage(establishment.id)}
+                >
+                  Gérer l&apos;établissement
+                </Button>
+                <Button
+                  type="button"
+                  disabled={pendingAccessEstablishmentId === establishment.id}
+                  onClick={() => onAccessApp(establishment.id)}
+                >
+                  Accéder à l&apos;application
+                </Button>
+              </div>
+              {accessError && accessErrorEstablishmentId === establishment.id ? (
+                <p className="text-sm text-red-600">{accessError}</p>
+              ) : null}
             </TerrainCard>
           ))
         )}
