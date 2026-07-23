@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { queryClient } from '@/lib/query-client'
+import {
+  getSuccessToastsSnapshot,
+  notifySuccess,
+  resetSuccessToastsForTests,
+} from '@/lib/success-toast'
 
 const {
   withAuthRetryMock,
@@ -86,6 +91,7 @@ describe('auth api cache isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queryClient.clear()
+    resetSuccessToastsForTests()
     withAuthRetryMock.mockImplementation(async (execute: (token: string | null) => Promise<unknown>) =>
       execute('access-token'),
     )
@@ -93,6 +99,7 @@ describe('auth api cache isolation', () => {
 
   it('purges non-auth queries when switching establishment', async () => {
     seedStaleNonAuthQueries()
+    notifySuccess({ message: 'stale toast', kind: 'created' })
 
     withAuthRetryMock.mockResolvedValueOnce({
       response: { status: 200 },
@@ -105,10 +112,12 @@ describe('auth api cache isolation', () => {
     expect(result).toEqual(bootstrapPayload)
     expectStaleNonAuthQueriesPurged()
     expect(queryClient.getQueryData(bootstrapQueryKey)).toEqual(bootstrapPayload)
+    expect(getSuccessToastsSnapshot()).toEqual([])
   })
 
   it('purges non-auth queries on login', async () => {
     seedStaleNonAuthQueries()
+    notifySuccess({ message: 'stale toast', kind: 'created' })
 
     apiClientPostMock.mockResolvedValueOnce({
       response: { status: 200 },
@@ -129,10 +138,12 @@ describe('auth api cache isolation', () => {
       permission_hints: bootstrapPayload.permission_hints,
     })
     expect(setAccessTokenMock).toHaveBeenCalledWith('new-access-token')
+    expect(getSuccessToastsSnapshot()).toEqual([])
   })
 
   it('purges non-auth queries on registerOnboarding', async () => {
     seedStaleNonAuthQueries()
+    notifySuccess({ message: 'stale toast', kind: 'created' })
 
     apiClientPostMock.mockResolvedValueOnce({
       response: { status: 201 },
@@ -160,6 +171,7 @@ describe('auth api cache isolation', () => {
       permission_hints: bootstrapPayload.permission_hints,
     })
     expect(setAccessTokenMock).toHaveBeenCalledWith('new-access-token')
+    expect(getSuccessToastsSnapshot()).toEqual([])
   })
 
   it('clears the entire query cache on clearAuthState', () => {
@@ -167,6 +179,7 @@ describe('auth api cache isolation', () => {
     queryClient.setQueryData(['chat', 'conversations', 'est-a'], { items: [] })
     queryClient.setQueryData(['reporting', 'kpi', 'est-a'], { kpi: 1 })
     queryClient.setQueryData(bootstrapQueryKey, bootstrapPayload)
+    notifySuccess({ message: 'stale toast', kind: 'created' })
 
     clearAuthState()
 
@@ -176,5 +189,6 @@ describe('auth api cache isolation', () => {
     expect(queryClient.getQueryData(['reporting', 'kpi', 'est-a'])).toBeUndefined()
     expect(queryClient.getQueryData(bootstrapQueryKey)).toBeUndefined()
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(getSuccessToastsSnapshot()).toEqual([])
   })
 })

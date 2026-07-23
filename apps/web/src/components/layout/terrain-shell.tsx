@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { BottomMobileNav } from '@/components/layout/bottom-mobile-nav'
 import { TerrainErrorBoundary } from '@/components/layout/terrain-error-boundary'
 import { NetworkStatusBanner } from '@/components/layout/network-status-banner'
+import { SuccessToastHost } from '@/components/domain/success-toast-host'
 import { ObservationProcessingBanner } from '@/features/observations/components/observation-processing-banner'
 import { OperationalReconnectBanner } from '@/features/realtime/components/operational-reconnect-banner'
 import { useOptionalOperationalRealtime } from '@/features/realtime/components/operational-realtime-provider'
@@ -47,7 +48,10 @@ export function TerrainShell({
       data-terrain-shell-root
       className="fixed inset-x-0 top-0 mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-[#F5F4F0]"
     >
-      <ObservationProcessingBanner navigate={navigate} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex flex-col gap-2 px-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <ObservationProcessingBanner navigate={navigate} />
+        <SuccessToastHost />
+      </div>
       <div className="shrink-0">{topbar}</div>
       {updateBanner ? <div className="shrink-0">{updateBanner}</div> : null}
       <NetworkStatusBanner isOnline={isOnline} />

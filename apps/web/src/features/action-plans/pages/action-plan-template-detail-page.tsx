@@ -6,6 +6,7 @@ import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
 import { TerrainCard, TerrainErrorState, TerrainSectionLabel } from '@/components/ui/terrain'
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
+import { notifySuccess } from '@/lib/success-toast'
 import { terrain } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -143,7 +144,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     setFeedback(null)
     try {
       await activateMutation.mutateAsync()
-      setFeedback({ variant: 'success', message: 'Plan activé dans la bibliothèque.' })
+      notifySuccess({ message: 'Modèle activé.', kind: 'activated' })
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -156,7 +157,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     setFeedback(null)
     try {
       await deactivateMutation.mutateAsync()
-      setFeedback({ variant: 'success', message: 'Plan désactivé.' })
+      notifySuccess({ message: 'Modèle désactivé.', kind: 'deactivated' })
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -199,10 +200,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
       })
       clearPlanningSubmissionIntent(establishmentId, actionPlanId)
       resetExecutionPanel()
-      sessionStorage.setItem(
-        'houston:planning-feedback',
-        formatPlanningSubmitFeedback(response.summary),
-      )
+      notifySuccess({
+        message: formatPlanningSubmitFeedback(response.summary),
+        kind: 'created',
+      })
       navigate('/execution')
     } catch (error) {
       setFeedback({

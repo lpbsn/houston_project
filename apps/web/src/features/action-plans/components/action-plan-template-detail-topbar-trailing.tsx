@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { notifySuccess } from '@/lib/success-toast'
 
 import { useActionPlanDetailQuery, useDeleteActionPlanMutation } from '../hooks'
 import {
@@ -42,6 +43,7 @@ export function ActionPlanTemplateDetailTopbarTrailing({
     }
     try {
       await deleteMutation.mutateAsync()
+      notifySuccess({ message: 'Modèle supprimé.', kind: 'deleted' })
       onNavigate('/action-plans')
     } catch {
       // Error feedback is shown on the detail page via shared mutation state.

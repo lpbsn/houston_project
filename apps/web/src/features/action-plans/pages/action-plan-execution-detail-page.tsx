@@ -19,6 +19,7 @@ import {
 import { TerrainFeedback } from '@/components/domain/terrain-feedback'
 import { trackObservation } from '@/features/observations/components/observation-processing-tracker-provider'
 import { resolveApiErrorMessage } from '@/lib/error-message'
+import { notifySuccess } from '@/lib/success-toast'
 import { cn } from '@/lib/utils'
 
 import { ActionPlansApiError } from '../api'
@@ -51,6 +52,7 @@ import {
 } from '../lib/action-plan-display'
 import { filterActionPlanTasksByPole } from '../lib/filter-action-plan-tasks-by-pole'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
+import { resolveMarkActionPlanExecutionDoneSuccess } from '../lib/action-plan-lifecycle-success-messages'
 import {
   canShowActionPlanExecutionCancel,
 } from '../lib/action-plan-permission-hints'
@@ -180,8 +182,8 @@ function ActionPlanExecutionDetailPageContent({
   async function handleMarkDone() {
     setFeedback(null)
     try {
-      await markDoneMutation.mutateAsync()
-      setFeedback({ variant: 'success', message: 'Plan marqué comme terminé.' })
+      const result = await markDoneMutation.mutateAsync()
+      notifySuccess(resolveMarkActionPlanExecutionDoneSuccess(result.status))
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -194,7 +196,7 @@ function ActionPlanExecutionDetailPageContent({
     setFeedback(null)
     try {
       await validateMutation.mutateAsync()
-      setFeedback({ variant: 'success', message: 'Plan validé.' })
+      notifySuccess({ message: 'Plan validé.', kind: 'validated' })
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -207,7 +209,7 @@ function ActionPlanExecutionDetailPageContent({
     setFeedback(null)
     try {
       await reopenMutation.mutateAsync()
-      setFeedback({ variant: 'success', message: 'Plan rouvert.' })
+      notifySuccess({ message: 'Plan rouvert.', kind: 'reopened' })
     } catch (error) {
       setFeedback({
         variant: 'error',
@@ -220,7 +222,7 @@ function ActionPlanExecutionDetailPageContent({
     setFeedback(null)
     try {
       await cancelMutation.mutateAsync()
-      setFeedback({ variant: 'success', message: 'Plan annulé.' })
+      notifySuccess({ message: 'Plan annulé.', kind: 'canceled' })
     } catch (error) {
       setFeedback({
         variant: 'error',

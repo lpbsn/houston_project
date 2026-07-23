@@ -185,11 +185,33 @@ export function isCatalogPlanningPrimaryDisabled(
   return false
 }
 
+function formatExecutionNoun(count: number): string {
+  return count === 1 ? '1 exécution' : `${count} exécutions`
+}
+
+function formatScheduleNoun(count: number): string {
+  return count === 1 ? '1 planification' : `${count} planifications`
+}
+
 export function formatPlanningSubmitFeedback(summary: {
   executions_created: number
   schedules_created: number
 }): string {
-  return `${summary.schedules_created} planifications et ${summary.executions_created} exécutions ont été créées.`
+  const schedules = summary.schedules_created
+  const executions = summary.executions_created
+
+  if (schedules > 0 && executions > 0) {
+    return `${formatScheduleNoun(schedules)} et ${formatExecutionNoun(executions)} créées.`
+  }
+  if (schedules > 0) {
+    return schedules === 1
+      ? '1 planification créée.'
+      : `${schedules} planifications créées.`
+  }
+  if (executions > 0) {
+    return executions === 1 ? '1 exécution créée.' : `${executions} exécutions créées.`
+  }
+  return '0 exécution créée.'
 }
 
 export function resolveCatalogPlanningSubmitFallbackMessage(
