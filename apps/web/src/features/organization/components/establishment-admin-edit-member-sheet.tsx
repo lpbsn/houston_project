@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { TerrainBottomSheet } from '@/components/ui/terrain'
@@ -27,6 +27,16 @@ type EditEstablishmentMemberSheetProps = {
   filterOptions: EstablishmentAdminMemberFilterOptions | undefined
 }
 
+type EditEstablishmentMemberSheetInnerProps = {
+  member: EstablishmentAdminMembership
+  onClose: () => void
+  onSubmit: (body: PatchedEstablishmentAdminMembershipUpdateRequest) => Promise<void>
+  isSubmitting: boolean
+  errorMessage: string | null
+  allowedRoles: EstablishmentAdminInviteRole[]
+  filterOptions: EstablishmentAdminMemberFilterOptions | undefined
+}
+
 function toAdminRole(role: string): EstablishmentAdminInviteRole | null {
   if (role === 'director' || role === 'manager' || role === 'staff') {
     return role
@@ -44,7 +54,34 @@ export function EditEstablishmentMemberSheet({
   allowedRoles,
   filterOptions,
 }: EditEstablishmentMemberSheetProps) {
-  const currentRole = member ? toAdminRole(member.role) : null
+  if (!open || !member) {
+    return null
+  }
+
+  return (
+    <EditEstablishmentMemberSheetInner
+      key={member.id}
+      member={member}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      isSubmitting={isSubmitting}
+      errorMessage={errorMessage}
+      allowedRoles={allowedRoles}
+      filterOptions={filterOptions}
+    />
+  )
+}
+
+function EditEstablishmentMemberSheetInner({
+  member,
+  onClose,
+  onSubmit,
+  isSubmitting,
+  errorMessage,
+  allowedRoles,
+  filterOptions,
+}: EditEstablishmentMemberSheetInnerProps) {
+  const currentRole = toAdminRole(member.role)
   const roleOptions = useMemo(() => {
     if (!currentRole) {
       return allowedRoles
@@ -55,32 +92,27 @@ export function EditEstablishmentMemberSheet({
     return [currentRole, ...allowedRoles]
   }, [allowedRoles, currentRole])
 
-  const [role, setRole] = useState<EstablishmentAdminInviteRole>(currentRole ?? 'staff')
-  const [selectedBuIds, setSelectedBuIds] = useState<string[]>([])
-
-  useEffect(() => {
-    if (!open || !member) {
-      return
-    }
-    const nextRole = toAdminRole(member.role) ?? allowedRoles[0] ?? 'staff'
-    setRole(nextRole)
-    setSelectedBuIds(member.business_units.map((unit) => unit.id))
-  }, [allowedRoles, member, open])
+  const [role, setRole] = useState<EstablishmentAdminInviteRole>(
+    () => toAdminRole(member.role) ?? allowedRoles[0] ?? 'staff',
+  )
+  const [selectedBuIds, setSelectedBuIds] = useState<string[]>(() =>
+    member.business_units.map((unit) => unit.id),
+  )
 
   const effectiveRole = useMemo(() => {
     if (roleOptions.includes(role)) return role
     return roleOptions[0] ?? 'staff'
   }, [role, roleOptions])
 
-  const canEditRole = Boolean(member?.permission_hints.can_edit_role)
+  const canEditRole = Boolean(member.permission_hints.can_edit_role)
   const needsScopes = establishmentAdminInviteRequiresScopes(effectiveRole)
   const canEditScopes =
-    Boolean(member?.permission_hints.can_edit_scopes) ||
+    Boolean(member.permission_hints.can_edit_scopes) ||
     (canEditRole && needsScopes && effectiveRole !== currentRole)
   const businessUnits = filterOptions?.business_units ?? []
 
   const roleChanged = canEditRole && currentRole !== null && effectiveRole !== currentRole
-  const initialBuIds = member?.business_units.map((unit) => unit.id) ?? []
+  const initialBuIds = member.business_units.map((unit) => unit.id)
   const scopesChanged =
     canEditScopes &&
     needsScopes &&
@@ -88,18 +120,15 @@ export function EditEstablishmentMemberSheet({
       selectedBuIds.some((id) => !initialBuIds.includes(id)))
 
   const canSubmit =
-    Boolean(member) &&
-    (roleChanged || scopesChanged) &&
-    (!needsScopes || selectedBuIds.length > 0)
+    (roleChanged || scopesChanged) && (!needsScopes || selectedBuIds.length > 0)
 
-  const displayName = member
-    ? [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email
-    : ''
+  const displayName =
+    [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email
 
   return (
     <TerrainBottomSheet
       title="Modifier le membre"
-      open={open && member !== null}
+      open
       onClose={onClose}
       footer={
         <Button
@@ -107,9 +136,6 @@ export function EditEstablishmentMemberSheet({
           className="w-full"
           disabled={isSubmitting || !canSubmit}
           onClick={async () => {
-            if (!member) {
-              return
-            }
             const body: PatchedEstablishmentAdminMembershipUpdateRequest = {}
             if (canEditRole && roleChanged) {
               body.role = effectiveRole
@@ -134,7 +160,7 @@ export function EditEstablishmentMemberSheet({
     >
       <div className="space-y-3 p-4">
         <p className="text-sm font-medium text-[#1a1a1a]">{displayName}</p>
-        <p className={cn('text-xs', terrain.muted)}>{member?.email}</p>
+        <p className={cn('text-xs', terrain.muted)}>{member.email}</p>
 
         {canEditRole ? (
           <label className="block space-y-1.5">
@@ -155,7 +181,7 @@ export function EditEstablishmentMemberSheet({
           </label>
         ) : (
           <p className="text-sm text-[#1a1a1a]">
-            Rôle : {currentRole ? formatOrgRole(currentRole) : member?.role}
+            Rôle : {currentRole ? formatOrgRole(currentRole) : member.role}
           </p>
         )}
 
