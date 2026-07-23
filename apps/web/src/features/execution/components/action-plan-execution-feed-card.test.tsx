@@ -10,6 +10,42 @@ import { ActionPlanExecutionFeedCard } from './action-plan-execution-feed-card'
 const onSelect = vi.fn()
 const COUNTDOWN_NOW = Date.parse('2026-07-10T12:00:00Z')
 
+const maintenancePilotBusinessUnit = {
+  id: 'bu-maint',
+  specific_name: 'Maintenance',
+  instance_description: '',
+  active: true,
+  generic: {
+    key: 'maintenance',
+    label: 'Maintenance',
+    description: '',
+    unit_type: 'dedicated' as const,
+  },
+}
+
+const classificationWithAffectedSummary = {
+  affected_business_unit_key: 'restaurant',
+  affected_business_unit_label: 'Restaurant',
+  responsible_business_unit_key: 'maintenance',
+  responsible_business_unit_label: 'Maintenance',
+  activity_subject_normalized_name: 'equipements',
+  activity_subject_label: 'Équipements d’exploitation',
+}
+
+function expectClassificationBadgesWithAffectedLineBelow() {
+  const pilotBadge = screen.getByText('Maintenance', { exact: true })
+  const classificationBadge = screen.getByText('Maintenance · Équipements d’exploitation')
+  const affectedLine = screen.getByText('Concerné : Restaurant')
+  const badgesRow = pilotBadge.parentElement
+
+  expect(badgesRow?.className).toContain('items-center')
+  expect(badgesRow?.contains(classificationBadge)).toBe(true)
+  expect(badgesRow?.contains(affectedLine)).toBe(false)
+  expect(affectedLine.parentElement?.contains(badgesRow as Node)).toBe(true)
+
+  return { pilotBadge, classificationBadge, affectedLine, badgesRow }
+}
+
 function buildFeedItem(
   overrides: Partial<ActionPlanExecutionFeedItem> = {},
 ): ActionPlanExecutionFeedItem {
@@ -187,26 +223,8 @@ describe('ActionPlanExecutionFeedCard', () => {
           status: 'scheduled',
           start_at: '2026-07-13T12:00:00Z',
           end_at: null,
-          pilot_business_unit: {
-            id: 'bu-maint',
-            specific_name: 'Maintenance',
-            instance_description: '',
-            active: true,
-            generic: {
-              key: 'maintenance',
-              label: 'Maintenance',
-              description: '',
-              unit_type: 'dedicated',
-            },
-          },
-          signal_summary: {
-            affected_business_unit_key: 'restaurant',
-            affected_business_unit_label: 'Restaurant',
-            responsible_business_unit_key: 'maintenance',
-            responsible_business_unit_label: 'Maintenance',
-            activity_subject_normalized_name: 'equipements',
-            activity_subject_label: 'Équipements d’exploitation',
-          },
+          pilot_business_unit: maintenancePilotBusinessUnit,
+          signal_summary: classificationWithAffectedSummary,
           permission_hints: {
             can_mark_done: false,
             can_validate: false,
@@ -228,18 +246,46 @@ describe('ActionPlanExecutionFeedCard', () => {
     expect(document.querySelector('.bg-\\[\\#8B6914\\]')).toBeTruthy()
     expect(screen.queryByRole('progressbar')).toBeNull()
 
-    const pilotBadge = screen.getByText('Maintenance', { exact: true })
-    const classificationBadge = screen.getByText('Maintenance · Équipements d’exploitation')
-    const affectedLine = screen.getByText('Concerné : Restaurant')
-    const badgesRow = pilotBadge.parentElement
+    const { affectedLine, badgesRow } = expectClassificationBadgesWithAffectedLineBelow()
     const headerRow = badgesRow?.parentElement
 
-    expect(badgesRow?.className).toContain('items-center')
-    expect(badgesRow?.contains(classificationBadge)).toBe(true)
-    expect(badgesRow?.contains(affectedLine)).toBe(false)
     expect(headerRow?.className).toContain('justify-between')
     expect(headerRow?.contains(affectedLine)).toBe(false)
     expect(affectedLine.parentElement?.contains(headerRow as Node)).toBe(true)
+  })
+
+  it('keeps Concerné below the badges row on in_progress cards', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({
+          pilot_business_unit: maintenancePilotBusinessUnit,
+          signal_summary: classificationWithAffectedSummary,
+        })}
+        onSelect={onSelect}
+      />,
+    )
+
+    const { affectedLine, badgesRow } = expectClassificationBadgesWithAffectedLineBelow()
+    const headerRow = badgesRow?.parentElement
+
+    expect(headerRow?.className).toContain('justify-between')
+    expect(headerRow?.contains(affectedLine)).toBe(false)
+    expect(affectedLine.parentElement?.contains(headerRow as Node)).toBe(true)
+  })
+
+  it('keeps Concerné below the badges row on pending validation cards', () => {
+    render(
+      <ActionPlanExecutionFeedCard
+        item={buildFeedItem({
+          status: 'pending_validation',
+          pilot_business_unit: maintenancePilotBusinessUnit,
+          signal_summary: classificationWithAffectedSummary,
+        })}
+        onSelect={onSelect}
+      />,
+    )
+
+    expectClassificationBadgesWithAffectedLineBelow()
   })
 
   it('highlights overdue deadline on pending validation cards', () => {

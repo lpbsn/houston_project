@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Bell } from 'lucide-react'
 
 import { FeedCardActionsButton, FeedCardMetaRow } from '@/components/domain/feed-card-meta-row'
@@ -17,7 +18,6 @@ import { ActionPlanPinnedBadge } from '@/features/action-plans/components/action
 import { ActionPlanStatusBadge } from '@/features/action-plans/components/action-plan-status-badge'
 import { canOpenActionPlanExecutionFeedCardActions } from '@/features/action-plans/lib/action-plan-execution-feed-card-actions'
 import type { ActionPlanExecutionFeedItem } from '@/features/action-plans/types'
-import { SignalClassificationBadges } from '@/features/signals/components/signal-classification-badges'
 import { formatSignalRelativeTime } from '@/features/signals/lib/signal-display'
 import { formatSignalClassification } from '@/lib/signal-classification'
 
@@ -73,20 +73,38 @@ function ActionPlanFeedCardActionsButton({ item, onOpenActions }: ActionPlanFeed
   )
 }
 
-function ActionPlanFeedPilotBadge({ label }: { label: string }) {
-  return <HoustonBadge variant="gray">{label}</HoustonBadge>
-}
-
-type ActionPlanFeedHeaderBadgesProps = {
+type ActionPlanFeedClassificationBlockProps = {
   item: ActionPlanExecutionFeedItem
   signalInput: ReturnType<typeof actionPlanFeedSignalClassificationInput>
+  children: (badges: ReactNode) => ReactNode
 }
 
-function ActionPlanFeedHeaderBadges({ item, signalInput }: ActionPlanFeedHeaderBadgesProps) {
+/** Flat pilot + primary badges; `Concerné` is rendered below the badges row (not inside it). */
+function ActionPlanFeedClassificationBlock({
+  item,
+  signalInput,
+  children,
+}: ActionPlanFeedClassificationBlockProps) {
+  const classification = signalInput ? formatSignalClassification(signalInput) : null
+  const badges = (
+    <>
+      <HoustonBadge variant="gray" className="shrink-0 leading-none">
+        {item.pilot_business_unit.specific_name}
+      </HoustonBadge>
+      {classification?.primaryLine ? (
+        <HoustonBadge variant="gray" className="min-w-0 truncate leading-none">
+          {classification.primaryLine}
+        </HoustonBadge>
+      ) : null}
+    </>
+  )
+
   return (
     <>
-      <ActionPlanFeedPilotBadge label={item.pilot_business_unit.specific_name} />
-      {signalInput ? <SignalClassificationBadges signal={signalInput} /> : null}
+      {children(badges)}
+      {classification?.affectedLine ? (
+        <p className="mb-1 text-[11px] leading-none text-[#888]">{classification.affectedLine}</p>
+      ) : null}
     </>
   )
 }
@@ -106,15 +124,19 @@ function ActionPlanFeedCardHeader({
 }: ActionPlanFeedCardHeaderProps) {
   return (
     <>
-      <FeedCardMetaRow
-        timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-        badges={<ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />}
-        actions={
-          showActions && onOpenActions ? (
-            <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-          ) : null
-        }
-      />
+      <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
+        {(badges) => (
+          <FeedCardMetaRow
+            timeLabel={formatSignalRelativeTime(item.last_activity_at)}
+            badges={badges}
+            actions={
+              showActions && onOpenActions ? (
+                <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+              ) : null
+            }
+          />
+        )}
+      </ActionPlanFeedClassificationBlock>
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
     </>
   )
@@ -220,9 +242,11 @@ function PendingValidationActionPlanFeedCard({
         </div>
       </div>
 
-      <div className="mb-1 mt-2 flex flex-wrap items-center gap-1">
-        <ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />
-      </div>
+      <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
+        {(badges) => (
+          <div className="mb-1 mt-2 flex flex-wrap items-center gap-1">{badges}</div>
+        )}
+      </ActionPlanFeedClassificationBlock>
 
       <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
 
@@ -256,15 +280,19 @@ function InProgressActionPlanFeedCard({
       <ActionPlanFeedSidebar state={sidebarState} />
 
       <div className="min-w-0 flex-1 p-4">
-        <FeedCardMetaRow
-          timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-          badges={<ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />}
-          actions={
-            showActions && onOpenActions ? (
-              <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-            ) : null
-          }
-        />
+        <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
+          {(badges) => (
+            <FeedCardMetaRow
+              timeLabel={formatSignalRelativeTime(item.last_activity_at)}
+              badges={badges}
+              actions={
+                showActions && onOpenActions ? (
+                  <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+                ) : null
+              }
+            />
+          )}
+        </ActionPlanFeedClassificationBlock>
 
         <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
 
@@ -293,34 +321,22 @@ function ScheduledActionPlanFeedCardHeader({
   showActions,
   onOpenActions,
 }: ActionPlanFeedCardHeaderProps) {
-  const classification = signalInput ? formatSignalClassification(signalInput) : null
-
   return (
-    <>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1">
-          <HoustonBadge variant="gray" className="shrink-0 leading-none">
-            {item.pilot_business_unit.specific_name}
-          </HoustonBadge>
-          {classification?.primaryLine ? (
-            <HoustonBadge variant="gray" className="min-w-0 truncate leading-none">
-              {classification.primaryLine}
-            </HoustonBadge>
-          ) : null}
+    <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
+      {(badges) => (
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1">{badges}</div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <span className="text-[11px] leading-none text-[#888]">
+              {formatSignalRelativeTime(item.last_activity_at)}
+            </span>
+            {showActions && onOpenActions ? (
+              <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+            ) : null}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <span className="text-[11px] leading-none text-[#888]">
-            {formatSignalRelativeTime(item.last_activity_at)}
-          </span>
-          {showActions && onOpenActions ? (
-            <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-          ) : null}
-        </div>
-      </div>
-      {classification?.affectedLine ? (
-        <p className="mb-1 text-[11px] leading-none text-[#888]">{classification.affectedLine}</p>
-      ) : null}
-    </>
+      )}
+    </ActionPlanFeedClassificationBlock>
   )
 }
 
@@ -394,15 +410,19 @@ function TerminalActionPlanFeedCard({
       <ActionPlanFeedSidebar variant={sidebarVariant} />
 
       <div className="min-w-0 flex-1 p-4">
-        <FeedCardMetaRow
-          timeLabel={formatSignalRelativeTime(item.last_activity_at)}
-          badges={<ActionPlanFeedHeaderBadges item={item} signalInput={signalInput} />}
-          actions={
-            showActions && onOpenActions ? (
-              <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
-            ) : null
-          }
-        />
+        <ActionPlanFeedClassificationBlock item={item} signalInput={signalInput}>
+          {(badges) => (
+            <FeedCardMetaRow
+              timeLabel={formatSignalRelativeTime(item.last_activity_at)}
+              badges={badges}
+              actions={
+                showActions && onOpenActions ? (
+                  <ActionPlanFeedCardActionsButton item={item} onOpenActions={onOpenActions} />
+                ) : null
+              }
+            />
+          )}
+        </ActionPlanFeedClassificationBlock>
 
         <h3 className="line-clamp-2 text-lg font-bold text-[#1a1a1a]">{item.title}</h3>
 
