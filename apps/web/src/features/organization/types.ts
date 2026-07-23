@@ -15,6 +15,17 @@ export type OrganizationAdminOwnerInvitationRequest =
   components['schemas']['OrganizationAdminOwnerInvitationRequest']
 export type DirectorInvitationResponse = components['schemas']['DirectorInvitationResponse']
 
+export type EstablishmentAdminOverview = components['schemas']['EstablishmentAdminOverview']
+export type EstablishmentAdminMembership = components['schemas']['EstablishmentAdminMembership']
+export type EstablishmentAdminMembershipList =
+  components['schemas']['EstablishmentAdminMembershipList']
+export type EstablishmentAdminMemberFilterOptions =
+  components['schemas']['EstablishmentAdminMemberFilterOptions']
+export type EstablishmentAdminMembershipInvitationRequest =
+  components['schemas']['EstablishmentAdminMembershipInvitationRequest']
+export type PatchedEstablishmentAdminMembershipUpdateRequest =
+  components['schemas']['PatchedEstablishmentAdminMembershipUpdateRequest']
+
 export type OrganizationMemberListFilters = {
   q?: string
   establishment_id?: string
@@ -23,4 +34,12 @@ export type OrganizationMemberListFilters = {
   status?: string
 }
 
+export type EstablishmentAdminMemberListFilters = {
+  q?: string
+  business_unit_id?: string
+  role?: string
+  status?: string
+}
+
 export type OrganizationTab = 'establishments' | 'members' | 'owners'
+export type EstablishmentAdminTab = 'overview' | 'members'

@@ -93,12 +93,11 @@ export function OrganizationPage({ onNavigate }: OrganizationPageProps) {
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight text-[#1a1a1a]">
-          Gestion de l&apos;organisation
-        </h2>
         {overview ? (
           <>
-            <p className="text-base font-medium text-[#1a1a1a]">{overview.name}</p>
+            <h2 className="text-2xl font-semibold tracking-tight text-[#1a1a1a]">
+              {overview.name}
+            </h2>
             <p className={cn('text-sm', terrain.muted)}>
               {overview.active_establishment_count} établissements actifs ·{' '}
               {overview.draft_establishment_count} en configuration

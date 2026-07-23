@@ -3,10 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createEstablishment } from '@/features/auth/api'
 
 import {
+  activateEstablishmentAdminMembership,
+  deactivateEstablishmentAdminMembership,
+  establishmentAdminMemberFilterOptionsQueryKey,
+  establishmentAdminMembershipsQueryKey,
+  establishmentAdminOverviewQueryKey,
+  getEstablishmentAdminMemberFilterOptions,
+  getEstablishmentAdminOverview,
   getOrganizationMemberFilterOptions,
   getOrganizationOverview,
+  invalidateEstablishmentAdminQueries,
   invalidateOrganizationQueries,
+  inviteEstablishmentAdminMembership,
   inviteOrganizationOwner,
+  listEstablishmentAdminMemberships,
   listOrganizationEstablishments,
   listOrganizationMembers,
   listOrganizationOwners,
@@ -15,10 +25,14 @@ import {
   organizationMembersQueryKey,
   organizationOverviewQueryKey,
   organizationOwnersQueryKey,
+  updateEstablishmentAdminMembership,
 } from './api'
 import type {
+  EstablishmentAdminMemberListFilters,
+  EstablishmentAdminMembershipInvitationRequest,
   OrganizationAdminOwnerInvitationRequest,
   OrganizationMemberListFilters,
+  PatchedEstablishmentAdminMembershipUpdateRequest,
 } from './types'
 
 export function useOrganizationOverviewQuery(organizationId: string | null) {
@@ -93,6 +107,83 @@ export function useCreateOrganizationEstablishmentMutation(organizationId: strin
     mutationFn: (name: string) => createEstablishment({ name }),
     onSuccess: async () => {
       await invalidateOrganizationQueries(organizationId)
+    },
+  })
+}
+
+export function useEstablishmentAdminOverviewQuery(establishmentId: string | null) {
+  return useQuery({
+    queryKey: establishmentId
+      ? establishmentAdminOverviewQueryKey(establishmentId)
+      : ['organization', 'establishment', 'overview', 'disabled'],
+    queryFn: () => getEstablishmentAdminOverview(establishmentId!),
+    enabled: Boolean(establishmentId),
+  })
+}
+
+export function useEstablishmentAdminMembershipsQuery(
+  establishmentId: string | null,
+  filters: EstablishmentAdminMemberListFilters,
+) {
+  return useQuery({
+    queryKey: establishmentId
+      ? establishmentAdminMembershipsQueryKey(establishmentId, filters)
+      : ['organization', 'establishment', 'memberships', 'disabled'],
+    queryFn: () => listEstablishmentAdminMemberships(establishmentId!, filters),
+    enabled: Boolean(establishmentId),
+  })
+}
+
+export function useEstablishmentAdminMemberFilterOptionsQuery(
+  establishmentId: string | null,
+) {
+  return useQuery({
+    queryKey: establishmentId
+      ? establishmentAdminMemberFilterOptionsQueryKey(establishmentId)
+      : ['organization', 'establishment', 'membership-filter-options', 'disabled'],
+    queryFn: () => getEstablishmentAdminMemberFilterOptions(establishmentId!),
+    enabled: Boolean(establishmentId),
+  })
+}
+
+export function useInviteEstablishmentAdminMembershipMutation(establishmentId: string) {
+  return useMutation({
+    mutationFn: (body: EstablishmentAdminMembershipInvitationRequest) =>
+      inviteEstablishmentAdminMembership(establishmentId, body),
+    onSuccess: async () => {
+      await invalidateEstablishmentAdminQueries(establishmentId)
+    },
+  })
+}
+
+export function useUpdateEstablishmentAdminMembershipMutation(establishmentId: string) {
+  return useMutation({
+    mutationFn: (input: {
+      membershipId: string
+      body: PatchedEstablishmentAdminMembershipUpdateRequest
+    }) => updateEstablishmentAdminMembership(establishmentId, input.membershipId, input.body),
+    onSuccess: async () => {
+      await invalidateEstablishmentAdminQueries(establishmentId)
+    },
+  })
+}
+
+export function useDeactivateEstablishmentAdminMembershipMutation(establishmentId: string) {
+  return useMutation({
+    mutationFn: (membershipId: string) =>
+      deactivateEstablishmentAdminMembership(establishmentId, membershipId),
+    onSuccess: async () => {
+      await invalidateEstablishmentAdminQueries(establishmentId)
+    },
+  })
+}
+
+export function useActivateEstablishmentAdminMembershipMutation(establishmentId: string) {
+  return useMutation({
+    mutationFn: (membershipId: string) =>
+      activateEstablishmentAdminMembership(establishmentId, membershipId),
+    onSuccess: async () => {
+      await invalidateEstablishmentAdminQueries(establishmentId)
     },
   })
 }

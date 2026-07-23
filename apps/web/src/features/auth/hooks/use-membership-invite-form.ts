@@ -1,11 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
-import {
-  inviteMembership,
-  invalidateMembershipListQueries,
-  invalidateMembershipWorkspaceQueries,
-} from '@/features/auth/api'
+import { inviteMembership, invalidateMembershipListQueries } from '@/features/auth/api'
 import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import { type BusinessUnitScopeSelection } from '@/features/auth/lib/business-unit-scope'
 import { resolveInvitationErrorMessage } from '@/features/auth/lib/invitation-errors'
@@ -151,14 +147,7 @@ export function useMembershipInviteForm({
       setForm(emptyForm)
       setSelectedBusinessUnitScopes([])
 
-      if (selectedRole === 'owner') {
-        void invalidateMembershipWorkspaceQueries({
-          includeBootstrap: true,
-          queryClient,
-        })
-      } else {
-        void invalidateMembershipListQueries(establishmentId, queryClient)
-      }
+      void invalidateMembershipListQueries(establishmentId, queryClient)
     } catch (error) {
       setErrorMessage(
         resolveInvitationErrorMessage(error, 'L’invitation n’a pas pu être créée.'),

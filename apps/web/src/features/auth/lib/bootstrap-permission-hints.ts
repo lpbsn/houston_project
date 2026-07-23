@@ -59,9 +59,9 @@ export function canCreateEstablishmentFromBootstrapHints(
 }
 
 export function canManageOrganizationFromBootstrapHints(
-  hints: BootstrapPermissionHints,
+  hints: BootstrapPermissionHints | null | undefined,
 ): boolean {
-  return hints.can_manage_organization === true
+  return hints?.can_manage_organization === true
 }
 
 export function canAccessManagementSpace(hints: BootstrapPermissionHints): boolean {

@@ -27,7 +27,10 @@ from houston.establishments.organization_admin_selectors import (
     list_organization_admin_members,
     list_organization_admin_owners,
 )
-from houston.establishments.permissions import CanManageOrganization, resolve_manageable_organization
+from houston.establishments.permissions import (
+    CanManageOrganization,
+    resolve_manageable_organization,
+)
 from houston.establishments.services import (
     DirectorInvitationDuplicateError,
     InvalidMembershipInvitationInputError,

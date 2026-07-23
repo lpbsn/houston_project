@@ -1,7 +1,7 @@
 # Houston — Current product state
 
 Status: authoritative  
-Last reviewed: 2026-07-16
+Last reviewed: 2026-07-23
 
 ## Branding
 
@@ -75,6 +75,9 @@ Post-core gaps (non-blocking pilot): some bootstrap hints, no REST message write
 ## Frontend
 
 - Terrain mobile shell (`TerrainShell`, bottom nav, safe areas).
+- Management shell (`AppShell`) for non-terrain routes: `/organization`, `/organization/establishments/{id}`, `/app/operational-config`, onboarding.
+- Organization admin (Owners): `/organization` — establishments, members, owners.
+- Establishment admin (Owners org-wide + Directors on path): `/organization/establishments/{id}` — overview metrics + memberships; entry to operational config.
 - Client router: `apps/web/src/app/app-routes.ts` (not React Router).
 - Server state: TanStack Query only. Zustand is listed in stack docs but **not imported** in `apps/web/src` today.
 - PWA: `vite-plugin-pwa` `injectManifest`, `src/sw.ts`, register on prod build.

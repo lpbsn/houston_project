@@ -155,12 +155,6 @@ function TeamInviteForm({ establishmentId, allowedTargetRoles }: TeamInviteFormP
                   ))}
                 </div>
               )}
-              {selectedRole === 'owner' ? (
-                <p className="text-sm text-[#5f574d]">
-                  L’invitation d’un propriétaire s’applique à tous les établissements brouillon et
-                  actifs de l’organisation.
-                </p>
-              ) : null}
             </TerrainCard>
           </section>
 

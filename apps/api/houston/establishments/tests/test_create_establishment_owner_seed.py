@@ -109,7 +109,6 @@ def owner_invite_payload(*, email: str = "new-owner@example.com") -> dict:
         "email": email,
         "first_name": "Nora",
         "last_name": "Owner",
-        "role": ROLE_OWNER,
     }
 
 
@@ -127,14 +126,14 @@ def setup_full_coverage_actor(
 def post_owner_invitation(
     api_client: APIClient,
     *,
-    establishment_id,
+    organization_id,
     actor: User,
     payload: dict | None = None,
 ):
     access_token = login(api_client, identifier=actor.email)
     csrf_token = ensure_csrf(api_client)
     return api_client.post(
-        f"/api/v1/establishments/{establishment_id}/membership-invitations/",
+        f"/api/v1/organizations/{organization_id}/owner-invitations/",
         payload or owner_invite_payload(),
         format="json",
         HTTP_X_CSRFTOKEN=csrf_token,
@@ -170,7 +169,7 @@ def test_create_establishment_for_organization_seeds_then_accept(api_client):
 
     response = post_owner_invitation(
         api_client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="cta-owner@example.com"),
     )
@@ -206,7 +205,7 @@ def test_accept_then_create_establishment_seeds_active_owner(api_client):
 
     response = post_owner_invitation(
         api_client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="atc-owner@example.com"),
     )
@@ -233,7 +232,7 @@ def test_concurrent_accept_and_create_establishment_preserve_coverage():
     client = APIClient(enforce_csrf_checks=True)
     response = post_owner_invitation(
         client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="cca-owner@example.com"),
     )
@@ -542,7 +541,7 @@ def test_accept_owner_heals_missing_coverage_on_raw_orm_establishment(api_client
     )
     response = post_owner_invitation(
         api_client,
-        establishment_id=active_a.id,
+        organization_id=organization.id,
         actor=actor,
         payload=owner_invite_payload(email="heal-orm-owner@example.com"),
     )

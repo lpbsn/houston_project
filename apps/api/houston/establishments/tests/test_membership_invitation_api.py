@@ -478,8 +478,10 @@ def test_establishment_invite_rejects_owner_role(api_client):
         },
     )
 
-    assert response.status_code == 403
-    assert response.json()["code"] == "membership_invitation_role_not_allowed"
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert "role" in body["errors"]
 
 
 @pytest.mark.parametrize(
@@ -640,10 +642,10 @@ def test_manager_can_invite_staff_with_business_unit_scope(api_client):
     [
         EstablishmentMembership.Role.MANAGER,
         EstablishmentMembership.Role.DIRECTOR,
-        EstablishmentMembership.Role.OWNER,
     ],
 )
 def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
+    # Owner → 400 via serializer; see test_establishment_invite_rejects_owner_role.
     establishment = create_establishment(name="Manager Role Guard Hotel")
     actor = create_user(username=f"manager_role_guard_{target_role}")
     manager_membership = create_membership(
@@ -657,10 +659,7 @@ def test_manager_cannot_invite_non_staff_roles(api_client, target_role):
         business_unit=business_unit,
     )
 
-    if target_role in {
-        EstablishmentMembership.Role.OWNER,
-        EstablishmentMembership.Role.DIRECTOR,
-    }:
+    if target_role == EstablishmentMembership.Role.DIRECTOR:
         payload = {
             "email": f"{target_role}@example.com",
             "first_name": "New",

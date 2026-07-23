@@ -62,17 +62,6 @@ def list_memberships_for_team(
     )
 
 
-def list_memberships_for_management(
-    *,
-    current_membership: EstablishmentMembership | None,
-    establishment_id,
-) -> list[EstablishmentMembership] | None:
-    return list_memberships_for_team(
-        current_membership=current_membership,
-        establishment_id=establishment_id,
-    )
-
-
 def get_membership_for_team_detail(
     *,
     current_membership: EstablishmentMembership | None,
@@ -91,104 +80,28 @@ def get_membership_for_management(
     current_membership: EstablishmentMembership | None,
     establishment_id,
     membership_id,
+    path_admin_same_org_owner: bool = False,
 ) -> EstablishmentMembership | None:
-    if current_membership is None or current_membership.establishment_id != establishment_id:
+    if current_membership is None:
         return None
+    if current_membership.establishment_id != establishment_id:
+        if not (
+            path_admin_same_org_owner
+            and current_membership.role == EstablishmentMembership.Role.OWNER
+            and current_membership.establishment.organization_id
+            == (
+                Establishment.objects.filter(id=establishment_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+        ):
+            return None
 
     return (
         _management_membership_queryset(establishment_id=establishment_id)
         .filter(id=membership_id)
         .first()
     )
-
-
-def get_workspace_summary_for_establishment(
-    *,
-    current_membership: EstablishmentMembership | None,
-    establishment_id,
-) -> dict | None:
-    if current_membership is None or current_membership.establishment_id != establishment_id:
-        return None
-
-    establishment = current_membership.establishment
-
-    owner_membership = (
-        EstablishmentMembership.objects.filter(
-            establishment_id=establishment_id,
-            role=EstablishmentMembership.Role.OWNER,
-            status=EstablishmentMembership.Status.ACTIVE,
-        )
-        .select_related("user")
-        .order_by("created_at", "id")
-        .first()
-    )
-
-    director_membership = (
-        EstablishmentMembership.objects.filter(
-            establishment_id=establishment_id,
-            role=EstablishmentMembership.Role.DIRECTOR,
-            status__in=[
-                EstablishmentMembership.Status.ACTIVE,
-                EstablishmentMembership.Status.INVITED,
-            ],
-        )
-        .select_related("user")
-        .order_by(
-            models.Case(
-                models.When(status=EstablishmentMembership.Status.ACTIVE, then=0),
-                default=1,
-            ),
-            "created_at",
-            "id",
-        )
-        .first()
-    )
-
-    active_membership_count = EstablishmentMembership.objects.filter(
-        establishment_id=establishment_id,
-        status=EstablishmentMembership.Status.ACTIVE,
-    ).count()
-
-    return {
-        "establishment": {
-            "id": establishment.id,
-            "name": establishment.name,
-        },
-        "owner": _serialize_workspace_person(owner_membership),
-        "director": _serialize_workspace_director(director_membership),
-        "active_membership_count": active_membership_count,
-    }
-
-
-def _serialize_workspace_person(membership: EstablishmentMembership | None) -> dict | None:
-    if membership is None:
-        return None
-
-    return {"display_name": _membership_display_name(membership.user)}
-
-
-def _serialize_workspace_director(membership: EstablishmentMembership | None) -> dict | None:
-    if membership is None:
-        return None
-
-    return {
-        "display_name": _membership_display_name(membership.user),
-        "status": membership.status,
-    }
-
-
-def _membership_display_name(user: User) -> str:
-    full_name = user.get_full_name().strip()
-    if full_name:
-        return full_name
-
-    if user.username:
-        return user.username
-
-    if user.email:
-        return user.email
-
-    return str(user.id)
 
 
 def search_users_for_establishment(

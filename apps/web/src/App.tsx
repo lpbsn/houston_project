@@ -47,7 +47,6 @@ import { LoginPage } from '@/features/auth/pages/login-page'
 import {
   allowsUnauthenticatedAccess,
   getAuthenticatedLandingPath,
-  resolveAppHubRedirectPath,
   routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
   shouldRedirectUnauthenticatedPublicRoute,
@@ -165,22 +164,6 @@ function App() {
     navigate,
     route,
   ])
-
-  useEffect(() => {
-    if (route.kind === 'static' && route.path === '/app/report') {
-      navigate('/reporting', { replace: true })
-    }
-  }, [navigate, route])
-
-  useEffect(() => {
-    if (!auth.isReady || !auth.isAuthenticated || !auth.bootstrap) {
-      return
-    }
-
-    if (route.kind === 'static' && route.path === '/app') {
-      navigate(resolveAppHubRedirectPath(auth.bootstrap), { replace: true })
-    }
-  }, [auth.bootstrap, auth.isAuthenticated, auth.isReady, navigate, route])
 
   const handleSignOut = useCallback(() => {
     void auth.logout().then(() => {
@@ -378,14 +361,6 @@ function App() {
       return <LoginPage onNavigate={navigate} />
     }
 
-    if (route.path === '/app') {
-      return (
-        <div className="flex min-h-[16rem] items-center justify-center text-sm text-muted-foreground">
-          Redirection…
-        </div>
-      )
-    }
-
     if (route.path === '/organization') {
       return <OrganizationPage onNavigate={navigate} />
     }
@@ -394,7 +369,7 @@ function App() {
       return <OperationalConfigPage onNavigate={navigate} />
     }
 
-    if (route.path === '/app/report' || route.path === '/reporting') {
+    if (route.path === '/reporting') {
       return <LazyReportPage />
     }
 
@@ -605,12 +580,6 @@ function App() {
           ? {
               title: 'Gestion de l’organisation',
               description: 'Pilotez les établissements, membres et propriétaires.',
-              actions: signOutAction,
-            }
-      : route.kind === 'static' && route.path === '/app'
-          ? {
-              title: 'Redirection',
-              description: 'Redirection vers votre espace de gestion.',
               actions: signOutAction,
             }
           : route.kind === 'static' && route.path === '/app/operational-config'

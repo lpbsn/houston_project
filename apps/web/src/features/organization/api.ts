@@ -4,6 +4,12 @@ import { queryClient } from '@/lib/query-client'
 
 import type {
   DirectorInvitationResponse,
+  EstablishmentAdminMemberFilterOptions,
+  EstablishmentAdminMemberListFilters,
+  EstablishmentAdminMembership,
+  EstablishmentAdminMembershipInvitationRequest,
+  EstablishmentAdminMembershipList,
+  EstablishmentAdminOverview,
   OrganizationAdminEstablishmentList,
   OrganizationAdminMemberFilterOptions,
   OrganizationAdminMemberList,
@@ -11,6 +17,7 @@ import type {
   OrganizationAdminOwnerInvitationRequest,
   OrganizationAdminOwnerList,
   OrganizationMemberListFilters,
+  PatchedEstablishmentAdminMembershipUpdateRequest,
 } from './types'
 
 export const organizationQueryKeyRoot = ['organization'] as const
@@ -31,6 +38,23 @@ export const organizationMemberFilterOptionsQueryKey = (organizationId: string) 
 
 export const organizationOwnersQueryKey = (organizationId: string) =>
   [...organizationQueryKeyRoot, organizationId, 'owners'] as const
+
+export const establishmentAdminOverviewQueryKey = (establishmentId: string) =>
+  [...organizationQueryKeyRoot, 'establishment', establishmentId, 'overview'] as const
+
+export const establishmentAdminMembershipsQueryKey = (
+  establishmentId: string,
+  filters: EstablishmentAdminMemberListFilters = {},
+) =>
+  [...organizationQueryKeyRoot, 'establishment', establishmentId, 'memberships', filters] as const
+
+export const establishmentAdminMemberFilterOptionsQueryKey = (establishmentId: string) =>
+  [
+    ...organizationQueryKeyRoot,
+    'establishment',
+    establishmentId,
+    'membership-filter-options',
+  ] as const
 
 class OrganizationApiError extends Error {
   status: number
@@ -228,6 +252,223 @@ export async function inviteOrganizationOwner(
   }
 
   return result.data
+}
+
+export async function getEstablishmentAdminOverview(
+  establishmentId: string,
+): Promise<EstablishmentAdminOverview> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/admin/overview/', {
+        params: { path: { establishment_id: establishmentId } },
+        headers: authHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible de charger l’établissement.',
+    )
+  }
+
+  return result.data
+}
+
+export async function listEstablishmentAdminMemberships(
+  establishmentId: string,
+  filters: EstablishmentAdminMemberListFilters = {},
+): Promise<EstablishmentAdminMembershipList> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET('/api/v1/establishments/{establishment_id}/admin/memberships/', {
+        params: {
+          path: { establishment_id: establishmentId },
+          query: {
+            q: filters.q || undefined,
+            business_unit_id: filters.business_unit_id || undefined,
+            role: filters.role as 'director' | 'manager' | 'staff' | undefined,
+            status: filters.status as 'invited' | 'active' | 'deactivated' | undefined,
+          },
+        },
+        headers: authHeaders(accessToken),
+      }),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible de charger les membres.',
+    )
+  }
+
+  return result.data
+}
+
+export async function getEstablishmentAdminMemberFilterOptions(
+  establishmentId: string,
+): Promise<EstablishmentAdminMemberFilterOptions> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.GET(
+        '/api/v1/establishments/{establishment_id}/admin/memberships/filter-options/',
+        {
+          params: { path: { establishment_id: establishmentId } },
+          headers: authHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible de charger les filtres membres.',
+    )
+  }
+
+  return result.data
+}
+
+export async function inviteEstablishmentAdminMembership(
+  establishmentId: string,
+  body: EstablishmentAdminMembershipInvitationRequest,
+): Promise<DirectorInvitationResponse> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/admin/membership-invitations/',
+        {
+          params: { path: { establishment_id: establishmentId } },
+          body,
+          headers: authHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible d’envoyer l’invitation.',
+    )
+  }
+
+  return result.data
+}
+
+export async function updateEstablishmentAdminMembership(
+  establishmentId: string,
+  membershipId: string,
+  body: PatchedEstablishmentAdminMembershipUpdateRequest,
+): Promise<EstablishmentAdminMembership> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.PATCH(
+        '/api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              membership_id: membershipId,
+            },
+          },
+          body,
+          headers: authHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible de mettre à jour le membre.',
+    )
+  }
+
+  return result.data
+}
+
+export async function deactivateEstablishmentAdminMembership(
+  establishmentId: string,
+  membershipId: string,
+): Promise<EstablishmentAdminMembership> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/deactivate/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              membership_id: membershipId,
+            },
+          },
+          headers: authHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible de désactiver le membre.',
+    )
+  }
+
+  return result.data
+}
+
+export async function activateEstablishmentAdminMembership(
+  establishmentId: string,
+  membershipId: string,
+): Promise<EstablishmentAdminMembership> {
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/admin/memberships/{membership_id}/activate/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              membership_id: membershipId,
+            },
+          },
+          headers: authHeaders(accessToken),
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildOrganizationError(
+      result.response,
+      result.error,
+      'Impossible de réactiver le membre.',
+    )
+  }
+
+  return result.data
+}
+
+export async function invalidateEstablishmentAdminQueries(establishmentId: string) {
+  await Promise.allSettled([
+    queryClient.invalidateQueries({
+      queryKey: [...organizationQueryKeyRoot, 'establishment', establishmentId],
+    }),
+    queryClient.invalidateQueries({ queryKey: organizationQueryKeyRoot }),
+    queryClient.invalidateQueries({ queryKey: bootstrapQueryKey, exact: true }),
+  ])
 }
 
 export async function invalidateOrganizationQueries(organizationId: string) {

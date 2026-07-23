@@ -6,7 +6,6 @@ import {
   buildOnboardingUrl,
   resolvePendingLanding,
 } from '@/features/auth/lib/pending-onboarding'
-import { toRoleEnum } from '@/features/auth/lib/role'
 
 export type AuthenticatedLanding =
   | { kind: 'operational'; path: '/reporting' }
@@ -18,6 +17,10 @@ export type AuthenticatedLanding =
 export function resolveAuthenticatedLanding(
   bootstrap: BootstrapResponse,
 ): AuthenticatedLanding {
+  if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
+    return { kind: 'organization', path: '/organization' }
+  }
+
   if (bootstrap.active_membership) {
     return { kind: 'operational', path: '/reporting' }
   }
@@ -31,17 +34,7 @@ export function resolveAuthenticatedLanding(
     return { kind: 'operational', path: '/reporting' }
   }
 
-  const canManageOrganization = canManageOrganizationFromBootstrapHints(
-    bootstrap.permission_hints,
-  )
   const pendingLanding = resolvePendingLanding(bootstrap.pending_onboarding_memberships)
-
-  if (canManageOrganization) {
-    if (pendingLanding.kind === 'onboarding') {
-      return { kind: 'pending', path: buildOnboardingUrl(pendingLanding.pending) }
-    }
-    return { kind: 'organization', path: '/organization' }
-  }
 
   if (pendingLanding.kind === 'onboarding') {
     return { kind: 'pending', path: buildOnboardingUrl(pendingLanding.pending) }
@@ -64,26 +57,6 @@ export function getAuthenticatedLandingPath(
   return resolveAuthenticatedLanding(bootstrap).path
 }
 
-export function resolveAppHubRedirectPath(
-  bootstrap: BootstrapResponse | null | undefined,
-): string {
-  if (!bootstrap) {
-    return '/login'
-  }
-
-  if (canManageOrganizationFromBootstrapHints(bootstrap.permission_hints)) {
-    return '/organization'
-  }
-
-  const activeMembership = bootstrap.active_membership
-  const activeRole = toRoleEnum(activeMembership?.role)
-  if (activeMembership && activeRole === 'director') {
-    return `/organization/establishments/${activeMembership.establishment_id}`
-  }
-
-  return getAuthenticatedLandingPath(bootstrap) ?? '/no-establishment'
-}
-
 export const AUTHENTICATED_LANDING_PATHS = new Set<string>([
   '/reporting',
   '/select-establishment',
@@ -101,7 +74,6 @@ export function routeAllowsMissingActiveMembership(path: string): boolean {
     path === '/no-establishment' ||
     path === '/install-app' ||
     path === '/organization' ||
-    path === '/app' ||
     path.startsWith('/organization/')
   )
 }

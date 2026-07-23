@@ -325,3 +325,23 @@ class CanManageOrganization(BasePermission):
 
     def has_permission(self, request, view) -> bool:
         return can_manage_organization(getattr(request, "user", None))
+
+
+def resolve_active_establishment_admin_actor(
+    user: User | None,
+    establishment_id,
+) -> EstablishmentAdminActor | None:
+    """Path-scoped admin for ACTIVE establishments only (Lot D HTTP surface)."""
+    actor = resolve_establishment_admin_actor(user, establishment_id)
+    if actor is None:
+        return None
+    if actor.establishment.status != Establishment.Status.ACTIVE:
+        return None
+    return actor
+
+
+class CanAccessEstablishmentAdmin(BasePermission):
+    message = "You do not have permission to administer this establishment."
+
+    def has_permission(self, request, view) -> bool:
+        return bool(getattr(request, "user", None) and request.user.is_authenticated)

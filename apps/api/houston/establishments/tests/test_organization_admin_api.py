@@ -14,7 +14,10 @@ from houston.establishments.models import (
 from houston.organizations.models import Organization
 from houston.testing.auth import auth_headers, login
 from houston.testing.factories import create_membership, create_user
-from houston.testing.taxonomy import create_business_unit, create_membership_with_business_unit_scope
+from houston.testing.taxonomy import (
+    create_business_unit,
+    create_membership_with_business_unit_scope,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -372,5 +375,7 @@ def test_establishment_membership_invitation_still_rejects_owner(api_client):
         format="json",
         **auth_headers(access_token),
     )
-    assert response.status_code == 403
-    assert response.json()["code"] == "membership_invitation_role_not_allowed"
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "validation_error"
+    assert "role" in body["errors"]

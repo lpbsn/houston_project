@@ -24,7 +24,6 @@ import type {
   RegistrationRequest,
   RegistrationResponse,
   SwitchEstablishmentRequest,
-  WorkspaceSummaryResponse,
   BusinessUnitTreeResponse,
 } from './types'
 
@@ -34,8 +33,6 @@ export const membershipListQueryKey = (establishmentId: string) =>
   [...membershipsQueryKeyRoot, establishmentId] as const
 export const membershipDetailQueryKey = (establishmentId: string, membershipId: string) =>
   [...membershipsQueryKeyRoot, establishmentId, membershipId] as const
-export const workspaceSummaryQueryKey = (establishmentId: string) =>
-  ['workspace', 'summary', establishmentId] as const
 
 class AuthApiError extends Error {
   status: number
@@ -84,17 +81,6 @@ export async function invalidateMembershipListAndDetailQueries(
   ])
 }
 
-/** Best-effort list + workspace summary invalidation. */
-export async function invalidateMembershipListAndWorkspaceSummaryQueries(
-  establishmentId: string,
-  client: QueryClient = queryClient,
-) {
-  await settleQueryInvalidations([
-    client.invalidateQueries({ queryKey: membershipListQueryKey(establishmentId) }),
-    client.invalidateQueries({ queryKey: workspaceSummaryQueryKey(establishmentId) }),
-  ])
-}
-
 /** Best-effort membership list invalidation (e.g. after invite). */
 export async function invalidateMembershipListQueries(
   establishmentId: string,
@@ -125,13 +111,12 @@ export function patchMembershipCaches(
 
 /**
  * After a successful membership write: patch list+detail, then best-effort invalidations.
- * Owner path fans out via memberships root + bootstrap; optional workspace summary on any role.
+ * Owner path fans out via memberships root + bootstrap.
  */
 export function commitMembershipWriteCache(
   establishmentId: string,
   membership: EstablishmentMembershipResponse,
   client: QueryClient = queryClient,
-  options?: { includeWorkspaceSummary?: boolean },
 ) {
   patchMembershipCaches(establishmentId, membership, client)
 
@@ -145,11 +130,6 @@ export function commitMembershipWriteCache(
       client.invalidateQueries({
         queryKey: membershipDetailQueryKey(establishmentId, membership.id),
       }),
-    )
-  }
-  if (options?.includeWorkspaceSummary) {
-    invalidations.push(
-      client.invalidateQueries({ queryKey: workspaceSummaryQueryKey(establishmentId) }),
     )
   }
   void settleQueryInvalidations(invalidations)
@@ -687,29 +667,6 @@ export async function updateUserProfile(input: UserProfileUpdateRequest) {
 
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
-}
-
-export async function getWorkspaceSummary(establishmentId: string) {
-  const result = await withAuthRetry(
-    (accessToken) =>
-      apiClient.GET('/api/v1/establishments/{establishment_id}/workspace-summary/', {
-        params: {
-          path: { establishment_id: establishmentId },
-        },
-        headers: accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : undefined,
-      }),
-    { refreshable: true },
-  )
-
-  if (result.error || !result.data) {
-    throw buildAuthError(result.response, result.error, 'Establishment summary is unavailable.')
-  }
-
-  return result.data as WorkspaceSummaryResponse
 }
 
 export async function inviteMembership(

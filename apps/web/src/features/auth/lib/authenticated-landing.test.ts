@@ -5,7 +5,6 @@ import { isProtectedRoute } from '@/app/terrain-routes'
 import {
   allowsUnauthenticatedAccess,
   isPublicAuthRoute,
-  resolveAppHubRedirectPath,
   resolveAuthenticatedLanding,
   routeAllowsMissingActiveMembership,
   shouldRedirectAuthenticatedPublicRoute,
@@ -62,62 +61,44 @@ function membership(establishmentName: string, establishmentId = '33333333-3333-
   }
 }
 
+const ownerOrgHints = {
+  chat_available: false,
+  can_create_action_plan: false,
+  can_create_catalog_action_plan: false,
+  can_view_action_plan_catalog: false,
+  can_invite: false,
+  can_manage_runtime_config: false,
+  can_view_team: false,
+  can_manage_organization: true,
+  can_create_establishment: true,
+} as const
+
 describe('resolveAuthenticatedLanding', () => {
-  it('returns reporting when active membership is selected', () => {
+  it('returns organization for owner with an ACTIVE membership selected', () => {
     const active = membership('Nice')
     expect(
       resolveAuthenticatedLanding(
         bootstrap({
           active_membership: active,
           memberships: [active],
+          permission_hints: ownerOrgHints,
         }),
       ),
-    ).toEqual({ kind: 'operational', path: '/reporting' })
+    ).toEqual({ kind: 'organization', path: '/organization' })
   })
 
-  it('returns select-establishment for multiple active memberships without selection', () => {
+  it('returns organization for owner with multiple ACTIVE memberships without selection', () => {
     expect(
       resolveAuthenticatedLanding(
         bootstrap({
           memberships: [membership('Nice', 'est-1'), membership('Cannes', 'est-2')],
-          permission_hints: {
-            chat_available: false,
-            can_create_action_plan: false,
-            can_create_catalog_action_plan: false,
-            can_view_action_plan_catalog: false,
-            can_invite: false,
-            can_manage_runtime_config: false,
-            can_view_team: false,
-            can_manage_organization: true,
-            can_create_establishment: true,
-          },
+          permission_hints: ownerOrgHints,
         }),
       ),
-    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+    ).toEqual({ kind: 'organization', path: '/organization' })
   })
 
-  it('returns reporting for a single active membership without selection', () => {
-    expect(
-      resolveAuthenticatedLanding(
-        bootstrap({
-          memberships: [membership('Nice')],
-          permission_hints: {
-            chat_available: false,
-            can_create_action_plan: false,
-            can_create_catalog_action_plan: false,
-            can_view_action_plan_catalog: false,
-            can_invite: false,
-            can_manage_runtime_config: false,
-            can_view_team: false,
-            can_manage_organization: true,
-            can_create_establishment: true,
-          },
-        }),
-      ),
-    ).toEqual({ kind: 'operational', path: '/reporting' })
-  })
-
-  it('returns onboarding url for owner org-capable with a single continuable pending draft', () => {
+  it('returns organization for owner DRAFT-only', () => {
     const pending: PendingOnboardingMembership = {
       id: '55555555-5555-5555-5555-555555555555',
       establishment_id: '66666666-6666-6666-6666-666666666666',
@@ -134,59 +115,54 @@ describe('resolveAuthenticatedLanding', () => {
       resolveAuthenticatedLanding(
         bootstrap({
           pending_onboarding_memberships: [pending],
-          permission_hints: {
-            chat_available: false,
-            can_create_action_plan: false,
-            can_create_catalog_action_plan: false,
-            can_view_action_plan_catalog: false,
-            can_invite: false,
-            can_manage_runtime_config: false,
-            can_view_team: false,
-            can_manage_organization: true,
-            can_create_establishment: true,
-          },
-        }),
-      ),
-    ).toEqual({
-      kind: 'pending',
-      path: '/onboarding?establishmentId=66666666-6666-6666-6666-666666666666&sessionId=77777777-7777-7777-7777-777777777777',
-    })
-  })
-
-  it('returns organization for owner org-capable without ACTIVE memberships', () => {
-    expect(
-      resolveAuthenticatedLanding(
-        bootstrap({
-          permission_hints: {
-            chat_available: false,
-            can_create_action_plan: false,
-            can_create_catalog_action_plan: false,
-            can_view_action_plan_catalog: false,
-            can_invite: false,
-            can_manage_runtime_config: false,
-            can_view_team: false,
-            can_manage_organization: true,
-            can_create_establishment: true,
-          },
+          permission_hints: ownerOrgHints,
         }),
       ),
     ).toEqual({ kind: 'organization', path: '/organization' })
   })
 
+  it('returns select-establishment for director with multiple ACTIVE without selection', () => {
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          memberships: [
+            { ...membership('Nice', 'est-1'), role: 'director' as const },
+            { ...membership('Cannes', 'est-2'), role: 'director' as const },
+          ],
+        }),
+      ),
+    ).toEqual({ kind: 'establishment-selection', path: '/select-establishment' })
+  })
+
+  it('returns reporting for non-owner with ACTIVE membership selected', () => {
+    const active = {
+      ...membership('Nice'),
+      role: 'staff' as const,
+    }
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          active_membership: active,
+          memberships: [active],
+        }),
+      ),
+    ).toEqual({ kind: 'operational', path: '/reporting' })
+  })
+
+  it('returns reporting for a single active membership without selection', () => {
+    expect(
+      resolveAuthenticatedLanding(
+        bootstrap({
+          memberships: [{ ...membership('Nice'), role: 'staff' as const }],
+        }),
+      ),
+    ).toEqual({ kind: 'operational', path: '/reporting' })
+  })
+
   it('never lands owner without ACTIVE on /general', () => {
     const landing = resolveAuthenticatedLanding(
       bootstrap({
-        permission_hints: {
-          chat_available: false,
-          can_create_action_plan: false,
-          can_create_catalog_action_plan: false,
-          can_view_action_plan_catalog: false,
-          can_invite: false,
-          can_manage_runtime_config: false,
-          can_view_team: false,
-          can_manage_organization: true,
-          can_create_establishment: true,
-        },
+        permission_hints: ownerOrgHints,
       }),
     )
     expect(landing.path).not.toBe('/general')
@@ -219,58 +195,6 @@ describe('resolveAuthenticatedLanding', () => {
       kind: 'empty',
       path: '/no-establishment',
     })
-  })
-})
-
-describe('resolveAppHubRedirectPath', () => {
-  it('sends organization managers to /organization', () => {
-    expect(
-      resolveAppHubRedirectPath(
-        bootstrap({
-          permission_hints: {
-            chat_available: false,
-            can_create_action_plan: false,
-            can_create_catalog_action_plan: false,
-            can_view_action_plan_catalog: false,
-            can_invite: false,
-            can_manage_runtime_config: false,
-            can_view_team: false,
-            can_manage_organization: true,
-            can_create_establishment: true,
-          },
-        }),
-      ),
-    ).toBe('/organization')
-  })
-
-  it('sends directors with an active establishment to their establishment page', () => {
-    const active = {
-      ...membership('Nice', 'est-director'),
-      role: 'director' as const,
-    }
-    expect(
-      resolveAppHubRedirectPath(
-        bootstrap({
-          active_membership: active,
-          memberships: [active],
-        }),
-      ),
-    ).toBe('/organization/establishments/est-director')
-  })
-
-  it('falls back to operational landing for other roles', () => {
-    const active = {
-      ...membership('Nice'),
-      role: 'staff' as const,
-    }
-    expect(
-      resolveAppHubRedirectPath(
-        bootstrap({
-          active_membership: active,
-          memberships: [active],
-        }),
-      ),
-    ).toBe('/reporting')
   })
 })
 
@@ -323,7 +247,7 @@ describe('routeAllowsMissingActiveMembership', () => {
     expect(routeAllowsMissingActiveMembership('/install-app')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/organization')).toBe(true)
     expect(routeAllowsMissingActiveMembership('/organization/establishments/est-1')).toBe(true)
-    expect(routeAllowsMissingActiveMembership('/app')).toBe(true)
+    expect(routeAllowsMissingActiveMembership('/app')).toBe(false)
   })
 
   it('returns false for operational routes', () => {

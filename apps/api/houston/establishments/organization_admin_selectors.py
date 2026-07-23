@@ -13,6 +13,7 @@ from uuid import UUID
 from django.db.models import Count, Q
 
 from houston.accounts.models import User
+from houston.establishments.admin_serialization import serialize_admin_director
 from houston.establishments.membership_scope import (
     membership_scope_prefetch,
     membership_scope_rows_for_membership,
@@ -142,7 +143,7 @@ def list_organization_admin_establishments(
             "name": establishment.name,
             "status": establishment.status,
             "directors": [
-                _serialize_director(membership)
+                serialize_admin_director(membership)
                 for membership in directors_by_establishment.get(establishment.id, [])
             ],
             "active_member_count": active_counts.get(establishment.id, 0),
@@ -403,17 +404,6 @@ def _latest_non_terminal_onboarding_sessions(
         if session.establishment_id not in sessions_by_establishment:
             sessions_by_establishment[session.establishment_id] = session
     return sessions_by_establishment
-
-
-def _serialize_director(membership: EstablishmentMembership) -> dict[str, Any]:
-    user = membership.user
-    display_name = user.get_full_name().strip() or user.username or user.email
-    return {
-        "membership_id": membership.id,
-        "display_name": display_name,
-        "email": user.email,
-        "status": membership.status,
-    }
 
 
 def _serialize_member_membership(membership: EstablishmentMembership) -> dict[str, Any]:

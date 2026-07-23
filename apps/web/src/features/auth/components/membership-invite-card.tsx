@@ -51,8 +51,9 @@ export function MembershipInviteCard({
             Invite a team member
           </CardTitle>
           <CardDescription className="text-sm leading-6">
-            Invite an owner, director, manager, or staff member according to your role. An email
-            will be sent automatically; copy and share the link manually if needed.
+            Invite a director, manager, or staff member according to your role. An email will be
+            sent automatically; copy and share the link manually if needed. Owner invitations are
+            managed from organization administration.
           </CardDescription>
         </div>
       </CardHeader>
@@ -113,12 +114,6 @@ export function MembershipInviteCard({
                   ))}
                 </div>
               )}
-              {selectedRole === 'owner' ? (
-                <p className="text-sm text-[#5f574d]">
-                  L’invitation d’un propriétaire s’applique à tous les établissements brouillon et
-                  actifs de l’organisation.
-                </p>
-              ) : null}
             </div>
 
             {requiresScopes ? (

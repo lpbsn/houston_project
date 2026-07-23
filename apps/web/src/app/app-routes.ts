@@ -11,9 +11,7 @@ import {
 export type AppPath =
   | '/'
   | '/login'
-  | '/app'
   | '/app/operational-config'
-  | '/app/report'
   | '/onboarding'
   | '/pending-onboarding'
   | '/select-establishment'
@@ -233,9 +231,7 @@ export function parseAppRoute(input: string): AppRoute {
   if (
     pathname === '/' ||
     pathname === '/login' ||
-    pathname === '/app' ||
     pathname === '/app/operational-config' ||
-    pathname === '/app/report' ||
     pathname === '/onboarding' ||
     pathname === '/pending-onboarding' ||
     pathname === '/select-establishment' ||

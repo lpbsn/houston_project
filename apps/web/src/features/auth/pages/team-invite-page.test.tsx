@@ -233,20 +233,4 @@ describe('TeamInvitePage', () => {
     expect(screen.getByText('Invitation could not be created.')).toBeTruthy()
   })
 
-  it('shows organizational owner coverage note when owner role is selected', () => {
-    inviteFormState.current = {
-      ...inviteFormState.current,
-      roleOptions: ['owner', 'director', 'manager', 'staff'],
-      selectedRole: 'owner',
-      requiresScopes: false,
-    }
-
-    render(createElement(TeamInvitePage))
-
-    expect(
-      screen.getByText(
-        'L’invitation d’un propriétaire s’applique à tous les établissements brouillon et actifs de l’organisation.',
-      ),
-    ).toBeTruthy()
-  })
 })

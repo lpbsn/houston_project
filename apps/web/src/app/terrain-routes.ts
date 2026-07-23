@@ -29,7 +29,6 @@ export type TerrainRouteConfig = {
 
 const OPERATIONAL_STATIC_PATHS = new Set<string>([
   '/app/operational-config',
-  '/app/report',
   '/reporting',
   '/signals',
   '/execution',
@@ -46,7 +45,6 @@ const OPERATIONAL_STATIC_PATHS = new Set<string>([
 
 const PROTECTED_STATIC_PATHS = new Set<string>([
   ...OPERATIONAL_STATIC_PATHS,
-  '/app',
   '/organization',
   '/pending-onboarding',
   '/onboarding',

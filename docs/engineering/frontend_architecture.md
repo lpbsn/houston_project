@@ -1,7 +1,7 @@
 # Frontend architecture
 
 Status: authoritative  
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-23
 
 ## Stack
 
@@ -23,7 +23,7 @@ Lazy pages: [`lazy-terrain-pages.tsx`](../../apps/web/src/app/lazy-terrain-pages
 ## Layout
 
 - **Terrain shell** — `TerrainShell` (`fixed inset-x-0 top-0`, `h-dvh`, topbar, scrollable main, optional bottom nav)
-- **App shell** — legacy desktop shell for non-terrain routes (`/app`, auth pages)
+- **App shell** — desktop/management shell for non-terrain routes (`/organization*`, `/app/operational-config`, onboarding, auth pages)
 
 ## Server state
 

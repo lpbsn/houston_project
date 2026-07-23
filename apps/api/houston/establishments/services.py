@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.db.models.functions import Lower, Trim
 from django.http import HttpRequest
 from django.utils import timezone
 
@@ -49,8 +50,6 @@ from houston.establishments.membership_scope import (
     normalize_membership_scope_inputs,
     scopes_not_allowed_for_role,
 )
-from django.db.models.functions import Lower, Trim
-
 from houston.establishments.models import (
     ACTIVITY_DESCRIPTION_MIN_LENGTH,
     ESTABLISHMENT_ORG_NAME_CI_UNIQ,
@@ -115,6 +114,17 @@ class InvalidMembershipInvitationInputError(Exception):
 
 class MembershipInvitationRoleNotAllowedError(Exception):
     pass
+
+
+class EstablishmentAdminOwnerForbiddenError(Exception):
+    """Owner memberships are not manageable on the establishment admin surface."""
+
+    def __init__(
+        self,
+        detail: str = "Owner memberships cannot be managed on the establishment admin surface.",
+    ):
+        self.detail = detail
+        super().__init__(detail)
 
 
 class MembershipInvitationUserExistsError(Exception):
@@ -1752,9 +1762,22 @@ def invite_membership_for_establishment(
     last_name: str,
     role: str,
     scopes: list[MembershipScopeInput] | None = None,
+    path_admin_same_org_owner: bool = False,
 ) -> DirectorInvitationResult:
-    if current_membership is None or current_membership.establishment_id != establishment_id:
+    if current_membership is None:
         raise MembershipManagementNotFoundError
+    if current_membership.establishment_id != establishment_id:
+        if not (
+            path_admin_same_org_owner
+            and current_membership.role == EstablishmentMembership.Role.OWNER
+            and current_membership.establishment.organization_id
+            == (
+                Establishment.objects.filter(id=establishment_id)
+                .values_list("organization_id", flat=True)
+                .first()
+            )
+        ):
+            raise MembershipManagementNotFoundError
 
     if not _can_actor_invite_memberships(current_membership=current_membership):
         raise MembershipManagementForbiddenError
@@ -1802,7 +1825,13 @@ def invite_membership_for_establishment(
                 EstablishmentMembership.Role.OWNER,
                 EstablishmentMembership.Role.DIRECTOR,
             }
-            or current_membership.establishment_id != establishment_id
+            or (
+                current_membership.establishment_id != establishment_id
+                and not (
+                    path_admin_same_org_owner
+                    and current_membership.role == EstablishmentMembership.Role.OWNER
+                )
+            )
         ):
             raise MembershipManagementForbiddenError
         if establishment.status != Establishment.Status.ACTIVE:
@@ -2213,10 +2242,12 @@ def _can_actor_manage_target_membership(
     *,
     actor_membership: EstablishmentMembership | None,
     target_membership: EstablishmentMembership,
+    path_admin_same_org_owner: bool = False,
 ) -> bool:
     return can_actor_manage_target_membership(
         actor_membership=actor_membership,
         target_membership=target_membership,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     )
 
 
@@ -2224,12 +2255,19 @@ def can_actor_manage_target_membership(
     *,
     actor_membership: EstablishmentMembership | None,
     target_membership: EstablishmentMembership,
+    path_admin_same_org_owner: bool = False,
 ) -> bool:
     if actor_membership is None:
         return False
 
     if actor_membership.establishment_id != target_membership.establishment_id:
-        return False
+        if not (
+            path_admin_same_org_owner
+            and actor_membership.role == EstablishmentMembership.Role.OWNER
+            and actor_membership.establishment.organization_id
+            == target_membership.establishment.organization_id
+        ):
+            return False
 
     allowed_targets = _MANAGEABLE_TARGET_ROLES_BY_ACTOR.get(actor_membership.role)
     if allowed_targets is None:
@@ -2482,11 +2520,13 @@ def update_membership_for_management(
     establishment_id,
     membership_id,
     update_input: MembershipUpdateInput,
+    path_admin_same_org_owner: bool = False,
 ) -> EstablishmentMembership:
     membership = get_membership_for_management(
         current_membership=current_membership,
         establishment_id=establishment_id,
         membership_id=membership_id,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     )
     if membership is None:
         raise MembershipManagementNotFoundError
@@ -2494,6 +2534,7 @@ def update_membership_for_management(
     if not _can_actor_manage_target_membership(
         actor_membership=current_membership,
         target_membership=membership,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     ):
         raise MembershipManagementForbiddenError
 
@@ -2604,11 +2645,13 @@ def deactivate_membership_for_management(
     current_membership: EstablishmentMembership | None,
     establishment_id,
     membership_id,
+    path_admin_same_org_owner: bool = False,
 ) -> EstablishmentMembership:
     membership = get_membership_for_management(
         current_membership=current_membership,
         establishment_id=establishment_id,
         membership_id=membership_id,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     )
     if membership is None:
         raise MembershipManagementNotFoundError
@@ -2616,6 +2659,7 @@ def deactivate_membership_for_management(
     if not _can_actor_manage_target_membership(
         actor_membership=current_membership,
         target_membership=membership,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     ):
         raise MembershipManagementForbiddenError
 
@@ -2667,11 +2711,13 @@ def activate_membership_for_management(
     current_membership: EstablishmentMembership | None,
     establishment_id,
     membership_id,
+    path_admin_same_org_owner: bool = False,
 ) -> EstablishmentMembership:
     membership = get_membership_for_management(
         current_membership=current_membership,
         establishment_id=establishment_id,
         membership_id=membership_id,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     )
     if membership is None:
         raise MembershipManagementNotFoundError
@@ -2679,6 +2725,7 @@ def activate_membership_for_management(
     if not _can_actor_manage_target_membership(
         actor_membership=current_membership,
         target_membership=membership,
+        path_admin_same_org_owner=path_admin_same_org_owner,
     ):
         raise MembershipManagementForbiddenError
 
@@ -3940,3 +3987,136 @@ def deactivate_runtime_activity_subject(
     activity_subject.active = False
     activity_subject.save(update_fields=["active", "updated_at"])
     return activity_subject
+
+
+def _management_membership_for_establishment_admin(actor):
+    from houston.establishments.establishment_admin_selectors import (
+        resolve_management_membership_for_admin,
+    )
+
+    return resolve_management_membership_for_admin(actor)
+
+
+def _path_admin_same_org_owner_flag(*, actor, management_membership) -> bool:
+    return bool(
+        actor.via_organization_owner
+        and management_membership.establishment_id != actor.establishment.id
+    )
+
+
+def _ensure_establishment_admin_active(actor) -> None:
+    if actor.establishment.status != Establishment.Status.ACTIVE:
+        raise MembershipManagementNotFoundError
+
+
+def _ensure_admin_target_not_owner(*, membership_id, establishment_id) -> None:
+    target = EstablishmentMembership.objects.filter(
+        id=membership_id,
+        establishment_id=establishment_id,
+    ).first()
+    if target is None:
+        raise MembershipManagementNotFoundError
+    if target.role == EstablishmentMembership.Role.OWNER:
+        raise EstablishmentAdminOwnerForbiddenError
+
+
+def invite_membership_for_establishment_admin(
+    *,
+    actor,
+    email: str,
+    first_name: str,
+    last_name: str,
+    role: str,
+    scopes: list[MembershipScopeInput] | None = None,
+) -> DirectorInvitationResult:
+    _ensure_establishment_admin_active(actor)
+    if role == EstablishmentMembership.Role.OWNER:
+        raise EstablishmentAdminOwnerForbiddenError(
+            "Owner invitations are not allowed on the establishment admin surface."
+        )
+    management_membership = _management_membership_for_establishment_admin(actor)
+    return invite_membership_for_establishment(
+        current_membership=management_membership,
+        establishment_id=actor.establishment.id,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        role=role,
+        scopes=scopes,
+        path_admin_same_org_owner=_path_admin_same_org_owner_flag(
+            actor=actor,
+            management_membership=management_membership,
+        ),
+    )
+
+
+def update_membership_for_establishment_admin(
+    *,
+    actor,
+    membership_id,
+    update_input: MembershipUpdateInput,
+) -> EstablishmentMembership:
+    _ensure_establishment_admin_active(actor)
+    _ensure_admin_target_not_owner(
+        membership_id=membership_id,
+        establishment_id=actor.establishment.id,
+    )
+    if update_input.role == EstablishmentMembership.Role.OWNER:
+        raise EstablishmentAdminOwnerForbiddenError(
+            "Owner role cannot be assigned on the establishment admin surface."
+        )
+    management_membership = _management_membership_for_establishment_admin(actor)
+    return update_membership_for_management(
+        current_membership=management_membership,
+        establishment_id=actor.establishment.id,
+        membership_id=membership_id,
+        update_input=update_input,
+        path_admin_same_org_owner=_path_admin_same_org_owner_flag(
+            actor=actor,
+            management_membership=management_membership,
+        ),
+    )
+
+
+def deactivate_membership_for_establishment_admin(
+    *,
+    actor,
+    membership_id,
+) -> EstablishmentMembership:
+    _ensure_establishment_admin_active(actor)
+    _ensure_admin_target_not_owner(
+        membership_id=membership_id,
+        establishment_id=actor.establishment.id,
+    )
+    management_membership = _management_membership_for_establishment_admin(actor)
+    return deactivate_membership_for_management(
+        current_membership=management_membership,
+        establishment_id=actor.establishment.id,
+        membership_id=membership_id,
+        path_admin_same_org_owner=_path_admin_same_org_owner_flag(
+            actor=actor,
+            management_membership=management_membership,
+        ),
+    )
+
+
+def activate_membership_for_establishment_admin(
+    *,
+    actor,
+    membership_id,
+) -> EstablishmentMembership:
+    _ensure_establishment_admin_active(actor)
+    _ensure_admin_target_not_owner(
+        membership_id=membership_id,
+        establishment_id=actor.establishment.id,
+    )
+    management_membership = _management_membership_for_establishment_admin(actor)
+    return activate_membership_for_management(
+        current_membership=management_membership,
+        establishment_id=actor.establishment.id,
+        membership_id=membership_id,
+        path_admin_same_org_owner=_path_admin_same_org_owner_flag(
+            actor=actor,
+            management_membership=management_membership,
+        ),
+    )

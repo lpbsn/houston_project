@@ -1,6 +1,8 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
+import { terrainBrandAction } from '@/lib/terrain-styles'
+import { cn } from '@/lib/utils'
 
 type AppShellProps = PropsWithChildren<{
   headingBadge?: string
@@ -23,11 +25,21 @@ export function AppShell({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="text-[1.75rem] font-black tracking-[-0.06em] text-[color:var(--primary)] sm:text-[2rem]">
-                  houston
+                <span
+                  className={cn(
+                    'text-[1.75rem] font-black tracking-[-0.06em] sm:text-[2rem]',
+                    terrainBrandAction.text,
+                  )}
+                >
+                  spore
                 </span>
                 {headingBadge ? (
-                  <Badge className="max-w-full bg-[color:var(--primary)]/12 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-[color:var(--primary)] sm:px-3 sm:text-[0.68rem] sm:tracking-[0.22em]">
+                  <Badge
+                    className={cn(
+                      'max-w-full bg-[#114660]/12 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] sm:px-3 sm:text-[0.68rem] sm:tracking-[0.22em]',
+                      terrainBrandAction.text,
+                    )}
+                  >
                     {headingBadge}
                   </Badge>
                 ) : null}
