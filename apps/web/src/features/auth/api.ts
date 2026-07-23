@@ -8,6 +8,7 @@ import {
   clearAuthenticatedQueryCache,
   purgeNonAuthQueries,
 } from '@/lib/query-invalidation'
+import { clearSuccessToasts } from '@/lib/success-toast'
 
 import { ensureCsrfToken } from './csrf'
 import { clearAccessToken, getAccessToken, setAccessToken } from './session'
@@ -287,6 +288,7 @@ export function clearAuthState() {
   clearAccessToken()
   clearAllPlanningSubmissionIntents()
   clearObservationProcessingTrackerOnLogout()
+  clearSuccessToasts()
   clearAuthenticatedQueryCache(queryClient)
 }
 
@@ -365,6 +367,7 @@ export async function login(input: LoginRequest) {
 
   purgeNonAuthQueries(queryClient)
   clearAllPlanningSubmissionIntents()
+  clearSuccessToasts()
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -412,6 +415,7 @@ export async function registerOnboarding(input: RegistrationRequest) {
 
   purgeNonAuthQueries(queryClient)
   clearAllPlanningSubmissionIntents()
+  clearSuccessToasts()
   hydrateBootstrap(data)
   setAccessToken(data.access_token)
 
@@ -472,6 +476,7 @@ export async function switchEstablishment(input: SwitchEstablishmentRequest) {
 
   purgeNonAuthQueries(queryClient)
   clearAllPlanningSubmissionIntents()
+  clearSuccessToasts()
   queryClient.setQueryData<BootstrapResponse>(bootstrapQueryKey, result.data)
   return result.data
 }

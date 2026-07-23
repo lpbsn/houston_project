@@ -6,11 +6,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanDetail } from '@/features/action-plans/types'
+import { notifySuccess } from '@/lib/success-toast'
 
 import {
   ActionPlanTemplateDetailTopbarTrailing,
   DELETE_TEMPLATE_CONFIRM,
 } from './action-plan-template-detail-topbar-trailing'
+
+vi.mock('@/lib/success-toast', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/success-toast')>('@/lib/success-toast')
+  return {
+    ...actual,
+    notifySuccess: vi.fn(),
+  }
+})
 
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
@@ -209,6 +218,10 @@ describe('ActionPlanTemplateDetailTopbarTrailing', () => {
     expect(window.confirm).toHaveBeenCalledWith(DELETE_TEMPLATE_CONFIRM)
     await vi.waitFor(() => {
       expect(deleteMutateAsyncMock).toHaveBeenCalledTimes(1)
+      expect(notifySuccess).toHaveBeenCalledWith({
+        message: 'Modèle supprimé.',
+        kind: 'deleted',
+      })
       expect(navigateMock).toHaveBeenCalledWith('/action-plans')
     })
   })

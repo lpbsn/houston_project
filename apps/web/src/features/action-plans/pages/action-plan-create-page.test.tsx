@@ -5,7 +5,17 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { notifySuccess } from '@/lib/success-toast'
+
 import { ActionPlanCreatePage } from './action-plan-create-page'
+
+vi.mock('@/lib/success-toast', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/success-toast')>('@/lib/success-toast')
+  return {
+    ...actual,
+    notifySuccess: vi.fn(),
+  }
+})
 
 const navigate = vi.fn()
 const createMutateAsync = vi.fn()
@@ -835,9 +845,10 @@ describe('ActionPlanCreatePage', () => {
     expect(createBody.submission_id).toBe('sub-create')
     expect(createBody.use_shared_chronology).toBe(false)
     expect(createBody.items).toHaveLength(2)
-    expect(sessionStorage.getItem('houston:planning-feedback')).toBe(
-      '1 planifications et 1 exécutions ont été créées.',
-    )
+    expect(notifySuccess).toHaveBeenCalledWith({
+      message: '1 planification et 1 exécution créées.',
+      kind: 'created',
+    })
   })
 
   it('blocks per-assignee create when assignee cards are incomplete', async () => {

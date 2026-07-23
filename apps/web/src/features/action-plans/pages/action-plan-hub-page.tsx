@@ -10,6 +10,7 @@ import {
 } from '@/features/auth/lib/bootstrap-permission-hints'
 import { TerrainCard } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
+import { notifySuccess } from '@/lib/success-toast'
 import { terrain, terrainBrandAction } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -155,10 +156,10 @@ export function ActionPlanHubPage({ onNavigate }: ActionPlanHubPageProps) {
       })
       clearPlanningSubmissionIntent(establishmentId, usePlanId)
       setUsePlanId(null)
-      sessionStorage.setItem(
-        'houston:planning-feedback',
-        formatPlanningSubmitFeedback(response.summary),
-      )
+      notifySuccess({
+        message: formatPlanningSubmitFeedback(response.summary),
+        kind: 'created',
+      })
       navigateTo('/execution')
     } catch (error) {
       const message = resolveCatalogPlanningSubmitFallbackMessage(result, error)

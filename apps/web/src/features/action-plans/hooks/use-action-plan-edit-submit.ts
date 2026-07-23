@@ -6,6 +6,8 @@ import {
   validateActionPlanCreateForm,
   type ActionPlanCreateFormValues,
 } from '../lib/action-plan-form-validation'
+import { notifySuccess } from '@/lib/success-toast'
+
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { useUpdateActionPlanMutation } from '../hooks'
 
@@ -38,6 +40,7 @@ export function useActionPlanEditSubmit({
 
     try {
       await updateMutation.mutateAsync(buildActionPlanUpdateRequest(values))
+      notifySuccess({ message: 'Plan mis à jour.', kind: 'updated' })
       onNavigate(`/action-plans/${actionPlanId}`)
       return true
     } catch (error) {

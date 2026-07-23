@@ -169,10 +169,19 @@ describe('action-plan-catalog-planning-submit', () => {
     ).toBe(true)
   })
 
-  it('formats planning submit feedback as X planifications et Y exécutions', () => {
+  it('formats planning submit feedback with singular and plural parts', () => {
     expect(
       formatPlanningSubmitFeedback({ schedules_created: 2, executions_created: 3 }),
-    ).toBe('2 planifications et 3 exécutions ont été créées.')
+    ).toBe('2 planifications et 3 exécutions créées.')
+    expect(
+      formatPlanningSubmitFeedback({ schedules_created: 1, executions_created: 0 }),
+    ).toBe('1 planification créée.')
+    expect(
+      formatPlanningSubmitFeedback({ schedules_created: 0, executions_created: 1 }),
+    ).toBe('1 exécution créée.')
+    expect(
+      formatPlanningSubmitFeedback({ schedules_created: 0, executions_created: 2 }),
+    ).toBe('2 exécutions créées.')
   })
 
   it('maps planning fallback messages', () => {

@@ -7,8 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanDetail } from '@/features/action-plans/types'
 
+import { notifySuccess } from '@/lib/success-toast'
+
 import { ActionPlanTemplateDetailPage } from './action-plan-template-detail-page'
 import * as catalogPlanningSubmit from '../lib/action-plan-catalog-planning-submit'
+
+vi.mock('@/lib/success-toast', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/success-toast')>('@/lib/success-toast')
+  return {
+    ...actual,
+    notifySuccess: vi.fn(),
+  }
+})
 
 function renderPage(ui: ReactNode) {
   const queryClient = new QueryClient({
@@ -225,6 +235,7 @@ describe('ActionPlanTemplateDetailPage', () => {
       mutateAsync: activateMutateAsync,
       isPending: false,
     })
+    vi.mocked(notifySuccess).mockClear()
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -248,6 +259,10 @@ describe('ActionPlanTemplateDetailPage', () => {
 
     await vi.waitFor(() => {
       expect(activateMutateAsync).toHaveBeenCalled()
+      expect(notifySuccess).toHaveBeenCalledWith({
+        message: 'Modèle activé.',
+        kind: 'activated',
+      })
     })
   })
 
@@ -393,8 +408,9 @@ describe('ActionPlanTemplateDetailPage', () => {
     await vi.waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/execution')
     })
-    expect(sessionStorage.getItem('houston:planning-feedback')).toBe(
-      '1 planifications et 0 exécutions ont été créées.',
-    )
+    expect(notifySuccess).toHaveBeenCalledWith({
+      message: '1 planification créée.',
+      kind: 'created',
+    })
   })
 })

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { notifySuccess } from '@/lib/success-toast'
+
 import { ActionPlansApiError } from '../api'
 import { useUpdateActionPlanExecutionMutation } from '../hooks'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
@@ -49,6 +51,7 @@ export function useActionPlanExecutionEditSubmit({
 
     try {
       await updateMutation.mutateAsync(buildActionPlanExecutionUpdateRequest(values))
+      notifySuccess({ message: 'Plan mis à jour.', kind: 'updated' })
       onNavigate(`/action-plans/executions/${executionId}`)
       return true
     } catch (error) {

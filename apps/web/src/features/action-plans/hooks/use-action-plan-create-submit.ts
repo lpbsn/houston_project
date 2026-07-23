@@ -25,10 +25,10 @@ import {
   clearPlanningSubmissionIntent,
   resolvePlanningSubmissionIntent,
 } from '../lib/action-plan-planning-submission-intent'
+import { notifySuccess } from '@/lib/success-toast'
+
 import { useCreateActionPlanMutation } from '../hooks'
 import type { ActionPlanDetail } from '../types'
-
-const PLANNING_FEEDBACK_STORAGE_KEY = 'houston:planning-feedback'
 
 type UseActionPlanCreateSubmitOptions = {
   establishmentId: string
@@ -80,6 +80,10 @@ export function useActionPlanCreateSubmit({
       if (values.saveToLibrary) {
         const response = await createMutation.mutateAsync(buildActionPlanCreateRequest(values))
         if (isActionPlanDetail(response)) {
+          notifySuccess({
+            message: 'Plan ajouté à la bibliothèque.',
+            kind: 'created',
+          })
           onNavigate(`/action-plans/${response.id}`)
         }
         return true
@@ -123,10 +127,10 @@ export function useActionPlanCreateSubmit({
           setSubmitError('Le plan d’action n’a pas pu être créé.')
           return false
         }
-        sessionStorage.setItem(
-          PLANNING_FEEDBACK_STORAGE_KEY,
-          formatPlanningSubmitFeedback(response.summary),
-        )
+        notifySuccess({
+          message: formatPlanningSubmitFeedback(response.summary),
+          kind: 'created',
+        })
         onNavigate('/execution')
         return true
       }
@@ -138,13 +142,13 @@ export function useActionPlanCreateSubmit({
         : schedulesCreated > 0
           ? 0
           : 1
-      sessionStorage.setItem(
-        PLANNING_FEEDBACK_STORAGE_KEY,
-        formatPlanningSubmitFeedback({
+      notifySuccess({
+        message: formatPlanningSubmitFeedback({
           executions_created: executionsCreated,
           schedules_created: schedulesCreated,
         }),
-      )
+        kind: 'created',
+      })
       onNavigate('/execution')
       return true
     } catch (error) {
