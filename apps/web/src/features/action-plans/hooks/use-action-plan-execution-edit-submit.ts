@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import { notifySuccess } from '@/lib/success-toast'
 
@@ -44,15 +44,18 @@ export function useActionPlanExecutionEditSubmit({
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [guidanceNonce, setGuidanceNonce] = useState(0)
 
-  function revalidateFrontend(values: ActionPlanExecutionEditFormValues) {
-    const errors = validateActionPlanExecutionEditForm(values, {
-      canDefineCrossPoleTasks,
-      staffMode,
-      membershipId,
-    })
-    setFrontendFieldErrors(errors)
-    return errors
-  }
+  const revalidateFrontend = useCallback(
+    (values: ActionPlanExecutionEditFormValues) => {
+      const errors = validateActionPlanExecutionEditForm(values, {
+        canDefineCrossPoleTasks,
+        staffMode,
+        membershipId,
+      })
+      setFrontendFieldErrors(errors)
+      return errors
+    },
+    [canDefineCrossPoleTasks, membershipId, staffMode],
+  )
 
   function clearApiFieldError(key: string) {
     setApiFieldErrors((prev) => clearActionPlanFieldErrorKey(prev, key))
@@ -60,7 +63,6 @@ export function useActionPlanExecutionEditSubmit({
 
   async function submit(values: ActionPlanExecutionEditFormValues) {
     setGlobalError(null)
-    setApiFieldErrors({})
     setHasAttemptedSubmit(true)
     const errors = revalidateFrontend(values)
     if (hasActionPlanExecutionEditFormErrors(errors)) {
@@ -68,6 +70,7 @@ export function useActionPlanExecutionEditSubmit({
       return false
     }
 
+    setApiFieldErrors({})
     try {
       await updateMutation.mutateAsync(buildActionPlanExecutionUpdateRequest(values))
       notifySuccess({ message: 'Plan mis à jour.', kind: 'updated' })

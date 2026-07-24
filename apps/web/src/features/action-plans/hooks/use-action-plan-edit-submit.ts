@@ -50,7 +50,6 @@ export function useActionPlanEditSubmit({
 
   async function submit(values: ActionPlanCreateFormValues) {
     setGlobalError(null)
-    setApiFieldErrors({})
     setHasAttemptedSubmit(true)
     const errors = revalidateFrontend(values)
     if (hasActionPlanCreateFormErrors(errors)) {
@@ -58,6 +57,7 @@ export function useActionPlanEditSubmit({
       return false
     }
 
+    setApiFieldErrors({})
     try {
       await updateMutation.mutateAsync(buildActionPlanUpdateRequest(values))
       notifySuccess({ message: 'Plan mis à jour.', kind: 'updated' })

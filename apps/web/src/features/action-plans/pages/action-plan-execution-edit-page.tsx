@@ -130,6 +130,25 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     })
   }, [fieldErrors, guidanceNonce])
 
+  useEffect(() => {
+    if (!form || !hasAttemptedSubmit) {
+      return
+    }
+    revalidateFrontend(form)
+  }, [form, hasAttemptedSubmit, revalidateFrontend])
+
+  function patchForm(patch: Partial<ActionPlanExecutionEditFormValues>) {
+    setForm((previousForm) => {
+      if (previousForm === null) {
+        return previousForm
+      }
+      return {
+        ...previousForm,
+        ...patch,
+      }
+    })
+  }
+
   if (!establishmentId) {
     return null
   }
@@ -170,14 +189,6 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
         onRetry={() => navigate(detailBackPath)}
       />
     )
-  }
-
-  function patchForm(patch: Partial<ActionPlanExecutionEditFormValues>) {
-    const next = { ...form, ...patch }
-    setForm(next)
-    if (hasAttemptedSubmit) {
-      revalidateFrontend(next)
-    }
   }
 
   function setPendingTasks(pendingTasks: ActionPlanTaskDraft[]) {

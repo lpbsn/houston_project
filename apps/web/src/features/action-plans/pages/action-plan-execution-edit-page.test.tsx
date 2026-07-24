@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionPlanExecutionDetail } from '@/features/action-plans/types'
@@ -11,6 +11,10 @@ import { ActionPlanExecutionEditPage } from './action-plan-execution-edit-page'
 const detailQueryMock = vi.fn()
 const navigateMock = vi.fn()
 const submitMock = vi.fn()
+const revalidateFrontendMock = vi.fn()
+const submitHookState = {
+  hasAttemptedSubmit: false,
+}
 
 function buildExecution(
   overrides: Partial<ActionPlanExecutionDetail> = {},
@@ -122,14 +126,15 @@ vi.mock('../hooks/use-action-plan-execution-edit-submit', () => ({
     submitError: null,
     isSubmitting: false,
     guidanceNonce: 0,
-    hasAttemptedSubmit: false,
-    revalidateFrontend: vi.fn(),
+    hasAttemptedSubmit: submitHookState.hasAttemptedSubmit,
+    revalidateFrontend: revalidateFrontendMock,
     clearApiFieldError: vi.fn(),
   }),
 }))
 
 describe('ActionPlanExecutionEditPage guards', () => {
   beforeEach(() => {
+    submitHookState.hasAttemptedSubmit = false
     detailQueryMock.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -212,5 +217,37 @@ describe('ActionPlanExecutionEditPage guards', () => {
 
     expect(screen.getByDisplayValue('Titre local')).toBeTruthy()
     expect(screen.queryByDisplayValue('Titre concurrent')).toBeNull()
+  })
+
+  it('keeps both patches from the same batch and revalidates the final form', async () => {
+    submitHookState.hasAttemptedSubmit = true
+    detailQueryMock.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: buildExecution({ title: 'Titre initial', description: 'Desc initiale' }),
+      refetch: vi.fn(),
+    })
+
+    render(createElement(ActionPlanExecutionEditPage, { executionId: 'exec-1' }))
+
+    const titleInput = await screen.findByDisplayValue('Titre initial')
+    const descriptionInput = screen.getByDisplayValue('Desc initiale')
+
+    act(() => {
+      fireEvent.change(titleInput, { target: { value: 'Titre batch' } })
+      fireEvent.change(descriptionInput, { target: { value: 'Desc batch' } })
+    })
+
+    expect(screen.getByDisplayValue('Titre batch')).toBeTruthy()
+    expect(screen.getByDisplayValue('Desc batch')).toBeTruthy()
+
+    await waitFor(() => {
+      expect(
+        revalidateFrontendMock.mock.calls.some(
+          ([values]) =>
+            values.title === 'Titre batch' && values.description === 'Desc batch',
+        ),
+      ).toBe(true)
+    })
   })
 })

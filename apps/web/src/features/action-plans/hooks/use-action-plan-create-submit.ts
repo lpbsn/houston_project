@@ -91,7 +91,6 @@ export function useActionPlanCreateSubmit({
     planningDraft: ActionPlanEventPlanningDraft,
   ) {
     setGlobalError(null)
-    setApiFieldErrors({})
     setHasAttemptedSubmit(true)
     const mergedErrors = revalidateFrontend(values, planningDraft)
     if (hasActionPlanCreateFormErrors(mergedErrors)) {
@@ -99,6 +98,7 @@ export function useActionPlanCreateSubmit({
       return false
     }
 
+    setApiFieldErrors({})
     try {
       if (values.saveToLibrary) {
         const response = await createMutation.mutateAsync(buildActionPlanCreateRequest(values))
