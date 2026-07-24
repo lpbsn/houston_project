@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import { buildActionPlanUpdateRequest } from '../lib/action-plan-create-payload'
 import { mapActionPlanApiErrors } from '../lib/action-plan-api-error-map'
@@ -36,13 +36,16 @@ export function useActionPlanEditSubmit({
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [guidanceNonce, setGuidanceNonce] = useState(0)
 
-  function revalidateFrontend(values: ActionPlanCreateFormValues) {
-    const errors = validateActionPlanCreateForm(values, {
-      canDefineCrossPoleTasks,
-    })
-    setFrontendFieldErrors(errors)
-    return errors
-  }
+  const revalidateFrontend = useCallback(
+    (values: ActionPlanCreateFormValues) => {
+      const errors = validateActionPlanCreateForm(values, {
+        canDefineCrossPoleTasks,
+      })
+      setFrontendFieldErrors(errors)
+      return errors
+    },
+    [canDefineCrossPoleTasks],
+  )
 
   function clearApiFieldError(key: string) {
     setApiFieldErrors((prev) => clearActionPlanFieldErrorKey(prev, key))

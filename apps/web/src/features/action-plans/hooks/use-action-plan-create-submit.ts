@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import {
   formatPlanningSubmitFeedback,
@@ -65,22 +65,22 @@ export function useActionPlanCreateSubmit({
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [guidanceNonce, setGuidanceNonce] = useState(0)
 
-  function revalidateFrontend(
-    values: ActionPlanCreateFormValues,
-    planningDraft: ActionPlanEventPlanningDraft,
-  ) {
-    const errors = validateActionPlanCreateForm(values, {
-      canDefineCrossPoleTasks,
-      staffExecutionMode,
-    })
-    const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
-      saveToLibrary: values.saveToLibrary,
-      staffExecutionMode,
-    })
-    const merged = { ...errors, ...planningErrors }
-    setFrontendFieldErrors(merged)
-    return merged
-  }
+  const revalidateFrontend = useCallback(
+    (values: ActionPlanCreateFormValues, planningDraft: ActionPlanEventPlanningDraft) => {
+      const errors = validateActionPlanCreateForm(values, {
+        canDefineCrossPoleTasks,
+        staffExecutionMode,
+      })
+      const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
+        saveToLibrary: values.saveToLibrary,
+        staffExecutionMode,
+      })
+      const merged = { ...errors, ...planningErrors }
+      setFrontendFieldErrors(merged)
+      return merged
+    },
+    [canDefineCrossPoleTasks, staffExecutionMode],
+  )
 
   function clearApiFieldError(key: string) {
     setApiFieldErrors((prev) => clearActionPlanFieldErrorKey(prev, key))

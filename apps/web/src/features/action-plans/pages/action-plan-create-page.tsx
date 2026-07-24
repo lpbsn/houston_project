@@ -252,10 +252,13 @@ export function ActionPlanCreatePage({
     ],
   )
 
-  const staffExecutionMode =
-    modeConfig.showStaffSelfAssignee && membershipId && resolvedPilotBusinessUnitId
-      ? { membershipId, pilotBusinessUnitId: resolvedPilotBusinessUnitId }
-      : undefined
+  const staffExecutionMode = useMemo(
+    () =>
+      modeConfig.showStaffSelfAssignee && membershipId && resolvedPilotBusinessUnitId
+        ? { membershipId, pilotBusinessUnitId: resolvedPilotBusinessUnitId }
+        : undefined,
+    [membershipId, modeConfig.showStaffSelfAssignee, resolvedPilotBusinessUnitId],
+  )
 
   const createSubmit = useActionPlanCreateSubmit({
     establishmentId: establishmentId ?? '',
@@ -317,10 +320,14 @@ export function ActionPlanCreatePage({
       ...planningDraft,
       assignees: effectiveAssignees,
     })
-    // Revalidate only when the committed planning draft changes; other fields
-    // already call revalidateAfterChange with their next values.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional planning-draft trigger
-  }, [planningDraft, resolvedHasAttemptedSubmit, isTemplateEdit])
+  }, [
+    createSubmit.revalidateFrontend,
+    effectiveAssignees,
+    formValues,
+    isTemplateEdit,
+    planningDraft,
+    resolvedHasAttemptedSubmit,
+  ])
 
   useEffect(() => {
     if (!resolvedHasAttemptedSubmit) {
@@ -337,8 +344,16 @@ export function ActionPlanCreatePage({
         assignees: effectiveAssignees,
       },
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional tasks trigger
-  }, [tasks, resolvedHasAttemptedSubmit, isTemplateEdit])
+  }, [
+    createSubmit.revalidateFrontend,
+    editSubmit.revalidateFrontend,
+    effectiveAssignees,
+    formValues,
+    isTemplateEdit,
+    planningDraft,
+    resolvedHasAttemptedSubmit,
+    tasks,
+  ])
 
   function handleFieldChange(fieldKey: string, apply: () => void) {
     apply()

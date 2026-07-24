@@ -435,4 +435,103 @@ describe('ActionPlanTaskDraftEditor', () => {
       { id: 'task-2', task: 'Titre batch 2' },
     ])
   })
+
+  it('keeps title and description patches on the same card from the same render', () => {
+    const initialTask = {
+      ...createActionPlanTaskDraft('bu-1'),
+      id: 'task-1',
+      task: 'Titre A',
+      description: 'Desc A',
+    }
+    const initial = [initialTask]
+    let tasks = initial
+
+    render(
+      createElement(ActionPlanTaskDraftEditor, {
+        tasks: initial,
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        canDefineCrossPoleTasks: false,
+        businessUnits: [{ id: 'bu-1', label: 'Restaurant' }],
+        onTasksChange: (update) => {
+          tasks = typeof update === 'function' ? update(tasks) : update
+        },
+      }),
+    )
+
+    act(() => {
+      fireEvent.change(screen.getByLabelText('Titre de la tâche'), {
+        target: { value: 'Titre batch' },
+      })
+      fireEvent.change(screen.getByLabelText('Description de la tâche'), {
+        target: { value: 'Desc batch' },
+      })
+    })
+
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        id: 'task-1',
+        task: 'Titre batch',
+        description: 'Desc batch',
+      }),
+    ])
+  })
+
+  it('keeps coherent pole and assignee fields from interdependent same-render patches', () => {
+    const initialTask = {
+      ...createActionPlanTaskDraft('bu-1'),
+      id: 'task-1',
+      task: 'Contrôler la température',
+      assigneeMembershipId: 'member-alice',
+      assigneeDisplayName: 'Alice',
+      assigneeBusinessUnitIds: ['bu-1', 'bu-2'],
+      businessUnitId: 'bu-1',
+    }
+    const initial = [initialTask]
+    let tasks = initial
+
+    render(
+      createElement(ActionPlanTaskDraftEditor, {
+        tasks: initial,
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        canDefineCrossPoleTasks: true,
+        businessUnits: [
+          { id: 'bu-1', label: 'Restaurant' },
+          { id: 'bu-2', label: 'Bar' },
+        ],
+        onTasksChange: (update) => {
+          tasks = typeof update === 'function' ? update(tasks) : update
+        },
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Options avancées' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Alice' }))
+    fireEvent.click(screen.getByRole('button', { name: "Pôle d'activité" }))
+    expect(lastAssigneeSheetProps?.onAssigneeChange).toBeTypeOf('function')
+    expect(screen.getByRole('button', { name: 'Restaurant' })).toBeTruthy()
+
+    act(() => {
+      ;(lastAssigneeSheetProps?.onAssigneeChange as (membershipId: string, user: {
+        display_name: string
+        business_unit_ids?: string[]
+      }) => void)('member-bob', {
+        display_name: 'Bob',
+        business_unit_ids: ['bu-2'],
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Restaurant' }))
+    })
+
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        id: 'task-1',
+        task: 'Contrôler la température',
+        assigneeMembershipId: '',
+        assigneeDisplayName: '',
+        assigneeBusinessUnitIds: [],
+        businessUnitId: 'bu-1',
+      }),
+    ])
+  })
 })

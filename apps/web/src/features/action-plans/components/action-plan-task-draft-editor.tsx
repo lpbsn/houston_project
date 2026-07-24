@@ -65,6 +65,10 @@ export function createActionPlanTaskDraftEditorItem(
   }
 }
 
+type TaskPatch =
+  | Partial<ActionPlanTaskDraft>
+  | ((previousTask: ActionPlanTaskDraft) => Partial<ActionPlanTaskDraft>)
+
 type ActionPlanTaskDraftCardProps = {
   task: ActionPlanTaskDraft
   establishmentId: string
@@ -76,7 +80,7 @@ type ActionPlanTaskDraftCardProps = {
   fieldErrors: Record<string, string>
   expandAdvancedNonce: number
   shouldExpandAdvanced: boolean
-  onChange: (task: ActionPlanTaskDraft) => void
+  onChange: (patch: TaskPatch) => void
   onDelete: () => void
   onTaskFieldChange?: (fieldKey: string) => void
 }
@@ -150,20 +154,20 @@ function ActionPlanTaskDraftCard({
   function updateDeadline(date: string, time: string) {
     onTaskFieldChange?.(deadlineKey)
     onChange({
-      ...task,
       deadlineAt: combineDateAndTimeToIso(date, time),
     })
   }
 
   function handleBusinessUnitChange(businessUnitId: string) {
     onTaskFieldChange?.(poleKey)
-    const clearAssignee = shouldClearAssigneeOnPoleChange(task, businessUnitId)
-    onChange({
-      ...task,
-      businessUnitId,
-      ...(clearAssignee
-        ? { assigneeMembershipId: '', assigneeDisplayName: '', assigneeBusinessUnitIds: [] }
-        : {}),
+    onChange((previousTask) => {
+      const clearAssignee = shouldClearAssigneeOnPoleChange(previousTask, businessUnitId)
+      return {
+        businessUnitId,
+        ...(clearAssignee
+          ? { assigneeMembershipId: '', assigneeDisplayName: '', assigneeBusinessUnitIds: [] }
+          : {}),
+      }
     })
   }
 
@@ -172,19 +176,24 @@ function ActionPlanTaskDraftCard({
     user: { display_name: string; business_unit_ids?: string[] },
   ) {
     onTaskFieldChange?.(assigneeKey)
-    onChange(
-      applyAssigneeSelectionToTask(task, {
+    onChange((previousTask) => {
+      const nextTask = applyAssigneeSelectionToTask(previousTask, {
         membershipId,
         displayName: user.display_name,
         businessUnitIds: user.business_unit_ids ?? [],
-      }),
-    )
+      })
+      return {
+        assigneeMembershipId: nextTask.assigneeMembershipId,
+        assigneeDisplayName: nextTask.assigneeDisplayName,
+        assigneeBusinessUnitIds: nextTask.assigneeBusinessUnitIds,
+        businessUnitId: nextTask.businessUnitId,
+      }
+    })
   }
 
   function handleClearAssignee() {
     onTaskFieldChange?.(assigneeKey)
     onChange({
-      ...task,
       assigneeMembershipId: '',
       assigneeDisplayName: '',
       assigneeBusinessUnitIds: [],
@@ -207,7 +216,7 @@ function ActionPlanTaskDraftCard({
                 value={task.task}
                 onChange={(event) => {
                   onTaskFieldChange?.(titleKey)
-                  onChange({ ...task, task: event.target.value })
+                  onChange({ task: event.target.value })
                 }}
                 placeholder="Ex. Contrôler la température"
                 aria-label="Titre de la tâche"
@@ -232,7 +241,7 @@ function ActionPlanTaskDraftCard({
               value={task.description}
               onChange={(event) => {
                 onTaskFieldChange?.(descriptionKey)
-                onChange({ ...task, description: event.target.value })
+                onChange({ description: event.target.value })
               }}
               placeholder="Description (optionnelle)"
               aria-label="Description de la tâche"
@@ -402,11 +411,16 @@ export function ActionPlanTaskDraftEditor({
             fieldErrors={fieldErrors}
             expandAdvancedNonce={expandAdvancedNonce}
             shouldExpandAdvanced={expandIds.has(task.id)}
-            onChange={(nextTask) =>
+            onChange={(patch) =>
               onTasksChange((previousTasks) =>
-                previousTasks.map((candidate) =>
-                  candidate.id === task.id ? nextTask : candidate,
-                ),
+                previousTasks.map((previousTask) => {
+                  if (previousTask.id !== task.id) {
+                    return previousTask
+                  }
+                  const resolvedPatch =
+                    typeof patch === 'function' ? patch(previousTask) : patch
+                  return { ...previousTask, ...resolvedPatch }
+                }),
               )
             }
             onDelete={() =>
