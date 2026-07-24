@@ -44,7 +44,9 @@ type ActionPlanTaskDraftEditorProps = {
   /** One-shot expand request for advanced options (nonce increments per invalid submit). */
   expandAdvancedNonce?: number
   expandAdvancedTaskIds?: ReadonlySet<string> | readonly string[]
-  onTasksChange: (tasks: ActionPlanTaskDraft[]) => void
+  onTasksChange: (
+    update: ActionPlanTaskDraft[] | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[]),
+  ) => void
   onTaskFieldChange?: (fieldKey: string) => void
 }
 
@@ -401,11 +403,17 @@ export function ActionPlanTaskDraftEditor({
             expandAdvancedNonce={expandAdvancedNonce}
             shouldExpandAdvanced={expandIds.has(task.id)}
             onChange={(nextTask) =>
-              onTasksChange(
-                tasks.map((candidate) => (candidate.id === task.id ? nextTask : candidate)),
+              onTasksChange((previousTasks) =>
+                previousTasks.map((candidate) =>
+                  candidate.id === task.id ? nextTask : candidate,
+                ),
               )
             }
-            onDelete={() => onTasksChange(tasks.filter((candidate) => candidate.id !== task.id))}
+            onDelete={() =>
+              onTasksChange((previousTasks) =>
+                previousTasks.filter((candidate) => candidate.id !== task.id),
+              )
+            }
             onTaskFieldChange={onTaskFieldChange}
           />
         ))}
@@ -417,7 +425,10 @@ export function ActionPlanTaskDraftEditor({
           )}
           disabled={tasks.length >= 10}
           onClick={() =>
-            onTasksChange([...tasks, createActionPlanTaskDraftEditorItem()])
+            onTasksChange((previousTasks) => [
+              ...previousTasks,
+              createActionPlanTaskDraftEditorItem(),
+            ])
           }
         >
           <Plus className="mr-2 h-4 w-4" aria-hidden />

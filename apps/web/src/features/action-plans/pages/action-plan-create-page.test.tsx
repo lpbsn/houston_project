@@ -186,15 +186,19 @@ vi.mock('../components/action-plan-event-planning-form', () => ({
     onDraftChange,
   }: {
     draft: Record<string, unknown> & { assignees: Array<Record<string, unknown>> }
-    onDraftChange: (draft: Record<string, unknown>) => void
+    onDraftChange: (
+      update:
+        | Record<string, unknown>
+        | ((previous: Record<string, unknown>) => Record<string, unknown>),
+    ) => void
   }) => {
     useEffect(() => {
       if (perAssigneeTestMode.enabled) {
         if (draft.usePerAssigneeChronology) {
           return
         }
-        onDraftChange({
-          ...draft,
+        onDraftChange((previous) => ({
+          ...previous,
           usePerAssigneeChronology: true,
           assignees: [
             {
@@ -222,15 +226,15 @@ vi.mock('../components/action-plan-event-planning-form', () => ({
               recurrenceEndDate: '',
             },
           ],
-        })
+        }))
         return
       }
 
       if (draft.assignees.length > 0) {
         return
       }
-      onDraftChange({
-        ...draft,
+      onDraftChange((previous) => ({
+        ...previous,
         assignees: [
           {
             id: 'a1',
@@ -245,7 +249,7 @@ vi.mock('../components/action-plan-event-planning-form', () => ({
             recurrenceEndDate: '',
           },
         ],
-      })
+      }))
     }, [draft, onDraftChange])
     return createElement('div', { 'data-testid': 'event-planning-form' })
   },

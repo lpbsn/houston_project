@@ -38,7 +38,11 @@ type ActionPlanEventPlanningFormProps = {
   establishmentId: string
   pilotBusinessUnitId: string
   fieldErrors?: Record<string, string>
-  onDraftChange: (draft: ActionPlanEventPlanningDraft) => void
+  onDraftChange: (
+    update:
+      | ActionPlanEventPlanningDraft
+      | ((previous: ActionPlanEventPlanningDraft) => ActionPlanEventPlanningDraft),
+  ) => void
   onAssigneeSchedule?: (assigneeId: string, body: ActionPlanScheduleCreateRequest) => void
   onAssigneeLaunch?: (assigneeId: string, body: ActionPlanUseRequest) => void
 }
@@ -118,15 +122,16 @@ export function ActionPlanEventPlanningForm({
   const [assigneeActionErrors, setAssigneeActionErrors] = useState<Record<string, string>>({})
 
   function updateDraft(patch: Partial<ActionPlanEventPlanningDraft>) {
-    onDraftChange({ ...draft, ...patch })
+    onDraftChange((previousDraft) => ({ ...previousDraft, ...patch }))
   }
 
   function updateAssignee(id: string, patch: Partial<ActionPlanAssigneeDraft>) {
-    updateDraft({
-      assignees: draft.assignees.map((assignee) =>
+    onDraftChange((previousDraft) => ({
+      ...previousDraft,
+      assignees: previousDraft.assignees.map((assignee) =>
         assignee.id === id ? { ...assignee, ...patch } : assignee,
       ),
-    })
+    }))
   }
 
   function renderNowButton(apply: (parts: { date: string; time: string }) => void) {
@@ -235,10 +240,13 @@ export function ActionPlanEventPlanningForm({
               label="Chronologie par assigné"
               checked={draft.usePerAssigneeChronology}
               onCheckedChange={(usePerAssigneeChronology) =>
-                updateDraft({
+                onDraftChange((previousDraft) => ({
+                  ...previousDraft,
                   usePerAssigneeChronology,
-                  repeatEnabled: usePerAssigneeChronology ? false : draft.repeatEnabled,
-                })
+                  repeatEnabled: usePerAssigneeChronology
+                    ? false
+                    : previousDraft.repeatEnabled,
+                }))
               }
             />
           ) : null}
@@ -273,11 +281,12 @@ export function ActionPlanEventPlanningForm({
                           className="rounded-lg p-2 text-[#E24B4A]"
                           aria-label="Retirer l’assigné"
                           onClick={() =>
-                            updateDraft({
-                              assignees: draft.assignees.filter(
+                            onDraftChange((previousDraft) => ({
+                              ...previousDraft,
+                              assignees: previousDraft.assignees.filter(
                                 (candidate) => candidate.id !== assignee.id,
                               ),
-                            })
+                            }))
                           }
                         >
                           <Trash2 className="h-4 w-4" />
@@ -506,12 +515,13 @@ export function ActionPlanEventPlanningForm({
                   variant="outline"
                   className="h-10 w-full rounded-xl border-dashed"
                   onClick={() =>
-                    updateDraft({
+                    onDraftChange((previousDraft) => ({
+                      ...previousDraft,
                       assignees: [
-                        ...draft.assignees,
+                        ...previousDraft.assignees,
                         createActionPlanAssigneeDraft({ businessUnitId: pilotBusinessUnitId }),
                       ],
-                    })
+                    }))
                   }
                 >
                   <Plus className="mr-2 h-4 w-4" aria-hidden />

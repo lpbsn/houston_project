@@ -96,6 +96,19 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
       root: planningFormRootRef.current ?? document,
     })
   }, [planningFieldErrors, planningGuidanceNonce])
+
+  useEffect(() => {
+    if (!hasAttemptedPlanningSubmit || !detailQuery.data) {
+      return
+    }
+    setPlanningFieldErrors(
+      validateCatalogPlanningDraft(planningDraft, {
+        canSchedule: canShowActionPlanSchedule(detailQuery.data.permission_hints),
+        staffMode: staffUseMode,
+      }),
+    )
+  }, [detailQuery.data, hasAttemptedPlanningSubmit, planningDraft, staffUseMode])
+
   const displayedFeedback =
     feedback ??
     (latestDeleteError
@@ -297,11 +310,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
               establishmentId={establishmentId}
               pilotBusinessUnitId={plan.pilot_business_unit.id}
               fieldErrors={planningFieldErrors}
-              onDraftChange={(next) => {
-                setPlanningDraft(next)
-                if (hasAttemptedPlanningSubmit) {
-                  setPlanningFieldErrors(validateCatalogPlanningDraft(next, planningOptions))
-                }
+              onDraftChange={(update) => {
+                setPlanningDraft((previous) =>
+                  typeof update === 'function' ? update(previous) : update,
+                )
               }}
             />
           </div>

@@ -309,6 +309,37 @@ export function ActionPlanCreatePage({
     })
   }, [resolvedFieldErrors, resolvedGuidanceNonce])
 
+  useEffect(() => {
+    if (!resolvedHasAttemptedSubmit || isTemplateEdit) {
+      return
+    }
+    createSubmit.revalidateFrontend(formValues, {
+      ...planningDraft,
+      assignees: effectiveAssignees,
+    })
+    // Revalidate only when the committed planning draft changes; other fields
+    // already call revalidateAfterChange with their next values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional planning-draft trigger
+  }, [planningDraft, resolvedHasAttemptedSubmit, isTemplateEdit])
+
+  useEffect(() => {
+    if (!resolvedHasAttemptedSubmit) {
+      return
+    }
+    if (isTemplateEdit) {
+      editSubmit.revalidateFrontend({ ...formValues, tasks })
+      return
+    }
+    createSubmit.revalidateFrontend(
+      { ...formValues, tasks },
+      {
+        ...planningDraft,
+        assignees: effectiveAssignees,
+      },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional tasks trigger
+  }, [tasks, resolvedHasAttemptedSubmit, isTemplateEdit])
+
   function handleFieldChange(fieldKey: string, apply: () => void) {
     apply()
     if (isTemplateEdit) {
@@ -563,9 +594,10 @@ export function ActionPlanCreatePage({
           fieldErrors={resolvedFieldErrors}
           expandAdvancedNonce={resolvedGuidanceNonce}
           expandAdvancedTaskIds={expandAdvancedTaskIds}
-          onTasksChange={(nextTasks) => {
-            setTasks(nextTasks)
-            revalidateAfterChange({ ...formValues, tasks: nextTasks })
+          onTasksChange={(update) => {
+            setTasks((previous) =>
+              typeof update === 'function' ? update(previous) : update,
+            )
           }}
           onTaskFieldChange={(fieldKey) => {
             if (isTemplateEdit) {
@@ -592,14 +624,13 @@ export function ActionPlanCreatePage({
             establishmentId={establishmentId}
             pilotBusinessUnitId={resolvedPilotBusinessUnitId}
             fieldErrors={resolvedFieldErrors}
-            onDraftChange={(next) => {
-              const nextDraft = modeConfig.showStaffSelfAssignee
-                ? { ...next, assignees: effectiveAssignees }
-                : next
-              setPlanningDraft(nextDraft)
-              if (resolvedHasAttemptedSubmit && !isTemplateEdit) {
-                createSubmit.revalidateFrontend(formValues, nextDraft)
-              }
+            onDraftChange={(update) => {
+              setPlanningDraft((previous) => {
+                const next = typeof update === 'function' ? update(previous) : update
+                return modeConfig.showStaffSelfAssignee
+                  ? { ...next, assignees: effectiveAssignees }
+                  : next
+              })
             }}
           />
         ) : null}

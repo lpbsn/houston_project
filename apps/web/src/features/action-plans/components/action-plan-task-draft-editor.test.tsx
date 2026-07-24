@@ -1,14 +1,17 @@
 // @vitest-environment jsdom
 
 import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ActionPlanTaskDraftEditor,
   createActionPlanTaskDraftEditorItem,
 } from '@/features/action-plans/components/action-plan-task-draft-editor'
-import { createActionPlanTaskDraft } from '@/features/action-plans/lib/action-plan-form-validation'
+import {
+  createActionPlanTaskDraft,
+  type ActionPlanTaskDraft,
+} from '@/features/action-plans/lib/action-plan-form-validation'
 
 let lastAssigneeSheetProps: Record<string, unknown> | null = null
 
@@ -175,18 +178,19 @@ describe('ActionPlanTaskDraftEditor', () => {
 
   it('clears pole when assignee is cleared', () => {
     const onTasksChange = vi.fn()
+    const initialTasks = [
+      {
+        ...createActionPlanTaskDraft('bu-1'),
+        task: 'Contrôler la température',
+        assigneeMembershipId: 'member-1',
+        assigneeDisplayName: 'Manager restaurant',
+        assigneeBusinessUnitIds: ['bu-1'],
+      },
+    ]
 
     render(
       createElement(ActionPlanTaskDraftEditor, {
-        tasks: [
-          {
-            ...createActionPlanTaskDraft('bu-1'),
-            task: 'Contrôler la température',
-            assigneeMembershipId: 'member-1',
-            assigneeDisplayName: 'Manager restaurant',
-            assigneeBusinessUnitIds: ['bu-1'],
-          },
-        ],
+        tasks: initialTasks,
         establishmentId: 'est-1',
         pilotBusinessUnitId: 'bu-1',
         canDefineCrossPoleTasks: false,
@@ -198,7 +202,12 @@ describe('ActionPlanTaskDraftEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Options avancées' }))
     fireEvent.click(screen.getByRole('button', { name: 'Effacer' }))
 
-    expect(onTasksChange).toHaveBeenCalledWith([
+    const update = onTasksChange.mock.calls[0][0] as
+      | ActionPlanTaskDraft[]
+      | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[])
+    const nextTasks = typeof update === 'function' ? update(initialTasks) : update
+
+    expect(nextTasks).toEqual([
       expect.objectContaining({
         assigneeMembershipId: '',
         assigneeDisplayName: '',
@@ -387,5 +396,43 @@ describe('ActionPlanTaskDraftEditor', () => {
     )
 
     expect(screen.queryByRole('button', { name: "Pôle d'activité" })).toBeNull()
+  })
+
+  it('keeps both task title patches from the same render before any intermediate rerender', () => {
+    const first = { ...createActionPlanTaskDraft('bu-1'), id: 'task-1', task: 'Titre A' }
+    const second = { ...createActionPlanTaskDraft('bu-1'), id: 'task-2', task: 'Titre B' }
+    const initial = [first, second]
+    let tasks = initial
+
+    // Freeze the tasks prop so both handlers close over the same render snapshot.
+    // Parent applies each update onto the latest committed list (functional-setState shape).
+    render(
+      createElement(ActionPlanTaskDraftEditor, {
+        tasks: initial,
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        canDefineCrossPoleTasks: false,
+        businessUnits: [{ id: 'bu-1', label: 'Restaurant' }],
+        onTasksChange: (update) => {
+          tasks =
+            typeof update === 'function'
+              ? update(tasks)
+              : update
+        },
+      }),
+    )
+
+    const titleInputs = screen.getAllByLabelText('Titre de la tâche')
+    expect(titleInputs).toHaveLength(2)
+
+    act(() => {
+      fireEvent.change(titleInputs[0], { target: { value: 'Titre batch 1' } })
+      fireEvent.change(titleInputs[1], { target: { value: 'Titre batch 2' } })
+    })
+
+    expect(tasks.map((task) => ({ id: task.id, task: task.task }))).toEqual([
+      { id: 'task-1', task: 'Titre batch 1' },
+      { id: 'task-2', task: 'Titre batch 2' },
+    ])
   })
 })

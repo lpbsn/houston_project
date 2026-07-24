@@ -191,12 +191,38 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     )
   }
 
-  function setPendingTasks(pendingTasks: ActionPlanTaskDraft[]) {
-    patchForm({ pendingTasks })
+  function setPendingTasks(
+    update: ActionPlanTaskDraft[] | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[]),
+  ) {
+    setForm((previousForm) => {
+      if (previousForm === null) {
+        return previousForm
+      }
+      const pendingTasks =
+        typeof update === 'function' ? update(previousForm.pendingTasks) : update
+      return {
+        ...previousForm,
+        pendingTasks,
+      }
+    })
   }
 
-  function setPlanningDraft(planningDraft: ActionPlanEventPlanningDraft) {
-    patchForm({ planningDraft })
+  function setPlanningDraft(
+    update:
+      | ActionPlanEventPlanningDraft
+      | ((previous: ActionPlanEventPlanningDraft) => ActionPlanEventPlanningDraft),
+  ) {
+    setForm((previousForm) => {
+      if (previousForm === null) {
+        return previousForm
+      }
+      const planningDraft =
+        typeof update === 'function' ? update(previousForm.planningDraft) : update
+      return {
+        ...previousForm,
+        planningDraft,
+      }
+    })
   }
 
   return (

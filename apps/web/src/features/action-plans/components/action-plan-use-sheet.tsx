@@ -79,6 +79,13 @@ function ActionPlanUseSheetBody({
     })
   }, [frontendFieldErrors, guidanceNonce])
 
+  useEffect(() => {
+    if (!hasAttemptedSubmit) {
+      return
+    }
+    setFrontendFieldErrors(validateCatalogPlanningDraft(planningDraft, planningOptions))
+  }, [hasAttemptedSubmit, planningDraft, canSchedule, staffUseMode])
+
   function handlePrimaryAction() {
     setHasAttemptedSubmit(true)
     const errors = validateCatalogPlanningDraft(planningDraft, planningOptions)
@@ -131,11 +138,10 @@ function ActionPlanUseSheetBody({
           establishmentId={establishmentId}
           pilotBusinessUnitId={pilotBusinessUnitId}
           fieldErrors={frontendFieldErrors}
-          onDraftChange={(next) => {
-            setPlanningDraft(next)
-            if (hasAttemptedSubmit) {
-              setFrontendFieldErrors(validateCatalogPlanningDraft(next, planningOptions))
-            }
+          onDraftChange={(update) => {
+            setPlanningDraft((previous) =>
+              typeof update === 'function' ? update(previous) : update,
+            )
           }}
         />
       </div>
