@@ -18,11 +18,18 @@ import { useBusinessUnitTreeQuery } from '@/features/auth/hooks'
 import {
   useActivateMembershipMutation,
   useDeactivateMembershipMutation,
+  useReinviteMembershipMutation,
   useTeamMemberDetailQuery,
   useUpdateMembershipMutation,
   useUpdateProfileMutation,
 } from '@/features/auth/hooks/use-team-members'
+import { buildInvitationAcceptUrl } from '@/features/auth/hooks/use-membership-invite-form'
 import { businessUnitScopesFromApiItems } from '@/features/auth/lib/business-unit-scope'
+import {
+  buildInvitationResentDisabledEmailMessage,
+  buildInvitationResentMessage,
+  REINVITE_CONFIRM_MESSAGE,
+} from '@/features/auth/lib/invitation-messaging'
 import { resolveMembershipManagementErrorMessage } from '@/features/auth/lib/membership-management-errors'
 import {
   canChangeMembershipRoleViaPatch,
@@ -37,7 +44,7 @@ import {
   normalizeTeamRole,
 } from '@/features/auth/lib/team-members'
 import { toRoleEnum } from '@/features/auth/lib/role'
-import type { EstablishmentMembershipResponse, RoleEnum } from '@/features/auth/types'
+import type { EstablishmentMembershipDetailResponse, RoleEnum } from '@/features/auth/types'
 import { terrain, terrainBackButtonClassName } from '@/lib/terrain-styles'
 import { cn } from '@/lib/utils'
 
@@ -65,7 +72,14 @@ type EditorDraft = {
   scopes: ReturnType<typeof businessUnitScopesFromApiItems>
 }
 
-function buildEditorDraft(membership: EstablishmentMembershipResponse): EditorDraft {
+function formatInvitationDate(value: string | null | undefined) {
+  if (!value) {
+    return '—'
+  }
+  return new Date(value).toLocaleString('fr-FR')
+}
+
+function buildEditorDraft(membership: EstablishmentMembershipDetailResponse): EditorDraft {
   return {
     firstName: membership.user.first_name ?? '',
     lastName: membership.user.last_name ?? '',
@@ -75,7 +89,7 @@ function buildEditorDraft(membership: EstablishmentMembershipResponse): EditorDr
   }
 }
 
-function hasEditableFields(membership: EstablishmentMembershipResponse | undefined): boolean {
+function hasEditableFields(membership: EstablishmentMembershipDetailResponse | undefined): boolean {
   if (!membership?.permission_hints) {
     return false
   }
@@ -98,10 +112,14 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState<EditorDraft | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [invitationLink, setInvitationLink] = useState<string | null>(null)
+  const [copyMessage, setCopyMessage] = useState<string | null>(null)
 
   const updateMembershipMutation = useUpdateMembershipMutation(membershipId)
   const activateMutation = useActivateMembershipMutation(membershipId)
   const deactivateMutation = useDeactivateMembershipMutation(membershipId)
+  const reinviteMutation = useReinviteMembershipMutation(membershipId)
   const updateProfileMutation = useUpdateProfileMutation()
 
   const currentRole = membership ? normalizeTeamRole(membership.role) : null
@@ -129,9 +147,54 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
     updateMembershipMutation.isPending ||
     activateMutation.isPending ||
     deactivateMutation.isPending ||
+    reinviteMutation.isPending ||
     updateProfileMutation.isPending
 
   const isStatusPending = activateMutation.isPending || deactivateMutation.isPending
+
+  const handleReinvite = async () => {
+    if (!membership?.permission_hints?.can_reinvite) {
+      return
+    }
+    if (!window.confirm(REINVITE_CONFIRM_MESSAGE)) {
+      return
+    }
+
+    setErrorMessage(null)
+    setSuccessMessage(null)
+    setCopyMessage(null)
+
+    try {
+      const result = await reinviteMutation.mutateAsync()
+      const email = membership.user.email ?? ''
+      setInvitationLink(buildInvitationAcceptUrl(result.invitation_accept_path))
+      setSuccessMessage(
+        result.email_scheduling_status === 'disabled'
+          ? buildInvitationResentDisabledEmailMessage(email)
+          : buildInvitationResentMessage(email),
+      )
+    } catch (error) {
+      setInvitationLink(null)
+      setErrorMessage(
+        resolveMembershipManagementErrorMessage(
+          error,
+          "L'invitation n'a pas pu être renouvelée. Réessayez.",
+        ),
+      )
+    }
+  }
+
+  const handleCopyInvitationLink = async () => {
+    if (!invitationLink) {
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(invitationLink)
+      setCopyMessage('Lien copié')
+    } catch {
+      setCopyMessage('La copie a échoué. Sélectionnez le lien manuellement.')
+    }
+  }
 
   if (detailQuery.isPending) {
     return <p className={cn('px-3 py-4 text-sm', terrain.muted)}>Chargement du membre...</p>
@@ -361,8 +424,71 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
                 <span>—</span>
               )}
             </TerrainDetailFieldCard>
+            <TerrainDetailFieldCard label="Date d'invitation">
+              <span>{formatInvitationDate(membership.last_invited_at)}</span>
+            </TerrainDetailFieldCard>
           </TerrainCard>
         </section>
+
+        {invited ? (
+          <section className="space-y-2">
+            <TerrainSectionLabel>Invitation en attente</TerrainSectionLabel>
+            <TerrainCard className="space-y-3 p-3">
+              <div className="space-y-1 text-sm text-[#5C5A54]">
+                {membership.pending_invitation ? (
+                  <>
+                    <p>
+                      Expiration :{' '}
+                      {formatInvitationDate(membership.pending_invitation.expires_at)}
+                      {membership.pending_invitation.is_expired ? ' (expiré)' : ''}
+                    </p>
+                    <p>
+                      Lien : {membership.pending_invitation.is_expired ? 'expiré' : 'valide'}
+                    </p>
+                  </>
+                ) : (
+                  <p>Aucun lien d&apos;invitation actif. Vous pouvez en générer un nouveau.</p>
+                )}
+                {membership.user.email ? <p>Email : {membership.user.email}</p> : null}
+              </div>
+              {hints?.can_reinvite ? (
+                <Button
+                  type="button"
+                  className="h-10 w-full rounded-xl bg-[#114660] text-white hover:bg-[#114660]/90"
+                  disabled={reinviteMutation.isPending || isEditing}
+                  onClick={() => void handleReinvite()}
+                >
+                  {reinviteMutation.isPending ? (
+                    <>
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                      Renvoi...
+                    </>
+                  ) : (
+                    "Renvoyer l'invitation"
+                  )}
+                </Button>
+              ) : null}
+              {invitationLink ? (
+                <div className="space-y-2">
+                  <Input readOnly value={invitationLink} className="h-9 border-[#E8E6DF] text-xs" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 w-full rounded-xl"
+                    onClick={() => void handleCopyInvitationLink()}
+                  >
+                    Copier le lien
+                  </Button>
+                  {copyMessage ? (
+                    <p className="text-xs text-[#5C5A54]" role="status">
+                      {copyMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </TerrainCard>
+          </section>
+        ) : null}
 
         <section className="space-y-2">
           <TerrainSectionLabel>Poste</TerrainSectionLabel>
@@ -467,6 +593,12 @@ export function TeamMemberDetailPage({ membershipId }: TeamMemberDetailPageProps
             ) : null}
           </TerrainCard>
         </section>
+
+        {successMessage ? (
+          <p className="text-sm text-[#2F6B3A]" role="status">
+            {successMessage}
+          </p>
+        ) : null}
 
         {errorMessage ? (
           <p className="text-sm text-[#E24B4A]" role="alert">

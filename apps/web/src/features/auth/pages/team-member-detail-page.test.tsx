@@ -17,6 +17,8 @@ const { authState, detailState, mutations, defaultMembership } = vi.hoisted(() =
     organization_name: 'Org',
     role: 'staff',
     status: 'active',
+    last_invited_at: null,
+    pending_invitation: null,
     scopes: [
       {
         scope_id: 'scope-1',
@@ -30,6 +32,7 @@ const { authState, detailState, mutations, defaultMembership } = vi.hoisted(() =
       can_edit_scopes: false,
       can_edit_status: false,
       can_edit_personal_info: true,
+      can_reinvite: false,
     },
     user: {
       id: 'user-1',
@@ -65,6 +68,7 @@ const { authState, detailState, mutations, defaultMembership } = vi.hoisted(() =
       updateMembership: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
       activate: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
       deactivate: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
+      reinvite: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
       updateProfile: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
     },
   }
@@ -83,6 +87,7 @@ vi.mock('@/features/auth/hooks/use-team-members', () => ({
   useUpdateMembershipMutation: () => mutations.updateMembership,
   useActivateMembershipMutation: () => mutations.activate,
   useDeactivateMembershipMutation: () => mutations.deactivate,
+  useReinviteMembershipMutation: () => mutations.reinvite,
   useUpdateProfileMutation: () => mutations.updateProfile,
 }))
 
@@ -107,6 +112,8 @@ afterEach(() => {
   mutations.activate.mutateAsync.mockResolvedValue(undefined)
   mutations.deactivate.mutateAsync.mockReset()
   mutations.deactivate.mutateAsync.mockResolvedValue(undefined)
+  mutations.reinvite.mutateAsync.mockReset()
+  mutations.reinvite.mutateAsync.mockResolvedValue(undefined)
   mutations.updateProfile.mutateAsync.mockReset()
   mutations.updateProfile.mutateAsync.mockResolvedValue(undefined)
 })
@@ -138,6 +145,7 @@ describe('TeamMemberDetailPage', () => {
           can_edit_scopes: false,
           can_edit_status: false,
           can_edit_personal_info: false,
+          can_reinvite: false,
         },
       },
     }
@@ -167,11 +175,17 @@ describe('TeamMemberDetailPage', () => {
       data: {
         ...detailState.current.data!,
         status: 'invited',
+        last_invited_at: '2026-07-23T10:30:00Z',
+        pending_invitation: {
+          expires_at: '2026-07-30T10:30:00Z',
+          is_expired: false,
+        },
         permission_hints: {
           can_edit_role: true,
           can_edit_scopes: true,
           can_edit_status: true,
           can_edit_personal_info: true,
+          can_reinvite: true,
         },
       },
     }
@@ -181,9 +195,50 @@ describe('TeamMemberDetailPage', () => {
     const activeSwitch = screen.getByRole('switch', { name: 'Actif' })
     expect(activeSwitch.hasAttribute('disabled')).toBe(true)
     expect(screen.getByText('Invité')).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Renvoyer l'invitation" })).toBeTruthy()
     expect(
       screen.getByText(/Invitation en attente : le membre devient actif après configuration du mot de passe/i),
     ).toBeTruthy()
+  })
+
+  it('does not show reinvite action for active members', () => {
+    render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+    expect(screen.getByText("Date d'invitation")).toBeTruthy()
+    expect(screen.queryByRole('button', { name: "Renvoyer l'invitation" })).toBeNull()
+  })
+
+  it('confirms then calls reinvite mutation for invited members', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    mutations.reinvite.mutateAsync.mockResolvedValue({
+      invitation_accept_path: '/invitations/new-token',
+      email_scheduling_status: 'requested',
+      membership: detailState.current.data,
+    })
+    detailState.current = {
+      ...detailState.current,
+      data: {
+        ...detailState.current.data!,
+        status: 'invited',
+        last_invited_at: '2026-07-23T10:30:00Z',
+        pending_invitation: {
+          expires_at: '2026-07-30T10:30:00Z',
+          is_expired: false,
+        },
+        permission_hints: {
+          ...detailState.current.data!.permission_hints,
+          can_reinvite: true,
+        },
+      },
+    }
+
+    render(createElement(TeamMemberDetailPage, { membershipId: 'member-1' }))
+    fireEvent.click(screen.getByRole('button', { name: "Renvoyer l'invitation" }))
+
+    await vi.waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalled()
+      expect(mutations.reinvite.mutateAsync).toHaveBeenCalled()
+    })
+    confirmSpy.mockRestore()
   })
 
   it('shows inactive badge for deactivated members and no badge when active', () => {

@@ -58,6 +58,13 @@ class MembershipPermissionHintsSerializer(serializers.Serializer):
     can_edit_scopes = serializers.BooleanField()
     can_edit_status = serializers.BooleanField()
     can_edit_personal_info = serializers.BooleanField()
+    can_reinvite = serializers.BooleanField()
+
+
+@extend_schema_serializer(component_name="EstablishmentMembershipPendingInvitation")
+class MembershipPendingInvitationSerializer(serializers.Serializer):
+    expires_at = serializers.DateTimeField()
+    is_expired = serializers.BooleanField()
 
 
 @extend_schema_serializer(component_name="EstablishmentMembershipScopeWriteItem")
@@ -103,6 +110,38 @@ class EstablishmentMembershipResponseSerializer(serializers.Serializer):
             actor_membership=actor_membership,
             target_membership=membership,
         )
+
+
+@extend_schema_serializer(component_name="EstablishmentMembershipDetailResponse")
+class EstablishmentMembershipDetailResponseSerializer(EstablishmentMembershipResponseSerializer):
+    last_invited_at = serializers.SerializerMethodField()
+    pending_invitation = serializers.SerializerMethodField()
+
+    def _invitation_fields(self, membership: EstablishmentMembership) -> dict:
+        cache = self.context.setdefault("_invitation_detail_fields_by_id", {})
+        membership_id = str(membership.id)
+        if membership_id not in cache:
+            from houston.establishments.selectors import build_membership_invitation_detail_fields
+
+            cache[membership_id] = build_membership_invitation_detail_fields(membership)
+        return cache[membership_id]
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_last_invited_at(self, membership: EstablishmentMembership):
+        return self._invitation_fields(membership)["last_invited_at"]
+
+    @extend_schema_field(MembershipPendingInvitationSerializer(allow_null=True))
+    def get_pending_invitation(self, membership: EstablishmentMembership):
+        return self._invitation_fields(membership)["pending_invitation"]
+
+
+@extend_schema_serializer(component_name="MembershipReinviteResponse")
+class MembershipReinviteResponseSerializer(serializers.Serializer):
+    membership = EstablishmentMembershipDetailResponseSerializer()
+    invitation_token = serializers.CharField()
+    invitation_expires_at = serializers.DateTimeField()
+    invitation_accept_path = serializers.CharField()
+    email_scheduling_status = serializers.ChoiceField(choices=["requested", "disabled"])
 
 
 class MembershipUpdateRequestSerializer(serializers.Serializer):

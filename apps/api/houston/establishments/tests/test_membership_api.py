@@ -1290,3 +1290,29 @@ def test_membership_detail_includes_permission_hints(api_client):
     assert hints["can_edit_scopes"] is True
     assert hints["can_edit_status"] is True
     assert hints["can_edit_personal_info"] is False
+    assert hints["can_reinvite"] is False
+    assert "last_invited_at" in response.json()
+    assert response.json()["last_invited_at"] is None
+    assert response.json()["pending_invitation"] is None
+
+
+def test_membership_list_omits_detail_invitation_fields(api_client):
+    actor = create_user(username="owner_list_shape")
+    actor_membership = create_membership(
+        user=actor,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+
+    access_token = login(api_client, identifier=actor.email)
+    response = api_client.get(
+        f"/api/v1/establishments/{actor_membership.establishment_id}/memberships/",
+        **auth_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body
+    assert "last_invited_at" not in body[0]
+    assert "pending_invitation" not in body[0]
+    assert "can_reinvite" in body[0]["permission_hints"]

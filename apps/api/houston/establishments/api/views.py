@@ -26,9 +26,11 @@ from houston.establishments.api.serializers import (
     DirectorInvitationResponseSerializer,
     EstablishmentCreateRequestSerializer,
     EstablishmentCreateResponseSerializer,
+    EstablishmentMembershipDetailResponseSerializer,
     EstablishmentMembershipResponseSerializer,
     MarkReadyResponseSerializer,
     MembershipInvitationRequestSerializer,
+    MembershipReinviteResponseSerializer,
     MembershipUpdateRequestSerializer,
     OnboardingErrorResponseSerializer,
     OnboardingProposalCreateRequestSerializer,
@@ -104,6 +106,7 @@ from houston.establishments.services import (
     MembershipInvitationUserExistsError,
     MembershipManagementForbiddenError,
     MembershipManagementNotFoundError,
+    MembershipReinviteConflictError,
     MembershipRoleChangeForbiddenError,
     MembershipUpdateInput,
     OnboardingAccessDeniedError,
@@ -131,6 +134,7 @@ from houston.establishments.services import (
     provision_establishment_onboarding,
     reactivate_runtime_activity_subject,
     reactivate_runtime_business_unit,
+    reinvite_membership_for_establishment,
     reject_onboarding_proposal,
     start_onboarding_session,
     submit_activity_description,
@@ -144,6 +148,14 @@ from houston.organizations.models import Organization
 
 def _membership_response(membership, *, actor_membership) -> Response:
     serializer = EstablishmentMembershipResponseSerializer(
+        membership,
+        context={"actor_membership": actor_membership},
+    )
+    return Response(serializer.data)
+
+
+def _membership_detail_response(membership, *, actor_membership) -> Response:
+    serializer = EstablishmentMembershipDetailResponseSerializer(
         membership,
         context={"actor_membership": actor_membership},
     )
@@ -299,7 +311,7 @@ class MembershipDetailView(APIView):
     @extend_schema(
         tags=["memberships"],
         responses={
-            200: EstablishmentMembershipResponseSerializer,
+            200: EstablishmentMembershipDetailResponseSerializer,
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
             404: OpenApiResponse(response=DetailResponseSerializer),
@@ -318,7 +330,7 @@ class MembershipDetailView(APIView):
         if membership is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        return _membership_response(
+        return _membership_detail_response(
             membership,
             actor_membership=access_context.active_membership,
         )
@@ -327,7 +339,7 @@ class MembershipDetailView(APIView):
         tags=["memberships"],
         request=MembershipUpdateRequestSerializer,
         responses={
-            200: EstablishmentMembershipResponseSerializer,
+            200: EstablishmentMembershipDetailResponseSerializer,
             400: OpenApiResponse(response=ApiErrorResponseSerializer),
             401: OpenApiResponse(response=ApiErrorResponseSerializer),
             403: OpenApiResponse(response=ApiErrorResponseSerializer),
@@ -390,11 +402,96 @@ class MembershipDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        response_serializer = EstablishmentMembershipResponseSerializer(
+        return _membership_detail_response(
             membership,
-            context={"actor_membership": access_context.active_membership},
+            actor_membership=access_context.active_membership,
         )
-        return Response(response_serializer.data)
+
+
+class MembershipReinviteView(APIView):
+    authentication_classes = [BearerAccessTokenAuthentication]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasActiveMembership,
+        CanViewTeamMemberships,
+    ]
+
+    @extend_schema(
+        tags=["memberships"],
+        request=None,
+        responses={
+            200: MembershipReinviteResponseSerializer,
+            401: OpenApiResponse(response=ApiErrorResponseSerializer),
+            403: OpenApiResponse(response=ApiErrorResponseSerializer),
+            404: OpenApiResponse(response=DetailResponseSerializer),
+            409: OpenApiResponse(response=ApiErrorResponseSerializer),
+        },
+        description=(
+            "Reissues the pending invitation for an invited membership: revokes the "
+            "previous live token, creates a new invitation, and schedules email when "
+            "enabled. Returns the new token for manual copy."
+        ),
+    )
+    def post(self, request, establishment_id, membership_id):
+        access_context = get_api_access_context(request)
+        current_membership = access_context.active_membership
+
+        if not can_invite_memberships(current_membership):
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You do not have permission to invite memberships.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            invitation_result = reinvite_membership_for_establishment(
+                current_membership=current_membership,
+                establishment_id=establishment_id,
+                membership_id=membership_id,
+            )
+        except MembershipManagementNotFoundError:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        except MembershipManagementForbiddenError:
+            return Response(
+                {
+                    "code": "membership_management_forbidden",
+                    "detail": "You cannot invite members for this establishment.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except MembershipInvitationRoleNotAllowedError:
+            return Response(
+                {
+                    "code": "membership_invitation_role_not_allowed",
+                    "detail": (
+                        "This role cannot be invited from this workspace with your "
+                        "current membership."
+                    ),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except MembershipReinviteConflictError:
+            return Response(
+                {
+                    "code": "membership_reinvite_conflict",
+                    "detail": "This membership cannot be reinvited in its current state.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        response_serializer = MembershipReinviteResponseSerializer(
+            {
+                "membership": invitation_result.membership,
+                "invitation_token": invitation_result.invitation_token,
+                "invitation_expires_at": invitation_result.invitation_expires_at,
+                "invitation_accept_path": (f"/invitations/{invitation_result.invitation_token}"),
+                "email_scheduling_status": invitation_result.email_scheduling_status,
+            },
+            context={"actor_membership": current_membership},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
 class MembershipDeactivateView(APIView):

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Any
+
 from django.db import models
-from django.db.models import Q
+from django.db.models import Prefetch, Q
+from django.utils import timezone
 
 from houston.accounts.models import User
 from houston.establishments.membership_scope import (
@@ -14,6 +18,7 @@ from houston.establishments.models import (
     BusinessUnit,
     Establishment,
     EstablishmentActivityDescription,
+    EstablishmentInvitation,
     EstablishmentMembership,
     MembershipScope,
     OnboardingProposal,
@@ -68,11 +73,48 @@ def get_membership_for_team_detail(
     establishment_id,
     membership_id,
 ) -> EstablishmentMembership | None:
-    return get_membership_for_management(
-        current_membership=current_membership,
-        establishment_id=establishment_id,
-        membership_id=membership_id,
+    if current_membership is None or current_membership.establishment_id != establishment_id:
+        return None
+
+    return (
+        _management_membership_queryset(establishment_id=establishment_id)
+        .prefetch_related(
+            Prefetch(
+                "invitations",
+                queryset=EstablishmentInvitation.objects.order_by("-created_at"),
+            )
+        )
+        .filter(id=membership_id)
+        .first()
     )
+
+
+def build_membership_invitation_detail_fields(
+    membership: EstablishmentMembership,
+) -> dict[str, Any]:
+    """Read-only invitation projection for team membership detail (no token)."""
+    invitations = list(membership.invitations.all())
+    last_invited_at: datetime | None = None
+    if invitations:
+        last_invited_at = max(invitation.created_at for invitation in invitations)
+
+    pending_invitation = None
+    live = [
+        invitation
+        for invitation in invitations
+        if invitation.accepted_at is None and invitation.revoked_at is None
+    ]
+    if live:
+        current = max(live, key=lambda invitation: invitation.created_at)
+        pending_invitation = {
+            "expires_at": current.expires_at,
+            "is_expired": current.expires_at <= timezone.now(),
+        }
+
+    return {
+        "last_invited_at": last_invited_at,
+        "pending_invitation": pending_invitation,
+    }
 
 
 def get_membership_for_management(

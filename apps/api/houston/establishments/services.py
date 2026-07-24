@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Prefetch, Q, Value, When
 from django.db.models.functions import Lower, Trim
 from django.http import HttpRequest
 from django.utils import timezone
@@ -46,6 +47,7 @@ from houston.establishments.membership_scope import (
     MembershipScopeType,
     assign_membership_scopes,
     membership_business_unit_scope_ids,
+    membership_is_assignable_by_actor,
     membership_scope_covers_business_unit,
     normalize_membership_scope_inputs,
     scopes_not_allowed_for_role,
@@ -276,12 +278,25 @@ class DirectorInvitationResult:
     membership: EstablishmentMembership
     invitation_token: str
     invitation_expires_at: datetime
+    email_scheduling_status: str = "disabled"
 
 
 @dataclass(frozen=True)
 class DirectorInvitationAcceptResult:
     auth: object
     payload: dict
+
+
+class MembershipReinviteConflictError(Exception):
+    """Membership exists but is not in a reinvitable state (active/deactivated/owner/…)."""
+
+    pass
+
+
+class ReinviteTargetDecision(str, Enum):
+    ALLOWED = "allowed"
+    FORBIDDEN = "forbidden"
+    NOT_ELIGIBLE = "not_eligible"
 
 
 @dataclass(frozen=True)
@@ -1933,6 +1948,82 @@ def invite_membership_for_establishment(
     return _issue_establishment_invitation_for_membership(membership)
 
 
+def actor_can_reinvite_target_membership(
+    *,
+    actor_membership: EstablishmentMembership | None,
+    target_membership: EstablishmentMembership,
+) -> ReinviteTargetDecision:
+    if actor_membership is None:
+        return ReinviteTargetDecision.FORBIDDEN
+
+    if target_membership.role == EstablishmentMembership.Role.OWNER:
+        return ReinviteTargetDecision.NOT_ELIGIBLE
+    if target_membership.status != EstablishmentMembership.Status.INVITED:
+        return ReinviteTargetDecision.NOT_ELIGIBLE
+    if target_membership.user.status != User.Status.PENDING:
+        return ReinviteTargetDecision.NOT_ELIGIBLE
+
+    if not _can_actor_invite_memberships(current_membership=actor_membership):
+        return ReinviteTargetDecision.FORBIDDEN
+    if not _can_actor_invite_role(
+        actor_role=actor_membership.role,
+        invited_role=target_membership.role,
+    ):
+        return ReinviteTargetDecision.FORBIDDEN
+    if not membership_is_assignable_by_actor(
+        actor=actor_membership,
+        target=target_membership,
+    ):
+        return ReinviteTargetDecision.FORBIDDEN
+
+    return ReinviteTargetDecision.ALLOWED
+
+
+@transaction.atomic
+def reinvite_membership_for_establishment(
+    *,
+    current_membership: EstablishmentMembership | None,
+    establishment_id,
+    membership_id,
+) -> DirectorInvitationResult:
+    if current_membership is None:
+        raise MembershipManagementNotFoundError
+
+    if current_membership.establishment_id != establishment_id:
+        raise MembershipManagementNotFoundError
+
+    if not _can_actor_invite_memberships(current_membership=current_membership):
+        raise MembershipManagementForbiddenError
+
+    membership = (
+        EstablishmentMembership.objects.select_for_update()
+        .select_related(
+            "user",
+            "establishment",
+            "establishment__organization",
+        )
+        .prefetch_related("scope_links")
+        .filter(
+            id=membership_id,
+            establishment_id=establishment_id,
+        )
+        .first()
+    )
+    if membership is None:
+        raise MembershipManagementNotFoundError
+
+    decision = actor_can_reinvite_target_membership(
+        actor_membership=current_membership,
+        target_membership=membership,
+    )
+    if decision == ReinviteTargetDecision.FORBIDDEN:
+        raise MembershipManagementForbiddenError
+    if decision == ReinviteTargetDecision.NOT_ELIGIBLE:
+        raise MembershipReinviteConflictError
+
+    return _issue_establishment_invitation_for_membership(membership)
+
+
 @transaction.atomic
 def invite_organizational_owner_for_organization(
     *,
@@ -2383,7 +2474,7 @@ def _issue_establishment_invitation_for_membership(
 
     _revoke_pending_invitations(membership=membership)
     raw_token, invitation = _create_establishment_invitation(membership=membership)
-    schedule_establishment_invitation_email(
+    email_scheduling_status = schedule_establishment_invitation_email(
         invitation=invitation,
         membership=membership,
         raw_token=raw_token,
@@ -2392,6 +2483,7 @@ def _issue_establishment_invitation_for_membership(
         membership=_reload_membership_for_response(membership.id),
         invitation_token=raw_token,
         invitation_expires_at=invitation.expires_at,
+        email_scheduling_status=email_scheduling_status,
     )
 
 
@@ -3703,7 +3795,13 @@ def _reload_membership_for_response(membership_id) -> EstablishmentMembership:
             "establishment",
             "establishment__organization",
         )
-        .prefetch_related("scope_links__business_unit")
+        .prefetch_related(
+            "scope_links__business_unit",
+            Prefetch(
+                "invitations",
+                queryset=EstablishmentInvitation.objects.order_by("-created_at"),
+            ),
+        )
         .get(id=membership_id)
     )
 

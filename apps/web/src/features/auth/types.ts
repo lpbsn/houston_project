@@ -3,6 +3,9 @@ import type { components } from '@/api/generated/types'
 export type AuthResponse = components['schemas']['AuthResponse']
 export type BootstrapResponse = components['schemas']['BootstrapResponse']
 export type EstablishmentMembershipResponse = components['schemas']['EstablishmentMembershipResponse']
+export type EstablishmentMembershipDetailResponse =
+  components['schemas']['EstablishmentMembershipDetailResponse']
+export type MembershipReinviteResponse = components['schemas']['MembershipReinviteResponse']
 export type LoginRequest = components['schemas']['LoginRequest']
 export type RegistrationOwnerValidateRequest =
   components['schemas']['RegistrationOwnerValidateRequest']

@@ -10,6 +10,7 @@ import {
   listMemberships,
   membershipDetailQueryKey,
   membershipListQueryKey,
+  reinviteMembership,
   updateMembership,
   updateUserProfile,
   type UserProfileUpdateRequest,
@@ -18,7 +19,11 @@ import {
   canViewTeamFromBootstrapHints,
   getBootstrapPermissionHints,
 } from '@/features/auth/lib/bootstrap-permission-hints'
-import type { EstablishmentMembershipResponse, MembershipUpdateRequest } from '@/features/auth/types'
+import type {
+  EstablishmentMembershipDetailResponse,
+  EstablishmentMembershipResponse,
+  MembershipUpdateRequest,
+} from '@/features/auth/types'
 
 export function useTeamMembersQuery() {
   const { activeMembership, bootstrap } = useAuth()
@@ -54,7 +59,9 @@ function useTeamMembershipMutationContext() {
   const { activeMembership } = useAuth()
   const establishmentId = activeMembership?.establishment_id ?? null
 
-  const applyMembershipWriteSuccess = (membership: EstablishmentMembershipResponse) => {
+  const applyMembershipWriteSuccess = (
+    membership: EstablishmentMembershipResponse | EstablishmentMembershipDetailResponse,
+  ) => {
     if (!establishmentId) {
       return
     }
@@ -95,6 +102,25 @@ export function useDeactivateMembershipMutation(membershipId: string) {
     mutationFn: () => deactivateMembership(establishmentId!, membershipId),
     onSuccess: (data) => {
       applyMembershipWriteSuccess(data)
+    },
+  })
+}
+
+export function useReinviteMembershipMutation(membershipId: string) {
+  const queryClient = useQueryClient()
+  const { establishmentId, applyMembershipWriteSuccess } = useTeamMembershipMutationContext()
+
+  return useMutation({
+    mutationFn: () => reinviteMembership(establishmentId!, membershipId),
+    onSuccess: (data) => {
+      applyMembershipWriteSuccess(data.membership)
+      if (establishmentId) {
+        void invalidateMembershipListAndDetailQueries(
+          establishmentId,
+          membershipId,
+          queryClient,
+        )
+      }
     },
   })
 }

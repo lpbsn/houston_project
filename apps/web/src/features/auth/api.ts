@@ -17,10 +17,12 @@ import type {
   BootstrapResponse,
   EstablishmentCreateRequest,
   EstablishmentCreateResponse,
+  EstablishmentMembershipDetailResponse,
   EstablishmentMembershipResponse,
   LoginRequest,
   MembershipUpdateRequest,
   MembershipInvitationRequest,
+  MembershipReinviteResponse,
   RegistrationOwnerValidateRequest,
   RegistrationRequest,
   RegistrationResponse,
@@ -95,7 +97,7 @@ export async function invalidateMembershipListQueries(
 /** Synchronously patch detail + list caches from a membership API response. */
 export function patchMembershipCaches(
   establishmentId: string,
-  membership: EstablishmentMembershipResponse,
+  membership: EstablishmentMembershipResponse | EstablishmentMembershipDetailResponse,
   client: QueryClient = queryClient,
 ) {
   client.setQueryData(membershipDetailQueryKey(establishmentId, membership.id), membership)
@@ -105,7 +107,9 @@ export function patchMembershipCaches(
       if (!current) {
         return current
       }
-      return current.map((item) => (item.id === membership.id ? membership : item))
+      return current.map((item) =>
+        item.id === membership.id ? (membership as EstablishmentMembershipResponse) : item,
+      )
     },
   )
 }
@@ -116,7 +120,7 @@ export function patchMembershipCaches(
  */
 export function commitMembershipWriteCache(
   establishmentId: string,
-  membership: EstablishmentMembershipResponse,
+  membership: EstablishmentMembershipResponse | EstablishmentMembershipDetailResponse,
   client: QueryClient = queryClient,
 ) {
   patchMembershipCaches(establishmentId, membership, client)
@@ -554,7 +558,7 @@ export async function getMembership(establishmentId: string, membershipId: strin
     throw buildAuthError(result.response, result.error, 'Membership details are unavailable.')
   }
 
-  return result.data as EstablishmentMembershipResponse
+  return result.data as EstablishmentMembershipDetailResponse
 }
 
 export async function updateMembership(
@@ -585,7 +589,7 @@ export async function updateMembership(
     throw buildAuthError(result.response, result.error, 'Membership changes were not saved.')
   }
 
-  return result.data as EstablishmentMembershipResponse
+  return result.data as EstablishmentMembershipDetailResponse
 }
 
 export async function deactivateMembership(establishmentId: string, membershipId: string) {
@@ -700,6 +704,36 @@ export async function inviteMembership(
   }
 
   return result.data
+}
+
+export async function reinviteMembership(establishmentId: string, membershipId: string) {
+  const csrfToken = await ensureCsrfToken()
+  const result = await withAuthRetry(
+    (accessToken) =>
+      apiClient.POST(
+        '/api/v1/establishments/{establishment_id}/memberships/{membership_id}/reinvite/',
+        {
+          params: {
+            path: {
+              establishment_id: establishmentId,
+              membership_id: membershipId,
+            },
+          },
+          credentials: 'include',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'X-CSRFToken': csrfToken,
+          },
+        },
+      ),
+    { refreshable: true },
+  )
+
+  if (result.error || !result.data) {
+    throw buildAuthError(result.response, result.error, 'Invitation could not be resent.')
+  }
+
+  return result.data as MembershipReinviteResponse
 }
 
 export const businessUnitTreeQueryKey = (establishmentId: string) =>

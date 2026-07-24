@@ -1233,6 +1233,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/establishments/{establishment_id}/memberships/{membership_id}/reinvite/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reissues the pending invitation for an invited membership: revokes the previous live token, creates a new invitation, and schedules email when enabled. Returns the new token for manual copy. */
+        post: operations["v1_establishments_memberships_reinvite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/establishments/{establishment_id}/notifications/": {
         parameters: {
             query?: never;
@@ -2786,6 +2803,12 @@ export interface components {
             invitation_expires_at: string;
             invitation_accept_path: string;
         };
+        /**
+         * @description * `requested` - requested
+         *     * `disabled` - disabled
+         * @enum {string}
+         */
+        EmailSchedulingStatusEnum: "requested" | "disabled";
         EstablishmentAdminDirector: {
             /** Format: uuid */
             membership_id: string;
@@ -2883,11 +2906,36 @@ export interface components {
             /** Format: uuid */
             onboarding_session_id: string;
         };
+        EstablishmentMembershipDetailResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            establishment_id: string;
+            establishment_name: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_name: string;
+            user: components["schemas"]["MembershipUserSummary"];
+            role: string;
+            status: string;
+            readonly scopes: components["schemas"]["EstablishmentMembershipScopeItem"][];
+            readonly scope_summary: components["schemas"]["EstablishmentMembershipScopeSummary"];
+            readonly permission_hints: components["schemas"]["EstablishmentMembershipPermissionHints"];
+            /** Format: date-time */
+            readonly last_invited_at: string | null;
+            readonly pending_invitation: components["schemas"]["EstablishmentMembershipPendingInvitation"] | null;
+        };
+        EstablishmentMembershipPendingInvitation: {
+            /** Format: date-time */
+            expires_at: string;
+            is_expired: boolean;
+        };
         EstablishmentMembershipPermissionHints: {
             can_edit_role: boolean;
             can_edit_scopes: boolean;
             can_edit_status: boolean;
             can_edit_personal_info: boolean;
+            can_reinvite: boolean;
         };
         EstablishmentMembershipResponse: {
             /** Format: uuid */
@@ -3029,6 +3077,14 @@ export interface components {
             last_name: string;
             role: components["schemas"]["EstablishmentNonOwnerMembershipRoleEnum"];
             scopes?: components["schemas"]["EstablishmentMembershipScopeWriteItem"][];
+        };
+        MembershipReinviteResponse: {
+            membership: components["schemas"]["EstablishmentMembershipDetailResponse"];
+            invitation_token: string;
+            /** Format: date-time */
+            invitation_expires_at: string;
+            invitation_accept_path: string;
+            email_scheduling_status: components["schemas"]["EmailSchedulingStatusEnum"];
         };
         MembershipUserSummary: {
             /** Format: uuid */
@@ -7934,7 +7990,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EstablishmentMembershipResponse"];
+                    "application/json": components["schemas"]["EstablishmentMembershipDetailResponse"];
                 };
             };
             401: {
@@ -7986,7 +8042,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EstablishmentMembershipResponse"];
+                    "application/json": components["schemas"]["EstablishmentMembershipDetailResponse"];
                 };
             };
             400: {
@@ -8143,6 +8199,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DirectorInvitationErrorResponse"];
+                };
+            };
+        };
+    };
+    v1_establishments_memberships_reinvite_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                establishment_id: string;
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipReinviteResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
