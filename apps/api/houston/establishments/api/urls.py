@@ -34,6 +34,7 @@ from houston.establishments.api.views import (
     MembershipDetailView,
     MembershipInvitationView,
     MembershipListView,
+    MembershipReinviteView,
     OnboardingSessionActivateView,
     OnboardingSessionActivationSummaryView,
     OnboardingSessionCreateView,
@@ -250,6 +251,11 @@ urlpatterns = [
         "establishments/<uuid:establishment_id>/memberships/<uuid:membership_id>/",
         MembershipDetailView.as_view(),
         name="establishment-membership-detail",
+    ),
+    path(
+        "establishments/<uuid:establishment_id>/memberships/<uuid:membership_id>/reinvite/",
+        MembershipReinviteView.as_view(),
+        name="establishment-membership-reinvite",
     ),
     path(
         "establishments/<uuid:establishment_id>/memberships/<uuid:membership_id>/deactivate/",

@@ -24,6 +24,7 @@ function membership(
       can_edit_scopes: false,
       can_edit_status: false,
       can_edit_personal_info: false,
+      can_reinvite: false,
     },
     user: {
       id: 'user-1',

@@ -4198,7 +4198,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstablishmentMembershipResponse'
+                $ref: '#/components/schemas/EstablishmentMembershipDetailResponse'
           description: ''
         '401':
           content:
@@ -4255,7 +4255,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EstablishmentMembershipResponse'
+                $ref: '#/components/schemas/EstablishmentMembershipDetailResponse'
           description: ''
         '400':
           content:
@@ -4401,6 +4401,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DirectorInvitationErrorResponse'
+          description: ''
+  /api/v1/establishments/{establishment_id}/memberships/{membership_id}/reinvite/:
+    post:
+      operationId: v1_establishments_memberships_reinvite_create
+      description: 'Reissues the pending invitation for an invited membership: revokes
+        the previous live token, creates a new invitation, and schedules email when
+        enabled. Returns the new token for manual copy.'
+      parameters:
+      - in: path
+        name: establishment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - memberships
+      security:
+      - BearerAccessToken: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipReinviteResponse'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
           description: ''
   /api/v1/establishments/{establishment_id}/notifications/:
     get:
@@ -8717,6 +8771,14 @@ components:
       - invitation_expires_at
       - invitation_token
       - membership
+    EmailSchedulingStatusEnum:
+      enum:
+      - requested
+      - disabled
+      type: string
+      description: |-
+        * `requested` - requested
+        * `disabled` - disabled
     EstablishmentAdminDirector:
       type: object
       properties:
@@ -8968,6 +9030,76 @@ components:
       - onboarding_session_id
       - organization_id
       - status
+    EstablishmentMembershipDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        establishment_id:
+          type: string
+          format: uuid
+        establishment_name:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        organization_name:
+          type: string
+        user:
+          $ref: '#/components/schemas/MembershipUserSummary'
+        role:
+          type: string
+        status:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EstablishmentMembershipScopeItem'
+          readOnly: true
+        scope_summary:
+          allOf:
+          - $ref: '#/components/schemas/EstablishmentMembershipScopeSummary'
+          readOnly: true
+        permission_hints:
+          allOf:
+          - $ref: '#/components/schemas/EstablishmentMembershipPermissionHints'
+          readOnly: true
+        last_invited_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        pending_invitation:
+          allOf:
+          - $ref: '#/components/schemas/EstablishmentMembershipPendingInvitation'
+          nullable: true
+          readOnly: true
+      required:
+      - establishment_id
+      - establishment_name
+      - id
+      - last_invited_at
+      - organization_id
+      - organization_name
+      - pending_invitation
+      - permission_hints
+      - role
+      - scope_summary
+      - scopes
+      - status
+      - user
+    EstablishmentMembershipPendingInvitation:
+      type: object
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+        is_expired:
+          type: boolean
+      required:
+      - expires_at
+      - is_expired
     EstablishmentMembershipPermissionHints:
       type: object
       properties:
@@ -8979,11 +9111,14 @@ components:
           type: boolean
         can_edit_personal_info:
           type: boolean
+        can_reinvite:
+          type: boolean
       required:
       - can_edit_personal_info
       - can_edit_role
       - can_edit_scopes
       - can_edit_status
+      - can_reinvite
     EstablishmentMembershipResponse:
       type: object
       properties:
@@ -9314,6 +9449,26 @@ components:
       - first_name
       - last_name
       - role
+    MembershipReinviteResponse:
+      type: object
+      properties:
+        membership:
+          $ref: '#/components/schemas/EstablishmentMembershipDetailResponse'
+        invitation_token:
+          type: string
+        invitation_expires_at:
+          type: string
+          format: date-time
+        invitation_accept_path:
+          type: string
+        email_scheduling_status:
+          $ref: '#/components/schemas/EmailSchedulingStatusEnum'
+      required:
+      - email_scheduling_status
+      - invitation_accept_path
+      - invitation_expires_at
+      - invitation_token
+      - membership
     MembershipUserSummary:
       type: object
       properties:

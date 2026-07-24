@@ -68,6 +68,7 @@ function membership(
       can_edit_scopes: true,
       can_edit_status: true,
       can_edit_personal_info: false,
+      can_reinvite: false,
     },
     user: {
       id: 'user-1',

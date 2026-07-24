@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Literal
 
 from django.conf import settings
 from django.db import transaction
@@ -12,6 +13,8 @@ from houston.establishments.models import EstablishmentInvitation, Establishment
 from houston.establishments.resend_client import (
     send_invitation_email_via_resend,
 )
+
+InvitationEmailSchedulingStatus = Literal["requested", "disabled"]
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,7 @@ def schedule_establishment_invitation_email(
     invitation: EstablishmentInvitation,
     membership: EstablishmentMembership,
     raw_token: str,
-) -> None:
+) -> InvitationEmailSchedulingStatus:
     if membership.role not in _INVITATION_EMAIL_ROLES:
         logger.info(
             "invitation_email_skipped_unsupported_role",
@@ -69,10 +72,10 @@ def schedule_establishment_invitation_email(
                 "role": membership.role,
             },
         )
-        return
+        return "disabled"
 
     if not settings.HOUSTON_INVITATION_EMAIL_ENABLED:
-        return
+        return "disabled"
 
     invitation_id = invitation.id
     membership_id = membership.id
@@ -99,6 +102,7 @@ def schedule_establishment_invitation_email(
             )
 
     transaction.on_commit(_enqueue)
+    return "requested"
 
 
 def send_establishment_invitation_email(
@@ -187,6 +191,7 @@ def build_invitation_idempotency_key(invitation_id: uuid.UUID | str) -> str:
 
 
 __all__ = [
+    "InvitationEmailSchedulingStatus",
     "build_invitation_accept_url",
     "build_invitation_idempotency_key",
     "schedule_establishment_invitation_email",
