@@ -333,4 +333,59 @@ describe('ActionPlanTaskDraftEditor', () => {
     expect(screen.getByRole('button', { name: 'Coworking' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Bar' })).toBeTruthy()
   })
+
+  it('shows inline task errors and opens advanced options once on guidance nonce', () => {
+    const draft = {
+      ...createActionPlanTaskDraft(''),
+      task: 'Task 1',
+      assigneeMembershipId: 'member-1',
+      assigneeDisplayName: 'Nami',
+      assigneeBusinessUnitIds: ['bu-1', 'bu-2'],
+    }
+    const poleKey = `tasks.${draft.id}.businessUnitId`
+
+    const { rerender } = render(
+      createElement(ActionPlanTaskDraftEditor, {
+        tasks: [draft],
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        canDefineCrossPoleTasks: false,
+        businessUnits: [
+          { id: 'bu-1', label: 'Restaurant' },
+          { id: 'bu-2', label: 'Bar' },
+        ],
+        fieldErrors: { [poleKey]: 'Choisissez le pôle de l’assigné pour chaque tâche concernée.' },
+        expandAdvancedNonce: 1,
+        expandAdvancedTaskIds: [draft.id],
+        onTasksChange: vi.fn(),
+      }),
+    )
+
+    expect(
+      screen.getByText('Choisissez le pôle de l’assigné pour chaque tâche concernée.'),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: "Pôle d'activité" })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Options avancées' }))
+    expect(screen.queryByRole('button', { name: "Pôle d'activité" })).toBeNull()
+
+    rerender(
+      createElement(ActionPlanTaskDraftEditor, {
+        tasks: [draft],
+        establishmentId: 'est-1',
+        pilotBusinessUnitId: 'bu-1',
+        canDefineCrossPoleTasks: false,
+        businessUnits: [
+          { id: 'bu-1', label: 'Restaurant' },
+          { id: 'bu-2', label: 'Bar' },
+        ],
+        fieldErrors: { [poleKey]: 'Choisissez le pôle de l’assigné pour chaque tâche concernée.' },
+        expandAdvancedNonce: 1,
+        expandAdvancedTaskIds: [draft.id],
+        onTasksChange: vi.fn(),
+      }),
+    )
+
+    expect(screen.queryByRole('button', { name: "Pôle d'activité" })).toBeNull()
+  })
 })

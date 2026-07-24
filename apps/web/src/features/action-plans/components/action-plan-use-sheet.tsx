@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import {
   createActionPlanEventPlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
+import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
 import {
   CATALOG_LAUNCH_EXECUTION_LABEL,
   isCatalogPlanningPrimaryDisabled,
@@ -53,7 +54,11 @@ function ActionPlanUseSheetBody({
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
   )
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [frontendFieldErrors, setFrontendFieldErrors] = useState<Record<string, string>>({})
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
+  const [guidanceNonce, setGuidanceNonce] = useState(0)
+  const formRootRef = useRef<HTMLDivElement>(null)
+  const lastGuidanceNonceRef = useRef(0)
 
   const planningOptions = { canSchedule, staffMode: staffUseMode }
   const primaryDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
@@ -61,10 +66,25 @@ function ActionPlanUseSheetBody({
     isPending,
   })
 
+  useEffect(() => {
+    if (guidanceNonce <= lastGuidanceNonceRef.current) {
+      return
+    }
+    lastGuidanceNonceRef.current = guidanceNonce
+    if (Object.keys(frontendFieldErrors).length === 0) {
+      return
+    }
+    return guideToFirstActionPlanFieldError(frontendFieldErrors, {
+      root: formRootRef.current ?? document,
+    })
+  }, [frontendFieldErrors, guidanceNonce])
+
   function handlePrimaryAction() {
+    setHasAttemptedSubmit(true)
     const errors = validateCatalogPlanningDraft(planningDraft, planningOptions)
-    setFieldErrors(errors)
+    setFrontendFieldErrors(errors)
     if (Object.keys(errors).length > 0) {
+      setGuidanceNonce((value) => value + 1)
       return
     }
 
@@ -96,22 +116,29 @@ function ActionPlanUseSheetBody({
         </Button>
       }
     >
-      <ActionPlanEventPlanningForm
-        draft={planningDraft}
-        config={{
-          canEditAssignees: !staffUseMode,
-          canSchedule,
-          staffMode: staffUseMode,
-          showAdvancedChronology: !staffUseMode,
-          hideAssignees: false,
-          staffDisplayName,
-          assigneeActionsEnabled: false,
-        }}
-        establishmentId={establishmentId}
-        pilotBusinessUnitId={pilotBusinessUnitId}
-        fieldErrors={fieldErrors}
-        onDraftChange={setPlanningDraft}
-      />
+      <div ref={formRootRef}>
+        <ActionPlanEventPlanningForm
+          draft={planningDraft}
+          config={{
+            canEditAssignees: !staffUseMode,
+            canSchedule,
+            staffMode: staffUseMode,
+            showAdvancedChronology: !staffUseMode,
+            hideAssignees: false,
+            staffDisplayName,
+            assigneeActionsEnabled: false,
+          }}
+          establishmentId={establishmentId}
+          pilotBusinessUnitId={pilotBusinessUnitId}
+          fieldErrors={frontendFieldErrors}
+          onDraftChange={(next) => {
+            setPlanningDraft(next)
+            if (hasAttemptedSubmit) {
+              setFrontendFieldErrors(validateCatalogPlanningDraft(next, planningOptions))
+            }
+          }}
+        />
+      </div>
     </TerrainBottomSheet>
   )
 }

@@ -58,12 +58,15 @@ export class ActionPlansApiError extends Error {
   detail: string
   code: string | null
   failedStep: 'schedule' | 'use' | null
+  /** DRF serializer error tree when present (`ApiErrorResponse.errors`). */
+  errors: Record<string, unknown> | null
 
   constructor(options: {
     status: number
     detail: string
     code?: string | null
     failedStep?: 'schedule' | 'use' | null
+    errors?: Record<string, unknown> | null
   }) {
     super(options.detail)
     this.name = 'ActionPlansApiError'
@@ -71,6 +74,7 @@ export class ActionPlansApiError extends Error {
     this.detail = options.detail
     this.code = options.code ?? null
     this.failedStep = options.failedStep ?? null
+    this.errors = options.errors ?? null
   }
 }
 
@@ -89,7 +93,14 @@ function parseError(response: Response, payload: unknown): ActionPlansApiError {
     'failed_step' in body && (body.failed_step === 'schedule' || body.failed_step === 'use')
       ? body.failed_step
       : null
-  return new ActionPlansApiError({ status, detail, code, failedStep })
+  const errors =
+    'errors' in body &&
+    typeof body.errors === 'object' &&
+    body.errors !== null &&
+    !Array.isArray(body.errors)
+      ? (body.errors as Record<string, unknown>)
+      : null
+  return new ActionPlansApiError({ status, detail, code, failedStep, errors })
 }
 
 function assertActionPlanData<T>(result: {

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -51,6 +51,8 @@ import {
   toCreateFormPlanningSlice,
   type ActionPlanEventPlanningDraft,
 } from '../lib/action-plan-event-planning-form'
+import { taskIdsNeedingAdvancedExpand } from '../lib/action-plan-field-errors'
+import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
 import { resolveVisibleBusinessUnits } from '../lib/resolve-visible-business-units'
 import { canShowActionPlanUpdate } from '../lib/action-plan-permission-hints'
 
@@ -255,7 +257,7 @@ export function ActionPlanCreatePage({
       ? { membershipId, pilotBusinessUnitId: resolvedPilotBusinessUnitId }
       : undefined
 
-  const { submit, fieldErrors, submitError, isSubmitting } = useActionPlanCreateSubmit({
+  const createSubmit = useActionPlanCreateSubmit({
     establishmentId: establishmentId ?? '',
     canDefineCrossPoleTasks: canCrossPole,
     staffExecutionMode,
@@ -265,21 +267,73 @@ export function ActionPlanCreatePage({
   const templateEditBackPath =
     isTemplateEdit && actionPlanId ? `/action-plans/${actionPlanId}` : backPath
 
-  const {
-    submit: submitEdit,
-    fieldErrors: editFieldErrors,
-    submitError: editSubmitError,
-    isSubmitting: isEditSubmitting,
-  } = useActionPlanEditSubmit({
+  const editSubmit = useActionPlanEditSubmit({
     establishmentId: establishmentId ?? '',
     actionPlanId: actionPlanId ?? '',
     canDefineCrossPoleTasks: canCrossPole,
     onNavigate: navigate,
   })
 
-  const resolvedFieldErrors = isTemplateEdit ? editFieldErrors : fieldErrors
-  const resolvedSubmitError = isTemplateEdit ? editSubmitError : submitError
-  const resolvedIsSubmitting = isTemplateEdit ? isEditSubmitting : isSubmitting
+  const resolvedFieldErrors = isTemplateEdit
+    ? editSubmit.fieldErrors
+    : createSubmit.fieldErrors
+  const resolvedSubmitError = isTemplateEdit
+    ? editSubmit.submitError
+    : createSubmit.submitError
+  const resolvedIsSubmitting = isTemplateEdit
+    ? editSubmit.isSubmitting
+    : createSubmit.isSubmitting
+  const resolvedGuidanceNonce = isTemplateEdit
+    ? editSubmit.guidanceNonce
+    : createSubmit.guidanceNonce
+  const resolvedHasAttemptedSubmit = isTemplateEdit
+    ? editSubmit.hasAttemptedSubmit
+    : createSubmit.hasAttemptedSubmit
+  const formRootRef = useRef<HTMLDivElement>(null)
+  const lastGuidanceNonceRef = useRef(0)
+  const expandAdvancedTaskIds = useMemo(
+    () => new Set(taskIdsNeedingAdvancedExpand(resolvedFieldErrors)),
+    [resolvedFieldErrors],
+  )
+
+  useEffect(() => {
+    if (resolvedGuidanceNonce <= lastGuidanceNonceRef.current) {
+      return
+    }
+    lastGuidanceNonceRef.current = resolvedGuidanceNonce
+    if (Object.keys(resolvedFieldErrors).length === 0) {
+      return
+    }
+    return guideToFirstActionPlanFieldError(resolvedFieldErrors, {
+      root: formRootRef.current ?? document,
+    })
+  }, [resolvedFieldErrors, resolvedGuidanceNonce])
+
+  function handleFieldChange(fieldKey: string, apply: () => void) {
+    apply()
+    if (isTemplateEdit) {
+      editSubmit.clearApiFieldError(fieldKey)
+    } else {
+      createSubmit.clearApiFieldError(fieldKey)
+    }
+  }
+
+  function revalidateAfterChange(
+    nextValues: ActionPlanCreateFormValues,
+    nextPlanning: ActionPlanEventPlanningDraft = {
+      ...planningDraft,
+      assignees: effectiveAssignees,
+    },
+  ) {
+    if (!resolvedHasAttemptedSubmit) {
+      return
+    }
+    if (isTemplateEdit) {
+      editSubmit.revalidateFrontend(nextValues)
+      return
+    }
+    createSubmit.revalidateFrontend(nextValues, nextPlanning)
+  }
 
   if (!establishmentId) {
     return null
@@ -396,7 +450,7 @@ export function ActionPlanCreatePage({
       : 'Créer le plan d’action'
 
   async function handlePrimarySubmit() {
-    await submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
+    await createSubmit.submit(formValues, { ...planningDraft, assignees: effectiveAssignees })
   }
 
   return (
@@ -410,7 +464,7 @@ export function ActionPlanCreatePage({
         </ActionLinkedSignalStrip>
       ) : null}
 
-      <div className="space-y-3 px-3 pb-28 pt-2">
+      <div ref={formRootRef} className="space-y-3 px-3 pb-28 pt-2">
         {signalDetail ? (
           <section className="flex flex-col gap-1.5">
             <TerrainSectionLabel>Classification héritée de l’observation</TerrainSectionLabel>
@@ -421,14 +475,22 @@ export function ActionPlanCreatePage({
         ) : null}
 
         <TerrainCard className="space-y-3">
-          <div>
+          <div data-action-plan-field="title">
             <TerrainFieldLabel>Titre</TerrainFieldLabel>
             <Input
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="h-11 border-[#E8E6DF]"
+              onChange={(event) => {
+                const nextTitle = event.target.value
+                handleFieldChange('title', () => setTitle(nextTitle))
+                revalidateAfterChange({ ...formValues, title: nextTitle })
+              }}
+              aria-invalid={resolvedFieldErrors.title ? true : undefined}
+              className={cn(
+                'h-11 border-[#E8E6DF]',
+                resolvedFieldErrors.title && 'border-destructive',
+              )}
             />
-            {fieldErrors.title ? (
+            {resolvedFieldErrors.title ? (
               <p className="mt-1 text-xs text-destructive">{resolvedFieldErrors.title}</p>
             ) : null}
           </div>
@@ -454,8 +516,12 @@ export function ActionPlanCreatePage({
             disabled={modeConfig.lockPilotBusinessUnit}
             openPicker={openPilotPicker}
             onOpenPickerChange={setOpenPilotPicker}
-            onChange={setPilotBusinessUnitId}
+            onChange={(nextPilot) => {
+              handleFieldChange('pilotBusinessUnitId', () => setPilotBusinessUnitId(nextPilot))
+              revalidateAfterChange({ ...formValues, pilotBusinessUnitId: nextPilot })
+            }}
             error={resolvedFieldErrors.pilotBusinessUnitId}
+            fieldKey="pilotBusinessUnitId"
           />
         </TerrainCard>
 
@@ -467,14 +533,20 @@ export function ActionPlanCreatePage({
                 <TerrainSwitch
                   label="Validation requise"
                   checked={requiresValidation}
-                  onCheckedChange={setRequiresValidation}
+                  onCheckedChange={(next) => {
+                    setRequiresValidation(next)
+                    revalidateAfterChange({ ...formValues, requiresValidation: next })
+                  }}
                 />
               ) : null}
               {modeConfig.showLibraryToggle ? (
                 <TerrainSwitch
                   label="Enregistrer dans la bibliothèque"
                   checked={saveToLibrary}
-                  onCheckedChange={setSaveToLibrary}
+                  onCheckedChange={(next) => {
+                    setSaveToLibrary(next)
+                    revalidateAfterChange({ ...formValues, saveToLibrary: next })
+                  }}
                 />
               ) : null}
             </TerrainCard>
@@ -488,11 +560,21 @@ export function ActionPlanCreatePage({
           canDefineCrossPoleTasks={canCrossPole}
           staffMode={modeConfig.showStaffSelfAssignee}
           businessUnits={visibleBusinessUnits}
-          onTasksChange={setTasks}
+          fieldErrors={resolvedFieldErrors}
+          expandAdvancedNonce={resolvedGuidanceNonce}
+          expandAdvancedTaskIds={expandAdvancedTaskIds}
+          onTasksChange={(nextTasks) => {
+            setTasks(nextTasks)
+            revalidateAfterChange({ ...formValues, tasks: nextTasks })
+          }}
+          onTaskFieldChange={(fieldKey) => {
+            if (isTemplateEdit) {
+              editSubmit.clearApiFieldError(fieldKey)
+            } else {
+              createSubmit.clearApiFieldError(fieldKey)
+            }
+          }}
         />
-        {resolvedFieldErrors.tasks ? (
-          <p className="text-xs text-destructive">{resolvedFieldErrors.tasks}</p>
-        ) : null}
 
         {showPlanningForm ? (
           <ActionPlanEventPlanningForm
@@ -511,11 +593,13 @@ export function ActionPlanCreatePage({
             pilotBusinessUnitId={resolvedPilotBusinessUnitId}
             fieldErrors={resolvedFieldErrors}
             onDraftChange={(next) => {
-              if (modeConfig.showStaffSelfAssignee) {
-                setPlanningDraft({ ...next, assignees: effectiveAssignees })
-                return
+              const nextDraft = modeConfig.showStaffSelfAssignee
+                ? { ...next, assignees: effectiveAssignees }
+                : next
+              setPlanningDraft(nextDraft)
+              if (resolvedHasAttemptedSubmit && !isTemplateEdit) {
+                createSubmit.revalidateFrontend(formValues, nextDraft)
               }
-              setPlanningDraft(next)
             }}
           />
         ) : null}
@@ -545,7 +629,7 @@ export function ActionPlanCreatePage({
                 terrainBrandAction.hover,
               )}
               disabled={resolvedIsSubmitting}
-              onClick={() => void submitEdit(formValues)}
+              onClick={() => void editSubmit.submit(formValues)}
             >
               {submitLabel}
             </Button>

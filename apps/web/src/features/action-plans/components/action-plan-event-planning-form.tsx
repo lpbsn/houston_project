@@ -51,6 +51,7 @@ type PlanningFormRowProps = {
   children?: ReactNode
   error?: string
   className?: string
+  fieldKey?: string
 }
 
 function PlanningFormRow({
@@ -61,12 +62,16 @@ function PlanningFormRow({
   children,
   error,
   className,
+  fieldKey,
 }: PlanningFormRowProps) {
   const interactive = Boolean(onClick) && !disabled
   const Tag = interactive ? 'button' : 'div'
 
   return (
-    <div className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}>
+    <div
+      className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}
+      {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
+    >
       <Tag
         type={interactive ? 'button' : undefined}
         className={cn(
@@ -220,6 +225,7 @@ export function ActionPlanEventPlanningForm({
               }
               disabled={!config.canEditAssignees}
               error={mergedFieldErrors.assignees}
+              fieldKey="assignees"
             />
           ) : null}
 
@@ -316,6 +322,7 @@ export function ActionPlanEventPlanningForm({
                             }),
                           )}
                           error={assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate')}
+                          fieldKey={`assignee.${assignee.id}.startDate`}
                         />
                         <PlanningDateRow
                           rowId={`assignee-${assignee.id}-recurrence-end`}
@@ -331,6 +338,7 @@ export function ActionPlanEventPlanningForm({
                             assignee.id,
                             'recurrenceEndDate',
                           )}
+                          fieldKey={`assignee.${assignee.id}.recurrenceEndDate`}
                         />
                         <div className="border-b border-[#E8E6DF] last:border-b-0">
                           <div className="flex items-center justify-between gap-3 px-3 py-3">
@@ -347,6 +355,7 @@ export function ActionPlanEventPlanningForm({
                                 assignee.id,
                                 'recurrenceDays',
                               )}
+                              fieldKey={`assignee.${assignee.id}.recurrenceDays`}
                             />
                           </div>
                         </div>
@@ -369,6 +378,7 @@ export function ActionPlanEventPlanningForm({
                             })
                           }
                           error={assigneeFieldError(mergedFieldErrors, assignee.id, 'startTime')}
+                          fieldKey={`assignee.${assignee.id}.startTime`}
                         />
                         <PlanningDateTimeRow
                           rowId={`assignee-${assignee.id}-slot-end`}
@@ -389,6 +399,7 @@ export function ActionPlanEventPlanningForm({
                             })
                           }
                           error={assigneeFieldError(mergedFieldErrors, assignee.id, 'endTime')}
+                          fieldKey={`assignee.${assignee.id}.endTime`}
                         />
                       </>
                     ) : (
@@ -428,6 +439,11 @@ export function ActionPlanEventPlanningForm({
                             assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate') ??
                             assigneeFieldError(mergedFieldErrors, assignee.id, 'startTime')
                           }
+                          fieldKey={
+                            assigneeFieldError(mergedFieldErrors, assignee.id, 'startDate')
+                              ? `assignee.${assignee.id}.startDate`
+                              : `assignee.${assignee.id}.startTime`
+                          }
                         />
                         <PlanningDateTimeRow
                           rowId={`assignee-${assignee.id}-end`}
@@ -453,6 +469,11 @@ export function ActionPlanEventPlanningForm({
                           error={
                             assigneeFieldError(mergedFieldErrors, assignee.id, 'endDate') ??
                             assigneeFieldError(mergedFieldErrors, assignee.id, 'endTime')
+                          }
+                          fieldKey={
+                            assigneeFieldError(mergedFieldErrors, assignee.id, 'endDate')
+                              ? `assignee.${assignee.id}.endDate`
+                              : `assignee.${assignee.id}.endTime`
                           }
                         />
                       </>
@@ -517,6 +538,7 @@ export function ActionPlanEventPlanningForm({
                     updateDraft({ startDate: parts.date, startTime: parts.time }),
                   )}
                   error={mergedFieldErrors.startDate}
+                  fieldKey="startDate"
                 />
                 <PlanningDateRow
                   rowId="global-recurrence-end"
@@ -526,6 +548,7 @@ export function ActionPlanEventPlanningForm({
                   onOpenPickerChange={setOpenPicker}
                   onDateChange={(recurrenceEndDate) => updateDraft({ recurrenceEndDate })}
                   error={mergedFieldErrors.recurrenceEndDate}
+                  fieldKey="recurrenceEndDate"
                 />
                 <div className="border-b border-[#E8E6DF] last:border-b-0">
                   <div className="flex items-center justify-between gap-3 px-3 py-3">
@@ -538,6 +561,7 @@ export function ActionPlanEventPlanningForm({
                         updateDraft({ recurrenceDays })
                       }
                       error={mergedFieldErrors.recurrenceDays}
+                      fieldKey="recurrenceDays"
                     />
                     {config.staffMode ? (
                       <p className="text-xs text-[#7D7B75]">
@@ -560,6 +584,7 @@ export function ActionPlanEventPlanningForm({
                     updateDraft({ startTime: snapTimeToFiveMinutes(startTime) })
                   }
                   error={mergedFieldErrors.startTime}
+                  fieldKey="startTime"
                 />
                 <PlanningDateTimeRow
                   rowId="global-slot-end"
@@ -574,6 +599,7 @@ export function ActionPlanEventPlanningForm({
                     updateDraft({ endTime: snapTimeToFiveMinutes(endTime) })
                   }
                   error={mergedFieldErrors.endTime}
+                  fieldKey="endTime"
                 />
               </>
             ) : (
@@ -598,6 +624,13 @@ export function ActionPlanEventPlanningForm({
                     mergedFieldErrors.startTime ??
                     mergedFieldErrors.startDate
                   }
+                  fieldKey={
+                    mergedFieldErrors.startAt
+                      ? 'startAt'
+                      : mergedFieldErrors.startTime
+                        ? 'startTime'
+                        : 'startDate'
+                  }
                 />
 
                 <PlanningDateTimeRow
@@ -616,6 +649,15 @@ export function ActionPlanEventPlanningForm({
                     mergedFieldErrors.sharedEndAt ??
                     mergedFieldErrors.endAt ??
                     mergedFieldErrors.endTime
+                  }
+                  fieldKey={
+                    mergedFieldErrors.endDate
+                      ? 'endDate'
+                      : mergedFieldErrors.sharedEndAt
+                        ? 'sharedEndAt'
+                        : mergedFieldErrors.endAt
+                          ? 'endAt'
+                          : 'endTime'
                   }
                 />
               </>

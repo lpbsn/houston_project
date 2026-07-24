@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ActionPlanExecutionDetail } from '../types'
+import { actionPlanTaskFieldKey } from './action-plan-field-errors'
 import {
   buildActionPlanExecutionUpdateRequest,
   hydrateActionPlanExecutionEditForm,
@@ -200,7 +201,7 @@ describe('action-plan-execution-edit-form', () => {
       canDefineCrossPoleTasks: true,
       staffMode: false,
     })
-    expect(errors.tasks).toBeTruthy()
+    expect(errors[actionPlanTaskFieldKey('task-pending', 'task')]).toBeTruthy()
 
     const body = buildActionPlanExecutionUpdateRequest(form)
     expect(body.pending_tasks).toEqual([

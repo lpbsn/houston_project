@@ -29,6 +29,7 @@ type PlanningDateTimeRowProps = {
   onDateChange: (date: string) => void
   onTimeChange: (time: string) => void
   error?: string
+  fieldKey?: string
   className?: string
   pickerFooter?: ReactNode
   labelAddon?: ReactNode
@@ -47,6 +48,7 @@ export function PlanningDateTimeRow({
   onDateChange,
   onTimeChange,
   error,
+  fieldKey,
   className,
   pickerFooter,
   labelAddon,
@@ -69,7 +71,10 @@ export function PlanningDateTimeRow({
   }
 
   return (
-    <div className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}>
+    <div
+      className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}
+      {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
+    >
       <div className="flex items-center justify-between gap-3 px-3 py-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-sm text-[#1a1a1a]">{label}</span>

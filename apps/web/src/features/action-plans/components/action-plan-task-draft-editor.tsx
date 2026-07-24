@@ -1,5 +1,5 @@
 import { ChevronRight, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { TerrainCard, TerrainSectionLabel } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,10 @@ import {
   splitIsoToDateAndTime,
 } from '../lib/action-plan-event-planning-form'
 import { formatActionPlanTaskEditorMetaLine } from '../lib/action-plan-display'
+import {
+  ACTION_PLAN_FIELD_ATTR,
+} from '../lib/action-plan-form-guidance'
+import { actionPlanTaskFieldKey } from '../lib/action-plan-field-errors'
 import type { ActionPlanTaskDraft } from '../lib/action-plan-form-validation'
 import {
   applyAssigneeSelectionToTask,
@@ -36,7 +40,12 @@ type ActionPlanTaskDraftEditorProps = {
   canDefineCrossPoleTasks: boolean
   staffMode?: boolean
   businessUnits: Array<{ id: string; label: string }>
+  fieldErrors?: Record<string, string>
+  /** One-shot expand request for advanced options (nonce increments per invalid submit). */
+  expandAdvancedNonce?: number
+  expandAdvancedTaskIds?: ReadonlySet<string> | readonly string[]
   onTasksChange: (tasks: ActionPlanTaskDraft[]) => void
+  onTaskFieldChange?: (fieldKey: string) => void
 }
 
 export function createActionPlanTaskDraftEditorItem(
@@ -62,8 +71,12 @@ type ActionPlanTaskDraftCardProps = {
   staffMode: boolean
   businessUnits: Array<{ id: string; label: string }>
   canDelete: boolean
+  fieldErrors: Record<string, string>
+  expandAdvancedNonce: number
+  shouldExpandAdvanced: boolean
   onChange: (task: ActionPlanTaskDraft) => void
   onDelete: () => void
+  onTaskFieldChange?: (fieldKey: string) => void
 }
 
 function ActionPlanTaskDraftCard({
@@ -73,10 +86,15 @@ function ActionPlanTaskDraftCard({
   staffMode,
   businessUnits,
   canDelete,
+  fieldErrors,
+  expandAdvancedNonce,
+  shouldExpandAdvanced,
   onChange,
   onDelete,
+  onTaskFieldChange,
 }: ActionPlanTaskDraftCardProps) {
   const [advancedExpanded, setAdvancedExpanded] = useState(false)
+  const lastExpandNonceRef = useRef(0)
   const [openPicker, setOpenPicker] = useState<PlanningPickerTarget>(null)
   const [openPolePicker, setOpenPolePicker] = useState<PlanningOptionPickerTarget>(null)
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
@@ -85,6 +103,16 @@ function ActionPlanTaskDraftCard({
     pilotBusinessUnitId,
     businessUnits,
   })
+
+  useEffect(() => {
+    if (
+      expandAdvancedNonce > lastExpandNonceRef.current &&
+      shouldExpandAdvanced
+    ) {
+      lastExpandNonceRef.current = expandAdvancedNonce
+      setAdvancedExpanded(true)
+    }
+  }, [expandAdvancedNonce, shouldExpandAdvanced])
 
   const taskBusinessUnitOptions = poleAssigneeState.poleOptions.map((unit) => ({
     value: unit.id,
@@ -103,7 +131,22 @@ function ActionPlanTaskDraftCard({
     deadlineAt: task.deadlineAt || null,
   })
 
+  const titleKey = actionPlanTaskFieldKey(task.id, 'task')
+  const descriptionKey = actionPlanTaskFieldKey(task.id, 'description')
+  const deadlineKey = actionPlanTaskFieldKey(task.id, 'deadlineAt')
+  const assigneeKey = actionPlanTaskFieldKey(task.id, 'assignee')
+  const poleKey = actionPlanTaskFieldKey(task.id, 'businessUnitId')
+  const titleError = fieldErrors[titleKey]
+  const descriptionError = fieldErrors[descriptionKey]
+  const deadlineError = fieldErrors[deadlineKey]
+  const assigneeError = fieldErrors[assigneeKey]
+  const poleError = fieldErrors[poleKey]
+  const hasTaskError = Boolean(
+    titleError || descriptionError || deadlineError || assigneeError || poleError,
+  )
+
   function updateDeadline(date: string, time: string) {
+    onTaskFieldChange?.(deadlineKey)
     onChange({
       ...task,
       deadlineAt: combineDateAndTimeToIso(date, time),
@@ -111,6 +154,7 @@ function ActionPlanTaskDraftCard({
   }
 
   function handleBusinessUnitChange(businessUnitId: string) {
+    onTaskFieldChange?.(poleKey)
     const clearAssignee = shouldClearAssigneeOnPoleChange(task, businessUnitId)
     onChange({
       ...task,
@@ -125,6 +169,7 @@ function ActionPlanTaskDraftCard({
     membershipId: string,
     user: { display_name: string; business_unit_ids?: string[] },
   ) {
+    onTaskFieldChange?.(assigneeKey)
     onChange(
       applyAssigneeSelectionToTask(task, {
         membershipId,
@@ -135,6 +180,7 @@ function ActionPlanTaskDraftCard({
   }
 
   function handleClearAssignee() {
+    onTaskFieldChange?.(assigneeKey)
     onChange({
       ...task,
       assigneeMembershipId: '',
@@ -145,30 +191,59 @@ function ActionPlanTaskDraftCard({
   }
 
   return (
-    <TerrainCard className="space-y-2 p-3">
+    <TerrainCard
+      className={cn(
+        'space-y-2 p-3',
+        hasTaskError && 'border-destructive/60 ring-1 ring-destructive/30',
+      )}
+    >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <Input
-              value={task.task}
-              onChange={(event) => onChange({ ...task, task: event.target.value })}
-              placeholder="Ex. Contrôler la température"
-              aria-label="Titre de la tâche"
-              className="h-10 border-[#E8E6DF]"
-            />
+            <div className="min-w-0 flex-1" {...{ [ACTION_PLAN_FIELD_ATTR]: titleKey }}>
+              <Input
+                value={task.task}
+                onChange={(event) => {
+                  onTaskFieldChange?.(titleKey)
+                  onChange({ ...task, task: event.target.value })
+                }}
+                placeholder="Ex. Contrôler la température"
+                aria-label="Titre de la tâche"
+                aria-invalid={titleError ? true : undefined}
+                className={cn(
+                  'h-10 border-[#E8E6DF]',
+                  titleError && 'border-destructive',
+                )}
+              />
+              {titleError ? (
+                <p className="mt-1 text-xs text-destructive">{titleError}</p>
+              ) : null}
+            </div>
             {metaLine ? (
               <p className="max-w-[45%] shrink-0 pt-2.5 text-right text-xs text-[#7D7B75]">
                 {metaLine}
               </p>
             ) : null}
           </div>
-          <Textarea
-            value={task.description}
-            onChange={(event) => onChange({ ...task, description: event.target.value })}
-            placeholder="Description (optionnelle)"
-            aria-label="Description de la tâche"
-            className="min-h-16 border-[#E8E6DF]"
-          />
+          <div {...{ [ACTION_PLAN_FIELD_ATTR]: descriptionKey }}>
+            <Textarea
+              value={task.description}
+              onChange={(event) => {
+                onTaskFieldChange?.(descriptionKey)
+                onChange({ ...task, description: event.target.value })
+              }}
+              placeholder="Description (optionnelle)"
+              aria-label="Description de la tâche"
+              aria-invalid={descriptionError ? true : undefined}
+              className={cn(
+                'min-h-16 border-[#E8E6DF]',
+                descriptionError && 'border-destructive',
+              )}
+            />
+            {descriptionError ? (
+              <p className="mt-1 text-xs text-destructive">{descriptionError}</p>
+            ) : null}
+          </div>
         </div>
         <button
           type="button"
@@ -196,18 +271,24 @@ function ActionPlanTaskDraftCard({
 
       {advancedExpanded ? (
         <TerrainCard className="overflow-hidden p-0">
-          <PlanningDateTimeRow
-            rowId={`task-${task.id}-deadline`}
-            label="Deadline"
-            date={deadlineDate}
-            time={deadlineTime}
-            openPicker={openPicker}
-            onOpenPickerChange={setOpenPicker}
-            onDateChange={(date) => updateDeadline(date, deadlineTime)}
-            onTimeChange={(time) => updateDeadline(deadlineDate, time)}
-          />
+          <div {...{ [ACTION_PLAN_FIELD_ATTR]: deadlineKey }}>
+            <PlanningDateTimeRow
+              rowId={`task-${task.id}-deadline`}
+              label="Deadline"
+              date={deadlineDate}
+              time={deadlineTime}
+              openPicker={openPicker}
+              onOpenPickerChange={setOpenPicker}
+              onDateChange={(date) => updateDeadline(date, deadlineTime)}
+              onTimeChange={(time) => updateDeadline(deadlineDate, time)}
+              error={deadlineError}
+            />
+          </div>
           {!staffMode ? (
-            <div className="border-b border-[#E8E6DF] px-3 py-3">
+            <div
+              className="border-b border-[#E8E6DF] px-3 py-3"
+              {...{ [ACTION_PLAN_FIELD_ATTR]: assigneeKey }}
+            >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm text-[#1a1a1a]">Assigné</span>
                 <div className="flex items-center gap-2">
@@ -232,9 +313,12 @@ function ActionPlanTaskDraftCard({
                   </Button>
                 </div>
               </div>
+              {assigneeError ? (
+                <p className="mt-1 text-xs text-destructive">{assigneeError}</p>
+              ) : null}
             </div>
           ) : null}
-          <div className="px-3 py-3">
+          <div className="px-3 py-3" {...{ [ACTION_PLAN_FIELD_ATTR]: poleKey }}>
             <PlanningOptionRow
               rowId={`task-${task.id}-pole`}
               label="Pôle d'activité"
@@ -245,15 +329,16 @@ function ActionPlanTaskDraftCard({
               onOpenPickerChange={setOpenPolePicker}
               onChange={handleBusinessUnitChange}
               disabled={poleAssigneeState.poleLocked}
+              error={poleError}
             />
-            {poleAssigneeState.requiresPoleChoice ? (
+            {poleAssigneeState.requiresPoleChoice && !poleError ? (
               <p className="mt-1 text-xs text-[#7D7B75]">
                 {task.assigneeMembershipId && task.assigneeBusinessUnitIds.length === 0
                   ? "Choisissez un pôle d'activité pour cette tâche."
                   : 'Choisissez le pôle de l’assigné.'}
               </p>
             ) : null}
-            {!task.businessUnitId && !task.assigneeMembershipId ? (
+            {!task.businessUnitId && !task.assigneeMembershipId && !poleError ? (
               <p className="mt-1 text-xs text-[#7D7B75]">
                 Sans pôle explicite, le pôle pilote sera utilisé.
               </p>
@@ -287,10 +372,19 @@ export function ActionPlanTaskDraftEditor({
   canDefineCrossPoleTasks,
   staffMode = false,
   businessUnits,
+  fieldErrors = {},
+  expandAdvancedNonce = 0,
+  expandAdvancedTaskIds,
   onTasksChange,
+  onTaskFieldChange,
 }: ActionPlanTaskDraftEditorProps) {
+  const expandIds =
+    expandAdvancedTaskIds instanceof Set
+      ? expandAdvancedTaskIds
+      : new Set(expandAdvancedTaskIds ?? [])
+
   return (
-    <section className="space-y-2">
+    <section className="space-y-2" {...{ [ACTION_PLAN_FIELD_ATTR]: 'tasks' }}>
       <TerrainSectionLabel>Tâches</TerrainSectionLabel>
       <div className="space-y-2">
         {tasks.map((task) => (
@@ -303,12 +397,16 @@ export function ActionPlanTaskDraftEditor({
             staffMode={staffMode}
             businessUnits={businessUnits}
             canDelete
+            fieldErrors={fieldErrors}
+            expandAdvancedNonce={expandAdvancedNonce}
+            shouldExpandAdvanced={expandIds.has(task.id)}
             onChange={(nextTask) =>
               onTasksChange(
                 tasks.map((candidate) => (candidate.id === task.id ? nextTask : candidate)),
               )
             }
             onDelete={() => onTasksChange(tasks.filter((candidate) => candidate.id !== task.id))}
+            onTaskFieldChange={onTaskFieldChange}
           />
         ))}
         <Button
@@ -326,6 +424,9 @@ export function ActionPlanTaskDraftEditor({
           Ajouter une tâche
         </Button>
       </div>
+      {fieldErrors.tasks ? (
+        <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
+      ) : null}
     </section>
   )
 }

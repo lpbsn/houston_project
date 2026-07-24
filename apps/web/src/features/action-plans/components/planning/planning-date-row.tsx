@@ -13,6 +13,7 @@ type PlanningDateRowProps = {
   onOpenPickerChange: (target: PlanningPickerTarget) => void
   onDateChange: (date: string) => void
   error?: string
+  fieldKey?: string
   className?: string
 }
 
@@ -24,6 +25,7 @@ export function PlanningDateRow({
   onOpenPickerChange,
   onDateChange,
   error,
+  fieldKey,
   className,
 }: PlanningDateRowProps) {
   const dateActive = openPicker?.rowId === rowId && openPicker.part === 'date'
@@ -37,7 +39,10 @@ export function PlanningDateRow({
   }
 
   return (
-    <div className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}>
+    <div
+      className={cn('border-b border-[#E8E6DF] last:border-b-0', className)}
+      {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
+    >
       <div className="flex items-center justify-between gap-3 px-3 py-3">
         <span className="text-sm text-[#1a1a1a]">{label}</span>
         <PlanningPill active={dateActive} aria-label={`${label} — date`} onClick={toggleDatePicker}>

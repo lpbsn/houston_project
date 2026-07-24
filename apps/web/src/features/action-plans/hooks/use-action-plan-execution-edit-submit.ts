@@ -4,13 +4,17 @@ import { notifySuccess } from '@/lib/success-toast'
 
 import { ActionPlansApiError } from '../api'
 import { useUpdateActionPlanExecutionMutation } from '../hooks'
-import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
+import { mapActionPlanApiErrors } from '../lib/action-plan-api-error-map'
+import {
+  clearActionPlanFieldErrorKey,
+  mergeActionPlanFieldErrors,
+} from '../lib/action-plan-field-errors'
 import {
   buildActionPlanExecutionUpdateRequest,
   hasActionPlanExecutionEditFormErrors,
   isActionPlanExecutionEditConflictError,
+  listExecutionPendingPayloadTaskIds,
   validateActionPlanExecutionEditForm,
-  type ActionPlanExecutionEditFormErrors,
   type ActionPlanExecutionEditFormValues,
 } from '../lib/action-plan-execution-edit-form'
 
@@ -34,18 +38,33 @@ export function useActionPlanExecutionEditSubmit({
   onConflictReload,
 }: UseActionPlanExecutionEditSubmitOptions) {
   const updateMutation = useUpdateActionPlanExecutionMutation(establishmentId, executionId)
-  const [fieldErrors, setFieldErrors] = useState<ActionPlanExecutionEditFormErrors>({})
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [frontendFieldErrors, setFrontendFieldErrors] = useState<Record<string, string>>({})
+  const [apiFieldErrors, setApiFieldErrors] = useState<Record<string, string>>({})
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
+  const [guidanceNonce, setGuidanceNonce] = useState(0)
 
-  async function submit(values: ActionPlanExecutionEditFormValues) {
-    setSubmitError(null)
+  function revalidateFrontend(values: ActionPlanExecutionEditFormValues) {
     const errors = validateActionPlanExecutionEditForm(values, {
       canDefineCrossPoleTasks,
       staffMode,
       membershipId,
     })
-    setFieldErrors(errors)
+    setFrontendFieldErrors(errors)
+    return errors
+  }
+
+  function clearApiFieldError(key: string) {
+    setApiFieldErrors((prev) => clearActionPlanFieldErrorKey(prev, key))
+  }
+
+  async function submit(values: ActionPlanExecutionEditFormValues) {
+    setGlobalError(null)
+    setApiFieldErrors({})
+    setHasAttemptedSubmit(true)
+    const errors = revalidateFrontend(values)
     if (hasActionPlanExecutionEditFormErrors(errors)) {
+      setGuidanceNonce((value) => value + 1)
       return false
     }
 
@@ -63,27 +82,44 @@ export function useActionPlanExecutionEditSubmit({
             : { status: undefined, code: null, detail: '' }
 
       if (isActionPlanExecutionEditConflictError(apiError)) {
-        setSubmitError(
-          resolveActionPlanErrorMessage(
-            error,
-            'Ce plan a changé. Les données ont été rechargées.',
-          ),
+        setGlobalError(
+          error instanceof ActionPlansApiError && error.detail
+            ? error.detail
+            : 'Ce plan a changé. Les données ont été rechargées.',
         )
         await onConflictReload()
         return false
       }
 
-      setSubmitError(
-        resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être mis à jour.'),
-      )
+      const mapped = mapActionPlanApiErrors(error, {
+        payloadTaskIds: listExecutionPendingPayloadTaskIds(
+          values.pendingTasks,
+          values.knownPendingTaskIds,
+        ),
+        taskListKey: 'pending_tasks',
+        fallbackDetail: 'Le plan n’a pas pu être mis à jour.',
+      })
+      setApiFieldErrors(mapped.apiFieldErrors)
+      setGlobalError(mapped.globalError)
+      if (Object.keys(mapped.apiFieldErrors).length > 0) {
+        setGuidanceNonce((value) => value + 1)
+      }
       return false
     }
   }
 
   return {
     submit,
-    fieldErrors,
-    submitError,
+    frontendFieldErrors,
+    setFrontendFieldErrors,
+    revalidateFrontend,
+    apiFieldErrors,
+    clearApiFieldError,
+    globalError,
+    hasAttemptedSubmit,
+    guidanceNonce,
+    fieldErrors: mergeActionPlanFieldErrors(frontendFieldErrors, apiFieldErrors),
+    submitError: globalError,
     isSubmitting: updateMutation.isPending,
   }
 }

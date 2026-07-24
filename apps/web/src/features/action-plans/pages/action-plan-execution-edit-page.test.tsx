@@ -121,6 +121,10 @@ vi.mock('../hooks/use-action-plan-execution-edit-submit', () => ({
     fieldErrors: {},
     submitError: null,
     isSubmitting: false,
+    guidanceNonce: 0,
+    hasAttemptedSubmit: false,
+    revalidateFrontend: vi.fn(),
+    clearApiFieldError: vi.fn(),
   }),
 }))
 
