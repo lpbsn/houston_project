@@ -18,6 +18,7 @@ type PlanningOptionRowProps = {
   onOpenPickerChange: (target: PlanningOptionPickerTarget) => void
   onChange: (value: string) => void
   error?: string
+  fieldKey?: string
   className?: string
 }
 
@@ -32,6 +33,7 @@ export function PlanningOptionRow({
   onOpenPickerChange,
   onChange,
   error,
+  fieldKey,
   className,
 }: PlanningOptionRowProps) {
   const pickerActive = !disabled && openPicker?.rowId === rowId
@@ -50,7 +52,10 @@ export function PlanningOptionRow({
   }
 
   return (
-    <div className={cn(className)}>
+    <div
+      className={cn(className)}
+      {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-[#1a1a1a]">{label}</span>
         {disabled ? (

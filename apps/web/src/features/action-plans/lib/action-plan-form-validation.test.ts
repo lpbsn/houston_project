@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildActionPlanCreateRequest } from '@/features/action-plans/lib/action-plan-create-payload'
+import { actionPlanTaskFieldKey } from '@/features/action-plans/lib/action-plan-field-errors'
 import {
   createActionPlanAssigneeDraft,
   createActionPlanTaskDraft,
@@ -60,6 +61,13 @@ describe('validateActionPlanCreateForm', () => {
   })
 
   it('requires pole choice when assignee has multiple business units', () => {
+    const draft = {
+      ...createActionPlanTaskDraft(''),
+      task: 'Task 1',
+      assigneeMembershipId: 'member-1',
+      assigneeDisplayName: 'Nami',
+      assigneeBusinessUnitIds: ['bu-1', 'bu-2'],
+    }
     const errors = validateActionPlanCreateForm(
       {
         title: 'Plan',
@@ -71,25 +79,26 @@ describe('validateActionPlanCreateForm', () => {
         sharedStartAt: '',
         sharedEndAt: '',
         sharedVisibleFrom: '',
-        tasks: [
-          {
-            ...createActionPlanTaskDraft(''),
-            task: 'Task 1',
-            assigneeMembershipId: 'member-1',
-            assigneeDisplayName: 'Nami',
-            assigneeBusinessUnitIds: ['bu-1', 'bu-2'],
-          },
-        ],
+        tasks: [draft],
         assignees: [],
         schedule: emptySchedule,
       },
       { canDefineCrossPoleTasks: false },
     )
 
-    expect(errors.tasks).toBe('Choisissez le pôle de l’assigné pour chaque tâche concernée.')
+    expect(errors[actionPlanTaskFieldKey(draft.id, 'businessUnitId')]).toBe(
+      'Choisissez le pôle de l’assigné pour chaque tâche concernée.',
+    )
   })
 
   it('requires pole choice when assignee is owner or director', () => {
+    const draft = {
+      ...createActionPlanTaskDraft(''),
+      task: 'Task 1',
+      assigneeMembershipId: 'member-1',
+      assigneeDisplayName: 'Director',
+      assigneeBusinessUnitIds: [] as string[],
+    }
     const errors = validateActionPlanCreateForm(
       {
         title: 'Plan',
@@ -101,22 +110,14 @@ describe('validateActionPlanCreateForm', () => {
         sharedStartAt: '',
         sharedEndAt: '',
         sharedVisibleFrom: '',
-        tasks: [
-          {
-            ...createActionPlanTaskDraft(''),
-            task: 'Task 1',
-            assigneeMembershipId: 'member-1',
-            assigneeDisplayName: 'Director',
-            assigneeBusinessUnitIds: [],
-          },
-        ],
+        tasks: [draft],
         assignees: [],
         schedule: emptySchedule,
       },
       { canDefineCrossPoleTasks: false },
     )
 
-    expect(errors.tasks).toBe(
+    expect(errors[actionPlanTaskFieldKey(draft.id, 'businessUnitId')]).toBe(
       'Sélectionnez un pôle d’activité pour chaque tâche assignée à un Owner ou un Director.',
     )
   })
@@ -152,6 +153,7 @@ describe('validateActionPlanCreateForm', () => {
   })
 
   it('requires business unit on non-empty tasks when pilot is missing', () => {
+    const draft = { ...createActionPlanTaskDraft(''), task: 'Task 1' }
     const errors = validateActionPlanCreateForm(
       {
         title: 'Plan',
@@ -163,14 +165,66 @@ describe('validateActionPlanCreateForm', () => {
         sharedStartAt: '',
         sharedEndAt: '',
         sharedVisibleFrom: '',
-        tasks: [{ ...createActionPlanTaskDraft(''), task: 'Task 1' }],
+        tasks: [draft],
         assignees: [],
         schedule: emptySchedule,
       },
       { canDefineCrossPoleTasks: false },
     )
 
-    expect(errors.tasks).toBe('Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.')
+    expect(errors[actionPlanTaskFieldKey(draft.id, 'businessUnitId')]).toBe(
+      'Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.',
+    )
+  })
+
+  it('ignores empty placeholder tasks even with a prefilled business unit', () => {
+    const errors = validateActionPlanCreateForm(
+      {
+        title: 'Plan',
+        description: '',
+        pilotBusinessUnitId: 'bu-1',
+        requiresValidation: false,
+        saveToLibrary: true,
+        useSharedChronology: false,
+        sharedStartAt: '',
+        sharedEndAt: '',
+        sharedVisibleFrom: '',
+        tasks: [createActionPlanTaskDraft('bu-1')],
+        assignees: [],
+        schedule: emptySchedule,
+      },
+      { canDefineCrossPoleTasks: false },
+    )
+
+    expect(errors).toEqual({})
+  })
+
+  it('blocks partial tasks that have description but no title', () => {
+    const draft = {
+      ...createActionPlanTaskDraft(''),
+      description: 'Only description',
+    }
+    const errors = validateActionPlanCreateForm(
+      {
+        title: 'Plan',
+        description: '',
+        pilotBusinessUnitId: 'bu-1',
+        requiresValidation: false,
+        saveToLibrary: true,
+        useSharedChronology: false,
+        sharedStartAt: '',
+        sharedEndAt: '',
+        sharedVisibleFrom: '',
+        tasks: [draft],
+        assignees: [],
+        schedule: emptySchedule,
+      },
+      { canDefineCrossPoleTasks: false },
+    )
+
+    expect(errors[actionPlanTaskFieldKey(draft.id, 'task')]).toBe(
+      'Chaque tâche doit avoir un titre.',
+    )
   })
 
   it('accepts form without tasks when title and pilot business unit are set', () => {
@@ -431,13 +485,14 @@ describe('validateActionPlanCreateForm staff execution filet', () => {
   })
 
   it('rejects staff plan with cross-pole task', () => {
+    const draft = { ...createActionPlanTaskDraft('bu-2'), task: 'Task 1' }
     const errors = validateActionPlanCreateForm(
       {
         ...staffValues,
-        tasks: [{ ...createActionPlanTaskDraft('bu-2'), task: 'Task 1' }],
+        tasks: [draft],
       },
       { canDefineCrossPoleTasks: false, staffExecutionMode: staffMode },
     )
-    expect(errors.tasks).toBeTruthy()
+    expect(errors[actionPlanTaskFieldKey(draft.id, 'businessUnitId')]).toBeTruthy()
   })
 })

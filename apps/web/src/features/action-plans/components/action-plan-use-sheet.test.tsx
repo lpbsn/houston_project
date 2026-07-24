@@ -12,31 +12,40 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
   return {
     ...actual,
     ActionPlanEventPlanningForm: ({
-      draft,
       onDraftChange,
     }: {
       draft: ActionPlanEventPlanningDraft
-      onDraftChange: (next: ActionPlanEventPlanningDraft) => void
+      onDraftChange: (
+        update:
+          | ActionPlanEventPlanningDraft
+          | ((previous: ActionPlanEventPlanningDraft) => ActionPlanEventPlanningDraft),
+      ) => void
     }) => (
       <div>
         <button
           type="button"
-          onClick={() => onDraftChange({ ...draft, repeatEnabled: true, recurrenceDays: ['monday'] })}
+          onClick={() =>
+            onDraftChange((previous) => ({
+              ...previous,
+              repeatEnabled: true,
+              recurrenceDays: ['monday'],
+            }))
+          }
         >
           Activer repeat
         </button>
         <button
           type="button"
           onClick={() =>
-            onDraftChange({
-              ...draft,
+            onDraftChange((previous) => ({
+              ...previous,
               repeatEnabled: true,
               recurrenceDays: ['monday'],
               recurrenceEndDate: '2026-12-31',
               startDate: '2026-07-01',
               startTime: '09:00',
               endTime: '10:00',
-            })
+            }))
           }
         >
           Compléter repeat
@@ -44,8 +53,8 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
         <button
           type="button"
           onClick={() =>
-            onDraftChange({
-              ...draft,
+            onDraftChange((previous) => ({
+              ...previous,
               usePerAssigneeChronology: true,
               assignees: [
                 {
@@ -62,7 +71,7 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
                 },
               ],
               startDate: '2026-07-01',
-            })
+            }))
           }
         >
           Activer per-assignee
@@ -70,8 +79,8 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
         <button
           type="button"
           onClick={() =>
-            onDraftChange({
-              ...draft,
+            onDraftChange((previous) => ({
+              ...previous,
               usePerAssigneeChronology: true,
               assignees: [
                 {
@@ -99,7 +108,7 @@ vi.mock('./action-plan-event-planning-form', async (importOriginal) => {
                   recurrenceEndDate: '',
                 },
               ],
-            })
+            }))
           }
         >
           Activer mixte

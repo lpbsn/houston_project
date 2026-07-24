@@ -10,16 +10,25 @@ type RecurrenceDaysPickerProps = {
   value: ActionPlanRecurrenceDay[]
   onChange: (days: ActionPlanRecurrenceDay[]) => void
   error?: string
+  fieldKey?: string
 }
 
-export function RecurrenceDaysPicker({ value, onChange, error }: RecurrenceDaysPickerProps) {
+export function RecurrenceDaysPicker({
+  value,
+  onChange,
+  error,
+  fieldKey,
+}: RecurrenceDaysPickerProps) {
   function toggleDay(day: ActionPlanRecurrenceDay) {
     const nextDays = value.includes(day) ? value.filter((item) => item !== day) : [...value, day]
     onChange(nextDays)
   }
 
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      {...(fieldKey ? { 'data-action-plan-field': fieldKey } : {})}
+    >
       <div className="flex flex-wrap gap-2">
         {ACTION_PLAN_RECURRENCE_DAYS.map((day) => {
           const selected = value.includes(day)

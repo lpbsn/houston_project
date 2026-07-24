@@ -7,6 +7,10 @@ import {
   validatePerAssigneePlanningDraft,
   type ActionPlanEventPlanningDraft,
 } from './action-plan-event-planning-form'
+import {
+  actionPlanTaskFieldKey,
+  isActionPlanTaskDraftActive,
+} from './action-plan-field-errors'
 import type { ActionPlanTaskTemplate } from '../types'
 
 export type ActionPlanTaskDraft = {
@@ -92,26 +96,69 @@ export type ActionPlanCreateFormValues = {
   sourceSignalId?: string | null
 }
 
-export type ActionPlanCreateFormErrors = Partial<
-  Record<
-    | 'title'
-    | 'pilotBusinessUnitId'
-    | 'tasks'
-    | 'assignees'
-    | 'sharedStartAt'
-    | 'sharedEndAt'
-    | 'recurrenceDays'
-    | 'recurrenceEndDate'
-    | 'endDate'
-    | 'startAt'
-    | 'startTime'
-    | 'endTime'
-    | 'submit',
-    string
-  >
->
+/** Flat field-error map (includes per-task keys `tasks.<id>.<field>`). */
+export type ActionPlanCreateFormErrors = Record<string, string>
 
 const MAX_TASKS = 10
+
+const TASK_TITLE_REQUIRED = 'Chaque tâche doit avoir un titre.'
+const TASK_POLE_MULTI =
+  'Choisissez le pôle de l’assigné pour chaque tâche concernée.'
+const TASK_POLE_ADMIN =
+  'Sélectionnez un pôle d’activité pour chaque tâche assignée à un Owner ou un Director.'
+const TASK_POLE_OR_PILOT = 'Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.'
+const TASK_CROSS_POLE = 'Les tâches hors pôle pilote sont réservées aux administrateurs.'
+const TASK_STAFF_POLE = 'Les tâches staff doivent rester sur le pôle pilote.'
+
+function validateActiveTaskDraft(
+  task: ActionPlanTaskDraft,
+  options: {
+    pilotBusinessUnitId: string
+    canDefineCrossPoleTasks: boolean
+    staffPilotBusinessUnitId?: string
+  },
+): Record<string, string> {
+  const errors: Record<string, string> = {}
+
+  if (!task.task.trim()) {
+    errors[actionPlanTaskFieldKey(task.id, 'task')] = TASK_TITLE_REQUIRED
+  }
+
+  if (
+    task.assigneeMembershipId &&
+    !task.businessUnitId &&
+    task.assigneeBusinessUnitIds.length > 1
+  ) {
+    errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] = TASK_POLE_MULTI
+  } else if (
+    task.assigneeMembershipId &&
+    task.assigneeBusinessUnitIds.length === 0 &&
+    !task.businessUnitId
+  ) {
+    errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] = TASK_POLE_ADMIN
+  }
+
+  const effectiveBusinessUnitId = task.businessUnitId || options.pilotBusinessUnitId
+  if (!effectiveBusinessUnitId) {
+    errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] = TASK_POLE_OR_PILOT
+  } else if (
+    !options.canDefineCrossPoleTasks &&
+    options.pilotBusinessUnitId &&
+    effectiveBusinessUnitId !== options.pilotBusinessUnitId
+  ) {
+    errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] = TASK_CROSS_POLE
+  }
+
+  if (
+    options.staffPilotBusinessUnitId &&
+    effectiveBusinessUnitId &&
+    effectiveBusinessUnitId !== options.staffPilotBusinessUnitId
+  ) {
+    errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] = TASK_STAFF_POLE
+  }
+
+  return errors
+}
 
 export function validateActionPlanCreateForm(
   values: ActionPlanCreateFormValues,
@@ -130,42 +177,20 @@ export function validateActionPlanCreateForm(
     errors.pilotBusinessUnitId = 'Sélectionnez un pôle d’activité pilote.'
   }
 
-  const nonEmptyTasks = values.tasks.filter((task) => task.task.trim())
-  if (nonEmptyTasks.length > MAX_TASKS) {
+  const activeTasks = values.tasks.filter(isActionPlanTaskDraftActive)
+  if (activeTasks.length > MAX_TASKS) {
     errors.tasks = `Maximum ${MAX_TASKS} tâches.`
   }
 
-  for (const task of nonEmptyTasks) {
-    if (
-      task.assigneeMembershipId &&
-      !task.businessUnitId &&
-      task.assigneeBusinessUnitIds.length > 1
-    ) {
-      errors.tasks = 'Choisissez le pôle de l’assigné pour chaque tâche concernée.'
-      break
-    }
-    if (
-      task.assigneeMembershipId &&
-      task.assigneeBusinessUnitIds.length === 0 &&
-      !task.businessUnitId
-    ) {
-      errors.tasks =
-        'Sélectionnez un pôle d’activité pour chaque tâche assignée à un Owner ou un Director.'
-      break
-    }
-    const effectiveBusinessUnitId = task.businessUnitId || values.pilotBusinessUnitId
-    if (!effectiveBusinessUnitId) {
-      errors.tasks = 'Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.'
-      break
-    }
-    if (
-      !options.canDefineCrossPoleTasks &&
-      values.pilotBusinessUnitId &&
-      effectiveBusinessUnitId !== values.pilotBusinessUnitId
-    ) {
-      errors.tasks = 'Les tâches hors pôle pilote sont réservées aux administrateurs.'
-      break
-    }
+  for (const task of activeTasks) {
+    Object.assign(
+      errors,
+      validateActiveTaskDraft(task, {
+        pilotBusinessUnitId: values.pilotBusinessUnitId,
+        canDefineCrossPoleTasks: options.canDefineCrossPoleTasks,
+        staffPilotBusinessUnitId: options.staffExecutionMode?.pilotBusinessUnitId,
+      }),
+    )
   }
 
   const hasPerAssigneeRepeatAssignees =
@@ -207,14 +232,6 @@ export function validateActionPlanCreateForm(
       }
       if (assignee.businessUnitId !== pilotBusinessUnitId) {
         errors.assignees = 'L’assigné staff doit être sur le pôle pilote.'
-      }
-    }
-
-    for (const task of nonEmptyTasks) {
-      const effectiveBusinessUnitId = task.businessUnitId || pilotBusinessUnitId
-      if (effectiveBusinessUnitId !== pilotBusinessUnitId) {
-        errors.tasks = 'Les tâches staff doivent rester sur le pôle pilote.'
-        break
       }
     }
   }

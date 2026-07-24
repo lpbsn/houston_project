@@ -1,6 +1,6 @@
 import { useMutationState } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -29,6 +29,7 @@ import {
   validateCatalogPlanningDraft,
 } from '../lib/action-plan-catalog-planning-submit'
 import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
+import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
 import {
   applyPlanningSubmissionIntent,
   clearPlanningSubmissionIntent,
@@ -74,10 +75,38 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
   )
-  const [planningFieldErrors, setPlanningFieldErrors] = useState<Record<string, string>>({})
+  const [hasAttemptedPlanningSubmit, setHasAttemptedPlanningSubmit] = useState(false)
+  const [planningGuidanceNonce, setPlanningGuidanceNonce] = useState(0)
+  const planningFormRootRef = useRef<HTMLDivElement>(null)
+  const lastPlanningGuidanceNonceRef = useRef(0)
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
   )
+
+  const planningFieldErrors = useMemo(
+    () =>
+      hasAttemptedPlanningSubmit && detailQuery.data
+        ? validateCatalogPlanningDraft(planningDraft, {
+            canSchedule: canShowActionPlanSchedule(detailQuery.data.permission_hints),
+            staffMode: staffUseMode,
+          })
+        : {},
+    [detailQuery.data, hasAttemptedPlanningSubmit, planningDraft, staffUseMode],
+  )
+
+  useEffect(() => {
+    if (planningGuidanceNonce <= lastPlanningGuidanceNonceRef.current) {
+      return
+    }
+    lastPlanningGuidanceNonceRef.current = planningGuidanceNonce
+    if (Object.keys(planningFieldErrors).length === 0) {
+      return
+    }
+    return guideToFirstActionPlanFieldError(planningFieldErrors, {
+      root: planningFormRootRef.current ?? document,
+    })
+  }, [planningFieldErrors, planningGuidanceNonce])
+
   const displayedFeedback =
     feedback ??
     (latestDeleteError
@@ -137,7 +166,7 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     clearPlanningSubmissionIntent(establishmentId, actionPlanId)
     setExecutionPanelOpen(false)
     setPlanningDraft(createActionPlanEventPlanningDraft())
-    setPlanningFieldErrors({})
+    setHasAttemptedPlanningSubmit(false)
   }
 
   async function handleActivate() {
@@ -167,9 +196,10 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   }
 
   async function handleLaunchExecution() {
+    setHasAttemptedPlanningSubmit(true)
     const errors = validateCatalogPlanningDraft(planningDraft, planningOptions)
-    setPlanningFieldErrors(errors)
     if (Object.keys(errors).length > 0) {
+      setPlanningGuidanceNonce((value) => value + 1)
       return
     }
 
@@ -261,22 +291,28 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
         </section>
 
         {executionPanelOpen ? (
-          <ActionPlanEventPlanningForm
-            draft={planningDraft}
-            config={{
-              canEditAssignees: !staffUseMode,
-              canSchedule,
-              staffMode: staffUseMode,
-              showAdvancedChronology: !staffUseMode,
-              hideAssignees: false,
-              staffDisplayName,
-              assigneeActionsEnabled: false,
-            }}
-            establishmentId={establishmentId}
-            pilotBusinessUnitId={plan.pilot_business_unit.id}
-            fieldErrors={planningFieldErrors}
-            onDraftChange={setPlanningDraft}
-          />
+          <div ref={planningFormRootRef}>
+            <ActionPlanEventPlanningForm
+              draft={planningDraft}
+              config={{
+                canEditAssignees: !staffUseMode,
+                canSchedule,
+                staffMode: staffUseMode,
+                showAdvancedChronology: !staffUseMode,
+                hideAssignees: false,
+                staffDisplayName,
+                assigneeActionsEnabled: false,
+              }}
+              establishmentId={establishmentId}
+              pilotBusinessUnitId={plan.pilot_business_unit.id}
+              fieldErrors={planningFieldErrors}
+              onDraftChange={(update) => {
+                setPlanningDraft((previous) =>
+                  typeof update === 'function' ? update(previous) : update,
+                )
+              }}
+            />
+          </div>
         ) : null}
       </div>
 

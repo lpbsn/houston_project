@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { createElement } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { createElement, useState } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ActionPlanEventPlanningForm } from './action-plan-event-planning-form'
@@ -25,6 +25,17 @@ const baseConfig: ActionPlanEventPlanningConfig = {
   hideAssignees: false,
 }
 
+type DraftUpdate =
+  | ActionPlanEventPlanningDraft
+  | ((previous: ActionPlanEventPlanningDraft) => ActionPlanEventPlanningDraft)
+
+function resolveDraftUpdate(
+  update: DraftUpdate,
+  previous: ActionPlanEventPlanningDraft,
+): ActionPlanEventPlanningDraft {
+  return typeof update === 'function' ? update(previous) : update
+}
+
 function renderForm(
   draft: ActionPlanEventPlanningDraft = createActionPlanEventPlanningDraft(),
   config = baseConfig,
@@ -37,6 +48,34 @@ function renderForm(
       establishmentId: 'est-1',
       pilotBusinessUnitId: 'bu-1',
       onDraftChange,
+    }),
+  )
+}
+
+function StatefulPlanningHarness({
+  initialDraft,
+  config = baseConfig,
+}: {
+  initialDraft: ActionPlanEventPlanningDraft
+  config?: ActionPlanEventPlanningConfig
+}) {
+  const [draft, setDraft] = useState(initialDraft)
+  return createElement(
+    'div',
+    null,
+    createElement('pre', { 'data-testid': 'planning-draft-snapshot' }, JSON.stringify({
+      startDate: draft.startDate,
+      startTime: draft.startTime,
+      endDate: draft.endDate,
+      endTime: draft.endTime,
+      repeatEnabled: draft.repeatEnabled,
+    })),
+    createElement(ActionPlanEventPlanningForm, {
+      draft,
+      config,
+      establishmentId: 'est-1',
+      pilotBusinessUnitId: 'bu-1',
+      onDraftChange: setDraft,
     }),
   )
 }
@@ -73,49 +112,44 @@ describe('ActionPlanEventPlanningForm', () => {
   })
 
   it('toggles repeat fields with a switch', () => {
+    const initial = createActionPlanEventPlanningDraft()
     const onDraftChange = vi.fn()
-    renderForm(createActionPlanEventPlanningDraft(), baseConfig, onDraftChange)
+    renderForm(initial, baseConfig, onDraftChange)
     fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
-    expect(onDraftChange).toHaveBeenCalledWith(
+    expect(resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)).toEqual(
       expect.objectContaining({ repeatEnabled: true }),
     )
   })
 
   it('preserves a distinct one-shot end date when repeat is enabled', () => {
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-07-04',
+      endDate: '2026-07-08',
+    }
     const onDraftChange = vi.fn()
-    renderForm(
-      {
-        ...createActionPlanEventPlanningDraft(),
-        startDate: '2026-07-04',
-        endDate: '2026-07-08',
-      },
-      baseConfig,
-      onDraftChange,
-    )
+    renderForm(initial, baseConfig, onDraftChange)
 
     fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
 
-    expect(onDraftChange).toHaveBeenCalledWith(
+    expect(resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)).toEqual(
       expect.objectContaining({ repeatEnabled: true, endDate: '2026-07-08' }),
     )
   })
 
   it('preserves end date when repeat is toggled off again', () => {
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-07-04',
+      endDate: '2026-07-08',
+      repeatEnabled: true,
+    }
     const onDraftChange = vi.fn()
-    renderForm(
-      {
-        ...createActionPlanEventPlanningDraft(),
-        startDate: '2026-07-04',
-        endDate: '2026-07-08',
-        repeatEnabled: true,
-      },
-      baseConfig,
-      onDraftChange,
-    )
+    renderForm(initial, baseConfig, onDraftChange)
 
     fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
 
-    expect(onDraftChange).toHaveBeenCalledWith(
+    expect(resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)).toEqual(
       expect.objectContaining({ repeatEnabled: false, endDate: '2026-07-08' }),
     )
   })
@@ -332,22 +366,19 @@ describe('ActionPlanEventPlanningForm', () => {
 
   it('fills shared start from Maintenant without changing end', () => {
     vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-07-01',
+      startTime: '09:00',
+      endDate: '2026-07-02',
+      endTime: '18:00',
+    }
     const onDraftChange = vi.fn()
-    renderForm(
-      {
-        ...createActionPlanEventPlanningDraft(),
-        startDate: '2026-07-01',
-        startTime: '09:00',
-        endDate: '2026-07-02',
-        endTime: '18:00',
-      },
-      baseConfig,
-      onDraftChange,
-    )
+    renderForm(initial, baseConfig, onDraftChange)
 
     fireEvent.click(screen.getByRole('button', { name: 'Maintenant' }))
 
-    expect(onDraftChange).toHaveBeenCalledWith(
+    expect(resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)).toEqual(
       expect.objectContaining({
         startDate: '2026-07-19',
         startTime: '10:00',
@@ -374,26 +405,60 @@ describe('ActionPlanEventPlanningForm', () => {
       startAt: combineDateAndTimeToIso('2026-07-02', '11:00', 'start'),
       endAt: combineDateAndTimeToIso('2026-07-02', '12:00', 'end'),
     })
-    renderForm(
-      {
-        ...createActionPlanEventPlanningDraft(),
-        usePerAssigneeChronology: true,
-        assignees: [first, second],
-      },
-      baseConfig,
-      onDraftChange,
-    )
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      usePerAssigneeChronology: true,
+      assignees: [first, second],
+    }
+    renderForm(initial, baseConfig, onDraftChange)
 
     const nowButtons = screen.getAllByRole('button', { name: 'Maintenant' })
     expect(nowButtons).toHaveLength(2)
     fireEvent.click(nowButtons[0])
 
     expect(onDraftChange).toHaveBeenCalledTimes(1)
-    const nextDraft = onDraftChange.mock.calls[0][0] as ActionPlanEventPlanningDraft
+    const nextDraft = resolveDraftUpdate(onDraftChange.mock.calls[0][0], initial)
     expect(nextDraft.assignees[0].startAt).toBe(
       combineDateAndTimeToIso('2026-07-19', '10:00', 'start'),
     )
     expect(nextDraft.assignees[0].endAt).toBe(first.endAt)
     expect(nextDraft.assignees[1]).toEqual(second)
+  })
+
+  it('keeps both patches from the same render before any intermediate rerender', () => {
+    vi.setSystemTime(new Date(2026, 6, 19, 10, 2, 0))
+    const initial = {
+      ...createActionPlanEventPlanningDraft(),
+      startDate: '2026-07-01',
+      startTime: '09:00',
+      endDate: '2026-07-02',
+      endTime: '18:00',
+      repeatEnabled: false,
+    }
+
+    render(createElement(StatefulPlanningHarness, { initialDraft: initial }))
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Maintenant' }))
+      fireEvent.click(screen.getByRole('switch', { name: 'Répéter' }))
+    })
+
+    const snapshot = JSON.parse(
+      screen.getByTestId('planning-draft-snapshot').textContent ?? '{}',
+    ) as {
+      startDate: string
+      startTime: string
+      endDate: string
+      endTime: string
+      repeatEnabled: boolean
+    }
+
+    expect(snapshot).toEqual({
+      startDate: '2026-07-19',
+      startTime: '10:00',
+      endDate: '2026-07-02',
+      endTime: '18:00',
+      repeatEnabled: true,
+    })
   })
 })

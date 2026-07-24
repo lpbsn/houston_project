@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import {
   formatPlanningSubmitFeedback,
@@ -12,6 +12,12 @@ import {
   buildActionPlanCreateRequest,
   buildDirectPlanningCreateRequest,
 } from '../lib/action-plan-create-payload'
+import { mapActionPlanApiErrors } from '../lib/action-plan-api-error-map'
+import {
+  clearActionPlanFieldErrorKey,
+  listActionPlanPayloadTaskIds,
+  mergeActionPlanFieldErrors,
+} from '../lib/action-plan-field-errors'
 import {
   hasActionPlanCreateFormErrors,
   validateActionPlanCreateForm,
@@ -19,7 +25,6 @@ import {
   type ActionPlanCreateFormValues,
 } from '../lib/action-plan-form-validation'
 import type { ActionPlanEventPlanningDraft } from '../lib/action-plan-event-planning-form'
-import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import {
   applyPlanningSubmissionIntent,
   clearPlanningSubmissionIntent,
@@ -54,28 +59,46 @@ export function useActionPlanCreateSubmit({
   onNavigate,
 }: UseActionPlanCreateSubmitOptions) {
   const createMutation = useCreateActionPlanMutation(establishmentId)
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [frontendFieldErrors, setFrontendFieldErrors] = useState<Record<string, string>>({})
+  const [apiFieldErrors, setApiFieldErrors] = useState<Record<string, string>>({})
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
+  const [guidanceNonce, setGuidanceNonce] = useState(0)
+
+  const revalidateFrontend = useCallback(
+    (values: ActionPlanCreateFormValues, planningDraft: ActionPlanEventPlanningDraft) => {
+      const errors = validateActionPlanCreateForm(values, {
+        canDefineCrossPoleTasks,
+        staffExecutionMode,
+      })
+      const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
+        saveToLibrary: values.saveToLibrary,
+        staffExecutionMode,
+      })
+      const merged = { ...errors, ...planningErrors }
+      setFrontendFieldErrors(merged)
+      return merged
+    },
+    [canDefineCrossPoleTasks, staffExecutionMode],
+  )
+
+  function clearApiFieldError(key: string) {
+    setApiFieldErrors((prev) => clearActionPlanFieldErrorKey(prev, key))
+  }
 
   async function submit(
     values: ActionPlanCreateFormValues,
     planningDraft: ActionPlanEventPlanningDraft,
   ) {
-    setSubmitError(null)
-    const errors = validateActionPlanCreateForm(values, {
-      canDefineCrossPoleTasks,
-      staffExecutionMode,
-    })
-    const planningErrors = validateActionPlanCreatePlanningErrors(planningDraft, {
-      saveToLibrary: values.saveToLibrary,
-      staffExecutionMode,
-    })
-    const mergedErrors = { ...errors, ...planningErrors }
-    setFieldErrors(mergedErrors)
+    setGlobalError(null)
+    setHasAttemptedSubmit(true)
+    const mergedErrors = revalidateFrontend(values, planningDraft)
     if (hasActionPlanCreateFormErrors(mergedErrors)) {
+      setGuidanceNonce((value) => value + 1)
       return false
     }
 
+    setApiFieldErrors({})
     try {
       if (values.saveToLibrary) {
         const response = await createMutation.mutateAsync(buildActionPlanCreateRequest(values))
@@ -96,7 +119,7 @@ export function useActionPlanCreateSubmit({
           staffMode: false,
         })
         if (!catalogSubmit || catalogSubmit.body.items.length === 0) {
-          setSubmitError('Le plan d’action n’a pas pu être créé.')
+          setGlobalError('Le plan d’action n’a pas pu être créé.')
           return false
         }
 
@@ -124,7 +147,7 @@ export function useActionPlanCreateSubmit({
         )
         clearPlanningSubmissionIntent(establishmentId, 'direct-create')
         if (!isActionPlanPlanningSubmitResponse(response)) {
-          setSubmitError('Le plan d’action n’a pas pu être créé.')
+          setGlobalError('Le plan d’action n’a pas pu être créé.')
           return false
         }
         notifySuccess({
@@ -152,17 +175,32 @@ export function useActionPlanCreateSubmit({
       onNavigate('/execution')
       return true
     } catch (error) {
-      setSubmitError(
-        resolveActionPlanErrorMessage(error, 'Le plan d’action n’a pas pu être créé.'),
-      )
+      const mapped = mapActionPlanApiErrors(error, {
+        payloadTaskIds: listActionPlanPayloadTaskIds(values.tasks),
+        taskListKey: 'tasks',
+        fallbackDetail: 'Le plan d’action n’a pas pu être créé.',
+      })
+      setApiFieldErrors(mapped.apiFieldErrors)
+      setGlobalError(mapped.globalError)
+      if (Object.keys(mapped.apiFieldErrors).length > 0) {
+        setGuidanceNonce((value) => value + 1)
+      }
       return false
     }
   }
 
   return {
     submit,
-    fieldErrors,
-    submitError,
+    frontendFieldErrors,
+    setFrontendFieldErrors,
+    revalidateFrontend,
+    apiFieldErrors,
+    clearApiFieldError,
+    globalError,
+    hasAttemptedSubmit,
+    guidanceNonce,
+    fieldErrors: mergeActionPlanFieldErrors(frontendFieldErrors, apiFieldErrors),
+    submitError: globalError,
     isSubmitting: createMutation.isPending,
   }
 }

@@ -10,6 +10,10 @@ import {
   type ActionPlanEventPlanningDraft,
 } from './action-plan-event-planning-form'
 import {
+  actionPlanTaskFieldKey,
+  isActionPlanTaskDraftActive,
+} from './action-plan-field-errors'
+import {
   createActionPlanAssigneeDraft,
   createActionPlanTaskDraft,
   type ActionPlanAssigneeDraft,
@@ -31,9 +35,8 @@ export type ActionPlanExecutionEditFormValues = {
   planningDraft: ActionPlanEventPlanningDraft
 }
 
-export type ActionPlanExecutionEditFormErrors = Partial<
-  Record<'title' | 'tasks' | 'assignees' | 'endAt' | 'submit', string>
->
+/** Flat field-error map (includes per-task keys `tasks.<id>.<field>`). */
+export type ActionPlanExecutionEditFormErrors = Record<string, string>
 
 export function isActionPlanExecutionTaskFrozen(
   task: Pick<ActionPlanTaskExecution, 'status'>,
@@ -147,6 +150,18 @@ function isRetainedPendingTask(
   return knownPendingTaskIds.has(task.id) || Boolean(task.task.trim())
 }
 
+export function listExecutionPendingPayloadTaskIds(
+  pendingTasks: ActionPlanTaskDraft[],
+  knownPendingTaskIds: ReadonlySet<string> | readonly string[],
+): string[] {
+  const known = knownPendingTaskIds instanceof Set
+    ? knownPendingTaskIds
+    : new Set(knownPendingTaskIds)
+  return pendingTasks
+    .filter((task) => isRetainedPendingTask(task, known))
+    .map((task) => task.id)
+}
+
 export function validateActionPlanExecutionEditForm(
   values: Pick<
     ActionPlanExecutionEditFormValues,
@@ -174,43 +189,57 @@ export function validateActionPlanExecutionEditForm(
   const retainedTasks = values.pendingTasks.filter((task) =>
     isRetainedPendingTask(task, knownPendingTaskIds),
   )
-  for (const task of retainedTasks) {
-    if (!task.task.trim()) {
-      errors.tasks = 'Chaque tâche conservée doit avoir un titre.'
-      break
-    }
-  }
 
   const totalTasks = retainedTasks.length + values.treatedTasks.length
-  if (!errors.tasks && totalTasks > MAX_TASKS) {
+  if (totalTasks > MAX_TASKS) {
     errors.tasks = `Maximum ${MAX_TASKS} tâches.`
   }
 
   for (const task of retainedTasks) {
     if (!task.task.trim()) {
+      errors[actionPlanTaskFieldKey(task.id, 'task')] =
+        'Chaque tâche conservée doit avoir un titre.'
       continue
     }
-    const effectiveBusinessUnitId = task.businessUnitId || values.pilotBusinessUnitId
-    if (!effectiveBusinessUnitId) {
-      errors.tasks = 'Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.'
-      break
-    }
-    if (
-      !options.canDefineCrossPoleTasks &&
-      values.pilotBusinessUnitId &&
-      effectiveBusinessUnitId !== values.pilotBusinessUnitId
-    ) {
-      errors.tasks = 'Les tâches hors pôle pilote sont réservées aux administrateurs.'
-      break
-    }
+
     if (
       task.assigneeMembershipId &&
       !task.businessUnitId &&
       task.assigneeBusinessUnitIds.length > 1
     ) {
-      errors.tasks = 'Choisissez le pôle de l’assigné pour chaque tâche concernée.'
-      break
+      errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] =
+        'Choisissez le pôle de l’assigné pour chaque tâche concernée.'
     }
+
+    const effectiveBusinessUnitId = task.businessUnitId || values.pilotBusinessUnitId
+    if (!effectiveBusinessUnitId) {
+      errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] =
+        'Chaque tâche doit avoir un pôle d’activité ou un pôle pilote.'
+    } else if (
+      !options.canDefineCrossPoleTasks &&
+      values.pilotBusinessUnitId &&
+      effectiveBusinessUnitId !== values.pilotBusinessUnitId
+    ) {
+      errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] =
+        'Les tâches hors pôle pilote sont réservées aux administrateurs.'
+    } else if (
+      options.staffMode &&
+      effectiveBusinessUnitId !== values.pilotBusinessUnitId
+    ) {
+      errors[actionPlanTaskFieldKey(task.id, 'businessUnitId')] =
+        'Les tâches staff doivent rester sur le pôle pilote.'
+    }
+  }
+
+  // Active non-retained drafts (e.g. new row with description only) must also be blocked.
+  for (const task of values.pendingTasks) {
+    if (knownPendingTaskIds.has(task.id) || task.task.trim()) {
+      continue
+    }
+    if (!isActionPlanTaskDraftActive(task)) {
+      continue
+    }
+    errors[actionPlanTaskFieldKey(task.id, 'task')] = 'Chaque tâche doit avoir un titre.'
   }
 
   const validAssignees = values.planningDraft.assignees.filter(
@@ -229,17 +258,6 @@ export function validateActionPlanExecutionEditForm(
       validAssignees[0]?.businessUnitId !== values.pilotBusinessUnitId
     ) {
       errors.assignees = 'Le staff ne peut s’assigner qu’à lui-même.'
-    }
-
-    for (const task of retainedTasks) {
-      if (!task.task.trim()) {
-        continue
-      }
-      const effectiveBusinessUnitId = task.businessUnitId || values.pilotBusinessUnitId
-      if (effectiveBusinessUnitId !== values.pilotBusinessUnitId) {
-        errors.tasks = 'Les tâches staff doivent rester sur le pôle pilote.'
-        break
-      }
     }
   }
 

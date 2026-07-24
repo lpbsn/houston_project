@@ -1,6 +1,12 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import { buildActionPlanUpdateRequest } from '../lib/action-plan-create-payload'
+import { mapActionPlanApiErrors } from '../lib/action-plan-api-error-map'
+import {
+  clearActionPlanFieldErrorKey,
+  listActionPlanPayloadTaskIds,
+  mergeActionPlanFieldErrors,
+} from '../lib/action-plan-field-errors'
 import {
   hasActionPlanCreateFormErrors,
   validateActionPlanCreateForm,
@@ -8,7 +14,6 @@ import {
 } from '../lib/action-plan-form-validation'
 import { notifySuccess } from '@/lib/success-toast'
 
-import { resolveActionPlanErrorMessage } from '../lib/action-plan-errors'
 import { useUpdateActionPlanMutation } from '../hooks'
 
 type UseActionPlanEditSubmitOptions = {
@@ -25,36 +30,69 @@ export function useActionPlanEditSubmit({
   onNavigate,
 }: UseActionPlanEditSubmitOptions) {
   const updateMutation = useUpdateActionPlanMutation(establishmentId, actionPlanId)
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [frontendFieldErrors, setFrontendFieldErrors] = useState<Record<string, string>>({})
+  const [apiFieldErrors, setApiFieldErrors] = useState<Record<string, string>>({})
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
+  const [guidanceNonce, setGuidanceNonce] = useState(0)
+
+  const revalidateFrontend = useCallback(
+    (values: ActionPlanCreateFormValues) => {
+      const errors = validateActionPlanCreateForm(values, {
+        canDefineCrossPoleTasks,
+      })
+      setFrontendFieldErrors(errors)
+      return errors
+    },
+    [canDefineCrossPoleTasks],
+  )
+
+  function clearApiFieldError(key: string) {
+    setApiFieldErrors((prev) => clearActionPlanFieldErrorKey(prev, key))
+  }
 
   async function submit(values: ActionPlanCreateFormValues) {
-    setSubmitError(null)
-    const errors = validateActionPlanCreateForm(values, {
-      canDefineCrossPoleTasks,
-    })
-    setFieldErrors(errors)
+    setGlobalError(null)
+    setHasAttemptedSubmit(true)
+    const errors = revalidateFrontend(values)
     if (hasActionPlanCreateFormErrors(errors)) {
+      setGuidanceNonce((value) => value + 1)
       return false
     }
 
+    setApiFieldErrors({})
     try {
       await updateMutation.mutateAsync(buildActionPlanUpdateRequest(values))
       notifySuccess({ message: 'Plan mis à jour.', kind: 'updated' })
       onNavigate(`/action-plans/${actionPlanId}`)
       return true
     } catch (error) {
-      setSubmitError(
-        resolveActionPlanErrorMessage(error, 'Le plan n’a pas pu être mis à jour.'),
-      )
+      const mapped = mapActionPlanApiErrors(error, {
+        payloadTaskIds: listActionPlanPayloadTaskIds(values.tasks),
+        taskListKey: 'tasks',
+        fallbackDetail: 'Le plan n’a pas pu être mis à jour.',
+      })
+      setApiFieldErrors(mapped.apiFieldErrors)
+      setGlobalError(mapped.globalError)
+      if (Object.keys(mapped.apiFieldErrors).length > 0) {
+        setGuidanceNonce((value) => value + 1)
+      }
       return false
     }
   }
 
   return {
     submit,
-    fieldErrors,
-    submitError,
+    frontendFieldErrors,
+    setFrontendFieldErrors,
+    revalidateFrontend,
+    apiFieldErrors,
+    clearApiFieldError,
+    globalError,
+    hasAttemptedSubmit,
+    guidanceNonce,
+    fieldErrors: mergeActionPlanFieldErrors(frontendFieldErrors, apiFieldErrors),
+    submitError: globalError,
     isSubmitting: updateMutation.isPending,
   }
 }

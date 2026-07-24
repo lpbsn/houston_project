@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { useAppRoute } from '@/app/app-routes'
@@ -31,6 +31,8 @@ import {
   type ActionPlanExecutionEditFormValues,
 } from '../lib/action-plan-execution-edit-form'
 import type { ActionPlanEventPlanningDraft } from '../lib/action-plan-event-planning-form'
+import { taskIdsNeedingAdvancedExpand } from '../lib/action-plan-field-errors'
+import { guideToFirstActionPlanFieldError } from '../lib/action-plan-form-guidance'
 import { canDefineCrossPoleTasks } from '../lib/action-plan-management-access'
 import { canShowActionPlanExecutionUpdate } from '../lib/action-plan-permission-hints'
 import type { ActionPlanTaskDraft } from '../lib/action-plan-form-validation'
@@ -52,6 +54,8 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
 
   const detailQuery = useActionPlanExecutionDetailQuery(establishmentId, executionId)
   const [form, setForm] = useState<ActionPlanExecutionEditFormValues | null>(null)
+  const formRootRef = useRef<HTMLDivElement>(null)
+  const lastGuidanceNonceRef = useRef(0)
 
   // Hydrate once on first load. Realtime refetch must not wipe local edits.
   // Conflict reload rehydrates explicitly via onConflictReload.
@@ -84,7 +88,16 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     [auth.activeMembership?.scopes, businessUnits, role],
   )
 
-  const { submit, fieldErrors, submitError, isSubmitting } = useActionPlanExecutionEditSubmit({
+  const {
+    submit,
+    fieldErrors,
+    submitError,
+    isSubmitting,
+    guidanceNonce,
+    hasAttemptedSubmit,
+    revalidateFrontend,
+    clearApiFieldError,
+  } = useActionPlanExecutionEditSubmit({
     establishmentId: establishmentId ?? '',
     executionId,
     canDefineCrossPoleTasks: canCrossPole,
@@ -98,6 +111,43 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
       }
     },
   })
+
+  const expandAdvancedTaskIds = useMemo(
+    () => new Set(taskIdsNeedingAdvancedExpand(fieldErrors)),
+    [fieldErrors],
+  )
+
+  useEffect(() => {
+    if (guidanceNonce <= lastGuidanceNonceRef.current) {
+      return
+    }
+    lastGuidanceNonceRef.current = guidanceNonce
+    if (Object.keys(fieldErrors).length === 0) {
+      return
+    }
+    return guideToFirstActionPlanFieldError(fieldErrors, {
+      root: formRootRef.current ?? document,
+    })
+  }, [fieldErrors, guidanceNonce])
+
+  useEffect(() => {
+    if (!form || !hasAttemptedSubmit) {
+      return
+    }
+    revalidateFrontend(form)
+  }, [form, hasAttemptedSubmit, revalidateFrontend])
+
+  function patchForm(patch: Partial<ActionPlanExecutionEditFormValues>) {
+    setForm((previousForm) => {
+      if (previousForm === null) {
+        return previousForm
+      }
+      return {
+        ...previousForm,
+        ...patch,
+      }
+    })
+  }
 
   if (!establishmentId) {
     return null
@@ -141,28 +191,57 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
     )
   }
 
-  function patchForm(patch: Partial<ActionPlanExecutionEditFormValues>) {
-    setForm((current) => (current ? { ...current, ...patch } : current))
+  function setPendingTasks(
+    update: ActionPlanTaskDraft[] | ((previous: ActionPlanTaskDraft[]) => ActionPlanTaskDraft[]),
+  ) {
+    setForm((previousForm) => {
+      if (previousForm === null) {
+        return previousForm
+      }
+      const pendingTasks =
+        typeof update === 'function' ? update(previousForm.pendingTasks) : update
+      return {
+        ...previousForm,
+        pendingTasks,
+      }
+    })
   }
 
-  function setPendingTasks(pendingTasks: ActionPlanTaskDraft[]) {
-    patchForm({ pendingTasks })
-  }
-
-  function setPlanningDraft(planningDraft: ActionPlanEventPlanningDraft) {
-    patchForm({ planningDraft })
+  function setPlanningDraft(
+    update:
+      | ActionPlanEventPlanningDraft
+      | ((previous: ActionPlanEventPlanningDraft) => ActionPlanEventPlanningDraft),
+  ) {
+    setForm((previousForm) => {
+      if (previousForm === null) {
+        return previousForm
+      }
+      const planningDraft =
+        typeof update === 'function' ? update(previousForm.planningDraft) : update
+      return {
+        ...previousForm,
+        planningDraft,
+      }
+    })
   }
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="space-y-3 px-3 pb-28 pt-2">
+      <div ref={formRootRef} className="space-y-3 px-3 pb-28 pt-2">
         <TerrainCard className="space-y-3">
-          <div>
+          <div data-action-plan-field="title">
             <TerrainFieldLabel>Titre</TerrainFieldLabel>
             <Input
               value={form.title}
-              onChange={(event) => patchForm({ title: event.target.value })}
-              className="h-11 border-[#E8E6DF]"
+              onChange={(event) => {
+                clearApiFieldError('title')
+                patchForm({ title: event.target.value })
+              }}
+              aria-invalid={fieldErrors.title ? true : undefined}
+              className={cn(
+                'h-11 border-[#E8E6DF]',
+                fieldErrors.title && 'border-destructive',
+              )}
             />
             {fieldErrors.title ? (
               <p className="mt-1 text-xs text-destructive">{fieldErrors.title}</p>
@@ -186,6 +265,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
             openPicker={null}
             onOpenPickerChange={() => undefined}
             onChange={() => undefined}
+            fieldKey="pilotBusinessUnitId"
           />
         </TerrainCard>
 
@@ -224,11 +304,12 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
           canDefineCrossPoleTasks={canCrossPole}
           staffMode={staffMode}
           businessUnits={visibleBusinessUnits}
+          fieldErrors={fieldErrors}
+          expandAdvancedNonce={guidanceNonce}
+          expandAdvancedTaskIds={expandAdvancedTaskIds}
           onTasksChange={setPendingTasks}
+          onTaskFieldChange={clearApiFieldError}
         />
-        {fieldErrors.tasks ? (
-          <p className="text-xs text-destructive">{fieldErrors.tasks}</p>
-        ) : null}
 
         <ActionPlanEventPlanningForm
           draft={form.planningDraft}
@@ -245,10 +326,7 @@ export function ActionPlanExecutionEditPage({ executionId }: ActionPlanExecution
           }}
           establishmentId={establishmentId}
           pilotBusinessUnitId={form.pilotBusinessUnitId}
-          fieldErrors={{
-            ...(fieldErrors.assignees ? { assignees: fieldErrors.assignees } : {}),
-            ...(fieldErrors.endAt ? { endAt: fieldErrors.endAt } : {}),
-          }}
+          fieldErrors={fieldErrors}
           onDraftChange={setPlanningDraft}
         />
 
