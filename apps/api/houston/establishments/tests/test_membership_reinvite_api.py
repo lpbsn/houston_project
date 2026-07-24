@@ -9,6 +9,11 @@ from rest_framework.test import APIClient
 
 from houston.accounts import tokens as auth_tokens
 from houston.accounts.models import User
+from houston.establishments.models import (
+    EstablishmentInvitation,
+    EstablishmentMembership,
+    MembershipScope,
+)
 from houston.establishments.tests.membership_api_helpers import (
     auth_headers,
     create_membership,
@@ -20,11 +25,6 @@ from houston.establishments.tests.taxonomy_helpers import (
     business_unit_scope_payload,
     create_business_unit,
     create_membership_with_business_unit_scope,
-)
-from houston.establishments.models import (
-    EstablishmentInvitation,
-    EstablishmentMembership,
-    MembershipScope,
 )
 
 pytestmark = pytest.mark.django_db
