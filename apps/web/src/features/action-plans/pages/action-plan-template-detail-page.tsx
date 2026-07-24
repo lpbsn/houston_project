@@ -1,6 +1,6 @@
 import { useMutationState } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAppRoute } from '@/app/app-routes'
 import { useAuth } from '@/app/auth-provider'
@@ -75,13 +75,23 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
   )
-  const [planningFieldErrors, setPlanningFieldErrors] = useState<Record<string, string>>({})
   const [hasAttemptedPlanningSubmit, setHasAttemptedPlanningSubmit] = useState(false)
   const [planningGuidanceNonce, setPlanningGuidanceNonce] = useState(0)
   const planningFormRootRef = useRef<HTMLDivElement>(null)
   const lastPlanningGuidanceNonceRef = useRef(0)
   const [feedback, setFeedback] = useState<{ variant: 'error' | 'success'; message: string } | null>(
     null,
+  )
+
+  const planningFieldErrors = useMemo(
+    () =>
+      hasAttemptedPlanningSubmit && detailQuery.data
+        ? validateCatalogPlanningDraft(planningDraft, {
+            canSchedule: canShowActionPlanSchedule(detailQuery.data.permission_hints),
+            staffMode: staffUseMode,
+          })
+        : {},
+    [detailQuery.data, hasAttemptedPlanningSubmit, planningDraft, staffUseMode],
   )
 
   useEffect(() => {
@@ -96,18 +106,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
       root: planningFormRootRef.current ?? document,
     })
   }, [planningFieldErrors, planningGuidanceNonce])
-
-  useEffect(() => {
-    if (!hasAttemptedPlanningSubmit || !detailQuery.data) {
-      return
-    }
-    setPlanningFieldErrors(
-      validateCatalogPlanningDraft(planningDraft, {
-        canSchedule: canShowActionPlanSchedule(detailQuery.data.permission_hints),
-        staffMode: staffUseMode,
-      }),
-    )
-  }, [detailQuery.data, hasAttemptedPlanningSubmit, planningDraft, staffUseMode])
 
   const displayedFeedback =
     feedback ??
@@ -168,7 +166,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
     clearPlanningSubmissionIntent(establishmentId, actionPlanId)
     setExecutionPanelOpen(false)
     setPlanningDraft(createActionPlanEventPlanningDraft())
-    setPlanningFieldErrors({})
     setHasAttemptedPlanningSubmit(false)
   }
 
@@ -201,7 +198,6 @@ export function ActionPlanTemplateDetailPage({ actionPlanId }: ActionPlanTemplat
   async function handleLaunchExecution() {
     setHasAttemptedPlanningSubmit(true)
     const errors = validateCatalogPlanningDraft(planningDraft, planningOptions)
-    setPlanningFieldErrors(errors)
     if (Object.keys(errors).length > 0) {
       setPlanningGuidanceNonce((value) => value + 1)
       return

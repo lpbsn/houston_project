@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { TerrainBottomSheet } from '@/components/ui/terrain'
 import { Button } from '@/components/ui/button'
@@ -54,12 +54,21 @@ function ActionPlanUseSheetBody({
   const [planningDraft, setPlanningDraft] = useState<ActionPlanEventPlanningDraft>(
     createActionPlanEventPlanningDraft,
   )
-  const [frontendFieldErrors, setFrontendFieldErrors] = useState<Record<string, string>>({})
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [guidanceNonce, setGuidanceNonce] = useState(0)
   const formRootRef = useRef<HTMLDivElement>(null)
   const lastGuidanceNonceRef = useRef(0)
 
+  const frontendFieldErrors = useMemo(
+    () =>
+      hasAttemptedSubmit
+        ? validateCatalogPlanningDraft(planningDraft, {
+            canSchedule,
+            staffMode: staffUseMode,
+          })
+        : {},
+    [hasAttemptedSubmit, planningDraft, canSchedule, staffUseMode],
+  )
   const planningOptions = { canSchedule, staffMode: staffUseMode }
   const primaryDisabled = isCatalogPlanningPrimaryDisabled(planningDraft, {
     ...planningOptions,
@@ -79,17 +88,9 @@ function ActionPlanUseSheetBody({
     })
   }, [frontendFieldErrors, guidanceNonce])
 
-  useEffect(() => {
-    if (!hasAttemptedSubmit) {
-      return
-    }
-    setFrontendFieldErrors(validateCatalogPlanningDraft(planningDraft, planningOptions))
-  }, [hasAttemptedSubmit, planningDraft, canSchedule, staffUseMode])
-
   function handlePrimaryAction() {
     setHasAttemptedSubmit(true)
     const errors = validateCatalogPlanningDraft(planningDraft, planningOptions)
-    setFrontendFieldErrors(errors)
     if (Object.keys(errors).length > 0) {
       setGuidanceNonce((value) => value + 1)
       return

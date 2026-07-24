@@ -276,6 +276,8 @@ export function ActionPlanCreatePage({
     canDefineCrossPoleTasks: canCrossPole,
     onNavigate: navigate,
   })
+  const revalidateCreateFrontend = createSubmit.revalidateFrontend
+  const revalidateEditFrontend = editSubmit.revalidateFrontend
 
   const resolvedFieldErrors = isTemplateEdit
     ? editSubmit.fieldErrors
@@ -313,31 +315,14 @@ export function ActionPlanCreatePage({
   }, [resolvedFieldErrors, resolvedGuidanceNonce])
 
   useEffect(() => {
-    if (!resolvedHasAttemptedSubmit || isTemplateEdit) {
-      return
-    }
-    createSubmit.revalidateFrontend(formValues, {
-      ...planningDraft,
-      assignees: effectiveAssignees,
-    })
-  }, [
-    createSubmit.revalidateFrontend,
-    effectiveAssignees,
-    formValues,
-    isTemplateEdit,
-    planningDraft,
-    resolvedHasAttemptedSubmit,
-  ])
-
-  useEffect(() => {
     if (!resolvedHasAttemptedSubmit) {
       return
     }
     if (isTemplateEdit) {
-      editSubmit.revalidateFrontend({ ...formValues, tasks })
+      revalidateEditFrontend({ ...formValues, tasks })
       return
     }
-    createSubmit.revalidateFrontend(
+    revalidateCreateFrontend(
       { ...formValues, tasks },
       {
         ...planningDraft,
@@ -345,13 +330,13 @@ export function ActionPlanCreatePage({
       },
     )
   }, [
-    createSubmit.revalidateFrontend,
-    editSubmit.revalidateFrontend,
     effectiveAssignees,
     formValues,
     isTemplateEdit,
     planningDraft,
     resolvedHasAttemptedSubmit,
+    revalidateCreateFrontend,
+    revalidateEditFrontend,
     tasks,
   ])
 
@@ -375,10 +360,10 @@ export function ActionPlanCreatePage({
       return
     }
     if (isTemplateEdit) {
-      editSubmit.revalidateFrontend(nextValues)
+      revalidateEditFrontend(nextValues)
       return
     }
-    createSubmit.revalidateFrontend(nextValues, nextPlanning)
+    revalidateCreateFrontend(nextValues, nextPlanning)
   }
 
   if (!establishmentId) {
