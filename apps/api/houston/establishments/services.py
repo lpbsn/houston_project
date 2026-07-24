@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -46,6 +47,7 @@ from houston.establishments.membership_scope import (
     MembershipScopeType,
     assign_membership_scopes,
     membership_business_unit_scope_ids,
+    membership_is_assignable_by_actor,
     membership_scope_covers_business_unit,
     normalize_membership_scope_inputs,
     scopes_not_allowed_for_role,
@@ -289,6 +291,12 @@ class MembershipReinviteConflictError(Exception):
     """Membership exists but is not in a reinvitable state (active/deactivated/owner/…)."""
 
     pass
+
+
+class ReinviteTargetDecision(str, Enum):
+    ALLOWED = "allowed"
+    FORBIDDEN = "forbidden"
+    NOT_ELIGIBLE = "not_eligible"
 
 
 @dataclass(frozen=True)
@@ -1944,21 +1952,31 @@ def actor_can_reinvite_target_membership(
     *,
     actor_membership: EstablishmentMembership | None,
     target_membership: EstablishmentMembership,
-) -> bool:
+) -> ReinviteTargetDecision:
     if actor_membership is None:
-        return False
+        return ReinviteTargetDecision.FORBIDDEN
+
     if target_membership.role == EstablishmentMembership.Role.OWNER:
-        return False
+        return ReinviteTargetDecision.NOT_ELIGIBLE
     if target_membership.status != EstablishmentMembership.Status.INVITED:
-        return False
+        return ReinviteTargetDecision.NOT_ELIGIBLE
     if target_membership.user.status != User.Status.PENDING:
-        return False
+        return ReinviteTargetDecision.NOT_ELIGIBLE
+
     if not _can_actor_invite_memberships(current_membership=actor_membership):
-        return False
-    return _can_actor_invite_role(
+        return ReinviteTargetDecision.FORBIDDEN
+    if not _can_actor_invite_role(
         actor_role=actor_membership.role,
         invited_role=target_membership.role,
-    )
+    ):
+        return ReinviteTargetDecision.FORBIDDEN
+    if not membership_is_assignable_by_actor(
+        actor=actor_membership,
+        target=target_membership,
+    ):
+        return ReinviteTargetDecision.FORBIDDEN
+
+    return ReinviteTargetDecision.ALLOWED
 
 
 @transaction.atomic
@@ -1984,6 +2002,7 @@ def reinvite_membership_for_establishment(
             "establishment",
             "establishment__organization",
         )
+        .prefetch_related("scope_links")
         .filter(
             id=membership_id,
             establishment_id=establishment_id,
@@ -1993,20 +2012,14 @@ def reinvite_membership_for_establishment(
     if membership is None:
         raise MembershipManagementNotFoundError
 
-    if membership.role == EstablishmentMembership.Role.OWNER:
+    decision = actor_can_reinvite_target_membership(
+        actor_membership=current_membership,
+        target_membership=membership,
+    )
+    if decision == ReinviteTargetDecision.FORBIDDEN:
+        raise MembershipManagementForbiddenError
+    if decision == ReinviteTargetDecision.NOT_ELIGIBLE:
         raise MembershipReinviteConflictError
-
-    if membership.status != EstablishmentMembership.Status.INVITED:
-        raise MembershipReinviteConflictError
-
-    if membership.user.status != User.Status.PENDING:
-        raise MembershipReinviteConflictError
-
-    if not _can_actor_invite_role(
-        actor_role=current_membership.role,
-        invited_role=membership.role,
-    ):
-        raise MembershipInvitationRoleNotAllowedError
 
     return _issue_establishment_invitation_for_membership(membership)
 

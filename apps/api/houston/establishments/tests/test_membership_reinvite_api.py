@@ -19,6 +19,7 @@ from houston.establishments.tests.membership_api_helpers import (
 from houston.establishments.tests.taxonomy_helpers import (
     business_unit_scope_payload,
     create_business_unit,
+    create_membership_with_business_unit_scope,
 )
 from houston.establishments.models import (
     EstablishmentInvitation,
@@ -357,3 +358,170 @@ def test_detail_marks_pending_invitation_expired(api_client):
     body = detail.json()
     assert body["pending_invitation"]["is_expired"] is True
     assert body["permission_hints"]["can_reinvite"] is True
+
+
+@override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=True)
+def test_manager_out_of_scope_cannot_reinvite(api_client, monkeypatch):
+    owner = create_user(username="owner_mgr_oos_reinvite")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    establishment = owner_membership.establishment
+    actor_unit = create_business_unit(establishment=establishment, key="housekeeping")
+    target_unit = create_business_unit(establishment=establishment, key="security")
+
+    invite_body, _ = _invite_staff(
+        api_client=api_client,
+        owner=owner,
+        establishment=establishment,
+        business_unit=target_unit,
+        email="oos-staff@example.com",
+    )
+    membership_id = invite_body["membership"]["id"]
+
+    manager = create_user(username="manager_oos_reinvite")
+    manager_membership = EstablishmentMembership.objects.create(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=actor_unit,
+    )
+
+    before = list(
+        EstablishmentInvitation.objects.filter(membership_id=membership_id)
+        .order_by("id")
+        .values_list("id", "token_digest", "revoked_at")
+    )
+    scheduled: list[object] = []
+    monkeypatch.setattr(
+        "houston.establishments.invitation_email.schedule_establishment_invitation_email",
+        lambda **kwargs: scheduled.append(kwargs) or "requested",
+    )
+
+    access_token = login(api_client, identifier=manager.email)
+    detail = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/memberships/{membership_id}/",
+        **auth_headers(access_token),
+    )
+    assert detail.status_code == 200
+    assert detail.json()["permission_hints"]["can_reinvite"] is False
+
+    csrf_token = ensure_csrf(api_client)
+    response = api_client.post(
+        f"/api/v1/establishments/{establishment.id}/memberships/{membership_id}/reinvite/",
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "membership_management_forbidden"
+
+    after = list(
+        EstablishmentInvitation.objects.filter(membership_id=membership_id)
+        .order_by("id")
+        .values_list("id", "token_digest", "revoked_at")
+    )
+    assert after == before
+    assert scheduled == []
+
+
+@override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=False)
+def test_manager_in_scope_can_reinvite(api_client):
+    owner = create_user(username="owner_mgr_in_scope_reinvite")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    establishment = owner_membership.establishment
+    business_unit = create_business_unit(establishment=establishment, key="housekeeping")
+
+    invite_body, _ = _invite_staff(
+        api_client=api_client,
+        owner=owner,
+        establishment=establishment,
+        business_unit=business_unit,
+        email="in-scope-staff@example.com",
+    )
+    membership_id = invite_body["membership"]["id"]
+    old_token = invite_body["invitation_token"]
+
+    manager = create_user(username="manager_in_scope_reinvite")
+    manager_membership = EstablishmentMembership.objects.create(
+        user=manager,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.MANAGER,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+    create_membership_with_business_unit_scope(
+        membership=manager_membership,
+        business_unit=business_unit,
+    )
+
+    access_token = login(api_client, identifier=manager.email)
+    detail = api_client.get(
+        f"/api/v1/establishments/{establishment.id}/memberships/{membership_id}/",
+        **auth_headers(access_token),
+    )
+    assert detail.status_code == 200
+    assert detail.json()["permission_hints"]["can_reinvite"] is True
+
+    csrf_token = ensure_csrf(api_client)
+    reinvite = api_client.post(
+        f"/api/v1/establishments/{establishment.id}/memberships/{membership_id}/reinvite/",
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+    assert reinvite.status_code == 200, reinvite.json()
+    body = reinvite.json()
+    assert body["invitation_token"]
+    assert body["invitation_token"] != old_token
+    assert body["membership"]["permission_hints"]["can_reinvite"] is True
+
+
+@override_settings(HOUSTON_INVITATION_EMAIL_ENABLED=False)
+def test_director_can_reinvite(api_client):
+    owner = create_user(username="owner_for_director_reinvite")
+    owner_membership = create_membership(
+        user=owner,
+        role=EstablishmentMembership.Role.OWNER,
+        name="Nice",
+    )
+    establishment = owner_membership.establishment
+    business_unit = create_business_unit(establishment=establishment, key="cuisine")
+
+    invite_body, _ = _invite_staff(
+        api_client=api_client,
+        owner=owner,
+        establishment=establishment,
+        business_unit=business_unit,
+        email="director-reinvite-staff@example.com",
+    )
+    membership_id = invite_body["membership"]["id"]
+    old_token = invite_body["invitation_token"]
+
+    director = create_user(username="director_reinvite")
+    EstablishmentMembership.objects.create(
+        user=director,
+        establishment=establishment,
+        role=EstablishmentMembership.Role.DIRECTOR,
+        status=EstablishmentMembership.Status.ACTIVE,
+    )
+
+    access_token = login(api_client, identifier=director.email)
+    csrf_token = ensure_csrf(api_client)
+    reinvite = api_client.post(
+        f"/api/v1/establishments/{establishment.id}/memberships/{membership_id}/reinvite/",
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf_token,
+        **auth_headers(access_token),
+    )
+    assert reinvite.status_code == 200, reinvite.json()
+    assert reinvite.json()["invitation_token"] != old_token

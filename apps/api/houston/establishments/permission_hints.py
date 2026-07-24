@@ -9,6 +9,7 @@ def build_membership_permission_hints(
     target_membership: EstablishmentMembership,
 ) -> dict[str, bool]:
     from houston.establishments.services import (
+        ReinviteTargetDecision,
         actor_can_reinvite_target_membership,
         can_actor_manage_target_membership,
     )
@@ -27,9 +28,12 @@ def build_membership_permission_hints(
     can_edit_status = (
         can_manage and target_membership.status != EstablishmentMembership.Status.INVITED
     )
-    can_reinvite = actor_can_reinvite_target_membership(
-        actor_membership=actor_membership,
-        target_membership=target_membership,
+    can_reinvite = (
+        actor_can_reinvite_target_membership(
+            actor_membership=actor_membership,
+            target_membership=target_membership,
+        )
+        == ReinviteTargetDecision.ALLOWED
     )
 
     return {
