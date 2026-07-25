@@ -15,11 +15,11 @@ from houston.ai.observation_pipeline import (
     establishment_can_run_observation_pipeline,
     evaluate_observation_pipeline_precondition,
 )
-from houston.establishments.models import Establishment
 from houston.ai.observation_pipeline_schema import (
     ObservationPipelineOutput,
     PipelineCandidateOutput,
 )
+from houston.establishments.models import Establishment
 from houston.observations.models import ObservationProcessing
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import CandidateSignal, Signal
