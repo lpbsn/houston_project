@@ -196,7 +196,11 @@ def validate_pipeline_v6_acceptance_corpus(
         errors,
     )
     cases = data.get("cases")
-    _require(isinstance(cases, list) and bool(cases), "corpus.cases must be a non-empty list", errors)
+    _require(
+        isinstance(cases, list) and bool(cases),
+        "corpus.cases must be a non-empty list",
+        errors,
+    )
     if not isinstance(cases, list):
         return errors
 
@@ -283,7 +287,11 @@ def validate_pipeline_v6_truth_tables(
         for row in rows:
             row_id = row.get("id")
             label = f"truth {section_name}/{row_id}"
-            _require(isinstance(row_id, str) and bool(row_id), f"{section_name}: row missing id", errors)
+            _require(
+                isinstance(row_id, str) and bool(row_id),
+                f"{section_name}: row missing id",
+                errors,
+            )
             if isinstance(row_id, str):
                 _require(row_id not in seen_ids, f"duplicate truth-table id: {row_id}", errors)
                 seen_ids.add(row_id)
@@ -333,7 +341,11 @@ def validate_pipeline_v6_lot_acceptance(
             errors,
         )
         for case_id in entry.get("case_ids", []):
-            _require(case_id in case_ids, f"LOT_ACCEPTANCE[{lot_id}] unknown case {case_id}", errors)
+            _require(
+                case_id in case_ids,
+                f"LOT_ACCEPTANCE[{lot_id}] unknown case {case_id}",
+                errors,
+            )
             case = cases_by_id.get(case_id)
             if case is not None:
                 _require(

@@ -45,7 +45,10 @@ METRIC_SPECS: dict[str, dict[str, str]] = {
     "H": {
         "name": "agregation_backend",
         "layer": "aggregation",
-        "measures": "agrégation resolved-only ; pas de fausse agrégation ; politique expected_action",
+        "measures": (
+            "agrégation resolved-only ; pas de fausse agrégation ; "
+            "politique expected_action"
+        ),
     },
     "I": {
         "name": "qualification_manuelle",

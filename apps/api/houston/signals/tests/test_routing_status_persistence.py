@@ -14,7 +14,6 @@ from houston.establishments.tests.taxonomy_helpers import (
 from houston.signals.models import ExpectedAction, Signal
 from houston.testing.factories import create_establishment
 
-
 pytestmark = pytest.mark.django_db
 
 

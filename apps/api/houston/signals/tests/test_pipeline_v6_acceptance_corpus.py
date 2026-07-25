@@ -340,7 +340,10 @@ def _assert_v5_baseline_runtime_golden_apply(case_id: str) -> None:
     expected_apply = golden["expected_apply"]
     assert result.created_count == expected_apply["created_count"]
     assert result.aggregated_count == expected_apply["aggregated_count"]
-    assert Signal.objects.filter(establishment=establishment).count() == expected_apply["signal_count"]
+    assert (
+        Signal.objects.filter(establishment=establishment).count()
+        == expected_apply["signal_count"]
+    )
 
 
 def _assert_v5_baseline_runtime_empty_candidates(case_id: str) -> None:
