@@ -12,7 +12,6 @@ from houston.signals.models import CandidateSignal, Signal, SignalSourceObservat
 from houston.signals.services import apply_pipeline_output
 from houston.signals.tests.conftest import (
     GOLDEN_OBSERVATION_TEXT,
-    RESTAURANT_MODULE_KEY,
     create_observation,
     create_restaurant_v3_taxonomy,
     golden_two_candidate_pipeline_output,

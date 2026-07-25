@@ -7,6 +7,7 @@ from houston.ai.observation_pipeline_schema import (
     PipelineCandidateOutput,
 )
 from houston.establishments.models import OperationalUnit
+from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
@@ -15,7 +16,6 @@ from houston.signals.constants import (
     AI_LOCATION_TEXT_MAX_LENGTH,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
 )
-from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.signals.models import Signal
 from houston.signals.routing_resolver import (
     resolve_candidate_routing,
