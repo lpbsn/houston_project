@@ -42,18 +42,23 @@ def legacy_signal(*, establishment, bar, subject, title="Rupture sirop mojito"):
     )
 
 
-def mojito_candidate(*, bar, subject, aggregate_into_signal_id=None):
-    return PipelineCandidateOutput(
-        title="Toujours plus de sirop mojito au bar",
-        structured_summary="La rupture de sirop mojito au bar persiste.",
-        issue_focus="sirop mojito",
-        affected_business_unit_routing_key=bar.routing_key,
-        responsible_business_unit_routing_key=bar.routing_key,
-        activity_subject_routing_key=subject.routing_key,
-        operational_unit_key=None,
-        location_text="Bar",
-        aggregate_into_signal_id=aggregate_into_signal_id,
-    )
+def mojito_candidate(*, bar, subject, **overrides):
+    payload = {
+        "title": "Toujours plus de sirop mojito au bar",
+        "structured_summary": "La rupture de sirop mojito au bar persiste.",
+        "issue_focus": "sirop mojito",
+        "canonical_object": "sirop mojito",
+        "signal_kind": "actionable",
+        "expected_action": "replenish",
+        "information_type": None,
+        "affected_business_unit_routing_key": bar.routing_key,
+        "responsible_business_unit_routing_key": bar.routing_key,
+        "activity_subject_routing_key": subject.routing_key,
+        "operational_unit_key": None,
+        "location_text": "Bar",
+    }
+    payload.update(overrides)
+    return PipelineCandidateOutput(**payload)
 
 
 def setup_hotel_taxonomy(establishment):
@@ -83,6 +88,10 @@ def output_with_candidate(
                 title="Clim en panne",
                 structured_summary="La climatisation ne fonctionne plus.",
                 issue_focus="climatisation",
+                canonical_object="clim",
+                signal_kind="actionable",
+                expected_action="repair",
+                information_type=None,
                 affected_business_unit_routing_key=affected_routing_key,
                 responsible_business_unit_routing_key=(
                     responsible_routing_key or affected_routing_key
@@ -90,7 +99,6 @@ def output_with_candidate(
                 activity_subject_routing_key=subject_routing_key,
                 operational_unit_key=None,
                 location_text=None,
-                aggregate_into_signal_id=None,
             )
         ],
     )
@@ -110,6 +118,10 @@ def fake_provider_payload(
                 "title": "Clim en panne",
                 "structured_summary": "La climatisation ne fonctionne plus.",
                 "issue_focus": issue_focus,
+                "canonical_object": issue_focus,
+                "signal_kind": "actionable",
+                "expected_action": "inspect",
+                "information_type": None,
                 "affected_business_unit_routing_key": affected_routing_key,
                 "responsible_business_unit_routing_key": (
                     responsible_routing_key or affected_routing_key
@@ -117,7 +129,6 @@ def fake_provider_payload(
                 "activity_subject_routing_key": subject_routing_key,
                 "operational_unit_key": None,
                 "location_text": None,
-                "aggregate_into_signal_id": None,
             }
         ],
     }

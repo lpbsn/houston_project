@@ -99,7 +99,6 @@ def test_legacy_empty_issue_focus_hint_mismatch_still_aggregates_via_fallback(ca
                     _mojito_candidate(
                         bar=bar,
                         subject=subject,
-                        aggregate_into_signal_id=str(legacy.id),
                     )
                 ],
             ),
@@ -116,7 +115,7 @@ def test_legacy_empty_issue_focus_hint_mismatch_still_aggregates_via_fallback(ca
         if getattr(r, "event", None) == "observation_pipeline_candidate_applied"
     ]
     assert len(records) == 1
-    assert records[0].hint_rejected_reason == "hint_issue_focus_mismatch"
+    assert getattr(records[0], "hint_rejected_reason", "") == ""
     assert records[0].aggregation_match_mode == "legacy_fallback"
 
 
@@ -183,12 +182,15 @@ def test_different_issue_focus_does_not_aggregate():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
-                    aggregate_into_signal_id=None,
                 )
             ],
         ),
@@ -288,12 +290,15 @@ def test_legacy_enriched_then_different_focus_creates_new():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
-                    aggregate_into_signal_id=None,
                 )
             ],
         ),
@@ -311,12 +316,15 @@ def test_legacy_enriched_then_different_focus_creates_new():
                     title="Rupture de pain blanc",
                     structured_summary="Le pain blanc est en rupture.",
                     issue_focus="pain blanc",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                     affected_business_unit_routing_key=bar.routing_key,
                     responsible_business_unit_routing_key=bar.routing_key,
                     activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
-                    aggregate_into_signal_id=None,
                 )
             ],
         ),

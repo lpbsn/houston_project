@@ -24,7 +24,7 @@ from houston.testing.factories import build_membership
 
 def test_prompt_version_constant_is_v6():
     assert AI_OBSERVATION_PIPELINE_PROMPT_VERSION == "ai_observation_pipeline_v6"
-    assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v5"
+    assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION == "ai_observation_pipeline_v6"
 
 
 def test_system_prompt_is_french_and_covers_dual_context():
@@ -35,10 +35,16 @@ def test_system_prompt_is_french_and_covers_dual_context():
     assert "establishment_context" in prompt
     assert "routing_taxonomy" in prompt
     assert "active_business_units" in prompt
+    assert "contexte structurel" in prompt
+    assert "seules clés runtime valides" in prompt
     assert "author_scope_business_unit_routing_keys" in prompt
     assert f"max {MAX_CANDIDATES_PER_OBSERVATION}" in prompt
     assert "MÉTHODE — ANALYSE PROBLÈME PAR PROBLÈME" in prompt
     assert "ISSUE_FOCUS" in prompt
+    assert "canonical_object" in prompt
+    assert "signal_kind" in prompt
+    assert "information_type" in prompt
+    assert "aggregate_into_signal_id" not in prompt
     assert "active_signals_context" not in prompt
     assert "establishment_taxonomy" not in prompt
     assert "PRIORITÉ TRANSVERSALE" in prompt
@@ -54,6 +60,7 @@ def test_system_prompt_is_french_and_covers_dual_context():
     assert "business_unit_key" not in prompt
     assert "normalized_name" not in prompt
     assert "location_text" in prompt
+    assert "routing_status" in prompt  # listed as hors périmètre
     assert AI_OBSERVATION_PIPELINE_SCHEMA_VERSION in prompt
 
 

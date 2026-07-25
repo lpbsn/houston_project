@@ -32,12 +32,15 @@ def test_compare_pipeline_output_flags_routing_and_issue_focus_mismatch():
                 title="Wrong routing candidate",
                 structured_summary="Candidate with wrong taxonomy routing.",
                 issue_focus=expected["issue_focus"],
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                 affected_business_unit_routing_key="maintenance",
                 responsible_business_unit_routing_key="maintenance",
                 activity_subject_routing_key="plomberie_eau",
                 operational_unit_key=None,
                 location_text="couloir",
-                aggregate_into_signal_id=None,
             )
         ],
     )

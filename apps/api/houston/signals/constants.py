@@ -6,10 +6,25 @@ SIGNAL_STRUCTURED_SUMMARY_MAX_LENGTH = 2000
 SIGNAL_LOCATION_TEXT_MAX_LENGTH = 255
 AI_LOCATION_TEXT_MAX_LENGTH = 120
 AI_ISSUE_FOCUS_MAX_LENGTH = 80
+AI_CANONICAL_OBJECT_MAX_LENGTH = 255
+AI_INFORMATION_TYPE_MAX_LENGTH = 64
 STRUCTURED_SUMMARY_SHORT_MAX_LENGTH = 280
 
-AI_OBSERVATION_PIPELINE_SCHEMA_VERSION = "ai_observation_pipeline_v5"
+AI_OBSERVATION_PIPELINE_SCHEMA_VERSION = "ai_observation_pipeline_v6"
 AI_OBSERVATION_PIPELINE_PROMPT_VERSION = "ai_observation_pipeline_v6"
+
+AI_SIGNAL_KIND_VALUES = ("actionable", "informational")
+AI_EXPECTED_ACTION_VALUES = (
+    "clean_secure",
+    "repair",
+    "replenish",
+    "inspect",
+    "coordinate",
+    "assist",
+    "inform",
+    "monitor",
+    "safety_response",
+)
 
 # Must stay aligned with Signal.Status.OPEN and Signal.Status.IN_PROGRESS.
 ACTIVE_SIGNAL_STATUSES = frozenset({"open", "in_progress"})

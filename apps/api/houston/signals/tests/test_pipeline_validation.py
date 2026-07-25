@@ -57,12 +57,15 @@ def test_validate_pipeline_output_rejects_whitespace_only_issue_focus():
                         title="Clim en panne",
                         structured_summary="La climatisation ne fonctionne plus.",
                         issue_focus="   ",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                         affected_business_unit_routing_key="hotel--hotel--0123456789abcdef",
                         responsible_business_unit_routing_key="hotel--hotel--0123456789abcdef",
                         activity_subject_routing_key="custom--maintenance--0123456789abcdef",
                         operational_unit_key=None,
                         location_text=None,
-                        aggregate_into_signal_id=None,
                     )
                 ],
             )
@@ -85,12 +88,15 @@ def test_apply_pipeline_rejects_whitespace_only_issue_focus():
                         title="Clim en panne",
                         structured_summary="La climatisation ne fonctionne plus.",
                         issue_focus="   ",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                         affected_business_unit_routing_key=hotel.routing_key,
                         responsible_business_unit_routing_key=hotel.routing_key,
                         activity_subject_routing_key=subject.routing_key,
                         operational_unit_key=None,
                         location_text=None,
-                        aggregate_into_signal_id=None,
                     )
                 ],
             ),
@@ -379,7 +385,7 @@ def test_observation_pipeline_links_created_signal_to_source_observation():
     assert link.link_type == SignalSourceObservation.LinkType.CREATED_FROM
 
 
-def test_apply_pipeline_persists_aggregate_hint_signal_id():
+def test_apply_pipeline_aggregates_exact_match_without_llm_hint():
     membership = build_membership()
     hotel = _setup_hotel_taxonomy(membership.establishment)
     subject = hotel.activity_subjects.get()
@@ -405,12 +411,15 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
                     title="Prolongation",
                     structured_summary="Même sujet, aggravation.",
                     issue_focus="maintenance",
+                    canonical_object="maintenance",
+                    signal_kind="actionable",
+                    expected_action="inspect",
+                    information_type=None,
                     affected_business_unit_routing_key=hotel.routing_key,
                     responsible_business_unit_routing_key=hotel.routing_key,
                     activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
-                    aggregate_into_signal_id=str(existing.id),
                 )
             ],
         ),
@@ -418,7 +427,7 @@ def test_apply_pipeline_persists_aggregate_hint_signal_id():
 
     assert outcome == ObservationProcessing.Outcome.SIGNAL_AGGREGATED
     row = CandidateSignal.objects.get(observation=observation)
-    assert row.ai_aggregate_hint_signal_id == existing.id
+    assert row.ai_aggregate_hint_signal_id is None
     assert row.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
     assert row.result_signal_id == existing.id
 
@@ -463,12 +472,15 @@ def test_apply_pipeline_rejects_hint_when_issue_focus_mismatch():
                     title="Rupture de pain",
                     structured_summary="Plus de pain disponible.",
                     issue_focus="pain",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                     affected_business_unit_routing_key=hotel.routing_key,
                     responsible_business_unit_routing_key=hotel.routing_key,
                     activity_subject_routing_key=subject.routing_key,
                     operational_unit_key=None,
                     location_text=None,
-                    aggregate_into_signal_id=str(mojito_signal.id),
                 )
             ],
         ),
@@ -509,12 +521,15 @@ def test_apply_pipeline_logs_candidate_applied_audit(caplog):
                         title="Prolongation",
                         structured_summary="Même sujet, aggravation.",
                         issue_focus="maintenance",
+                canonical_object="object",
+                signal_kind="actionable",
+                expected_action="inspect",
+                information_type=None,
                         affected_business_unit_routing_key=hotel.routing_key,
                         responsible_business_unit_routing_key=hotel.routing_key,
                         activity_subject_routing_key=subject.routing_key,
                         operational_unit_key=None,
                         location_text=None,
-                        aggregate_into_signal_id=str(existing.id),
                     )
                 ],
             ),
@@ -527,19 +542,20 @@ def test_apply_pipeline_logs_candidate_applied_audit(caplog):
     ]
     assert len(applied_records) == 1
     record = applied_records[0]
-    assert record.hint_used is True
+    assert record.hint_used is False
     assert getattr(record, "hint_rejected_reason", "") == ""
     assert record.candidate_outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
     assert record.aggregation_key
+    assert getattr(record, "aggregation_match_mode", "") == "exact"
     assert observation.raw_text not in caplog.text
 
 
-def test_apply_pipeline_logs_hint_rejected_on_issue_focus_mismatch(caplog):
+def test_apply_pipeline_logs_create_when_issue_focus_differs(caplog):
     membership = build_membership()
     hotel = _setup_hotel_taxonomy(membership.establishment)
     subject = hotel.activity_subjects.get()
     observation = create_observation(membership=membership)
-    mojito_signal = Signal.objects.create(
+    Signal.objects.create(
         establishment=membership.establishment,
         affected_business_unit=hotel,
         responsible_business_unit=hotel,
@@ -561,12 +577,15 @@ def test_apply_pipeline_logs_hint_rejected_on_issue_focus_mismatch(caplog):
                         title="Rupture de pain",
                         structured_summary="Plus de pain disponible.",
                         issue_focus="pain",
+                        canonical_object="pain",
+                        signal_kind="actionable",
+                        expected_action="replenish",
+                        information_type=None,
                         affected_business_unit_routing_key=hotel.routing_key,
                         responsible_business_unit_routing_key=hotel.routing_key,
                         activity_subject_routing_key=subject.routing_key,
                         operational_unit_key=None,
                         location_text=None,
-                        aggregate_into_signal_id=str(mojito_signal.id),
                     )
                 ],
             ),
@@ -580,5 +599,5 @@ def test_apply_pipeline_logs_hint_rejected_on_issue_focus_mismatch(caplog):
     assert len(applied_records) == 1
     record = applied_records[0]
     assert record.hint_used is False
-    assert record.hint_rejected_reason == "hint_issue_focus_mismatch"
+    assert getattr(record, "hint_rejected_reason", "") == ""
     assert record.candidate_outcome == CandidateSignal.Outcome.CREATED_SIGNAL

@@ -1,4 +1,4 @@
-"""V6 truth-table runners — Lot 1/2 + Lot 3 CTX-*."""
+"""V6 truth-table runners — Lot 1/2 + Lot 3 CTX-* + Lot 4 ERR-02/03."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from houston.ai.observation_pipeline import (
     establishment_can_run_observation_pipeline,
     evaluate_observation_pipeline_precondition,
 )
+from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
 from houston.establishments.business_unit_identity import normalize_generic_activity_subject_name
 from houston.establishments.models import ActivitySubject, BusinessUnit, CatalogActivitySubject
 from houston.establishments.taxonomy_snapshot import (
@@ -37,6 +38,7 @@ from houston.signals.models import Signal
 from houston.signals.services import run_observation_pipeline
 from houston.signals.signal_classification import routing_status_for_classification
 from houston.signals.tests.conftest import create_observation
+from houston.signals.tests.pipeline_helpers import fake_provider_payload
 from houston.testing.action_plan_pipeline import create_action_plan_task_observation
 from houston.testing.factories import build_membership, create_establishment
 from houston.testing.pipeline_v6_acceptance import (
@@ -70,8 +72,12 @@ LOT3_IMPLEMENTED_TRUTH_ROWS = frozenset(
         "CTX-08",
     }
 )
+LOT4_IMPLEMENTED_TRUTH_ROWS = frozenset({"ERR-02", "ERR-03"})
 IMPLEMENTED_TRUTH_ROWS = (
-    LOT1_IMPLEMENTED_TRUTH_ROWS | LOT2_IMPLEMENTED_TRUTH_ROWS | LOT3_IMPLEMENTED_TRUTH_ROWS
+    LOT1_IMPLEMENTED_TRUTH_ROWS
+    | LOT2_IMPLEMENTED_TRUTH_ROWS
+    | LOT3_IMPLEMENTED_TRUTH_ROWS
+    | LOT4_IMPLEMENTED_TRUTH_ROWS
 )
 
 # Lot 2 owns precondition start; Signal unassigned creation is Lot 5.
@@ -295,6 +301,79 @@ def _run_err_01(row: dict) -> dict:
         "error_code": processing.last_error_code,
         "routing_status": None,
         "signal_created": signal_created,
+    }
+
+
+def _run_err_02(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hôtel",
+    )
+    create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    observation = create_observation(membership=membership)
+    provider = FakeObservationPipelineProvider(
+        exc=ObservationPipelineTimeoutError("provider timeout"),
+    )
+    with pytest.raises(ObservationPipelineTimeoutError):
+        run_observation_pipeline(observation.id, provider=provider)
+    processing = observation.processing
+    processing.refresh_from_db()
+    return {
+        "error_code": processing.last_error_code,
+        "routing_status": None,
+        "signal_created": Signal.objects.filter(
+            establishment=membership.establishment,
+        ).exists(),
+    }
+
+
+def _run_err_03(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment,
+        key="hotel",
+        label="Hôtel",
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    observation = create_observation(membership=membership)
+    # Valid taxonomy keys but schema-invalid payload (missing V6 required fields).
+    invalid_payload = {
+        "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+        "candidates": [
+            {
+                "title": "Broken",
+                "structured_summary": "Missing required V6 fields.",
+                "issue_focus": "broken",
+            }
+        ],
+    }
+    # Ensure fake helper shape itself is parseable when complete (contract guard).
+    assert ObservationPipelineOutput.model_validate(
+        fake_provider_payload(
+            affected_routing_key=hotel.routing_key,
+            subject_routing_key=subject.routing_key,
+        )
+    )
+    provider = FakeObservationPipelineProvider(payload=invalid_payload)
+    run_observation_pipeline(observation.id, provider=provider)
+    processing = observation.processing
+    processing.refresh_from_db()
+    return {
+        "error_code": processing.last_error_code,
+        "routing_status": None,
+        "signal_created": Signal.objects.filter(
+            establishment=membership.establishment,
+        ).exists(),
     }
 
 
@@ -537,6 +616,8 @@ def _run_v6_truth_row(row: dict) -> dict:
         "PRE-03": _run_pre_03,
         "PRE-04": _run_pre_04,
         "ERR-01": _run_err_01,
+        "ERR-02": _run_err_02,
+        "ERR-03": _run_err_03,
         "CTX-01": _run_ctx_01,
         "CTX-02": _run_ctx_02,
         "CTX-03": _run_ctx_03,
@@ -624,3 +705,14 @@ def test_no_lot3_truth_row_remains_unimplemented_xfail():
     }
     assert lot3_ids
     assert lot3_ids <= LOT3_IMPLEMENTED_TRUTH_ROWS
+
+
+def test_no_lot4_truth_row_remains_unimplemented_xfail():
+    lot4_ids = {
+        row["id"]
+        for _, row in iter_truth_table_rows()
+        if row.get("owning_lot") == "lot4"
+    }
+    assert lot4_ids
+    assert lot4_ids <= LOT4_IMPLEMENTED_TRUTH_ROWS
+    assert lot4_ids == LOT4_IMPLEMENTED_TRUTH_ROWS

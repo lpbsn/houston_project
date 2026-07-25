@@ -43,12 +43,15 @@ def _candidate(hotel, subject, **overrides) -> PipelineCandidateOutput:
         "title": "Issue",
         "structured_summary": "Structured summary for tests.",
         "issue_focus": "maintenance",
+        "canonical_object": "object",
+        "signal_kind": "actionable",
+        "expected_action": "inspect",
+        "information_type": None,
         "affected_business_unit_routing_key": hotel.routing_key,
         "responsible_business_unit_routing_key": hotel.routing_key,
         "activity_subject_routing_key": subject.routing_key,
         "operational_unit_key": None,
         "location_text": None,
-        "aggregate_into_signal_id": None,
     }
     base.update(overrides)
     return PipelineCandidateOutput(**base)

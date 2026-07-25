@@ -129,6 +129,8 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "provider_contract_v6_fake_ci",
             "nullable_routing_keys",
             "no_backend_only_fields_in_llm_schema",
+            "truth_table_provider_errors_green",
+            "no_aggregate_into_signal_id_in_contract",
         ],
         "case_ids": ["S15-05", "S15-06", "S15-07", "S15-11", "S15-12", "S15-14"],
         "truth_row_ids": ["ERR-02", "ERR-03"],
