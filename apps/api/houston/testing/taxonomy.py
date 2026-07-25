@@ -36,6 +36,7 @@ class RestaurantV3Taxonomy:
     bar: BusinessUnit
     lighting_subject: ActivitySubject | None
     stock_subject: ActivitySubject | None
+    restaurant_subject: ActivitySubject | None = None
 
 
 def create_business_unit(
@@ -218,12 +219,20 @@ def create_restaurant_v3_taxonomy(
     include_maintenance_transversal: bool = True,
     include_lighting_subject: bool = True,
     include_bar_stock: bool = True,
+    include_restaurant_subject: bool = False,
 ) -> RestaurantV3Taxonomy:
     restaurant = _get_or_create_business_unit(
         establishment=establishment,
         key=RESTAURANT_MODULE_KEY,
         label="Restaurant",
     )
+    restaurant_subject = None
+    if include_restaurant_subject:
+        restaurant_subject = _get_or_create_activity_subject(
+            establishment=establishment,
+            business_unit=restaurant,
+            label="Salle",
+        )
     maintenance = None
     lighting_subject = None
     if include_maintenance_transversal:
@@ -257,6 +266,7 @@ def create_restaurant_v3_taxonomy(
         bar=bar,
         lighting_subject=lighting_subject,
         stock_subject=stock_subject,
+        restaurant_subject=restaurant_subject,
     )
 
 

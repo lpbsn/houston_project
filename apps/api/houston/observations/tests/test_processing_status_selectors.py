@@ -135,6 +135,7 @@ def test_processing_status_updated_count_for_aggregation():
         establishment=membership.establishment,
         bar=bar,
         subject=subject,
+        issue_focus="sirop mojito",
     )
     observation = create_observation(membership=membership)
     apply_pipeline_output(
@@ -144,6 +145,10 @@ def test_processing_status_updated_count_for_aggregation():
             candidates=[mojito_candidate(bar=bar, subject=subject)],
         ),
     )
+    candidate = CandidateSignal.objects.get(observation=observation)
+    assert candidate.outcome == CandidateSignal.Outcome.AGGREGATED_SIGNAL
+    assert candidate.result_signal_id == legacy.id
+
     processing = observation.processing
     processing.status = ObservationProcessing.Status.PROCESSED
     processing.outcome = ObservationProcessing.Outcome.SIGNAL_AGGREGATED
