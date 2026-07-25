@@ -92,6 +92,7 @@ def test_pipeline_v6_truth_tables_loadable():
         "persistence",
         "aggregation",
         "errors",
+        "context",
     }
 
 

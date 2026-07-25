@@ -1,4 +1,4 @@
-"""V6 truth-table runners — Lot 1 PERS-01/02/04; Lot 2 PRE-*/PERS-03/ERR-01."""
+"""V6 truth-table runners — Lot 1/2 + Lot 3 CTX-*."""
 
 from __future__ import annotations
 
@@ -14,20 +14,30 @@ from houston.ai.observation_pipeline import (
     FakeObservationPipelineProvider,
     ObservationPipelineSkippedError,
     ObservationPipelineTimeoutError,
+    _resolve_action_plan_business_unit_context,
+    build_pipeline_input,
     establishment_can_run_observation_pipeline,
     evaluate_observation_pipeline_precondition,
 )
-from houston.establishments.models import BusinessUnit
+from houston.establishments.business_unit_identity import normalize_generic_activity_subject_name
+from houston.establishments.models import ActivitySubject, BusinessUnit, CatalogActivitySubject
+from houston.establishments.taxonomy_snapshot import (
+    build_active_business_units,
+    build_routing_taxonomy,
+)
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
     create_business_unit,
+    create_membership_with_business_unit_scope,
 )
 from houston.observations.models import ObservationProcessing
+from houston.signals.catalog_capabilities import CATALOG_CAPABILITIES_VERSION
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
 from houston.signals.models import Signal
 from houston.signals.services import run_observation_pipeline
 from houston.signals.signal_classification import routing_status_for_classification
 from houston.signals.tests.conftest import create_observation
+from houston.testing.action_plan_pipeline import create_action_plan_task_observation
 from houston.testing.factories import build_membership, create_establishment
 from houston.testing.pipeline_v6_acceptance import (
     get_truth_table_row,
@@ -48,7 +58,21 @@ LOT2_IMPLEMENTED_TRUTH_ROWS = frozenset(
         "ERR-01",
     }
 )
-IMPLEMENTED_TRUTH_ROWS = LOT1_IMPLEMENTED_TRUTH_ROWS | LOT2_IMPLEMENTED_TRUTH_ROWS
+LOT3_IMPLEMENTED_TRUTH_ROWS = frozenset(
+    {
+        "CTX-01",
+        "CTX-02",
+        "CTX-03",
+        "CTX-04",
+        "CTX-05",
+        "CTX-06",
+        "CTX-07",
+        "CTX-08",
+    }
+)
+IMPLEMENTED_TRUTH_ROWS = (
+    LOT1_IMPLEMENTED_TRUTH_ROWS | LOT2_IMPLEMENTED_TRUTH_ROWS | LOT3_IMPLEMENTED_TRUTH_ROWS
+)
 
 # Lot 2 owns precondition start; Signal unassigned creation is Lot 5.
 LOT2_PARTIAL_EXPECTED_KEYS = {
@@ -274,6 +298,233 @@ def _run_err_01(row: dict) -> dict:
     }
 
 
+def _catalog_key_for_active(unit: dict, *, establishment) -> str | None:
+    bu = BusinessUnit.objects.get(id=unit["id"], establishment=establishment)
+    if bu.catalog_business_unit_id is None:
+        return None
+    return bu.catalog_business_unit.key
+
+
+def _run_ctx_01(row: dict) -> dict:
+    establishment = create_establishment()
+    create_business_unit(establishment=establishment, key="spa", label="Spa")
+    hotel = create_business_unit(establishment=establishment, key="hotel", label="Hôtel")
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Ménage",
+    )
+    active = build_active_business_units(establishment_id=establishment.id)
+    routing = build_routing_taxonomy(establishment_id=establishment.id)
+    active_keys = {
+        _catalog_key_for_active(unit, establishment=establishment) for unit in active
+    }
+    routing_keys = {unit["catalog_key"] for unit in routing["business_units"]}
+    return {
+        "active_includes": sorted(k for k in active_keys if k in {"spa", "hotel"}),
+        "routing_excludes": ["spa"] if "spa" not in routing_keys else [],
+        "routing_includes": sorted(k for k in routing_keys if k in {"spa", "hotel"}),
+    }
+
+
+def _run_ctx_02(row: dict) -> dict:
+    establishment = create_establishment()
+    for key, label in (("spa", "Spa"), ("hotel", "Hôtel"), ("bar", "Bar")):
+        create_business_unit(establishment=establishment, key=key, label=label)
+    active = build_active_business_units(establishment_id=establishment.id)
+    return {
+        "active_count": len(active),
+        "active_omitted": len(active) != 3,
+    }
+
+
+def _run_ctx_03(row: dict) -> dict:
+    membership = build_membership()
+    establishment = membership.establishment
+    rooftop = create_business_unit(
+        establishment=establishment, key="rooftop", label="Rooftop"
+    )
+    food_court = create_business_unit(
+        establishment=establishment, key="food_court", label="Food Court"
+    )
+    create_activity_subject(
+        establishment=establishment, business_unit=rooftop, label="Service"
+    )
+    create_activity_subject(
+        establishment=establishment, business_unit=food_court, label="Service"
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership, business_unit=rooftop
+    )
+    create_membership_with_business_unit_scope(
+        membership=membership, business_unit=food_court
+    )
+    observation = create_observation(membership=membership)
+    payload = build_pipeline_input(observation=observation)
+    keys = payload["submission_context"]["author_scope_business_unit_routing_keys"]
+    return {
+        "author_scope_count": len(keys),
+        "author_scopes_sorted": keys == sorted(keys),
+        "author_scopes_deduped": len(keys) == len(set(keys)),
+    }
+
+
+def _run_ctx_04(row: dict) -> dict:
+    membership = build_membership()
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+    )
+    create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=maintenance,
+        label="Task subject",
+    )
+    observation = create_action_plan_task_observation(
+        membership=membership,
+        task_business_unit=maintenance,
+        pilot_business_unit=maintenance,
+    )
+    payload = build_pipeline_input(observation=observation)
+    ctx = payload["action_plan_context"]
+    return {
+        "context_business_unit_source": ctx["context_business_unit_source"],
+        "business_unit_routing_key_null": ctx["business_unit_routing_key"] is None,
+    }
+
+
+def _run_ctx_05(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+    )
+    create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=maintenance,
+        label="Pilot subject",
+    )
+    observation = create_action_plan_task_observation(
+        membership=membership,
+        task_business_unit=hotel,
+        pilot_business_unit=maintenance,
+    )
+    payload = build_pipeline_input(observation=observation)
+    ctx = payload["action_plan_context"]
+    return {
+        "context_business_unit_source": ctx["context_business_unit_source"],
+        "business_unit_routing_key_null": ctx["business_unit_routing_key"] is None,
+        "uses_pilot_name": ctx["business_unit_specific_name"] == maintenance.specific_name,
+    }
+
+
+def _run_ctx_06(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    spa = create_business_unit(
+        establishment=membership.establishment, key="spa", label="Spa"
+    )
+    observation = create_action_plan_task_observation(
+        membership=membership,
+        task_business_unit=hotel,
+        pilot_business_unit=spa,
+    )
+    payload = build_pipeline_input(observation=observation)
+    ctx = payload["action_plan_context"]
+    return {
+        "business_unit_routing_key_null": ctx["business_unit_routing_key"] is None,
+        "business_unit_specific_name_null": ctx["business_unit_specific_name"] is None,
+        "context_business_unit_source": ctx["context_business_unit_source"],
+    }
+
+
+def _run_ctx_07(row: dict) -> dict:
+    routing_key, specific_name, source = _resolve_action_plan_business_unit_context(
+        task_business_unit=None,
+        pilot_business_unit=None,
+        routable_keys=set(),
+    )
+    return {
+        "business_unit_routing_key_null": routing_key is None,
+        "business_unit_specific_name_null": specific_name is None,
+        "context_business_unit_source": source,
+    }
+
+
+def _run_ctx_08(row: dict) -> dict:
+    membership = build_membership()
+    establishment = membership.establishment
+    hotel = create_business_unit(
+        establishment=establishment, key="hotel", label="Hôtel"
+    )
+    known_catalog = CatalogActivitySubject.objects.create(
+        catalog_business_unit=hotel.catalog_business_unit,
+        key="hotel__menage",
+        label="Ménage",
+        description="Propreté",
+        active=True,
+        sort_order=1,
+    )
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=hotel,
+        catalog_activity_subject=known_catalog,
+        normalized_name=normalize_generic_activity_subject_name(known_catalog.label),
+        label="",
+        description="",
+        routing_key=known_catalog.key,
+        source=ActivitySubject.Source.CATALOG_SUGGESTION,
+        active=True,
+    )
+    unknown_catalog = CatalogActivitySubject.objects.create(
+        catalog_business_unit=hotel.catalog_business_unit,
+        key="hotel__unknown_capability_subject",
+        label="Inconnu capacités",
+        description="",
+        active=True,
+        sort_order=2,
+    )
+    ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=hotel,
+        catalog_activity_subject=unknown_catalog,
+        normalized_name=normalize_generic_activity_subject_name(unknown_catalog.label),
+        label="",
+        description="",
+        routing_key=unknown_catalog.key,
+        source=ActivitySubject.Source.CATALOG_SUGGESTION,
+        active=True,
+    )
+    create_activity_subject(
+        establishment=establishment,
+        business_unit=hotel,
+        label="Machine à café",
+    )
+    taxonomy = build_routing_taxonomy(establishment_id=establishment.id)
+    subjects = {
+        item["routing_key"]: item
+        for item in taxonomy["business_units"][0]["activity_subjects"]
+    }
+    free_subject = next(s for s in subjects.values() if s["source"] == "free")
+    return {
+        "capabilities_version_present": (
+            taxonomy.get("capabilities_version") == CATALOG_CAPABILITIES_VERSION
+        ),
+        "known_capabilities_non_empty": bool(subjects[known_catalog.key]["capabilities"]),
+        "unknown_capabilities_empty": subjects[unknown_catalog.key]["capabilities"] == [],
+        "free_capabilities_empty": free_subject["capabilities"] == [],
+    }
+
+
 def _run_v6_truth_row(row: dict) -> dict:
     row_id = row["id"]
     runners = {
@@ -286,6 +537,14 @@ def _run_v6_truth_row(row: dict) -> dict:
         "PRE-03": _run_pre_03,
         "PRE-04": _run_pre_04,
         "ERR-01": _run_err_01,
+        "CTX-01": _run_ctx_01,
+        "CTX-02": _run_ctx_02,
+        "CTX-03": _run_ctx_03,
+        "CTX-04": _run_ctx_04,
+        "CTX-05": _run_ctx_05,
+        "CTX-06": _run_ctx_06,
+        "CTX-07": _run_ctx_07,
+        "CTX-08": _run_ctx_08,
     }
     runner = runners.get(row_id)
     if runner is None:
@@ -328,6 +587,7 @@ def test_v6_truth_table_rows_have_owning_lot():
             "persistence",
             "aggregation",
             "errors",
+            "context",
         }
 
 
@@ -354,3 +614,13 @@ def test_no_lot2_truth_row_remains_unimplemented_xfail():
     }
     assert lot2_ids
     assert lot2_ids <= LOT2_IMPLEMENTED_TRUTH_ROWS
+
+
+def test_no_lot3_truth_row_remains_unimplemented_xfail():
+    lot3_ids = {
+        row["id"]
+        for _, row in iter_truth_table_rows()
+        if row.get("owning_lot") == "lot3"
+    }
+    assert lot3_ids
+    assert lot3_ids <= LOT3_IMPLEMENTED_TRUTH_ROWS

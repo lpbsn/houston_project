@@ -30,6 +30,7 @@ TRUTH_SECTIONS: tuple[str, ...] = (
     "persistence",
     "aggregation",
     "errors",
+    "context",
 )
 
 V6_ROUTING_STATUSES = frozenset({"resolved", "unassigned", None})

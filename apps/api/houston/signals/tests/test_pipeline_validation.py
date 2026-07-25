@@ -207,8 +207,18 @@ def test_precondition_gate_does_not_consult_snapshot_ready_and_calls_provider():
         "validated_text": observation.raw_text,
         "submitted_at": observation.submitted_at.isoformat(),
         "media_count": 0,
-        "establishment_taxonomy": {"business_units": [], "operational_units": []},
-        "active_signals_context": [],
+        "establishment_context": {
+            "id": str(membership.establishment_id),
+            "name": membership.establishment.name,
+            "activity_description": None,
+            "active_business_units": [],
+        },
+        "routing_taxonomy": {
+            "capabilities_version": "catalog_capabilities_v1",
+            "business_units": [],
+            "operational_units": [],
+        },
+        "submission_context": {"author_scope_business_unit_routing_keys": []},
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": "test",
     }

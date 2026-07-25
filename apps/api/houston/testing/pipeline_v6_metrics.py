@@ -69,6 +69,7 @@ SECTION_DEFAULT_METRICS: dict[str, tuple[str, ...]] = {
     "persistence": ("G",),
     "aggregation": ("H",),
     "errors": ("J",),
+    "context": ("C", "D", "E"),
 }
 
 LOT_IDS: tuple[str, ...] = tuple(f"lot{i}" for i in range(0, 11))
@@ -112,7 +113,16 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "author_and_action_plan_context",
         ],
         "case_ids": ["S15-08", "S15-09", "S15-10", "S15-15", "S15-16", "S15-17", "S15-D1"],
-        "truth_row_ids": [],
+        "truth_row_ids": [
+            "CTX-01",
+            "CTX-02",
+            "CTX-03",
+            "CTX-04",
+            "CTX-05",
+            "CTX-06",
+            "CTX-07",
+            "CTX-08",
+        ],
     },
     "lot4": {
         "criteria": [

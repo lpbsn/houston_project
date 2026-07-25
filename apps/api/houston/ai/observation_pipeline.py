@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from django.conf import settings
-from django.db.models import F, Q
 from pydantic import ValidationError as PydanticValidationError
 
 from houston.ai.models import AIUsageLog
@@ -19,20 +18,20 @@ from houston.ai.observation_pipeline_diagnostics import (
 from houston.ai.observation_pipeline_provider_schema import openai_strict_response_format
 from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
 from houston.core.observability import build_observation_pipeline_timing_log_context
+from houston.establishments.models import BusinessUnit, MembershipScope
 from houston.establishments.taxonomy_snapshot import (
-    build_establishment_taxonomy_snapshot,
+    build_establishment_context,
+    build_routing_taxonomy,
     establishment_has_any_active_business_unit,
     get_active_establishment_for_pipeline,
-    is_snapshot_ready_business_unit,
+    routing_taxonomy_business_unit_keys,
 )
 from houston.observations.models import Observation
 from houston.signals.constants import (
     AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-    MAX_ACTIVE_SIGNALS_CONTEXT,
     MAX_CANDIDATES_PER_OBSERVATION,
 )
-from houston.signals.selectors import active_signals_for_establishment
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +97,69 @@ class ObservationPipelineProvider(Protocol):
     def propose(self, *, input_payload: dict[str, Any]) -> ObservationPipelineProviderResponse: ...
 
 
-def _build_action_plan_context(*, observation: Observation) -> dict[str, Any] | None:
+def _build_author_scope_routing_keys(
+    *,
+    observation: Observation,
+    routable_keys: set[str],
+) -> list[str]:
+    membership = observation.submitted_by_membership
+    if membership is None:
+        return []
+    keys: set[str] = set()
+    scopes = MembershipScope.objects.filter(membership_id=membership.id).select_related(
+        "business_unit",
+    )
+    for scope in scopes:
+        business_unit = scope.business_unit
+        if business_unit is None or not business_unit.routing_key:
+            continue
+        if business_unit.routing_key in routable_keys:
+            keys.add(business_unit.routing_key)
+    return sorted(keys)
+
+
+def _resolve_action_plan_business_unit_context(
+    *,
+    task_business_unit: BusinessUnit | None,
+    pilot_business_unit: BusinessUnit | None,
+    routable_keys: set[str],
+) -> tuple[str | None, str | None, str | None]:
+    """
+    Return (routing_key, specific_name, source).
+
+    task preferred when routable; pilot when task missing/non-routable and pilot routable;
+    BU present but none routable → key null, keep priority name+source;
+    no task nor pilot BU → all null.
+    """
+    task_routable = (
+        task_business_unit is not None
+        and bool(task_business_unit.routing_key)
+        and task_business_unit.routing_key in routable_keys
+    )
+    pilot_routable = (
+        pilot_business_unit is not None
+        and bool(pilot_business_unit.routing_key)
+        and pilot_business_unit.routing_key in routable_keys
+    )
+
+    if task_routable:
+        assert task_business_unit is not None
+        return task_business_unit.routing_key, task_business_unit.specific_name, "task"
+    if pilot_routable:
+        assert pilot_business_unit is not None
+        return pilot_business_unit.routing_key, pilot_business_unit.specific_name, "pilot"
+    if task_business_unit is not None:
+        return None, task_business_unit.specific_name, "task"
+    if pilot_business_unit is not None:
+        return None, pilot_business_unit.specific_name, "pilot"
+    return None, None, None
+
+
+def _build_action_plan_context(
+    *,
+    observation: Observation,
+    routable_keys: set[str],
+) -> dict[str, Any] | None:
     if observation.origin != Observation.Origin.ACTION_PLAN_TASK:
         return None
     if (
@@ -109,11 +170,17 @@ def _build_action_plan_context(*, observation: Observation) -> dict[str, Any] | 
 
     execution = observation.action_plan_execution
     task_execution = observation.action_plan_execution_task
-    business_unit_routing_key = None
-    if execution.pilot_business_unit_id is not None:
-        pilot = execution.pilot_business_unit
-        if is_snapshot_ready_business_unit(pilot):
-            business_unit_routing_key = pilot.routing_key
+    task_business_unit = None
+    if task_execution.execution_team_id is not None:
+        task_business_unit = task_execution.execution_team.business_unit
+    pilot_business_unit = (
+        execution.pilot_business_unit if execution.pilot_business_unit_id is not None else None
+    )
+    routing_key, specific_name, source = _resolve_action_plan_business_unit_context(
+        task_business_unit=task_business_unit,
+        pilot_business_unit=pilot_business_unit,
+        routable_keys=routable_keys,
+    )
 
     return {
         "origin": Observation.Origin.ACTION_PLAN_TASK,
@@ -121,25 +188,33 @@ def _build_action_plan_context(*, observation: Observation) -> dict[str, Any] | 
         "action_plan_execution_task_id": str(task_execution.id),
         "plan_title": execution.title,
         "task": task_execution.task,
-        "business_unit_routing_key": business_unit_routing_key,
+        "business_unit_routing_key": routing_key,
+        "context_business_unit_source": source,
+        "business_unit_specific_name": specific_name,
     }
 
 
 def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
     observation = Observation.objects.select_related(
         "establishment",
+        "submitted_by_membership",
         "action_plan_execution",
         "action_plan_execution__pilot_business_unit",
         "action_plan_execution__pilot_business_unit__catalog_business_unit",
         "action_plan_execution_task",
+        "action_plan_execution_task__execution_team",
+        "action_plan_execution_task__execution_team__business_unit",
+        "action_plan_execution_task__execution_team__business_unit__catalog_business_unit",
     ).get(pk=observation.pk)
     establishment = observation.establishment
-    establishment_taxonomy = build_establishment_taxonomy_snapshot(
-        establishment_id=establishment.id,
-    )
+    establishment_context = build_establishment_context(establishment_id=establishment.id)
+    routing_taxonomy = build_routing_taxonomy(establishment_id=establishment.id)
+    routable_keys = routing_taxonomy_business_unit_keys(routing_taxonomy=routing_taxonomy)
     media_count = observation.media_items.count()
-    active_signals_context = _build_active_signals_context(establishment_id=establishment.id)
-    action_plan_context = _build_action_plan_context(observation=observation)
+    action_plan_context = _build_action_plan_context(
+        observation=observation,
+        routable_keys=routable_keys,
+    )
 
     payload: dict[str, Any] = {
         "observation_id": str(observation.id),
@@ -147,8 +222,14 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
         "validated_text": observation.raw_text,
         "submitted_at": observation.submitted_at.isoformat(),
         "media_count": media_count,
-        "establishment_taxonomy": establishment_taxonomy,
-        "active_signals_context": active_signals_context,
+        "establishment_context": establishment_context,
+        "routing_taxonomy": routing_taxonomy,
+        "submission_context": {
+            "author_scope_business_unit_routing_keys": _build_author_scope_routing_keys(
+                observation=observation,
+                routable_keys=routable_keys,
+            ),
+        },
         "schema_version": AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         "prompt_version": AI_OBSERVATION_PIPELINE_PROMPT_VERSION,
     }
@@ -182,54 +263,6 @@ def establishment_can_run_observation_pipeline(*, establishment_id: uuid.UUID) -
     except ObservationPipelineSkippedError:
         return False
     return True
-
-
-def _build_active_signals_context(*, establishment_id: uuid.UUID) -> list[dict[str, Any]]:
-    signals = (
-        active_signals_for_establishment(establishment_id=establishment_id)
-        .filter(
-            affected_business_unit__isnull=False,
-            responsible_business_unit__isnull=False,
-            activity_subject__isnull=False,
-            affected_business_unit__active=True,
-            responsible_business_unit__active=True,
-            activity_subject__active=True,
-            activity_subject__business_unit_id=F("responsible_business_unit_id"),
-        )
-        .exclude(
-            Q(affected_business_unit__routing_key__isnull=True)
-            | Q(affected_business_unit__routing_key="")
-            | Q(responsible_business_unit__routing_key__isnull=True)
-            | Q(responsible_business_unit__routing_key="")
-            | Q(activity_subject__routing_key__isnull=True)
-            | Q(activity_subject__routing_key="")
-        )
-        .order_by(
-            "-last_activity_at",
-            "-created_at",
-        )[:MAX_ACTIVE_SIGNALS_CONTEXT]
-    )
-    entries: list[dict[str, Any]] = []
-    for signal in signals:
-        entries.append(
-            {
-                "signal_id": str(signal.id),
-                "status": signal.status,
-                "title": signal.title,
-                "structured_summary": signal.structured_summary,
-                "affected_business_unit_routing_key": signal.affected_business_unit.routing_key,
-                "responsible_business_unit_routing_key": (
-                    signal.responsible_business_unit.routing_key
-                ),
-                "activity_subject_routing_key": signal.activity_subject.routing_key,
-                "operational_unit_key": (
-                    signal.operational_unit.key if signal.operational_unit_id else None
-                ),
-                "location_text": signal.location_text or None,
-                "issue_focus": signal.issue_focus or None,
-            }
-        )
-    return entries
 
 
 def parse_pipeline_output(payload: dict[str, Any]) -> ObservationPipelineOutput:
@@ -388,9 +421,10 @@ def call_observation_pipeline(
     input_started_at = time.monotonic()
     input_payload = build_pipeline_input(observation=observation)
     input_duration_ms = _elapsed_ms(input_started_at)
-    taxonomy = input_payload.get("establishment_taxonomy") or {}
-    business_unit_count = len(taxonomy.get("business_units") or [])
-    active_signal_context_count = len(input_payload.get("active_signals_context") or [])
+    establishment_context = input_payload.get("establishment_context") or {}
+    routing_taxonomy = input_payload.get("routing_taxonomy") or {}
+    business_unit_count = len(establishment_context.get("active_business_units") or [])
+    routing_taxonomy_business_unit_count = len(routing_taxonomy.get("business_units") or [])
     input_payload_bytes = len(
         json.dumps(input_payload, ensure_ascii=False).encode("utf-8"),
     )
@@ -402,7 +436,7 @@ def call_observation_pipeline(
             event="observation_pipeline_input_built",
             duration_ms=input_duration_ms,
             business_unit_count=business_unit_count,
-            active_signal_context_count=active_signal_context_count,
+            active_signal_context_count=routing_taxonomy_business_unit_count,
             input_payload_bytes=input_payload_bytes,
             provider=provider_name,
             model=provider_model,
@@ -572,18 +606,20 @@ Tu structures des remontées terrain en propositions CandidateSignal pour Housto
 
 CONTEXTE
 - Le message utilisateur est un JSON. Le texte à analyser est dans "validated_text".
-- Si "action_plan_context" est présent, l'observation provient d'une tâche de plan d'action :
-  utiliser plan_title, task et business_unit_routing_key (si non null)
-  pour affiner le routage ; ne pas répéter validated_text dans les champs de sortie.
-- La taxonomie autorisée est dans "establishment_taxonomy.business_units" avec :
-  routing_key, specific_name, generic_label, generic_description, instance_description,
-  unit_type (dedicated ou transversal), activity_subjects[].
-- Chaque activity_subject a routing_key, label, description, source.
-- Les unités de lieu structurées sont dans establishment_taxonomy.operational_units
-  (key, label, description).
-- Les signaux actifs éligibles à l'agrégation sont dans "active_signals_context"
-  (max {MAX_ACTIVE_SIGNALS_CONTEXT}) avec affected/responsible/activity_subject_routing_key.
-- Chaque routing_key doit exister dans ce snapshot runtime. N'invente jamais de clé.
+- "establishment_context" décrit l'établissement (id, name, activity_description) et
+  "active_business_units" (tous les pôles actifs, même non routables) — contexte structurel.
+- La taxonomie de routing autorisée est dans "routing_taxonomy.business_units" avec :
+  routing_key, specific_name, catalog_key, generic_label, generic_description,
+  instance_description, unit_type (dedicated ou transversal), activity_subjects[].
+- Chaque activity_subject a routing_key, label, description, source, catalog_key,
+  capabilities[] ; "routing_taxonomy.capabilities_version" versionne le mapping capacités.
+- Les unités de lieu structurées sont dans routing_taxonomy.operational_units (key, label).
+- "submission_context.author_scope_business_unit_routing_keys" liste 0/1/2+ rattachements
+  auteur (clés runtime taxonomy-only, sans identité nominative) pour aider affected.
+- Si "action_plan_context" est présent : utiliser plan_title, task,
+  business_unit_routing_key (si non null), context_business_unit_source (task|pilot)
+  et business_unit_specific_name pour affiner le routage ; ne pas répéter validated_text.
+- Chaque routing_key proposée doit exister dans routing_taxonomy. N'invente jamais de clé.
 - Les descriptions des pôles aident à distinguer périmètres et responsabilités.
 - Les images ne sont pas fournies ; "media_count" est informatif uniquement.
 
@@ -651,14 +687,8 @@ TEXTE DE SORTIE
   jamais le texte complet de validated_text.
 
 AGRÉGATION (optionnel)
-- aggregate_into_signal_id : UUID d'un signal dans active_signals_context UNIQUEMENT si :
-  (a) le problème prolonge clairement la même situation ouverte, ET
-  (b) issue_focus est identique (même focus stable) à la situation cible, ET
-  (c) la taxonomie (affected, responsible, activity_subject) est compatible.
-- Si le hint pointe vers un signal actif mais issue_focus diffère → null (créer nouveau Signal).
-- Anti-biais active_signals_context : la présence d'un signal actif sur un sujet proche
-  (ex. mojito actif) ne doit PAS faire agréger un problème différent (ex. pain).
-- Sans correspondance claire → aggregate_into_signal_id = null.
+- aggregate_into_signal_id : laisser null sauf correspondance évidente imposée ailleurs ;
+  l'agrégation exacte est déterminée côté backend. Ne pas inventer d'UUID.
 
 HORS PÉRIMÈTRE
 - urgence, priorité, detected_domains[], scores de confiance
@@ -682,7 +712,7 @@ def _system_prompt() -> str:
 
 
 def _default_fake_payload(input_payload: dict[str, Any]) -> dict[str, Any]:
-    taxonomy = input_payload.get("establishment_taxonomy") or {}
+    taxonomy = input_payload.get("routing_taxonomy") or {}
     business_units = taxonomy.get("business_units") or []
     if not business_units:
         return {

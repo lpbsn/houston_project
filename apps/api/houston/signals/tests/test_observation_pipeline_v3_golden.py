@@ -315,7 +315,7 @@ def test_g8_business_unit_description_in_pipeline_input():
 
     payload = build_pipeline_input(observation=observation)
 
-    hotel_unit = payload["establishment_taxonomy"]["business_units"][0]
+    hotel_unit = payload["routing_taxonomy"]["business_units"][0]
     assert hotel_unit["instance_description"] == "Regroupe chambres et couloirs."
     assert hotel_unit["routing_key"] == hotel.routing_key
 
