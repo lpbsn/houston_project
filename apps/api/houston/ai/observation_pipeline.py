@@ -21,7 +21,8 @@ from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
 from houston.core.observability import build_observation_pipeline_timing_log_context
 from houston.establishments.taxonomy_snapshot import (
     build_establishment_taxonomy_snapshot,
-    establishment_has_active_business_units,
+    establishment_has_any_active_business_unit,
+    get_active_establishment_for_pipeline,
     is_snapshot_ready_business_unit,
 )
 from houston.observations.models import Observation
@@ -67,10 +68,18 @@ class ObservationPipelineProviderBadRequestError(ObservationPipelineError):
     error_code = "provider_bad_request"
 
 
-class ObservationPipelineSkippedError(ObservationPipelineError):
-    """Establishment has no snapshot-ready business units — pipeline skips AI call."""
+PRECONDITION_INVALID_ESTABLISHMENT = "precondition_invalid_establishment"
+PRECONDITION_NO_ACTIVE_BUSINESS_UNIT = "precondition_no_active_business_unit"
 
-    error_code = "no_snapshot_ready_business_units"
+
+class ObservationPipelineSkippedError(ObservationPipelineError):
+    """Terminal pipeline precondition failure — no provider call, no Signal/Candidate."""
+
+    error_code = "observation_pipeline_precondition_failed"
+
+    def __init__(self, message: str, *, error_code: str):
+        super().__init__(message)
+        self.error_code = error_code
 
 
 @dataclass(frozen=True)
@@ -148,8 +157,31 @@ def build_pipeline_input(*, observation: Observation) -> dict[str, Any]:
     return payload
 
 
+def evaluate_observation_pipeline_precondition(*, establishment_id: uuid.UUID) -> None:
+    """
+    Raise ObservationPipelineSkippedError when the establishment cannot start the pipeline.
+
+    Order: invalid/non-ACTIVE establishment first, then zero active BusinessUnits.
+    Does not consult snapshot-ready / routing taxonomy.
+    """
+    if get_active_establishment_for_pipeline(establishment_id) is None:
+        raise ObservationPipelineSkippedError(
+            "Establishment is missing or not ACTIVE for observation pipeline.",
+            error_code=PRECONDITION_INVALID_ESTABLISHMENT,
+        )
+    if not establishment_has_any_active_business_unit(establishment_id=establishment_id):
+        raise ObservationPipelineSkippedError(
+            "Establishment has no active business units for observation pipeline.",
+            error_code=PRECONDITION_NO_ACTIVE_BUSINESS_UNIT,
+        )
+
+
 def establishment_can_run_observation_pipeline(*, establishment_id: uuid.UUID) -> bool:
-    return establishment_has_active_business_units(establishment_id=establishment_id)
+    try:
+        evaluate_observation_pipeline_precondition(establishment_id=establishment_id)
+    except ObservationPipelineSkippedError:
+        return False
+    return True
 
 
 def _build_active_signals_context(*, establishment_id: uuid.UUID) -> list[dict[str, Any]]:
@@ -345,12 +377,9 @@ def call_observation_pipeline(
     correlation_id: uuid.UUID | None = None,
 ) -> ObservationPipelineOutput:
     correlation_id = correlation_id or uuid.uuid4()
-    if not establishment_can_run_observation_pipeline(
+    evaluate_observation_pipeline_precondition(
         establishment_id=observation.establishment_id,
-    ):
-        raise ObservationPipelineSkippedError(
-            "Establishment has no snapshot-ready business units for pipeline routing."
-        )
+    )
 
     provider = provider or get_observation_pipeline_provider()
     provider_name = provider.provider

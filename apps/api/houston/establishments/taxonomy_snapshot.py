@@ -135,8 +135,27 @@ def build_establishment_taxonomy_snapshot(
 
 
 def establishment_has_active_business_units(*, establishment_id: uuid.UUID) -> bool:
+    """True when the establishment has at least one snapshot-ready BusinessUnit."""
     return snapshot_ready_business_units(establishment_id=establishment_id).exists()
+
+
+def establishment_has_any_active_business_unit(*, establishment_id: uuid.UUID) -> bool:
+    """True when the establishment has at least one active BusinessUnit (any identity)."""
+    return BusinessUnit.objects.filter(
+        establishment_id=establishment_id,
+        active=True,
+    ).exists()
 
 
 def get_establishment_for_snapshot(establishment_id: uuid.UUID) -> Establishment | None:
     return Establishment.objects.filter(id=establishment_id).first()
+
+
+def get_active_establishment_for_pipeline(
+    establishment_id: uuid.UUID,
+) -> Establishment | None:
+    """Return the establishment when it exists and is ACTIVE (pipeline-attachable)."""
+    return Establishment.objects.filter(
+        id=establishment_id,
+        status=Establishment.Status.ACTIVE,
+    ).first()

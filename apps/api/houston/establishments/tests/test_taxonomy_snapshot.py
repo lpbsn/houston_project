@@ -7,6 +7,7 @@ from houston.establishments.models import ActivitySubject, CatalogActivitySubjec
 from houston.establishments.taxonomy_snapshot import (
     build_establishment_taxonomy_snapshot,
     establishment_has_active_business_units,
+    establishment_has_any_active_business_unit,
 )
 from houston.establishments.tests.taxonomy_helpers import (
     create_activity_subject,
@@ -154,10 +155,27 @@ def test_establishment_has_active_business_units_requires_snapshot_ready_identit
     inactive.save(update_fields=["active", "updated_at"])
 
     assert establishment_has_active_business_units(establishment_id=establishment.id) is False
+    assert establishment_has_any_active_business_unit(establishment_id=establishment.id) is False
 
     inactive.active = True
     inactive.save(update_fields=["active", "updated_at"])
     assert establishment_has_active_business_units(establishment_id=establishment.id) is True
+    assert establishment_has_any_active_business_unit(establishment_id=establishment.id) is True
+
+
+@pytest.mark.django_db
+def test_establishment_has_any_active_business_unit_ignores_snapshot_ready_gate():
+    establishment = create_establishment()
+    assert establishment_has_any_active_business_unit(establishment_id=establishment.id) is False
+    unit = create_business_unit(
+        establishment=establishment,
+        key="hotel",
+        label="Hotel",
+    )
+    assert establishment_has_any_active_business_unit(establishment_id=establishment.id) is True
+    unit.active = False
+    unit.save(update_fields=["active", "updated_at"])
+    assert establishment_has_any_active_business_unit(establishment_id=establishment.id) is False
 
 
 def test_snapshot_query_count_flat_across_business_units():
