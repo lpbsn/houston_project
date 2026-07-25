@@ -108,16 +108,18 @@ def test_golden_incomplete_taxonomy_rejects_bar_stock_candidate():
     outcome = apply_pipeline_output(observation=observation, output=output).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
-    assert Signal.objects.filter(establishment=membership.establishment).count() == 1
-    signal = Signal.objects.get()
-    assert signal.responsible_business_unit.catalog_business_unit.key == "maintenance"
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 2
+    lighting = Signal.objects.get(activity_subject=taxonomy.lighting_subject)
+    # Restaurant has no subjects → not in routing_taxonomy → affected null → unassigned.
+    assert lighting.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert lighting.responsible_business_unit_id == taxonomy.maintenance.id
+    bar_partial = Signal.objects.exclude(id=lighting.id).get()
+    assert bar_partial.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert bar_partial.activity_subject is None
     assert CandidateSignal.objects.filter(
         observation=observation,
-        outcome=CandidateSignal.Outcome.REJECTED,
-    ).exists()
-    assert not Signal.objects.filter(
-        affected_business_unit__catalog_business_unit__key="bar"
-    ).exists()
+        outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
+    ).count() == 2
 
 
 def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
@@ -167,16 +169,20 @@ def test_golden_incomplete_taxonomy_rejects_lighting_candidate():
     outcome = apply_pipeline_output(observation=observation, output=output).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
-    assert Signal.objects.filter(establishment=membership.establishment).count() == 1
-    signal = Signal.objects.get()
-    assert signal.affected_business_unit.catalog_business_unit.key == "bar"
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 2
+    bar_signal = Signal.objects.get(
+        affected_business_unit__catalog_business_unit__key="bar"
+    )
+    assert bar_signal.routing_status == Signal.RoutingStatus.RESOLVED
+    lighting_partial = Signal.objects.exclude(id=bar_signal.id).get()
+    assert lighting_partial.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert lighting_partial.activity_subject is None
+    # Maintenance without lighting subject is absent from routing_taxonomy.
+    assert lighting_partial.responsible_business_unit is None
     assert CandidateSignal.objects.filter(
         observation=observation,
-        outcome=CandidateSignal.Outcome.REJECTED,
-    ).exists()
-    assert not Signal.objects.filter(
-        affected_business_unit__catalog_business_unit__key=RESTAURANT_MODULE_KEY
-    ).exists()
+        outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
+    ).count() == 2
 
 
 def test_golden_invented_taxonomy_key_does_not_create_signal():
@@ -222,5 +228,12 @@ def test_golden_invented_taxonomy_key_does_not_create_signal():
     outcome = apply_pipeline_output(observation=observation, output=output).outcome
 
     assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
-    assert Signal.objects.count() == 1
-    assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.REJECTED).count() == 1
+    assert Signal.objects.count() == 2
+    invented = Signal.objects.get(issue_focus="stock inventé")
+    assert invented.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert invented.affected_business_unit is None
+    assert invented.responsible_business_unit is None
+    assert invented.activity_subject is None
+    assert CandidateSignal.objects.filter(
+        outcome=CandidateSignal.Outcome.CREATED_SIGNAL
+    ).count() == 2

@@ -35,12 +35,12 @@ from houston.establishments.models import (
     EstablishmentMembership,
     OperationalUnit,
 )
+from houston.establishments.taxonomy_snapshot import build_routing_taxonomy
 from houston.observations.models import Observation, ObservationProcessing
 from houston.signals.aggregation_eval import (
     count_active_taxonomy_peers_with_different_focus,
     format_taxonomy_bucket_key,
 )
-from houston.signals.classification_fallback import try_apply_responsible_affected_fallback
 from houston.signals.constants import (
     ACTIVE_SIGNAL_STATUSES,
     AI_ISSUE_FOCUS_MAX_LENGTH,
@@ -55,8 +55,15 @@ from houston.signals.exceptions import (
     SignalValidationError,
 )
 from houston.signals.models import CandidateSignal, Signal, SignalSourceObservation
+from houston.signals.routing_resolver import (
+    RoutingResolution,
+    resolve_candidate_routing,
+    routing_proposal_from_pipeline_candidate,
+)
 from houston.signals.signal_classification import (
     InvalidSignalClassificationError,
+    routing_status_for_classification,
+    validate_partial_signal_routing,
     validate_signal_classification,
 )
 
@@ -208,7 +215,56 @@ def create_signal_from_candidate(
     resolved: ResolvedTaxonomy,
     title: str,
     structured_summary: str,
+    routing_status: str,
 ) -> Signal:
+    establishment = observation.establishment
+    try:
+        if routing_status == Signal.RoutingStatus.RESOLVED:
+            if (
+                resolved.affected_business_unit is None
+                or resolved.responsible_business_unit is None
+                or resolved.activity_subject is None
+            ):
+                raise SignalValidationError(
+                    "resolved routing_status requires a complete taxonomy triplet.",
+                    code="inconsistent_routing_status",
+                )
+            validate_signal_classification(
+                establishment=establishment,
+                affected_business_unit=resolved.affected_business_unit,
+                responsible_business_unit=resolved.responsible_business_unit,
+                activity_subject=resolved.activity_subject,
+            )
+        elif routing_status == Signal.RoutingStatus.UNASSIGNED:
+            validate_partial_signal_routing(
+                establishment=establishment,
+                affected_business_unit=resolved.affected_business_unit,
+                responsible_business_unit=resolved.responsible_business_unit,
+                activity_subject=resolved.activity_subject,
+            )
+        else:
+            raise SignalValidationError(
+                "routing_status must be resolved or unassigned.",
+                code="invalid_routing_status",
+            )
+    except InvalidSignalClassificationError as exc:
+        raise SignalValidationError(
+            str(exc),
+            code="invalid_signal_classification",
+        ) from exc
+
+    expected_status = routing_status_for_classification(
+        establishment=establishment,
+        affected_business_unit=resolved.affected_business_unit,
+        responsible_business_unit=resolved.responsible_business_unit,
+        activity_subject=resolved.activity_subject,
+    )
+    if routing_status != expected_status:
+        raise SignalValidationError(
+            "routing_status is inconsistent with resolved taxonomy FKs.",
+            code="inconsistent_routing_status",
+        )
+
     now = timezone.now()
     location_text = resolve_signal_location_text(
         candidate=candidate,
@@ -217,13 +273,13 @@ def create_signal_from_candidate(
     )
 
     signal = Signal.objects.create(
-        establishment=observation.establishment,
+        establishment=establishment,
         operational_unit=resolved.operational_unit,
         affected_business_unit=resolved.affected_business_unit,
         responsible_business_unit=resolved.responsible_business_unit,
         activity_subject=resolved.activity_subject,
         status=Signal.Status.OPEN,
-        routing_status=Signal.RoutingStatus.RESOLVED,
+        routing_status=routing_status,
         title=title.strip(),
         structured_summary=structured_summary.strip(),
         location_text=location_text,
@@ -323,148 +379,12 @@ def _issue_focus_eval_log_fields(
     return fields
 
 
-def _resolve_activity_subject(
-    *,
-    business_unit: BusinessUnit | None,
-    activity_subject_routing_key: str,
-) -> ActivitySubject | None:
-    if business_unit is None:
-        return None
-    return ActivitySubject.objects.filter(
-        business_unit=business_unit,
-        routing_key=activity_subject_routing_key,
-        active=True,
-    ).first()
-
-
-def _require_activity_subject_under_responsible(
-    *,
-    establishment_id: uuid.UUID,
-    responsible: BusinessUnit,
-    activity_subject_routing_key: str,
-) -> ActivitySubject:
-    subject = _resolve_activity_subject(
-        business_unit=responsible,
-        activity_subject_routing_key=activity_subject_routing_key,
-    )
-    if subject is not None:
-        return subject
-    other = (
-        ActivitySubject.objects.filter(
-            establishment_id=establishment_id,
-            routing_key=activity_subject_routing_key,
-            active=True,
-            business_unit__active=True,
-        )
-        .exclude(business_unit_id=responsible.id)
-        .first()
-    )
-    if other is not None:
-        raise SignalValidationError(
-            "activity_subject belongs to another business unit.",
-            code="activity_subject_under_other_business_unit",
-        )
-    raise SignalValidationError(
-        "Unknown activity subject routing key.",
-        code="unknown_activity_subject_routing_key",
-    )
-
-
-def resolve_taxonomy_from_candidate(
-    *,
-    establishment_id: uuid.UUID,
-    candidate: PipelineCandidateOutput,
-) -> ResolvedTaxonomy:
-    return _resolve_v3_candidate(establishment_id=establishment_id, candidate=candidate)
-
-
-def _resolve_v3_candidate(
-    *,
-    establishment_id: uuid.UUID,
-    candidate: PipelineCandidateOutput,
-) -> ResolvedTaxonomy:
-    affected = (
-        BusinessUnit.objects.filter(
-            establishment_id=establishment_id,
-            routing_key=candidate.affected_business_unit_routing_key,
-            active=True,
-        )
-        .select_related("catalog_business_unit")
-        .first()
-    )
-    if affected is None:
-        raise SignalValidationError(
-            "Unknown affected business unit routing key.",
-            code="unknown_affected_business_unit_routing_key",
-        )
-
-    responsible = (
-        BusinessUnit.objects.filter(
-            establishment_id=establishment_id,
-            routing_key=candidate.responsible_business_unit_routing_key,
-            active=True,
-        )
-        .select_related("catalog_business_unit")
-        .first()
-    )
-    subject_under_affected = _resolve_activity_subject(
-        business_unit=affected,
-        activity_subject_routing_key=candidate.activity_subject_routing_key,
-    )
-
-    establishment = affected.establishment
-
-    if responsible is None:
-        fallback = try_apply_responsible_affected_fallback(
-            establishment=establishment,
-            affected=affected,
-            responsible=None,
-            activity_subject=None,
-            subject_under_affected=subject_under_affected,
-        )
-        if fallback is None:
-            raise SignalValidationError(
-                "Unknown responsible business unit routing key.",
-                code="unknown_responsible_business_unit_routing_key",
-            )
-        resolved_affected = fallback.affected_business_unit
-        resolved_responsible = fallback.responsible_business_unit
-        resolved_subject = fallback.activity_subject
-    else:
-        activity_subject = _require_activity_subject_under_responsible(
-            establishment_id=establishment_id,
-            responsible=responsible,
-            activity_subject_routing_key=candidate.activity_subject_routing_key,
-        )
-        try:
-            validate_signal_classification(
-                establishment=establishment,
-                affected_business_unit=affected,
-                responsible_business_unit=responsible,
-                activity_subject=activity_subject,
-            )
-        except InvalidSignalClassificationError as exc:
-            raise SignalValidationError(
-                str(exc),
-                code="invalid_signal_classification",
-            ) from exc
-        resolved_affected = affected
-        resolved_responsible = responsible
-        resolved_subject = activity_subject
-
-    unit = None
-    if candidate.operational_unit_key:
-        unit = OperationalUnit.objects.filter(
-            establishment_id=establishment_id,
-            key=candidate.operational_unit_key,
-            active=True,
-        ).first()
-
+def _resolved_taxonomy_from_resolution(resolution: RoutingResolution) -> ResolvedTaxonomy:
     return ResolvedTaxonomy(
-        operational_unit=unit,
-        affected_business_unit=resolved_affected,
-        responsible_business_unit=resolved_responsible,
-        activity_subject=resolved_subject,
+        operational_unit=resolution.operational_unit,
+        affected_business_unit=resolution.affected_business_unit,
+        responsible_business_unit=resolution.responsible_business_unit,
+        activity_subject=resolution.activity_subject,
     )
 
 
@@ -489,6 +409,7 @@ def find_active_signal_for_aggregation(
         activity_subject=resolved.activity_subject,
         issue_focus=issue_focus,
         status__in=ACTIVE_SIGNAL_STATUSES,
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     if resolved.operational_unit is None:
         queryset = queryset.filter(operational_unit__isnull=True)
@@ -520,6 +441,7 @@ def find_active_legacy_signal_for_aggregation(
         activity_subject=resolved.activity_subject,
         issue_focus="",
         status__in=ACTIVE_SIGNAL_STATUSES,
+        routing_status=Signal.RoutingStatus.RESOLVED,
     )
     if resolved.operational_unit is None:
         queryset = queryset.filter(operational_unit__isnull=True)
@@ -564,23 +486,223 @@ def _persist_pending_candidate(
     *,
     observation: Observation,
     candidate: PipelineCandidateOutput,
-    resolved: ResolvedTaxonomy | None,
+    resolution: RoutingResolution,
 ) -> CandidateSignal:
     return CandidateSignal.objects.create(
         observation=observation,
         establishment=observation.establishment,
-        operational_unit=resolved.operational_unit if resolved else None,
-        affected_business_unit=resolved.affected_business_unit if resolved else None,
-        responsible_business_unit=resolved.responsible_business_unit if resolved else None,
-        activity_subject=resolved.activity_subject if resolved else None,
+        operational_unit=resolution.operational_unit,
+        affected_business_unit=resolution.affected_business_unit,
+        responsible_business_unit=resolution.responsible_business_unit,
+        activity_subject=resolution.activity_subject,
         location_text=normalize_location_text(candidate.location_text),
         title=candidate.title.strip(),
         structured_summary=candidate.structured_summary.strip(),
         issue_focus=require_normalized_issue_focus(candidate.issue_focus),
         schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
         ai_aggregate_hint_signal_id=None,
+        signal_kind=candidate.signal_kind,
+        information_type=candidate.information_type or "",
+        canonical_object=candidate.canonical_object,
+        expected_action=candidate.expected_action,
+        proposed_affected_business_unit_routing_key=(
+            candidate.affected_business_unit_routing_key or ""
+        ),
+        proposed_responsible_business_unit_routing_key=(
+            candidate.responsible_business_unit_routing_key or ""
+        ),
+        proposed_activity_subject_routing_key=(
+            candidate.activity_subject_routing_key or ""
+        ),
+        routing_status=resolution.routing_status,
+        resolution_audit=resolution.resolution_audit,
         outcome=CandidateSignal.Outcome.PENDING,
     )
+
+
+def _apply_resolved_candidate(
+    *,
+    observation: Observation,
+    candidate: PipelineCandidateOutput,
+    resolved: ResolvedTaxonomy,
+    row: CandidateSignal,
+    normalized_issue_focus: str,
+    seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None, str]],
+) -> tuple[str, int, int]:
+    """Apply aggregation/create for a resolved candidate. Returns (kind, created, aggregated)."""
+    assert resolved.affected_business_unit is not None
+    assert resolved.responsible_business_unit is not None
+    assert resolved.activity_subject is not None
+
+    eval_log_fields = _issue_focus_eval_log_fields(
+        establishment_id=observation.establishment_id,
+        resolved=resolved,
+        normalized_issue_focus=normalized_issue_focus,
+    )
+    dedupe_key = _aggregation_key(
+        affected_business_unit_id=resolved.affected_business_unit.id,
+        responsible_business_unit_id=resolved.responsible_business_unit.id,
+        activity_subject_id=resolved.activity_subject.id,
+        unit_id=resolved.operational_unit.id if resolved.operational_unit else None,
+        issue_focus=normalized_issue_focus,
+    )
+    if dedupe_key in seen_keys:
+        row.outcome = CandidateSignal.Outcome.REJECTED
+        row.save(update_fields=["outcome", "updated_at"])
+        _log_pipeline_candidate_applied(
+            observation=observation,
+            aggregation_key=format_aggregation_key(dedupe_key),
+            hint_used=False,
+            hint_rejected_reason="",
+            candidate_outcome=CandidateSignal.Outcome.REJECTED,
+            issue_focus=str(eval_log_fields["issue_focus"]),
+            taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+        )
+        return "rejected", 0, 0
+    seen_keys.add(dedupe_key)
+
+    hint_signal, hint_rejected_reason = _try_resolve_hint_signal(
+        establishment_id=observation.establishment_id,
+        candidate=candidate,
+        resolved=resolved,
+        normalized_issue_focus=normalized_issue_focus,
+        for_update=True,
+    )
+    if hint_signal is not None:
+        signal = aggregate_candidate_into_signal(
+            signal=hint_signal,
+            observation=observation,
+            normalized_issue_focus=normalized_issue_focus,
+        )
+        # Lot 5: never modify Signal.expected_action; CandidateSignal.expected_action kept.
+        row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+        row.result_signal = signal
+        row.save(update_fields=["outcome", "result_signal", "updated_at"])
+        _log_pipeline_candidate_applied(
+            observation=observation,
+            aggregation_key=format_aggregation_key(dedupe_key),
+            hint_used=True,
+            hint_rejected_reason="",
+            candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+            issue_focus=str(eval_log_fields["issue_focus"]),
+            taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+            aggregation_match_mode="hint",
+        )
+        return "aggregated", 0, 1
+
+    existing = find_active_signal_for_aggregation(
+        establishment_id=observation.establishment_id,
+        resolved=resolved,
+        issue_focus=normalized_issue_focus,
+        for_update=True,
+    )
+    if existing is not None:
+        signal = aggregate_candidate_into_signal(
+            signal=existing,
+            observation=observation,
+            normalized_issue_focus=normalized_issue_focus,
+        )
+        row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+        row.result_signal = signal
+        row.save(update_fields=["outcome", "result_signal", "updated_at"])
+        _log_pipeline_candidate_applied(
+            observation=observation,
+            aggregation_key=format_aggregation_key(dedupe_key),
+            hint_used=False,
+            hint_rejected_reason=hint_rejected_reason or "",
+            candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+            issue_focus=str(eval_log_fields["issue_focus"]),
+            taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+            aggregation_match_mode="exact",
+        )
+        return "aggregated", 0, 1
+
+    legacy_existing = find_active_legacy_signal_for_aggregation(
+        establishment_id=observation.establishment_id,
+        resolved=resolved,
+    )
+    if legacy_existing is not None:
+        signal = aggregate_candidate_into_signal(
+            signal=legacy_existing,
+            observation=observation,
+            normalized_issue_focus=normalized_issue_focus,
+        )
+        row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+        row.result_signal = signal
+        row.save(update_fields=["outcome", "result_signal", "updated_at"])
+        _log_pipeline_candidate_applied(
+            observation=observation,
+            aggregation_key=format_aggregation_key(dedupe_key),
+            hint_used=False,
+            hint_rejected_reason=hint_rejected_reason or "",
+            candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+            issue_focus=str(eval_log_fields["issue_focus"]),
+            taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
+            aggregation_match_mode="legacy_fallback",
+        )
+        return "aggregated", 0, 1
+
+    create_eval_log_fields = _issue_focus_eval_log_fields(
+        establishment_id=observation.establishment_id,
+        resolved=resolved,
+        normalized_issue_focus=normalized_issue_focus,
+        include_peer_count=True,
+    )
+    try:
+        with transaction.atomic():
+            signal = create_signal_from_candidate(
+                observation=observation,
+                candidate=candidate,
+                resolved=resolved,
+                title=candidate.title,
+                structured_summary=candidate.structured_summary,
+                routing_status=Signal.RoutingStatus.RESOLVED,
+            )
+    except IntegrityError as exc:
+        if not _is_active_aggregation_unique_violation(exc):
+            raise
+        existing = find_active_signal_for_aggregation(
+            establishment_id=observation.establishment_id,
+            resolved=resolved,
+            issue_focus=normalized_issue_focus,
+            for_update=True,
+        )
+        if existing is None:
+            raise
+        signal = aggregate_candidate_into_signal(
+            signal=existing,
+            observation=observation,
+            normalized_issue_focus=normalized_issue_focus,
+        )
+        row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
+        row.result_signal = signal
+        row.save(update_fields=["outcome", "result_signal", "updated_at"])
+        _log_pipeline_candidate_applied(
+            observation=observation,
+            aggregation_key=format_aggregation_key(dedupe_key),
+            hint_used=False,
+            hint_rejected_reason=hint_rejected_reason or "",
+            candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
+            issue_focus=str(create_eval_log_fields["issue_focus"]),
+            taxonomy_bucket_key=str(create_eval_log_fields["taxonomy_bucket_key"]),
+            aggregation_match_mode="exact",
+        )
+        return "aggregated", 0, 1
+
+    row.outcome = CandidateSignal.Outcome.CREATED_SIGNAL
+    row.result_signal = signal
+    row.save(update_fields=["outcome", "result_signal", "updated_at"])
+    _log_pipeline_candidate_applied(
+        observation=observation,
+        aggregation_key=format_aggregation_key(dedupe_key),
+        hint_used=False,
+        hint_rejected_reason=hint_rejected_reason or "",
+        candidate_outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
+        issue_focus=str(create_eval_log_fields["issue_focus"]),
+        taxonomy_bucket_key=str(create_eval_log_fields["taxonomy_bucket_key"]),
+        active_taxonomy_peer_count=int(create_eval_log_fields["active_taxonomy_peer_count"]),
+    )
+    return "created", 1, 0
 
 
 @transaction.atomic
@@ -597,226 +719,61 @@ def apply_pipeline_output(
             aggregated_count=0,
         )
 
+    taxonomy = build_routing_taxonomy(establishment_id=observation.establishment_id)
     seen_keys: set[tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID | None, str]] = set()
     created_count = 0
     aggregated_count = 0
-    rejected_count = 0
 
     for candidate in candidates:
-        try:
-            resolved = resolve_taxonomy_from_candidate(
-                establishment_id=observation.establishment_id,
-                candidate=candidate,
-            )
-        except SignalValidationError as exc:
-            logger.info(
-                "observation_pipeline_candidate_rejected",
-                extra={
-                    "event": "observation_pipeline_candidate_rejected",
-                    "observation_id": str(observation.id),
-                    "establishment_id": str(observation.establishment_id),
-                    "rejection_code": exc.code,
-                },
-            )
-            CandidateSignal.objects.create(
-                observation=observation,
-                establishment=observation.establishment,
-                title=candidate.title.strip()[:200],
-                structured_summary=candidate.structured_summary.strip()[:2000],
-                issue_focus=require_normalized_issue_focus(candidate.issue_focus),
-                schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
-                outcome=CandidateSignal.Outcome.REJECTED,
-            )
-            rejected_count += 1
-            continue
-
-        assert resolved.affected_business_unit is not None
-        assert resolved.responsible_business_unit is not None
-        assert resolved.activity_subject is not None
-        normalized_issue_focus = require_normalized_issue_focus(candidate.issue_focus)
-        eval_log_fields = _issue_focus_eval_log_fields(
+        proposal = routing_proposal_from_pipeline_candidate(candidate)
+        resolution = resolve_candidate_routing(
             establishment_id=observation.establishment_id,
-            resolved=resolved,
-            normalized_issue_focus=normalized_issue_focus,
+            proposal=proposal,
+            routing_taxonomy=taxonomy,
         )
-        dedupe_key = _aggregation_key(
-            affected_business_unit_id=resolved.affected_business_unit.id,
-            responsible_business_unit_id=resolved.responsible_business_unit.id,
-            activity_subject_id=resolved.activity_subject.id,
-            unit_id=resolved.operational_unit.id if resolved.operational_unit else None,
-            issue_focus=normalized_issue_focus,
-        )
-        if dedupe_key in seen_keys:
-            row = _persist_pending_candidate(
-                observation=observation,
-                candidate=candidate,
-                resolved=resolved,
-            )
-            row.outcome = CandidateSignal.Outcome.REJECTED
-            row.save(update_fields=["outcome", "updated_at"])
-            rejected_count += 1
-            _log_pipeline_candidate_applied(
-                observation=observation,
-                aggregation_key=format_aggregation_key(dedupe_key),
-                hint_used=False,
-                hint_rejected_reason="",
-                candidate_outcome=CandidateSignal.Outcome.REJECTED,
-                issue_focus=str(eval_log_fields["issue_focus"]),
-                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
-            )
-            continue
-        seen_keys.add(dedupe_key)
-
+        resolved = _resolved_taxonomy_from_resolution(resolution)
+        normalized_issue_focus = require_normalized_issue_focus(candidate.issue_focus)
         row = _persist_pending_candidate(
             observation=observation,
             candidate=candidate,
-            resolved=resolved,
+            resolution=resolution,
         )
 
-        hint_signal, hint_rejected_reason = _try_resolve_hint_signal(
-            establishment_id=observation.establishment_id,
+        if resolution.routing_status == Signal.RoutingStatus.UNASSIGNED:
+            signal = create_signal_from_candidate(
+                observation=observation,
+                candidate=candidate,
+                resolved=resolved,
+                title=candidate.title,
+                structured_summary=candidate.structured_summary,
+                routing_status=Signal.RoutingStatus.UNASSIGNED,
+            )
+            row.outcome = CandidateSignal.Outcome.CREATED_SIGNAL
+            row.result_signal = signal
+            row.save(update_fields=["outcome", "result_signal", "updated_at"])
+            created_count += 1
+            _log_pipeline_candidate_applied(
+                observation=observation,
+                aggregation_key="",
+                hint_used=False,
+                hint_rejected_reason="",
+                candidate_outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
+                issue_focus=normalized_issue_focus,
+                taxonomy_bucket_key="",
+            )
+            continue
+
+        kind, created_delta, aggregated_delta = _apply_resolved_candidate(
+            observation=observation,
             candidate=candidate,
             resolved=resolved,
+            row=row,
             normalized_issue_focus=normalized_issue_focus,
-            for_update=True,
+            seen_keys=seen_keys,
         )
-        if hint_signal is not None:
-            signal = aggregate_candidate_into_signal(
-                signal=hint_signal,
-                observation=observation,
-                normalized_issue_focus=normalized_issue_focus,
-            )
-            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
-            row.result_signal = signal
-            row.save(update_fields=["outcome", "result_signal", "updated_at"])
-            aggregated_count += 1
-            _log_pipeline_candidate_applied(
-                observation=observation,
-                aggregation_key=format_aggregation_key(dedupe_key),
-                hint_used=True,
-                hint_rejected_reason="",
-                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
-                issue_focus=str(eval_log_fields["issue_focus"]),
-                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
-                aggregation_match_mode="hint",
-            )
-            continue
-
-        existing = find_active_signal_for_aggregation(
-            establishment_id=observation.establishment_id,
-            resolved=resolved,
-            issue_focus=normalized_issue_focus,
-            for_update=True,
-        )
-        if existing is not None:
-            signal = aggregate_candidate_into_signal(
-                signal=existing,
-                observation=observation,
-                normalized_issue_focus=normalized_issue_focus,
-            )
-            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
-            row.result_signal = signal
-            row.save(update_fields=["outcome", "result_signal", "updated_at"])
-            aggregated_count += 1
-            _log_pipeline_candidate_applied(
-                observation=observation,
-                aggregation_key=format_aggregation_key(dedupe_key),
-                hint_used=False,
-                hint_rejected_reason=hint_rejected_reason or "",
-                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
-                issue_focus=str(eval_log_fields["issue_focus"]),
-                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
-                aggregation_match_mode="exact",
-            )
-            continue
-
-        legacy_existing = find_active_legacy_signal_for_aggregation(
-            establishment_id=observation.establishment_id,
-            resolved=resolved,
-        )
-        if legacy_existing is not None:
-            signal = aggregate_candidate_into_signal(
-                signal=legacy_existing,
-                observation=observation,
-                normalized_issue_focus=normalized_issue_focus,
-            )
-            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
-            row.result_signal = signal
-            row.save(update_fields=["outcome", "result_signal", "updated_at"])
-            aggregated_count += 1
-            _log_pipeline_candidate_applied(
-                observation=observation,
-                aggregation_key=format_aggregation_key(dedupe_key),
-                hint_used=False,
-                hint_rejected_reason=hint_rejected_reason or "",
-                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
-                issue_focus=str(eval_log_fields["issue_focus"]),
-                taxonomy_bucket_key=str(eval_log_fields["taxonomy_bucket_key"]),
-                aggregation_match_mode="legacy_fallback",
-            )
-            continue
-
-        create_eval_log_fields = _issue_focus_eval_log_fields(
-            establishment_id=observation.establishment_id,
-            resolved=resolved,
-            normalized_issue_focus=normalized_issue_focus,
-            include_peer_count=True,
-        )
-        try:
-            with transaction.atomic():
-                signal = create_signal_from_candidate(
-                    observation=observation,
-                    candidate=candidate,
-                    resolved=resolved,
-                    title=candidate.title,
-                    structured_summary=candidate.structured_summary,
-                )
-        except IntegrityError as exc:
-            if not _is_active_aggregation_unique_violation(exc):
-                raise
-            existing = find_active_signal_for_aggregation(
-                establishment_id=observation.establishment_id,
-                resolved=resolved,
-                issue_focus=normalized_issue_focus,
-                for_update=True,
-            )
-            if existing is None:
-                raise
-            signal = aggregate_candidate_into_signal(
-                signal=existing,
-                observation=observation,
-                normalized_issue_focus=normalized_issue_focus,
-            )
-            row.outcome = CandidateSignal.Outcome.AGGREGATED_SIGNAL
-            row.result_signal = signal
-            row.save(update_fields=["outcome", "result_signal", "updated_at"])
-            aggregated_count += 1
-            _log_pipeline_candidate_applied(
-                observation=observation,
-                aggregation_key=format_aggregation_key(dedupe_key),
-                hint_used=False,
-                hint_rejected_reason=hint_rejected_reason or "",
-                candidate_outcome=CandidateSignal.Outcome.AGGREGATED_SIGNAL,
-                issue_focus=str(create_eval_log_fields["issue_focus"]),
-                taxonomy_bucket_key=str(create_eval_log_fields["taxonomy_bucket_key"]),
-                aggregation_match_mode="exact",
-            )
-            continue
-
-        row.outcome = CandidateSignal.Outcome.CREATED_SIGNAL
-        row.result_signal = signal
-        row.save(update_fields=["outcome", "result_signal", "updated_at"])
-        created_count += 1
-        _log_pipeline_candidate_applied(
-            observation=observation,
-            aggregation_key=format_aggregation_key(dedupe_key),
-            hint_used=False,
-            hint_rejected_reason=hint_rejected_reason or "",
-            candidate_outcome=CandidateSignal.Outcome.CREATED_SIGNAL,
-            issue_focus=str(create_eval_log_fields["issue_focus"]),
-            taxonomy_bucket_key=str(create_eval_log_fields["taxonomy_bucket_key"]),
-            active_taxonomy_peer_count=int(create_eval_log_fields["active_taxonomy_peer_count"]),
-        )
+        del kind
+        created_count += created_delta
+        aggregated_count += aggregated_delta
 
     if created_count == 0 and aggregated_count == 0:
         return PipelineApplyResult(

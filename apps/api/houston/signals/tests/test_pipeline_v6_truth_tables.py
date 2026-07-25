@@ -1,4 +1,4 @@
-"""V6 truth-table runners — Lot 1/2 + Lot 3 CTX-* + Lot 4 ERR-02/03."""
+"""V6 truth-table runners — Lot 1–5."""
 
 from __future__ import annotations
 
@@ -19,7 +19,10 @@ from houston.ai.observation_pipeline import (
     establishment_can_run_observation_pipeline,
     evaluate_observation_pipeline_precondition,
 )
-from houston.ai.observation_pipeline_schema import ObservationPipelineOutput
+from houston.ai.observation_pipeline_schema import (
+    ObservationPipelineOutput,
+    PipelineCandidateOutput,
+)
 from houston.establishments.business_unit_identity import normalize_generic_activity_subject_name
 from houston.establishments.models import ActivitySubject, BusinessUnit, CatalogActivitySubject
 from houston.establishments.taxonomy_snapshot import (
@@ -34,8 +37,12 @@ from houston.establishments.tests.taxonomy_helpers import (
 from houston.observations.models import ObservationProcessing
 from houston.signals.catalog_capabilities import CATALOG_CAPABILITIES_VERSION
 from houston.signals.constants import AI_OBSERVATION_PIPELINE_SCHEMA_VERSION
-from houston.signals.models import Signal
-from houston.signals.services import run_observation_pipeline
+from houston.signals.models import CandidateSignal, Signal
+from houston.signals.routing_resolver import (
+    resolve_candidate_routing,
+    routing_proposal_from_pipeline_candidate,
+)
+from houston.signals.services import apply_pipeline_output, run_observation_pipeline
 from houston.signals.signal_classification import routing_status_for_classification
 from houston.signals.tests.conftest import create_observation
 from houston.signals.tests.pipeline_helpers import fake_provider_payload
@@ -73,11 +80,15 @@ LOT3_IMPLEMENTED_TRUTH_ROWS = frozenset(
     }
 )
 LOT4_IMPLEMENTED_TRUTH_ROWS = frozenset({"ERR-02", "ERR-03"})
+LOT5_IMPLEMENTED_TRUTH_ROWS = frozenset(
+    {"RES-01", "RES-02", "RES-03", "RES-04", "RES-05", "ERR-04"}
+)
 IMPLEMENTED_TRUTH_ROWS = (
     LOT1_IMPLEMENTED_TRUTH_ROWS
     | LOT2_IMPLEMENTED_TRUTH_ROWS
     | LOT3_IMPLEMENTED_TRUTH_ROWS
     | LOT4_IMPLEMENTED_TRUTH_ROWS
+    | LOT5_IMPLEMENTED_TRUTH_ROWS
 )
 
 # Lot 2 owns precondition start; Signal unassigned creation is Lot 5.
@@ -604,6 +615,337 @@ def _run_ctx_08(row: dict) -> dict:
     }
 
 
+def _catalog_key(unit: BusinessUnit | None) -> str | None:
+    if unit is None or unit.catalog_business_unit_id is None:
+        return None
+    return unit.catalog_business_unit.key
+
+
+def _pipeline_candidate(
+    *,
+    affected_key: str | None,
+    responsible_key: str | None,
+    subject_key: str | None,
+    title: str = "Issue",
+) -> PipelineCandidateOutput:
+    return PipelineCandidateOutput(
+        title=title,
+        structured_summary="Structured summary for truth table.",
+        issue_focus="truth-focus",
+        canonical_object="object",
+        signal_kind="actionable",
+        expected_action="inspect",
+        information_type=None,
+        affected_business_unit_routing_key=affected_key,
+        responsible_business_unit_routing_key=responsible_key,
+        activity_subject_routing_key=subject_key,
+        operational_unit_key=None,
+        location_text=None,
+    )
+
+
+def _resolve_proposal(*, establishment_id, candidate: PipelineCandidateOutput):
+    taxonomy = build_routing_taxonomy(establishment_id=establishment_id)
+    return resolve_candidate_routing(
+        establishment_id=establishment_id,
+        proposal=routing_proposal_from_pipeline_candidate(candidate),
+        routing_taxonomy=taxonomy,
+    )
+
+
+def _create_catalog_menage_subject(*, establishment, hotel: BusinessUnit) -> ActivitySubject:
+    catalog = CatalogActivitySubject.objects.create(
+        catalog_business_unit=hotel.catalog_business_unit,
+        key="hotel__menage",
+        label="Ménage",
+        description="Propreté",
+        active=True,
+        sort_order=1,
+    )
+    return ActivitySubject.objects.create(
+        establishment=establishment,
+        business_unit=hotel,
+        catalog_activity_subject=catalog,
+        normalized_name=normalize_generic_activity_subject_name(catalog.label),
+        label="",
+        description="",
+        routing_key=catalog.key,
+        source=ActivitySubject.Source.CATALOG_SUGGESTION,
+        active=True,
+    )
+
+
+def _run_res_01(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Ménage",
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key="unknown_pole",
+        responsible_key=hotel.routing_key,
+        subject_key=subject.routing_key,
+    )
+    resolution = _resolve_proposal(
+        establishment_id=membership.establishment.id,
+        candidate=candidate,
+    )
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate],
+        ),
+    )
+    candidate_row = CandidateSignal.objects.get(observation=observation)
+    return {
+        "affected_key": _catalog_key(resolution.affected_business_unit),
+        "responsible_key": _catalog_key(resolution.responsible_business_unit),
+        "subject_key": (
+            "menage"
+            if resolution.activity_subject is not None
+            and resolution.activity_subject.id == subject.id
+            else None
+        ),
+        "routing_status": resolution.routing_status,
+        "candidate_kept": candidate_row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL,
+    }
+
+
+def _run_res_02(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Ménage",
+    )
+    observation = create_observation(membership=membership)
+    maintenance = BusinessUnit.objects.get(
+        establishment=membership.establishment,
+        catalog_business_unit__key="maintenance",
+    )
+    candidate = _pipeline_candidate(
+        affected_key=hotel.routing_key,
+        responsible_key=maintenance.routing_key,
+        subject_key=subject.routing_key,
+    )
+    resolution = _resolve_proposal(
+        establishment_id=membership.establishment.id,
+        candidate=candidate,
+    )
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate],
+        ),
+    )
+    candidate_row = CandidateSignal.objects.get(observation=observation)
+    return {
+        "affected_key": _catalog_key(resolution.affected_business_unit),
+        "responsible_key": _catalog_key(resolution.responsible_business_unit),
+        "subject_key": (
+            "menage"
+            if resolution.activity_subject is not None
+            and resolution.activity_subject.id == subject.id
+            else None
+        ),
+        "routing_status": resolution.routing_status,
+        "candidate_kept": candidate_row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL,
+        "responsible_corrected": (
+            resolution.resolution_audit["responsible"]["source"] == "responsible_corrected"
+        ),
+    }
+
+
+def _run_res_03(row: dict) -> dict:
+    membership = build_membership()
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+    )
+    create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=maintenance,
+        label="Plomberie",
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key=None,
+        responsible_key=maintenance.routing_key,
+        subject_key=None,
+    )
+    resolution = _resolve_proposal(
+        establishment_id=membership.establishment.id,
+        candidate=candidate,
+    )
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate],
+        ),
+    )
+    candidate_row = CandidateSignal.objects.get(observation=observation)
+    return {
+        "affected_key": _catalog_key(resolution.affected_business_unit),
+        "responsible_key": _catalog_key(resolution.responsible_business_unit),
+        "subject_key": None if resolution.activity_subject is None else "unexpected",
+        "routing_status": resolution.routing_status,
+        "candidate_kept": candidate_row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL,
+    }
+
+
+def _run_res_04(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    maintenance = create_business_unit(
+        establishment=membership.establishment,
+        key="maintenance",
+        label="Maintenance",
+        unit_type=BusinessUnit.UnitType.TRANSVERSAL,
+    )
+    create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=maintenance,
+        label="Équipements",
+    )
+    subject = _create_catalog_menage_subject(
+        establishment=membership.establishment, hotel=hotel
+    )
+    taxonomy = build_routing_taxonomy(establishment_id=membership.establishment.id)
+    menage_entry = next(
+        s
+        for unit in taxonomy["business_units"]
+        if unit["routing_key"] == hotel.routing_key
+        for s in unit["activity_subjects"]
+        if s["routing_key"] == subject.routing_key
+    )
+    assert menage_entry["capabilities"], "RES-04 fixture must expose catalog capabilities"
+    candidate = _pipeline_candidate(
+        affected_key=hotel.routing_key,
+        responsible_key=maintenance.routing_key,
+        subject_key=subject.routing_key,
+    )
+    resolution = _resolve_proposal(
+        establishment_id=membership.establishment.id,
+        candidate=candidate,
+    )
+    return {
+        "affected_key": _catalog_key(resolution.affected_business_unit),
+        "subject_key": (
+            "menage"
+            if resolution.activity_subject is not None
+            and resolution.activity_subject.id == subject.id
+            else None
+        ),
+        "responsible_key": _catalog_key(resolution.responsible_business_unit),
+        "routing_status": resolution.routing_status,
+        "derivation_order": ["subject", "responsible"],
+        "capabilities_auto_complete": False,
+        "responsible_corrected": (
+            resolution.resolution_audit["responsible"]["source"] == "responsible_corrected"
+        ),
+    }
+
+
+def _run_res_05(row: dict) -> dict:
+    membership = build_membership()
+    bar = create_business_unit(
+        establishment=membership.establishment, key="bar", label="Bar"
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=bar,
+        label="Machine à café",
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key=bar.routing_key,
+        responsible_key=bar.routing_key,
+        subject_key=subject.routing_key,
+        title="Machine à café",
+    )
+    resolution = _resolve_proposal(
+        establishment_id=membership.establishment.id,
+        candidate=candidate,
+    )
+    apply_pipeline_output(
+        observation=observation,
+        output=ObservationPipelineOutput(
+            schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+            candidates=[candidate],
+        ),
+    )
+    candidate_row = CandidateSignal.objects.get(observation=observation)
+    return {
+        "subject_key": (
+            "machine_a_cafe"
+            if resolution.activity_subject is not None
+            and resolution.activity_subject.id == subject.id
+            else None
+        ),
+        "routing_status": resolution.routing_status,
+        "capabilities_auto_complete": False,
+        "candidate_kept": candidate_row.outcome == CandidateSignal.Outcome.CREATED_SIGNAL,
+    }
+
+
+def _run_err_04(row: dict) -> dict:
+    membership = build_membership()
+    hotel = create_business_unit(
+        establishment=membership.establishment, key="hotel", label="Hôtel"
+    )
+    subject = create_activity_subject(
+        establishment=membership.establishment,
+        business_unit=hotel,
+        label="Maintenance",
+    )
+    observation = create_observation(membership=membership)
+    candidate = _pipeline_candidate(
+        affected_key=hotel.routing_key,
+        responsible_key=hotel.routing_key,
+        subject_key=subject.routing_key,
+    )
+    with patch(
+        "houston.signals.services.create_signal_from_candidate",
+        side_effect=RuntimeError("simulated_technical"),
+    ):
+        with pytest.raises(RuntimeError, match="simulated_technical"):
+            apply_pipeline_output(
+                observation=observation,
+                output=ObservationPipelineOutput(
+                    schema_version=AI_OBSERVATION_PIPELINE_SCHEMA_VERSION,
+                    candidates=[candidate],
+                ),
+            )
+    assert Signal.objects.filter(establishment=membership.establishment).count() == 0
+    assert CandidateSignal.objects.filter(observation=observation).count() == 0
+    allowed = {choice.value for choice in Signal.RoutingStatus}
+    return {
+        "routing_status_allowed_values": sorted(allowed),
+        "routing_status_as_error_channel": False,
+    }
+
+
 def _run_v6_truth_row(row: dict) -> dict:
     row_id = row["id"]
     runners = {
@@ -618,6 +960,12 @@ def _run_v6_truth_row(row: dict) -> dict:
         "ERR-01": _run_err_01,
         "ERR-02": _run_err_02,
         "ERR-03": _run_err_03,
+        "ERR-04": _run_err_04,
+        "RES-01": _run_res_01,
+        "RES-02": _run_res_02,
+        "RES-03": _run_res_03,
+        "RES-04": _run_res_04,
+        "RES-05": _run_res_05,
         "CTX-01": _run_ctx_01,
         "CTX-02": _run_ctx_02,
         "CTX-03": _run_ctx_03,
@@ -716,3 +1064,14 @@ def test_no_lot4_truth_row_remains_unimplemented_xfail():
     assert lot4_ids
     assert lot4_ids <= LOT4_IMPLEMENTED_TRUTH_ROWS
     assert lot4_ids == LOT4_IMPLEMENTED_TRUTH_ROWS
+
+
+def test_no_lot5_truth_row_remains_unimplemented_xfail():
+    lot5_ids = {
+        row["id"]
+        for _, row in iter_truth_table_rows()
+        if row.get("owning_lot") == "lot5"
+    }
+    assert lot5_ids
+    assert lot5_ids <= LOT5_IMPLEMENTED_TRUTH_ROWS
+    assert lot5_ids == LOT5_IMPLEMENTED_TRUTH_ROWS

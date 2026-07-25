@@ -140,6 +140,7 @@ LOT_ACCEPTANCE: dict[str, dict[str, Any]] = {
             "partial_routing",
             "subject_imposes_responsible",
             "invalid_key_does_not_drop_candidate",
+            "explicit_keys_only_no_capability_auto_resolve",
             "truth_table_resolver_green",
         ],
         "case_ids": [

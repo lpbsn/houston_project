@@ -347,7 +347,7 @@ def test_apply_pipeline_creates_open_signal():
     assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.CREATED_SIGNAL).exists()
 
 
-def test_invalid_taxonomy_key_rejects_candidate():
+def test_invalid_taxonomy_key_keeps_candidate_as_unassigned():
     membership = build_membership()
     hotel = _setup_hotel_taxonomy(membership.establishment)
     subject = hotel.activity_subjects.get()
@@ -361,9 +361,15 @@ def test_invalid_taxonomy_key_rejects_candidate():
         ),
     ).outcome
 
-    assert outcome == ObservationProcessing.Outcome.NO_SIGNAL_CREATED
-    assert Signal.objects.count() == 0
-    assert CandidateSignal.objects.filter(outcome=CandidateSignal.Outcome.REJECTED).count() == 1
+    assert outcome == ObservationProcessing.Outcome.SIGNALS_CREATED
+    signal = Signal.objects.get()
+    assert signal.routing_status == Signal.RoutingStatus.UNASSIGNED
+    assert signal.affected_business_unit is None
+    assert signal.activity_subject_id == subject.id
+    assert signal.responsible_business_unit_id == hotel.id
+    candidate = CandidateSignal.objects.get()
+    assert candidate.outcome == CandidateSignal.Outcome.CREATED_SIGNAL
+    assert candidate.resolution_audit["affected"]["source"] == "invalid_key"
 
 
 def test_observation_pipeline_links_created_signal_to_source_observation():
